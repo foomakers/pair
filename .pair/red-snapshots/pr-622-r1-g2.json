@@ -1,0 +1,3458 @@
+{
+  "$meta": {
+    "pr": "622",
+    "phase": "r1-g2",
+    "base": "9116b4ba60f2739135aed340a0de1288e360658f",
+    "trailer": "Pair-RED-Snapshot: pr=622; phase=r1-g2; base=9116b4ba60f2739135aed340a0de1288e360658f; manifest=.pair/red-snapshots/pr-622-r1-g2.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "apps/pair-cli/src/commands/run/__fixtures__/cards-lifecycle-gh.cjs"
+    ]
+  },
+  "status": "red",
+  "mode": "repair",
+  "run": "story-614",
+  "story": "614",
+  "phase": "r1-g2",
+  "inputHead": "9116b4ba60f2739135aed340a0de1288e360658f",
+  "sourceOfTruth": {
+    "story": "https://github.com/foomakers/pair/issues/614",
+    "findings": [
+      "r0-2"
+    ],
+    "authority": "AC4/AC5/AC8 and Business Rules; live card read with cycle-state.mjs card; State Mapping and existing CardProcessExit.prepare",
+    "repairedContract": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-614/614/r1-g2-red-contract.json",
+    "repairedContractHash": "sha256:994751c74b234dab09cc0702a2734bda442374156e02e9ee2175b775009b87e4",
+    "rejections": [
+      "r1-g2-G1",
+      "r1-g2-G2",
+      "r1-g2-G3",
+      "r1-g2-G4",
+      "r1-g2-G5",
+      "r1-g2-G6"
+    ],
+    "acHash": "sha256:90dfd348c7b28cfc21c277167a1fe09fb82d74f2f9dd5ca9f79db3233d0e93ab"
+  },
+  "inventory": [
+    {
+      "id": "r0-2",
+      "producer": "cards-run.ts::readCardRank/runOne/classify/runCardList; cards-entry.ts::handleCardsRun/cardRunner durable lifecycle wiring",
+      "authority": "Story 614 AC4/AC5/AC8 and Business Rules; adopted State Mapping; existing CardProcessExit.prepare and cycleStatus grammar",
+      "inputs": [
+        "Ordered card ids, maxIterations, durable board projectItems/status and adopted map",
+        "Linked PR lifecycle (absent, draft, open non-draft), card association and head identity",
+        "Durable cycle handoffs; completed issue state/stateReason/closedAt; missing and unmapped tracker reads",
+        "CardProcessExit exitCode, prepare and cycleStatus; previous best state per card; same-root invocation restart"
+      ],
+      "representations": [
+        "Canonical TypeScript application source; no generated or dataset copy of this application rule",
+        "Real handleRunCommand -> handleCardsRun -> runPlannedCard -> outcomeOfExit -> classify/runCardList -> report/audit",
+        "Tracker JSON read by a real local gh executable fixture; state persisted in tracker.json between calls; engine boundary stubbed by runCardProcess",
+        "Custom board labels Inbox/Planned/Building/Checking/Finished map to canonical macrostates in both actual and injected fixture filesystem; stale body Status=Inbox must not override board",
+        "apps/website/content/docs/reference/cli/commands.mdx ordered-card documentation; behavioral finding includes its own prose correction"
+      ],
+      "consumers": [
+        "Pending-card filter and progress/no-progress decision",
+        "Per-card at-target and terminal classification, CLI exit status, pass report and audit",
+        "Next invocation durable completion check",
+        "Website explanation of progress sources"
+      ],
+      "classes": [
+        {
+          "id": "r1-g2-W1",
+          "rule": "Draft -> Ready: calls 12,15,12,15; closed 9 skipped; 2 passes; exit 0",
+          "rows": [
+            "r1-g2-W1"
+          ]
+        },
+        {
+          "id": "r1-g2-W2",
+          "rule": "Ready -> In Progress: calls 12,15,12,15; closed 9 skipped; 2 passes; exit 0",
+          "rows": [
+            "r1-g2-W2"
+          ]
+        },
+        {
+          "id": "r1-g2-W3",
+          "rule": "In Progress -> Review: calls 12,15,12,15; closed 9 skipped; 2 passes; exit 0",
+          "rows": [
+            "r1-g2-W3"
+          ]
+        },
+        {
+          "id": "r1-g2-W4",
+          "rule": "prepare=prepared, exit 0, no cycleStatus, Draft -> Ready: calls 12,15,12,15; all-at-target; audit 12,15,9 at-target; exit 0",
+          "rows": [
+            "r1-g2-W4"
+          ]
+        },
+        {
+          "id": "r1-g2-W5",
+          "rule": "Order 15,12,9: calls 15,12,15,12 after successful preparation; exit 0",
+          "rows": [
+            "r1-g2-W5"
+          ]
+        },
+        {
+          "id": "r1-g2-W6",
+          "rule": "Only peer cycle advances: prepared 12 remains eligible; calls 12,15,12,15; exit 0",
+          "rows": [
+            "r1-g2-W6"
+          ]
+        },
+        {
+          "id": "r1-g2-W7",
+          "rule": "prepared with unchanged durable state: one call; retryable; no-progress; exit 1",
+          "rows": [
+            "r1-g2-W7"
+          ]
+        },
+        {
+          "id": "r1-g2-W8",
+          "rule": "Existing r9 review evidence cannot mask Draft -> Ready; calls 12,15,12,15; exit 0",
+          "rows": [
+            "r1-g2-W8"
+          ]
+        },
+        {
+          "id": "r1-g2-W9",
+          "rule": "No PR -> open linked PR, board unchanged: calls 12,12; 2 passes; exit 0",
+          "rows": [
+            "r1-g2-W9"
+          ]
+        },
+        {
+          "id": "r1-g2-W10",
+          "rule": "Draft linked PR -> open non-draft linked PR, board unchanged: calls 12,12; 2 passes; exit 0",
+          "rows": [
+            "r1-g2-W10"
+          ]
+        },
+        {
+          "id": "r1-g2-W11",
+          "rule": "Card becomes CLOSED/COMPLETED during its run despite retryable process result: one call; at-target; all-at-target; exit 0",
+          "rows": [
+            "r1-g2-W11"
+          ]
+        },
+        {
+          "id": "r1-g2-W12",
+          "rule": "Mapped Done at invocation start: no call; at-target; exit 0",
+          "rows": [
+            "r1-g2-W12"
+          ]
+        },
+        {
+          "id": "r1-g2-C1",
+          "rule": "Optimistic engine text with unchanged state: one call; no-progress; exit 1",
+          "rows": [
+            "r1-g2-C1"
+          ]
+        },
+        {
+          "id": "r1-g2-C2",
+          "rule": "New cycle implementation handoff, board unchanged: calls 12,12; exit 0",
+          "rows": [
+            "r1-g2-C2"
+          ]
+        },
+        {
+          "id": "r1-g2-C3-needs-human",
+          "rule": "prepare needs-human with exit 0: terminal; calls 12,15,15; exit 1",
+          "rows": [
+            "r1-g2-C3-needs-human"
+          ]
+        },
+        {
+          "id": "r1-g2-C3-escalated",
+          "rule": "prepare escalated with exit 0: terminal; calls 12,15,15; exit 1",
+          "rows": [
+            "r1-g2-C3-escalated"
+          ]
+        },
+        {
+          "id": "r1-g2-C3-failed",
+          "rule": "prepare failed with exit 0: terminal; calls 12,15,15; exit 1",
+          "rows": [
+            "r1-g2-C3-failed"
+          ]
+        },
+        {
+          "id": "r1-g2-C4-gate-red",
+          "rule": "gate-red status overrides prepared and board advance: card12 called once; terminal; exit 1",
+          "rows": [
+            "r1-g2-C4-gate-red"
+          ]
+        },
+        {
+          "id": "r1-g2-C4-escalated",
+          "rule": "escalated status overrides prepared and board advance: card12 called once; terminal; exit 1",
+          "rows": [
+            "r1-g2-C4-escalated"
+          ]
+        },
+        {
+          "id": "r1-g2-C4-merge-parked",
+          "rule": "merge-parked status overrides prepared and board advance: card12 called once; terminal; exit 1",
+          "rows": [
+            "r1-g2-C4-merge-parked"
+          ]
+        },
+        {
+          "id": "r1-g2-C5",
+          "rule": "Unreadable tracker cannot manufacture completion or progress: at most one call; not at-target; exit 1",
+          "rows": [
+            "r1-g2-C5"
+          ]
+        },
+        {
+          "id": "r1-g2-C6",
+          "rule": "Unmapped board state and PR linked to another card: one call; no-progress; exit 1",
+          "rows": [
+            "r1-g2-C6"
+          ]
+        },
+        {
+          "id": "r1-g2-C7",
+          "rule": "New PR head with unchanged lifecycle: one call; no-progress",
+          "rows": [
+            "r1-g2-C7"
+          ]
+        },
+        {
+          "id": "r1-g2-B1",
+          "rule": "One-pass cap with board progress: one call; pass-cap; exit 1",
+          "rows": [
+            "r1-g2-B1"
+          ]
+        },
+        {
+          "id": "r1-g2-B2",
+          "rule": "One-pass cap with successful preparation: one call; retryable; pass-cap; exit 1",
+          "rows": [
+            "r1-g2-B2"
+          ]
+        },
+        {
+          "id": "r1-g2-I1",
+          "rule": "Same-root restart after 12 closes: first calls 12,15; second calls only 15; 12 at-target; exit 0",
+          "rows": [
+            "r1-g2-I1"
+          ]
+        },
+        {
+          "id": "r1-g2-I2",
+          "rule": "Rank history 12:3->4->2->4 and 15:0->1->2->2: exactly three ordered passes, no-progress",
+          "rows": [
+            "r1-g2-I2"
+          ]
+        },
+        {
+          "id": "r1-g2-C8",
+          "rule": "Review -> Ready regression: one call; no-progress; exit 1",
+          "rows": [
+            "r1-g2-C8"
+          ]
+        },
+        {
+          "id": "r1-g2-I3",
+          "rule": "Durable board history 12:Draft->Review->Ready->Review, 15:Draft->Ready->In Progress->In Progress: exactly three ordered passes; no-progress; exit 1",
+          "rows": [
+            "r1-g2-I3"
+          ]
+        }
+      ],
+      "interactions": [
+        "Prepared/no-status exit0 x own board advancement (W4/W5) or peer-only cycle advancement (W6) or no advancement (W7)",
+        "Board advancement x pre-existing later cycle handoff (W8)",
+        "Progress x original order and completed peer removal (W1-W5)",
+        "Prepared x terminal/human marker precedence (C3/C4)",
+        "PR lifecycle x association and non-lifecycle head change (W9/W10/C6/C7)",
+        "Durable completion x stale process result and restart (W11/W12/I1)",
+        "Best state x regression/recovery while peer buys an intervening pass (I2/I3)",
+        "Progress x pass cap (B1/B2)"
+      ],
+      "transitionMatrix": {
+        "name": "run-local eligible -> retry / at-target / terminal and pass -> continue / stop",
+        "source": "Durable before/after board, linked PR and cycle state plus invocation-local best/results; real handler state readers exercised",
+        "acceptedEvent": "A completed card invocation for its ordered id; only state strictly later than its prior best buys another pass",
+        "predecessor": "Before-run durable snapshot/high-water state; prior pass must contain actual progress",
+        "next": "Only unfinished nonterminal cards remain pending in original order; completed cards omitted; otherwise no-progress/pass-cap",
+        "persistentEffects": "Existing audit line only; no new workflow ledger or event schema",
+        "immutableFields": "Input card order and card identity; sealed r1-g1 tests untouched; best never decreases during invocation",
+        "forbidden": "Engine text, new commit alone, unrelated PR, unreadable state and recovered prior maximum cannot buy a pass; prepare success alone cannot declare completion",
+        "replayRetryRestart": "C1/C7 prevent replay progress; I2/I3 prevent oscillation; I1 re-reads durable completion on a new invocation",
+        "terminalPreconditions": "Durably completed/Done or existing explicit target; human/terminal statuses override prepared; cap and no-progress leave unfinished cards unfinished",
+        "metrics": "Pass count increments once per pass; exit0 only all-at-target, otherwise exit1; W4 checks audit order/outcomes",
+        "negativeFamilies": "Applicable run-local families have rows; persisted ledger/head/scope/seal families are excluded with N1 rationale"
+      },
+      "documentationAcceptance": {
+        "file": "apps/website/content/docs/reference/cli/commands.mdx",
+        "requirement": "Progress is a later durable board/PR/cycle lifecycle state, not merely handoff filenames or engine text; prepared unfinished cards remain eligible for progress-driven retries; completed/terminal cards do not retry.",
+        "authority": "Story614 Business Rules and AC4/AC5/AC8"
+      },
+      "sealedCompatibility": "r1-g1 absent-status completed controls explicitly carry prepare undefined; new prepared witnesses carry prepare=prepared. No predecessor row or artifact changed."
+    },
+    {
+      "id": "r1-g2-G1",
+      "mechanismId": "durable-reader-representations",
+      "producer": "cycle-wiring.ts::readCard/readCardDocumentViaGh; cycle-state.mjs::cardView; host/github.mjs::readCard",
+      "inputs": [
+        "installed cycle-state script present or absent",
+        "offline gh card JSON",
+        "mapped before/after states",
+        "process prepare/terminal outcome"
+      ],
+      "representations": [
+        "raw projectItems fallback",
+        "installed normalized boardState (no projectItems)",
+        "body Status fallback"
+      ],
+      "consumers": [
+        "list progress reader",
+        "atTarget before and after run",
+        "prepared retry eligibility"
+      ],
+      "classes": [
+        "installed board progress",
+        "installed prepared unfinished retry",
+        "installed valid completed closure"
+      ],
+      "interactions": [
+        "installed adapter x real handler x board-only progress",
+        "prepared result x installed normalized boardState",
+        "closure x stale retryable result"
+      ],
+      "rows": [
+        "r1-g2-G1-board",
+        "r1-g2-G1-prepare",
+        "r1-g2-G1-completion"
+      ],
+      "authority": "Story 614 AC4/AC5/AC6/AC7/AC8/AC9 and Business Rules; live cycle-state card hash sha256:90dfd348c7b28cfc21c277167a1fe09fb82d74f2f9dd5ca9f79db3233d0e93ab; cycle-wiring.ts::readCard/readCardDocumentViaGh; cycle-state.mjs::cardView; host/github.mjs::readCard"
+    },
+    {
+      "id": "r1-g2-G2",
+      "mechanismId": "pr-lifecycle-inventory",
+      "producer": "host/github.mjs PR reads; pr-states.md Synthesis and canonical-states.md; cards-run.ts::readCardRank/runOne",
+      "inputs": [
+        "associated PR identity",
+        "isDraft/state/mergedAt",
+        "pr-state labels",
+        "reviewDecision/statusCheckRollup on current head",
+        "prior high-water state",
+        "independent existing cycle evidence"
+      ],
+      "representations": [
+        "absent",
+        "draft",
+        "to-be-reviewed",
+        "not-approved",
+        "ready-to-merge",
+        "MERGED",
+        "CLOSED without merge"
+      ],
+      "consumers": [
+        "list retry decision",
+        "invocation high-water snapshot"
+      ],
+      "classes": [
+        "absent -> draft",
+        "draft -> review",
+        "review -> approved",
+        "rejected -> approved",
+        "ready -> merged",
+        "review -> rejected",
+        "review -> closed-unmerged",
+        "ready -> review",
+        "review -> draft",
+        "review -> absent",
+        "rejected -> review without approval",
+        "each state unchanged",
+        "approval -> regression -> recovery",
+        "unrelated PR approval"
+      ],
+      "interactions": [
+        "PR-only progress beneath r9 review handoff",
+        "review verdict/label/check changes with unchanged board",
+        "regression/recovery with peer-only cycle progress",
+        "wrong card association and numeric-prefix collision"
+      ],
+      "rows": [
+        "r1-g2-G2-creation-draft",
+        "r1-g2-G2-draft-review",
+        "r1-g2-G2-approval",
+        "r1-g2-G2-rejection-repaired",
+        "r1-g2-G2-merge",
+        "r1-g2-G2-rejected",
+        "r1-g2-G2-closed-unmerged",
+        "r1-g2-G2-lost-approval",
+        "r1-g2-G2-back-to-draft",
+        "r1-g2-G2-pr-disappears",
+        "r1-g2-G2-rejection-cleared-only",
+        "r1-g2-G2-unchanged-absent",
+        "r1-g2-G2-unchanged-draft",
+        "r1-g2-G2-unchanged-review",
+        "r1-g2-G2-unchanged-rejected",
+        "r1-g2-G2-unchanged-ready",
+        "r1-g2-G2-unchanged-merged",
+        "r1-g2-G2-unchanged-closed",
+        "r1-g2-G2-high-water",
+        "r1-g2-G2-wrong-card"
+      ],
+      "authority": "Story 614 AC4/AC5/AC6/AC7/AC8/AC9 and Business Rules; live cycle-state card hash sha256:90dfd348c7b28cfc21c277167a1fe09fb82d74f2f9dd5ca9f79db3233d0e93ab; host/github.mjs PR reads; pr-states.md Synthesis and canonical-states.md; cards-run.ts::readCardRank/runOne",
+      "equivalence": "PR review and not-approved are the uncleared Review class (pr-states.md Synthesis); clearing rejection without green approved evidence is not later. ready-to-merge is merge-enabling, merged is later PR lifecycle evidence. Closed-unmerged is withdrawal, not advancement. A merged PR while the issue remains OPEN is PR progress, not proof that issue closure/cascade completed (existing merged-closure-unfinished rule). A prior component maximum never decreases; later cycle evidence does not mask PR progress."
+    },
+    {
+      "id": "r1-g2-G3",
+      "mechanismId": "board-state-representations",
+      "producer": "next/control-state.mjs::resolveMacrostate/parseStateMapping; cycle-wiring.ts::readCardDocumentViaGh",
+      "inputs": [
+        "board status",
+        "body Status",
+        "optional State Mapping"
+      ],
+      "representations": [
+        "canonical names without mapping",
+        "canonical fallback despite mapping",
+        "case-insensitive labels",
+        "multiple labels for same macrostate",
+        "body fallback",
+        "board overrides stale body"
+      ],
+      "consumers": [
+        "list durable progress reader",
+        "high-water comparison"
+      ],
+      "classes": [
+        "canonical/default forward",
+        "canonical/mapped forward",
+        "case-normalized forward",
+        "two mapped aliases same macrostate",
+        "canonical alias same macrostate",
+        "two unmapped names",
+        "known to unmapped",
+        "case-only equivalent",
+        "absent board/body forward",
+        "board-over-stale-Done body"
+      ],
+      "interactions": [
+        "each representation through installed and fallback readers",
+        "alias changes cannot manufacture progress",
+        "unmapped transition cannot manufacture progress",
+        "C6 Outside -> Removed with unrelated PR"
+      ],
+      "rows": [
+        "r1-g2-C6",
+        "r1-g2-G3-fallback-canonical-default",
+        "r1-g2-G3-fallback-canonical-mapped",
+        "r1-g2-G3-fallback-case",
+        "r1-g2-G3-fallback-alias",
+        "r1-g2-G3-fallback-canonical-alias",
+        "r1-g2-G3-fallback-unmapped",
+        "r1-g2-G3-fallback-known-to-unmapped",
+        "r1-g2-G3-fallback-case-only",
+        "r1-g2-G3-fallback-body",
+        "r1-g2-G3-fallback-stale-body",
+        "r1-g2-G3-installed-canonical-default",
+        "r1-g2-G3-installed-canonical-mapped",
+        "r1-g2-G3-installed-case",
+        "r1-g2-G3-installed-alias",
+        "r1-g2-G3-installed-canonical-alias",
+        "r1-g2-G3-installed-unmapped",
+        "r1-g2-G3-installed-known-to-unmapped",
+        "r1-g2-G3-installed-case-only",
+        "r1-g2-G3-installed-body",
+        "r1-g2-G3-installed-stale-body"
+      ],
+      "authority": "Story 614 AC4/AC5/AC6/AC7/AC8/AC9 and Business Rules; live cycle-state card hash sha256:90dfd348c7b28cfc21c277167a1fe09fb82d74f2f9dd5ca9f79db3233d0e93ab; next/control-state.mjs::resolveMacrostate/parseStateMapping; cycle-wiring.ts::readCardDocumentViaGh"
+    },
+    {
+      "id": "r1-g2-G4",
+      "mechanismId": "durable-completion-partitions",
+      "producer": "cycle-wiring.ts::readCardClosedAt; control-state.mjs::resolveMacrostate; cards-run.ts::runOne",
+      "inputs": [
+        "issue state/stateReason/closedAt",
+        "mapped Done",
+        "process terminal/retryable result",
+        "safety halt"
+      ],
+      "representations": [
+        "OPEN",
+        "CLOSED/COMPLETED/valid date",
+        "CLOSED/NOT_PLANNED",
+        "missing date",
+        "invalid date",
+        "legacy missing reason with valid date",
+        "board-only Done"
+      ],
+      "consumers": [
+        "pre-run skip",
+        "post-run completion",
+        "report/exit",
+        "restart"
+      ],
+      "classes": [
+        "not-planned negative",
+        "missing-date negative",
+        "invalid-date negative",
+        "open-with-date negative",
+        "completed positive",
+        "legacy null reason positive",
+        "post-run mapped Done",
+        "terminal gate-red/needs-human/closure-unfinished precedence",
+        "global-halt precedence"
+      ],
+      "interactions": [
+        "closure classes x installed/fallback reader x before/after execution",
+        "durable completion replaces unfinished retryable result only",
+        "explicit terminal/human and safety halt preserve their reason"
+      ],
+      "rows": [
+        "r1-g2-G4-fallback-not-planned",
+        "r1-g2-G4-fallback-missing-date",
+        "r1-g2-G4-fallback-invalid-date",
+        "r1-g2-G4-fallback-open-with-date",
+        "r1-g2-G4-fallback-completed",
+        "r1-g2-G4-fallback-legacy-null-reason",
+        "r1-g2-G4-fallback-done",
+        "r1-g2-G4-installed-not-planned",
+        "r1-g2-G4-installed-missing-date",
+        "r1-g2-G4-installed-invalid-date",
+        "r1-g2-G4-installed-open-with-date",
+        "r1-g2-G4-installed-completed",
+        "r1-g2-G4-installed-legacy-null-reason",
+        "r1-g2-G4-installed-done",
+        "r1-g2-G4-precedence-gate-red",
+        "r1-g2-G4-precedence-needs-human",
+        "r1-g2-G4-precedence-merged-closure-unfinished",
+        "r1-g2-G4-precedence-halt"
+      ],
+      "authority": "Story 614 AC4/AC5/AC6/AC7/AC8/AC9 and Business Rules; live cycle-state card hash sha256:90dfd348c7b28cfc21c277167a1fe09fb82d74f2f9dd5ca9f79db3233d0e93ab; cycle-wiring.ts::readCardClosedAt; control-state.mjs::resolveMacrostate; cards-run.ts::runOne",
+      "precedence": "AC7 global halt first; AC6 explicit terminal/human result is retained; durable Done/completed evidence replaces only unfinished retryable outcomes (AC8/AC9). Prior completed cards skip before invocation. readCardClosedAt explicitly accepts a valid CLOSED timestamp unless NOT_PLANNED, including legacy null reason."
+    },
+    {
+      "id": "r1-g2-G5",
+      "mechanismId": "prepared-classification-interactions",
+      "producer": "card-prepare.ts::planStep/say; parallel.ts::runCardInProcess/outcomeOfExit; cards-entry.ts::inProcessRunner/cardRunner; cards-run.ts::classify",
+      "inputs": [
+        "prepare=prepared",
+        "cycle status literal",
+        "exit 0/nonzero/null/error/signal",
+        "needs-human detail",
+        "skipped outcome"
+      ],
+      "representations": [
+        "real PREPARE-RESULT console relay",
+        "CardProcessExit",
+        "CardOutcome",
+        "list report and audit"
+      ],
+      "consumers": [
+        "pure classify",
+        "handler eligible filter",
+        "real in-process single-card lifecycle"
+      ],
+      "classes": [
+        "target set merged/ready-for-merge/target-ready",
+        "terminal set escalated/escalate/needs-human/merge-parked/merged-closure-unfinished/gate-red",
+        "not-found",
+        "failed-* including empty suffix and future suffix",
+        "ordinary complement including malformed prefixes/empty/absent",
+        "needs-human detail",
+        "skipped"
+      ],
+      "interactions": [
+        "each finite status member x six exit forms in classify and handler",
+        "successful prepared ordinary exits remain unfinished",
+        "target wins existing detail rule; terminal/human wins prepared",
+        "error/signal outcome conversion drops prepare as already defined; explicit cycle status still relayed",
+        "real prepare producer runs refine/plan with stubbed engine then real in-process relay and list retry"
+      ],
+      "rows": [
+        "r1-g2-G5-pure-at-target-zero",
+        "r1-g2-G5-pure-at-target-nonzero",
+        "r1-g2-G5-pure-at-target-null",
+        "r1-g2-G5-pure-at-target-error",
+        "r1-g2-G5-pure-at-target-signal",
+        "r1-g2-G5-pure-at-target-detail",
+        "r1-g2-G5-pure-terminal-zero",
+        "r1-g2-G5-pure-terminal-nonzero",
+        "r1-g2-G5-pure-terminal-null",
+        "r1-g2-G5-pure-terminal-error",
+        "r1-g2-G5-pure-terminal-signal",
+        "r1-g2-G5-pure-terminal-detail",
+        "r1-g2-G5-pure-retryable-zero",
+        "r1-g2-G5-pure-retryable-nonzero",
+        "r1-g2-G5-pure-retryable-null",
+        "r1-g2-G5-pure-retryable-error",
+        "r1-g2-G5-pure-retryable-signal",
+        "r1-g2-G5-pure-retryable-detail",
+        "r1-g2-G5-handler-at-target-zero",
+        "r1-g2-G5-handler-at-target-nonzero",
+        "r1-g2-G5-handler-at-target-null",
+        "r1-g2-G5-handler-at-target-error",
+        "r1-g2-G5-handler-at-target-signal",
+        "r1-g2-G5-handler-at-target-detail",
+        "r1-g2-G5-handler-terminal-zero",
+        "r1-g2-G5-handler-terminal-nonzero",
+        "r1-g2-G5-handler-terminal-null",
+        "r1-g2-G5-handler-terminal-error",
+        "r1-g2-G5-handler-terminal-signal",
+        "r1-g2-G5-handler-terminal-detail",
+        "r1-g2-G5-handler-retryable-zero",
+        "r1-g2-G5-handler-retryable-nonzero",
+        "r1-g2-G5-handler-retryable-null",
+        "r1-g2-G5-handler-retryable-error",
+        "r1-g2-G5-handler-retryable-signal",
+        "r1-g2-G5-handler-retryable-detail",
+        "r1-g2-G5-skipped",
+        "r1-g2-G5-relay-target-ready",
+        "r1-g2-G5-relay-needs-human",
+        "r1-g2-G5-relay-rounds-bound-reached",
+        "r1-g2-G5-relay-undefined",
+        "r1-g2-G5-engine-boundary"
+      ],
+      "authority": "Story 614 AC4/AC5/AC6/AC7/AC8/AC9 and Business Rules; live cycle-state card hash sha256:90dfd348c7b28cfc21c277167a1fe09fb82d74f2f9dd5ca9f79db3233d0e93ab; card-prepare.ts::planStep/say; parallel.ts::runCardInProcess/outcomeOfExit; cards-entry.ts::inProcessRunner/cardRunner; cards-run.ts::classify",
+      "equivalence": "Status precedence is the sealed r1-g1 partition: target set first, terminal disjunction or needs-human detail second, skipped third. Prepared changes only the ordinary completed outcome into retryable. Signal/error forms drop prepare in outcomeOfExit, while cards-entry relays explicit cycle status; pure tests deliberately carry prepared to protect classifier precedence independently."
+    },
+    {
+      "id": "r1-g2-G6",
+      "mechanismId": "gh-fixture-fidelity",
+      "producer": "offline cards-lifecycle-gh.cjs request parser, constrained to actual gh JSON request grammar used by host/github.mjs and cycle-wiring.ts",
+      "inputs": [
+        "issue/PR identity",
+        "requested JSON fields",
+        "repo",
+        "state/head/base/search/limit filters"
+      ],
+      "representations": [
+        "JSON object projected to requested fields",
+        "filtered projected PR list",
+        "nonzero empty stdout on unsupported/unknown reads"
+      ],
+      "consumers": [
+        "actual installed adapter",
+        "direct-gh reader",
+        "test witnesses"
+      ],
+      "classes": [
+        "field projection",
+        "unknown issue/PR",
+        "wrong repo",
+        "unsupported field",
+        "missing fields",
+        "write request",
+        "unsupported filter/search/jq",
+        "open/merged/closed/all list filters",
+        "head/base/search/limit",
+        "specific non-first PR identity"
+      ],
+      "interactions": [
+        "wrong fields cannot reveal completion",
+        "wrong PR cannot reveal unrelated approval",
+        "merged filter cannot expose open PR",
+        "numeric card identity boundaries"
+      ],
+      "rows": [
+        "r1-g2-G6-fields",
+        "r1-g2-G6-unknown-issue",
+        "r1-g2-G6-unknown-pr",
+        "r1-g2-G6-wrong-repo",
+        "r1-g2-G6-unknown-field",
+        "r1-g2-G6-no-fields",
+        "r1-g2-G6-write",
+        "r1-g2-G6-unsupported-filter",
+        "r1-g2-G6-unsupported-search",
+        "r1-g2-G6-unsupported-jq",
+        "r1-g2-G6-filter"
+      ],
+      "authority": "Story 614 AC4/AC5/AC6/AC7/AC8/AC9 and Business Rules; live cycle-state card hash sha256:90dfd348c7b28cfc21c277167a1fe09fb82d74f2f9dd5ca9f79db3233d0e93ab; offline cards-lifecycle-gh.cjs request parser, constrained to actual gh JSON request grammar used by host/github.mjs and cycle-wiring.ts"
+    }
+  ],
+  "fixScope": {
+    "owner": "cards-run.ts::readCardRank/runOne and cards-entry.ts durable lifecycle wiring",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/cards-run.ts",
+      "apps/pair-cli/src/commands/run/cards-entry.ts",
+      "apps/pair-cli/src/commands/run/run-context.ts",
+      "apps/website/content/docs/reference/cli/commands.mdx"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r1-g2-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "mapped board-only advance retries unfinished in order",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W1",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "Draft -> Ready: calls 12,15,12,15; closed 9 skipped; 2 passes; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12', '15' ] to deeply equal [ '12', '15', '12', '15' ]"
+    },
+    {
+      "id": "r1-g2-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "mapped board-only advance retries unfinished in order",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W2",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "Ready -> In Progress: calls 12,15,12,15; closed 9 skipped; 2 passes; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12', '15' ] to deeply equal [ '12', '15', '12', '15' ]"
+    },
+    {
+      "id": "r1-g2-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "mapped board-only advance retries unfinished in order",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W3",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "In Progress -> Review: calls 12,15,12,15; closed 9 skipped; 2 passes; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12', '15' ] to deeply equal [ '12', '15', '12', '15' ]"
+    },
+    {
+      "id": "r1-g2-W4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "successful board-only preparation stays eligible with a retryable peer",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W4",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "prepare=prepared, exit 0, no cycleStatus, Draft -> Ready: calls 12,15,12,15; all-at-target; audit 12,15,9 at-target; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12', '15' ] to deeply equal [ '12', '15', '12', '15' ]"
+    },
+    {
+      "id": "r1-g2-W5",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "prepared card after its peer keeps original order",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W5",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "Order 15,12,9: calls 15,12,15,12 after successful preparation; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '15', '12' ] to deeply equal [ '15', '12', '15', '12' ]"
+    },
+    {
+      "id": "r1-g2-W6",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "successful preparation remains retryable when only the peer advances",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W6",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "Only peer cycle advances: prepared 12 remains eligible; calls 12,15,12,15; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12', '15', '15' ] to deeply equal [ '12', '15', '12', '15' ]"
+    },
+    {
+      "id": "r1-g2-W7",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "prepared with no durable progress stops as unfinished, not terminal",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W7",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "prepared with unchanged durable state: one call; retryable; no-progress; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12\\n …' to contain '#12: retryable'"
+    },
+    {
+      "id": "r1-g2-W8",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "board progress is visible even with existing later cycle handoffs",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W8",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "Existing r9 review evidence cannot mask Draft -> Ready; calls 12,15,12,15; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12', '15' ] to deeply equal [ '12', '15', '12', '15' ]"
+    },
+    {
+      "id": "r1-g2-W9",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "PR-only creation or draft-to-open counts as progress",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W9",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "No PR -> open linked PR, board unchanged: calls 12,12; 2 passes; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]"
+    },
+    {
+      "id": "r1-g2-W10",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "PR-only creation or draft-to-open counts as progress",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W10",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "Draft linked PR -> open non-draft linked PR, board unchanged: calls 12,12; 2 passes; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]"
+    },
+    {
+      "id": "r1-g2-W11",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "durable completion after running wins over an unfinished process result",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W11",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "Card becomes CLOSED/COMPLETED during its run despite retryable process result: one call; at-target; all-at-target; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12\\n …' to contain '#12: at-target'"
+    },
+    {
+      "id": "r1-g2-W12",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "a board-only Done card is already at target on restart",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::W12",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^W",
+      "expected": "Mapped Done at invocation start: no call; at-target; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal []"
+    },
+    {
+      "id": "r1-g2-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unchanged state ignores optimistic engine text and stops",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C1",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "Optimistic engine text with unchanged state: one call; no-progress; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "a real cycle handoff advances an unfinished card without board changes",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C2",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "New cycle implementation handoff, board unchanged: calls 12,12; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C3-needs-human",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "non-successful prepare outcomes stay terminal",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C3-needs-human",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "prepare needs-human with exit 0: terminal; calls 12,15,15; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C3-escalated",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "non-successful prepare outcomes stay terminal",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C3-escalated",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "prepare escalated with exit 0: terminal; calls 12,15,15; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C3-failed",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "non-successful prepare outcomes stay terminal",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C3-failed",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "prepare failed with exit 0: terminal; calls 12,15,15; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C4-gate-red",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "terminal status wins over prepared and board advance",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C4-gate-red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "gate-red status overrides prepared and board advance: card12 called once; terminal; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C4-escalated",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "terminal status wins over prepared and board advance",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C4-escalated",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "escalated status overrides prepared and board advance: card12 called once; terminal; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C4-merge-parked",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "terminal status wins over prepared and board advance",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C4-merge-parked",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "merge-parked status overrides prepared and board advance: card12 called once; terminal; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C5",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unreadable card cannot manufacture completion or progress",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C5",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "Unreadable tracker cannot manufacture completion or progress: at most one call; not at-target; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C6",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unknown board state and unrelated PR changes cannot advance a card",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C6",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "Outside -> Removed (both unmapped), plus PR linked to another card: one call; no-progress; exit 1",
+      "covers": [
+        "r0-2",
+        "r1-g2-G3"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C7",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unchanged PR lifecycle with a new commit is not progress",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C7",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "New PR head with unchanged lifecycle: one call; no-progress",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-B1",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "board progress still respects the one-pass cap",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::B1",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^B1:",
+      "expected": "One-pass cap with board progress: one call; pass-cap; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-B2",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "successful prepare with one-pass cap remains unfinished",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::B2",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^B2:",
+      "expected": "One-pass cap with successful preparation: one call; retryable; pass-cap; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12\\n …' to contain '#12: retryable'"
+    },
+    {
+      "id": "r1-g2-I1",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "same-root restart re-reads completed and unfinished cards",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::I1",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^I1:",
+      "expected": "Same-root restart after 12 closes: first calls 12,15; second calls only 15; 12 at-target; exit 0",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-I2",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "regression then recovery below the high-water state cannot buy a fourth pass",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::I2",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^I2:",
+      "expected": "Rank history 12:3->4->2->4 and 15:0->1->2->2: exactly three ordered passes, no-progress",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-C8",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "a board regression is not forward progress",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::C8",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^C",
+      "expected": "Review -> Ready regression: one call; no-progress; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "PASS"
+    },
+    {
+      "id": "r1-g2-I3",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "durable board regression and recovery do not extend the run",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::I3",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json -t ^I3:",
+      "expected": "Durable board history 12:Draft->Review->Ready->Review, 15:Draft->Ready->In Progress->In Progress: exactly three ordered passes; no-progress; exit 1",
+      "covers": [
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12', '15' ] to deeply equal [ '12', '15', '12', '15', '12', '15' ]"
+    },
+    {
+      "id": "r1-g2-N1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "Persisted ledger writes, scope/head/batch identity mutation, evidence sealing, stale concurrent writers, human authorization and regression discharge",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "cards-run.ts::runCardList and cards-entry.ts::handleCardsRun",
+      "expected": "No new ledger event or durable cycle transition is accepted or written by this consumer.",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "This change reads durable state and computes invocation-local pending/results/best Maps; the existing card runner still owns cycle events and policy gates. No ledger schema, seal, head/scope/batch identity, predecessor validation, group convergence or human decision write changes. Missing authority (C5/C6), human terminal precedence (C3/C4), replay (C1/C7), restart (I1), regression/recovery (I2/I3), and false terminal completion (W7/W11/W12) ARE applicable and executed."
+    },
+    {
+      "id": "r1-g2-G1-board",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "board",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G1-board",
+      "expected": "Installed card adapter returns boardState without projectItems; calls 12,12; at-target; exit 0",
+      "covers": [
+        "r1-g2-G1",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G1-board: installed adapter reaches list decisions"
+      ]
+    },
+    {
+      "id": "r1-g2-G1-prepare",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "prepare",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G1-prepare",
+      "expected": "Installed card adapter returns boardState without projectItems; calls 12,12; at-target; exit 0",
+      "covers": [
+        "r1-g2-G1",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G1-prepare: installed adapter reaches list decisions"
+      ]
+    },
+    {
+      "id": "r1-g2-G1-completion",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "completion",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G1-completion",
+      "expected": "Installed card adapter returns boardState without projectItems; one call, durable at-target, exit 0",
+      "covers": [
+        "r1-g2-G1",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12\\n …' to contain '#12: at-target'",
+      "testNames": [
+        "G1-completion: installed adapter reaches list decisions"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-fallback-canonical-default",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "fallback-canonical-default",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-fallback-canonical-default",
+      "expected": "Resolved Draft -> Ready; calls 12,12; all-at-target; exit 0",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G3-fallback-'canonical-default': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-fallback-canonical-mapped",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "fallback-canonical-mapped",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-fallback-canonical-mapped",
+      "expected": "Resolved Draft -> Ready; calls 12,12; all-at-target; exit 0",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G3-fallback-'canonical-mapped': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-fallback-case",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "fallback-case",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-fallback-case",
+      "expected": "Resolved Draft -> Ready; calls 12,12; all-at-target; exit 0",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G3-fallback-'case': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-fallback-alias",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fallback-alias",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-fallback-alias",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-fallback-'alias': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-fallback-canonical-alias",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fallback-canonical-alias",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-fallback-canonical-alias",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-fallback-'canonical-alias': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-fallback-unmapped",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fallback-unmapped",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-fallback-unmapped",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-fallback-'unmapped': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-fallback-known-to-unmapped",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fallback-known-to-unmapped",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-fallback-known-to-unmapped",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-fallback-'known-to-unmapped': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-fallback-case-only",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fallback-case-only",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-fallback-case-only",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-fallback-'case-only': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-fallback-body",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "fallback-body",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-fallback-body",
+      "expected": "Resolved Draft -> Ready; calls 12,12; all-at-target; exit 0",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G3-fallback-'body': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-fallback-stale-body",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fallback-stale-body",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-fallback-stale-body",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-fallback-'stale-body': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-installed-canonical-default",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed-canonical-default",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-installed-canonical-default",
+      "expected": "Resolved Draft -> Ready; calls 12,12; all-at-target; exit 0",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G3-installed-'canonical-default': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-installed-canonical-mapped",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed-canonical-mapped",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-installed-canonical-mapped",
+      "expected": "Resolved Draft -> Ready; calls 12,12; all-at-target; exit 0",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G3-installed-'canonical-mapped': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-installed-case",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed-case",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-installed-case",
+      "expected": "Resolved Draft -> Ready; calls 12,12; all-at-target; exit 0",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G3-installed-'case': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-installed-alias",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed-alias",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-installed-alias",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-installed-'alias': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-installed-canonical-alias",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed-canonical-alias",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-installed-canonical-alias",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-installed-'canonical-alias': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-installed-unmapped",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed-unmapped",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-installed-unmapped",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-installed-'unmapped': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-installed-known-to-unmapped",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed-known-to-unmapped",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-installed-known-to-unmapped",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-installed-'known-to-unmapped': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-installed-case-only",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed-case-only",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-installed-case-only",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-installed-'case-only': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-installed-body",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed-body",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-installed-body",
+      "expected": "Resolved Draft -> Ready; calls 12,12; all-at-target; exit 0",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G3-installed-'body': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G3-installed-stale-body",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed-stale-body",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G3-installed-stale-body",
+      "expected": "No later resolved macrostate; one call; no-progress; exit 1",
+      "covers": [
+        "r1-g2-G3",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G3-installed-'stale-body': resolved macrostate governs progress"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-fallback-not-planned",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fallback-not-planned",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-fallback-not-planned",
+      "expected": "Reader yields no completion Date; pre/post one call; retryable; exit 1",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-fallback-'not-planned': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-fallback-missing-date",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fallback-missing-date",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-fallback-missing-date",
+      "expected": "Reader yields no completion Date; pre/post one call; retryable; exit 1",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-fallback-'missing-date': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-fallback-invalid-date",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fallback-invalid-date",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-fallback-invalid-date",
+      "expected": "Reader yields no completion Date; pre/post one call; retryable; exit 1",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-fallback-'invalid-date': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-fallback-open-with-date",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fallback-open-with-date",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-fallback-open-with-date",
+      "expected": "Reader yields no completion Date; pre/post one call; retryable; exit 1",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-fallback-'open-with-date': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-fallback-completed",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "fallback-completed",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-fallback-completed",
+      "expected": "Reader returns Date; pre-run no call; post-run one call, at-target, exit 0",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12\\n …' to contain '#12: at-target'",
+      "testNames": [
+        "G4-fallback-'completed': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-fallback-legacy-null-reason",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "fallback-legacy-null-reason",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-fallback-legacy-null-reason",
+      "expected": "Reader returns Date; pre-run no call; post-run one call, at-target, exit 0",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12\\n …' to contain '#12: at-target'",
+      "testNames": [
+        "G4-fallback-'legacy-null-reason': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-fallback-done",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "fallback-done",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-fallback-done",
+      "expected": "New mapped Done detected after first call; no rerun; at-target; exit 0",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12\\n …' to contain '#12: at-target'",
+      "testNames": [
+        "G4-fallback-done: new mapped Done ends without a second invocation"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-installed-not-planned",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed-not-planned",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-installed-not-planned",
+      "expected": "Reader yields no completion Date; pre/post one call; retryable; exit 1",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-installed-'not-planned': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-installed-missing-date",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed-missing-date",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-installed-missing-date",
+      "expected": "Reader yields no completion Date; pre/post one call; retryable; exit 1",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-installed-'missing-date': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-installed-invalid-date",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed-invalid-date",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-installed-invalid-date",
+      "expected": "Reader yields no completion Date; pre/post one call; retryable; exit 1",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-installed-'invalid-date': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-installed-open-with-date",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed-open-with-date",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-installed-open-with-date",
+      "expected": "Reader yields no completion Date; pre/post one call; retryable; exit 1",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-installed-'open-with-date': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-installed-completed",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed-completed",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-installed-completed",
+      "expected": "Reader returns Date; pre-run no call; post-run one call, at-target, exit 0",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12\\n …' to contain '#12: at-target'",
+      "testNames": [
+        "G4-installed-'completed': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-installed-legacy-null-reason",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed-legacy-null-reason",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-installed-legacy-null-reason",
+      "expected": "Reader returns Date; pre-run no call; post-run one call, at-target, exit 0",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12\\n …' to contain '#12: at-target'",
+      "testNames": [
+        "G4-installed-'legacy-null-reason': closure evidence before and after execution"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-installed-done",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed-done",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-installed-done",
+      "expected": "New mapped Done detected after first call; no rerun; at-target; exit 0",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12\\n …' to contain '#12: at-target'",
+      "testNames": [
+        "G4-installed-done: new mapped Done ends without a second invocation"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-precedence-gate-red",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "precedence-gate-red",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-precedence-gate-red",
+      "expected": "One call; terminal; exit 1; durable closure does not erase explicit terminal/human reason",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-precedence-gate-red: durable completion does not erase a terminal result"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-precedence-needs-human",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "precedence-needs-human",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-precedence-needs-human",
+      "expected": "One call; terminal; exit 1; durable closure does not erase explicit terminal/human reason",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-precedence-needs-human: durable completion does not erase a terminal result"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-precedence-merged-closure-unfinished",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "precedence-merged-closure-unfinished",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-precedence-merged-closure-unfinished",
+      "expected": "One call; terminal; exit 1; durable closure does not erase explicit terminal/human reason",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-precedence-merged-closure-unfinished: durable completion does not erase a terminal result"
+      ]
+    },
+    {
+      "id": "r1-g2-G4-precedence-halt",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "precedence-halt",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G4-precedence-halt",
+      "expected": "One call; terminal; exit 1; safety halt stops before card 15",
+      "covers": [
+        "r1-g2-G4",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G4-precedence-halt: completion cannot erase a safety-required halt"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-creation-draft",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "creation-draft",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-creation-draft",
+      "expected": "PR-only forward transition despite pre-existing r9 cycle evidence; calls 12,12; exit 0",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G2-'creation-draft': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-draft-review",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "draft-review",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-draft-review",
+      "expected": "PR-only forward transition despite pre-existing r9 cycle evidence; calls 12,12; exit 0",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G2-'draft-review': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-approval",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "approval",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-approval",
+      "expected": "PR-only forward transition despite pre-existing r9 cycle evidence; calls 12,12; exit 0",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G2-'approval': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-rejection-repaired",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "rejection-repaired",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-rejection-repaired",
+      "expected": "PR-only forward transition despite pre-existing r9 cycle evidence; calls 12,12; exit 0",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G2-'rejection-repaired': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-merge",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "merge",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-merge",
+      "expected": "PR-only forward transition despite pre-existing r9 cycle evidence; calls 12,12; exit 0",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G2-'merge': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-rejected",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "rejected",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-rejected",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-'rejected': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-closed-unmerged",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "closed-unmerged",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-closed-unmerged",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-'closed-unmerged': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-lost-approval",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "lost-approval",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-lost-approval",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-'lost-approval': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-back-to-draft",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "back-to-draft",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-back-to-draft",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-'back-to-draft': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-pr-disappears",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pr-disappears",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-pr-disappears",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-'pr-disappears': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-rejection-cleared-only",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "rejection-cleared-only",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-rejection-cleared-only",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-'rejection-cleared-only': independent PR transition below existing cycle evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-unchanged-absent",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unchanged-absent",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-unchanged-absent",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-unchanged-absent: unchanged PR state buys no pass"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-unchanged-draft",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unchanged-draft",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-unchanged-draft",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-unchanged-draft: unchanged PR state buys no pass"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-unchanged-review",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unchanged-review",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-unchanged-review",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-unchanged-review: unchanged PR state buys no pass"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-unchanged-rejected",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unchanged-rejected",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-unchanged-rejected",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-unchanged-rejected: unchanged PR state buys no pass"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-unchanged-ready",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unchanged-ready",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-unchanged-ready",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-unchanged-ready: unchanged PR state buys no pass"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-unchanged-merged",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unchanged-merged",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-unchanged-merged",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-unchanged-merged: unchanged PR state buys no pass"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-unchanged-closed",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unchanged-closed",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-unchanged-closed",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-unchanged-closed: unchanged PR state buys no pass"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-high-water",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "high-water",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-high-water",
+      "expected": "PR review -> ready -> rejected -> ready, peer advances twice: exactly 3 ordered passes then no-progress",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-high-water: PR regression and recovery buy no extra pass"
+      ]
+    },
+    {
+      "id": "r1-g2-G2-wrong-card",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "wrong-card",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G2-wrong-card",
+      "expected": "No PR forward progress; one call; no-progress; exit 1 (open issue has no durable Done evidence)",
+      "covers": [
+        "r1-g2-G2",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G2-wrong-card: another card approval cannot advance this card"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-fields",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fields",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-fields",
+      "expected": "Issue title-only read yields only title; PR number-only read yields only number",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-fields: requested fields are the only evidence returned"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-unknown-issue",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unknown-issue",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-unknown-issue",
+      "expected": "Nonzero exit with empty stdout; malformed or wrong identity/scope cannot expose progress/completion",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-unknown-issue: malformed or wrong-scope requests yield no evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-unknown-pr",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unknown-pr",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-unknown-pr",
+      "expected": "Nonzero exit with empty stdout; malformed or wrong identity/scope cannot expose progress/completion",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-unknown-pr: malformed or wrong-scope requests yield no evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-wrong-repo",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "wrong-repo",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-wrong-repo",
+      "expected": "Nonzero exit with empty stdout; malformed or wrong identity/scope cannot expose progress/completion",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-wrong-repo: malformed or wrong-scope requests yield no evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-unknown-field",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unknown-field",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-unknown-field",
+      "expected": "Nonzero exit with empty stdout; malformed or wrong identity/scope cannot expose progress/completion",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-unknown-field: malformed or wrong-scope requests yield no evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-no-fields",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "no-fields",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-no-fields",
+      "expected": "Nonzero exit with empty stdout; malformed or wrong identity/scope cannot expose progress/completion",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-no-fields: malformed or wrong-scope requests yield no evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-write",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "write",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-write",
+      "expected": "Nonzero exit with empty stdout; malformed or wrong identity/scope cannot expose progress/completion",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-write: malformed or wrong-scope requests yield no evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-unsupported-filter",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unsupported-filter",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-unsupported-filter",
+      "expected": "Nonzero exit with empty stdout; malformed or wrong identity/scope cannot expose progress/completion",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-unsupported-filter: malformed or wrong-scope requests yield no evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-unsupported-search",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unsupported-search",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-unsupported-search",
+      "expected": "Nonzero exit with empty stdout; malformed or wrong identity/scope cannot expose progress/completion",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-unsupported-search: malformed or wrong-scope requests yield no evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-unsupported-jq",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unsupported-jq",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-unsupported-jq",
+      "expected": "Nonzero exit with empty stdout; malformed or wrong identity/scope cannot expose progress/completion",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-unsupported-jq: malformed or wrong-scope requests yield no evidence"
+      ]
+    },
+    {
+      "id": "r1-g2-G6-filter",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "filter",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G6-filter",
+      "expected": "open -> 42, merged -> 43, closed-unmerged -> 44; all limit 2 -> 42,43; wrong head/base/card search -> []; correct card search -> 42; view 43 -> MERGED 43",
+      "covers": [
+        "r1-g2-G6",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G6-filter: lifecycle, association, branch, base and limit constrain PR lists"
+      ]
+    },
+    {
+      "id": "r1-g2-G5-pure-at-target-zero",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-at-target-zero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-at-target-zero",
+      "expected": "Every member classifies at-target",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-pure-'at-target-zero-merged': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-zero-ready-for-merge': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-zero-target-ready': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-at-target-nonzero",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-at-target-nonzero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-at-target-nonzero",
+      "expected": "Every member classifies at-target",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-pure-'at-target-nonzero-merged': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-nonzero-ready-for-merge': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-nonzero-target-ready': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-at-target-null",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-at-target-null",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-at-target-null",
+      "expected": "Every member classifies at-target",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-pure-'at-target-null-merged': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-null-ready-for-merge': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-null-target-ready': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-at-target-error",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-at-target-error",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-at-target-error",
+      "expected": "Every member classifies at-target",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-pure-'at-target-error-merged': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-error-ready-for-merge': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-error-target-ready': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-at-target-signal",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-at-target-signal",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-at-target-signal",
+      "expected": "Every member classifies at-target",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-pure-'at-target-signal-merged': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-signal-ready-for-merge': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-signal-target-ready': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-at-target-detail",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-at-target-detail",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-at-target-detail",
+      "expected": "Every member classifies at-target",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-pure-'at-target-detail-merged': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-detail-ready-for-merge': prepared obeys target and terminal partitions",
+        "G5-pure-'at-target-detail-target-ready': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-terminal-zero",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-terminal-zero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-terminal-zero",
+      "expected": "Every member classifies terminal",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-pure-'terminal-zero-escalated': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-zero-escalate': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-zero-needs-human': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-zero-merge-parked': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-zero-merged-closure-unfinish…': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-zero-gate-red': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-zero-not-found': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-zero-failed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-zero-failed-future': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-zero-failed-': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-terminal-nonzero",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-terminal-nonzero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-terminal-nonzero",
+      "expected": "Every member classifies terminal",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-pure-'terminal-nonzero-escalated': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-nonzero-escalate': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-nonzero-needs-human': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-nonzero-merge-parked': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-nonzero-merged-closure-unfin…': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-nonzero-gate-red': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-nonzero-not-found': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-nonzero-failed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-nonzero-failed-future': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-nonzero-failed-': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-terminal-null",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-terminal-null",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-terminal-null",
+      "expected": "Every member classifies terminal",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-pure-'terminal-null-escalated': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-null-escalate': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-null-needs-human': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-null-merge-parked': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-null-merged-closure-unfinish…': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-null-gate-red': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-null-not-found': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-null-failed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-null-failed-future': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-null-failed-': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-terminal-error",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-terminal-error",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-terminal-error",
+      "expected": "Every member classifies terminal",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-pure-'terminal-error-escalated': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-error-escalate': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-error-needs-human': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-error-merge-parked': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-error-merged-closure-unfinis…': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-error-gate-red': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-error-not-found': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-error-failed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-error-failed-future': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-error-failed-': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-terminal-signal",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-terminal-signal",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-terminal-signal",
+      "expected": "Every member classifies terminal",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-pure-'terminal-signal-escalated': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-signal-escalate': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-signal-needs-human': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-signal-merge-parked': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-signal-merged-closure-unfini…': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-signal-gate-red': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-signal-not-found': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-signal-failed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-signal-failed-future': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-signal-failed-': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-terminal-detail",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-terminal-detail",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-terminal-detail",
+      "expected": "Every member classifies terminal",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-pure-'terminal-detail-escalated': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-detail-escalate': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-detail-needs-human': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-detail-merge-parked': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-detail-merged-closure-unfini…': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-detail-gate-red': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-detail-not-found': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-detail-failed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-detail-failed-future': prepared obeys target and terminal partitions",
+        "G5-pure-'terminal-detail-failed-': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-retryable-zero",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pure-retryable-zero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-retryable-zero",
+      "expected": "Every member classifies retryable",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'terminal' to be 'retryable' // Object.is equality",
+      "testNames": [
+        "G5-pure-'retryable-zero-rounds-bound-reached': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-zero-failed': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-zero-xfailed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-zero-FAILED-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-zero-unknown': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-zero-empty': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-zero-absent': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-retryable-nonzero",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-retryable-nonzero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-retryable-nonzero",
+      "expected": "Every member classifies retryable",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 7/7 assertions",
+      "testNames": [
+        "G5-pure-'retryable-nonzero-rounds-bound-reached': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-nonzero-failed': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-nonzero-xfailed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-nonzero-FAILED-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-nonzero-unknown': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-nonzero-empty': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-nonzero-absent': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-retryable-null",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-retryable-null",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-retryable-null",
+      "expected": "Every member classifies retryable",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 7/7 assertions",
+      "testNames": [
+        "G5-pure-'retryable-null-rounds-bound-reached': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-null-failed': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-null-xfailed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-null-FAILED-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-null-unknown': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-null-empty': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-null-absent': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-retryable-error",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-retryable-error",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-retryable-error",
+      "expected": "Every member classifies retryable",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 7/7 assertions",
+      "testNames": [
+        "G5-pure-'retryable-error-rounds-bound-reached': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-error-failed': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-error-xfailed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-error-FAILED-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-error-unknown': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-error-empty': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-error-absent': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-retryable-signal",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-retryable-signal",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-retryable-signal",
+      "expected": "Every member classifies retryable",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 7/7 assertions",
+      "testNames": [
+        "G5-pure-'retryable-signal-rounds-bound-reached': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-signal-failed': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-signal-xfailed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-signal-FAILED-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-signal-unknown': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-signal-empty': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-signal-absent': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-pure-retryable-detail",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pure-retryable-detail",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-pure-retryable-detail",
+      "expected": "Every member classifies terminal",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 7/7 assertions",
+      "testNames": [
+        "G5-pure-'retryable-detail-rounds-bound-reached': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-detail-failed': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-detail-xfailed-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-detail-FAILED-implement': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-detail-unknown': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-detail-empty': prepared obeys target and terminal partitions",
+        "G5-pure-'retryable-detail-absent': prepared obeys target and terminal partitions"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-at-target-zero",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-at-target-zero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-at-target-zero",
+      "expected": "Every member reports at-target; calls 12,15,15; exit 0",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-handler-'at-target-zero-merged': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-zero-ready-for-merge': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-zero-target-ready': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-at-target-nonzero",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-at-target-nonzero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-at-target-nonzero",
+      "expected": "Every member reports at-target; calls 12,15,15; exit 0",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-handler-'at-target-nonzero-merged': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-nonzero-ready-for-merge': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-nonzero-target-ready': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-at-target-null",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-at-target-null",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-at-target-null",
+      "expected": "Every member reports at-target; calls 12,15,15; exit 0",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-handler-'at-target-null-merged': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-null-ready-for-merge': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-null-target-ready': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-at-target-error",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-at-target-error",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-at-target-error",
+      "expected": "Every member reports at-target; calls 12,15,15; exit 0",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-handler-'at-target-error-merged': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-error-ready-for-merge': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-error-target-ready': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-at-target-signal",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-at-target-signal",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-at-target-signal",
+      "expected": "Every member reports at-target; calls 12,15,15; exit 0",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-handler-'at-target-signal-merged': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-signal-ready-for-merge': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-signal-target-ready': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-at-target-detail",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-at-target-detail",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-at-target-detail",
+      "expected": "Every member reports at-target; calls 12,15,15; exit 0",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 3/3 assertions",
+      "testNames": [
+        "G5-handler-'at-target-detail-merged': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-detail-ready-for-merge': prepared partitions survive handler wiring",
+        "G5-handler-'at-target-detail-target-ready': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-terminal-zero",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-terminal-zero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-terminal-zero",
+      "expected": "Every member reports terminal; calls 12,15,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-handler-'terminal-zero-escalated': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-zero-escalate': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-zero-needs-human': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-zero-merge-parked': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-zero-merged-closure-unfinish…': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-zero-gate-red': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-zero-not-found': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-zero-failed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-zero-failed-future': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-zero-failed-': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-terminal-nonzero",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-terminal-nonzero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-terminal-nonzero",
+      "expected": "Every member reports terminal; calls 12,15,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-handler-'terminal-nonzero-escalated': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-nonzero-escalate': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-nonzero-needs-human': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-nonzero-merge-parked': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-nonzero-merged-closure-unfin…': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-nonzero-gate-red': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-nonzero-not-found': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-nonzero-failed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-nonzero-failed-future': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-nonzero-failed-': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-terminal-null",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-terminal-null",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-terminal-null",
+      "expected": "Every member reports terminal; calls 12,15,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-handler-'terminal-null-escalated': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-null-escalate': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-null-needs-human': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-null-merge-parked': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-null-merged-closure-unfinish…': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-null-gate-red': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-null-not-found': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-null-failed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-null-failed-future': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-null-failed-': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-terminal-error",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-terminal-error",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-terminal-error",
+      "expected": "Every member reports terminal; calls 12,15,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-handler-'terminal-error-escalated': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-error-escalate': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-error-needs-human': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-error-merge-parked': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-error-merged-closure-unfinis…': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-error-gate-red': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-error-not-found': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-error-failed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-error-failed-future': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-error-failed-': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-terminal-signal",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-terminal-signal",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-terminal-signal",
+      "expected": "Every member reports terminal; calls 12,15,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-handler-'terminal-signal-escalated': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-signal-escalate': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-signal-needs-human': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-signal-merge-parked': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-signal-merged-closure-unfini…': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-signal-gate-red': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-signal-not-found': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-signal-failed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-signal-failed-future': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-signal-failed-': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-terminal-detail",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-terminal-detail",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-terminal-detail",
+      "expected": "Every member reports terminal; calls 12,15,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 10/10 assertions",
+      "testNames": [
+        "G5-handler-'terminal-detail-escalated': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-detail-escalate': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-detail-needs-human': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-detail-merge-parked': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-detail-merged-closure-unfini…': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-detail-gate-red': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-detail-not-found': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-detail-failed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-detail-failed-future': prepared partitions survive handler wiring",
+        "G5-handler-'terminal-detail-failed-': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-retryable-zero",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "handler-retryable-zero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-retryable-zero",
+      "expected": "Every member reports retryable; calls 12,15,12,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12', '15', '15' ] to deeply equal [ '12', '15', '12', '15' ]",
+      "testNames": [
+        "G5-handler-'retryable-zero-rounds-bound-reached': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-zero-failed': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-zero-xfailed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-zero-FAILED-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-zero-unknown': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-zero-empty': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-zero-absent': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-retryable-nonzero",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-retryable-nonzero",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-retryable-nonzero",
+      "expected": "Every member reports retryable; calls 12,15,12,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 7/7 assertions",
+      "testNames": [
+        "G5-handler-'retryable-nonzero-rounds-bound-reached': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-nonzero-failed': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-nonzero-xfailed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-nonzero-FAILED-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-nonzero-unknown': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-nonzero-empty': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-nonzero-absent': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-retryable-null",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-retryable-null",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-retryable-null",
+      "expected": "Every member reports retryable; calls 12,15,12,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 7/7 assertions",
+      "testNames": [
+        "G5-handler-'retryable-null-rounds-bound-reached': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-null-failed': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-null-xfailed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-null-FAILED-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-null-unknown': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-null-empty': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-null-absent': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-retryable-error",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-retryable-error",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-retryable-error",
+      "expected": "Every member reports retryable; calls 12,15,12,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 7/7 assertions",
+      "testNames": [
+        "G5-handler-'retryable-error-rounds-bound-reached': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-error-failed': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-error-xfailed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-error-FAILED-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-error-unknown': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-error-empty': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-error-absent': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-retryable-signal",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-retryable-signal",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-retryable-signal",
+      "expected": "Every member reports retryable; calls 12,15,12,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 7/7 assertions",
+      "testNames": [
+        "G5-handler-'retryable-signal-rounds-bound-reached': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-signal-failed': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-signal-xfailed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-signal-FAILED-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-signal-unknown': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-signal-empty': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-signal-absent': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-handler-retryable-detail",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler-retryable-detail",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-handler-retryable-detail",
+      "expected": "Every member reports terminal; calls 12,15,15; exit 1",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 7/7 assertions",
+      "testNames": [
+        "G5-handler-'retryable-detail-rounds-bound-reached': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-detail-failed': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-detail-xfailed-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-detail-FAILED-implement': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-detail-unknown': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-detail-empty': prepared partitions survive handler wiring",
+        "G5-handler-'retryable-detail-absent': prepared partitions survive handler wiring"
+      ],
+      "rationale": "Equivalence uses the existing classify predicate, not observed output: target-status set has first precedence; terminal-status disjunction (explicit set, not-found, failed-*) next; ordinary complement remains retryable when prepared, except needs-human detail. Every literal including prefix boundaries is executed in this row. Exit representation is fixed for this row; pure and handler layers are separate rows."
+    },
+    {
+      "id": "r1-g2-G5-skipped",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "skipped",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-skipped",
+      "expected": "Skipped prepared outcome stays terminal",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G5-skipped: prepared does not defeat a lock/ineligibility skip"
+      ]
+    },
+    {
+      "id": "r1-g2-G5-relay-target-ready",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "relay-target-ready",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-relay-target-ready",
+      "expected": "Actual runCardInProcess captures prepared and exact cycle status; handler reports at-target; 12,15,15",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G5-relay-target-ready: PREPARE-RESULT and cycle status survive the actual in-process relay"
+      ]
+    },
+    {
+      "id": "r1-g2-G5-relay-needs-human",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "relay-needs-human",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-relay-needs-human",
+      "expected": "Actual runCardInProcess captures prepared and exact cycle status; handler reports terminal; 12,15,15",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "PASS: 1/1 assertions",
+      "testNames": [
+        "G5-relay-needs-human: PREPARE-RESULT and cycle status survive the actual in-process relay"
+      ]
+    },
+    {
+      "id": "r1-g2-G5-relay-rounds-bound-reached",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "relay-rounds-bound-reached",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-relay-rounds-bound-reached",
+      "expected": "Actual runCardInProcess captures prepared and exact cycle status; handler reports retryable; 12,15,12,15",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12 → …' to contain '#12: retryable'",
+      "testNames": [
+        "G5-relay-rounds-bound-reached: PREPARE-RESULT and cycle status survive the actual in-process relay"
+      ]
+    },
+    {
+      "id": "r1-g2-G5-relay-undefined",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "relay-undefined",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-relay-undefined",
+      "expected": "Actual runCardInProcess captures prepared and exact cycle status; handler reports retryable; 12,15,12,15",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected 'pair-cli run --cards\\n  Cards: #12 → …' to contain '#12: retryable'",
+      "testNames": [
+        "G5-relay-undefined: PREPARE-RESULT and cycle status survive the actual in-process relay"
+      ]
+    },
+    {
+      "id": "r1-g2-G5-engine-boundary",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "engine-boundary",
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts::G5-engine-boundary",
+      "expected": "Real prepare producer runs both skills with engine stub, emits prepared through in-process relay, board advances; two cycle invocations; exit 0",
+      "covers": [
+        "r1-g2-G5",
+        "r0-2"
+      ],
+      "observed": "FAIL: AssertionError: expected [ '12' ] to deeply equal [ '12', '12' ]",
+      "testNames": [
+        "G5-engine-boundary: real preparation and in-process entry relay their result"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:034889ef2084ae472a5e80a182622388bab6babce4ef1ab6c2ab3e98ac814c9b",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cards-lifecycle.test.ts --reporter=json",
+      "observed": "FAIL: 53 failed, 294 passed (347); complete current-head run in attempt-2-baseline.json. All 53 failures are lifecycle/retry assertions; all fixture/reader preconditions passed."
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/__fixtures__/cards-lifecycle-gh.cjs",
+      "kind": "fixture",
+      "baseline": "red",
+      "sha256": "sha256:0be60a4f4b3b0bfc62cb7433f18374bfdb9b019c40e62677094b96a9c216f79f",
+      "consumedBy": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts"
+    }
+  ],
+  "testExempt": false,
+  "reconciled": [
+    {
+      "file": "apps/pair-cli/src/commands/run/cards-lifecycle.test.ts",
+      "sha256": "sha256:a497f26facf176d77dc244cffc3a4deeee990dff86017c96ebfbfbbf58c9be0f"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/__fixtures__/cards-lifecycle-gh.cjs",
+      "sha256": "sha256:07240b0b01ecb9c7ae4eea5ce1c32d89cd50fedd2bf53657628308161d30872b"
+    }
+  ],
+  "preserved": [],
+  "staticGates": [
+    {
+      "command": "pnpm lint",
+      "cwd": "apps/pair-cli",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm ts:check",
+      "cwd": "apps/pair-cli",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm exec prettier-fix apps/pair-cli/src/commands/run/cards-lifecycle.test.ts apps/pair-cli/src/commands/run/__fixtures__/cards-lifecycle-gh.cjs",
+      "exitCode": 0
+    }
+  ],
+  "proofRef": "attempt-2-baseline.json",
+  "attempt": 2,
+  "changedRows": [
+    "r1-g2-G1",
+    "r1-g2-G2",
+    "r1-g2-G3",
+    "r1-g2-G4",
+    "r1-g2-G5",
+    "r1-g2-G6",
+    "durable-reader-representations",
+    "pr-lifecycle-inventory",
+    "board-state-representations",
+    "durable-completion-partitions",
+    "prepared-classification-interactions",
+    "gh-fixture-fidelity",
+    "r1-g2-C6",
+    "r1-g2-G1-board",
+    "r1-g2-G1-prepare",
+    "r1-g2-G1-completion",
+    "r1-g2-G3-fallback-canonical-default",
+    "r1-g2-G3-fallback-canonical-mapped",
+    "r1-g2-G3-fallback-case",
+    "r1-g2-G3-fallback-alias",
+    "r1-g2-G3-fallback-canonical-alias",
+    "r1-g2-G3-fallback-unmapped",
+    "r1-g2-G3-fallback-known-to-unmapped",
+    "r1-g2-G3-fallback-case-only",
+    "r1-g2-G3-fallback-body",
+    "r1-g2-G3-fallback-stale-body",
+    "r1-g2-G3-installed-canonical-default",
+    "r1-g2-G3-installed-canonical-mapped",
+    "r1-g2-G3-installed-case",
+    "r1-g2-G3-installed-alias",
+    "r1-g2-G3-installed-canonical-alias",
+    "r1-g2-G3-installed-unmapped",
+    "r1-g2-G3-installed-known-to-unmapped",
+    "r1-g2-G3-installed-case-only",
+    "r1-g2-G3-installed-body",
+    "r1-g2-G3-installed-stale-body",
+    "r1-g2-G4-fallback-not-planned",
+    "r1-g2-G4-fallback-missing-date",
+    "r1-g2-G4-fallback-invalid-date",
+    "r1-g2-G4-fallback-open-with-date",
+    "r1-g2-G4-fallback-completed",
+    "r1-g2-G4-fallback-legacy-null-reason",
+    "r1-g2-G4-fallback-done",
+    "r1-g2-G4-installed-not-planned",
+    "r1-g2-G4-installed-missing-date",
+    "r1-g2-G4-installed-invalid-date",
+    "r1-g2-G4-installed-open-with-date",
+    "r1-g2-G4-installed-completed",
+    "r1-g2-G4-installed-legacy-null-reason",
+    "r1-g2-G4-installed-done",
+    "r1-g2-G4-precedence-gate-red",
+    "r1-g2-G4-precedence-needs-human",
+    "r1-g2-G4-precedence-merged-closure-unfinished",
+    "r1-g2-G4-precedence-halt",
+    "r1-g2-G2-creation-draft",
+    "r1-g2-G2-draft-review",
+    "r1-g2-G2-approval",
+    "r1-g2-G2-rejection-repaired",
+    "r1-g2-G2-merge",
+    "r1-g2-G2-rejected",
+    "r1-g2-G2-closed-unmerged",
+    "r1-g2-G2-lost-approval",
+    "r1-g2-G2-back-to-draft",
+    "r1-g2-G2-pr-disappears",
+    "r1-g2-G2-rejection-cleared-only",
+    "r1-g2-G2-unchanged-absent",
+    "r1-g2-G2-unchanged-draft",
+    "r1-g2-G2-unchanged-review",
+    "r1-g2-G2-unchanged-rejected",
+    "r1-g2-G2-unchanged-ready",
+    "r1-g2-G2-unchanged-merged",
+    "r1-g2-G2-unchanged-closed",
+    "r1-g2-G2-high-water",
+    "r1-g2-G2-wrong-card",
+    "r1-g2-G6-fields",
+    "r1-g2-G6-unknown-issue",
+    "r1-g2-G6-unknown-pr",
+    "r1-g2-G6-wrong-repo",
+    "r1-g2-G6-unknown-field",
+    "r1-g2-G6-no-fields",
+    "r1-g2-G6-write",
+    "r1-g2-G6-unsupported-filter",
+    "r1-g2-G6-unsupported-search",
+    "r1-g2-G6-unsupported-jq",
+    "r1-g2-G6-filter",
+    "r1-g2-G5-pure-at-target-zero",
+    "r1-g2-G5-pure-at-target-nonzero",
+    "r1-g2-G5-pure-at-target-null",
+    "r1-g2-G5-pure-at-target-error",
+    "r1-g2-G5-pure-at-target-signal",
+    "r1-g2-G5-pure-at-target-detail",
+    "r1-g2-G5-pure-terminal-zero",
+    "r1-g2-G5-pure-terminal-nonzero",
+    "r1-g2-G5-pure-terminal-null",
+    "r1-g2-G5-pure-terminal-error",
+    "r1-g2-G5-pure-terminal-signal",
+    "r1-g2-G5-pure-terminal-detail",
+    "r1-g2-G5-pure-retryable-zero",
+    "r1-g2-G5-pure-retryable-nonzero",
+    "r1-g2-G5-pure-retryable-null",
+    "r1-g2-G5-pure-retryable-error",
+    "r1-g2-G5-pure-retryable-signal",
+    "r1-g2-G5-pure-retryable-detail",
+    "r1-g2-G5-handler-at-target-zero",
+    "r1-g2-G5-handler-at-target-nonzero",
+    "r1-g2-G5-handler-at-target-null",
+    "r1-g2-G5-handler-at-target-error",
+    "r1-g2-G5-handler-at-target-signal",
+    "r1-g2-G5-handler-at-target-detail",
+    "r1-g2-G5-handler-terminal-zero",
+    "r1-g2-G5-handler-terminal-nonzero",
+    "r1-g2-G5-handler-terminal-null",
+    "r1-g2-G5-handler-terminal-error",
+    "r1-g2-G5-handler-terminal-signal",
+    "r1-g2-G5-handler-terminal-detail",
+    "r1-g2-G5-handler-retryable-zero",
+    "r1-g2-G5-handler-retryable-nonzero",
+    "r1-g2-G5-handler-retryable-null",
+    "r1-g2-G5-handler-retryable-error",
+    "r1-g2-G5-handler-retryable-signal",
+    "r1-g2-G5-handler-retryable-detail",
+    "r1-g2-G5-skipped",
+    "r1-g2-G5-relay-target-ready",
+    "r1-g2-G5-relay-needs-human",
+    "r1-g2-G5-relay-rounds-bound-reached",
+    "r1-g2-G5-relay-undefined",
+    "r1-g2-G5-engine-boundary"
+  ]
+}
