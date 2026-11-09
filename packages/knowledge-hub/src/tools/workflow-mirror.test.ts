@@ -131,6 +131,12 @@ const PAIRS: MirrorPair[] = [
           'test nothing where it landed.',
         unresolvableIfMirrored: ['../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs'],
       },
+      'pair-contracts/role-docblock.test.mjs': {
+        why:
+          'Same reason as role-packet: it reads the INSTALLED `pair-workflow-cycle` scripts ' +
+          'through `../../skills/`, a layout the dataset does not have.',
+        unresolvableIfMirrored: ['../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs'],
+      },
       'pair-contracts/cycle-hooks.test.mjs': {
         why:
           'Same reason as cycle-coordinator: it drives the INSTALLED `pair-workflow-cycle` scripts ' +
