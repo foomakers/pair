@@ -5,6 +5,7 @@ import type { RunCommandConfig, RunDispatchRequest } from './parser'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
 import type { EngineDefinition } from './engines'
+import { syncAgentsFromConfig } from './codex-agents'
 import {
   locateAgentDefinitions,
   locateCycleScripts,
@@ -403,6 +404,7 @@ export function prepareCycleCoordinator(
     ...locateCycleScripts(fs, context.config, cwd),
     agentsDir: locateAgentDefinitions(context.config, cwd),
   }
+  syncAgentsFromConfig(context.config, cwd, location.agentsDir!)
   const setup = resolveProfileSetup(input, deps, location, engineDef)
   const autonomy = resolveEntryAutonomy(input, deps, location)
   const { driveCycle, shown } = driverFor(input, deps, { engine, engineDef, location, ...setup })
