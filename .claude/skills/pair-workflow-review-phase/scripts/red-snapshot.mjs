@@ -80,6 +80,7 @@ export const isTestPath = p =>
   /(^|\/)(test|tests|__tests__|spec|fixtures?)\//.test(p) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(p)
 
 // t9d-18: `pr` is a number — never interpolated raw into a path (`--pr '../../ESCAPED'` sealed outside).
+const FORMAT_IGNORE = '.prettierignore'
 export const manifestPathFor = (pr, phase) => {
   if (!/^\d+$/.test(String(pr))) throw new Error(`pr must be a number, got ${JSON.stringify(pr)}`)
   return `.pair/red-snapshots/pr-${pr}-${String(phase).replace(/[^a-zA-Z0-9._-]/g, '-')}.json`
@@ -643,7 +644,12 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
     manifestAbs,
     JSON.stringify({ $meta: { pr, phase, base, trailer, artifacts: files }, ...contract }, null, 2) + '\n',
   )
-  git(['add', '--', manifest, ...files], cwd)
+  // US-623 AC7: the manifest is machine-written JSON, never prettier-shaped — the seal ignores its own directory.
+  const ignoreAbs = join(cwd, FORMAT_IGNORE)
+  const ignored = existsSync(ignoreAbs) ? readFileSync(ignoreAbs, 'utf8') : ''
+  const entry = `${dirname(manifest)}/`
+  if (!ignored.split('\n').some(l => l.trim() === entry)) writeFileSync(ignoreAbs, `${ignored}${ignored && !ignored.endsWith('\n') ? '\n' : ''}${entry}\n`)
+  git(['add', '--', manifest, FORMAT_IGNORE, ...files], cwd)
   git(['commit', '--no-verify', '-q', '-m', `RED snapshot pr=${pr} phase=${phase}\n\n${trailer}`], cwd)
   const snapshot = git(['rev-parse', 'HEAD'], cwd)
   return { sealed: true, snapshot, manifest, preSeal }
@@ -717,7 +723,7 @@ export function verify({ pr, phase, base, cwd }) {
   const listed = contract && !contractErrors(contract).length ? artifactPaths(contract) : []
 
   const tree = (git(['diff-tree', '--no-commit-id', '--name-only', '-r', snapshot], cwd) ?? '').split('\n').filter(Boolean)
-  const expected = new Set([manifest, ...listed])
+  const expected = new Set([manifest, FORMAT_IGNORE, ...listed])
   for (const p of tree) if (!expected.has(p)) breach('snapshot-carries-unlisted-file', { path: p })
   // Witnesses changed at the base, so they appear in the snapshot's diff; a `pass` control may be
   // an unchanged file — it must exist in the snapshot's TREE, not in its diff.
@@ -1141,7 +1147,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
     }
     const listed = contract ? artifactPaths(contract) : []
     const tree = (git(['diff-tree', '--no-commit-id', '--name-only', '-r', s.sha], cwd) ?? '').split('\n').filter(Boolean)
-    for (const p of tree) if (p !== s.manifest && !listed.includes(p)) breach('snapshot-carries-unlisted-file', { phase: s.phase, path: p })
+    for (const p of tree) if (p !== s.manifest && p !== FORMAT_IGNORE && !listed.includes(p)) breach('snapshot-carries-unlisted-file', { phase: s.phase, path: p })
     for (const p of listed) if (git(['rev-parse', '--verify', '-q', `${s.sha}:${p}`], cwd, { allowFail: true }) === null) breach('snapshot-lacks-listed-file', { phase: s.phase, path: p })
     contracts.push({ ...s, contract, listed })
   }
