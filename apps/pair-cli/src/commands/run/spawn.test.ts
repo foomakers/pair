@@ -354,3 +354,105 @@ describe('spawnIteration — the run max fix rounds reaches the claude live stag
     expect(stages).not.toContain('fix 1/?')
   })
 })
+
+describe('US-623 AC3 — codex result channel (--output-last-message)', () => {
+  it('buildEngineArgs adds the channel flag before the prompt only for an engine declaring it', () => {
+    const base = { promptText: 'go', cwd: '/p', autonomyArgs: [], lastMessagePath: '/tmp/m.txt' }
+    expect(buildEngineArgs({ ...base, engine: ENGINES.codex })).toEqual([
+      'exec',
+      '--json',
+      '--output-last-message',
+      '/tmp/m.txt',
+      'go',
+    ])
+    expect(buildEngineArgs({ ...base, engine: ENGINES.claude })).not.toContain('/tmp/m.txt')
+  })
+
+  const codexStub = (body: string) => {
+    const dir = mkdtempSync(join(tmpdir(), 'pair-run-'))
+    const file = join(dir, 'engine.js')
+    writeFileSync(
+      file,
+      `const a=process.argv;const i=a.indexOf('--output-last-message');const p=i<0?'/dev/null':a[i+1];${body}
+const out=m=>process.stdout.write(JSON.stringify(m)+'\\n');
+out({type:'item.completed',item:{type:'agent_message',text:'done, no json here'}});out({type:'turn.completed',usage:{}})`,
+    )
+    return { dir, file }
+  }
+  const run = (dir: string, file: string) =>
+    spawnIteration({
+      engine: { ...ENGINES.codex, command: process.execPath, headlessArgs: [file] },
+      promptText: 'go',
+      cwd: dir,
+      autonomyArgs: [],
+      timeoutSeconds: 30,
+    })
+
+  it('reads the final result from the channel file when the last stream message is not the result JSON', async () => {
+    const { dir, file } = codexStub(
+      `require('fs').writeFileSync(p, '{"status":"ok","branch":"b"}')`,
+    )
+    const result = await run(dir, file)
+    expect(result.outcome).toBe('success')
+    expect(result.final).toMatchObject({ status: 'ok' })
+  })
+
+  it('no JSON in the stream nor the channel ⇒ a typed failure, no silent success', async () => {
+    const { dir, file } = codexStub(`require('fs').writeFileSync(p, 'prose only')`)
+    const result = await run(dir, file)
+    expect(result.final).toBeUndefined()
+    expect(result.detail).toMatch(/no parseable result/)
+  })
+})
+
+describe('US-623 AC8 — opt-in isolated codex home (PAIR_CODEX_HOME)', () => {
+  const stub = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pair-run-'))
+    const file = join(dir, 'engine.js')
+    writeFileSync(
+      file,
+      `const o=m=>process.stdout.write(JSON.stringify(m)+'\\n');o({type:'item.completed',item:{type:'agent_message',text:'{"status":"ok","reason":"'+process.env.CODEX_HOME+'"}'}});o({type:'turn.completed',usage:{}})`,
+    )
+    return { dir, file }
+  }
+  const run = (dir: string, file: string) =>
+    spawnIteration({
+      engine: { ...ENGINES.codex, command: process.execPath, headlessArgs: [file] },
+      promptText: 'go',
+      cwd: dir,
+      autonomyArgs: [],
+      timeoutSeconds: 30,
+    })
+
+  it('without the variable the engine env is untouched', async () => {
+    const { dir, file } = stub()
+    delete process.env['PAIR_CODEX_HOME']
+    const result = await run(dir, file)
+    expect(result.final?.reason).toBe(String(process.env['CODEX_HOME']))
+  })
+
+  it('with it, the engine runs under that CODEX_HOME', async () => {
+    const { dir, file } = stub()
+    const home = mkdtempSync(join(tmpdir(), 'codex-home-'))
+    writeFileSync(join(home, 'auth.json'), '{}')
+    process.env['PAIR_CODEX_HOME'] = home
+    try {
+      expect((await run(dir, file)).final?.reason).toBe(home)
+    } finally {
+      delete process.env['PAIR_CODEX_HOME']
+    }
+  })
+
+  it('an isolated home without auth.json is a clear failure — no silent fallback to the user home', async () => {
+    const { dir, file } = stub()
+    const home = mkdtempSync(join(tmpdir(), 'codex-home-'))
+    process.env['PAIR_CODEX_HOME'] = home
+    try {
+      const result = await run(dir, file)
+      expect(result.outcome).toBe('failed')
+      expect(result.detail).toMatch(/PAIR_CODEX_HOME.*auth\.json/)
+    } finally {
+      delete process.env['PAIR_CODEX_HOME']
+    }
+  })
+})

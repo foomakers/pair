@@ -1,7 +1,15 @@
 import { spawn } from 'child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join, resolve } from 'path'
 import type { EngineDefinition } from './engines'
 import { HEADLESS_STDIN } from './autonomy'
-import { readIterationOutcome, toLines, type IterationResult } from './stream-reader'
+import {
+  parseFinalResult,
+  readIterationOutcome,
+  toLines,
+  type IterationResult,
+} from './stream-reader'
 import type { RunEvent } from './run-events'
 import { isInterrupted, trackEngine } from './interrupt'
 
@@ -25,6 +33,8 @@ export interface EngineArgsInput {
   readonly model?: string | undefined
   /** US-488: a profile's effort for this stage — sent only when the engine declares `effortArgs`. */
   readonly effort?: string | undefined
+  /** US-623: where the engine writes its final message, for an engine declaring `lastMessageArgs`. */
+  readonly lastMessagePath?: string | undefined
 }
 
 /** The engine's argv: headless/stream flags, an optional cwd flag, autonomy, then the prompt. */
@@ -34,6 +44,9 @@ export function buildEngineArgs(input: EngineArgsInput): string[] {
     ...(input.engine.modelFlag && input.model ? [input.engine.modelFlag, input.model] : []),
     ...(input.engine.effortArgs && input.effort ? input.engine.effortArgs(input.effort) : []),
     ...(input.engine.cwdFlag ? [input.engine.cwdFlag, input.cwd] : []),
+    ...(input.engine.lastMessageArgs && input.lastMessagePath
+      ? input.engine.lastMessageArgs(input.lastMessagePath)
+      : []),
     ...input.autonomyArgs,
     input.promptText,
   ]
@@ -119,6 +132,58 @@ function createWatchdog(
   }
 }
 
+/** US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one. */
+function stalledOrResult(result: IterationResult, stopped: string | undefined): IterationResult {
+  if (stopped === undefined || result.outcome === 'success') return result
+  const { skippedLines, runEvents } = result
+  return {
+    outcome: 'failed',
+    cause: 'timed-out',
+    detail: stopped,
+    stalled: true,
+    ...(skippedLines !== undefined && { skippedLines }),
+    ...(runEvents !== undefined && { runEvents }),
+  }
+}
+
+/**
+ * US-623 AC8: opt-in isolation of a codex session from the user's own skills/MCP config —
+ * `PAIR_CODEX_HOME=<dir>` runs it under that CODEX_HOME. Absent ⇒ `undefined` (untouched); a home with
+ * no `auth.json` is a clear error, never a silent fallback to the user's home.
+ */
+function isolatedCodexHome(engine: EngineDefinition): string | { error: string } | undefined {
+  const raw = process.env['PAIR_CODEX_HOME']
+  if (engine.id !== 'codex' || !raw) return undefined
+  const home = resolve(raw)
+  return existsSync(join(home, 'auth.json'))
+    ? home
+    : {
+        error: `PAIR_CODEX_HOME=${home} has no auth.json — log codex in under it (CODEX_HOME=${home} codex login) or unset PAIR_CODEX_HOME`,
+      }
+}
+
+/** US-573 AC7 + US-623 AC8: the engine's own env (and an isolated CODEX_HOME) over the driver's; absent ⇒ inherit. */
+function engineEnv(engine: EngineDefinition, home: string | undefined) {
+  if (engine.env === undefined && home === undefined) return {}
+  return { env: { ...process.env, ...engine.env, ...(home && { CODEX_HOME: home }) } }
+}
+
+/** US-623 AC3: a temp file the engine writes its final message to; read only when the stream carried no result. */
+function openLastMessageChannel(engine: EngineDefinition) {
+  if (!engine.lastMessageArgs) return undefined
+  const dir = mkdtempSync(join(tmpdir(), 'pair-last-message-'))
+  const path = join(dir, 'last-message.txt')
+  return {
+    path,
+    merge: (result: IterationResult): IterationResult | undefined => {
+      if (result.final !== undefined || !existsSync(path)) return undefined
+      const final = parseFinalResult(readFileSync(path, 'utf-8'))
+      return final && { ...result, final }
+    },
+    close: () => rmSync(dir, { recursive: true, force: true }),
+  }
+}
+
 /**
  * Runs one iteration and returns what its STREAM said.
  *
@@ -131,11 +196,15 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   // r1-2: once the driver was signalled, the engine it is stopping must not be replaced by the next.
   if (isInterrupted())
     throw new Error('interrupted: the driver received a signal, no engine is started')
-  const child = spawn(input.engine.command, buildEngineArgs(input), {
+  const isolation = isolatedCodexHome(input.engine)
+  if (typeof isolation === 'object') return { outcome: 'failed', detail: isolation.error }
+  const channel = openLastMessageChannel(input.engine)
+  const lastMessagePath = channel?.path
+  const child = spawn(input.engine.command, buildEngineArgs({ ...input, lastMessagePath }), {
     cwd: input.cwd,
     stdio: [HEADLESS_STDIN, 'pipe', 'pipe'],
     // US-573 AC7: an engine's own env (claude: no background-wait ceiling) over the driver's.
-    ...(input.engine.env !== undefined && { env: { ...process.env, ...input.engine.env } }),
+    ...engineEnv(input.engine, isolation),
   })
   // Tracked so a SIGTERM/SIGINT on the driver stops it instead of orphaning it (r1-2).
   trackEngine(child)
@@ -158,20 +227,12 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
       },
       { maxFixRounds: input.maxFixRounds },
     )
-    // US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one.
-    const stopped = watchdog.stopped()
-    if (stopped === undefined || result.outcome === 'success') return result
-    const { skippedLines, runEvents } = result
-    return {
-      outcome: 'failed',
-      cause: 'timed-out',
-      detail: stopped,
-      stalled: true,
-      ...(skippedLines !== undefined && { skippedLines }),
-      ...(runEvents !== undefined && { runEvents }),
-    }
+    // US-623 AC3: the stream's last text carried no result ⇒ the engine's dedicated channel is read.
+    const channelResult = channel?.merge(result)
+    return stalledOrResult(channelResult ?? result, watchdog.stopped())
   } finally {
     watchdog.clear()
+    channel?.close()
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
     // ponytail: 1s drain bound — a grandchild holding stderr open must not hold the iteration.
     await Promise.race([stderr, new Promise(done => setTimeout(done, 1000).unref())])

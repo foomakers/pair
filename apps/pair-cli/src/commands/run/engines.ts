@@ -112,6 +112,8 @@ export interface EngineDefinition {
    */
   readonly messageField?: string
   readonly messageWhen?: Readonly<Record<string, string | number | boolean>>
+  /** US-623 AC3: argv making the engine write its final message to a file — a channel independent of the stream's last text. */
+  readonly lastMessageArgs?: (path: string) => readonly string[]
   /** US-573 AC7: environment the engine's process needs on top of the driver's own (absent ⇒ none). */
   readonly env?: Readonly<Record<string, string>>
   /** Where this entry's values were verified. Printed nowhere; read by the next maintainer. */
@@ -257,6 +259,7 @@ const CODEX: EngineDefinition = {
   // US-603: `turn.completed` carries only `usage`; the stage's final text is the last agent message.
   messageField: 'item.text',
   messageWhen: { type: 'item.completed', 'item.type': 'agent_message' },
+  lastMessageArgs: path => ['--output-last-message', path],
   verifiedAgainst:
     'codex-cli 0.166.0 — item.completed{item.type:agent_message,item.text} then turn.completed{usage}, ' +
     'recorded live in run/__fixtures__/codex-0.166-live.jsonl (read by codex-live-reader.test.ts). ' +

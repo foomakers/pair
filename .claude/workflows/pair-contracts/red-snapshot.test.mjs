@@ -119,7 +119,7 @@ test('seal: one local commit above base with exactly manifest + artifacts, trail
   const manifest = manifestPathFor(PR, PHASE)
   assert.deepEqual(
     git(cwd, 'diff-tree', '--no-commit-id', '--name-only', '-r', first.snapshot).split('\n').sort(),
-    [manifest, 'test/a.test.js'].sort(),
+    [manifest, '.prettierignore', 'test/a.test.js'].sort(),
   )
   assert.ok(git(cwd, 'log', '-1', '--format=%B').includes(trailerFor({ pr: PR, phase: PHASE, base, manifest })))
   const persisted = JSON.parse(readFileSync(join(cwd, manifest), 'utf8'))
@@ -410,7 +410,7 @@ test('seal: an already-correct control that did not change still seals (recorded
   write(cwd, contractPath, JSON.stringify(withControl))
   const s = seal({ pr: PR, phase: PHASE, base: base2, contractPath, cwd })
   assert.equal(s.sealed, true, JSON.stringify(s))
-  assert.deepEqual(git(cwd, 'diff-tree', '--no-commit-id', '--name-only', '-r', s.snapshot).split('\n').sort(), [manifestPathFor(PR, PHASE), 'test/a.test.js'].sort(), 'the unchanged control adds no blob to the snapshot commit')
+  assert.deepEqual(git(cwd, 'diff-tree', '--no-commit-id', '--name-only', '-r', s.snapshot).split('\n').sort(), [manifestPathFor(PR, PHASE), '.prettierignore', 'test/a.test.js'].sort(), 'the unchanged control adds no blob to the snapshot commit')
   // …but it IS protected: changing it after the seal is a breach
   rmSync(join(cwd, contractPath))
   green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n', 'test/other.test.js': 'tampered\n' })
@@ -1570,7 +1570,7 @@ test('US-506 T-6 c1 (control): a clean contract seals unchanged through the CLI 
   const { contractPath } = redContract(cwd)
   const out = sealCli(cwd, ['--pr', PR, '--phase', PHASE, '--base', base, '--contract', contractPath, '--static-gates', '[]'])
   assert.equal(out.json.sealed, true, JSON.stringify(out.json))
-  assert.deepEqual(git(cwd, 'diff-tree', '--no-commit-id', '--name-only', '-r', out.json.snapshot).split('\n').sort(), [manifestPathFor(PR, PHASE), 'test/a.test.js'].sort())
+  assert.deepEqual(git(cwd, 'diff-tree', '--no-commit-id', '--name-only', '-r', out.json.snapshot).split('\n').sort(), [manifestPathFor(PR, PHASE), '.prettierignore', 'test/a.test.js'].sort())
   assert.deepEqual(out.json.preSeal.staticGates, [])
   // without --static-gates the CLI refuses to seal blind: the repo's gates are a required input
   const { cwd: c2, base: b2 } = repo()
@@ -1851,7 +1851,7 @@ test('doc seal + verify: a manifest-only snapshot; custody passes for a prose ed
   write(cwd, '.pair/working/doc-draft.json', JSON.stringify(docContract()))
   const sealed = seal({ pr: PR, phase: PHASE, base: docBase, contractPath: '.pair/working/doc-draft.json', cwd })
   assert.equal(sealed.sealed, true, JSON.stringify(sealed))
-  assert.deepEqual(git(cwd, 'diff-tree', '--no-commit-id', '--name-only', '-r', sealed.snapshot).split('\n'), [manifestPathFor(PR, PHASE)], 'the snapshot IS the contract: no tests')
+  assert.deepEqual(git(cwd, 'diff-tree', '--no-commit-id', '--name-only', '-r', sealed.snapshot).split('\n').sort(), ['.prettierignore', manifestPathFor(PR, PHASE)].sort(), 'the snapshot IS the contract: no tests')
   // GREEN: prose inside the scope
   write(cwd, 'docs/guide.md', 'new\n')
   git(cwd, 'add', 'docs/guide.md'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'fix docs')
@@ -2269,4 +2269,19 @@ test('US-575 AC5: a hand-resolved merge of the base touching a path outside the 
   const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
   assert.deepEqual(chain.breaches.map(b => [b.code, b.path, b.fix]), [['out-of-scope', 'src/other.js', BASE_SYNC_FIX]])
   rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-623 AC7: a seal in a repo without the ignore entry adds it in the snapshot, once, and verify accepts it', () => {
+  const { cwd, base } = repo()
+  write(cwd, '.prettierignore', 'dist')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'ignore file without entry')
+  const head = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const s = seal({ pr: PR, phase: PHASE, base: head, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  assert.equal(git(cwd, 'show', `${s.snapshot}:.prettierignore`), 'dist\n.pair/red-snapshots/')
+  assert.equal(verify({ pr: PR, phase: PHASE, base: head, cwd }).verified, true)
+  rmSync(cwd, { recursive: true, force: true })
+  void base
 })

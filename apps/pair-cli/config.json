@@ -68,6 +68,7 @@
         "pair-contracts/cycle-merge.test.mjs",
         "pair-contracts/cycle-prepare.test.mjs",
         "pair-contracts/cycle-prepare-parity.test.mjs",
+        "pair-contracts/prepare-partitions.test.mjs",
         "pair-contracts/cycle-runtime.test.mjs",
         "pair-contracts/engine-integration.test.mjs",
         "pair-contracts/recipe.test.mjs",

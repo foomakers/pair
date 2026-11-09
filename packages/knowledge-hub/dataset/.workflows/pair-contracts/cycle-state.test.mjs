@@ -5334,3 +5334,13 @@ test('publish: green-fix `fixed` given as an id list is normalized — true iff 
   const stored2 = JSON.parse(readFileSync(join(dir2, 'r1-g1-green-fix.json'), 'utf8'))
   assert.equal(stored2.fixed, false)
 })
+
+test('US-623 AC5: after red-spec(dirty), red-spec#2(red), red-verify#2(rejected) the next attempt matches no existing red-spec attempt file', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { status: 'dirty', reason: 'dirty', preserved: ['src/a.ts'], contractPath: undefined, contractHash: undefined })
+  const c2 = writeContract(dir, 'a0-red-contract.attempt-2.json', { attempt: 2 })
+  redSpec(dir, 'a0', { contractPath: c2.path, contractHash: c2.hash }, { attempt: 2 })
+  redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, findings: rejectionOf(['row-1']) }, { predecessor: 'a0-red-spec', attempt: 2 })
+  const r = resolve({ dir, workflowVersion: V, policy: { ...POLICY, redRepairs: 2 }, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'attempt'), { step: 'prepare', mode: 'repair', attempt: 3 })
+})
