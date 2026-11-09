@@ -34,3 +34,17 @@ for (const [name, path] of Object.entries(COPIES)) {
 test('r0-4-c1 control: mirrors byte-identical', () => {
   assert.equal(readFileSync(COPIES.installed, 'utf8'), readFileSync(COPIES.dataset, 'utf8'))
 })
+
+const MIRROR_POLICY = fileURLToPath(
+  new URL('../../../packages/knowledge-hub/src/tools/workflow-mirror.test.ts', import.meta.url),
+)
+
+test('r1-g2-gap1-w1 witness: this root-only test file is enumerated in the workflow-mirror rootOnly list', () => {
+  assert.match(
+    readFileSync(MIRROR_POLICY, 'utf8'),
+    /'pair-contracts\/role-docblock\.test\.mjs'\s*:/,
+  )
+})
+test('r1-g2-gap1-c1 control: the rootOnly list already names its sibling root-only test', () => {
+  assert.match(readFileSync(MIRROR_POLICY, 'utf8'), /'pair-contracts\/merge-canary\.test\.mjs'\s*:/)
+})
