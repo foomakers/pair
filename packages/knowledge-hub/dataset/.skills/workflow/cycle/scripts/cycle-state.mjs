@@ -2684,7 +2684,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     if (d.verified !== true) {
       const repairs = byPhase('red-verify', last.phase).filter(h => h.data.verified !== true).length
       // US-575: a spent repair budget is durable only on the heads it was spent on — once they moved, one more repair.
-      if (repairs <= (policy.redRepairs ?? 1) || ctx.stale) return { ...(ctx.stale ? { stale: true } : {}), step: 'prepare', mode: 'repair', phase: last.phase, round: parts.round, attempt: repairs + 1, base: d.inputHead, rejection: d.findings ?? [], contract: contractOf(last.phase), group: groupOf(last.phase) }
+      if (repairs <= (policy.redRepairs ?? 1) || ctx.stale) return { ...(ctx.stale ? { stale: true } : {}), step: 'prepare', mode: 'repair', phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, rejection: d.findings ?? [], contract: contractOf(last.phase), group: groupOf(last.phase) }
       return blocked('failed-contract', { budget: 'redRepairs', phase: last.phase, findings: d.findings ?? [] })
     }
     if (d.sealed !== true) return blocked('failed-seal', { phase: last.phase, detail: d.reason })
