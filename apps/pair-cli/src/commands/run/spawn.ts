@@ -1,7 +1,7 @@
 import { spawn } from 'child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import type { EngineDefinition } from './engines'
 import { HEADLESS_STDIN } from './autonomy'
 import {
@@ -152,8 +152,9 @@ function stalledOrResult(result: IterationResult, stopped: string | undefined): 
  * no `auth.json` is a clear error, never a silent fallback to the user's home.
  */
 function isolatedCodexHome(engine: EngineDefinition): string | { error: string } | undefined {
-  const home = process.env['PAIR_CODEX_HOME']
-  if (engine.id !== 'codex' || !home) return undefined
+  const raw = process.env['PAIR_CODEX_HOME']
+  if (engine.id !== 'codex' || !raw) return undefined
+  const home = resolve(raw)
   return existsSync(join(home, 'auth.json'))
     ? home
     : {
