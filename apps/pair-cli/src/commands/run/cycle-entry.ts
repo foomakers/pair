@@ -404,9 +404,9 @@ export function prepareCycleCoordinator(
     ...locateCycleScripts(fs, context.config, cwd),
     agentsDir: locateAgentDefinitions(context.config, cwd),
   }
-  syncAgentsFromConfig(context.config, cwd, location.agentsDir!)
   const setup = resolveProfileSetup(input, deps, location, engineDef)
   const autonomy = resolveEntryAutonomy(input, deps, location)
+  syncAgentsFromConfig(context.config, cwd)
   const { driveCycle, shown } = driverFor(input, deps, { engine, engineDef, location, ...setup })
 
   const dispatch = config.dispatch!
