@@ -18,6 +18,9 @@ import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 import type { CardProcessExit } from './parallel'
 
+// Real CLI/adapter subprocesses need headroom when the full quality gate runs concurrently.
+vi.setConfig({ testTimeout: 30000 })
+
 let root: string
 const repository = resolve(__dirname, '../../../../..')
 const reviewScript = join(
@@ -538,3 +541,26 @@ it('G6-combined-limit: filters precede limit and projection', () => {
   expect(result.status, result.stderr).toBe(0)
   expect(JSON.parse(result.stdout)).toEqual([{ number: 42 }])
 })
+
+// Model a busy suite at the offline transport boundary, without changing lifecycle behavior.
+for (const reader of ['fallback', 'installed'] as const) {
+  it.each([0, 2600])(
+    `B-${reader}-%i: slow tracker reads retain lifecycle assertions`,
+    async delay => {
+      if (reader === 'installed') installed()
+      const gh = join(root, 'bin/gh')
+      const transport = readFileSync(gh, 'utf8')
+      writeFileSync(
+        gh,
+        transport.replace(
+          '\n',
+          `\nif (process.argv[2] === 'issue') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${delay});\n`,
+        ),
+      )
+      const started = Date.now()
+      const result = await invoke(initial(), () => retry)
+      expectProgress(result, false)
+      expect(Date.now() - started).toBeGreaterThanOrEqual(delay * 2)
+    },
+  )
+}
