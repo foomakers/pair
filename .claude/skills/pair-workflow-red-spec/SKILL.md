@@ -75,6 +75,14 @@ For every obligation — each AC of the card (`initial`; read the card with `nod
 
 **Carry-forward:** a finding carrying `observedHead`, `oracle`, `probe`, `observed` is a verified prior result — re-run its oracle on the base first; a `missedUpstream` finding gets a `regression` row that stays in the suite for good.
 
+The validator re-derives every class independently and rejects a missing one even when every row passes — so enumerate them yourself BEFORE writing rows (same checklist, same words, for every engine):
+
+**Enumerate first, only then decide** — for every inventory producer list, and check each has a discriminating row:
+
+- (a) every representation/consumer: the pure function AND every CLI/script entry that wires it;
+- (b) every value of every enumerated input dimension the guard is generic over (each channel, mode, kind — never one standing for all);
+- (c) the interaction pairs between (a) and (b).
+
 ### Step 3: The matrix
 
 One row per class and interaction of every inventory item: `{ id, kind, baseline, condition, oracle, expected, covers, rationale? }`.
