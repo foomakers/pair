@@ -172,9 +172,9 @@ interface LinkedPr {
 }
 
 function isLinkedPr(pr: LinkedPr, id: string): boolean {
-  if (pr.closingIssuesReferences?.length)
+  if (pr.closingIssuesReferences != null)
     return pr.closingIssuesReferences.some(issue => issue.number === Number(id))
-  const exactReference = new RegExp(`(?:^|[^0-9])#${id}(?![0-9])`)
+  const exactReference = new RegExp(`\\b(?:closes|fixes|resolves)\\s+#${id}(?![0-9])`, 'i')
   return exactReference.test(pr.body ?? '')
 }
 
@@ -183,9 +183,7 @@ function isReadyPr(pr: LinkedPr): boolean {
   const reviewGreen = pr.statusCheckRollup?.some(
     check => check.context === 'pair-review' && check.state === 'SUCCESS',
   )
-  return Boolean(
-    labels.has('pr-state:ready-to-merge') && pr.reviewDecision === 'APPROVED' && reviewGreen,
-  )
+  return Boolean(labels.has('pr-state:ready-to-merge') && reviewGreen)
 }
 
 function linkedPrRank(pr: LinkedPr, id: string): number {

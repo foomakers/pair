@@ -132,7 +132,9 @@ async function runOne(
     results.set(id, { id, end: 'retryable', reason: 'interrupted' })
     return { progress: false }
   }
-  if (state.snapshots.get(id)!.atTarget) {
+  const before = await current(input, id)
+  state.snapshots.set(id, before)
+  if (before.atTarget) {
     results.set(id, { id, end: 'at-target', reason: 'already at target' })
     return { progress: false }
   }
