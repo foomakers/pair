@@ -47,12 +47,13 @@ export interface CardsRunInput {
 }
 
 const AT_TARGET_STATUS = new Set(['merged', 'ready-for-merge', 'target-ready'])
-const HUMAN_STATUS = new Set([
+const TERMINAL_STATUS = new Set([
   'escalated',
   'escalate',
   'needs-human',
   'merge-parked',
   'merged-closure-unfinished',
+  'gate-red',
 ])
 
 /** Terminal/human-blocked ends are never retried (AC6); an unfinished card with no such marker is retryable. */
@@ -63,7 +64,7 @@ export function classify(outcome: CardOutcome): CardResult {
   const end = (e: CardEnd): CardResult => ({ id, end: e, reason })
   if (AT_TARGET_STATUS.has(status)) return end('at-target')
   if (
-    HUMAN_STATUS.has(status) ||
+    TERMINAL_STATUS.has(status) ||
     status === 'not-found' ||
     status.startsWith('failed-') ||
     detail.startsWith('needs-human')
