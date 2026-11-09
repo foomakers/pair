@@ -1,0 +1,171 @@
+{
+  "$meta": {
+    "pr": "624",
+    "phase": "r1-g1",
+    "base": "81a66f1a4736a7ea30ea39488bdaf56051af6eb1",
+    "trailer": "Pair-RED-Snapshot: pr=624; phase=r1-g1; base=81a66f1a4736a7ea30ea39488bdaf56051af6eb1; manifest=.pair/red-snapshots/pr-624-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts"
+    ]
+  },
+  "mode": "remediation",
+  "phase": "r1-g1",
+  "inputHead": "81a66f1a4736a7ea30ea39488bdaf56051af6eb1",
+  "sourceOfTruth": "apps/pair-cli/src/commands/run/spawn.ts isolatedCodexHome/engineEnv",
+  "inventory": [
+    {
+      "id": "r0-3",
+      "producer": "spawn.ts isolatedCodexHome() (PAIR_CODEX_HOME grammar) feeding engineEnv() CODEX_HOME",
+      "inputs": [
+        "PAIR_CODEX_HOME (abs|rel)",
+        "driver cwd",
+        "spawn cwd (story worktree)"
+      ],
+      "representations": [
+        "spawn.ts only"
+      ],
+      "consumers": [
+        "codex child process env CODEX_HOME"
+      ],
+      "classes": [
+        "absolute home with auth.json",
+        "relative home with auth.json under driver cwd (defect)",
+        "relative home without auth.json (error)",
+        "unset"
+      ],
+      "interactions": [
+        "auth.json check cwd vs child cwd"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli spawn.ts",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/spawn.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-3-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "relative PAIR_CODEX_HOME, auth.json under driver cwd, child cwd elsewhere",
+      "oracle": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts :: witness",
+      "expected": "child CODEX_HOME === resolve(rel)",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "r0-3-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "absolute home",
+      "oracle": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts :: control: an absolute home",
+      "expected": "child CODEX_HOME === home",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "r0-3-c2",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "relative home, no auth.json under driver cwd",
+      "oracle": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts :: control: a relative home with no auth.json",
+      "expected": "failed + PAIR_CODEX_HOME..auth.json detail",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "r0-3-inv-unset",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "PAIR_CODEX_HOME unset, driver CODEX_HOME=sentinel",
+      "oracle": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts :: control: PAIR_CODEX_HOME unset",
+      "expected": "child CODEX_HOME === process.env.CODEX_HOME (not a resolved cwd)",
+      "covers": [
+        "r0-3"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts"
+    },
+    {
+      "id": "r0-3-inv-noncodex",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "engine claude, relative PAIR_CODEX_HOME without auth.json",
+      "oracle": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts :: control: a non-codex engine ignores",
+      "expected": "outcome != failed; child CODEX_HOME === driver inherited (no override)",
+      "covers": [
+        "r0-3"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:08dcf90eb1b7a97ef8e97e845ed71f17b2a96294c3871f24114c17aa7378017b",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-codex-home-relative.test.ts",
+      "observed": "1 failed | 4 passed — witness failed: expected '../../../../../../../var/folders/…/codex-home-uzLtcX' to be '/var/folders/…/codex-home-uzLtcX'"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-3"
+        ],
+        "owner": "spawn.ts",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/spawn.ts"
+        ],
+        "oracle": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-4"
+        ],
+        "owner": "cycle-dispatch.mjs + dataset mirror",
+        "mode": "behavioral",
+        "allowedPaths": [
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs"
+        ],
+        "oracle": "docblock adjacent to roleBodyFor; mirrors byte-identical",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g3",
+        "findings": [
+          "r0-2"
+        ],
+        "owner": "cycle-wiring.ts beforePrepare wiring guard",
+        "mode": "test",
+        "allowedPaths": [],
+        "oracle": "wiring test: dirty worktree + prepare attempt 2 ⇒ pair-recovery stash, clean tree; attempt 1 no stash",
+        "dependsOn": []
+      }
+    ],
+    "carried": [
+      {
+        "id": "r0-1",
+        "disposition": "external: comparison report must be posted on card #623 (live paired cycle); human/PM action, not repo code"
+      }
+    ]
+  },
+  "groupId": "r1-g1",
+  "changedRows": [
+    "r0-3-inv-unset",
+    "r0-3-inv-noncodex"
+  ]
+}
