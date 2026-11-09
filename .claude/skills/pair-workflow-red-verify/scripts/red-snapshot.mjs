@@ -644,7 +644,7 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
     manifestAbs,
     JSON.stringify({ $meta: { pr, phase, base, trailer, artifacts: files }, ...contract }, null, 2) + '\n',
   )
-  // US-623 AC7: the manifest is machine-written JSON, never prettier-shaped — the seal ignores its own directory.
+  // The manifest is machine-written JSON, never prettier-shaped — the seal ignores its own directory.
   const ignoreAbs = join(cwd, FORMAT_IGNORE)
   const ignored = existsSync(ignoreAbs) ? readFileSync(ignoreAbs, 'utf8') : ''
   const entry = `${dirname(manifest)}/`

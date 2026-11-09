@@ -4,7 +4,12 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import type { EngineDefinition } from './engines'
 import { HEADLESS_STDIN } from './autonomy'
-import { parseFinalResult, readIterationOutcome, toLines, type IterationResult } from './stream-reader'
+import {
+  parseFinalResult,
+  readIterationOutcome,
+  toLines,
+  type IterationResult,
+} from './stream-reader'
 import type { RunEvent } from './run-events'
 import { isInterrupted, trackEngine } from './interrupt'
 
@@ -151,7 +156,9 @@ function isolatedCodexHome(engine: EngineDefinition): string | { error: string }
   if (engine.id !== 'codex' || !home) return undefined
   return existsSync(join(home, 'auth.json'))
     ? home
-    : { error: `PAIR_CODEX_HOME=${home} has no auth.json — log codex in under it (CODEX_HOME=${home} codex login) or unset PAIR_CODEX_HOME` }
+    : {
+        error: `PAIR_CODEX_HOME=${home} has no auth.json — log codex in under it (CODEX_HOME=${home} codex login) or unset PAIR_CODEX_HOME`,
+      }
 }
 
 /** US-573 AC7 + US-623 AC8: the engine's own env (and an isolated CODEX_HOME) over the driver's; absent ⇒ inherit. */
