@@ -10,9 +10,6 @@
     "files": ".pair/adoption/tech/workflow-profiles/*.json"
   },
   "agents": {
-    "targets": [
-      "claude",
-      "codex"
-    ]
+    "targets": ["claude", "codex"]
   }
 }
