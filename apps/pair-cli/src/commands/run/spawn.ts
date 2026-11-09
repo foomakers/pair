@@ -1,7 +1,10 @@
 import { spawn } from 'child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import type { EngineDefinition } from './engines'
 import { HEADLESS_STDIN } from './autonomy'
-import { readIterationOutcome, toLines, type IterationResult } from './stream-reader'
+import { parseFinalResult, readIterationOutcome, toLines, type IterationResult } from './stream-reader'
 import type { RunEvent } from './run-events'
 import { isInterrupted, trackEngine } from './interrupt'
 
@@ -25,6 +28,8 @@ export interface EngineArgsInput {
   readonly model?: string | undefined
   /** US-488: a profile's effort for this stage — sent only when the engine declares `effortArgs`. */
   readonly effort?: string | undefined
+  /** US-623: where the engine writes its final message, for an engine declaring `lastMessageArgs`. */
+  readonly lastMessagePath?: string | undefined
 }
 
 /** The engine's argv: headless/stream flags, an optional cwd flag, autonomy, then the prompt. */
@@ -34,6 +39,9 @@ export function buildEngineArgs(input: EngineArgsInput): string[] {
     ...(input.engine.modelFlag && input.model ? [input.engine.modelFlag, input.model] : []),
     ...(input.engine.effortArgs && input.effort ? input.engine.effortArgs(input.effort) : []),
     ...(input.engine.cwdFlag ? [input.engine.cwdFlag, input.cwd] : []),
+    ...(input.engine.lastMessageArgs && input.lastMessagePath
+      ? input.engine.lastMessageArgs(input.lastMessagePath)
+      : []),
     ...input.autonomyArgs,
     input.promptText,
   ]
@@ -131,7 +139,11 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   // r1-2: once the driver was signalled, the engine it is stopping must not be replaced by the next.
   if (isInterrupted())
     throw new Error('interrupted: the driver received a signal, no engine is started')
-  const child = spawn(input.engine.command, buildEngineArgs(input), {
+  const channelDir = input.engine.lastMessageArgs
+    ? mkdtempSync(join(tmpdir(), 'pair-last-message-'))
+    : undefined
+  const lastMessagePath = channelDir && join(channelDir, 'last-message.txt')
+  const child = spawn(input.engine.command, buildEngineArgs({ ...input, lastMessagePath }), {
     cwd: input.cwd,
     stdio: [HEADLESS_STDIN, 'pipe', 'pipe'],
     // US-573 AC7: an engine's own env (claude: no background-wait ceiling) over the driver's.
@@ -158,6 +170,11 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
       },
       { maxFixRounds: input.maxFixRounds },
     )
+    // US-623 AC3: the stream's last text carried no result ⇒ the engine's dedicated channel is read.
+    if (result.final === undefined && lastMessagePath && existsSync(lastMessagePath)) {
+      const final = parseFinalResult(readFileSync(lastMessagePath, 'utf-8'))
+      if (final !== undefined) return { ...result, final }
+    }
     // US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one.
     const stopped = watchdog.stopped()
     if (stopped === undefined || result.outcome === 'success') return result
@@ -172,6 +189,7 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
     }
   } finally {
     watchdog.clear()
+    if (channelDir) rmSync(channelDir, { recursive: true, force: true })
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
     // ponytail: 1s drain bound — a grandchild holding stderr open must not hold the iteration.
     await Promise.race([stderr, new Promise(done => setTimeout(done, 1000).unref())])
