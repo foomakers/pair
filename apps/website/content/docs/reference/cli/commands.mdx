@@ -978,7 +978,7 @@ pair-cli run --cards 12,15,9 --autonomous
 pair-cli run --cards 12,15,9 --until merged --max-iterations 3
 ```
 
-- **Passes.** A card that ends unfinished but retryable (not at target, not escalated, not awaiting a human, not gate-red) does not stop the next one. After a pass, only the unfinished retryable cards run again, in the original order, **while the previous pass made verifiable progress**: a card reached a later lifecycle state, read from the durable cycle state under `.pair/working/runs/`, never from engine output. A state that regresses and recovers is not progress.
+- **Passes.** A card that ends unfinished but retryable (not at target, not escalated, not awaiting a human, not gate-red) does not stop the next one. Successful preparation without a cycle status remains unfinished and retryable. After a pass, only unfinished retryable cards run again, in the original order, **while the previous pass made verifiable progress**: a later board state, linked PR lifecycle state, or durable cycle handoff. Engine output alone, an unrelated PR, and a state that regresses then recovers do not count. Completed and terminal cards do not retry.
 - **No-progress stop.** A full pass without progress ends the run and reports each remaining card with its reason.
 - **Pass cap.** `--max-iterations` (else the policy's `max-iterations`); there is no separate retry option.
 - **Never retried.** Escalated, awaiting-human, gate-red (`failed-*`) and unreadable cards stay as reported and do not block the others.
@@ -1133,7 +1133,7 @@ re-evaluated each time and a card that becomes eligible mid-run is picked up on 
 The loop stops when the skill reports itself finished (it printed no continue-token), an iteration
 fails, or the perimeter's cap is reached. The continue-token is recognised only as a **line of its
 own** naming a concrete re-invocation: the documented template (`CONTINUE-TOKEN: pair-loop [--root
-<id>] …`) echoed by an agent that read the skill file is not a token, and does not extend the run. Within one `pair-cli run` process parallelism is **1**: the
+&lt;id&gt;] …`) echoed by an agent that read the skill file is not a token, and does not extend the run. Within one `pair-cli run` process parallelism is **1**: the
 command states the policy's `## Max Parallelism` ceiling and leaves batching to `pair-loop`,
 concurrency comes from running several driver processes.
 
