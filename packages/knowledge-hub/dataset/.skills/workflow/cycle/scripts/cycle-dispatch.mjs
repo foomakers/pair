@@ -161,6 +161,12 @@ const AGENTS_DIR = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '.
  * run, say, the preparation skill with none of the preparer's own constraints (tests only, never
  * production), and a headless run would give nobody the chance to notice.
  */
+/** US-623 BR2: the role's `tools:` frontmatter — a harness constraint the instruction engines never enforce, so the prompt states it. */
+export function roleToolsFor(agentType, agentsDir = AGENTS_DIR) {
+  const path = join(agentsDir, `${agentType}.md`)
+  return /^tools:\s*(.+)$/m.exec(/^---\n([\s\S]*?)\n---\n/.exec(readFileSync(path, 'utf8'))?.[1] ?? '')?.[1].trim()
+}
+
 export function roleBodyFor(agentType, agentsDir = AGENTS_DIR) {
   const path = join(agentsDir, `${agentType}.md`)
   if (!existsSync(path)) {
@@ -508,9 +514,13 @@ function packetCommand(opts) {
     const bare = skill.replace(/^\//, '')
     const body = `${args} $workflowVersion=${workflowVersion}`
     const role = roleBodyFor(agentType, agentsDir)
+    const toolsNote = type => {
+      const tools = roleToolsFor(type, agentsDir)
+      return tools ? `\n\nTool allowlist for this role (this engine does not enforce it — stay within it): ${tools}.` : ''
+    }
     return style === 'slash'
       ? `/${bare} ${body}\n\n${role}\n\n${guardrails}`
-      : `${role}\n\nRun the ${bare} skill with these arguments: ${body}\n\n${guardrails}`
+      : `${role}${toolsNote(agentType)}\n\nRun the ${bare} skill with these arguments: ${body}\n\n${guardrails}`
   }
   const notesArg = card.notes ? ` $notes=${JSON.stringify(card.notes)}` : ''
   const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
