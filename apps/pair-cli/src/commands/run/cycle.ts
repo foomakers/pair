@@ -127,6 +127,8 @@ export interface RunCycleInput {
    * the cause is cleared and `resolve` re-derives the step; `false` (budget spent, no worktree) ⇒ the card stays blocked.
    */
   readonly recoverDirty?: (next: CycleNext) => Promise<boolean>
+  /** US-623 AC6: runs before a `prepare` dispatch beyond attempt 1 — stashes the files a failed attempt left, so they never block it. */
+  readonly beforePrepare?: (next: CycleNext) => Promise<void>
   /**
    * A stage stopped for a transient cause (`RETRYABLE_STOPS`): spend a recovery round and re-dispatch it. `false`
    * (budget spent) ⇒ the stop stands.
@@ -511,6 +513,11 @@ const MERGE_RAN = new Set(['merged', 'merged-closure-unfinished'])
  * a time. Never judges a stage's content. The only merge is the injected `mergeStage`
  * collaborator's (US-490: `cycle-merge.mjs` re-verifies its own conjunction) — never this loop.
  */
+/** US-623 AC6: a `prepare` beyond attempt 1 starts from a tree the failed attempt left clean. */
+async function cleanBeforePrepare(input: RunCycleInput, next: CycleNext): Promise<void> {
+  if (next.step === 'prepare' && Number(next['attempt']) > 1) await input.beforePrepare?.(next)
+}
+
 /** US-573: tells the live-progress observer, if any, which stage is about to run. */
 function announce(input: RunCycleInput, next: CycleNext): void {
   input.onDispatch?.(next)
@@ -557,6 +564,7 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
 
+    await cleanBeforePrepare(input, next)
     announce(input, next)
     const stagePacket = await packet(next)
     state.dispatchedResult = await spawnStage(withFormatCorrection(stagePacket, state))
