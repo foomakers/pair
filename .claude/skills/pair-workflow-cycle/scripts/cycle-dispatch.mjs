@@ -154,6 +154,12 @@ function fail(halt, detail, extra = {}) {
 // (`.agents/skills/`) sits three levels below `.agents/`, not below the agents' own target (r0-9).
 const AGENTS_DIR = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'agents')
 
+/** US-623 BR2: the role's `tools:` frontmatter — a harness constraint the instruction engines never enforce, so the prompt states it. */
+export function roleToolsFor(agentType, agentsDir = AGENTS_DIR) {
+  const path = join(agentsDir, `${agentType}.md`)
+  return /^tools:\s*(.+)$/m.exec(/^---\n([\s\S]*?)\n---\n/.exec(readFileSync(path, 'utf8'))?.[1] ?? '')?.[1].trim()
+}
+
 /**
  * The BODY of a stage's agent definition — frontmatter stripped, since `model`/`tools` are harness
  * configuration, not role instructions. A missing definition HALTs `agent-definition-missing`
@@ -161,12 +167,6 @@ const AGENTS_DIR = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '.
  * run, say, the preparation skill with none of the preparer's own constraints (tests only, never
  * production), and a headless run would give nobody the chance to notice.
  */
-/** US-623 BR2: the role's `tools:` frontmatter — a harness constraint the instruction engines never enforce, so the prompt states it. */
-export function roleToolsFor(agentType, agentsDir = AGENTS_DIR) {
-  const path = join(agentsDir, `${agentType}.md`)
-  return /^tools:\s*(.+)$/m.exec(/^---\n([\s\S]*?)\n---\n/.exec(readFileSync(path, 'utf8'))?.[1] ?? '')?.[1].trim()
-}
-
 export function roleBodyFor(agentType, agentsDir = AGENTS_DIR) {
   const path = join(agentsDir, `${agentType}.md`)
   if (!existsSync(path)) {
