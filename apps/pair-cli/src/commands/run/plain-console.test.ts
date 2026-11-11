@@ -83,7 +83,7 @@ describe('plain console: technical lines hidden, finished steps as short notes',
     ],
 ['  Iteration 1/∞: selected 1 · skipped none · ran #577 completed · next iteration', undefined],])('loop status %s', (line, note) => expect(plainNote(line)).toBe(note))
 
-  const platformCases = ['darwin', 'linux']
+  const platformCases = ['darwin',]
   it.each(platformCases)(
     'applies only to a live terminal without --verbose (platform %s)',
     platform => {

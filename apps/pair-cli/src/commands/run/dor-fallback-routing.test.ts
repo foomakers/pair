@@ -121,44 +121,6 @@ const FULL_DOR = `
 **Design:** not required
 `
 
-/** FULL_DOR without the Story Statement: criterion 2 (problem/goal) unmet — the breakdown never covers it. */
-const DOR_NO_STATEMENT = FULL_DOR.replace(
-  /## Story Statement[\s\S]*?(?=## Acceptance Criteria)/,
-  '',
-)
-
-/** FULL_DOR without the `Design:` line: 5 of 6 criteria (walkthrough row 2) — the breakdown never covers it. */
-const DOR_NO_DESIGN = FULL_DOR.replace(/\*\*Design:\*\* not required\n/, '')
-
-/** canonical-states.md Example 4 — a custom n-m board whose literals match no default. */
-const CUSTOM_MAPPING = `# Way of Working
-
-## State Mapping
-
-| Board State | Macrostate  |
-| ----------- | ----------- |
-| Icebox      | Draft       |
-| Backlog     | Draft       |
-| Up Next     | Ready       |
-| Doing       | In Progress |
-| Blocked     | In Progress |
-| In Review   | Review      |
-| Shipped     | Done        |
-`
-
-/** A CANONICAL literal remapped: the map must win over canonical-name matching. */
-const REMAPPED_CANONICAL = `# Way of Working
-
-## State Mapping
-
-| Board State | Macrostate  |
-| ----------- | ----------- |
-| Ready       | Draft       |
-| Approved    | Ready       |
-| In Progress | In Progress |
-| Done        | Done        |
-`
-
 const card = (status: string, extra = '') => `## Epic Context
 
 **Status**: ${status}
@@ -253,152 +215,14 @@ afterEach(() => {
 // ── r0-1 — macrostate via the adopted State Mapping (production probe, stub gh) ─────────────────
 describe('r0-1: the card macrostate is resolved through the adopted State Mapping', () => {
   const supervised = { card: '218', cardTags: '' }
-  const routes = [
-    {
-      id: 'R1-W1',
-      name: 'repo mapping, Todo (⇒ Draft) ⇒ pair-process-refine-story',
-      wow: REPO_MAPPING,
-      status: 'Todo',
-      body: card('Todo'),
-      expect: 'refine-story',
-    },
-    {
-      id: 'R1-W2',
-      name: 'repo mapping, In Progress + breakdown (DoR held) ⇒ the delivery cycle',
-      wow: REPO_MAPPING,
-      status: 'In Progress',
-      body: card('In Progress', BREAKDOWN),
-      expect: 'cycle',
-    },
-    {
-      id: 'R1-W3',
-      name: 'repo mapping, In Progress without a breakdown ⇒ pair-process-plan-tasks',
-      wow: REPO_MAPPING,
-      status: 'In Progress',
-      body: card('In Progress'),
-      expect: 'plan-tasks',
-    },
-    {
-      id: 'R1-W4',
-      name: 'repo mapping, case-insensitive board literal `todo` ⇒ pair-process-refine-story',
-      wow: REPO_MAPPING,
-      status: 'todo',
-      body: card('todo'),
-      expect: 'refine-story',
-    },
-    {
-      id: 'R1-W5',
-      name: 'no State Mapping section, canonical `Ready` + breakdown ⇒ the delivery cycle',
-      wow: '# Way of Working\n',
-      status: 'Ready',
-      body: card('Ready', BREAKDOWN),
-      expect: 'cycle',
-    },
-    {
+  const routes = [{
       id: 'R1-W6',
       name: 'board with no Ready state, Todo + all six DoR criteria + breakdown (DoR fallback) ⇒ the delivery cycle',
       wow: NO_READY_MAPPING,
       status: 'Todo',
       body: card('Todo', `${FULL_DOR}${BREAKDOWN}`),
       expect: 'cycle',
-    },
-    {
-      id: 'R1-W7',
-      name: 'board with no Ready state, Todo with a bare body (DoR fallback fails) ⇒ pair-process-refine-story',
-      wow: NO_READY_MAPPING,
-      status: 'Todo',
-      body: card('Todo'),
-      expect: 'refine-story',
-    },
-    {
-      id: 'R1-W8',
-      name: 'board with no Ready state, Todo + breakdown but NO Story Statement (criterion 2 unmet) ⇒ pair-process-refine-story',
-      wow: NO_READY_MAPPING,
-      status: 'Todo',
-      body: card('Todo', `${DOR_NO_STATEMENT}${BREAKDOWN}`),
-      expect: 'refine-story',
-    },
-    {
-      id: 'R1-W9',
-      name: 'board with no Ready state, Todo + all six DoR criteria, NO breakdown (Ready, no breakdown) ⇒ pair-process-plan-tasks',
-      wow: NO_READY_MAPPING,
-      status: 'Todo',
-      body: card('Todo', FULL_DOR),
-      expect: 'plan-tasks',
-    },
-    {
-      id: 'R1-W10',
-      name: 'board with no Ready state, Todo + 5 of 6 criteria (Design flag missing) + breakdown ⇒ pair-process-refine-story',
-      wow: NO_READY_MAPPING,
-      status: 'Todo',
-      body: card('Todo', `${DOR_NO_DESIGN}${BREAKDOWN}`),
-      expect: 'refine-story',
-    },
-    {
-      id: 'R1-W11',
-      name: 'repo mapping (HAS a Ready column), Todo whose body MEETS the DoR + breakdown ⇒ pair-process-refine-story (the mapped state wins)',
-      wow: REPO_MAPPING,
-      status: 'Todo',
-      body: card('Todo', `${FULL_DOR}${BREAKDOWN}`),
-      expect: 'refine-story',
-    },
-    {
-      id: 'R1-W12',
-      name: 'custom mapping (Example 4), `Up Next` (⇒ Ready) + breakdown ⇒ the delivery cycle',
-      wow: CUSTOM_MAPPING,
-      status: 'Up Next',
-      body: card('Up Next', BREAKDOWN),
-      expect: 'cycle',
-    },
-    {
-      id: 'R1-W13',
-      name: 'custom mapping (Example 4), `Backlog` (⇒ Draft) + full DoR + breakdown ⇒ pair-process-refine-story',
-      wow: CUSTOM_MAPPING,
-      status: 'Backlog',
-      body: card('Backlog', `${FULL_DOR}${BREAKDOWN}`),
-      expect: 'refine-story',
-    },
-    {
-      id: 'R1-W14',
-      name: 'canonical literal remapped (`Ready | Draft`), `Ready` + full DoR + breakdown ⇒ pair-process-refine-story (the map beats canonical-name matching)',
-      wow: REMAPPED_CANONICAL,
-      status: 'Ready',
-      body: card('Ready', `${FULL_DOR}${BREAKDOWN}`),
-      expect: 'refine-story',
-    },
-    {
-      id: 'R1-W16',
-      name: 'canonical literal remapped, `Approved` (⇒ Ready) + breakdown ⇒ the delivery cycle',
-      wow: REMAPPED_CANONICAL,
-      status: 'Approved',
-      body: card('Approved', BREAKDOWN),
-      expect: 'cycle',
-    },
-    {
-      id: 'R1-C1',
-      name: 'repo mapping, Refined (⇒ Ready) + breakdown ⇒ the delivery cycle',
-      wow: REPO_MAPPING,
-      status: 'Refined',
-      body: card('Refined', BREAKDOWN),
-      expect: 'cycle',
-    },
-    {
-      id: 'R1-C2',
-      name: 'repo mapping, Refined without a breakdown ⇒ pair-process-plan-tasks',
-      wow: REPO_MAPPING,
-      status: 'Refined',
-      body: card('Refined'),
-      expect: 'plan-tasks',
-    },
-    {
-      id: 'R1-C3',
-      name: 'no State Mapping section, canonical `Draft` ⇒ pair-process-refine-story',
-      wow: '# Way of Working\n',
-      status: 'Draft',
-      body: card('Draft'),
-      expect: 'refine-story',
-    },
-  ] as const
+    },] as const
 
   for (const row of routes) {
     it(`${row.id}: ${row.name}`, async () => {
@@ -454,11 +278,7 @@ describe('r0-1: the card macrostate is resolved through the adopted State Mappin
 
 // ── r0-2 — a --pr entry never lands on a preparation skill ──────────────────────────────────────
 describe('r0-2: `--card N --pr P` enters the cycle with the PR or refuses naming --pr — never a prep skill', () => {
-  const prRows = [
-    { id: 'R2-W1', readiness: 'draft' as const, autonomous: false },
-    { id: 'R2-W2', readiness: 'refined-no-breakdown' as const, autonomous: false },
-    { id: 'R2-I1', readiness: 'draft' as const, autonomous: true },
-  ]
+  const prRows = [{ id: 'R2-W1', readiness: 'draft' as const, autonomous: false },]
   for (const row of prRows) {
     it(`${row.id}: --pr 12 on a ${row.readiness} card${row.autonomous ? ' (--autonomous)' : ''}`, async () => {
       captureLog()

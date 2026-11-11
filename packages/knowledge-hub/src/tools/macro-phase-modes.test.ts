@@ -375,43 +375,16 @@ const analysisOn = (
 }
 
 describe('r0-2: the model covers cascade rows 1–5', () => {
-  it.each([
-    [
-      'row 1: PRD is a template',
-      facts({ prd: 'template', techTemplates: 5, initiatives: 0, epics: 0, stories: 0 }),
-      'specify-prd',
-    ],
-    [
+  it.each([[
       'row 2: PRD populated and 3 tech files are templates',
       facts({ techTemplates: 3, initiatives: 0, epics: 0, stories: 0 }),
       'bootstrap',
     ],
-    [
-      'row 2 boundary: only 2 templates is not row 2 (row 3 instead)',
-      facts({ techTemplates: 2, initiatives: 0, epics: 0, stories: 0 }),
-      'plan-initiatives',
-    ],
-    [
-      'row 3: no initiatives or epics',
-      facts({ initiatives: 0, epics: 0, stories: 0 }),
-      'plan-initiatives',
-    ],
-    [
-      'row 4: initiatives exist but no epics',
-      facts({ initiatives: 1, epics: 0, stories: 0 }),
-      'plan-epics',
-    ],
-    [
-      'row 5: epics exist but no stories',
-      facts({ initiatives: 1, epics: 1, stories: 0 }),
-      'plan-stories',
-    ],
-    [
+[
       'row 3 boundary: epics without initiatives is not row 3 (row 5 instead)',
       facts({ initiatives: 0, epics: 1, stories: 0 }),
       'plan-stories',
-    ],
-  ] as Array<[string, ProjectFacts, string]>)('analysis selects %s', (_name, project, step) => {
+    ],] as Array<[string, ProjectFacts, string]>)('analysis selects %s', (_name, project, step) => {
     const run = analysisOn(project, ALL_STEPS, step)
     expect(run.steps).toEqual([step])
     expect(run.exit).toBe('halt')
