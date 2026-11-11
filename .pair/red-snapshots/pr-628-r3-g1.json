@@ -1,0 +1,126 @@
+{
+  "$meta": {
+    "pr": "628",
+    "phase": "r3-g1",
+    "base": "42c35f51d733c1426b5839a9ad95576ab9c8b453",
+    "trailer": "Pair-RED-Snapshot: pr=628; phase=r3-g1; base=42c35f51d733c1426b5839a9ad95576ab9c8b453; manifest=.pair/red-snapshots/pr-628-r3-g1.json",
+    "artifacts": [
+      "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "packages/dev-tools/src/test-audit/suites-junit-attr.test.ts"
+    ]
+  },
+  "mode": "remediation",
+  "phase": "r3-g1",
+  "inputHead": "42c35f51d733c1426b5839a9ad95576ab9c8b453",
+  "sourceOfTruth": "node:test junit reporter on node 20.20.2 (no testcase file attr; per-file run) and node 24 (file attr); suites.ts parseJunit(root, xml, only?) and runNodeTest",
+  "inventory": [
+    {
+      "id": "r2-1",
+      "producer": "node:test junit reporter: node<24 omits testcase file attribute, node>=24 emits it; parseJunit(root,xml,only?) in suites.ts keys by only ?? relative(root,file); runNodeTest runs one file per process on node<24",
+      "inputs": [
+        "node major version",
+        "testcase file attribute presence",
+        "only argument"
+      ],
+      "representations": [
+        "sealed oracle tests r0-1-oracle (suites-junit.test.ts) and r1-1-oracle (suites-junit-attr.test.ts)",
+        "runNodeTest in suites.ts"
+      ],
+      "consumers": [
+        "runNodeTest",
+        "CI build job (node 20)"
+      ],
+      "classes": [
+        "node 24: file attr present, whole-run junit parsed with realpath root",
+        "node 20: file attr absent, per-file run parsed with only=file, no id starts with ..",
+        "boundary: both oracle files (r0 and r1)"
+      ],
+      "interactions": [
+        "node<24 x only argument: ids keyed by only, not relative(root,\"\")"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "packages/dev-tools test-audit tests (successor of sealed suites-junit tests)",
+    "mode": "test",
+    "allowedPaths": []
+  },
+  "matrix": [
+    {
+      "id": "r0-1-oracle",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "oracle runs junit node-version-aware (per-file + only on node<24); node 20.20.2 and 24",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-oracle",
+      "expected": "green on node 20.20.2 and 24; asserts no id starts with \"..\" under node<24 (sealed version: red on node 20 with ids \"..::\"; injected regression of only-handling in isolated copy fails it)",
+      "covers": [
+        "r2-1"
+      ]
+    },
+    {
+      "id": "r1-1-oracle",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "same node-version-aware helper in the attr oracle",
+      "file": "packages/dev-tools/src/test-audit/suites-junit-attr.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit-attr.test.ts > r1-1-oracle",
+      "expected": "green on node 20.20.2 and 24; no id starts with \"..\" (sealed version red on node 20)",
+      "covers": [
+        "r2-1"
+      ]
+    },
+    {
+      "id": "r2-1-controls",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "remaining rows of both files and the two control files, node 20 and 24",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r2-1-controls",
+      "expected": "still pass unchanged",
+      "covers": [
+        "r2-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:1a4ebaa50214ff0b3075ae3179d403df2713f311079f2a1e331eece1622b3db6",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/test-audit/suites-junit.test.ts",
+      "observed": "7 passed (7)"
+    },
+    {
+      "file": "packages/dev-tools/src/test-audit/suites-junit-attr.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:b37c2161cbca188048b55097cf980b580ba5d0262010e48b3a64c2fab86333f0",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/test-audit/suites-junit-attr.test.ts",
+      "observed": "7 passed (7)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r3-g1",
+        "findings": [
+          "r2-1"
+        ],
+        "owner": "packages/dev-tools test-audit tests",
+        "mode": "test",
+        "allowedPaths": [],
+        "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts"
+      }
+    ],
+    "carried": [
+      {
+        "finding": "r2-2",
+        "disposition": "PR #628 body edit, outside the repository; orchestrator handles it. Stays blocking until read-back proves it."
+      }
+    ]
+  },
+  "remediationBatchId": "r3"
+}
