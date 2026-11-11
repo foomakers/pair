@@ -47,7 +47,8 @@ const worktreeOf = (git: Git, main: string, card: string) => {
   return undefined
 }
 
-const prOf = (runDir: string): string => {
+const prOf = (runDir: string, pr?: number): string => {
+  if (pr !== undefined) return `#${pr} (dispatched)`
   if (!existsSync(runDir)) return UNAVAILABLE
   for (const f of readdirSync(runDir).sort().reverse()) {
     if (!/^a0.*implement-phase.*\.json$|^a0.*red-spec.*\.json$/.test(f)) continue
@@ -107,6 +108,7 @@ export function observePreparationFailure(input: {
   readonly card: string
   readonly runDir: string
   readonly git?: Git
+  readonly pr?: number
 }): PreparationFailure {
   const git = input.git ?? realGit
   const wt = worktreeOf(git, input.main, input.card)
@@ -127,7 +129,7 @@ export function observePreparationFailure(input: {
     localChanges: here.changes,
     localHead: here.head,
     pushedHead: here.pushed,
-    pr: prOf(input.runDir),
+    pr: prOf(input.runDir, input.pr),
     recovery: RECOVERY,
   }
 }

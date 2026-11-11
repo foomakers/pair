@@ -1725,6 +1725,14 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
   const predecessors = predecessorEvidence(dir)
   const target = resolveSealedContract({ handoffs: list, predecessors, contractHash: c.predecessorContractHash })
   if (!target || target.error) return { approved: false, reason: 'predecessor-not-sealed', detail: target?.error }
+  let known = null
+  try {
+    known = new Set((JSON.parse(readFileSync(target.spec.data.contractPath, 'utf8')).matrix ?? []).map(r => r?.id))
+  } catch {
+    /* sealed contract unreadable: the sealer still validates the rows */
+  }
+  const unknown = known ? c.rows.filter(r => !known.has(r)) : []
+  if (unknown.length) return { approved: false, reason: 'rows-unknown', rows: unknown }
   return withLock(dir, lockWaitMs, () => {
     const all = readApprovals(dir)
     if (all.some(a => a.decisionRef === decisionRef)) return { approved: true, reason: 'already-applied' }
@@ -2823,7 +2831,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     }
     // US-479 F-RR-03: the INDEPENDENT verifier receives the same derived guard set the resolver
     // holds — it cannot check a contract against authority it was never given.
-    if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined }
+    if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), ...(d.ownerApproval ? { ownerApproval: d.ownerApproval } : {}), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined }
     // A refusal whose cause is OUTSIDE the cycle — a dirty worktree, a moved head — is retryable
     // once a human clears it: the same phase, the next attempt. A refusal the cycle owns
     // (`unprovable`, `split-required`) is terminal at once; a second identical external refusal too

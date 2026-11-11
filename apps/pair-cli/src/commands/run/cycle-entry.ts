@@ -429,7 +429,7 @@ export function prepareCycleCoordinator(
       config,
       card,
       onRunEvent => driveCycle(cycleArgs(card, dispatch, autonomy, onRunEvent)),
-      outcome => onPreparationFailure(outcome, cwd, card, dispatch.runId),
+      outcome => onPreparationFailure(outcome, cwd, card, dispatch.runId, dispatch.pr),
     )
 }
 
@@ -452,7 +452,7 @@ function cycleArgs(
 }
 
 /** US-591 AC-5: a preparation that stopped the cycle reports the actual local/published state. */
-function onPreparationFailure(outcome: DriveCycleResult, cwd: string, card: string, runId: string) {
+function onPreparationFailure(outcome: DriveCycleResult, cwd: string, card: string, runId: string, pr?: number) {
   const next = outcome.next as { reason?: unknown; refusal?: unknown } | undefined
   if (next?.reason !== 'failed-preparation' && next?.refusal === undefined) return
   const main = mainCheckoutOrCwd(cwd)
@@ -461,6 +461,7 @@ function onPreparationFailure(outcome: DriveCycleResult, cwd: string, card: stri
     main,
     card,
     runDir: join(main, '.pair', 'working', 'runs', runId, card),
+    ...(pr !== undefined && { pr }),
   })
 }
 
