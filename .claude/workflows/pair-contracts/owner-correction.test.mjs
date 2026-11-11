@@ -66,7 +66,7 @@ test('AC-1: refused — bot, other human, stale/foreign binding, plain name; not
   ]
   for (const [comment, reason] of cases) assert.equal(approve(dir, 2, { 2: comment }).reason, reason)
   assert.deepEqual(readApprovals(dir), [])
-  assert.equal(go(dir).next.step, 'verify')
+  assert.equal(go(dir).next.step, 'done')
 })
 
 test('AC-4: a second approval while one is pending is a conflict; one for a predecessor the line already moved past is stale', () => {

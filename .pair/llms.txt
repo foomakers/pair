@@ -206,6 +206,7 @@
 - [Decision: use native GitHub issue references in commits](.pair/adoption/decision-log/2026-11-06-native-issue-commit-references.md)
 - [Decision: expose the canonical Review state on the project board](.pair/adoption/decision-log/2026-11-06-review-board-state.md)
 - [Decision: named Claude and Codex workflow profiles](.pair/adoption/decision-log/2026-11-07-codex-workflow-profile.md)
+- [Decision: an owner-approved correction routes a successor; it never waives custody](.pair/adoption/decision-log/2026-11-11-owner-approval-routes-a-successor-never-waives-custody.md)
 - [Decision: no affected-only pre-push; rely on turbo cache and parallel gate](.pair/adoption/decision-log/2026-11-11-prepush-affected-only-not-adopted.md)
 
 ## How-To Guides
