@@ -19,17 +19,25 @@ const SLOW = 'await new Promise(r => setTimeout(r, 30))'
 const MIN_MS = 20
 
 // node < 24 omits the testcase `file` attribute: attribute per file, one run each
-const junitRun = (root: string, names: string[]): { xml: string; tests: Record<string, RunTest> } => {
+const junitRun = (
+  root: string,
+  names: string[],
+): { xml: string; tests: Record<string, RunTest> } => {
   const out = join(root, 'junit.xml')
   const run = (files: string[]): string => {
-    spawnSync('node', ['--test', '--test-reporter=junit', `--test-reporter-destination=${out}`, ...files], {
-      cwd: root,
-      stdio: 'ignore',
-    })
+    spawnSync(
+      'node',
+      ['--test', '--test-reporter=junit', `--test-reporter-destination=${out}`, ...files],
+      {
+        cwd: root,
+        stdio: 'ignore',
+      },
+    )
     return readFileSync(out, 'utf8')
   }
   const xml = run(names)
-  if (/classname="[^"]*" file="/.test(xml)) return { xml, tests: parseJunit(realpathSync(root), xml) }
+  if (/classname="[^"]*" file="/.test(xml))
+    return { xml, tests: parseJunit(realpathSync(root), xml) }
   const xmls = names.map(n => run([n]))
   return {
     xml: xmls.join(''),

@@ -108,11 +108,15 @@ function trackedTests(root: string, dir: string): string[] {
 }
 
 function junitOf(cwd: string, out: string, files: string[]): string {
-  spawnSync('node', ['--test', '--test-reporter=junit', `--test-reporter-destination=${out}`, ...files], {
-    cwd,
-    stdio: 'ignore',
-    timeout: 590_000,
-  })
+  spawnSync(
+    'node',
+    ['--test', '--test-reporter=junit', `--test-reporter-destination=${out}`, ...files],
+    {
+      cwd,
+      stdio: 'ignore',
+      timeout: 590_000,
+    },
+  )
   return readFileSync(out, 'utf8')
 }
 
