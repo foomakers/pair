@@ -69,6 +69,7 @@ describe('buildSelectionPrompt', () => {
 })
 
 describe('candidatesInEvent / parseCandidates', () => {
+  // Pure string parsing: identical on any platform (darwin and linux), nothing to inject.
   it('keeps healthy candidates when a reviewed tier disagrees with an unlabelled card', () => {
     const result = parseSelection(
       JSON.stringify({
