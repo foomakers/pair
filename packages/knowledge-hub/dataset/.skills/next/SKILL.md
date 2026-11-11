@@ -55,7 +55,7 @@ The scope is **stateless across steps**. Every run — and every step of a mode 
 
 ## Skill Catalog (53 skills)
 
-The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 10 process + 34 capability + 7 workflow + `/next` and `/loop` (the two bare, uncategorized navigator skills) = 51. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
+The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 10 process + 34 capability + 7 workflow + `/next` and `/loop` (the two bare, uncategorized navigator skills) = 53. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
 
 ### Process Skills (10)
 

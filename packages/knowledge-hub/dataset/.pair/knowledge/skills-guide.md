@@ -18,7 +18,7 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | **Capability** | 34 | Atomic units — perform a single focused operation |
 | **Workflow** | 7 | Delivery stages — dispatched by the batch engine, one mutation boundary each |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 51 (10 process + 34 capability + 7 workflow + 2 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 53 (10 process + 34 capability + 7 workflow + 2 navigator).
 
 ## Full Catalog
 
