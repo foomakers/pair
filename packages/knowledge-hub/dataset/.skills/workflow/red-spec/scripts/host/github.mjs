@@ -331,7 +331,7 @@ export default defineAdapter({
       // that silently no-ops must not render a state the PR does not carry.
       setPrState({ pr, repo, label }) {
         try {
-          // A merged PR has no premerge state: a re-invoked writer clears instead of restoring (US-599 AC5).
+          // A merged PR has no premerge state: a re-invoked writer clears instead of restoring (US-599).
           if (mergedSafe({ pr, repo })) return clearPrState({ pr, repo })
           const before = readLabels({ pr, repo })
           const removed = before.filter(l => STATE_LABELS.includes(l) && l !== label)
