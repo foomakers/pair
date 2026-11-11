@@ -1,0 +1,164 @@
+{
+  "$meta": {
+    "pr": "630",
+    "phase": "r1-g1",
+    "base": "708083b27cf7396f703faef8639156a158b6c4d9",
+    "trailer": "Pair-RED-Snapshot: pr=630; phase=r1-g1; base=708083b27cf7396f703faef8639156a158b6c4d9; manifest=.pair/red-snapshots/pr-630-r1-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/template-resolution.test.ts"
+    ]
+  },
+  "phase": "r1-g1",
+  "mode": "remediation",
+  "inputHead": "708083b27cf7396f703faef8639156a158b6c4d9",
+  "sourceOfTruth": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/SKILL.md",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "publish-pr SKILL.md Phase 3 Title clause (dataset source) and /pair-workflow-implement-phase delegation via $publishPr",
+      "inputs": [
+        "SKILL.md prose"
+      ],
+      "representations": [
+        "dataset .skills",
+        ".claude/skills mirror"
+      ],
+      "consumers": [
+        "template-resolution.test.ts"
+      ],
+      "classes": [
+        "publish-pr clause: template-only override; body/update/tag/Refs/assignee clauses retained (dataset, mirror)",
+        "implement-phase delegates to $publishPr with no own title rule (dataset, mirror)"
+      ],
+      "interactions": [
+        "direct publish-pr vs cycle implement-phase share one title rule"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": "publish-pr SKILL.md Title + re-read clauses",
+      "inputs": [
+        "SKILL.md prose"
+      ],
+      "representations": [
+        "dataset",
+        "mirror"
+      ],
+      "consumers": [
+        "template-resolution.test.ts"
+      ],
+      "classes": [
+        "override direction exact clause",
+        "inverted \"never override\"",
+        "failure clause \"publication failure, never success\" present/dropped"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "conformance-tests",
+    "mode": "test",
+    "allowedPaths": []
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "template-only clause removed from publish-pr (dataset or mirror)",
+      "oracle": "packages/knowledge-hub/src/conformance/template-resolution.test.ts :: PR title publication precedence",
+      "file": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
+      "expected": "exact-clause test fails (mode test: injected regression); passes on current source",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w2",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "implement-phase composes own title rule / loses $publishPr delegation",
+      "oracle": "packages/knowledge-hub/src/conformance/template-resolution.test.ts :: PR title publication precedence",
+      "file": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
+      "expected": "delegation test fails; passes on current source",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "current publish-pr retains update/tags/Refs/assignee/body clauses",
+      "oracle": "packages/knowledge-hub/src/conformance/template-resolution.test.ts :: PR title publication precedence",
+      "file": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
+      "expected": "passes",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-2-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "override inverted to \"never override\"",
+      "oracle": "packages/knowledge-hub/src/conformance/template-resolution.test.ts :: PR title publication precedence",
+      "file": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
+      "expected": "exact OVERRIDE predicate fails; old loose regex still matches",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-2-w2",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "failure clause dropped",
+      "oracle": "packages/knowledge-hub/src/conformance/template-resolution.test.ts :: PR title publication precedence",
+      "file": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
+      "expected": "exact MISMATCH predicate fails",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-2-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "current text carries exact clauses",
+      "oracle": "packages/knowledge-hub/src/conformance/template-resolution.test.ts :: PR title publication precedence",
+      "file": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
+      "expected": "passes",
+      "covers": [
+        "r0-2"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:91b4fd8af032439cd459a61bd929ef32eed2f65989212bcfdd6362afbd753c51",
+      "command": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/template-resolution.test.ts",
+      "observed": "27 passed (27)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1",
+          "r0-2"
+        ],
+        "owner": "conformance-tests",
+        "mode": "test",
+        "allowedPaths": [],
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  }
+}
