@@ -139,3 +139,17 @@ for (const reader of ['fallback', 'installed'] as const) {
     },
   )
 }
+
+it.each(['darwin', 'linux'] as const)('G6-pr-view: answers merged state of a known PR (platform %s)', platform => {
+  const state = initial()
+  state.prs = [{ ...pr(), number: 42, mergedAt: '2026-01-01T00:00:00Z' }]
+  save(state)
+  const run = (n: string) =>
+    spawnSync(
+      process.execPath,
+      [join(__dirname, '__fixtures__/cards-review-gh.cjs'), 'pr', 'view', n, '--json', 'mergedAt'],
+      { encoding: 'utf8', timeout: 5000, env: { ...process.env, PAIR_TEST_PLATFORM: platform } },
+    )
+  expect(JSON.parse(run('42').stdout)).toEqual({ mergedAt: '2026-01-01T00:00:00Z' })
+  expect(run('99').status).not.toBe(0)
+})
