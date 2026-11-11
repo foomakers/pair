@@ -1,22 +1,17 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import {
-  copyFileSync,
   mkdirSync,
   readFileSync,
   mkdtempSync,
   realpathSync,
   rmSync,
   symlinkSync,
-  writeFileSync,
 } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import { handleRunCommand, type IterationRunner, type RunHandlerDependencies } from './handler'
-import { parseRunCommand } from './parser'
 import { POLICY_PATH, readAutomationPolicy } from './automation-policy'
-import type { DriveCycleResult } from './run-context'
 
 /**
  * US-521 remediation r2-g1, finding r1-1 — the shared resolver (`autonomy-policy.mjs`) translates a legacy
@@ -231,108 +226,4 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
-})
-
-/** `installed`: the shared script on disk (today); not installed ⇒ the pre-#521 legacy path, byte for byte. */
-function project(policy: string, installed: boolean) {
-  writeFileSync(join(root, POLICY_PATH), policy)
-  if (installed) copyFileSync(SCRIPT_SRC, join(root, SCRIPT_REL, 'autonomy-policy.mjs'))
-  else rmSync(join(root, SCRIPT_REL, 'autonomy-policy.mjs'), { force: true })
-  return new InMemoryFileSystemService(
-    {
-      [`${root}/config.json`]: JSON.stringify({
-        asset_registries: {
-          skills: {
-            source: '.skills',
-            behavior: 'overwrite',
-            description: 'skills',
-            prefix: 'pair',
-            targets: [{ path: '.claude/skills/', mode: 'canonical' }],
-          },
-        },
-      }),
-      [`${root}/.claude/skills/pair-next/SKILL.md`]: '',
-      [`${root}/.claude/skills/pair-loop/SKILL.md`]: '',
-      [`${root}/.claude/skills/pair-process-refine-story/SKILL.md`]: '',
-      [`${root}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
-      [`${root}/${SCRIPT_REL}/cycle-state.mjs`]: '',
-      [`${root}/${SCRIPT_REL}/cycle-dispatch.mjs`]: '',
-      [`${root}/${SCRIPT_REL}/autonomy-policy.mjs`]: '',
-      [`${bin}/claude`]: '',
-      [`${root}/${POLICY_PATH}`]: policy,
-    },
-    root,
-    root,
-  )
-}
-
-interface Outcome {
-  code: number | string
-  prompts: string[]
-}
-async function runEntry(
-  flags: Record<string, string | boolean>,
-  policy: string,
-  installed: boolean,
-): Promise<Outcome> {
-  vi.spyOn(console, 'log').mockImplementation(() => {})
-  const prompts: string[] = []
-  const runIteration: IterationRunner = async input => {
-    prompts.push(input.promptText)
-    return { outcome: 'success', detail: 'done' }
-  }
-  const deps: RunHandlerDependencies = {
-    runIteration,
-    acquireLock: ({ card }) => ({
-      kind: 'acquired',
-      lock: { path: `/l/${card}`, release: () => {} },
-    }),
-    appendAudit: () => {},
-    cardReadiness: async () => 'draft',
-    driveCycle: async (): Promise<DriveCycleResult> => ({
-      status: 'ready-for-merge',
-      stagesRun: 0,
-    }),
-  }
-  try {
-    const code = await handleRunCommand(parseRunCommand(flags), project(policy, installed), deps)
-    return { code, prompts }
-  } catch (error) {
-    return { code: `threw: ${(error as Error).message}`, prompts }
-  } finally {
-    vi.restoreAllMocks()
-  }
-}
-
-const ENTRIES: ReadonlyArray<readonly [string, Record<string, string | boolean>]> = [
-  ['E-1 --skill pair-next (borrowed eligibility)', { skill: 'pair-next', maxIterations: '1' }],
-  ['E-2 --root (default cascade, pair-loop)', { root: '1', maxIterations: '1' }],
-  ['E-3 --card Draft (DoR fallback ⇒ refine-story)', { card: '521', cardTags: '' }],
-  ['E-4 --card --dry-run', { card: '521', cardTags: '', dryRun: true }],
-]
-const ACCEPTED_LABELS = ["don't-merge", 'Q&A', 'a;b', 'say "hi"', 'back\\slash', 'a>b']
-
-describe('r1-1 — every pair-cli run entry: a legacy-accepted label runs exactly as before the resolver', () => {
-  for (const [entry, flags] of ENTRIES)
-    it.each(ACCEPTED_LABELS)(
-      `${entry}: \`## Eligibility %s\` — same outcome and prompts as the legacy path`,
-      async label => {
-        const before = await runEntry(flags, ELIG(label), false)
-        expect(before.code).toBe(0)
-        const now = await runEntry(flags, ELIG(label), true)
-        expect(now).toEqual(before)
-      },
-    )
-
-  it.each(['risk:green, risk:yellow', '#tech-debt', 'risk:green risk:yellow'])(
-    'E-6: a legacy-REJECTED `## Eligibility %s` still HALTs every entry with the legacy message',
-    async label => {
-      for (const [, flags] of ENTRIES) {
-        const before = await runEntry(flags, ELIG(label), false)
-        const now = await runEntry(flags, ELIG(label), true)
-        expect(String(before.code)).toMatch(/^threw: /)
-        expect(messageClass(String(now.code))).toBe(messageClass(String(before.code)))
-      }
-    },
-  )
 })

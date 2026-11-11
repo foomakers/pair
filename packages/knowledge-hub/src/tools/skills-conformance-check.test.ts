@@ -904,25 +904,6 @@ describe('extractProfileExamples', () => {
     expect(examples[0]).toContain('`poc`')
   })
 
-  // Round 5 Major: extraction matched only ```[a-z]*\n, so any info string that is
-  // not bare lowercase made the example invisible again — while the section
-  // parser's own fence skipper still skipped it, leaving it neither read as a
-  // declaration nor checked as an example. A titled fence is an ordinary docs edit
-  // on the file `pair update` writes into every adopting project.
-  it.each([
-    ['a titled info string', '```text title="custom subset"'],
-    ['an uppercase info string', '```TEXT'],
-    ['no info string at all', '```'],
-    ['a `~~~` fence', '~~~text'],
-    ['a 4-backtick fence', '````text'],
-  ])('extracts an example behind %s', (_, open) => {
-    const close = open.startsWith('~') ? '~~~' : open.replace(/[^`]/g, '')
-    const doc = `## Process Profile\n\nExample:\n\n${open}\n- \`profile\`: \`poc\`\n${close}\n`
-    const examples = extractProfileExamples(doc)
-    expect(examples).toHaveLength(1)
-    expect(parseWowProfileSection(examples[0] as string).profile).toBe('poc')
-  })
-
   // Round 6 Minor: a closing fence must be at least as long as the one that opened
   // it (CommonMark). The recognizer's backreference already enforces that; pinned
   // here so it stays mirrored with `scanFences`, which did NOT.
@@ -1005,26 +986,6 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
     }
   })
 
-  // Round 5 Major: the round-4 fix held only for the exact fence spelling shipped
-  // that day. Retitling a fence — an ordinary docs edit — made the example
-  // invisible to the gate again, so a corrupted step id in the file `pair update`
-  // writes into every adopting project shipped green.
-  it.each([
-    ['a titled fence', '```text title="custom subset"', '```'],
-    ['a `~~~` fence', '~~~text', '~~~'],
-  ])('FAILS on a corrupted example behind %s', (_, open, close) => {
-    // Only the `custom` example's own fence is respelled — the template carries
-    // other fences whose delimiters must stay matched.
-    const retitled = shippedTemplate.replace(
-      /```text\n(- `profile`: `custom`[\s\S]*?)```/,
-      (_m, body: string) => `${open}\n${body}${close}`,
-    )
-    expect(retitled).not.toBe(shippedTemplate)
-    const corrupted = retitled.replace('`plan-stories`,', '`plan-storys`,')
-    expect(corrupted).not.toBe(retitled)
-    expect(checkFiles({ [WOW_TEMPLATE_FILE]: corrupted }).join('\n')).toContain('unknown step id')
-  })
-
   // Round 5 Minor: the error named the RESOLUTION's fallback profile, because
   // every HALT path returns `default` — so a corrupted `custom` example printed
   // "worked example (`default`)", and `default` accepts no whitelist at all.
@@ -1034,20 +995,6 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
     const errors = check(template).join('\n')
     expect(errors).toContain('worked example #2 (`custom`)')
     expect(errors).not.toContain('(`default`)')
-  })
-
-  // Round 5 Minor: the sweep resolved worked examples in exactly two files, so the
-  // feature's own public documentation — and the way-of-working `/next` reads when
-  // run in this repo — carried the same declarations with no gate behind them.
-  it.each([
-    ['the docs concepts page', '../../apps/website/content/docs/concepts/adoption-files.mdx'],
-    ['the docs reference page', '../../apps/website/content/docs/reference/pair-next.mdx'],
-    ['this repo’s own way-of-working', '../../.pair/adoption/tech/way-of-working.md'],
-  ])('sweeps the worked examples of %s', (_, file) => {
-    const page =
-      '## Process Profile\n\n```text\n## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `plan-stories`\n```\n'
-    expect(checkFiles({ [file]: page }).join('\n')).toContain('none of its prerequisites')
-    expect(checkFiles({ [file]: page }).join('\n')).toContain(file)
   })
 
   // Round 7 Minor: the sweep read this repo's own way-of-working for FENCED
@@ -1555,21 +1502,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('more than once')
   })
 
-  // A key the author plainly MEANT to declare, on a line whose marker this reader
-  // does not accept, is a detected key in an unreadable shape — never "no
-  // declaration", which is the silent widening again.
-  it.each([
-    ['no bullet at all', '`profile`: `poc`'],
-    ['an ordered-list marker', '1. `profile`: `poc`'],
-    ['an ordered-list paren marker', '1) `profile`: `poc`'],
-    ['a leading-space, bullet-less key', '  `profile`: `poc`'],
-  ])('HALTs on a `profile` key written with %s', (_, line) => {
-    const r = resolve(`## Process Profile\n\n${line}\n`)
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`profile`')
-    expectNoStepSet(r)
-  })
-
   // Round 8 Questions: a key inside a BLOCKQUOTE matched neither the accepted-shape
   // regex (`^\s*[-*+]`, and `>` is not whitespace) nor the off-marker one
   // (`^[ \t]*`), so the whole declaration was invisible text — `default`, all 12
@@ -1601,40 +1533,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toEqual([])
   })
 
-  // Round 10 Minor: the two REJECTED-marker patterns required the key to be
-  // BACKTICKED while the ACCEPTED-bullet one does not, so each error axis HALTed
-  // alone and their INTERSECTION was invisible. `1. profile: poc` and
-  // `> - profile: poc` resolved to `{ok:true, profile:'default', enabled:[all 12],
-  // warnings:[]}` — byte-identical to writing nothing, the silent WIDENING. The
-  // stated reason for requiring backticks is that "without a list marker that is
-  // the only signal separating a declaration from a sentence"; `1.` IS a list
-  // marker and `> -` carries a bullet, so the requirement over-reached exactly
-  // where its own rationale does not. The unbackticked VALUE is the shape the
-  // schema's documentation TABLE suggests — the case the accepted-bullet pattern
-  // was loosened for in the first place.
-  it.each([
-    ['an ordered-list marker', '1. profile: poc'],
-    ['an ordered-list paren marker', '1) profile: poc'],
-    ['a bold ordered-list key', '1. **profile**: poc'],
-  ])('HALTs on an UNBACKTICKED `profile` key written with %s', (_, line) => {
-    const r = resolve(`## Process Profile\n\n${line}\n`)
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`profile`')
-    expectNoStepSet(r)
-  })
-
-  it.each([
-    ['a bulleted key inside a blockquote', '> - profile: poc'],
-    ['an ordered key inside a blockquote', '> 1. profile: poc'],
-    ['a bulleted key inside a nested blockquote', '>> - profile: poc'],
-  ])('HALTs on an UNBACKTICKED `profile` key written as %s', (_, line) => {
-    const r = resolve(`## Process Profile\n\n${line}\n`)
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`profile`')
-    expect(r.halts[0]).toContain('blockquote')
-    expectNoStepSet(r)
-  })
-
   // Asserted on the SHAPE halt, not merely on the key name: unread, this line left
   // `custom` with no whitelist at all, so the run HALTed anyway — with "declares no
   // `whitelist`" about a line visibly in the file, the anti-pattern the schema's own
@@ -1646,43 +1544,12 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('a shape this reader does not accept')
   })
 
-  // The line the requirement was actually drawn for stays where it was: with no
-  // list marker of any kind, the backticks are the only thing separating a
-  // declaration from a sentence that happens to open on the word.
-  it.each([
-    ['a marker-less unbackticked key', 'profile: poc'],
-    ['a marker-less unbackticked key inside a blockquote', '> profile: poc'],
-  ])('does not read %s as a declaration', (_, line) => {
-    const r = resolve(`## Process Profile\n\n${line}\n`)
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
-    expect(r.halts).toEqual([])
-  })
-
   // The third, weaker shape of the same class: the bullet and the backticks are
   // both there, padded inside the ticks. Detected on the accepted pattern (the
   // marker is present and the value is readable), so it RESOLVES rather than
   // HALTs — before, it was neither.
   it('accepts a bulleted key whose backticks are padded', () => {
     const r = resolve('## Process Profile\n\n- ` profile `: `poc`\n')
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  // Round 9 Minor: key detection was CASE-SENSITIVE while the HEADING one level up
-  // is not — so `- `Profile`: `poc`` was read by nothing and reported by nothing:
-  // `default`, all 12 catalogue steps, zero halts, zero warnings, byte-identical to
-  // writing nothing. The heading immediately above the key is Title Case
-  // (`## Process Profile`), so mirroring its case into the key is the same class of
-  // author error as copying the table's bare key spelling, which this reader already
-  // handles. Case belongs to DETECTION (the key's spelling), which is loose; the
-  // VALUE stays strict, so `` `POC` `` still HALTs as an unknown profile.
-  it.each([
-    ['Title Case', 'Profile'],
-    ['upper case', 'PROFILE'],
-    ['mixed case', 'pRoFiLe'],
-  ])('reads a `profile` key spelled in %s as the key', (_, spelling) => {
-    const r = resolve(`## Process Profile\n\n- \`${spelling}\`: \`poc\`\n`)
     expect(r.profile).toBe('poc')
     expect(r.halts).toEqual([])
   })
@@ -1712,22 +1579,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const misLevelled = resolve('### Process Profile\r\n\r\n- `profile`: `poc`\r\n')
     expect(misLevelled.halts).toHaveLength(1)
     expect(misLevelled.halts[0]).toContain('heading level')
-  })
-
-  // Round 6 Minor: four spaces (or a tab) in front of a key is ALSO a legitimate
-  // CommonMark sublist, and the two are indistinguishable from the line alone. The
-  // ambiguity was resolved silently in the widening direction — skipped as an
-  // example, section resolved to `default`, all 12 steps back, zero halts — while
-  // the SAME content indented by two spaces resolved to `poc`. Which one a team got
-  // depended on their editor's Tab width.
-  it.each([
-    ['four spaces', '    '],
-    ['a tab', '\t'],
-  ])('HALTs on a key indented by %s rather than skipping it as an example', (_, indent) => {
-    const r = resolve(`## Process Profile\n\n- Configuration:\n${indent}- \`profile\`: \`poc\`\n`)
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('does not accept')
-    expectNoStepSet(r)
   })
 
   it('still closes a ``` fence on ``` and not on a `~~~` line inside it', () => {

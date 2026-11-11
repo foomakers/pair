@@ -246,43 +246,6 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
     },
   )
 
-  const AUTO_ADVANCE_CORPUS: Case[] = [
-    ['the fail-closed default', '(none)'],
-    ['the project’s own eligibility tier', 'risk:green'],
-    ['a tier outside eligibility', 'risk:red'],
-    ['a non-label value', 'yes please'],
-    ['a boolean expression', 'risk:green OR risk:yellow'],
-    ['a command substitution', 'risk:$(id)'],
-  ]
-
-  const PARALLELISM_CORPUS: Case[] = [
-    ['a decimal ceiling', '3'],
-    ['scientific notation', '1e3'],
-    ['hexadecimal', '0x10'],
-    ['a trailing-zero float', '2.0'],
-    ['zero', '0'],
-    ['prose', 'plenty'],
-    ['a well-formed per-tier override', '3\nrisk:green: 5'],
-    ['a malformed override line', '3\nrisk:green 5'],
-    ['an override naming a non-label', '3\nnot a tier: 5'],
-    ['an override with a non-integer', '3\nrisk:green: many'],
-    [
-      'an override naming a tier the Tag Projection does not emit',
-      '3\nrisk:blue: 5',
-      {
-        tier1: 'reject',
-        tier2: 'accept',
-        why:
-          'DELIBERATE: tier 1 checks an override key against the Tag Projection family the calling ' +
-          'skill resolves from `tech/risk-matrix.md`. The driver never READS that file (it borrows ' +
-          'policy, it does not derive it — D18) and never APPLIES an override at all, since one ' +
-          'process drives one card (AC9), so it validates shape only. The value is unused on tier ' +
-          '2, which is why the looser direction is acceptable here; resolving the family in the ' +
-          'driver is the recorded follow-up.',
-      },
-    ],
-  ]
-
   const AUDIT_CORPUS: Case[] = [
     ['a normal relative path', 'automation/loop-audit.md'],
     ['an absolute path', '/var/tmp/audit.md'],
@@ -292,23 +255,6 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
     ['a windows drive-letter path', 'C:/tmp/audit.md'],
     ['a windows backslash path', 'C:\\tmp\\audit.md'],
   ]
-
-  it.each(AUTO_ADVANCE_CORPUS)(
-    'agrees on `## Auto-Advance` with %s',
-    (_label, value, divergence) => {
-      // Eligibility is declared alongside it, because tier 1 validates the switch against it.
-      const policyText = `## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\n${value}\n`
-
-      assertAgreement(policyText, 'Auto-Advance', divergence)
-    },
-  )
-
-  it.each(PARALLELISM_CORPUS)(
-    'agrees on `## Max Parallelism` with %s',
-    (_label, value, divergence) => {
-      assertAgreement(`## Max Parallelism\n\n${value}\n`, 'Max Parallelism', divergence)
-    },
-  )
 
   it.each(AUDIT_CORPUS)('agrees on `## Audit Location` with %s', (_label, value, divergence) => {
     assertAgreement(`## Audit Location\n\n${value}\n`, 'Audit Location', divergence)

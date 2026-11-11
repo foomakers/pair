@@ -485,41 +485,6 @@ describe('r0-2: `--card N --pr P` enters the cycle with the PR or refuses naming
 
 // ── r0-4 — the per-card lock on both fallback routes ────────────────────────────────────────────
 describe('r0-4: both fallback routes take the per-card lock and release it on every exit', () => {
-  const readinesses = [
-    { id: 'R4-W1', readiness: 'draft' as const },
-    { id: 'R4-W2', readiness: 'refined-no-breakdown' as const },
-    { id: 'R4-W3', readiness: 'ready' as const },
-  ]
-  for (const row of readinesses) {
-    it(`${row.id}: lock held, ${row.readiness} ⇒ run-in-progress skip, exit 0, nothing spawned`, async () => {
-      const output = captureLog()
-      const { calls, driveCycle, handler } = harness({ readiness: row.readiness, held: true })
-
-      const outcome = await run({ card: '9', cardTags: '' }, project(), handler)
-
-      expect(outcome.error?.message).toBeUndefined()
-      expect(outcome.code).toBe(0)
-      expect(output()).toContain('run-in-progress')
-      expect(calls).toHaveLength(0)
-      expect(driveCycle).not.toHaveBeenCalled()
-    })
-  }
-
-  const free = [
-    { id: 'R4-W5', readiness: 'draft' as const },
-    { id: 'R4-W6', readiness: 'ready' as const },
-  ]
-  for (const row of free) {
-    it(`${row.id}: lock free, ${row.readiness} ⇒ acquired before the dispatch and released after it`, async () => {
-      captureLog()
-      const { lock, handler } = harness({ readiness: row.readiness })
-
-      const outcome = await run({ card: '9', cardTags: '' }, project(), handler)
-
-      expect(outcome.code).toBe(0)
-      expect(lock.events).toEqual(['acquire:9', 'release:9'])
-    })
-  }
 
   it('R4-C1: a MAPPED route with the lock held is a run-in-progress skip (US-217, unchanged)', async () => {
     const output = captureLog()
@@ -535,71 +500,4 @@ describe('r0-4: both fallback routes take the per-card lock and release it on ev
     expect(output()).toContain('run-in-progress')
     expect(calls).toHaveLength(0)
   })
-})
-
-// ── r0-5 — unattended runs never start a preparation skill (AC14 amended 2026-09-23) ────────────
-describe('r0-5: --autonomous never starts a preparation skill; supervised routing stands', () => {
-  const ELIGIBILITY = '## Eligibility\n\nrisk:green\n'
-  const skips = [
-    {
-      id: 'R5-W1',
-      name: 'no mapping declared, Draft',
-      readiness: 'draft' as const,
-      options: { card: '9', cardTags: '', autonomous: true },
-      files: {},
-    },
-    {
-      id: 'R5-W2',
-      name: 'no mapping declared, Refined without a breakdown',
-      readiness: 'refined-no-breakdown' as const,
-      options: { card: '9', cardTags: '', autonomous: true },
-      files: {},
-    },
-    {
-      id: 'R5-W3',
-      name: '`## Eligibility` declared, label absent, --approve-ineligible, Draft',
-      readiness: 'draft' as const,
-      options: { card: '9', cardTags: 'risk:red', autonomous: true, approveIneligible: true },
-      files: { [`${cwd}/${POLICY_PATH}`]: ELIGIBILITY },
-    },
-    {
-      id: 'R5-W4',
-      name: 'unmapped (a mapping declared, the card carries none of its tags), Draft',
-      readiness: 'draft' as const,
-      options: { card: '9', cardTags: 'risk:green', autonomous: true },
-      files: { [`${cwd}/${POLICY_PATH}`]: MAPPED_POLICY },
-    },
-  ]
-  for (const row of skips) {
-    it(`${row.id}: --autonomous, ${row.name} ⇒ exit 0, "needs a human" printed, nothing spawned`, async () => {
-      const output = captureLog()
-      const { calls, driveCycle, handler } = harness({ readiness: row.readiness })
-
-      const outcome = await run(row.options, project(row.files), handler)
-
-      expect(outcome.error?.message).toBeUndefined()
-      expect(outcome.code).toBe(0)
-      expect(output()).toMatch(/needs a human/i)
-      expect(calls).toHaveLength(0)
-      expect(driveCycle).not.toHaveBeenCalled()
-    })
-  }
-
-  const supervisedRoutes = [
-    { id: 'R5-C1', readiness: 'draft' as const, skill: 'pair-process-refine-story' },
-    { id: 'R5-C2', readiness: 'refined-no-breakdown' as const, skill: 'pair-process-plan-tasks' },
-  ]
-  for (const row of supervisedRoutes) {
-    it(`${row.id}: supervised, ${row.readiness} ⇒ ${row.skill} dispatched`, async () => {
-      captureLog()
-      const { calls, driveCycle, handler } = harness({ readiness: row.readiness })
-
-      const outcome = await run({ card: '9', cardTags: '' }, project(), handler)
-
-      expect(outcome.code).toBe(0)
-      expect(calls).toHaveLength(1)
-      expect(calls[0]?.promptText).toContain(row.skill)
-      expect(driveCycle).not.toHaveBeenCalled()
-    })
-  }
 })

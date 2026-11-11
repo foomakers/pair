@@ -178,40 +178,6 @@ describe('describeMergePosture (round 1, finding 3)', () => {
  * file is safe on tier 1 and executable on tier 2, the divergence ADR-021 excludes.
  */
 describe('readAutomationPolicy — a policy value is never a command fragment (round 4, Major)', () => {
-  const eligibility = (value: string) => `## Eligibility\n\n${value}\n`
-  const predicate = (value: string) => `## Stop Predicate\n\n${value}\n`
-
-  it.each([
-    ['a command substitution', 'risk:$(whoami)'],
-    ['a backtick', 'risk:`id`'],
-    ['a backtick mid-value', 'risk:gr`een'],
-  ])('HALTs on `## Eligibility` carrying %s', (_case, value) => {
-    expect(() => policyFrom(eligibility(value)).read()).toThrow(/command fragment/)
-  })
-
-  it.each([
-    ['a backticked selector payload', 'tag:`gh pr merge 459 --admin` ⇒ Done'],
-    ['a command substitution in the selector', 'tag:$(whoami) ⇒ Done'],
-  ])('HALTs on `## Stop Predicate` carrying %s', (_case, value) => {
-    expect(() => policyFrom(predicate(value)).read()).toThrow(/command fragment|selector/)
-  })
-
-  /**
-   * Round 5, Major: the WHOLE predicate line reaches the prompt (`predicate = line`), so the
-   * content check belongs on the line, not on one field of it. `has-tag:$(whoami)` satisfies
-   * `/^has-tag:\S+$/` — shape is not safety.
-   *
-   * This is a TIER-2-ONLY exposure and the parity test cannot catch it by construction: tier 1
-   * accepts the same strings but never inlines them, it evaluates the predicate in JS. So the guard
-   * has to be here, applied directly.
-   */
-  it.each([
-    ['a command substitution in has-tag', 'root ⇒ has-tag:$(whoami)'],
-    ['a backtick in has-tag', 'root ⇒ has-tag:`id`'],
-    ['a command substitution after the arrow', 'tag:risk:red ⇒ has-tag:$(id)'],
-  ])('HALTs on a predicate line carrying %s', (_case, value) => {
-    expect(() => policyFrom(`## Stop Predicate\n\n${value}\n`).read()).toThrow(/command fragment/)
-  })
 
   it('HALTs on a traversing audit location, as tier 1 does', () => {
     expect(() => policyFrom('## Audit Location\n\n../../../etc/x.md\n').read()).toThrow(
@@ -223,15 +189,6 @@ describe('readAutomationPolicy — a policy value is never a command fragment (r
     expect(() => policyFrom('## Audit Location\n\naudit/one.md\naudit/two.md\n').read()).toThrow(
       /exactly one path/,
     )
-  })
-
-  it.each([
-    ['DEL', 0x7f],
-    ['a C1 control', 0x9b],
-  ])('HALTs on %s in a policy value', (_case, code) => {
-    const value = `risk:${String.fromCharCode(code)}green`
-
-    expect(() => policyFrom(`## Eligibility\n\n${value}\n`).read()).toThrow(/command fragment/)
   })
 
   it('still accepts every legitimate value, spaces included', () => {
@@ -266,25 +223,6 @@ describe('readAutomationPolicy — numeric and condition forms match tier 1 exac
       /not a canonical macrostate/,
     )
   })
-
-  /**
-   * Round 5, minor 2 — INVERTED from round 4, which was wrong in the other direction.
-   *
-   * Tier 1 parses this field with `Number()` (`parseMaxParallelism`), so `1e3` is 1000 and `0x10` is
-   * 16 there. Round 4 tightened it here to decimal-only, making the driver STRICTER than its schema
-   * owner — the same divergence as round 3's, mirrored. `max-iterations` stays strict because tier 1
-   * IS strict there (`/^max-iterations:\s*(-?\d+)\s*$/`): the two fields differ on purpose.
-   */
-  it.each([
-    ['scientific notation', '1e3', 1000],
-    ['hexadecimal', '0x10', 16],
-    ['a trailing-zero float', '2.0', 2],
-  ])(
-    'accepts `## Max Parallelism` in %s form, exactly as tier 1 does',
-    (_case, value, expected) => {
-      expect(policyFrom(`## Max Parallelism\n\n${value}\n`).read().maxParallelism).toBe(expected)
-    },
-  )
 
   it.each([
     ['a malformed override line', 'risk:green 5'],

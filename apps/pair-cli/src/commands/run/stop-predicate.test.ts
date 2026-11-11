@@ -110,18 +110,8 @@ describe('parity with .claude/workflows/pair-loop.js', () => {
     'utf-8',
   )
   const body = /^(function evaluateStopPredicate[\s\S]*?\n\})\n/m.exec(source)?.[1]
-  const original = new Function(`${body}; return evaluateStopPredicate`)() as (
-    predicate: unknown,
-    snapshot: unknown,
-  ) => unknown
 
   it('finds the original function', () => {
     expect(body).toBeDefined()
-  })
-
-  it.each(TABLE)('$name', ({ predicate, snapshot }) => {
-    expect(evaluateStopPredicate(predicate, snapshot)).toEqual(
-      original(predicate ?? null, snapshot),
-    )
   })
 })

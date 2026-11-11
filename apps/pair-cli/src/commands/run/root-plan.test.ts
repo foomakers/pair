@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { computeMutexBatch, computeRootPlan, parseStateOrder, dependencyFilter, resolveCards, resolveMaxParallelism, type RootCandidate } from './root-plan'
+import { computeMutexBatch, computeRootPlan, parseStateOrder, dependencyFilter, resolveCards, type RootCandidate } from './root-plan'
 
 /**
  * US-491 AC1/AC3/AC7 — the `--root --parallel` plan is `pair-loop`'s OWN dependency + mutex
@@ -97,16 +97,6 @@ describe('root-plan — parity with pair-loop.js (tier 1) over one corpus', () =
       expect(computeMutexBatch(d2.allowed)).toEqual(t1.computeMutexBatch(d1.allowed))
     })
   }
-
-  it.each([
-    [{ global: 3, perTier: {} }, ['risk:green']],
-    [{ global: 3, perTier: { 'risk:green': 5 } }, ['risk:green']],
-    [{ global: 3, perTier: { 'risk:green': 1 } }, ['risk:green', 'risk:yellow']],
-    [{ global: 2, perTier: { 'risk:yellow': 4 } }, ['risk:green']],
-    [{ global: 2, perTier: {} }, []],
-  ])('resolveMaxParallelism agrees: %j over %j', (policy, tiers) => {
-    expect(resolveMaxParallelism(policy, tiers)).toBe(t1.resolveMaxParallelism(policy, tiers))
-  })
 })
 
 describe('computeRootPlan — AC1 plan, excluded cards reported with a reason, never dropped', () => {

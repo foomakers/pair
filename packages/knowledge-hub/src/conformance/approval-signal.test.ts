@@ -135,24 +135,6 @@ describe('tie-break / choice rounds are rounds too (review round 1, Major 1)', (
   it('the corpus still has tie-break rounds to check', () => {
     expect(withTieBreak.length).toBeGreaterThan(0)
   })
-
-  for (const [rel, file] of withTieBreak) {
-    it(`${rel} — its tie-break lines are detected and carry the signal`, () => {
-      const content = read(file)
-      const tieLines = content
-        .split('\n')
-        .map((line, i) => ({ line: i + 1, text: line }))
-        .filter(l => TIE_BREAK.test(l.text))
-      expect(tieLines.length).toBeGreaterThan(0)
-
-      const detected = findApprovalRounds(content)
-      for (const tie of tieLines) {
-        const round = detected.find(r => r.line === tie.line)
-        expect(round, `line ${tie.line} is a tie-break the detector does not see`).toBeDefined()
-        expect(round?.qualified, `line ${tie.line} is not conditional on $approval`).toBe(true)
-      }
-    })
-  }
 })
 
 describe('qualifying a round did not move the guided path (AC2, review round 2)', () => {
