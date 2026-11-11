@@ -5,11 +5,18 @@
  */
 import { execFileSync } from 'child_process'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs'
-import { join, relative } from 'path'
+import { dirname, join, relative } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
 
 import { NOT_MEASURED } from './inventory'
+import {
+  NODE_TEST_SUITES,
+  PLAYWRIGHT_SUITES,
+  runNodeTest,
+  runPlaywrightSuite,
+  summarize,
+} from './suites'
 
 export interface RunTest {
   status: string
@@ -114,17 +121,28 @@ export const PACKAGES = [
   'packages/content-ops',
   'packages/dev-tools',
   'packages/knowledge-hub',
+  ...NODE_TEST_SUITES.map(s => s.name),
+  ...PLAYWRIGHT_SUITES,
 ]
+
+/** One run of one suite: vitest package, `node:test` dir or Playwright target, by its name. */
+export function runSuite(root: string, pkg: string, seed: number, withCoverage: boolean): Run {
+  const node = NODE_TEST_SUITES.find(s => s.name === pkg)
+  if (node) return runNodeTest(root, node, seed)
+  if (PLAYWRIGHT_SUITES.includes(pkg)) return runPlaywrightSuite(root, pkg, seed)
+  return runPackage(root, pkg, seed, withCoverage)
+}
 
 const RAW = (root: string) => join(root, 'test-audit', '.tmp', 'raw.json')
 
 /** Appends one run to the (gitignored) raw store; `finalize` compacts it into the versioned baseline. */
 export function recordRun(root: string, pkg: string, seed: number, withCoverage: boolean): void {
   const file = RAW(root)
+  mkdirSync(dirname(file), { recursive: true })
   const raw: Record<string, Run[]> = existsSync(file)
     ? JSON.parse(readFileSync(file, 'utf8')).packages
     : {}
-  ;(raw[pkg] ??= []).push(runPackage(root, pkg, seed, withCoverage))
+  ;(raw[pkg] ??= []).push(runSuite(root, pkg, seed, withCoverage))
   writeFileSync(file, JSON.stringify({ packages: raw }))
 }
 
@@ -139,7 +157,8 @@ export interface CompactBaseline {
 }
 
 const TOOL = {
-  runner: 'vitest 3.2.4, --sequence.shuffle with recorded seed per run',
+  runner:
+    'vitest 3.2.4 (--sequence.shuffle, recorded seed per run); node:test junit (.claude/workflows, scripts, qa; no shuffle, seed is a label); Playwright json (brand-ct, website-ct, website-e2e)',
   coverage:
     '@vitest/coverage-v8 json-summary, first run per package; absent when the package lacks the provider',
   mutation: NOT_MEASURED,
@@ -192,5 +211,16 @@ if (require.main === module) {
   else if (cmd === 'rerun') rerunBaseline(REPO_ROOT)
   else if (cmd === 'run' && pkg && seed)
     recordRun(REPO_ROOT, pkg, Number(seed), cov === '--coverage')
-  else throw new Error('usage: baseline.ts run <package> <seed> [--coverage] | finalize | rerun')
+  else if (cmd === 'summary')
+    console.log(
+      JSON.stringify(
+        summarize(JSON.parse(readFileSync(join(REPO_ROOT, 'test-audit', 'baseline.json'), 'utf8'))),
+        null,
+        2,
+      ),
+    )
+  else
+    throw new Error(
+      'usage: baseline.ts run <package> <seed> [--coverage] | finalize | rerun | summary',
+    )
 }

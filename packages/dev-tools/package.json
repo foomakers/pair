@@ -21,6 +21,7 @@
     "test-audit:mutation": "ts-node -T src/test-audit/mutation.ts",
     "test-audit:playwright": "ts-node -T src/test-audit/playwright-overlap.ts",
     "test-audit:redundancy": "ts-node -T src/test-audit/redundancy.ts",
+    "test-audit:prepush": "ts-node -T src/test-audit/profile.ts",
     "code-hygiene:check": "ts-node src/quality-gates/code-hygiene-check.ts",
     "smoke-modes:check": "ts-node src/quality-gates/smoke-scenario-modes.ts",
     "sync-version": "ts-node src/quality-gates/sync-version-in-docs.ts",

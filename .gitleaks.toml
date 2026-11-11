@@ -32,12 +32,12 @@ regexes = [
   '''cc1fba122f0c912ba01288fe90ab2632e7e41057''', # synthetic 40-hex HEAD SHA fixture in scripts/smoke-tests (pr-state-flow.sh, github-pr-reviews.json); matched generic-api-key only through the `TOKEN_HEAD=` variable name at commit 5e99d538 — a git object id, not a credential
 ]
 
-# PATH-SCOPED exception (#613): the test-audit baseline records test NAMES, and secret-scanning
+# PATH-SCOPED exception (#613, #625): the test-audit baseline and raw measures record test NAMES, and secret-scanning
 # tests are named after their synthetic token fixtures. Both the path and the value must match.
 [[allowlists]]
 description = "synthetic token fixtures quoted in test names of the test-audit baseline"
 condition = "AND"
-paths = ['''test-audit/baseline\.json''']
+paths = ['''test-audit/(baseline|measures/[^/]+)\.json''']
 regexes = [
   '''ghp_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8''',
   '''gho_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8''',
