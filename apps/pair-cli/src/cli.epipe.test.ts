@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
 import { spawn } from 'child_process'
 import { resolve } from 'path'
+import { CLI_ENTRY } from './test-utils/cli-entry'
 
 // B6: `pair-cli --help | head -1` — reader closes the pipe early; no EPIPE stack on stderr.
 const CLI_CWD = resolve(__dirname, '..')
-const ARGS = ['-r', 'ts-node/register/transpile-only', 'src/cli.ts']
+const ARGS = [...CLI_ENTRY]
 
 const earlyClosed = (...args: string[]) =>
   new Promise<{ status: number | null; stderr: string }>((done, fail) => {
