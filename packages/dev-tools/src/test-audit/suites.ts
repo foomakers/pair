@@ -40,8 +40,13 @@ const ENTITY: Record<string, string> = { lt: '<', gt: '>', quot: '"', apos: "'",
 const unescape = (s: string): string =>
   s.replace(/&amp;quot;|&(lt|gt|quot|apos|amp);/g, (_, e?: string) => (e ? ENTITY[e]! : '"'))
 
-const attr = (tag: string | undefined, name: string): string =>
-  unescape(new RegExp(`\\s${name}="([^"]*)"`).exec(tag ?? '')?.[1] ?? '')
+// quoted pairs scanned left to right: a value ending in ` file=` is never an attribute name
+const attr = (tag: string | undefined, name: string): string => {
+  for (const [, k, v] of (tag ?? '').matchAll(/\s([\w:.-]+)="([^"]*)"/g)) {
+    if (k === name) return unescape(v!)
+  }
+  return ''
+}
 
 const MARKER_STATUS: Record<string, string> = { skipped: 'skipped' }
 const TAG = /<(\/?)(testsuite|testcase)\b((?:[^>"]|"[^"]*")*?)(\/?)>|<(failure|error|skipped)\b/g
