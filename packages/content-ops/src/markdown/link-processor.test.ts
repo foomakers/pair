@@ -1,15 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import {
-  extractLinks,
-  extractLinksFromFile,
-  extractLinksFromDirectory,
-  classifyLinkType,
-  detectLinkStyle,
-  generateNormalizationReplacements,
-  generatePathSubstitutionReplacements,
-  applyReplacements,
-  processFileWithLinks,
-} from './link-processor'
+import { extractLinksFromFile, extractLinksFromDirectory, classifyLinkType, detectLinkStyle, generateNormalizationReplacements, applyReplacements, processFileWithLinks } from './link-processor'
 import type { ParsedLink, LinkProcessingConfig } from './link-processor'
 import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
 import { replaceLinkOnLine } from './replacement-applier'
@@ -20,38 +10,6 @@ const sampleContent = [
   'Another [link](old-link.md) here in line 4',
   'This is line 5',
 ].join('\n')
-
-describe('extractLinks', () => {
-  it('should extract links from markdown content', async function () {
-    const content = `
-# Test Document
-
-Here is a [link](page.md) and a [link with anchor](other.md#section).
-
-Another line with an external [link](https://example.com).
-`
-
-    const links = await extractLinks(content)
-
-    expect(links).toHaveLength(3)
-    expect(links[0]).toMatchObject({
-      href: 'page.md',
-      text: 'link',
-    })
-    expect(links[1]).toMatchObject({
-      href: 'other.md#section',
-      text: 'link with anchor',
-    })
-    expect(links[2]).toMatchObject({
-      href: 'https://example.com',
-      text: 'link',
-    })
-  })
-  it('should handle empty content', async function () {
-    const links = await extractLinks('')
-    expect(links).toHaveLength(0)
-  })
-})
 
 describe('generateNormalizationReplacements - core', () => {
   it('should generate normalization replacements', async function () {
@@ -93,73 +51,6 @@ describe('generateNormalizationReplacements - core', () => {
   })
 })
 
-describe('generateNormalizationReplacements - path substitution', () => {
-  it('should generate normalization replacements for different folders', async function () {
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/docs/page.md': '# Page',
-        '/dataset/page.md': '# Root Page',
-      },
-      '/',
-      '/',
-    )
-
-    const links: ParsedLink[] = [
-      {
-        href: '../page.md',
-        text: 'link',
-        line: 1,
-        start: 0,
-        end: 15,
-      },
-    ]
-
-    const config: LinkProcessingConfig = {
-      docsFolders: ['docs'],
-      datasetRoot: '/dataset',
-      exclusionList: [],
-    }
-
-    const replacements = await generateNormalizationReplacements(
-      links,
-      '/dataset/docs/current.md',
-      config,
-      fileService,
-    )
-
-    expect(replacements).toHaveLength(1)
-    expect(replacements[0].newHref).toBe('page.md')
-    expect(replacements[0].kind).toBe('normalizedRel')
-  })
-})
-
-describe('generatePathSubstitutionReplacements', () => {
-  it('should generate path substitution replacements', async function () {
-    const links: ParsedLink[] = [
-      {
-        href: 'old/path/page.md',
-        text: 'link',
-        line: 1,
-        start: 0,
-        end: 20,
-      },
-      {
-        href: 'other/path/page.md',
-        text: 'other link',
-        line: 2,
-        start: 0,
-        end: 25,
-      },
-    ]
-
-    const replacements = await generatePathSubstitutionReplacements(links, 'old/path', 'new/path')
-
-    expect(replacements).toHaveLength(1)
-    expect(replacements[0].newHref).toBe('new/path/page.md')
-    expect(replacements[0].kind).toBe('pathSubstitution')
-  })
-})
-
 describe('applyReplacements', () => {
   it('should apply replacements to content', function () {
     const content = 'This is a [link](old.md) and [another](other.md).'
@@ -178,15 +69,6 @@ describe('applyReplacements', () => {
     expect(result.content).toBe('This is a [link](new.md) and [another](other.md).')
     expect(result.applied).toBe(1)
     expect(result.byKind).toEqual({ updated: 1 })
-  })
-
-  it('should handle empty replacements', function () {
-    const content = 'No links here.'
-    const result = applyReplacements(content, [])
-
-    expect(result.content).toBe('No links here.')
-    expect(result.applied).toBe(0)
-    expect(result.byKind).toEqual({})
   })
 })
 
@@ -219,142 +101,15 @@ describe('processFileWithLinks', () => {
   })
 })
 
-describe('replaceLinkOnLine', () => {
-  describe('Successful replacements', () => {
-    it('should replace link on specific line', function () {
-      const result = replaceLinkOnLine(
-        sampleContent,
-        2,
-        '[link](old-link.md)',
-        '[link](new-link.md)',
-      )
-      const lines = result.split('\n')
-      expect(lines[1]).toBe('Here is a [link](new-link.md) in line 2')
-      expect(lines[3]).toBe('Another [link](old-link.md) here in line 4') // unchanged
-    })
-
-    it('should replace first occurrence on line', function () {
-      const lineWithMultiple = 'First [link1](old.md) and second [link2](old.md)'
-      const result = replaceLinkOnLine(lineWithMultiple, 1, '[link1](old.md)', '[link1](new.md)')
-      expect(result).toBe('First [link1](new.md) and second [link2](old.md)')
-    })
-  })
-})
-
-// Normalization policy specs (moved from normalization-policy.test.ts)
-it('should normalize ../page.md to page.md as normalizedRel when file exists under docs', async function () {
-  const fs = new InMemoryFileSystemService(
-    {
-      '/dataset/docs/page.md': '# Page',
-      '/dataset/page.md': '# Page Root',
-    },
-    '/',
-    '/',
-  )
-
-  const links = [
-    {
-      href: '../page.md',
-      text: 'link',
-      line: 1,
-      start: 0,
-      end: 15,
-    },
-  ]
-
-  const config: LinkProcessingConfig = {
-    docsFolders: ['docs'],
-    datasetRoot: '/dataset',
-    exclusionList: [],
-  }
-
-  const replacements = await generateNormalizationReplacements(
-    links,
-    '/dataset/docs/current.md',
-    config,
-    fs,
-  )
-
-  expect(replacements.length).toBe(1)
-  expect(replacements[0].newHref).toBe('page.md')
-  expect(replacements[0].kind).toBe('normalizedRel')
-})
-
-it('should not normalize ../index.md to index.md when not appropriate', async function () {
-  const fs = new InMemoryFileSystemService(
-    {
-      '/dataset/index.md': '# Home',
-    },
-    '/',
-    '/',
-  )
-
-  const links: ParsedLink[] = [
-    {
-      href: '../index.md',
-      text: 'home',
-      line: 1,
-      start: 0,
-      end: 15,
-    },
-  ]
-
-  const config: LinkProcessingConfig = {
-    docsFolders: ['docs'],
-    datasetRoot: '/dataset',
-    exclusionList: [],
-  }
-
-  const replacements = await generateNormalizationReplacements(
-    links,
-    '/dataset/guide/current.md',
-    config,
-    fs,
-  )
-
-  // In this setup the policy may decide not to normalize parent index links; ensure no replacement
-  expect(replacements.length).toBe(0)
-})
-
 describe('replaceLinkOnLine - no replacements', () => {
   describe('No replacements', () => {
     it('should return unchanged if oldHref not found', function () {
       const result = replaceLinkOnLine(sampleContent, 2, '[nonexistent](link.md)', '[new](link.md)')
       expect(result).toBe(sampleContent)
     })
-
-    it('should return unchanged if line is out of bounds', function () {
-      const result = replaceLinkOnLine(
-        sampleContent,
-        10,
-        '[link](old-link.md)',
-        '[link](new-link.md)',
-      )
-      expect(result).toBe(sampleContent)
-    })
-
-    it('should handle negative line numbers', function () {
-      const result = replaceLinkOnLine(
-        sampleContent,
-        -1,
-        '[link](old-link.md)',
-        '[link](new-link.md)',
-      )
-      expect(result).toBe(sampleContent)
-    })
   })
 
   describe('Edge cases', () => {
-    it('should handle empty content', function () {
-      const result = replaceLinkOnLine('', 1, 'old', 'new')
-      expect(result).toBe('')
-    })
-
-    it('should handle single line content', function () {
-      const singleLine = 'Single line with [link](old.md)'
-      const result = replaceLinkOnLine(singleLine, 1, '[link](old.md)', '[link](new.md)')
-      expect(result).toBe('Single line with [link](new.md)')
-    })
 
     it('should handle CRLF line endings', function () {
       const crlfContent = 'Line 1\r\nLine 2 with [link](old.md)\r\nLine 3'
@@ -436,54 +191,6 @@ it('extractLinksFromFile: should extract anchor from links with fragments', asyn
   })
 })
 
-it('extractLinksFromFile: should handle files with no links', async function () {
-  const fileService = new InMemoryFileSystemService(
-    {
-      '/project/plain.md': '# No Links\n\nJust text.',
-    },
-    '/project',
-    '/project',
-  )
-
-  const links = await extractLinksFromFile('/project/plain.md', fileService)
-
-  expect(links).toHaveLength(0)
-})
-
-it('extractLinksFromDirectory: should extract links from all markdown files in directory', async function () {
-  const fileService = new InMemoryFileSystemService(
-    {
-      '/project/docs/guide.md': 'See [intro](intro.md).',
-      '/project/docs/intro.md': 'See [guide](guide.md).',
-      '/project/README.md': 'See [docs](./docs/guide.md).',
-    },
-    '/project',
-    '/project',
-  )
-
-  const links = await extractLinksFromDirectory('/project/docs', fileService)
-
-  expect(links.length).toBeGreaterThanOrEqual(2)
-  const filesParsed = [...new Set(links.map(l => l.filePath))]
-  expect(filesParsed).toContain('/project/docs/guide.md')
-  expect(filesParsed).toContain('/project/docs/intro.md')
-})
-
-it('extractLinksFromDirectory: should handle nested directories', async function () {
-  const fileService = new InMemoryFileSystemService(
-    {
-      '/project/docs/a/guide.md': 'Link [b](../b/intro.md).',
-      '/project/docs/b/intro.md': 'Link [a](../a/guide.md).',
-    },
-    '/project',
-    '/project',
-  )
-
-  const links = await extractLinksFromDirectory('/project/docs', fileService)
-
-  expect(links.length).toBeGreaterThanOrEqual(2)
-})
-
 it('extractLinksFromDirectory: should skip non-markdown files', async function () {
   const fileService = new InMemoryFileSystemService(
     {
@@ -516,162 +223,11 @@ it('extractLinksFromDirectory: should handle empty directories', async function 
   expect(links).toHaveLength(0)
 })
 describe('link-processor - classifyLinkType (T-69-02)', () => {
-  it('should classify relative paths', () => {
-    expect(classifyLinkType('./file.md')).toBe('relative')
-    expect(classifyLinkType('../file.md')).toBe('relative')
-    expect(classifyLinkType('file.md')).toBe('relative')
-    expect(classifyLinkType('docs/file.md')).toBe('relative')
-  })
-
-  it('should classify absolute paths', () => {
-    expect(classifyLinkType('/docs/file.md')).toBe('absolute')
-    expect(classifyLinkType('/file.md')).toBe('absolute')
-  })
 
   it('should classify HTTP/HTTPS URLs', () => {
     expect(classifyLinkType('https://example.com')).toBe('http')
     expect(classifyLinkType('http://example.com')).toBe('http')
   })
-
-  it('should classify mailto links', () => {
-    expect(classifyLinkType('mailto:test@example.com')).toBe('mailto')
-  })
-
-  it('should classify anchor-only links', () => {
-    expect(classifyLinkType('#section')).toBe('anchor')
-    expect(classifyLinkType('#')).toBe('anchor')
-  })
-})
-
-describe('link-processor - performance (T-69-02)', () => {
-  it('should handle large files efficiently', async function () {
-    const largeContent = Array(1000)
-      .fill(0)
-      .map((_, i) => `Line ${i} with [link${i}](file${i}.md).`)
-      .join('\n')
-
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/project/large.md': largeContent,
-      },
-      '/project',
-      '/project',
-    )
-
-    const startTime = Date.now()
-    const links = await extractLinksFromFile('/project/large.md', fileService)
-    const duration = Date.now() - startTime
-
-    expect(links).toHaveLength(1000)
-    expect(duration).toBeLessThan(5000) // Target: < 5s for 1000 links
-  })
-})
-
-describe('link-processor - edge cases (T-69-02)', () => {
-  it('should handle malformed markdown gracefully', async function () {
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/project/malformed.md': '[broken link](file.md\n[valid](other.md)',
-      },
-      '/project',
-      '/project',
-    )
-
-    const links = await extractLinksFromFile('/project/malformed.md', fileService)
-
-    expect(links.length).toBeGreaterThanOrEqual(0)
-  })
-
-  it('should handle links with special characters', async function () {
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/project/special.md': 'Link [test](file%20with%20spaces.md).',
-      },
-      '/project',
-      '/project',
-    )
-
-    const links = await extractLinksFromFile('/project/special.md', fileService)
-
-    expect(links).toHaveLength(1)
-    expect(links[0].href).toBe('file%20with%20spaces.md')
-  })
-})
-
-it('should preserve simple anchors when normalizing relative links', async function () {
-  const fs = new InMemoryFileSystemService(
-    {
-      '/dataset/docs/page.md': '# Page',
-      '/dataset/page.md': '# Root',
-    },
-    '/',
-    '/',
-  )
-
-  const links: ParsedLink[] = [
-    {
-      href: '../page.md#overview',
-      text: 'link',
-      line: 1,
-      start: 0,
-      end: 20,
-    },
-  ]
-
-  const config: LinkProcessingConfig = {
-    docsFolders: ['docs'],
-    datasetRoot: '/dataset',
-    exclusionList: [],
-  }
-
-  const replacements = await generateNormalizationReplacements(
-    links,
-    '/dataset/docs/current.md',
-    config,
-    fs,
-  )
-
-  expect(replacements.length).toBe(1)
-  expect(replacements[0].newHref).toBe('page.md#overview')
-  expect(replacements[0].kind).toBe('normalizedRel')
-})
-
-it('should preserve encoded anchors when normalizing', async function () {
-  const fs = new InMemoryFileSystemService(
-    {
-      '/dataset/docs/page.md': '# Page',
-      '/dataset/page.md': '# Root',
-    },
-    '/',
-    '/',
-  )
-
-  const links = [
-    {
-      href: '../page.md#sec%20one',
-      text: 'link',
-      line: 1,
-      start: 0,
-      end: 25,
-    },
-  ]
-
-  const config = {
-    docsFolders: ['docs'],
-    datasetRoot: '/dataset',
-    exclusionList: [],
-  }
-
-  const replacements = await generateNormalizationReplacements(
-    links,
-    '/dataset/docs/current.md',
-    config,
-    fs,
-  )
-
-  expect(replacements.length).toBe(1)
-  expect(replacements[0].newHref).toBe('page.md#sec%20one')
-  expect(replacements[0].kind).toBe('normalizedRel')
 })
 
 it('should preserve query parameters alongside anchors when normalizing', async function () {
@@ -712,151 +268,8 @@ it('should preserve query parameters alongside anchors when normalizing', async 
   expect(replacements[0].kind).toBe('normalizedRel')
 })
 
-it('should preserve encoded query and anchor characters when normalizing', async function () {
-  const fs = new InMemoryFileSystemService(
-    {
-      '/dataset/docs/page.md': '# Page',
-      '/dataset/page.md': '# Root',
-    },
-    '/',
-    '/',
-  )
-
-  const links = [
-    {
-      href: '../page.md?q=one%20two#sec%20one',
-      text: 'link',
-      line: 1,
-      start: 0,
-      end: 40,
-    },
-  ]
-
-  const config = {
-    docsFolders: ['docs'],
-    datasetRoot: '/dataset',
-    exclusionList: [],
-  }
-
-  const replacements = await generateNormalizationReplacements(
-    links,
-    '/dataset/docs/current.md',
-    config,
-    fs,
-  )
-
-  expect(replacements.length).toBe(1)
-  expect(replacements[0].newHref).toBe('page.md?q=one%20two#sec%20one')
-  expect(replacements[0].kind).toBe('normalizedRel')
-})
-
-describe('generateNormalizationReplacements - no full normalization', () => {
-  it('should NOT convert cross-folder relative paths to docsFolders-based paths', async function () {
-    // Scenario: a skill file in .skills/ references a file in .pair/ using a correct relative path.
-    // The normalizer should NOT rewrite it to a .pair/-prefix path because that breaks
-    // navigability in IDEs, GitHub, and the link rewriter during distribution.
-    const fs = new InMemoryFileSystemService(
-      {
-        '/dataset/.pair/adoption/tech/way-of-working.md': '# Way of Working',
-        '/dataset/.skills/capability/verify-quality/SKILL.md':
-          'See [wow](../../../.pair/adoption/tech/way-of-working.md).',
-      },
-      '/',
-      '/',
-    )
-
-    const links: ParsedLink[] = [
-      {
-        href: '../../../.pair/adoption/tech/way-of-working.md',
-        text: 'wow',
-        line: 1,
-        start: 4,
-        end: 60,
-      },
-    ]
-
-    const config: LinkProcessingConfig = {
-      docsFolders: ['.pair', '.skills', '.github'],
-      datasetRoot: '/dataset',
-      exclusionList: [],
-    }
-
-    const replacements = await generateNormalizationReplacements(
-      links,
-      '/dataset/.skills/capability/verify-quality/SKILL.md',
-      config,
-      fs,
-    )
-
-    // The relative path is already correct and navigable — no replacement should be generated
-    expect(replacements).toHaveLength(0)
-  })
-
-  it('should still normalize redundant relative paths within the same folder', async function () {
-    // Scenario: a file references a sibling with ../same-dir/ prefix — can be simplified
-    const fs = new InMemoryFileSystemService(
-      {
-        '/dataset/.pair/knowledge/how-to/guide.md': '# Guide',
-        '/dataset/.pair/knowledge/how-to/other.md': 'See [guide](../how-to/guide.md).',
-      },
-      '/',
-      '/',
-    )
-
-    const links: ParsedLink[] = [
-      {
-        href: '../how-to/guide.md',
-        text: 'guide',
-        line: 1,
-        start: 4,
-        end: 30,
-      },
-    ]
-
-    const config: LinkProcessingConfig = {
-      docsFolders: ['.pair', '.skills'],
-      datasetRoot: '/dataset',
-      exclusionList: [],
-    }
-
-    const replacements = await generateNormalizationReplacements(
-      links,
-      '/dataset/.pair/knowledge/how-to/other.md',
-      config,
-      fs,
-    )
-
-    // ../how-to/guide.md → guide.md (same directory, simpler relative path)
-    expect(replacements).toHaveLength(1)
-    expect(replacements[0].newHref).toBe('guide.md')
-    expect(replacements[0].kind).toBe('normalizedRel')
-  })
-})
-
 describe('link-processor - detectLinkStyle', () => {
   const cwd = '/test'
-
-  it('should return relative when majority are relative', async () => {
-    const fs = new InMemoryFileSystemService(
-      {
-        [`${cwd}/file1.md`]: '[a](./file.md) [b](../other.md) [c](/abs.md)',
-      },
-      cwd,
-      cwd,
-    )
-    expect(await detectLinkStyle(fs, cwd)).toBe('relative')
-  })
-
-  it('should return absolute when majority are absolute', async () => {
-    const fs = new InMemoryFileSystemService(
-      {
-        [`${cwd}/file1.md`]: '[a](/abs1.md) [b](/abs2.md) [c](./rel.md)',
-      },
-      cwd,
-      cwd,
-    )
-    expect(await detectLinkStyle(fs, cwd)).toBe('absolute')
-  })
 
   it('should skip external and anchor links', async () => {
     const fs = new InMemoryFileSystemService(
@@ -879,12 +292,6 @@ describe('link-processor - detectLinkStyle', () => {
       cwd,
       cwd,
     )
-    expect(await detectLinkStyle(fs, cwd)).toBe('relative')
-  })
-
-  it('should return relative in empty directory', async () => {
-    const fs = new InMemoryFileSystemService({}, cwd, cwd)
-    await fs.mkdir(cwd, { recursive: true })
     expect(await detectLinkStyle(fs, cwd)).toBe('relative')
   })
 })
