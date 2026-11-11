@@ -1644,6 +1644,99 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer, workflowVers
   return { applied: discovered.some(d => d.applied && d.reason !== 'already-applied'), discovered }
 }
 
+// ── owner-approved contract correction (US-591) ─────────────────────────────────────────────
+// The owner's bounded approval to correct a WRONG sealed oracle. The approval is read from the ACTUAL
+// host comment (never a supplied name): a `User`, the adopted maintainer, on THIS PR, naming this story,
+// the sealed predecessor's hash, the rows and the exact delta. It authorizes ONLY that successor: never
+// a merge, a wider scope or an arbitrary reseal; the sealer and custody checks stay the only authority
+// on the bytes. Persisted idempotently (keyed by decisionRef) in `owner-approvals.json`; `resolve` routes
+// the successor preparation once, and the revision line advancing is what consumes it.
+export const APPROVALS_FILE = 'owner-approvals.json'
+export const readApprovals = dir => {
+  try {
+    const a = JSON.parse(readFileSync(join(dir, APPROVALS_FILE), 'utf8'))
+    return Array.isArray(a) ? a : []
+  } catch {
+    return []
+  }
+}
+export function parseCorrectionComment(body) {
+  const m = /```json\s*([\s\S]*?)```/.exec(String(body ?? ''))
+  if (!m) return { error: 'no-fenced-json' }
+  let p
+  try {
+    p = JSON.parse(m[1])
+  } catch {
+    return { error: 'invalid-json' }
+  }
+  if (!p || typeof p !== 'object' || p.schemaVersion !== 1 || p.kind !== 'contract-correction') return { error: 'not-a-contract-correction' }
+  if (!/^sha256:[0-9a-f]{64}$/.test(String(p.predecessorContractHash ?? ''))) return { error: 'predecessorContractHash-invalid' }
+  if (!Array.isArray(p.rows) || !p.rows.length || p.rows.some(r => typeof r !== 'string' || !r.trim())) return { error: 'rows-invalid' }
+  for (const k of ['story', 'delta', 'reason']) if (typeof p[k] !== 'string' || !p[k].trim()) return { error: `${k}-missing` }
+  return { value: { story: p.story.trim(), pr: Number(p.pr), predecessorContractHash: p.predecessorContractHash, rows: [...new Set(p.rows)].sort(), delta: p.delta, reason: p.reason.trim() } }
+}
+// The sealed contract a still-unconsumed approval targets, or null: its predecessor must be the LATEST sealed
+// contract of its succession line (a stale approval, the line moved on, never routes anything).
+function pendingCorrection(list, approvals, predecessors = []) {
+  for (const a of approvals) {
+    if (a.status !== 'approved') continue
+    const target = resolveSealedContract({ handoffs: list, predecessors, contractHash: a.predecessorContractHash })
+    const line = target && !target.error ? successionLineOf(target.phase) : null
+    if (!line) continue
+    const lineRevisions = [...list, ...(target.origin === 'predecessor' ? (target.handoffs ?? []) : [])].filter(h => h.phase === line || h.phase.startsWith(`${line}-rev`)).map(h => phaseParts(h.phase)?.revision ?? 1)
+    const top = Math.max(1, ...lineRevisions)
+    if (top > (phaseParts(target.phase)?.revision ?? 1)) continue
+    return { approval: a, target, line, revision: top + 1 }
+  }
+  return null
+}
+export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now = new Date(), lockWaitMs = 5000, host: bound, ...transport }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { approved: false, reason: where.error }
+  const list = readHandoffs(dir).filter(h => h.data && h.data.recordType !== 'migration')
+  if (!list.length) return { approved: false, reason: 'no-cycle-evidence' }
+  const who = resolveMaintainer({ dir, maintainer })
+  if (who.error) return { approved: false, reason: who.error }
+  let host
+  try {
+    host = bound ?? bindHosts({ dir, transport })
+  } catch (e) {
+    return { approved: false, reason: e.kind === 'host-unsupported' ? 'host-unsupported' : `host-error:${e.message}` }
+  }
+  let ref, comment
+  try {
+    ref = host.code.parseCommentRef(String(decisionRef ?? ''), { repo })
+    if (!ref) return { approved: false, reason: 'decisionRef-invalid' }
+    if (!ref.inScope) return { approved: false, reason: 'decisionRef-repo-mismatch' }
+    if (ref.pr !== Number(pr)) return { approved: false, reason: 'decisionRef-pr-mismatch' }
+    comment = host.code.readComment({ id: ref.id, pr: ref.pr, repo })
+  } catch (e) {
+    return { approved: false, reason: hostReason(host.code, 'api', e) }
+  }
+  if (!comment?.authorIsUser) return { approved: false, reason: 'author-not-a-user' }
+  if (comment.authorLogin !== who.login) return { approved: false, reason: `author-not-authorized:${comment.authorLogin}` }
+  if (comment.pr !== ref.pr) return { approved: false, reason: 'decisionRef-pr-mismatch' }
+  const parsed = parseCorrectionComment(comment.body)
+  if (parsed.error) return { approved: false, reason: parsed.error }
+  const c = parsed.value
+  const story = String(list[list.length - 1].data.story ?? '')
+  if (c.story !== story) return { approved: false, reason: 'story-mismatch' }
+  if (c.pr !== Number(pr)) return { approved: false, reason: 'pr-mismatch' }
+  const predecessors = predecessorEvidence(dir)
+  const target = resolveSealedContract({ handoffs: list, predecessors, contractHash: c.predecessorContractHash })
+  if (!target || target.error) return { approved: false, reason: 'predecessor-not-sealed', detail: target?.error }
+  return withLock(dir, lockWaitMs, () => {
+    const all = readApprovals(dir)
+    if (all.some(a => a.decisionRef === decisionRef)) return { approved: true, reason: 'already-applied' }
+    const open = pendingCorrection(list, all, predecessors)
+    if (open) return { approved: false, reason: 'conflicting-approval', pending: open.approval.decisionRef }
+    if (!pendingCorrection(list, [{ ...c, status: 'approved' }], predecessors)) return { approved: false, reason: 'stale-predecessor' }
+    const record = { decisionRef, status: 'approved', actor: comment.authorLogin, at: (now instanceof Date ? now : new Date(now)).toISOString(), ...c }
+    writeFileSync(join(dir, APPROVALS_FILE), JSON.stringify([...all, record], null, 2))
+    return { approved: true, record }
+  })
+}
+
 // US-514 T-5 (#514/AC6): the correct `predecessorContractHash` for a repair/revision contract — the
 // canonical hash (`contractHash`, `$meta` and friends already stripped) of the manifest a SEALED
 // snapshot of `phase` actually committed, read from git history. Best-effort, not a security
@@ -2645,6 +2738,28 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     return { step: 'verify', mode: 're-review', phase: `r${reviewRound}`, round: reviewRound, attempt: byPhase('review-phase', `r${reviewRound}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings() }
   }
 
+  // US-591: an owner-approved correction of a wrong sealed oracle routes the minimal successor preparation ONCE
+  // (the revision line advancing consumes the approval); the sealer still validates predecessor and changed rows.
+  const correction = pendingCorrection(list, ctx.approvals ?? [], ctx.predecessors ?? [])
+  if (correction) {
+    const { approval, target, line, revision } = correction
+    const tp = phaseParts(target.phase) ?? {}
+    return {
+      step: 'prepare',
+      mode: 'revision',
+      phase: `${line}-rev${revision}`,
+      revision,
+      round: tp.round ?? 0,
+      attempt: 1,
+      base: d.outputHead ?? d.reviewedHead ?? d.inputHead,
+      contract: { path: target.spec.data.contractPath, hash: target.spec.data.contractHash, revision: tp.revision ?? 1, snapshot: target.sealed.data.snapshot },
+      group: groupOf(line),
+      changedRows: approval.rows,
+      ownerApproval: { decisionRef: approval.decisionRef, actor: approval.actor, delta: approval.delta, reason: approval.reason },
+      detail: `owner-approved correction of ${target.phase}: ${approval.rows.join(', ')}`,
+    }
+  }
+
   if (last.skill === 'red-spec') {
     // US-479 B1 (S3, AC-08, DT-04): a CONTRADICTION with sealed rows is not a dead end — it routes
     // the minimal successor revision of the contract it names, in the same canonical cycle. The
@@ -3284,7 +3399,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // A `worktree-clean` round (the driver stashed what made the worktree dirty) after the failure was seen clears its cause too.
   const cleaned = !!recorded && recorded.reason === 'failed-preparation' && recovery.rounds.some(r => r.kind === 'worktree-clean' && r.at >= recorded.at)
   const stale = !!recorded && (recorded.stale !== undefined || moved || cleaned)
-  let next = deriveNext(handoffs, policy, { entry, head, stale, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger })
+  let next = deriveNext(handoffs, policy, { entry, head, stale, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger, approvals: readApprovals(dir) })
   if (stale && next.step !== 'blocked') {
     if (recorded.stale === undefined) writeRecovery(dir, { ...recovery, failures: { ...recovery.failures, [failureId]: { ...recorded, stale: heads } } })
   } else if (next.step === 'blocked' && DURABLE_FAILURES.has(next.reason)) {
@@ -3685,6 +3800,7 @@ if (isMain()) {
       'activate-card': ['dir', 'story', 'worktree'],
       inputs: ['json', 'story', 'workflowVersion'],
       'apply-scope-decisions': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo', 'workflowVersion'],
+      'approve-correction': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo'],
       'scope-baseline': ['dir'],
       'migrate-inspect': ['dir'],
       'migrate-acknowledge': ['branch', 'dir', 'head', 'legacy', 'pr', 'run', 'story', 'workflowVersion'],
@@ -3804,6 +3920,12 @@ if (isMain()) {
         : discoverScopeDecisions({ dir: opts.dir, repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer, workflowVersion: opts.workflowVersion })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.applied ? 0 : 1)
+    } else if (cmd === 'approve-correction') {
+      // US-591: record the owner's bounded approval to correct a wrong sealed oracle; `resolve` then routes the successor.
+      need('dir', 'decision-ref', 'repo', 'pr')
+      out = approveCorrection({ dir: opts.dir, decisionRef: opts['decision-ref'], repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.approved ? 0 : 1)
     } else if (cmd === 'scope-baseline') {
       // t9d-8: the value the reviewer prints into the scope-decision packet and the maintainer
       // echoes back verbatim — the producer for the one field `apply-scope-decisions` refuses the
@@ -3880,7 +4002,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | card | whoami | test-identity | version)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | approve-correction | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | card | whoami | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)
