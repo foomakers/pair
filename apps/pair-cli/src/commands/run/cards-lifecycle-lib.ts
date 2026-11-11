@@ -245,3 +245,22 @@ export const preparedCases = statusGroups.flatMap(group =>
     })),
   ),
 )
+
+export async function preparedHandlerCase(c: (typeof preparedCases)[number]) {
+  const state = initial()
+  const result = await invoke(
+    state,
+    (id, n) => {
+      if (id === '12') return c.exit
+      if (n > 1) return target
+      handoff(id)
+      return retry
+    },
+    { cards: '12,15' },
+  )
+  expect(result.calls).toEqual(
+    c.expected === 'retryable' ? ['12', '15', '12', '15'] : ['12', '15', '15'],
+  )
+  expect(result.output).toContain(`#12: ${c.expected}`)
+  expect(result.code).toBe(c.expected === 'at-target' ? 0 : 1)
+}

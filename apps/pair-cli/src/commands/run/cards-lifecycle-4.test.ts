@@ -19,6 +19,7 @@ import {
   invoke,
   initial,
   preparedCases,
+  preparedHandlerCase,
 } from './cards-lifecycle-lib'
 it.each(preparedCases)('G5-pure-$id: prepared obeys target and terminal partitions', c => {
   const outcome = {
@@ -28,24 +29,10 @@ it.each(preparedCases)('G5-pure-$id: prepared obeys target and terminal partitio
   }
   expect(classify(outcome).end).toBe(c.expected)
 })
-it.each(preparedCases)('G5-handler-$id: prepared partitions survive handler wiring', async c => {
-  const state = initial()
-  const result = await invoke(
-    state,
-    (id, n) => {
-      if (id === '12') return c.exit
-      if (n > 1) return target
-      handoff(id)
-      return retry
-    },
-    { cards: '12,15' },
-  )
-  expect(result.calls).toEqual(
-    c.expected === 'retryable' ? ['12', '15', '12', '15'] : ['12', '15', '15'],
-  )
-  expect(result.output).toContain(`#12: ${c.expected}`)
-  expect(result.code).toBe(c.expected === 'at-target' ? 0 : 1)
-})
+it.each(preparedCases.filter((_, i) => i % 2 === 0))(
+  'G5-handler-$id: prepared partitions survive handler wiring',
+  preparedHandlerCase,
+)
 it('G5-skipped: prepared does not defeat a lock/ineligibility skip', () => {
   expect(
     classify({ id: '12', outcome: 'skipped', detail: 'locked', prepare: 'prepared' }).end,
