@@ -198,6 +198,8 @@ const fakeHosts = (o = {}) => {
     prHead: rec('prHead', () => o.head ?? SHA('a')),
     readCheck: rec('readCheck', ({ context }) => (o.checks ?? { 'pair-review': 'success', 'pair-explicit-approval': 'success' })[context] ?? null),
     readCheckRun: rec('readCheckRun', ({ context }) => (o.runs ?? {})[context] ?? null),
+    isMerged: rec('isMerged', () => o.merged ?? false),
+    clearPrState: rec('clearPrState', () => o.clear ?? { applied: null, removed: ['pr-state:to-be-reviewed'], confirmed: true, error: null }),
     merge: rec('merge', args => {
       if (o.mergeThrows) throw new Error(o.mergeThrows)
       return { merged: true, ...args }
@@ -316,7 +318,7 @@ test('AC3: all green -> squash merge with the message, DoD boxes, close+cascade,
   const h = fakeHosts({ close: { closed: [42, 9], stoppedAt: 3 } })
   const out = runMerge({ ...input(h), gate: 'green', message: '[#42] feat: thing\n\nbody', branch: 'feature/US-42-x', root: g.main })
   assert.deepEqual({ merged: out.merged, cascaded: out.cascaded, mergeAllowed: out.mergeAllowed }, { merged: true, cascaded: true, mergeAllowed: true }, JSON.stringify(out))
-  assert.deepEqual(h.calls.map(c => c[0]).filter(n => n !== 'readCard' && n !== 'readLabels' && n !== 'prHead' && n !== 'readCheck' && n !== 'readCheckRun'), ['merge', 'updateCard', 'closeAndCascade', 'setBoardState', 'setBoardState'])
+  assert.deepEqual(h.calls.map(c => c[0]).filter(n => n !== 'readCard' && n !== 'readLabels' && n !== 'prHead' && n !== 'readCheck' && n !== 'readCheckRun' && n !== 'isMerged'), ['merge', 'clearPrState', 'updateCard', 'closeAndCascade', 'setBoardState', 'setBoardState'])
   assert.deepEqual(h.calls.find(c => c[0] === 'merge')[1], { pr: 7, repo: 'o/r', strategy: 'squash', message: '[#42] feat: thing\n\nbody', headSha: SHA('a') })
   assert.deepEqual(h.calls.filter(c => c[0] === 'setBoardState').map(c => c[1].id), [42, 9]) // the story AND every closed parent
   assert.equal(h.calls.some(c => c[0] === 'commentOnCard'), false)
@@ -961,4 +963,98 @@ test('US-576 AC2: hold-when; has: risk:red and hold-always keep the red hold; th
   assert.ok(decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: { mode: 'always', has: [], lacks: [] } }).failed.some(f => f.code === 'explicit-approval'))
   assert.ok(decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: { mode: 'when', has: ['cost:red'], lacks: [] } }).failed.some(f => f.code === 'explicit-approval'))
   assert.ok(decideMerge({ ...WAIVER, autoAdvanceTiers: [RED] }).failed.some(f => f.code === 'explicit-approval'))
+})
+
+// ── US-599: merged PRs shed premerge state labels ───────────────────────────────────────────────
+test('US-599 AC1: confirmed merge clears the PR premerge labels (merge first, then cleanup)', () => {
+  const h = fakeHosts()
+  const out = runMerge({ ...input(h), gate: 'green', message: 'm' })
+  const names = h.calls.map(c => c[0])
+  assert.ok(names.indexOf('clearPrState') > names.indexOf('merge'))
+  assert.deepEqual(h.calls.find(c => c[0] === 'clearPrState')[1], { pr: 7, repo: 'o/r' })
+  assert.equal(out.cascade.prState.ok, true)
+})
+
+test('US-599 AC3: unconfirmed cleanup is merged-but-unfinished, names the failure, never full success', () => {
+  const h = fakeHosts({ clear: { applied: null, removed: [], confirmed: false, error: 'read-back: labels are ["pr-state:to-be-reviewed"]' } })
+  const out = runMerge({ ...input(h), gate: 'green', message: 'm' })
+  assert.deepEqual({ merged: out.merged, cascaded: out.cascaded }, { merged: true, cascaded: false })
+  assert.match(out.reason, /prState \(read-back/)
+})
+
+test('US-599 AC3: a thrown cleanup is reported as a failed step, not a refused merge', () => {
+  const h = fakeHosts()
+  h.hosts.code.clearPrState = () => { throw new Error('denied') }
+  const out = runMerge({ ...input(h), gate: 'green', message: 'm' })
+  assert.deepEqual({ merged: out.merged, cascaded: out.cascaded }, { merged: true, cascaded: false })
+  assert.equal(out.cascade.prState.error, 'denied')
+})
+
+test('US-599 AC4: refused or parked merge never runs the cleanup', () => {
+  const refused = fakeHosts({ mergeThrows: 'protected' })
+  assert.equal(runMerge({ ...input(refused), gate: 'green', message: 'm' }).merged, false)
+  const parked = fakeHosts({ checks: { 'pair-review': 'failure', 'pair-explicit-approval': 'success' } })
+  assert.equal(runMerge({ ...input(parked), gate: 'green', message: 'm' }).merged, false)
+  for (const h of [refused, parked]) assert.equal(h.calls.some(c => c[0] === 'clearPrState'), false)
+})
+
+test('US-599 AC2: retry after a host merge finishes cleanup without merging again or fresh approval', () => {
+  const h = fakeHosts({ merged: true, checks: { 'pair-review': 'failure' } })
+  assert.equal(checkMerge(input(h)).mergeAllowed, true)
+  const g = gitFixture()
+  const out = runMerge({ ...input(h), gate: 'green', message: 'm', branch: 'feature/US-42-x', root: g.main })
+  assert.deepEqual({ merged: out.merged, cascaded: out.cascaded }, { merged: true, cascaded: true }, JSON.stringify(out))
+  assert.equal(h.calls.some(c => c[0] === 'merge'), false)
+  assert.equal(h.calls.some(c => c[0] === 'clearPrState'), true)
+})
+
+test('US-599: a host without the cleanup capability skips the step explicitly', () => {
+  const h = fakeHosts()
+  delete h.hosts.code.clearPrState
+  const out = runMerge({ ...input(h), gate: 'green', message: 'm' })
+  assert.deepEqual(out.cascade.prState, { ok: true, skipped: true })
+})
+
+// github adapter at the gh boundary: stub gh on PATH
+function ghStub(labels, merged) {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-'))
+  const log = join(dir, 'log')
+  const state = join(dir, 'labels.json')
+  writeFileSync(state, JSON.stringify(labels))
+  writeFileSync(join(dir, 'gh'), `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+fs.appendFileSync(${JSON.stringify(log)}, a.join(' ') + '\\n')
+let l = JSON.parse(fs.readFileSync(${JSON.stringify(state)}, 'utf8'))
+if (a[0] === 'pr' && a[1] === 'view') process.stdout.write(JSON.stringify({ mergedAt: ${merged ? "'2026-01-01T00:00:00Z'" : 'null'} }))
+else if (a.includes('DELETE')) { const n = decodeURIComponent(a[a.length - 1].split('/labels/')[1]); l = l.filter(x => x !== n); fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(l)) }
+else if (a.includes('POST')) { l.push(...JSON.parse(fs.readFileSync(0, 'utf8')).labels); fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(l)) }
+else process.stdout.write(JSON.stringify(l.map(name => ({ name }))))
+`)
+  chmodSync(join(dir, 'gh'), 0o755)
+  return { dir, log, state }
+}
+const withGh = (stub, fn) => {
+  const old = process.env.PATH
+  process.env.PATH = `${stub.dir}:${old}`
+  try { return fn() } finally { process.env.PATH = old }
+}
+
+test('US-599 AC1/AC5 (github boundary): clearPrState drops only pr-state labels; setPrState on a merged PR does not restore one', () => {
+  const stub = ghStub(['pr-state:to-be-reviewed', 'pr-state:not-approved', 'risk:green', 'foreign'], true)
+  const code = github.instantiate({ ghBin: join(stub.dir, 'gh') })
+  const out = withGh(stub, () => code.clearPrState({ pr: 7, repo: 'o/r' }))
+  assert.equal(out.confirmed, true)
+  assert.deepEqual(JSON.parse(readFileSync(stub.state, 'utf8')), ['risk:green', 'foreign'])
+  const again = withGh(stub, () => code.setPrState({ pr: 7, repo: 'o/r', label: 'pr-state:to-be-reviewed' }))
+  assert.equal(again.confirmed, true)
+  assert.deepEqual(JSON.parse(readFileSync(stub.state, 'utf8')), ['risk:green', 'foreign'])
+})
+
+test('US-599 AC4 (github boundary): setPrState on an unmerged PR still sets the label; isMerged is false', () => {
+  const stub = ghStub(['pr-state:not-approved'], false)
+  const code = github.instantiate({ ghBin: join(stub.dir, 'gh') })
+  assert.equal(withGh(stub, () => code.isMerged({ pr: 7, repo: 'o/r' })), false)
+  assert.equal(withGh(stub, () => code.setPrState({ pr: 7, repo: 'o/r', label: 'pr-state:ready-to-merge' })).confirmed, true)
+  assert.deepEqual(JSON.parse(readFileSync(stub.state, 'utf8')), ['pr-state:ready-to-merge'])
 })
