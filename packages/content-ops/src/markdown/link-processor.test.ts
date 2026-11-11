@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
-import { extractLinksFromFile, extractLinksFromDirectory, classifyLinkType, detectLinkStyle, generateNormalizationReplacements, applyReplacements, processFileWithLinks } from './link-processor'
+import {
+  extractLinksFromFile,
+  extractLinksFromDirectory,
+  classifyLinkType,
+  detectLinkStyle,
+  generateNormalizationReplacements,
+  applyReplacements,
+  processFileWithLinks,
+} from './link-processor'
 import type { ParsedLink, LinkProcessingConfig } from './link-processor'
 import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
 import { replaceLinkOnLine } from './replacement-applier'
@@ -110,7 +118,6 @@ describe('replaceLinkOnLine - no replacements', () => {
   })
 
   describe('Edge cases', () => {
-
     it('should handle CRLF line endings', function () {
       const crlfContent = 'Line 1\r\nLine 2 with [link](old.md)\r\nLine 3'
       const result = replaceLinkOnLine(crlfContent, 2, '[link](old.md)', '[link](new.md)')
@@ -223,7 +230,6 @@ it('extractLinksFromDirectory: should handle empty directories', async function 
   expect(links).toHaveLength(0)
 })
 describe('link-processor - classifyLinkType (T-69-02)', () => {
-
   it('should classify HTTP/HTTPS URLs', () => {
     expect(classifyLinkType('https://example.com')).toBe('http')
     expect(classifyLinkType('http://example.com')).toBe('http')

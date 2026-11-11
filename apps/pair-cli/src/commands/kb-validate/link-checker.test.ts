@@ -37,7 +37,6 @@ describe('validateLinks', () => {
   })
 
   describe('external links', () => {
-
     it('should validate external links in strict mode', async () => {
       fs.writeFile('/kb/README.md', '[Link](https://example.com)')
       httpClient.setRequestResponses([createMockResponse(200)])
@@ -78,19 +77,22 @@ describe('validateLinks', () => {
     // source directory and stat-ing it reports a link that is not broken as broken,
     // and (since the smoke suite link-validates the shipped dataset in CI) the first
     // `mailto:` in the KB would redden a green pre-merge run.
-    it.each([['mailto:', '[Mail](mailto:a@b.c)'],])('%s is not validated as an internal path', async (_name, markdown) => {
-      fs.writeFile('/kb/README.md', markdown)
+    it.each([['mailto:', '[Mail](mailto:a@b.c)']])(
+      '%s is not validated as an internal path',
+      async (_name, markdown) => {
+        fs.writeFile('/kb/README.md', markdown)
 
-      const { results } = await validateLinks({
-        baseDir: '/kb',
-        files: ['/kb/README.md'],
-        fs,
-      })
+        const { results } = await validateLinks({
+          baseDir: '/kb',
+          files: ['/kb/README.md'],
+          fs,
+        })
 
-      expect(results[0]?.valid).toBe(true)
-      expect(results[0]?.errors).toHaveLength(0)
-      expect(results[0]?.warnings).toHaveLength(0)
-    })
+        expect(results[0]?.valid).toBe(true)
+        expect(results[0]?.errors).toHaveLength(0)
+        expect(results[0]?.warnings).toHaveLength(0)
+      },
+    )
   })
 
   describe('link destinations (CommonMark title / angle brackets)', () => {
@@ -98,9 +100,11 @@ describe('validateLinks', () => {
     // `"Title"` is a title. Capturing the whole parenthesised run stats a path that
     // can never exist, so a perfectly valid link is reported broken (absorbed from
     // the closed #452 into story #188).
-    it.each([['single-quoted title', "[Doc](./other.md 'The Other')"],
-['padded destination', '[Doc](  ./other.md   "The Other"  )'],
-['angle-bracket destination', '[Doc](<./other.md>)'],])('%s: an EXISTING target validates clean', async (_name, markdown) => {
+    it.each([
+      ['single-quoted title', "[Doc](./other.md 'The Other')"],
+      ['padded destination', '[Doc](  ./other.md   "The Other"  )'],
+      ['angle-bracket destination', '[Doc](<./other.md>)'],
+    ])('%s: an EXISTING target validates clean', async (_name, markdown) => {
       fs.writeFile('/kb/README.md', markdown)
       fs.writeFile('/kb/other.md', '# Other')
 

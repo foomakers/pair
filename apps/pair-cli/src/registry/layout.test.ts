@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import type { TargetConfig, FileSystemService } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
-import { collectLayoutFiles, transformSourceToTarget, transformTargetToSource, validateLayoutOption } from './layout'
+import {
+  collectLayoutFiles,
+  transformSourceToTarget,
+  transformTargetToSource,
+  validateLayoutOption,
+} from './layout'
 
 // Test fixtures
 const createMockRegistry = (
@@ -24,7 +29,6 @@ const mockFs: FileSystemService = {
 } as FileSystemService
 
 describe('collectLayoutFiles', () => {
-
   it('should skip non-existent target directories', async () => {
     const mockFsPartial: FileSystemService = {
       ...mockFs,
@@ -71,7 +75,6 @@ describe('collectLayoutFiles', () => {
 })
 
 describe('transformSourceToTarget', () => {
-
   it('should apply prefix and flatten when configured', () => {
     const registry = createMockRegistry(
       '.skills',
@@ -138,7 +141,6 @@ describe('transformSourceToTarget', () => {
 })
 
 describe('transformTargetToSource', () => {
-
   it('should remove prefix when flatten is enabled', () => {
     const registry = createMockRegistry(
       '.skills',
@@ -205,7 +207,6 @@ describe('transformTargetToSource', () => {
 })
 
 describe('validateLayoutOption', () => {
-
   it('should return target when layout is target', () => {
     expect(validateLayoutOption('target')).toBe('target')
   })

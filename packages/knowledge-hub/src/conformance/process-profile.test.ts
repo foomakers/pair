@@ -1,7 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { parseStepCatalogue, parseProcessProfiles, collectHowToGuides, collectAllSkillDirs, checkStepCatalogue, checkStepMarkers, checkProcessProfiles, parseWowProfileSection, resolveProcessProfile, STEP_MARKER } from '../tools/skills-conformance-check'
+import {
+  parseStepCatalogue,
+  parseProcessProfiles,
+  collectHowToGuides,
+  collectAllSkillDirs,
+  checkStepCatalogue,
+  checkStepMarkers,
+  checkProcessProfiles,
+  parseWowProfileSection,
+  resolveProcessProfile,
+  STEP_MARKER,
+} from '../tools/skills-conformance-check'
 import { installedSkillDir } from '../tools/skill-md-mirror'
 import { sectionBetween } from './test-utils'
 
@@ -682,7 +693,6 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
 })
 
 describe('the manual (no-skills) path is governed by the same profile (AC8)', () => {
-
   it('the schema says the profile governs the step, not one representation', () => {
     const lower = profilesSource.toLowerCase()
     expect(lower).toMatch(/how-to/)

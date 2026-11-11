@@ -66,7 +66,6 @@ async function makeInSyncTree(extra: Record<string, string> = {}): Promise<strin
 }
 
 describe('checkLlmsIndexDrift — the committed index vs. the generator', () => {
-
   it('names a command that EXISTS — a root script, resolved against the real package.json (AC5)', async () => {
     // The producer -> published identity -> consumer chain for the advice: the root
     // `package.json` (producer) defines the script name (published identity) that the
@@ -240,16 +239,19 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   // that spell emoji flag sequences, the supplementary variation selectors). One code
   // point is two UTF-16 units there, so a `charCodeAt(0)` escape would print the lone
   // high surrogate. Spelled `\u{XXXXX}` — the form JavaScript itself reads back.
-  it.each([['U+E0001 LANGUAGE TAG', '\u{E0001}', 'e0001'],])('renders an astral %s look-alike pair escaped as \\u{XXXXX}', (_name, char, hex) => {
-    const line = '- [A](a.md)'
-    const spoiled = `- [A${char}](a.md)`
+  it.each([['U+E0001 LANGUAGE TAG', '\u{E0001}', 'e0001']])(
+    'renders an astral %s look-alike pair escaped as \\u{XXXXX}',
+    (_name, char, hex) => {
+      const line = '- [A](a.md)'
+      const spoiled = `- [A${char}](a.md)`
 
-    const message = formatReport(compareIndex(`${line}\n`, `${spoiled}\n`), '/repo')
+      const message = formatReport(compareIndex(`${line}\n`, `${spoiled}\n`), '/repo')
 
-    expect(message).toContain(`  "- [A\\u{${hex}}](a.md)"\n`)
-    expect(message).toContain(`  "${line}"\n`)
-    expect(message).toContain('characters a terminal does not show')
-  })
+      expect(message).toContain(`  "- [A\\u{${hex}}](a.md)"\n`)
+      expect(message).toContain(`  "${line}"\n`)
+      expect(message).toContain('characters a terminal does not show')
+    },
+  )
 
   // ---- Round 7: the caution counts the quoted LINES ------------------------------------
   //
@@ -300,18 +302,21 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   // would make a pair DETECTED (key folds it) but rendered UNESCAPED (still two identical
   // lines). Every member is asserted on both sides here; the tab shows as `\t` because
   // `JSON.stringify` already spells it.
-  it.each([['U+00A0 NO-BREAK SPACE', '\u00A0', '\\u00a0'],])('detects AND escapes a %s look-alike pair', (_name, char, escaped) => {
-    const line = '- [A B](a.md)'
-    const spoiled = `- [A${char}B](a.md)`
+  it.each([['U+00A0 NO-BREAK SPACE', '\u00A0', '\\u00a0']])(
+    'detects AND escapes a %s look-alike pair',
+    (_name, char, escaped) => {
+      const line = '- [A B](a.md)'
+      const spoiled = `- [A${char}B](a.md)`
 
-    const report = compareIndex(`${line}\n`, `${spoiled}\n`)
-    const message = formatReport(report, '/repo')
+      const report = compareIndex(`${line}\n`, `${spoiled}\n`)
+      const message = formatReport(report, '/repo')
 
-    expect(report).toMatchObject({ missing: [line], extra: [spoiled] })
-    expect(message).toContain(`  "- [A${escaped}B](a.md)"\n`)
-    expect(message).toContain(`  "${line}"\n`)
-    expect(message).toContain('2 line(s) above carry characters a terminal does not show')
-  })
+      expect(report).toMatchObject({ missing: [line], extra: [spoiled] })
+      expect(message).toContain(`  "- [A${escaped}B](a.md)"\n`)
+      expect(message).toContain(`  "${line}"\n`)
+      expect(message).toContain('2 line(s) above carry characters a terminal does not show')
+    },
+  )
 
   // ---- The tracked file cannot be read ---------------------------------------------
   //
@@ -369,7 +374,6 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
 })
 
 describe('compareIndex — the pure line-level comparison', () => {
-
   it('reports a whitespace/ordering-only difference with empty missing AND extra', () => {
     const report = compareIndex('- [A](a)\n- [B](b)\n', '- [B](b)\n- [A](a)\n')
 

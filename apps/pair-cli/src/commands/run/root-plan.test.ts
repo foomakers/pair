@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { computeMutexBatch, computeRootPlan, parseStateOrder, dependencyFilter, resolveCards, type RootCandidate } from './root-plan'
+import {
+  computeMutexBatch,
+  computeRootPlan,
+  parseStateOrder,
+  dependencyFilter,
+  resolveCards,
+  type RootCandidate,
+} from './root-plan'
 
 /**
  * US-491 AC1/AC3/AC7 — the `--root --parallel` plan is `pair-loop`'s OWN dependency + mutex
@@ -57,15 +64,17 @@ const card = (id: string, extra: Partial<RootCandidate> = {}): RootCandidate => 
   }
 }
 
-const CORPUS: Array<[string, RootCandidate[]]> = [['duplicate + unresolvable', [card('1'), card('1'), card('2', { branch: '' })]],
-[
+const CORPUS: Array<[string, RootCandidate[]]> = [
+  ['duplicate + unresolvable', [card('1'), card('1'), card('2', { branch: '' })]],
+  [
     'mutex + dependency together',
     [
       card('1', { mutexResources: ['r'] }),
       card('2', { mutexResources: ['r'] }),
       card('3', { prerequisites: [{ id: '1', merged: false }] }),
     ],
-  ],]
+  ],
+]
 
 describe('root-plan — parity with pair-loop.js (tier 1) over one corpus', () => {
   const t1 = tier1()

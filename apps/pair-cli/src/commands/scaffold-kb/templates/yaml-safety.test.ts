@@ -21,8 +21,10 @@ import { renderReleaseWorkflow } from './release-workflow'
  * Names that survive `validateKbName` (no newlines, no control characters) yet
  * are hostile to YAML if interpolated raw.
  */
-const HOSTILE_NAMES = [// `'`
-  'Acme #1 KB',] as const
+const HOSTILE_NAMES = [
+  // `'`
+  'Acme #1 KB',
+] as const
 
 /** The frontmatter block of a SKILL.md, without the `---` fences. */
 function frontmatterOf(skill: string): string {

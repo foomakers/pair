@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { parsePackageCommand } from './parser'
 
 describe('parsePackageCommand', () => {
-
   it('creates config with source directory', () => {
     const config = parsePackageCommand({
       sourceDir: './kb-content',
@@ -32,7 +31,6 @@ describe('parsePackageCommand', () => {
   })
 
   describe('skip-registries flag', () => {
-
     it('should handle empty string', () => {
       const config = parsePackageCommand({ skipRegistries: '' })
 
@@ -47,7 +45,6 @@ describe('parsePackageCommand', () => {
   })
 
   describe('tags flag', () => {
-
     it('should filter empty tags', () => {
       const config = parsePackageCommand({ tags: 'ai,,testing,' })
 
@@ -56,7 +53,6 @@ describe('parsePackageCommand', () => {
   })
 
   describe('org flag', () => {
-
     it('should parse all org fields', () => {
       const config = parsePackageCommand({
         org: true,

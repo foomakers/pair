@@ -75,7 +75,6 @@ describe('findSkillReferences', () => {
 })
 
 describe('buildSkillNameMap', () => {
-
   it('skips entries where leaf equals transformed (no rename)', () => {
     const dirMappingFiles = new Map([['myskill', ['/target/myskill/SKILL.md']]])
     const result = buildSkillNameMap(dirMappingFiles, { flatten: false })
@@ -108,7 +107,6 @@ describe('buildSkillNameMap', () => {
 })
 
 describe('rewriteSkillReferencesInFiles', () => {
-
   it('skips non-.md files', async () => {
     const fileService = new InMemoryFileSystemService(
       { '/target/config.json': '{"skill": "/next"}' },

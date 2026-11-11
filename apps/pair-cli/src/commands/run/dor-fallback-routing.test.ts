@@ -215,14 +215,16 @@ afterEach(() => {
 // ── r0-1 — macrostate via the adopted State Mapping (production probe, stub gh) ─────────────────
 describe('r0-1: the card macrostate is resolved through the adopted State Mapping', () => {
   const supervised = { card: '218', cardTags: '' }
-  const routes = [{
+  const routes = [
+    {
       id: 'R1-W6',
       name: 'board with no Ready state, Todo + all six DoR criteria + breakdown (DoR fallback) ⇒ the delivery cycle',
       wow: NO_READY_MAPPING,
       status: 'Todo',
       body: card('Todo', `${FULL_DOR}${BREAKDOWN}`),
       expect: 'cycle',
-    },] as const
+    },
+  ] as const
 
   for (const row of routes) {
     it(`${row.id}: ${row.name}`, async () => {
@@ -278,7 +280,7 @@ describe('r0-1: the card macrostate is resolved through the adopted State Mappin
 
 // ── r0-2 — a --pr entry never lands on a preparation skill ──────────────────────────────────────
 describe('r0-2: `--card N --pr P` enters the cycle with the PR or refuses naming --pr — never a prep skill', () => {
-  const prRows = [{ id: 'R2-W1', readiness: 'draft' as const, autonomous: false },]
+  const prRows = [{ id: 'R2-W1', readiness: 'draft' as const, autonomous: false }]
   for (const row of prRows) {
     it(`${row.id}: --pr 12 on a ${row.readiness} card${row.autonomous ? ' (--autonomous)' : ''}`, async () => {
       captureLog()
@@ -305,7 +307,6 @@ describe('r0-2: `--card N --pr P` enters the cycle with the PR or refuses naming
 
 // ── r0-4 — the per-card lock on both fallback routes ────────────────────────────────────────────
 describe('r0-4: both fallback routes take the per-card lock and release it on every exit', () => {
-
   it('R4-C1: a MAPPED route with the lock held is a run-in-progress skip (US-217, unchanged)', async () => {
     const output = captureLog()
     const { calls, handler } = harness({ held: true })

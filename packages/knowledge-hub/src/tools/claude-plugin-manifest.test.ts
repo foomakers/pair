@@ -315,7 +315,6 @@ describe('expectedPluginSkillPaths — derived from the bootstrap corpus, never 
 })
 
 describe('assertDeclaredSkillsResolve — stale path detection', () => {
-
   it('FAILS naming each declared dir with no SKILL.md', () => {
     const message = captureThrownMessage(() =>
       assertDeclaredSkillsResolve(
@@ -331,7 +330,6 @@ describe('assertDeclaredSkillsResolve — stale path detection', () => {
 })
 
 describe('assertSkillsOnlyDistribution — allowlist, not denylist', () => {
-
   it('accepts every metadata key the published schemas declare', () => {
     // Without this, tightening to an allowlist could break a legitimate hand edit
     // (e.g. adding `license`) — the allowlist must cover the whole metadata surface.
@@ -398,7 +396,6 @@ describe('assertSkillsOnlyDistribution — allowlist, not denylist', () => {
 })
 
 describe('assertNoRootPluginComponents — payload-level skills-only guarantee', () => {
-
   it('FAILS when any component path exists at the plugin root', () => {
     for (const path of ROOT_PLUGIN_COMPONENT_PATHS) {
       const message = captureThrownMessage(() => assertNoRootPluginComponents(rel => rel === path))

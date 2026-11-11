@@ -1,6 +1,36 @@
 import { describe, it, expect, vi } from 'vitest'
 import { resolve } from 'node:path'
-import { findSkillCountMismatches, findPluginSkillCountMismatches, countDeclaredPluginSkills, findGuideCountMismatches, findDeadLinks, findEmDashes, findDeadRepoCitations, githubHeadingSlugs, checkCatalogSync, checkCommandAnchors, checkDocsCommands, countHowToGuides, buildValidRoutes, readSkillDescription, checkCatalogContent, generateCatalogRows, checkBatchEnginePaths, checkBatchEngineAgents, checkBatchEngineWorkflows, batchEngineErrors, checkListTargetsSamples, PLANNED_MARKER_RE, findStalePlannedMarkers, plannedMarkerErrors, queryIssueState, findDeadAnchors, buildDocSlugs, parseIntentRequests, checkViaLines } from './docs-staleness-check'
+import {
+  findSkillCountMismatches,
+  findPluginSkillCountMismatches,
+  countDeclaredPluginSkills,
+  findGuideCountMismatches,
+  findDeadLinks,
+  findEmDashes,
+  findDeadRepoCitations,
+  githubHeadingSlugs,
+  checkCatalogSync,
+  checkCommandAnchors,
+  checkDocsCommands,
+  countHowToGuides,
+  buildValidRoutes,
+  readSkillDescription,
+  checkCatalogContent,
+  generateCatalogRows,
+  checkBatchEnginePaths,
+  checkBatchEngineAgents,
+  checkBatchEngineWorkflows,
+  batchEngineErrors,
+  checkListTargetsSamples,
+  PLANNED_MARKER_RE,
+  findStalePlannedMarkers,
+  plannedMarkerErrors,
+  queryIssueState,
+  findDeadAnchors,
+  buildDocSlugs,
+  parseIntentRequests,
+  checkViaLines,
+} from './docs-staleness-check'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
 
@@ -70,7 +100,6 @@ describe('countDeclaredPluginSkills', () => {
 })
 
 describe('findGuideCountMismatches', () => {
-
   it('flags wrong counts in adjective phrasings ("N sequential/step-by-step guides")', () => {
     const errs = findGuideCountMismatches(
       '11 sequential guides and 11 step-by-step guides',
@@ -117,21 +146,23 @@ describe('findDeadRepoCitations', () => {
 
   // Every `hrefs` below is what the site's own MDX compiler (@mdx-js/mdx + remark-gfm, the same
   // pair fumadocs runs) emits as a link for that source — the oracle is the renderer, not a regex.
-  const ROWS: ReadonlyArray<{ why: string; content: string; dead: number }> = [{ why: 'a bare GFM autolink to a missing repo file', content: `See ${DEAD} here.\n`, dead: 1 },
-{
+  const ROWS: ReadonlyArray<{ why: string; content: string; dead: number }> = [
+    { why: 'a bare GFM autolink to a missing repo file', content: `See ${DEAD} here.\n`, dead: 1 },
+    {
       // ADL decision 4: a page the compiler rejects is next build's finding, not this gate's —
       // the gate returns nothing rather than a misleading citation error.
       why: 'a page the compiler rejects — next build reports it, not this gate',
       content: `See [x](${DEAD}).\n\n<Broken attr={ unclosed\n`,
       dead: 0,
     },
-{
+    {
       // A literal `%` is not a valid escape. The gate must REPORT the citation, never throw a
       // URIError out of the whole run — that would also discard every other check's findings.
       why: 'a path with a malformed percent-escape, reported instead of crashing the gate',
       content: `See [x](https://github.com/foomakers/pair/blob/main/scripts/100%coverage.sh).\n`,
       dead: 1,
-    },]
+    },
+  ]
   for (const { why, content, dead } of ROWS) {
     it(`${dead === 0 ? 'ignores' : 'flags'} ${why}`, () => {
       expect(
@@ -211,40 +242,42 @@ describe('findDeadRepoCitations — #fragment anchors (Check 5c)', () => {
   const src = (path: string) => targets.get(path)
   const B = 'https://github.com/foomakers/pair/blob/main/'
 
-  const ROWS: Array<[string, string, number]> = [['an explicit html <a name> anchor', `[x](${B}README.md#legacy)`, 0],
-[
+  const ROWS: Array<[string, string, number]> = [
+    ['an explicit html <a name> anchor', `[x](${B}README.md#legacy)`, 0],
+    [
       'a single-quoted html id is an anchor too (GitHub parses HTML, not quotes)',
       `[x](${B}README.md#single-quoted)`,
       0,
     ],
-['line range whose end is past the end', `[x](${B}packages/x/src/index.ts#L5-L30)`, 1],
-['line range with columns', `[x](${B}packages/x/src/index.ts#L5C1-L9C4)`, 0],
-[
+    ['line range whose end is past the end', `[x](${B}packages/x/src/index.ts#L5-L30)`, 1],
+    ['line range with columns', `[x](${B}packages/x/src/index.ts#L5C1-L9C4)`, 0],
+    [
       'line anchor on a RENDERED markdown file is dead — github.com serves line anchors only under ?plain=1',
       `[x](${B}docs/guide.md#L1)`,
       1,
     ],
-[
+    [
       '?plain=1 shows source, so a heading anchor is dead there',
       `[x](${B}docs/guide.md?plain=1#execution-log)`,
       1,
     ],
-['?plain=1 keeps line anchors', `[x](${B}docs/guide.md?plain=1#L1)`, 0],
-[
+    ['?plain=1 keeps line anchors', `[x](${B}docs/guide.md?plain=1#L1)`, 0],
+    [
       'tree/ renders the directory README — its heading anchors are live',
       `[x](https://github.com/foomakers/pair/tree/main/apps/cli#development)`,
       0,
     ],
-[
+    [
       'tree/ has no source panel, so no line anchors',
       `[x](https://github.com/foomakers/pair/tree/main/apps/cli#L2)`,
       1,
     ],
-[
+    [
       'raw/ has no anchors',
       `[x](https://github.com/foomakers/pair/raw/main/docs/guide.md#execution-log)`,
       1,
-    ],]
+    ],
+  ]
 
   it.each(ROWS)('%s', (_label, body, dead) => {
     expect(findDeadRepoCitations(`See ${body}.\n`, 'a.mdx', tracked, src)).toHaveLength(dead)

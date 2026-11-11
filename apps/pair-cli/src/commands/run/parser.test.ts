@@ -70,12 +70,17 @@ describe('parseRunCommand', () => {
     )
   })
 
-  it.each([['0', '--max-iterations must be a positive integer (received: 0)'],])('rejects --max-iterations %s', (value, message) => {
-    expect(() => parseRunCommand({ maxIterations: value })).toThrow(message)
-  })
+  it.each([['0', '--max-iterations must be a positive integer (received: 0)']])(
+    'rejects --max-iterations %s',
+    (value, message) => {
+      expect(() => parseRunCommand({ maxIterations: value })).toThrow(message)
+    },
+  )
 
-  it.each([['skill', '--skill'],
-['cwd', '--cwd'],])('rejects an empty %s value', (key, flag) => {
+  it.each([
+    ['skill', '--skill'],
+    ['cwd', '--cwd'],
+  ])('rejects an empty %s value', (key, flag) => {
     expect(() => parseRunCommand({ [key]: '   ' })).toThrow(
       `${flag} was passed with an empty value`,
     )
@@ -94,14 +99,16 @@ describe('parseRunCommand', () => {
    * is routinely interpolated from somewhere else.
    */
   describe('CLI values that reach an agent prompt are content-checked', () => {
-
     it('bounds --root length, so a 50k id cannot be re-rendered every iteration (round 7, m2)', () => {
       expect(() => parseRunCommand({ root: 'a'.repeat(50_000) })).toThrow(/--root/)
     })
 
-    it.each([['an unbounded payload', 'a'.repeat(4000)],])('rejects --filter carrying %s', (_case, value) => {
-      expect(() => parseRunCommand({ filter: value })).toThrow(/--filter/)
-    })
+    it.each([['an unbounded payload', 'a'.repeat(4000)]])(
+      'rejects --filter carrying %s',
+      (_case, value) => {
+        expect(() => parseRunCommand({ filter: value })).toThrow(/--filter/)
+      },
+    )
   })
 
   it('rejects positional arguments', () => {
@@ -469,7 +476,7 @@ describe('R: --predicate (the loop override of ## Stop Predicate)', () => {
         parseRunCommand({ root: platform === 'darwin' ? '1' : '2', predicate: 'root ⇒ Done' }),
       ).not.toHaveProperty('parallel')
   })
-  it.each(['tag: ⇒ Done',])(
+  it.each(['tag: ⇒ Done'])(
     'an invalid predicate %s is refused at parse time, before anything spawns',
     bad => {
       expect(() => parseRunCommand({ parallel: '2', root: '1', predicate: bad })).toThrow()

@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { extractLinks } from './markdown-parser'
 
 describe('markdown-parser extractLinks - edge cases', () => {
-
   it('handles empty href links', async () => {
     const content = 'Empty link: [text]() and another [](empty.md)'
     const links = await extractLinks(content)

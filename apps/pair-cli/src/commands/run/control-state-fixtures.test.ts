@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { parseStateMapping, resolveCardReadiness, resolveMacrostate, unmetReadinessCriteria, type CardDocument, type StateMapping } from './card-readiness'
+import {
+  parseStateMapping,
+  resolveCardReadiness,
+  resolveMacrostate,
+  unmetReadinessCriteria,
+  type CardDocument,
+  type StateMapping,
+} from './card-readiness'
 
 /**
  * US-253 — control state = macrostate (primary) + Definition-of-Ready fallback, never title

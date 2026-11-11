@@ -133,11 +133,13 @@ describe('config loader - the source declaration is validated, not trusted', () 
     expect(config.asset_registries['skills']!.prefix).toBe('pair')
   })
 
-  it.each([['an absolute POSIX path', '/home/victim/.ssh'],
-['a parent traversal', '../../../../Users'],
-['a Windows drive path', 'C:\\Users\\victim'],
-['an empty string', ''],
-['a non-string', 42],])(
+  it.each([
+    ['an absolute POSIX path', '/home/victim/.ssh'],
+    ['a parent traversal', '../../../../Users'],
+    ['a Windows drive path', 'C:\\Users\\victim'],
+    ['an empty string', ''],
+    ['a non-string', 42],
+  ])(
     'ignores a source-declared source that is %s — layer 2 may not read outside the KB',
     (_label, declared) => {
       const { config } = load({
@@ -175,7 +177,9 @@ describe('config loader - the source declaration is validated, not trusted', () 
    * as `source: <path>`, letting remote content erase or forge the very lines the user
    * reads to judge whether the install went well (US-396 review round 6).
    */
-  it.each([['a source carrying an erase-line sequence', { source: 'docs\u001b[2K\u001b[1A' }, 'source'],])('ignores %s — a declared value is plain text, never terminal control', (_l, bad, field) => {
+  it.each([
+    ['a source carrying an erase-line sequence', { source: 'docs\u001b[2K\u001b[1A' }, 'source'],
+  ])('ignores %s — a declared value is plain text, never terminal control', (_l, bad, field) => {
     const { config } = load({
       '/kb/pair.config.json': JSON.stringify({ asset_registries: { knowledge: bad } }),
     })
@@ -254,8 +258,10 @@ describe('config loader - the source declaration is validated, not trusted', () 
     expect(skills.description).toBe('Acme skills')
   })
 
-  it.each([['null', 'null'],
-['asset_registries that is not an object', '{"asset_registries": ["skills"]}'],])('warns and ignores a declaration that is %s', (_label, content) => {
+  it.each([
+    ['null', 'null'],
+    ['asset_registries that is not an object', '{"asset_registries": ["skills"]}'],
+  ])('warns and ignores a declaration that is %s', (_label, content) => {
     const { config, sourceDeclaration } = loadConfigWithOverrides(
       fsWith({ '/kb/pair.config.json': content }),
       { projectRoot: '/project', sourceRoot: '/kb' },
@@ -348,9 +354,11 @@ describe('config loader - a source declaration never aborts the consumer install
 
   const base = JSON.parse(REAL_CONFIG).asset_registries
 
-  it.each([['exclude as an object', { exclude: { a: 1 } }, 'exclude'],
-['flatten as a string', { flatten: 'true' }, 'flatten'],
-['description as a number', { description: 42 }, 'description'],])('drops %s and keeps the rest of the declaration', (_label, bad, field) => {
+  it.each([
+    ['exclude as an object', { exclude: { a: 1 } }, 'exclude'],
+    ['flatten as a string', { flatten: 'true' }, 'flatten'],
+    ['description as a number', { description: 42 }, 'description'],
+  ])('drops %s and keeps the rest of the declaration', (_label, bad, field) => {
     const { config } = load({
       asset_registries: { knowledge: { ...(bad as object), prefix: 'acme' } },
     })

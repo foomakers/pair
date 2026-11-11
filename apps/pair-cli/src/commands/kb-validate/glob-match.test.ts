@@ -2,16 +2,18 @@ import { describe, it, expect } from 'vitest'
 import { compileOptionalLinkPatterns, matchesAnyPattern } from './glob-match'
 
 describe('compileOptionalLinkPatterns', () => {
-
   // The contract is "a pattern this matcher cannot compile is REPORTED and skipped,
   // never thrown" (US-188 edge case). Table-driven so the contract is what is
   // pinned, not the handful of malformed shapes known today.
-  it.each([['empty character class', 'docs/[].md'],])('reports a %s as invalid instead of throwing', (_label, pattern) => {
-    const { matchers, invalid } = compileOptionalLinkPatterns([pattern, 'packages/**'])
+  it.each([['empty character class', 'docs/[].md']])(
+    'reports a %s as invalid instead of throwing',
+    (_label, pattern) => {
+      const { matchers, invalid } = compileOptionalLinkPatterns([pattern, 'packages/**'])
 
-    expect(matchers).toHaveLength(1)
-    expect(invalid).toEqual([pattern])
-  })
+      expect(matchers).toHaveLength(1)
+      expect(invalid).toEqual([pattern])
+    },
+  )
 })
 
 describe('matchesAnyPattern', () => {

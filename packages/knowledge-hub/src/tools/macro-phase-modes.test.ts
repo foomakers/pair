@@ -298,7 +298,6 @@ function literalSession(mode: string, start: Unit): { steps: string[]; unit: Uni
 }
 
 describe('r0-1: row 7 hands over to row 8 without a session flag on the unit', () => {
-
   it('the session equals /next literal Step 3 predicates + the Step 6 hand-off over every unit in every mode', () => {
     const macrostates: Unit['macrostate'][] = ['Draft', 'Ready', 'In Progress', 'Review', 'Done']
     const units: Unit[] = macrostates.flatMap(macrostate =>
@@ -375,16 +374,18 @@ const analysisOn = (
 }
 
 describe('r0-2: the model covers cascade rows 1–5', () => {
-  it.each([[
+  it.each([
+    [
       'row 2: PRD populated and 3 tech files are templates',
       facts({ techTemplates: 3, initiatives: 0, epics: 0, stories: 0 }),
       'bootstrap',
     ],
-[
+    [
       'row 3 boundary: epics without initiatives is not row 3 (row 5 instead)',
       facts({ initiatives: 0, epics: 1, stories: 0 }),
       'plan-stories',
-    ],] as Array<[string, ProjectFacts, string]>)('analysis selects %s', (_name, project, step) => {
+    ],
+  ] as Array<[string, ProjectFacts, string]>)('analysis selects %s', (_name, project, step) => {
     const run = analysisOn(project, ALL_STEPS, step)
     expect(run.steps).toEqual([step])
     expect(run.exit).toBe('halt')

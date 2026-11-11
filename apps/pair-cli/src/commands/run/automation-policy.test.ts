@@ -57,7 +57,6 @@ describe("readAutomationPolicy — absent file (today's real path for most proje
 })
 
 describe('readAutomationPolicy — present file', () => {
-
   it('does not read a declaration out of a fenced example (rendered-markdown counting)', () => {
     const policy = policyFrom(
       '## Notes\n\n```markdown\n## Eligibility\n\nrisk:red\n```\n\n## Eligibility\n\nrisk:green\n',
@@ -81,26 +80,28 @@ describe('readAutomationPolicy — present file', () => {
 })
 
 describe('readAutomationPolicy — HALTs before any card is touched', () => {
-  it.each([[
+  it.each([
+    [
       'an empty Eligibility section',
       '## Eligibility\n\n## Auto-Advance\n\n(none)\n',
       /present but empty/,
     ],
-[
+    [
       'two Eligibility headings',
       '## Eligibility\n\nrisk:green\n\n## Eligibility\n\nrisk:yellow\n',
       /carries 2 `## Eligibility` headings/,
     ],
-[
+    [
       'an unknown predicate shape',
       '## Stop Predicate\n\nwhenever it feels done\n',
       /matches neither/,
     ],
-[
+    [
       'an absolute audit path',
       '## Audit Location\n\n/var/tmp/audit.md\n',
       /must be project-relative/,
-    ],])('halts on %s', (_case, markdown, expected) => {
+    ],
+  ])('halts on %s', (_case, markdown, expected) => {
     expect(() => policyFrom(markdown).read()).toThrow(expected)
   })
 })
@@ -121,22 +122,18 @@ describe('describeParallelism (AC9)', () => {
 })
 
 describe('describeMergePosture (round 1, finding 3)', () => {
-
   // US-490: `run --card` now reaches the merge stage (cycle-merge.mjs check -> gate -> run), so
   // with a tier under `## Auto-Advance` the run itself merges that tier — "the driver never
   // merges" is false there and must not be printed.
-  it.each(['risk:green',])(
-    'states that merge is automatic for the declared tier %s',
-    tier => {
-      const posture = describeMergePosture(
-        policyFrom(`## Eligibility\n\n${tier}\n\n## Auto-Advance\n\n${tier}\n`).read(),
-      )
+  it.each(['risk:green'])('states that merge is automatic for the declared tier %s', tier => {
+    const posture = describeMergePosture(
+      policyFrom(`## Eligibility\n\n${tier}\n\n## Auto-Advance\n\n${tier}\n`).read(),
+    )
 
-      expect(posture).not.toContain('never merges')
-      expect(posture).toContain(tier)
-      expect(posture).toMatch(/automatic/i)
-    },
-  )
+    expect(posture).not.toContain('never merges')
+    expect(posture).toContain(tier)
+    expect(posture).toMatch(/automatic/i)
+  })
 
   it('halts on an auto-advance tier the eligibility declaration does not name', () => {
     expect(() =>
@@ -155,7 +152,6 @@ describe('describeMergePosture (round 1, finding 3)', () => {
  * file is safe on tier 1 and executable on tier 2, the divergence ADR-021 excludes.
  */
 describe('readAutomationPolicy — a policy value is never a command fragment (round 4, Major)', () => {
-
   it('HALTs on a traversing audit location, as tier 1 does', () => {
     expect(() => policyFrom('## Audit Location\n\n../../../etc/x.md\n').read()).toThrow(
       /escapes the working area/,
@@ -180,21 +176,29 @@ describe('readAutomationPolicy — a policy value is never a command fragment (r
 
 /** Round 4, minor 1: parity measured on the CLASS — the same strictness tier 1 applies. */
 describe('readAutomationPolicy — numeric and condition forms match tier 1 exactly', () => {
-  it.each([['scientific notation', '1e3'],])('HALTs on max-iterations in %s form', (_case, value) => {
-    expect(() => policyFrom(`## Stop Predicate\n\nmax-iterations: ${value}\n`).read()).toThrow(
-      /not a positive integer/,
-    )
-  })
+  it.each([['scientific notation', '1e3']])(
+    'HALTs on max-iterations in %s form',
+    (_case, value) => {
+      expect(() => policyFrom(`## Stop Predicate\n\nmax-iterations: ${value}\n`).read()).toThrow(
+        /not a positive integer/,
+      )
+    },
+  )
 
-  it.each([['a has-tag payload carrying a space', 'root ⇒ has-tag:a b'],])('HALTs on a condition with %s', (_case, value) => {
-    expect(() => policyFrom(`## Stop Predicate\n\n${value}\n`).read()).toThrow(
-      /not a canonical macrostate/,
-    )
-  })
+  it.each([['a has-tag payload carrying a space', 'root ⇒ has-tag:a b']])(
+    'HALTs on a condition with %s',
+    (_case, value) => {
+      expect(() => policyFrom(`## Stop Predicate\n\n${value}\n`).read()).toThrow(
+        /not a canonical macrostate/,
+      )
+    },
+  )
 
-  it.each([['a malformed override line', 'risk:green 5'],
-['an override naming a non-label', 'not a tier: 5'],
-['an override at zero', 'risk:green: 0'],])('HALTs on %s instead of ignoring it silently', (_case, override) => {
+  it.each([
+    ['a malformed override line', 'risk:green 5'],
+    ['an override naming a non-label', 'not a tier: 5'],
+    ['an override at zero', 'risk:green: 0'],
+  ])('HALTs on %s instead of ignoring it silently', (_case, override) => {
     expect(() => policyFrom(`## Max Parallelism\n\n3\n${override}\n`).read()).toThrow(
       /`## Max Parallelism`/,
     )

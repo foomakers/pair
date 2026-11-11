@@ -1,7 +1,18 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { readSkillsDatasetFromDisk, datasetSkillDirs, datasetSkillArtifacts, installedSkillDir, installedArtifactPath, buildInstalledArtifacts, assertRootArtifactMatches, diffSkillMd, MIRROR_REGENERATE_COMMAND, type DatasetTree } from './skill-md-mirror'
+import {
+  readSkillsDatasetFromDisk,
+  datasetSkillDirs,
+  datasetSkillArtifacts,
+  installedSkillDir,
+  installedArtifactPath,
+  buildInstalledArtifacts,
+  assertRootArtifactMatches,
+  diffSkillMd,
+  MIRROR_REGENERATE_COMMAND,
+  type DatasetTree,
+} from './skill-md-mirror'
 
 // packages/knowledge-hub/src/tools -> repo root
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..')
@@ -199,7 +210,6 @@ describe('datasetSkillArtifacts — every markdown artifact the dataset contribu
  * as the sanctioned way to ship a `references/` sub-doc.
  */
 describe('installedArtifactPath — root location via the real naming transform', () => {
-
   // Inverted when #407 landed. This asserted the DEFECT — the sub-dir flattened
   // OUT of its skill into a sibling pseudo-skill — deliberately, because the
   // guard's job is to mirror whatever the real pipeline does, and pinning the
@@ -227,7 +237,6 @@ describe('installedArtifactPath — root location via the real naming transform'
  * Exercises each edit class directly so a large SKILL.md failure stays readable.
  */
 describe('diffSkillMd — compact line-level diff', () => {
-
   it('shows pure insertions as + lines (actual longer than expected)', () => {
     const out = diffSkillMd('a\nb', 'a\nb\nc\nd')
     expect(out).toContain('+c')

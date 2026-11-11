@@ -136,11 +136,13 @@ interface Divergence {
 type Case = [label: string, value: string, divergence?: Divergence]
 
 /** The corpus: every value a previous review round found, plus the legitimate ones around them. */
-const ELIGIBILITY_CORPUS: Case[] = [// Round 7, minor 1: the four values where "byte-consistent with tier 1" did not hold. All four
+const ELIGIBILITY_CORPUS: Case[] = [
+  // Round 7, minor 1: the four values where "byte-consistent with tier 1" did not hold. All four
   // are now ALIGNED rather than registered as divergences — the schema's own trigger list settled
   // each one, so there was nothing deliberate to record. They stay in the corpus as the regression
   // guard for that alignment.
-  ['DEL inside the value', `risk:${String.fromCharCode(0x7f)}green`],]
+  ['DEL inside the value', `risk:${String.fromCharCode(0x7f)}green`],
+]
 
 const PREDICATE_CORPUS: Case[] = [
   ['this project’s own predicate', 'tag:risk:red ⇒ Done'],
@@ -231,21 +233,24 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
     },
   )
 
-  const AUDIT_CORPUS: Case[] = [['a windows drive-letter path', 'C:/tmp/audit.md'],]
+  const AUDIT_CORPUS: Case[] = [['a windows drive-letter path', 'C:/tmp/audit.md']]
 
   it.each(AUDIT_CORPUS)('agrees on `## Audit Location` with %s', (_label, value, divergence) => {
     assertAgreement(`## Audit Location\n\n${value}\n`, 'Audit Location', divergence)
   })
 
-  it.each([['an id at the bound', 'a'.repeat(200)],])('agrees on `isSafeId` with %s (the --root/--skill rule)', (_label, value) => {
-    const source = readFileSync(WORKFLOW, 'utf-8').replace(/^export /gm, '')
-    const prelude = source.slice(0, source.indexOf('// ── `## Eligibility`'))
-    const { isSafeId: tier1IsSafeId } = new Function(`${prelude}\nreturn { isSafeId }`)() as {
-      isSafeId: (v: string) => boolean
-    }
+  it.each([['an id at the bound', 'a'.repeat(200)]])(
+    'agrees on `isSafeId` with %s (the --root/--skill rule)',
+    (_label, value) => {
+      const source = readFileSync(WORKFLOW, 'utf-8').replace(/^export /gm, '')
+      const prelude = source.slice(0, source.indexOf('// ── `## Eligibility`'))
+      const { isSafeId: tier1IsSafeId } = new Function(`${prelude}\nreturn { isSafeId }`)() as {
+        isSafeId: (v: string) => boolean
+      }
 
-    expect(isSafeId(value)).toBe(tier1IsSafeId(value))
-  })
+      expect(isSafeId(value)).toBe(tier1IsSafeId(value))
+    },
+  )
 
   /**
    * `$approval` — the SECOND thing both tiers now implement twice (US-464).

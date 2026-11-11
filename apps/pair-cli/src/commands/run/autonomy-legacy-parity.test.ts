@@ -1,12 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import {
-  mkdirSync,
-  readFileSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  symlinkSync,
-} from 'fs'
+import { mkdirSync, readFileSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -114,7 +107,9 @@ const CORPUS: ReadonlyArray<readonly [string, string]> = [
   ['R-16', 'risk:green OR x'],
   ['R-17', 'a`b'],
 ]
-const STRUCTURAL: ReadonlyArray<readonly [string, string]> = [['S-02 two lines', '## Eligibility\n\nrisk:green\nrisk:yellow\n'],]
+const STRUCTURAL: ReadonlyArray<readonly [string, string]> = [
+  ['S-02 two lines', '## Eligibility\n\nrisk:green\nrisk:yellow\n'],
+]
 
 describe('r1-1 — the resolver translates `## Eligibility` with the legacy grammar (derived parity table)', () => {
   it('the resolver gives the same verdict as readAutomationPolicy on every corpus label', async () => {
