@@ -362,6 +362,8 @@ export function checkMerge(input) {
 export function runMerge({ message, branch, root, git, fs, ...input }) {
   const decision = evaluate({ ...input, requireGate: true })
   const out = { stage: 'merge', mode: 'run', ...decision, merged: false, cascaded: false }
+  // Already merged: the refusal (spread from the gate decision) no longer applies.
+  if (alreadyMerged(input)) { delete out.reason; out.mergeAllowed = true; out.failed = [] }
   const parkWith = (d, merged) => ({ ...out, ...d, merged, comment: record(input, d, merged) })
   // Retry after an interruption past the host merge: finish the closure, never merge twice (US-599).
   const already = alreadyMerged(input)
