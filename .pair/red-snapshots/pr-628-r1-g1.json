@@ -1,0 +1,312 @@
+{
+  "$meta": {
+    "pr": "628",
+    "phase": "r1-g1",
+    "base": "4a69b8820c34755f4b819c85f0bcd5189b42857b",
+    "trailer": "Pair-RED-Snapshot: pr=628; phase=r1-g1; base=4a69b8820c34755f4b819c85f0bcd5189b42857b; manifest=.pair/red-snapshots/pr-628-r1-g1.json",
+    "artifacts": [
+      "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "packages/dev-tools/src/test-audit/suites-junit-control.test.ts"
+    ]
+  },
+  "mode": "repair",
+  "phase": "r1-g1",
+  "inputHead": "4a69b8820c34755f4b819c85f0bcd5189b42857b",
+  "sourceOfTruth": "node:test junit reporter output (real node 24); packages/dev-tools/src/test-audit/suites.ts parseJunit",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "node:test junit reporter (real node 24) is the grammar owner: escapes & < \" in attribute values (\" twice, as &amp;quot;), never >; parseJunit in packages/dev-tools/src/test-audit/suites.ts (TAG regex + unescape) is the parser under test; shared rule: every attribute value is one quoted string whose '>' and '/>' never end the tag, so name, file, time, classname and failure= obey the same tag grammar",
+      "inputs": [
+        "test name",
+        "describe name (testsuite tag)",
+        "file attribute",
+        "time attribute",
+        "child <failure>/<skipped> marker; the testcase tag's own failure=\"<message>\" attribute (raw user text: '/>' and '>')"
+      ],
+      "representations": [
+        "pure parseJunit(root, xml) on real reporter output",
+        "runNodeTest (real node + real git)",
+        "runSuite/recordRun in baseline.ts wiring runNodeTest",
+        "compact + summarize (per-file / per-type ranking, AC1/AC2)",
+        "runNodeTest channels: explicit tracked files (dir set: scripts, qa) and node discovery (no dir, cwd subdirectory: .claude/workflows) both reach the single call parseJunit(realpathSync(root), readFileSync(out)) (suites.ts runNodeTest); equivalence rationale = shared call site, so the 'qa' explicit-file channel stands for both"
+      ],
+      "consumers": [
+        "runNodeTest",
+        "runSuite",
+        "recordRun",
+        "compact",
+        "summarize"
+      ],
+      "classes": [
+        "'>' in a testcase name (a > b, x => y, a -> b)",
+        "'>' in a describe/testsuite name (incl. nested)",
+        "'\"' in testcase and describe name (double-escaped &amp;quot;)",
+        "name ending in '>' or equal to '>', holding '/>' or '>' beside a quote",
+        "failed (child element) and skipped testcase with '>'",
+        "repeated '>' names (#n numbering)",
+        "controls: '&', '<' (escaped by node), apostrophe, '=' (raw)",
+        "invalid: none (reporter output is always well formed)",
+        "failure=\"<message>\" attribute holding '/>' or '>' (failed test recorded 'passed' at base)",
+        "describe name holding '/>' (testsuite push/pop path: self-close misread drops the parent and later siblings' prefix)",
+        "file attribute holding '>' (root directory name holding '>')",
+        "entity-looking text in a name ('&lt;', '&amp;', '&gt;', escaped again by node): decoder must be the exact inverse of node's escaping (control)",
+        "OUT OF SCOPE: numeric reference '&#10;' for a newline in a name: no defect on id, file, duration or status is demonstrated and titles with newlines are not a supported id shape; no row"
+      ],
+      "interactions": [
+        "'>' x '\"' in one name",
+        "'>' x failed/skipped marker",
+        "'>' x repeat numbering",
+        "'>' name -> recordRun -> compact -> summarize per-file key and sum",
+        "'/>' in failure message x status letter -> compact per-test 'ppf' flaky detection",
+        "describe '/>' x later sibling id prefix",
+        "'>' in root dir x per-file key -> recordRun -> summarize"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": "card #625 and PR #628 body (GitHub tracker, outside the repository) plus a maintainer decision on the hard limits",
+      "inputs": [
+        "AC1..AC6 publications",
+        "maintainer confirm-or-revise of hard limits"
+      ],
+      "representations": [
+        "card body/comments",
+        "PR body"
+      ],
+      "consumers": [
+        "maintainer",
+        "review"
+      ],
+      "classes": [
+        "correction lies outside the repository: carried"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "packages/dev-tools test-audit (suites.ts parseJunit)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/dev-tools/src/test-audit/suites.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-gt-test",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "real node junit of tests 'a > b','x => y','a -> b' in describe 'd' via runNodeTest",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-gt-test",
+      "expected": "ids qa/a.test.mjs::d > a > b | x => y | a -> b, status passed, duration >= 20 ms (base: garbage id, duration 0)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-gt-describe",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "describe 's > t' and nested 'u => v' (testsuite tag holds '>')",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-gt-describe",
+      "expected": "ids qa/a.test.mjs::s > t > x and ::s > t > u => v > y, duration >= 20",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-quote",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "'\"' in test and describe names (node emits &amp;quot;)",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-quote",
+      "expected": "ids hold a literal quote, none contains '&quot;'",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-boundary",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "names 'ends >', 'self /> close', 'q \"> mix >\"', '>'",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-boundary",
+      "expected": "ids exact with file qa/a.test.mjs, duration >= 20",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-status",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "failed ('<failure>' child) and skipped tests whose names hold '>'",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-status",
+      "expected": "[d > e > f > g, failed], [d > e > s > k, skipped] under qa/a.test.mjs",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-repeat",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "three tests named 'r > s'",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-repeat",
+      "expected": "ids r > s, r > s#2, r > s#3 under qa/a.test.mjs",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-oracle",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "real junit of two files (7 testcases) parsed by pure parseJunit",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-oracle",
+      "expected": "id count == testcase count (7), summed ms == sum(round(time*1000)), no id starts '..' or ends '::'",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-consumer",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "recordRun x3 -> compact -> summarize on a repo with '>' names",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-consumer",
+      "expected": "files keys exactly qa/a.test.mjs and qa/b.test.mjs; a-file sum >= 40 ms; node:test type sum >= 60 ms",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-control-escapes",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "names with '&', '<', apostrophe, '=' (no '>')",
+      "file": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts > r0-1-control-escapes",
+      "expected": "ids and durations exact today; stays green after the fix",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-2-carried",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "finding r0-2 (PR #628 body / card #625 publications, maintainer limits decision)",
+      "oracle": "gh issue view 625 (read-back by the verifier, no repo test)",
+      "expected": "carried to the human",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "Correction lies outside the repository (card, PR body, maintainer decision); carried in plan.carried, finding stays blocking until a human dispositions it or a read-back proves it."
+    },
+    {
+      "id": "r0-1-failure-attr",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "real node: test('plain name', assert.fail('<div /> rendered')) and test('m > n', assert.fail('a => b')) via runNodeTest",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-failure-attr",
+      "expected": "[id,status] equals [['qa/a.test.mjs::plain name','failed'],['qa/a.test.mjs::m > n','failed']] (base: plain name 'passed', m > n garbage id)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-describe-selfclose",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "real node: describe('outer', describe('a /> b', test('t')), test('after')) via runNodeTest, 30 ms bodies",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-describe-selfclose",
+      "expected": "ids ['qa/a.test.mjs::outer > a /> b > t','qa/a.test.mjs::outer > after'], duration >= 20 (base: '::outer > t','::after')",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-file-attr",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "real node in a git repo whose root dir name holds '>' (mkdtemp prefix 'x->y-'), one 30 ms test 'plain', via runNodeTest",
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts > r0-1-file-attr",
+      "expected": "ids ['qa/a.test.mjs::plain'], duration >= 20 (base: garbage '..::plain')",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-control-entities",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "real node: title 'esc &lt; and &amp; and &gt;' (no literal '&quot;': non-injective, owned by r0-1-quote) via runNodeTest",
+      "file": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts",
+      "oracle": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts > r0-1-control-entities",
+      "expected": "id 'qa/a.test.mjs::d > esc &lt; and &amp; and &gt;', duration >= 20; passes at base and with a correct fix, fails on an amp-first decoder",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:beb04295891f74193f9ee84a40cb8283dfa6ca66edcff0a60778d14269e39065",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/test-audit/suites-junit.test.ts",
+      "observed": "11 failed (11): ids garbage or '&quot;' for '>' / '/>' / '\"' names, failure-attr 'plain name' recorded 'passed', describe '/>' drops parent prefix, file-attr id '..::plain', oracle sum 93 != 215"
+    },
+    {
+      "file": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:852ff7b2adb12896be1f05d302dff3347861f568d28cc34a0831b28237fc4c88",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/test-audit/suites-junit-control.test.ts",
+      "observed": "2 passed (2)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "packages/dev-tools test-audit (suites.ts parseJunit)",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/dev-tools/src/test-audit/suites.ts"
+        ],
+        "oracle": "packages/dev-tools/src/test-audit/suites-junit.test.ts"
+      }
+    ],
+    "carried": [
+      {
+        "finding": "r0-2",
+        "disposition": "External: card #625 / PR #628 body publications and the maintainer's confirm-or-revise of the hard limits; no repository change can close it. Stays blocking until a human dispositions it or a read-back proves it."
+      }
+    ]
+  },
+  "remediationBatchId": "r1",
+  "changedRows": [
+    "r0-1-failure-attr",
+    "r0-1-describe-selfclose",
+    "r0-1-file-attr",
+    "r0-1-control-entities"
+  ]
+}
