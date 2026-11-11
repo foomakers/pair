@@ -274,7 +274,7 @@ test('TC-08: with GIT_DIR / GIT_WORK_TREE inherited from a hook and pointing at 
   assert.equal(JSON.parse(r.stdout).sealed, true, r.stdout + r.stderr)
   assert.equal(git(worktree, 'rev-list', '--count', `${base}..HEAD`), '1', 'the seal landed in the fixture worktree')
   // the custody dry-run suite itself, as the pre-push hook runs it
-  const suite = spawnSync(process.execPath, ['--test', fileURLToPath(new URL('./red-snapshot.test.mjs', import.meta.url))], { cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', env: hostile })
+  const suite = spawnSync(process.execPath, ['--test', ...[1, 2, 3, 4].map(n => fileURLToPath(new URL(`./red-snapshot-${n}.test.mjs`, import.meta.url)))], { cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', env: hostile })
   assert.equal(suite.status, 0, suite.stdout.split('\n').filter(l => /^✖|not ok/.test(l)).join('\n'))
   assert.deepEqual({ head: git(decoy, 'rev-parse', 'HEAD'), bare: git(decoy, 'config', 'core.bare'), branches: git(decoy, 'branch', '--list'), worktrees: git(decoy, 'worktree', 'list') }, before, 'the decoy repository was touched through the inherited environment')
   rmSync(decoy, { recursive: true, force: true })

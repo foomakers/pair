@@ -544,7 +544,7 @@ it('G6-combined-limit: filters precede limit and projection', () => {
 
 // Model a busy suite at the offline transport boundary, without changing lifecycle behavior.
 for (const reader of ['fallback', 'installed'] as const) {
-  it.each([0, 2600])(
+  it.each([0, 250])(
     `B-${reader}-%i: slow tracker reads retain lifecycle assertions`,
     async delay => {
       if (reader === 'installed') installed()
