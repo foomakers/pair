@@ -35,6 +35,8 @@
     "skills:conformance": "pnpm --filter @pair/knowledge-hub skills:conformance",
     "mirrors:regenerate": "./scripts/regenerate-mirrors.sh",
     "dup:check": "jscpd apps packages",
+    "test-audit:baseline": "pnpm --filter @pair/dev-tools test-audit:baseline",
+    "test-audit:prepush": "pnpm --filter @pair/dev-tools test-audit:prepush",
     "test-audit:mutation": "pnpm --filter @pair/dev-tools test-audit:mutation",
     "test-audit:redundancy": "pnpm --filter @pair/dev-tools test-audit:redundancy",
     "quality-gate": "node scripts/dev/parallel.mjs \"turbo ts:check test lint\" \"pnpm workflows:test\" \"pnpm format:check\" && pnpm dev-scripts:test && pnpm gate:composition && pnpm hygiene:check && pnpm smoke-modes:check && pnpm docs:staleness && pnpm skills:conformance && pnpm llms-index:check && pnpm dup:check",
