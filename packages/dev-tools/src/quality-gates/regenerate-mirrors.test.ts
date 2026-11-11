@@ -1328,7 +1328,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       // arms the trap (mktemp returns -> trap installed): a SIGTERM in that gap leaked the file.
       // Interrupting repeatedly at the earliest observable moment makes the gap a certainty, not luck.
       tmp = makeToolchainFixture()
-      writeTurboStub(tmp, 'sleep 30\n')
+      writeTurboStub(tmp, 'sleep 3\n')
       const root = tmp
       // Runs are independent (own TMPDIR), so they interrupt concurrently: same race, 1/12th the wall.
       await Promise.all(
