@@ -117,10 +117,11 @@ const CORPUS: ReadonlyArray<readonly [string, string]> = [
 const STRUCTURAL: ReadonlyArray<readonly [string, string]> = [['S-02 two lines', '## Eligibility\n\nrisk:green\nrisk:yellow\n'],]
 
 describe('r1-1 — the resolver translates `## Eligibility` with the legacy grammar (derived parity table)', () => {
-  it.each(CORPUS)('%s: `%s` — same verdict as readAutomationPolicy', async (_, label) => {
-    const legacy = legacyVerdict(ELIG(label))
-    const resolver = await resolverVerdict(ELIG(label))
-    expect(resolver).toEqual(legacy)
+  it('the resolver gives the same verdict as readAutomationPolicy on every corpus label', async () => {
+    for (const [name, label] of CORPUS) {
+      const legacy = legacyVerdict(ELIG(label))
+      expect(await resolverVerdict(ELIG(label)), `${name}: ${label}`).toEqual(legacy)
+    }
   })
 
   it.each(STRUCTURAL)('%s — same verdict as readAutomationPolicy', async (_, text) => {

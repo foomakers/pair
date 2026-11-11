@@ -399,10 +399,12 @@ describe('assertSkillsOnlyDistribution — allowlist, not denylist', () => {
 
 describe('assertNoRootPluginComponents — payload-level skills-only guarantee', () => {
 
-  it.each(ROOT_PLUGIN_COMPONENT_PATHS)('FAILS when %s exists at the plugin root', path => {
-    const message = captureThrownMessage(() => assertNoRootPluginComponents(rel => rel === path))
-    expect(message).toContain(path)
-    expect(message).toMatch(/bootstrap skills\/ dir and nothing else/i)
+  it('FAILS when any component path exists at the plugin root', () => {
+    for (const path of ROOT_PLUGIN_COMPONENT_PATHS) {
+      const message = captureThrownMessage(() => assertNoRootPluginComponents(rel => rel === path))
+      expect(message).toContain(path)
+      expect(message).toMatch(/bootstrap skills\/ dir and nothing else/i)
+    }
   })
 
   it('EXEMPTS `skills/` — at this plugin root it IS the declared payload', () => {

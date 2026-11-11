@@ -86,16 +86,17 @@ describe('dataset -> root mirror equality for every skill artifact (data-driven)
     expect(skillDirs).toContain('next')
   })
 
-  it.each(artifacts)('root mirror for %s equals the real copy-pipeline transform', artifact => {
-    const expected = mirror.byDatasetPath.get(artifact)
-    expect(expected, `pipeline produced no output for ${artifact}`).toBeDefined()
-
-    // Throws (AC4 missing / AC2 drift) or passes. The assertion helper
-    // lives in the production module so this guard and the drift-injection
-    // tests below exercise the same code path.
-    expect(() =>
-      assertRootArtifactMatches(artifact, expected!, rootMirrorContent(artifact)),
-    ).not.toThrow()
+  it('every root mirror equals the real copy-pipeline transform', () => {
+    for (const artifact of artifacts) {
+      const expected = mirror.byDatasetPath.get(artifact)
+      expect(expected, `pipeline produced no output for ${artifact}`).toBeDefined()
+      // Throws (AC4 missing / AC2 drift) or passes; the helper lives in the production module so
+      // this guard and the drift-injection tests below exercise the same code path.
+      expect(
+        () => assertRootArtifactMatches(artifact, expected!, rootMirrorContent(artifact)),
+        artifact,
+      ).not.toThrow()
+    }
   })
 })
 

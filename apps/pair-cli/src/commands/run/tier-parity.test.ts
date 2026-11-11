@@ -219,8 +219,9 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
     })
   })
 
-  it.each(ELIGIBILITY_CORPUS)('agrees on `## Eligibility` with %s', (_label, value, divergence) => {
-    assertAgreement(`## Eligibility\n\n${value}\n`, 'Eligibility', divergence)
+  it('agrees on `## Eligibility` over the whole corpus', () => {
+    for (const [, value, divergence] of ELIGIBILITY_CORPUS)
+      assertAgreement(`## Eligibility\n\n${value}\n`, 'Eligibility', divergence)
   })
 
   it.each(PREDICATE_CORPUS)(
