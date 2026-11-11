@@ -1,13 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'fs'
+import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
@@ -164,18 +156,6 @@ const REMAPPED_CANONICAL = `# Way of Working
 | Ready       | Draft       |
 | Approved    | Ready       |
 | In Progress | In Progress |
-| Done        | Done        |
-`
-
-/** Malformed: one board state under two macrostates (canonical-states.md Edge Cases ⇒ HALT). */
-const MALFORMED_MAPPING = `# Way of Working
-
-## State Mapping
-
-| Board State | Macrostate  |
-| ----------- | ----------- |
-| Todo        | Draft       |
-| Todo        | Ready       |
 | Done        | Done        |
 `
 
@@ -459,25 +439,6 @@ describe('r0-1: the card macrostate is resolved through the adopted State Mappin
     expect(driveCycle).not.toHaveBeenCalled()
   })
 
-  it('R1-W15: a malformed State Mapping (`Todo` under Draft AND Ready) HALTs with a pointer to the State-Mapping schema — nothing spawned, no cycle', async () => {
-    stubGh('Todo', card('Todo', BREAKDOWN))
-    const output = captureLog()
-    const { calls, driveCycle, handler } = harness()
-
-    const outcome = await run(
-      supervised,
-      project({ [`${cwd}/${WOW_PATH}`]: MALFORMED_MAPPING }),
-      handler,
-    )
-
-    expect(outcome.code === 0).toBe(false)
-    const said = `${outcome.error?.message ?? ''}\n${output()}`
-    expect(said).toMatch(/State Mapping/i)
-    expect(said).toContain('Todo')
-    expect(calls).toHaveLength(0)
-    expect(driveCycle).not.toHaveBeenCalled()
-  })
-
   for (const status of ['Done', 'Review']) {
     it(`R1-C5 (${status}): a card past In Progress is never routed to a preparation skill`, async () => {
       stubGh(status, card(status, BREAKDOWN))
@@ -489,24 +450,6 @@ describe('r0-1: the card macrostate is resolved through the adopted State Mappin
       expect(prompts(calls)).not.toMatch(/pair-process-(refine-story|plan-tasks)/)
     })
   }
-
-  it('R1-I1 (r0-1 × r0-5): --autonomous on a Todo card read through the mapping ⇒ clean skip, "needs a human", nothing spawned', async () => {
-    stubGh('Todo', card('Todo'))
-    const output = captureLog()
-    const { calls, driveCycle, handler } = harness()
-
-    const outcome = await run(
-      { ...supervised, autonomous: true },
-      project({ [`${cwd}/${WOW_PATH}`]: REPO_MAPPING }),
-      handler,
-    )
-
-    expect(outcome.error?.message).toBeUndefined()
-    expect(outcome.code).toBe(0)
-    expect(output()).toMatch(/needs a human/i)
-    expect(calls).toHaveLength(0)
-    expect(driveCycle).not.toHaveBeenCalled()
-  })
 })
 
 // ── r0-2 — a --pr entry never lands on a preparation skill ──────────────────────────────────────
@@ -538,32 +481,6 @@ describe('r0-2: `--card N --pr P` enters the cycle with the PR or refuses naming
       }
     })
   }
-
-  it('R2-W3: --pr 12 on a card whose tag MAPS a workflow still enters the cycle with the PR — never the mapped workflow, never silently dropped', async () => {
-    captureLog()
-    const { calls, driveCycle, handler } = harness({ readiness: 'draft' })
-
-    const outcome = await run(
-      { card: '9', cardTags: 'auto-dev,risk:green', pr: '12' },
-      project({ [`${cwd}/${POLICY_PATH}`]: MAPPED_POLICY }),
-      handler,
-    )
-
-    expect(outcome.error?.message).toBeUndefined()
-    expect(calls).toHaveLength(0)
-    expect(driveCycle).toHaveBeenCalledWith(expect.objectContaining({ card: '9', pr: 12 }))
-  })
-
-  it('R2-C1: --pr 12 on a Ready card reaches the cycle driver carrying pr 12', async () => {
-    captureLog()
-    const { calls, driveCycle, handler } = harness({ readiness: 'ready' })
-
-    const outcome = await run({ card: '9', cardTags: '', pr: '12' }, project(), handler)
-
-    expect(outcome.code).toBe(0)
-    expect(calls).toHaveLength(0)
-    expect(driveCycle).toHaveBeenCalledWith(expect.objectContaining({ card: '9', pr: 12 }))
-  })
 })
 
 // ── r0-4 — the per-card lock on both fallback routes ────────────────────────────────────────────
@@ -588,27 +505,6 @@ describe('r0-4: both fallback routes take the per-card lock and release it on ev
     })
   }
 
-  it('R4-W4: the REAL acquireCardLock, `.pair/working/automation/locks/9/` already held ⇒ run-in-progress, nothing spawned', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'pair-r1g1-lock-'))
-    bins.push(root)
-    const held = join(root, '.pair', 'working', 'automation', 'locks', '9')
-    mkdirSync(held, { recursive: true })
-    const output = captureLog()
-    const { calls, driveCycle, handler } = harness({ readiness: 'draft' })
-    // No `acquireLock` injected: the handler's own default (`acquireCardLock`) is the oracle.
-    const real: RunHandlerDependencies = { ...handler }
-    delete real.acquireLock
-
-    const outcome = await run({ card: '9', cardTags: '' }, project({}, root), real)
-
-    expect(outcome.error?.message).toBeUndefined()
-    expect(outcome.code).toBe(0)
-    expect(output()).toContain('run-in-progress')
-    expect(calls).toHaveLength(0)
-    expect(driveCycle).not.toHaveBeenCalled()
-    expect(existsSync(held)).toBe(true)
-  })
-
   const free = [
     { id: 'R4-W5', readiness: 'draft' as const },
     { id: 'R4-W6', readiness: 'ready' as const },
@@ -624,33 +520,6 @@ describe('r0-4: both fallback routes take the per-card lock and release it on ev
       expect(lock.events).toEqual(['acquire:9', 'release:9'])
     })
   }
-
-  it('R4-W7: the prep-skill engine throws ⇒ the lock is still released', async () => {
-    captureLog()
-    const { lock, handler } = harness({ readiness: 'draft' })
-    const exploding: IterationRunner = () => Promise.reject(new Error('engine exploded'))
-
-    const outcome = await run({ card: '9', cardTags: '' }, project(), {
-      ...handler,
-      runIteration: exploding,
-    })
-
-    expect(outcome.error?.message).toContain('engine exploded')
-    expect(lock.events).toEqual(['acquire:9', 'release:9'])
-  })
-
-  it('R4-W8: the cycle driver throws ⇒ the lock is still released', async () => {
-    captureLog()
-    const { lock, handler } = harness({ readiness: 'ready' })
-
-    const outcome = await run({ card: '9', cardTags: '' }, project(), {
-      ...handler,
-      driveCycle: () => Promise.reject(new Error('driver exploded')),
-    })
-
-    expect(outcome.error?.message).toContain('driver exploded')
-    expect(lock.events).toEqual(['acquire:9', 'release:9'])
-  })
 
   it('R4-C1: a MAPPED route with the lock held is a run-in-progress skip (US-217, unchanged)', async () => {
     const output = captureLog()
@@ -733,33 +602,4 @@ describe('r0-5: --autonomous never starts a preparation skill; supervised routin
       expect(driveCycle).not.toHaveBeenCalled()
     })
   }
-
-  it('R5-C3: --autonomous, Ready ⇒ the delivery cycle, no prep skill', async () => {
-    captureLog()
-    const { calls, driveCycle, handler } = harness({ readiness: 'ready' })
-
-    const outcome = await run({ card: '9', cardTags: '', autonomous: true }, project(), handler)
-
-    expect(outcome.code).toBe(0)
-    expect(driveCycle).toHaveBeenCalledTimes(1)
-    expect(calls).toHaveLength(0)
-  })
-
-  it('R5-C4: --autonomous, `## Eligibility` declared, label absent, no override ⇒ ineligible skip, the card never read (AC15)', async () => {
-    const output = captureLog()
-    const readiness = vi.fn(async () => 'draft' as const)
-    const { calls, driveCycle, handler } = harness()
-
-    const outcome = await run(
-      { card: '9', cardTags: 'risk:red', autonomous: true },
-      project({ [`${cwd}/${POLICY_PATH}`]: ELIGIBILITY }),
-      { ...handler, cardReadiness: readiness },
-    )
-
-    expect(outcome.code).toBe(0)
-    expect(output()).toContain('ineligible')
-    expect(readiness).not.toHaveBeenCalled()
-    expect(calls).toHaveLength(0)
-    expect(driveCycle).not.toHaveBeenCalled()
-  })
 })

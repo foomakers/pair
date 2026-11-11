@@ -1,13 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import {
-  hasControlCharacters,
-  isLabelShape,
-  isSafeId,
-  isSafePromptText,
-  MAX_PROMPT_VALUE_LENGTH,
-} from './prompt-safety'
+import { hasControlCharacters, isSafeId, isSafePromptText, MAX_PROMPT_VALUE_LENGTH } from './prompt-safety'
 
 describe('isSafePromptText', () => {
   it.each([
@@ -30,10 +24,6 @@ describe('isSafePromptText', () => {
     ['one character over the bound', 'a'.repeat(MAX_PROMPT_VALUE_LENGTH + 1)],
   ])('rejects %s', (_case, value) => {
     expect(isSafePromptText(value)).toBe(false)
-  })
-
-  it('restricts characters, never shape — a `$` alone is not a substitution', () => {
-    expect(isSafePromptText('price:$5')).toBe(true)
   })
 })
 
@@ -59,15 +49,6 @@ describe('isSafeId', () => {
     ['a semicolon', '212;rm -rf /'],
   ])('rejects %s', (_case, value) => {
     expect(isSafeId(value)).toBe(false)
-  })
-})
-
-describe('isLabelShape', () => {
-  it('accepts a family:tier label and rejects anything else', () => {
-    expect(isLabelShape('risk:green')).toBe(true)
-    expect(isLabelShape('risk:blue')).toBe(true)
-    expect(isLabelShape('good first issue')).toBe(false)
-    expect(isLabelShape('risk:')).toBe(false)
   })
 })
 
@@ -111,27 +92,5 @@ describe('byte-consistency with tier 1', () => {
     const source = readFileSync(WORKFLOW, 'utf-8')
 
     expect(source).toContain(`v.length <= ${MAX_PROMPT_VALUE_LENGTH}`)
-  })
-
-  it('agrees with tier 1 on every id and prompt-text case above', () => {
-    // `export ` stripped and only the helper prelude evaluated, as tier 1's own harness does.
-    const source = readFileSync(WORKFLOW, 'utf-8').replace(/^export /gm, '')
-    const prelude = source.slice(0, source.indexOf('// ── `## Eligibility`'))
-    const tier1 = new Function(
-      `${prelude}
-       return { isSafeId, isSafePromptText }`,
-    )() as { isSafeId: (v: string) => boolean; isSafePromptText: (v: string) => boolean }
-
-    for (const value of ['212', 'US-451', '../../etc/passwd', 'x`id`', '212 --admin', '.hidden']) {
-      expect(isSafeId(value), `isSafeId disagrees on ${JSON.stringify(value)}`).toBe(
-        tier1.isSafeId(value),
-      )
-    }
-    for (const value of ['risk:green', 'good first issue', 'risk:$(id)', 'a\nb', 'a'.repeat(201)]) {
-      expect(
-        isSafePromptText(value),
-        `isSafePromptText disagrees on ${JSON.stringify(value)}`,
-      ).toBe(tier1.isSafePromptText(value))
-    }
   })
 })

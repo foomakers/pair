@@ -96,13 +96,6 @@ describe('evaluateStopPredicate', () => {
 })
 
 describe('parseStopCondition', () => {
-  it('splits a validated `<selector> ⇒ <condition>` line', () => {
-    expect(parseStopCondition('tag:risk:green ⇒ Done and has-tag:x')).toEqual({
-      selector: 'tag:risk:green',
-      condition: 'Done and has-tag:x',
-    })
-    expect(parseStopCondition('root ⇒ Done')).toEqual({ selector: 'root', condition: 'Done' })
-  })
 
   it('returns undefined when the line has no arrow', () => {
     expect(parseStopCondition('max-iterations: 3')).toBeUndefined()

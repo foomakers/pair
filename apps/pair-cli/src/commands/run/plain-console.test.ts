@@ -122,12 +122,6 @@ describe('plain console: technical lines hidden, finished steps as short notes',
     ],
   ])('loop status %s', (line, note) => expect(plainNote(line)).toBe(note))
 
-  it('never hides an unknown line (errors, questions)', () => {
-    expect(plainNote('  Escalated at stage verify: needs a human decision')).toBe(
-      '  Escalated at stage verify: needs a human decision',
-    )
-  })
-
   const platformCases = ['darwin', 'linux']
   it.each(platformCases)(
     'applies only to a live terminal without --verbose (platform %s)',

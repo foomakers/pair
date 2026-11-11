@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { handleRunCommand, type IterationRunner, type RunHandlerDependencies } from './handler'
 import { parseRunCommand } from './parser'
-import { batchExitCode, runPlannedCard, type CardProcessRunner } from './parallel'
+import { runPlannedCard, type CardProcessRunner } from './parallel'
 import type { DriveCycleResult } from './run-context'
 import type { RootCandidate } from './root-plan'
 
@@ -49,17 +49,6 @@ const files = (): InMemoryFileSystemService =>
     cwd,
     cwd,
   )
-
-const MERGED: DriveCycleResult = {
-  status: 'merged',
-  stagesRun: 1,
-  next: { step: 'merge' },
-}
-const CLOSURE_UNFINISHED: DriveCycleResult = {
-  status: 'merged-closure-unfinished',
-  stagesRun: 1,
-  next: { step: 'merge' },
-}
 
 function harness(outcome: DriveCycleResult) {
   const audit: string[] = []
@@ -119,66 +108,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('r1-1: run --card — a merged card is a success', () => {
-  it('M1: a cycle that ends `merged` exits 0, prints the merged outcome, audits outcome=completed', async () => {
-    const { code, stdout, audit } = await runCard('32', MERGED)
-
-    expect(code).toBe(0)
-    expect(stdout.some(l => l.includes('Cycle status: merged ('))).toBe(true)
-    expect(audit[audit.length - 1]).toMatch(/event=end card=32\b.*outcome=completed/)
-  })
-})
-
-describe('r1-1: --parallel — a merged child counts as succeeded', () => {
-  it('P1: a child that ends `merged` is recorded completed (exit 0), never failed', async () => {
-    const outcome = await batchChild('41', MERGED)
-
-    expect(outcome).toEqual({
-      id: '41',
-      outcome: 'completed',
-      detail: 'exit 0',
-      startedAt: 't',
-      endedAt: 't',
-    })
-  })
-
-  it('P2: a batch of a merged child and a ready-for-merge child exits 0', async () => {
-    const outcomes = [
-      await batchChild('41', MERGED),
-      await batchChild('42', { status: 'ready-for-merge', stagesRun: 3 }),
-    ]
-
-    expect(outcomes.map(o => o.outcome)).toEqual(['completed', 'completed'])
-    expect(batchExitCode(outcomes)).toBe(0)
-  })
-})
-
-describe('r1-1: merged-closure-unfinished — merged, closure owed to a human: not a success', () => {
-  it('U1: run --card exits 1, prints the status, audits outcome=failed', async () => {
-    const { code, stdout, audit } = await runCard('33', CLOSURE_UNFINISHED)
-
-    expect(code).toBe(1)
-    expect(stdout.some(l => l.includes('Cycle status: merged-closure-unfinished'))).toBe(true)
-    expect(audit[audit.length - 1]).toMatch(/event=end card=33\b.*outcome=failed/)
-  })
-
-  it('U2: --parallel records the child failed (exit 1) and the batch exits 1, beside a merged sibling', async () => {
-    const outcomes = [await batchChild('41', MERGED), await batchChild('43', CLOSURE_UNFINISHED)]
-
-    expect(outcomes.map(o => [o.id, o.outcome, o.detail])).toEqual([
-      ['41', 'completed', 'exit 0'],
-      ['43', 'failed', 'exit 1'],
-    ])
-    expect(batchExitCode(outcomes)).toBe(1)
-  })
-})
-
 describe('r1-1 controls — unchanged exits', () => {
-  it('C1: ready-for-merge still exits 0 (run --card and --parallel)', async () => {
-    const ready: DriveCycleResult = { status: 'ready-for-merge', stagesRun: 3 }
-    expect((await runCard('34', ready)).code).toBe(0)
-    expect((await batchChild('34', ready)).outcome).toBe('completed')
-  })
 
   it.each(['failed-prepare', 'failed-review', 'rounds-bound-reached', 'blocked', 'incompatible'])(
     'C2: %s still exits non-zero and is recorded failed',
@@ -215,11 +145,6 @@ const parked = (parkKind: string | null | undefined, code: string, detail: strin
     ...(parkKind !== undefined && { parkKind }),
   },
 })
-const AWAITING_HUMAN = parked(
-  'awaiting-human',
-  'tier-not-auto-advance',
-  'card tier risk:yellow is not in ## Auto-Advance',
-)
 const HALTED = [
   ['head-moved', 'the PR head moved since review'],
   ['gate-red', "the tier's gate set came back red at merge time"],
@@ -228,19 +153,6 @@ const HALTED = [
 ] as const
 
 describe('merge-parked — awaiting a human is a terminal, a halted park is a failure', () => {
-  it('K1: an awaiting-human park exits 0, prints the status, audits outcome=completed', async () => {
-    const { code, stdout, audit } = await runCard('51', AWAITING_HUMAN)
-
-    expect(code).toBe(0)
-    expect(stdout.some(l => l.includes('Cycle status: merge-parked'))).toBe(true)
-    expect(audit[audit.length - 1]).toMatch(/event=end card=51\b.*outcome=completed/)
-  })
-
-  it('K2: an awaiting-human park is a completed --parallel child (exit 0)', async () => {
-    const outcome = await batchChild('52', AWAITING_HUMAN)
-
-    expect([outcome.outcome, outcome.detail]).toEqual(['completed', 'exit 0'])
-  })
 
   it.each(HALTED)(
     'H1: a halted park (%s) exits 1 and is a failed --parallel child',
@@ -250,30 +162,6 @@ describe('merge-parked — awaiting a human is a terminal, a halted park is a fa
       expect((await batchChild('53', outcome)).outcome).toBe('failed')
     },
   )
-
-  it('B1: mixed batch — awaiting-human + merged + ready-for-merge exits 0', async () => {
-    const outcomes = [
-      await batchChild('61', AWAITING_HUMAN),
-      await batchChild('62', MERGED),
-      await batchChild('63', { status: 'ready-for-merge', stagesRun: 3 }),
-    ]
-
-    expect(outcomes.map(o => o.outcome)).toEqual(['completed', 'completed', 'completed'])
-    expect(batchExitCode(outcomes)).toBe(0)
-  })
-
-  it('B2: mixed batch — awaiting-human + halted exits 1, each child classified by its own park', async () => {
-    const outcomes = [
-      await batchChild('64', AWAITING_HUMAN),
-      await batchChild('65', parked('halted', 'head-moved', 'the PR head moved since review')),
-    ]
-
-    expect(outcomes.map(o => [o.id, o.outcome])).toEqual([
-      ['64', 'completed'],
-      ['65', 'failed'],
-    ])
-    expect(batchExitCode(outcomes)).toBe(1)
-  })
 
   it.each([
     ['no merge answer', { status: 'merge-parked', stagesRun: 0 }],

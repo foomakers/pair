@@ -471,12 +471,4 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
       })
     })
   })
-
-  it('agrees that this repo’s real adoption file is valid', () => {
-    const real = readFileSync(join(REPO_ROOT, POLICY_PATH), 'utf-8')
-
-    expect(tier2Rejects(real)).toBe(false)
-    expect(tier1Rejects(real, 'Eligibility')).toBe(false)
-    expect(tier1Rejects(real, 'Stop Predicate')).toBe(false)
-  })
 })

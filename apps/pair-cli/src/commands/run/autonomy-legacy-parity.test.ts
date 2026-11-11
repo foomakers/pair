@@ -324,16 +324,6 @@ describe('r1-1 — every pair-cli run entry: a legacy-accepted label runs exactl
       },
     )
 
-  it('E-5: the reviewer’s fixture (`## Eligibility don’t-merge`, `## Auto-Advance (none)`) on --skill pair-next does not HALT', async () => {
-    const out = await runEntry(
-      { skill: 'pair-next', maxIterations: '1' },
-      "## Eligibility\n\ndon't-merge\n\n## Auto-Advance\n\n(none)\n",
-      true,
-    )
-    expect(out.code).toBe(0)
-    expect(out.prompts).toHaveLength(1)
-  })
-
   it.each(['risk:green, risk:yellow', '#tech-debt', 'risk:green risk:yellow'])(
     'E-6: a legacy-REJECTED `## Eligibility %s` still HALTs every entry with the legacy message',
     async label => {

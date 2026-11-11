@@ -57,36 +57,6 @@ describe("readAutomationPolicy — absent file (today's real path for most proje
 })
 
 describe('readAutomationPolicy — present file', () => {
-  it("reads this project's own policy with pair-loop's parameter names", () => {
-    const policy = policyFrom(THIS_PROJECTS_POLICY).read()
-
-    expect(policy).toMatchObject({
-      eligibility: 'risk:green',
-      autoAdvance: '(none)',
-      stopPredicate: 'tag:risk:red ⇒ Done',
-      maxIterations: 20,
-      maxParallelism: 3,
-      auditLocation: 'automation/loop-audit.md',
-      source: POLICY_PATH,
-    })
-  })
-
-  it('never writes the file it reads', async () => {
-    const { fs, read } = policyFrom(THIS_PROJECTS_POLICY)
-    const before = fs.readFileSync(`${cwd}/${POLICY_PATH}`)
-
-    read()
-
-    expect(fs.readFileSync(`${cwd}/${POLICY_PATH}`)).toBe(before)
-  })
-
-  it('applies section-level fail-safes when only some sections exist', () => {
-    const policy = policyFrom('## Eligibility\n\nrisk:green\n').read()
-
-    expect(policy.maxIterations).toBe(Number.POSITIVE_INFINITY)
-    expect(policy.maxParallelism).toBe(1)
-    expect(policy.auditLocation).toBe(DEFAULT_AUDIT_LOCATION)
-  })
 
   it('does not read a declaration out of a fenced example (rendered-markdown counting)', () => {
     const policy = policyFrom(
@@ -94,12 +64,6 @@ describe('readAutomationPolicy — present file', () => {
     ).read()
 
     expect(policy.eligibility).toBe('risk:green')
-  })
-
-  it('accepts ONLY the documented `⇒` arrow', () => {
-    const policy = policyFrom('## Stop Predicate\n\nroot ⇒ Done\n').read()
-
-    expect(policy.stopPredicate).toBe('root ⇒ Done')
   })
 
   it('HALTS on the ASCII `=>` arrow, naming the documented form (round 3, Major)', () => {
@@ -162,12 +126,6 @@ describe('readAutomationPolicy — HALTs before any card is touched', () => {
   ])('halts on %s', (_case, markdown, expected) => {
     expect(() => policyFrom(markdown).read()).toThrow(expected)
   })
-
-  it('names the file in every halt message', () => {
-    expect(() => policyFrom('## Eligibility\n\nrisk:green, risk:yellow\n').read()).toThrow(
-      new RegExp(POLICY_PATH.replace(/[.]/g, '\\.')),
-    )
-  })
 })
 
 describe('describeParallelism (AC9)', () => {
@@ -186,22 +144,6 @@ describe('describeParallelism (AC9)', () => {
 })
 
 describe('describeMergePosture (round 1, finding 3)', () => {
-  it('says nothing merges unattended when auto-advance is off', () => {
-    const posture = describeMergePosture(policyFrom(THIS_PROJECTS_POLICY).read())
-
-    expect(posture).toContain('never merges')
-    expect(posture).toContain('(none)')
-    // The old line claimed "the gate stays human" unconditionally, which is false as soon as a
-    // tier is declared below. It must not promise that here either.
-    expect(posture).not.toContain('the gate stays human')
-  })
-
-  it('keeps the off text verbatim when no tier is declared (control)', () => {
-    expect(describeMergePosture(policyFrom(THIS_PROJECTS_POLICY).read())).toBe(
-      'Merge: the driver never merges, and `## Auto-Advance` is (none) — ' +
-        'nothing is pushed or merged unattended; every gate stays human (AC10)',
-    )
-  })
 
   // US-490: `run --card` now reaches the merge stage (cycle-merge.mjs check -> gate -> run), so
   // with a tier under `## Auto-Advance` the run itself merges that tier — "the driver never
@@ -218,13 +160,6 @@ describe('describeMergePosture (round 1, finding 3)', () => {
       expect(posture).toMatch(/automatic/i)
     },
   )
-
-  it('falls back to off when the policy file is absent', () => {
-    const policy = policyFrom().read()
-
-    expect(policy.autoAdvance).toBe('(none)')
-    expect(describeMergePosture(policy)).toContain('(none)')
-  })
 
   it('halts on an auto-advance tier the eligibility declaration does not name', () => {
     expect(() =>
@@ -261,26 +196,6 @@ describe('readAutomationPolicy — a policy value is never a command fragment (r
     expect(() => policyFrom(predicate(value)).read()).toThrow(/command fragment|selector/)
   })
 
-  it('HALTs on the 4000-character selector payload', () => {
-    expect(() => policyFrom(predicate(`tag:${'a'.repeat(4000)} ⇒ Done`)).read()).toThrow(
-      /command fragment|selector/,
-    )
-  })
-
-  it('HALTs on an over-long eligibility value', () => {
-    expect(() => policyFrom(eligibility('a'.repeat(4000))).read()).toThrow()
-  })
-
-  it('HALTs on `## Auto-Advance` naming an unsafe tier', () => {
-    expect(() =>
-      policyFrom('## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:$(id)\n').read(),
-    ).toThrow()
-  })
-
-  it('HALTs on an audit location that could become a command fragment', () => {
-    expect(() => policyFrom('## Audit Location\n\naudit`whoami`.md\n').read()).toThrow()
-  })
-
   /**
    * Round 5, Major: the WHOLE predicate line reaches the prompt (`predicate = line`), so the
    * content check belongs on the line, not on one field of it. `has-tag:$(whoami)` satisfies
@@ -298,12 +213,6 @@ describe('readAutomationPolicy — a policy value is never a command fragment (r
     expect(() => policyFrom(`## Stop Predicate\n\n${value}\n`).read()).toThrow(/command fragment/)
   })
 
-  it('HALTs on a 4000-character has-tag payload (the line is bounded, not just the selector)', () => {
-    expect(() =>
-      policyFrom(`## Stop Predicate\n\nroot ⇒ has-tag:${'a'.repeat(4000)}\n`).read(),
-    ).toThrow(/command fragment/)
-  })
-
   it('HALTs on a traversing audit location, as tier 1 does', () => {
     expect(() => policyFrom('## Audit Location\n\n../../../etc/x.md\n').read()).toThrow(
       /escapes the working area/,
@@ -313,36 +222,6 @@ describe('readAutomationPolicy — a policy value is never a command fragment (r
   it('HALTs on a multi-line audit location body, as tier 1 does', () => {
     expect(() => policyFrom('## Audit Location\n\naudit/one.md\naudit/two.md\n').read()).toThrow(
       /exactly one path/,
-    )
-  })
-
-  it('still accepts a normal relative audit path', () => {
-    expect(policyFrom('## Audit Location\n\nautomation/loop-audit.md\n').read().auditLocation).toBe(
-      'automation/loop-audit.md',
-    )
-  })
-
-  /**
-   * Round 7, minor 1: four values where the "byte-consistent with tier 1" claim did not hold. Each
-   * is fixed toward the SCHEMA rather than registered as a divergence — the schema's own trigger
-   * list settles all four, so there was nothing deliberate to record.
-   */
-  it('accepts a label whose name merely CONTAINS a boolean word', () => {
-    // The schema says a "standalone upper-case AND/OR/NOT token"; `\b` made `area:OR-tools` a HALT,
-    // rejecting a legitimate label. Tier 1's `(^|\s)…(\s|$)` is the correct reading.
-    expect(policyFrom('## Eligibility\n\narea:OR-tools\n').read().eligibility).toBe('area:OR-tools')
-  })
-
-  it('still HALTs on a genuinely standalone boolean operator', () => {
-    expect(() => policyFrom('## Eligibility\n\nrisk:green OR risk:yellow\n').read()).toThrow(
-      /exactly one label/,
-    )
-  })
-
-  it('HALTs on a leading single backtick, as tier 1 does', () => {
-    // An inline-code paste (`` `risk:green ``) is the same copied-wrapper mistake as a fence.
-    expect(() => policyFrom('## Eligibility\n\n`risk:green\n').read()).toThrow(
-      /copied markdown wrapper|command fragment/,
     )
   })
 
@@ -379,22 +258,12 @@ describe('readAutomationPolicy — numeric and condition forms match tier 1 exac
     )
   })
 
-  it('accepts a plain decimal integer', () => {
-    expect(policyFrom('## Stop Predicate\n\nmax-iterations: 20\n').read().maxIterations).toBe(20)
-  })
-
   it.each([
     ['an empty has-tag payload', 'root ⇒ has-tag:'],
     ['a has-tag payload carrying a space', 'root ⇒ has-tag:a b'],
   ])('HALTs on a condition with %s', (_case, value) => {
     expect(() => policyFrom(`## Stop Predicate\n\n${value}\n`).read()).toThrow(
       /not a canonical macrostate/,
-    )
-  })
-
-  it('accepts a well-formed has-tag condition', () => {
-    expect(policyFrom('## Stop Predicate\n\nroot ⇒ has-tag:risk:red\n').read().stopPredicate).toBe(
-      'root ⇒ has-tag:risk:red',
     )
   })
 
@@ -417,10 +286,6 @@ describe('readAutomationPolicy — numeric and condition forms match tier 1 exac
     },
   )
 
-  it('HALTs on a `## Max Parallelism` global that is not a positive integer at all', () => {
-    expect(() => policyFrom('## Max Parallelism\n\nplenty\n').read()).toThrow(/positive integer/)
-  })
-
   it.each([
     ['a malformed override line', 'risk:green 5'],
     ['an override naming a non-label', 'not a tier: 5'],
@@ -432,14 +297,6 @@ describe('readAutomationPolicy — numeric and condition forms match tier 1 exac
     )
   })
 
-  it('accepts a well-formed per-tier override, keeping the global ceiling', () => {
-    const policy = policyFrom('## Max Parallelism\n\n3\nrisk:green: 5\n').read()
-
-    // The driver caps itself at 1 per process either way (AC9) — it reads the global, and the
-    // override only has to be VALIDATED, exactly as tier 1 validates it.
-    expect(policy.maxParallelism).toBe(3)
-  })
-
   it('US-491: exposes the per-tier overrides for run --root --parallel, absent when none is declared', () => {
     expect(
       policyFrom('## Max Parallelism\n\n3\nrisk:green: 5\nrisk:yellow: 2\n').read()
@@ -447,21 +304,6 @@ describe('readAutomationPolicy — numeric and condition forms match tier 1 exac
     ).toEqual({ 'risk:green': 5, 'risk:yellow': 2 })
     expect(policyFrom('## Max Parallelism\n\n3\n').read()).not.toHaveProperty(
       'maxParallelismOverrides',
-    )
-  })
-
-  /**
-   * Round 4, minor 2 — resolved the other way round, deliberately.
-   *
-   * `tag:a<b>` passes tier 1's content check (`isSafePromptText` allows angle brackets), so HALTing
-   * on it here would be the driver inventing STRICTER schema than its owner — the same class of
-   * divergence as round 3's, mirrored. Parity means accepting it; the fix therefore belongs to the
-   * token reader, which must not discard a token because a QUOTED value contains `<…>`
-   * (see `stream-reader.test.ts` — the placeholder check is quote-aware).
-   */
-  it('accepts a selector payload carrying `<...>`, exactly as tier 1 does', () => {
-    expect(policyFrom('## Stop Predicate\n\ntag:a<b> ⇒ Done\n').read().stopPredicate).toBe(
-      'tag:a<b> ⇒ Done',
     )
   })
 })

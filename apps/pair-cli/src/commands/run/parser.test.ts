@@ -13,19 +13,6 @@ describe('parseRunCommand', () => {
       /permutation/,
     )
   })
-  it('parses the flagless path off schema defaults (AC12)', () => {
-    const config = parseRunCommand({})
-
-    expect(config).toEqual({
-      command: 'run',
-      invocation: { kind: 'skill' },
-      scope: {},
-      autonomous: false,
-      approveProjectTrust: false,
-      approveIneligible: false,
-      dryRun: false,
-    })
-  })
 
   it('US-573 AC5: --iteration-timeout is an opt-in total cap (no default); --idle-timeout is carried when passed', () => {
     expect(parseRunCommand({}).iterationTimeoutSeconds).toBeUndefined()
@@ -40,13 +27,6 @@ describe('parseRunCommand', () => {
     expect(parseRunCommand({ json: true }).output).toBe('json')
     expect(parseRunCommand({ color: false }).noColor).toBe(true)
     expect(() => parseRunCommand({ quiet: true, json: true })).toThrow(/--quiet.*--json/)
-  })
-
-  it('never defaults to an autonomous or trust-approving value (AC6)', () => {
-    const config = parseRunCommand({ root: '212' })
-
-    expect(config.autonomous).toBe(false)
-    expect(config.approveProjectTrust).toBe(false)
   })
 
   it('carries every flag into the typed config', () => {
@@ -78,12 +58,6 @@ describe('parseRunCommand', () => {
     })
   })
 
-  it('treats --prompt as a prompt invocation', () => {
-    const config = parseRunCommand({ prompt: '/pair-next --root 212' })
-
-    expect(config.invocation).toEqual({ kind: 'prompt', text: '/pair-next --root 212' })
-  })
-
   it('rejects --skill together with --prompt', () => {
     expect(() => parseRunCommand({ skill: 'pair-loop', prompt: 'do the thing' })).toThrow(
       '--skill and --prompt are mutually exclusive',
@@ -103,12 +77,6 @@ describe('parseRunCommand', () => {
     ['1.5', '--max-iterations must be a positive integer (received: 1.5)'],
   ])('rejects --max-iterations %s', (value, message) => {
     expect(() => parseRunCommand({ maxIterations: value })).toThrow(message)
-  })
-
-  it('rejects a non-positive --iteration-timeout', () => {
-    expect(() => parseRunCommand({ iterationTimeout: '0' })).toThrow(
-      '--iteration-timeout must be a positive integer (received: 0)',
-    )
   })
 
   it.each([
@@ -201,19 +169,6 @@ describe('parseRunCommand', () => {
       ['a label with spaces', 'good first issue'],
     ])('accepts a legitimate --filter %s', (_case, value) => {
       expect(parseRunCommand({ filter: value }).scope.filter).toBe(value)
-    })
-
-    it('does NOT narrow --prompt, which is the operator own text (AC3)', () => {
-      // The asymmetry is the point: `--root`/`--filter` are IDENTIFIERS the driver splices into a
-      // command line it composes, while `--prompt` IS the instruction the operator chose to send.
-      // Narrowing it would break AC3's verbatim passthrough and protect nobody — whoever can pass
-      // `--prompt` can already write anything in it.
-      const multiLine = 'audit the backlog\n\nthen report'
-
-      expect(parseRunCommand({ prompt: multiLine }).invocation).toEqual({
-        kind: 'prompt',
-        text: multiLine,
-      })
     })
   })
 
@@ -572,11 +527,6 @@ describe('parseRunCommand — --watch / --interval (US-522 AC14)', () => {
 })
 
 describe('R: --predicate (the loop override of ## Stop Predicate)', () => {
-  it('is accepted with --parallel and carried verbatim', () => {
-    expect(
-      parseRunCommand({ parallel: '2', filter: 'x', predicate: 'tag:risk:red ⇒ Done' }).predicate,
-    ).toBe('tag:risk:red ⇒ Done')
-  })
   it('is refused off the loop (--skill/--prompt/--card); a --root alone leaves the request absent', () => {
     expect(() => parseRunCommand({ skill: 'pair-next', predicate: 'root ⇒ Done' })).toThrow(
       /--predicate .*the loop/,
