@@ -35,19 +35,16 @@ export const suiteTypeOf = (pkg: string): 'node:test' | 'playwright' | 'vitest' 
       ? 'node:test'
       : 'vitest'
 
+// node escapes & < " in attributes (" twice: &amp;quot;), never >; one pass is its exact inverse
+const ENTITY: Record<string, string> = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' }
 const unescape = (s: string): string =>
-  s
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, '&')
+  s.replace(/&amp;quot;|&(lt|gt|quot|apos|amp);/g, (_, e?: string) => (e ? ENTITY[e]! : '"'))
 
 const attr = (tag: string | undefined, name: string): string =>
   unescape(new RegExp(`\\s${name}="([^"]*)"`).exec(tag ?? '')?.[1] ?? '')
 
 const MARKER_STATUS: Record<string, string> = { skipped: 'skipped' }
-const TAG = /<(\/?)(testsuite|testcase)\b([^>]*?)(\/?)>|<(failure|error|skipped)\b/g
+const TAG = /<(\/?)(testsuite|testcase)\b((?:[^>"]|"[^"]*")*?)(\/?)>|<(failure|error|skipped)\b/g
 
 /** node:test junit → same id grammar as the inventory (`file::suite > name`, `#n` on repeats). */
 export function parseJunit(root: string, xml: string): Record<string, RunTest> {
