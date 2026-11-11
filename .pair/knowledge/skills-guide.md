@@ -15,10 +15,10 @@ Run `/pair-next` at the start of every session. It reads project adoption files 
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 10 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 32 | Atomic units — perform a single focused operation |
+| **Capability** | 34 | Atomic units — perform a single focused operation |
 | **Workflow** | 7 | Delivery stages — dispatched by the batch engine, one mutation boundary each |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 51 (10 process + 32 capability + 7 workflow + 2 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 51 (10 process + 34 capability + 7 workflow + 2 navigator).
 
 ## Full Catalog
 
@@ -41,7 +41,7 @@ Process skills compose capability skills. Capability skills are independently in
 >
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (32)
+### Capability Skills (34)
 
 #### Domain Modeling Skills (2)
 
