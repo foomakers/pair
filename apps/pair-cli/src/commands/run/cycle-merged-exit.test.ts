@@ -51,7 +51,6 @@ function harness(outcome: DriveCycleResult) {
   return { audit, stdout, deps }
 }
 
-
 const parked = (parkKind: string | null | undefined, code: string, detail: string) => ({
   status: 'merge-parked',
   stagesRun: 0,
@@ -78,10 +77,20 @@ describe('merge park reporting', () => {
     [undefined, 'failed'],
   ])('reports %s as %s', async (kind, expected) => {
     const output: string[] = []
-    vi.spyOn(process.stdout, 'write').mockImplementation(chunk => (output.push(String(chunk)), true))
+    vi.spyOn(process.stdout, 'write').mockImplementation(
+      chunk => (output.push(String(chunk)), true),
+    )
     const { deps } = harness(parked(kind, 'gate', 'merge reason'))
-    await handleRunCommand(parseRunCommand({ card: '596', cardTags: '', json: true }), files(), deps)
-    const events = output.join('').split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))
+    await handleRunCommand(
+      parseRunCommand({ card: '596', cardTags: '', json: true }),
+      files(),
+      deps,
+    )
+    const events = output
+      .join('')
+      .split('\n')
+      .filter(line => line.startsWith('{'))
+      .map(line => JSON.parse(line))
     expect(events.find(event => event.event === 'card-end')).toMatchObject({ status: expected })
   })
 })
@@ -97,7 +106,11 @@ describe('merge park reporting is platform independent', () => {
       chunk => (output.push(String(chunk)), true),
     )
     const { deps } = harness(parked('halted', 'gate', 'merge reason'))
-    await handleRunCommand(parseRunCommand({ card: '596', cardTags: '', json: true }), files(), deps)
+    await handleRunCommand(
+      parseRunCommand({ card: '596', cardTags: '', json: true }),
+      files(),
+      deps,
+    )
     const events = output
       .join('')
       .split('\n')
