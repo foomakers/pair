@@ -140,13 +140,13 @@ function parseLabels(value: unknown, id: string): string[] {
  * the two must name the same `risk:*` — the tier among the labels, or no risk label on an untagged
  * card — or the plan would run a card its child refuses (r0-2).
  */
-function checkTierAgainstLabels(id: string, tier: string, labels: readonly string[]): void {
+function tierMismatch(id: string, tier: string, labels: readonly string[]): string | undefined {
   const risk = labels.filter(label => label.startsWith('risk:'))
   const untagged = tier === '' || tier === 'untagged'
-  if (untagged ? risk.length === 0 : risk.length === 1 && risk[0] === tier) return
-  fail(
+  if (untagged ? risk.length === 0 : risk.length === 1 && risk[0] === tier) return undefined
+  return (
     `candidate ${id}: tier ${JSON.stringify(tier)} disagrees with its risk labels ` +
-      `${JSON.stringify(risk)} (labels ${JSON.stringify(labels)}) — the tier must be its one risk:* label`,
+      `${JSON.stringify(risk)} (labels ${JSON.stringify(labels)}) — the tier must be its one risk:* label`
   )
 }
 
@@ -162,7 +162,7 @@ function parsePrerequisites(value: unknown, id: string): RootCandidate['prerequi
   })
 }
 
-function parseCandidate(entry: unknown, loop: boolean): RootCandidate {
+function parseCandidate(entry: unknown, loop: boolean): RootCandidate | { blocked: string } {
   const c = (entry ?? {}) as Record<string, unknown>
   const id = c['id']
   // The id becomes an argv element and a lock-directory name: the `--root` rule, not free text.
@@ -175,7 +175,9 @@ function parseCandidate(entry: unknown, loop: boolean): RootCandidate {
   }
   const tier = text('tier')
   const labels = parseLabels(c['labels'], id)
-  checkTierAgainstLabels(id, tier, labels)
+  // Card-local: block this card with its reason, never fail the whole selection or invent a tier.
+  const blocked = tierMismatch(id, tier, labels)
+  if (blocked !== undefined) return { blocked }
   const escalated = c['escalated']
   if (loop && typeof escalated !== 'boolean') {
     fail(
@@ -219,6 +221,8 @@ function parseSnapshot(value: unknown): PredicateCard[] {
 /** What one selection returned: the candidates and, when the request asked for it, the predicate snapshot. */
 export interface SelectionAnswer {
   readonly candidates: RootCandidate[]
+  /** Cards skipped for a card-local risk inconsistency, each with its reason. */
+  readonly blocked?: string[]
   readonly snapshot?: PredicateCard[]
 }
 
@@ -240,8 +244,10 @@ export function parseSelection(json: string, options: ParseOptions = {}): Select
   const body = parsed as { candidates?: unknown; snapshot?: unknown }
   const list = body?.candidates
   if (!Array.isArray(list)) fail('the candidates line carries no `candidates` array')
+  const parsedList = list.map(entry => parseCandidate(entry, options.loop === true))
   return {
-    candidates: list.map(entry => parseCandidate(entry, options.loop === true)),
+    candidates: parsedList.filter((c): c is RootCandidate => !('blocked' in c)),
+    blocked: parsedList.flatMap(c => ('blocked' in c ? [c.blocked] : [])),
     ...(options.snapshot === true && { snapshot: parseSnapshot(body.snapshot) }),
   }
 }

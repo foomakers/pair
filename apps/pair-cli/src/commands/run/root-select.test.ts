@@ -69,6 +69,15 @@ describe('buildSelectionPrompt', () => {
 })
 
 describe('candidatesInEvent / parseCandidates', () => {
+  it('keeps healthy candidates when a reviewed tier disagrees with an unlabelled card', () => {
+    const result = parseSelection(
+      JSON.stringify({
+        candidates: [{ ...candidate, id: '36', tier: 'risk:yellow', labels: [] }, candidate],
+      }),
+    )
+    expect(result.candidates.map(c => c.id)).toEqual(['491'])
+  })
+
   it('reads the marker line out of a nested event string', () => {
     const event = { type: 'result', result: `Report…\n${marker({ candidates: [candidate] })}\n` }
     expect(candidatesInEvent(event)).toEqual([candidate])
