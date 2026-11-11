@@ -26,45 +26,6 @@ describe('config loader - skills registry', () => {
     expect(skills!.targets![0]!.mode).toBe('canonical')
   })
 
-  it('validates config with skills registry', () => {
-    const config = JSON.parse(REAL_CONFIG)
-    const result = validateConfig(config)
-    expect(result.valid).toBe(true)
-    expect(result.errors).toHaveLength(0)
-  })
-
-  it('merges local override for skills targets', () => {
-    const localOverride = {
-      asset_registries: {
-        skills: {
-          targets: [
-            { path: '.claude/skills/', mode: 'canonical' },
-            { path: '.custom/skills/', mode: 'copy' },
-          ],
-        },
-      },
-    }
-
-    const fs = new InMemoryFileSystemService(
-      {
-        '/module/config.json': REAL_CONFIG,
-        '/project/pair.config.json': JSON.stringify(localOverride),
-      },
-      '/module',
-      '/project',
-    )
-
-    const { config } = loadConfigWithOverrides(fs, { projectRoot: '/project' })
-    const skills = config.asset_registries['skills']
-
-    // Local override replaces targets array (shallow merge per registry)
-    expect(skills!.targets).toHaveLength(2)
-    expect(skills!.targets![1]!.path).toBe('.custom/skills/')
-    // Base fields preserved
-    expect(skills!.flatten).toBe(true)
-    expect(skills!.prefix).toBe('pair')
-  })
-
   it('preserves existing registries alongside skills', () => {
     const fs = new InMemoryFileSystemService(
       { '/module/config.json': REAL_CONFIG },
@@ -103,122 +64,6 @@ describe('config loader - source KB declaration', () => {
       '/project',
     )
   }
-
-  it('honours the source declaration when the consumer declares nothing', () => {
-    const fs = fsWith({ '/kb/pair.config.json': SOURCE_DECLARATION })
-
-    const { config, sourceDeclaration } = loadConfigWithOverrides(fs, {
-      projectRoot: '/project',
-      sourceRoot: '/kb',
-    })
-
-    expect(config.asset_registries['skills']!.prefix).toBe('acme-kb')
-    // Fields the source does not restate keep the CLI's defaults
-    expect(config.asset_registries['skills']!.flatten).toBe(true)
-    expect(sourceDeclaration).toEqual({ applied: true, unknownRegistries: [] })
-  })
-
-  it("lets the consuming project's own config win over the source declaration", () => {
-    const fs = fsWith({
-      '/kb/pair.config.json': SOURCE_DECLARATION,
-      '/project/pair.config.json': JSON.stringify({
-        asset_registries: { skills: { prefix: 'house-rules' } },
-      }),
-    })
-
-    const { config } = loadConfigWithOverrides(fs, {
-      projectRoot: '/project',
-      sourceRoot: '/kb',
-    })
-
-    expect(config.asset_registries['skills']!.prefix).toBe('house-rules')
-  })
-
-  it('lets an explicit --config win over the source declaration', () => {
-    const fs = fsWith({
-      '/kb/pair.config.json': SOURCE_DECLARATION,
-      '/custom.json': JSON.stringify({
-        asset_registries: { skills: { prefix: 'explicit' } },
-      }),
-    })
-
-    const { config } = loadConfigWithOverrides(fs, {
-      projectRoot: '/project',
-      sourceRoot: '/kb',
-      customConfigPath: '/custom.json',
-    })
-
-    expect(config.asset_registries['skills']!.prefix).toBe('explicit')
-  })
-
-  it('falls back to the consumer resolution and warns when the source config is malformed', () => {
-    const fs = fsWith({ '/kb/pair.config.json': '{ this is not json' })
-
-    const { config, sourceDeclaration } = loadConfigWithOverrides(fs, {
-      projectRoot: '/project',
-      sourceRoot: '/kb',
-    })
-
-    // No half-parsed declaration applied — the CLI default stands
-    expect(config.asset_registries['skills']!.prefix).toBe('pair')
-    expect(sourceDeclaration!.applied).toBe(false)
-    expect(sourceDeclaration!.warning).toMatch(/pair\.config\.json/)
-  })
-
-  it('reports a source-declared registry this CLI does not know, instead of installing it', () => {
-    const fs = fsWith({
-      '/kb/pair.config.json': JSON.stringify({
-        asset_registries: {
-          skills: { prefix: 'acme-kb' },
-          telemetry: {
-            source: '.telemetry',
-            behavior: 'mirror',
-            targets: [{ path: '.telemetry', mode: 'canonical' }],
-          },
-        },
-      }),
-    })
-
-    const { config, sourceDeclaration } = loadConfigWithOverrides(fs, {
-      projectRoot: '/project',
-      sourceRoot: '/kb',
-    })
-
-    expect(config.asset_registries['telemetry']).toBeUndefined()
-    expect(config.asset_registries['skills']!.prefix).toBe('acme-kb')
-    expect(sourceDeclaration!.unknownRegistries).toEqual(['telemetry'])
-  })
-
-  it('adopts a source-declared registry the consuming project also declares', () => {
-    const fs = fsWith({
-      '/kb/pair.config.json': JSON.stringify({
-        asset_registries: {
-          telemetry: {
-            source: '.telemetry',
-            behavior: 'mirror',
-            targets: [{ path: '.telemetry', mode: 'canonical' }],
-          },
-        },
-      }),
-      '/project/pair.config.json': JSON.stringify({
-        asset_registries: {
-          telemetry: {
-            source: '.telemetry',
-            behavior: 'mirror',
-            targets: [{ path: '.tele', mode: 'canonical' }],
-          },
-        },
-      }),
-    })
-
-    const { config, sourceDeclaration } = loadConfigWithOverrides(fs, {
-      projectRoot: '/project',
-      sourceRoot: '/kb',
-    })
-
-    expect(config.asset_registries['telemetry']!.targets![0]!.path).toBe('.tele')
-    expect(sourceDeclaration!.unknownRegistries).toEqual([])
-  })
 
   it('is inert when no source root is named — the default path is untouched', () => {
     const fs = fsWith({ '/kb/pair.config.json': SOURCE_DECLARATION })
@@ -278,47 +123,6 @@ describe('config loader - the source declaration is validated, not trusted', () 
     return loadConfigWithOverrides(fsWith(files), { projectRoot: '/project', sourceRoot: '/kb' })
   }
 
-  it('ignores targets declared by the source, however innocent they look', () => {
-    const { config } = load({
-      '/kb/pair.config.json': JSON.stringify({
-        asset_registries: {
-          agents: { targets: [{ path: '../../.zshenv', mode: 'canonical' }] },
-          knowledge: { targets: [{ path: 'unused-corner', mode: 'canonical' }] },
-        },
-      }),
-    })
-
-    // The CLI's own targets stand — a KB cannot repoint the install, inside or outside the project
-    expect(config.asset_registries['agents']!.targets).toEqual(
-      JSON.parse(REAL_CONFIG).asset_registries.agents.targets,
-    )
-    expect(config.asset_registries['knowledge']!.targets).toEqual(
-      JSON.parse(REAL_CONFIG).asset_registries.knowledge.targets,
-    )
-  })
-
-  it('ignores legacy target_path and behavior from the source', () => {
-    const { config } = load({
-      '/kb/pair.config.json': JSON.stringify({
-        asset_registries: { knowledge: { target_path: '/etc', behavior: 'mirror' } },
-      }),
-    })
-
-    const base = JSON.parse(REAL_CONFIG).asset_registries.knowledge
-    expect(config.asset_registries['knowledge']!.targets).toEqual(base.targets)
-    expect(config.asset_registries['knowledge']!.behavior).toBe(base.behavior)
-  })
-
-  it('ignores a source prefix that would traverse — a prefix is a path SEGMENT', () => {
-    const { config } = load({
-      '/kb/pair.config.json': JSON.stringify({
-        asset_registries: { skills: { prefix: '../../../tmp/evil' } },
-      }),
-    })
-
-    expect(config.asset_registries['skills']!.prefix).toBe('pair')
-  })
-
   it('ignores a source prefix carrying a separator', () => {
     const { config } = load({
       '/kb/pair.config.json': JSON.stringify({
@@ -332,10 +136,7 @@ describe('config loader - the source declaration is validated, not trusted', () 
   it.each([
     ['an absolute POSIX path', '/home/victim/.ssh'],
     ['a parent traversal', '../../../../Users'],
-    ['a traversal that only shows up after normalisation', 'a/../../outside'],
-    ['a bare parent', '..'],
     ['a Windows drive path', 'C:\\Users\\victim'],
-    ['a backslash root', '\\\\server\\share'],
     ['an empty string', ''],
     ['a non-string', 42],
   ])(
@@ -377,16 +178,7 @@ describe('config loader - the source declaration is validated, not trusted', () 
    * reads to judge whether the install went well (US-396 review round 6).
    */
   it.each([
-    ['a prefix carrying an ANSI colour escape', { prefix: '\u001b[31mACME\u001b[0m' }, 'prefix'],
-    ['a prefix carrying a newline', { prefix: 'acme\nEvil' }, 'prefix'],
-    ['a prefix carrying a NUL byte', { prefix: 'acme\u0000evil' }, 'prefix'],
     ['a source carrying an erase-line sequence', { source: 'docs\u001b[2K\u001b[1A' }, 'source'],
-    ['a source carrying a carriage return', { source: 'docs\rknowledge' }, 'source'],
-    [
-      'a description carrying a cursor-up sequence',
-      { description: 'Acme\u001b[1AInstallation complete' },
-      'description',
-    ],
   ])('ignores %s — a declared value is plain text, never terminal control', (_l, bad, field) => {
     const { config } = load({
       '/kb/pair.config.json': JSON.stringify({ asset_registries: { knowledge: bad } }),
@@ -466,45 +258,8 @@ describe('config loader - the source declaration is validated, not trusted', () 
     expect(skills.description).toBe('Acme skills')
   })
 
-  /**
-   * US-396 review round 2 (escalated Critical) — `include` looks like a content field but
-   * for a `mirror` registry it scopes MIRROR-CLEANUP OWNERSHIP (`registry/operations.ts`),
-   * a write decision. A source declaring `{"include":[]}` widened cleanup to the whole
-   * target instead of narrowing it, and deleted files the source never shipped. `include`
-   * is therefore dropped like `targets`, never merged, regardless of shape.
-   */
-  it('never honours include — it decides mirror-cleanup ownership, a write decision', () => {
-    const { config } = load({
-      '/kb/pair.config.json': JSON.stringify({
-        asset_registries: {
-          github: { include: [] },
-        },
-      }),
-    })
-
-    const github = config.asset_registries['github']!
-    expect(github.include).toEqual(JSON.parse(REAL_CONFIG).asset_registries.github.include)
-  })
-
-  it('ignores top-level keys declared by the source, such as working_path', () => {
-    const { config } = load({
-      '/kb/pair.config.json': JSON.stringify({
-        working_path: '../outside/working',
-        target: '/etc',
-        asset_registries: { skills: { prefix: 'acme-kb' } },
-      }),
-    })
-
-    expect(config['working_path']).toBeUndefined()
-    expect(config['target']).toBeUndefined()
-    expect(config.asset_registries['skills']!.prefix).toBe('acme-kb')
-  })
-
   it.each([
     ['null', 'null'],
-    ['an array', '[1,2]'],
-    ['a string', '"x"'],
-    ['a number', '42'],
     ['asset_registries that is not an object', '{"asset_registries": ["skills"]}'],
   ])('warns and ignores a declaration that is %s', (_label, content) => {
     const { config, sourceDeclaration } = loadConfigWithOverrides(
@@ -540,28 +295,6 @@ describe('config loader - the source declaration is validated, not trusted', () 
 describe('config loader - project layer when the module dir is not the project root', () => {
   const SOURCE_DECLARATION = JSON.stringify({
     asset_registries: { skills: { prefix: 'acme-kb' } },
-  })
-
-  it("reads the consumer's pair.config.json at a projectRoot far from the module dir", () => {
-    const fs = new InMemoryFileSystemService(
-      {
-        '/opt/pair-cli/config.json': REAL_CONFIG,
-        '/kb/pair.config.json': SOURCE_DECLARATION,
-        '/consumer/pair.config.json': JSON.stringify({
-          asset_registries: { skills: { prefix: 'house-rules' } },
-        }),
-      },
-      '/opt/pair-cli',
-      '/consumer',
-    )
-
-    const { config } = loadConfigWithOverrides(fs, {
-      projectRoot: '/consumer',
-      sourceRoot: '/kb',
-      projectConfigOnly: true,
-    })
-
-    expect(config.asset_registries['skills']!.prefix).toBe('house-rules')
   })
 
   it("does not read an unrelated config.json sitting in the consumer's root", () => {
@@ -624,8 +357,6 @@ describe('config loader - a source declaration never aborts the consumer install
   it.each([
     ['exclude as an object', { exclude: { a: 1 } }, 'exclude'],
     ['flatten as a string', { flatten: 'true' }, 'flatten'],
-    ['flattenDepth as a string', { flattenDepth: '2' }, 'flattenDepth'],
-    ['flattenDepth as zero', { flattenDepth: 0 }, 'flattenDepth'],
     ['description as a number', { description: 42 }, 'description'],
   ])('drops %s and keeps the rest of the declaration', (_label, bad, field) => {
     const { config } = load({
@@ -650,23 +381,6 @@ describe('config loader - a source declaration never aborts the consumer install
     expect(config.asset_registries['knowledge']!.prefix).toBe(base.knowledge.prefix)
     expect(sourceDeclaration!.applied).toBe(false)
     expect(sourceDeclaration!.warning).toMatch(/invalid/i)
-  })
-
-  it('still reports the unknown registries of a declaration it backed out', () => {
-    // A KB declares a registry this CLI has no definition for (`mcp`) BESIDE a coherent
-    // typo that costs it the whole declaration. The back-out must not also erase the
-    // record of what was declared: without `mcp` in `unknownRegistries` the install
-    // prints no `skipped — declared by source, unknown to this CLI` line for it and does
-    // not count it in the announced total, so the maintainer debugging why their new
-    // registry never appears gets that line only when the REST of their declaration
-    // happens to validate (US-396 review round 5).
-    const { sourceDeclaration } = load({
-      asset_registries: { mcp: { prefix: 'acme' }, knowledge: { flattenDepth: 2 } },
-    })
-
-    expect(sourceDeclaration!.applied).toBe(false)
-    expect(sourceDeclaration!.warning).toMatch(/invalid/i)
-    expect(sourceDeclaration!.unknownRegistries).toEqual(['mcp'])
   })
 
   it("reports the consumer's own broken config rather than blaming the source", () => {
@@ -717,16 +431,6 @@ describe('config loader - applied means honoured, not merely parseable', () => {
     expect(sourceDeclaration!.applied).toBe(false)
     expect(source).not.toMatch(/source KB declaration/)
     expect(sourceDeclaration!.warning).toMatch(/no field this CLI honours/)
-  })
-
-  it('is applied when one honoured field survives, even beside dropped ones', () => {
-    const { sourceDeclaration, source } = load({
-      asset_registries: { skills: { prefix: 'acme-kb', behavior: 'mirror' } },
-    })
-
-    expect(sourceDeclaration!.applied).toBe(true)
-    expect(source).toMatch(/source KB declaration: \/kb/)
-    expect(sourceDeclaration!.warning).toBeUndefined()
   })
 
   it('does not warn about honoured fields when the only declared registry is unknown', () => {

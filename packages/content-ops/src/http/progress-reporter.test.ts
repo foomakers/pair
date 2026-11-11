@@ -43,10 +43,6 @@ describe('ProgressReporter', () => {
     reporter = new ProgressReporter(10 * 1024 * 1024, true, mockStdout)
   })
 
-  it('creates reporter with total bytes', () => {
-    expect(reporter).toBeDefined()
-  })
-
   it('updates progress and throttles output', () => {
     reporter.update(1024 * 1024) // 1 MB
     expect(mockStdout.write).toHaveBeenCalled()

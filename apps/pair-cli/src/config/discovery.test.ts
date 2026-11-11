@@ -49,6 +49,6 @@ describe('registry discovery', () => {
       cwd,
       cwd,
     )
-    expect(getPackageJsonPath(fs, cwd)).not.toBeNull()
+    expect(getPackageJsonPath(fs, cwd)).toBe(`${cwd}/packages/knowledge-hub/package.json`)
   })
 })

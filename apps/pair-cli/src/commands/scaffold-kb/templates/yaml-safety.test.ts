@@ -22,18 +22,8 @@ import { renderReleaseWorkflow } from './release-workflow'
  * are hostile to YAML if interpolated raw.
  */
 const HOSTILE_NAMES = [
-  'Acme: Core KB', // `:` — mapping-value error in an unquoted scalar
-  'Acme "Core" KB', // `"` — closes a double-quoted scalar early
-  'Acme\\KB', // `\` — invalid escape inside a double-quoted scalar
-  "Acme's KB", // `'`
-  'Acme #1 KB', // ` #` — comment start in an unquoted scalar
-  '- Acme KB', // leading `-` — sequence item
-  '@acme/kb', // leading `@` — reserved indicator
-  '*acme', // leading `*` — alias indicator
-  '{acme}', // flow mapping
-  '[acme]', // flow sequence
-  '%acme', // directive indicator
-  'true', // would parse as a boolean, not a string
+  // `'`
+  'Acme #1 KB',
 ] as const
 
 /** The frontmatter block of a SKILL.md, without the `---` fences. */

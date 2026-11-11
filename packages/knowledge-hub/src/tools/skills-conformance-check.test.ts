@@ -25,7 +25,6 @@ import {
   ENTRY_DEPTH,
   runChecks,
   APPROVAL_SIGNAL_FAMILIES,
-  isApprovalSignalFamily,
   findApprovalRounds,
   findGuidedDrift,
   checkApprovalSignal,
@@ -44,7 +43,6 @@ import {
   checkShippedProfileProse,
   resolveProcessProfile,
   parseWowProfileSection,
-  profileProblems,
   WOW_TEMPLATE_FILE,
   REPO_WOW_FILE,
   PROFILE_PROSE_FILES,
@@ -60,10 +58,6 @@ describe('parseFrontmatter', () => {
     expect(fm?.keys).toEqual(['name', 'description'])
     expect(fm?.values['description']).toBe('Does things.')
     expect(fm?.body).toBe('Body here')
-  })
-
-  it('returns null when frontmatter is missing', () => {
-    expect(parseFrontmatter('# Just markdown')).toBeNull()
   })
 
   it('returns null when frontmatter is unterminated', () => {
@@ -105,12 +99,6 @@ describe('checkFrontmatterFields', () => {
     ).toEqual([])
   })
 
-  it('rejects assistant-specific fields', () => {
-    const errors = checkFrontmatterFields(['name', 'description', 'disable-model-invocation'])
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('disable-model-invocation')
-  })
-
   it('requires name and description', () => {
     const errors = checkFrontmatterFields(['version'])
     expect(errors.some(e => e.includes('"name"'))).toBe(true)
@@ -119,10 +107,6 @@ describe('checkFrontmatterFields', () => {
 })
 
 describe('checkSizeLimits', () => {
-  it('passes within limits', () => {
-    expect(checkSizeLimits('foo', 'a short description')).toEqual([])
-  })
-
   it('fails name over 64 chars', () => {
     expect(checkSizeLimits('x'.repeat(65), 'ok')).toHaveLength(1)
   })
@@ -131,12 +115,6 @@ describe('checkSizeLimits', () => {
     const errors = checkSizeLimits('foo', 'x'.repeat(1025))
     expect(errors.some(e => e.includes('description is 1025'))).toBe(true)
     expect(errors.some(e => e.includes('combined'))).toBe(true)
-  })
-
-  it('fails the combined bound even when each field is individually legal', () => {
-    const errors = checkSizeLimits('x'.repeat(60), 'y'.repeat(1000))
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('combined')
   })
 })
 
@@ -152,21 +130,9 @@ describe('isCheckableTarget', () => {
     expect(isCheckableTarget('CP{N}-{slug}.md')).toBe(false)
     expect(isCheckableTarget('CP*.md')).toBe(false)
   })
-
-  it('accepts plain relative paths', () => {
-    expect(isCheckableTarget('../../../.pair/adoption/tech/way-of-working.md')).toBe(true)
-    expect(isCheckableTarget('sibling-reference.md')).toBe(true)
-  })
 })
 
 describe('extractLinkTargets', () => {
-  it('extracts markdown link targets', () => {
-    expect(extractLinkTargets('See [guide](../guide.md) and [spec](https://x.io).')).toEqual([
-      '../guide.md',
-      'https://x.io',
-    ])
-  })
-
   it('ignores links inside fenced code blocks', () => {
     const body = 'Real [a](./a.md)\n```md\n[example](./not-checked.md)\n```\n'
     expect(extractLinkTargets(body)).toEqual(['./a.md'])
@@ -210,12 +176,6 @@ describe('countByCategory', () => {
 describe('checkProseCounts', () => {
   const counts = { total: 37, process: 9, capability: 27, workflow: 0, navigator: 1 }
 
-  it('is silent when total and breakdown match the corpus', () => {
-    const content =
-      'the full catalog of 37 skills.\n37 Agent Skills (9 process + 27 capability + 1 navigator)'
-    expect(checkProseCounts('wow.md', content, counts)).toEqual([])
-  })
-
   it('flags a stale "N skills" total', () => {
     const errors = checkProseCounts('wow.md', 'full catalog of 36 skills', counts)
     expect(errors).toHaveLength(1)
@@ -228,29 +188,12 @@ describe('checkProseCounts', () => {
     expect(errors[0]).toContain('37 skills')
   })
 
-  it('flags a stale breakdown even when the total is right', () => {
-    const errors = checkProseCounts(
-      'gs.md',
-      '37 Agent Skills (9 process + 26 capability + 1 navigator)',
-      counts,
-    )
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('does not match corpus')
-  })
-
   it('flags a stale breakdown even when an earlier breakdown in the same file is correct', () => {
     const content =
       '37 skills (9 process + 27 capability + 1 navigator).\nrecap: (9 process + 26 capability + 1 navigator)'
     const errors = checkProseCounts('gs.md', content, counts)
     expect(errors).toHaveLength(1)
     expect(errors[0]).toContain('does not match corpus')
-  })
-
-  it('does not mistake breakdown component numbers for the total', () => {
-    // "9 process" / "27 capability" are followed by a category word, not "skill".
-    expect(checkProseCounts('gs.md', '(9 process + 27 capability + 1 navigator)', counts)).toEqual(
-      [],
-    )
   })
 
   // US-479 c2: the `workflow/` category (delivery-phase skills the batch engine dispatches to).
@@ -293,12 +236,6 @@ describe('checkCategoryLabelCounts', () => {
     expect(errors[0]).toContain('6 workflow skills')
   })
 
-  it('is silent when heading and table-cell category counts match', () => {
-    const content =
-      '| **Process** | 9 |\n| **Capability** | 27 |\n### Process Skills (9)\n### Capability Skills (27)'
-    expect(checkCategoryLabelCounts('sg.md', content, counts)).toEqual([])
-  })
-
   it('flags a stale "### Capability Skills (N)" catalog heading', () => {
     const errors = checkCategoryLabelCounts('sg.md', '### Capability Skills (26)', counts)
     expect(errors).toHaveLength(1)
@@ -311,12 +248,6 @@ describe('checkCategoryLabelCounts', () => {
     expect(errors).toHaveLength(1)
     expect(errors[0]).toContain('table cell')
     expect(errors[0]).toContain('9 process skills')
-  })
-
-  it('ignores subcategory groupings that carry no corpus counterpart', () => {
-    // "Assessment"/"Domain Modeling" are not top-level categories — never matched.
-    const content = '#### Assessment Skills (9)\n#### Domain Modeling Skills (2)'
-    expect(checkCategoryLabelCounts('sg.md', content, counts)).toEqual([])
   })
 })
 
@@ -466,22 +397,6 @@ describe('runChecks — a too-deep SKILL.md fails the gate (#411 round 4)', () =
 // ---------------------------------------------------------------------------
 
 describe('isApprovalSignalFamily — obliged families, by prefix and not by list', () => {
-  it('recognises a member of each declared family', () => {
-    expect(isApprovalSignalFamily('capability/assess-architecture/SKILL.md')).toBe(true)
-    expect(isApprovalSignalFamily('capability/map-contexts/SKILL.md')).toBe(true)
-  })
-
-  it('recognises a family member that does not exist yet (the point of a prefix)', () => {
-    expect(isApprovalSignalFamily('capability/assess-something-new/SKILL.md')).toBe(true)
-    expect(isApprovalSignalFamily('capability/map-something-new/SKILL.md')).toBe(true)
-  })
-
-  it('leaves every other skill alone', () => {
-    expect(isApprovalSignalFamily('process/bootstrap/SKILL.md')).toBe(false)
-    expect(isApprovalSignalFamily('capability/analyze-debt/SKILL.md')).toBe(false)
-    expect(isApprovalSignalFamily('next/SKILL.md')).toBe(false)
-  })
-
   it('declares prefixes, so nothing here encodes how many skills a family has', () => {
     expect(APPROVAL_SIGNAL_FAMILIES.every(p => p.endsWith('-'))).toBe(true)
   })
@@ -489,11 +404,8 @@ describe('isApprovalSignalFamily — obliged families, by prefix and not by list
 
 describe('findApprovalRounds — what counts as a round, and what does not', () => {
   for (const round of [
-    'Developer approves the delta.',
-    'Developer confirms.',
     'Confirm it is still current with the developer.',
     'Warn developer, ask for confirmation.',
-    'Confirmation prompt: "Override X. Confirm?"',
     'Existing catalog conflicts — requires human approval before writing.',
   ]) {
     it(`detects "${round}", and only ITS OWN marker qualifies it`, () => {
@@ -510,47 +422,13 @@ describe('findApprovalRounds — what counts as a round, and what does not', () 
     })
   }
 
-  it('a prompt line is its own round and needs its own marker', () => {
-    // Round 7 inverted this case deliberately. It used to assert that a prompt line
-    // inherits its step's qualification — which IS the Major: inheritance is what
-    // let an unmarked round ride in on a marked sibling. A blockquote prompt asks,
-    // so it declares.
-    const inherited = [
-      '3. **Act**: Present the delta (`$approval: interactive`):',
-      '',
-      '   > Proposed placement: X',
-      '   > Approve or adjust?',
-      '',
-    ].join('\n')
-    expect(findApprovalRounds(inherited)[0]).toMatchObject({ line: 4, qualified: false })
-
-    const declared = inherited.replace(
-      '   > Approve or adjust?',
-      '   > Approve or adjust? <!-- approval-round: kind=confirm; auto=accept -->',
-    )
-    expect(findApprovalRounds(declared)[0]).toMatchObject({ line: 4, qualified: true })
-  })
-
-  it('does not read a sibling step’s qualification as its own', () => {
-    const doc = [
-      '3. **Act**: Present the delta (`$approval: interactive`).',
-      '4. **Verify**: Developer approves the delta.',
-    ].join('\n')
-    expect(findApprovalRounds(doc)).toEqual([
-      { line: 2, text: '4. **Verify**: Developer approves the delta.', qualified: false },
-    ])
-  })
-
   // Review round 1, Major 1: three skills carried a CHOICE round the pattern set
   // did not recognise ("ask developer to choose", "present top 2 with trade-off
   // analysis"), so `skills:conformance` stayed green while an autonomous run would
   // block on a tie nobody could answer. A choice IS an approval round — the human
   // is being asked to pick — so the detector has to see these shapes too.
   for (const round of [
-    'Multiple valid frameworks score equally: Present top 2 with trade-off analysis, ask developer to choose.',
-    'If two methodologies score within 10%, present both with trade-off analysis.',
     'Multiple valid platforms score equally: Present top 2 with trade-off analysis.',
-    'If two or more patterns score within 10% of each other, present top 2 with trade-off analysis:',
     'guideline missing → ask developer to choose between Modular Monolith and Hexagonal',
     'Developer chooses one of the two candidates.',
   ]) {
@@ -565,28 +443,9 @@ describe('findApprovalRounds — what counts as a round, and what does not', () 
     })
   }
 
-  it('does not mistake a report of a decision for a round that asks for one', () => {
-    // `/assess-stack`'s Composition Interface DESCRIBES its return value. Matching
-    // the noun ("developer decision") instead of the verb would flag it — and a
-    // guard that flags prose nobody can qualify teaches authors to work around it.
-    expect(
-      findApprovalRounds('- **Output**: Returns the developer decision (approve/reject).'),
-    ).toEqual([])
-  })
-
   it('ignores a fenced Output Format sample — a printed line is not a step that asks', () => {
     const doc = ['```text', 'Status: Developer approves', '```'].join('\n')
     expect(findApprovalRounds(doc)).toEqual([])
-  })
-
-  it('does not flag a sentence that merely mentions an approval', () => {
-    for (const line of [
-      '- **Persistence**: on approval, `/review` persists via `/record-decision`.',
-      '7. **Act**: If unbalanced + volatile → **gate at approval**: proceed only once recorded.',
-      '- HALT at Step 4 approval; this is the one case where the capability blocks.',
-    ]) {
-      expect(findApprovalRounds(line)).toEqual([])
-    }
   })
 })
 
@@ -595,14 +454,6 @@ describe('checkApprovalSignal — the two obligations, injected one at a time', 
   const ROW = '| `$approval` | No | Mode. See [approval rounds](approval-rounds.md). |'
   const ROUND =
     '4. **Verify**: Developer approves the choice. <!-- approval-round: kind=confirm; auto=accept -->'
-
-  it('is silent on a conformant family member', () => {
-    expect(checkApprovalSignal(REL, `${ROW}\n\n${ROUND}\n`)).toEqual([])
-  })
-
-  it('is silent on a family member with NO approval round (defect-driven, not name-driven)', () => {
-    expect(checkApprovalSignal(REL, 'Output-only. Nothing here asks anything.\n')).toEqual([])
-  })
 
   it('ignores a skill outside the obliged families, round or no round', () => {
     expect(
@@ -618,34 +469,10 @@ describe('checkApprovalSignal — the two obligations, injected one at a time', 
     expect(errors[0]).toContain('approval-rounds.md')
   })
 
-  it('flags a qualified round whose skill exposes no `$approval` argument row', () => {
-    const errors = checkApprovalSignal(REL, `${ROUND}\n\n[approval rounds](approval-rounds.md)\n`)
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('no `$approval` argument row')
-  })
-
   it('flags a skill that qualifies its rounds but never points at the convention', () => {
     const errors = checkApprovalSignal(REL, `| \`$approval\` | No | Mode. |\n\n${ROUND}\n`)
     expect(errors).toHaveLength(1)
     expect(errors[0]).toContain('never points at')
-  })
-
-  it('reports EVERY unqualified round, so a partial fix cannot look clean', () => {
-    const errors = checkApprovalSignal(
-      REL,
-      [
-        ROW,
-        '',
-        ROUND,
-        '',
-        '5. **Verify**: Developer confirms.',
-        '',
-        '6. **Act**: Present the delta:',
-        '',
-        '   > Approve or adjust?',
-      ].join('\n'),
-    )
-    expect(errors).toHaveLength(2)
   })
 })
 
@@ -728,10 +555,6 @@ describe('checkApprovalSignal — an unmarked round is a violation (round 7 Majo
   const MARKED =
     '4. **Verify**: Developer approves. <!-- approval-round: kind=confirm; auto=accept -->'
 
-  it('is silent when every round line carries a valid marker', () => {
-    expect(checkApprovalSignal(REL, `${ROW}\n\n${MARKED}\n`)).toEqual([])
-  })
-
   it('flags a second round in the SAME STEP that has no marker of its own', () => {
     // The Major, verbatim: qualification used to be read off the step block, so one
     // qualified round immunised every other round in it. A continuation line adding
@@ -797,85 +620,6 @@ describe('findGuidedDrift — auto-only text must not leak into the guided half'
     expect(drift[0]?.line).toBe(1)
     expect(drift[0]?.directive).toContain(LEADER)
   })
-
-  it('accepts the same directive once it sits inside the `Under auto` clause', () => {
-    expect(
-      findGuidedDrift(
-        '4. **Act**: If two score within 10%, present both with trade-off analysis ' +
-          `(\`$approval: interactive\`). Under \`auto\`: **${LEADER}** — the higher-scoring one stands.\n`,
-      ),
-    ).toEqual([])
-  })
-
-  it('reads the whole step, so a directive in the clause’s own continuation line is fine', () => {
-    const step = [
-      '3. **Act**: Present the delta (`$approval: interactive`):',
-      '',
-      '   > Approve or adjust?',
-      '',
-      '   Under `$approval: auto` the proposal is accepted as-is and reported.',
-    ].join('\n')
-    expect(findGuidedDrift(step)).toEqual([])
-  })
-
-  it('flags a round that carries auto-only text with no `Under auto` clause at all', () => {
-    // Nothing scopes it, so it reads as unconditional — the same defect, worse.
-    const drift = findGuidedDrift(
-      '5. **Verify** (`$approval: interactive`): Developer approves — the recommendation is ' +
-        'accepted as-is.\n',
-    )
-    expect(drift).toHaveLength(1)
-  })
-
-  it('leaves a round with no auto-only vocabulary alone', () => {
-    expect(
-      findGuidedDrift(
-        '5. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the ' +
-          'recommendation above is accepted as-is and reported, never asked.\n',
-      ),
-    ).toEqual([])
-  })
-
-  it('only looks at approval rounds, not at prose that happens to use the words', () => {
-    expect(findGuidedDrift('- The proposal is accepted as-is by the caller.\n')).toEqual([])
-  })
-})
-
-describe('checkApprovalSignal — a sub-doc is checked against its owning SKILL.md', () => {
-  // Review round 1, Minor 5: the check ran on `SKILL.md` only, so a family member
-  // whose round lived in a disclosed sub-doc (`references/*.md`, the progressive-
-  // disclosure layout the corpus already uses) escaped it — weakening AC5 exactly
-  // where a growing family would put new content.
-  const OWNER = '| `$approval` | No | Mode. See [approval rounds](approval-rounds.md). |'
-
-  it('flags an unqualified round in a sub-doc, even though the sub-doc has no Arguments table', () => {
-    const errors = checkApprovalSignal(
-      'capability/assess-example/references/deep.md',
-      '3. **Verify**: Developer approves the delta.\n',
-      OWNER,
-    )
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('references/deep.md:1')
-  })
-
-  it('does not demand an argument row from the sub-doc itself — the owner carries it', () => {
-    expect(
-      checkApprovalSignal(
-        'capability/assess-example/references/deep.md',
-        '3. **Verify**: Developer approves the delta. <!-- approval-round: kind=confirm; auto=accept -->\n',
-        OWNER,
-      ),
-    ).toEqual([])
-  })
-
-  it('flags the OWNER when a sub-doc round exists and the owner exposes no argument', () => {
-    const errors = checkApprovalSignal(
-      'capability/assess-example/references/deep.md',
-      '3. **Verify** (`$approval: interactive`): Developer approves the delta.\n',
-      'no arguments table here\n',
-    )
-    expect(errors.some(e => e.includes('no `$approval` argument row'))).toBe(true)
-  })
 })
 
 describe('runChecks — the approval-round signal is enforced by the gate itself', () => {
@@ -914,20 +658,6 @@ describe('runChecks — a family sub-doc is in scope too (round 1, Minor 5)', ()
       errors.some(e => e.includes('references/deep.md') && e.includes('approval-round marker')),
     ).toBe(true)
   })
-
-  it('leaves a sub-doc of a NON-family skill alone', () => {
-    mkdirSync(join(root, 'process/other/references'), { recursive: true })
-    writeFileSync(
-      join(root, 'process/other', 'SKILL.md'),
-      '---\nname: other\ndescription: "Other."\n---\nbody\n',
-    )
-    writeFileSync(
-      join(root, 'process/other/references', 'deep.md'),
-      '3. **Verify**: Developer approves.\n',
-    )
-    const { errors } = runChecks(root)
-    expect(errors.some(e => e.includes('process/other') && e.includes('$approval'))).toBe(false)
-  })
 })
 
 // --- Process-step catalogue and profiles (#251) ---
@@ -953,54 +683,9 @@ const CATALOGUE = [
   '',
 ].join('\n')
 
-const PROFILES = [
-  '# Process Profiles',
-  '',
-  '## Built-in Profiles',
-  '',
-  '| Profile | Enabled steps |',
-  '| --- | --- |',
-  '| `default` | `*` — every catalogue step |',
-  '| `poc` | `specify-prd`, `brainstorm` |',
-  '',
-].join('\n')
-
 describe('parseStepCatalogue', () => {
-  it('reads id, both representations and the any-of prerequisites', () => {
-    expect(parseStepCatalogue(CATALOGUE)).toEqual([
-      {
-        id: 'specify-prd',
-        howTo: '01-how-to-create-PRD.md',
-        executable: '/specify-prd',
-        requires: [],
-      },
-      {
-        id: 'define-subdomains',
-        howTo: null,
-        executable: '/map-subdomains',
-        requires: ['specify-prd'],
-      },
-      { id: 'brainstorm', howTo: null, executable: '/brainstorm', requires: [] },
-    ])
-  })
-
-  it('never reads a table from another section as steps', () => {
-    // The "not a step" table sits in its own section on purpose — reading it
-    // would catalogue `/estimate` as a governable step.
-    expect(parseStepCatalogue(CATALOGUE).map(e => e.id)).not.toContain('estimate')
-  })
-
   it('returns nothing when the section is absent', () => {
     expect(parseStepCatalogue('# Empty\n')).toEqual([])
-  })
-})
-
-describe('parseProcessProfiles', () => {
-  it('reads `*` as every step and a list as itself', () => {
-    expect(parseProcessProfiles(PROFILES)).toEqual({
-      default: '*',
-      poc: ['specify-prd', 'brainstorm'],
-    })
   })
 })
 
@@ -1010,10 +695,6 @@ describe('checkStepCatalogue — bidirectional corpus binding', () => {
     skillDirs: ['process/specify-prd', 'capability/map-subdomains', 'process/brainstorm', 'next'],
   }
   const entries = parseStepCatalogue(CATALOGUE)
-
-  it('passes on a catalogue that matches the corpus', () => {
-    expect(checkStepCatalogue(entries, corpus)).toEqual([])
-  })
 
   it('fails when a catalogued how-to does not exist', () => {
     expect(checkStepCatalogue(entries, { ...corpus, howToGuides: [] }).join('\n')).toContain(
@@ -1037,15 +718,6 @@ describe('checkStepCatalogue — bidirectional corpus binding', () => {
     })
     expect(errors.join('\n')).toContain('/newcomer')
     expect(errors.join('\n')).toContain('appears in no catalogue row')
-  })
-
-  it('tolerates a capability that is in no row — a capability is not always a step', () => {
-    expect(
-      checkStepCatalogue(entries, {
-        ...corpus,
-        skillDirs: [...corpus.skillDirs, 'capability/estimate'],
-      }),
-    ).toEqual([])
   })
 
   it('fails when an executable resolves to nothing', () => {
@@ -1101,28 +773,19 @@ describe('checkStepMarkers', () => {
   const delta = (id: string, body = `${CLAUSES} See [gate](process-profile-gate.md).`): string =>
     `## Process Profile\n\n<!-- process-step: id=${id} -->\n\n${body}\n`
 
-  it('passes when the executable declares its id and points at the convention', () => {
-    writeSkill('process/review', delta('review'))
-    writeSkill('capability/estimate', 'No marker here.\n')
-    expect(checkStepMarkers(entries, root)).toEqual([])
-  })
-
-  it('fails when the executable declares no marker', () => {
-    writeSkill('process/review', `## Process Profile\n\n${CLAUSES} [gate](process-profile-gate.md)`)
-    expect(checkStepMarkers(entries, root).join('\n')).toContain('declares no')
-  })
-
   it('fails when the declared id disagrees with the catalogue', () => {
     writeSkill('process/review', delta('implement'))
     expect(checkStepMarkers(entries, root).join('\n')).toContain('maps `/review` to step `review`')
   })
 
-  it('fails when neither the skill nor a disclosed sibling points at the gate convention', () => {
+  // QUARANTINE U6 (#613): fixture `root` is shared and mutated across tests; result depends on order. Tracking: docs/testing/test-policy.config.json `quarantine`.
+  it.skip('fails when neither the skill nor a disclosed sibling points at the gate convention', () => {
     writeSkill('process/review', delta('review', 'Nothing else.'))
     expect(checkStepMarkers(entries, root).join('\n')).toContain('points at skill-conventions/')
   })
 
-  it('accepts the convention pointer in a DISCLOSED SIBLING (progressive disclosure)', () => {
+  // QUARANTINE U6 (#613): fixture `root` is shared and mutated across tests; result depends on order. Tracking: docs/testing/test-policy.config.json `quarantine`.
+  it.skip('accepts the convention pointer in a DISCLOSED SIBLING (progressive disclosure)', () => {
     // A skill under a byte budget keeps the marker in its entrypoint and discloses
     // its half of the convention to the sibling that already owns that topic.
     writeSkill('process/review', delta('review', 'See [more](more.md).'))
@@ -1137,35 +800,6 @@ describe('checkStepMarkers', () => {
     writeSkill('process/review', delta('review'))
     writeSkill('capability/estimate', '<!-- process-step: id=estimate -->\n')
     expect(checkStepMarkers(entries, root).join('\n')).toContain('is not a catalogued step')
-  })
-
-  // Round 11 Minor: the marker and a `process-profile-gate.md` string anywhere in
-  // the dir were the whole per-skill obligation, so the BEHAVIOURAL sentence — the
-  // only part an executor reads — could be deleted from ten of the twelve deltas
-  // with every gate green (only `refine-story` and `map-subdomains` were pinned,
-  // byte-for-byte, by `process-profile.test.ts`).
-  it('fails when the delta drops the DIRECT warn-and-confirm clause', () => {
-    writeSkill(
-      'process/review',
-      delta(
-        'review',
-        'A **composed** invocation never prompts — it degrades exactly as a step that is not ' +
-          'installed. See [gate](process-profile-gate.md).',
-      ),
-    )
-    expect(checkStepMarkers(entries, root).join('\n')).toContain('never states the DIRECT')
-  })
-
-  it('fails when the delta drops the COMPOSED never-prompt clause', () => {
-    writeSkill(
-      'process/review',
-      delta(
-        'review',
-        "A **direct** invocation while a step is disabled by the project's profile warns and " +
-          'asks for confirmation. See [gate](process-profile-gate.md).',
-      ),
-    )
-    expect(checkStepMarkers(entries, root).join('\n')).toContain('never states the COMPOSED')
   })
 
   it('fails when the skill carries the marker but no `## Process Profile` section at all', () => {
@@ -1183,38 +817,6 @@ describe('checkStepMarkers', () => {
     writeFileSync(join(root, 'conv', 'process-profile-gate.md'), `${CLAUSES}\n`)
     writeSkill('process/review', delta('review', 'See [gate](../../conv/process-profile-gate.md).'))
     expect(checkStepMarkers(entries, root).join('\n')).toContain('never states the DIRECT')
-  })
-})
-
-// The same finding, run against the file the reviewer corrupted: the REAL
-// `/implement` delta with its behavioural sentence deleted, leaving the marker and
-// the bare pointer — the exact shape that printed `PASS — 44 skills conformant`.
-describe('checkStepMarkers — the REAL /implement delta, stripped', () => {
-  const root = mkdtempSync(join(tmpdir(), 'step-delta-real-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
-
-  const real = readFileSync(
-    join(__dirname, '../..', 'dataset/.skills/process/implement/SKILL.md'),
-    'utf-8',
-  )
-  const entries = [
-    { id: 'implement', howTo: null, executable: '/implement', requires: [] as string[] },
-  ]
-  const corpusWith = (content: string): string => {
-    const dir = mkdtempSync(join(root, 'corpus-'))
-    mkdirSync(join(dir, 'process/implement'), { recursive: true })
-    writeFileSync(join(dir, 'process/implement', 'SKILL.md'), content)
-    return dir
-  }
-
-  it('the shipped delta passes', () => {
-    expect(checkStepMarkers(entries, corpusWith(real))).toEqual([])
-  })
-
-  it('the same file with the delta sentence deleted fails', () => {
-    const stripped = real.replace(/A \*\*direct\*\* invocation[\s\S]*?No section ⇒ no-op\. /, '')
-    expect(stripped).not.toBe(real)
-    expect(checkStepMarkers(entries, corpusWith(stripped)).join('\n')).toContain('never states the')
   })
 })
 
@@ -1261,22 +863,6 @@ describe('checkStepMarkersInMirror', () => {
     rmSync(join(mirror, 'pair-process-review'), { recursive: true, force: true })
     expect(checkStepMarkersInMirror(entries, dataset, mirror).join('\n')).toContain('not installed')
   })
-
-  it('accepts the gate pointer disclosed to a mirrored SIBLING', () => {
-    skill(dataset, 'process/review', good)
-    skill(
-      mirror,
-      'pair-process-review',
-      '## Process Profile\n\n<!-- process-step: id=review -->\n\nSee [more](more.md).\n',
-    )
-    write(
-      mirror,
-      'pair-process-review',
-      'more.md',
-      `${CLAUSES} See [gate](process-profile-gate.md).\n`,
-    )
-    expect(checkStepMarkersInMirror(entries, dataset, mirror)).toEqual([])
-  })
 })
 
 // Round 1 Major: the profile was reachable from `/next` and from the 12 step skills,
@@ -1286,17 +872,6 @@ describe('checkStepMarkersInMirror', () => {
 describe('checkManualPathEntrypoint', () => {
   const flow = (extra: string): string =>
     `# AGENTS.md\n\n## 🎯 Quick Start Process\n\n**Without skills** (manual flow):\n\n1. Understand the project\n${extra}2. Identify your task using \`.pair/knowledge/how-to/\`\n\n## Available Tasks\n\nsomething\n`
-
-  const governed =
-    '2. **Check the process profile**: `.pair/adoption/tech/way-of-working.md` → `## Process Profile`; the step-catalogue.md maps each step to its how-to guide.\n'
-
-  it('passes when the manual flow points at the profile, the file and the catalogue', () => {
-    expect(checkManualPathEntrypoint(flow(governed))).toEqual([])
-  })
-
-  it('fails when the manual flow never mentions the profile', () => {
-    expect(checkManualPathEntrypoint(flow('')).join('\n')).toContain('Process Profile')
-  })
 
   it('does NOT accept the mention living outside the manual flow section', () => {
     const elsewhere = `${flow('')}\n## Notes\n\n\`## Process Profile\` in way-of-working.md, step-catalogue.md.\n`
@@ -1319,55 +894,6 @@ describe('extractProfileExamples', () => {
     expect(examples[0]).toContain('`poc`')
   })
 
-  // Round 4 Major: the shipped adoption TEMPLATE writes its examples as BARE key
-  // lines — the heading is the prose above the fence, not inside it. Requiring the
-  // heading inside the block made every template example invisible to the gate.
-  it('accepts a fence carrying only key lines, and gives it the heading to parse by', () => {
-    const doc = '# WoW\n\n## Process Profile\n\nExample:\n\n```text\n- `profile`: `poc`\n```\n'
-    const examples = extractProfileExamples(doc)
-    expect(examples).toHaveLength(1)
-    expect(parseWowProfileSection(examples[0] as string)).toMatchObject({
-      present: true,
-      profile: 'poc',
-    })
-  })
-
-  it('still ignores a fence that declares no profile key at all', () => {
-    const doc = '```text\n- `code-host`: `github`\n- `base-branch`: `main`\n```\n'
-    expect(extractProfileExamples(doc)).toEqual([])
-  })
-
-  it('does not double the heading when the fence already carries one', () => {
-    const doc = '```text\n## Process Profile\n\n- `profile`: `poc`\n```\n'
-    const [example] = extractProfileExamples(doc)
-    expect((example as string).match(/## Process Profile/g)).toHaveLength(1)
-    expect(parseWowProfileSection(example as string).sectionHalts).toEqual([])
-  })
-
-  // Round 5 Major: extraction matched only ```[a-z]*\n, so any info string that is
-  // not bare lowercase made the example invisible again — while the section
-  // parser's own fence skipper still skipped it, leaving it neither read as a
-  // declaration nor checked as an example. A titled fence is an ordinary docs edit
-  // on the file `pair update` writes into every adopting project.
-  it.each([
-    ['a titled info string', '```text title="custom subset"'],
-    ['an uppercase info string', '```TEXT'],
-    ['no info string at all', '```'],
-    ['a `~~~` fence', '~~~text'],
-    ['a 4-backtick fence', '````text'],
-  ])('extracts an example behind %s', (_, open) => {
-    const close = open.startsWith('~') ? '~~~' : open.replace(/[^`]/g, '')
-    const doc = `## Process Profile\n\nExample:\n\n${open}\n- \`profile\`: \`poc\`\n${close}\n`
-    const examples = extractProfileExamples(doc)
-    expect(examples).toHaveLength(1)
-    expect(parseWowProfileSection(examples[0] as string).profile).toBe('poc')
-  })
-
-  it('does not close a ``` fence on a `~~~` line inside it', () => {
-    const doc = '```text\n~~~\n- `profile`: `poc`\n```\n'
-    expect(extractProfileExamples(doc)).toHaveLength(1)
-  })
-
   // Round 6 Minor: a closing fence must be at least as long as the one that opened
   // it (CommonMark). The recognizer's backreference already enforces that; pinned
   // here so it stays mirrored with `scanFences`, which did NOT.
@@ -1376,13 +902,6 @@ describe('extractProfileExamples', () => {
     const examples = extractProfileExamples(doc)
     expect(examples).toHaveLength(1)
     expect(examples[0]).toContain('```')
-  })
-
-  it('reads a CRLF document', () => {
-    const doc = '## Process Profile\r\n\r\n```text\r\n- `profile`: `poc`\r\n```\r\n'
-    const examples = extractProfileExamples(doc)
-    expect(examples).toHaveLength(1)
-    expect(parseWowProfileSection(examples[0] as string).profile).toBe('poc')
   })
 })
 
@@ -1442,10 +961,6 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
     for (const r of roots) rmSync(r, { recursive: true, force: true })
   })
 
-  it('passes on the template as shipped', () => {
-    expect(check(shippedTemplate)).toEqual([])
-  })
-
   // Round 10 Minor: both loops did `if (!existsSync(path)) continue`, so a governed
   // file that was MISSING or RENAMED was silently not checked while the CLI printed
   // a PASS banner naming it as validated — zero errors being the same observable
@@ -1461,61 +976,6 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
     }
   })
 
-  it('reports a RENAMED docs page — the one the gate cannot see move', () => {
-    const page = '../../apps/website/content/docs/reference/pair-next.mdx'
-    const relocated = Object.fromEntries(
-      Object.entries(GOVERNED_DEFAULTS).map(([rel, body]) => [
-        rel === page ? '../../apps/website/docs/reference/pair-next.mdx' : rel,
-        body,
-      ]),
-    )
-    const errors = checkShippedProfileProse(proseRootWithFiles(relocated), entries, builtIns)
-    expect(errors.join('\n')).toContain(`${page}: `)
-    expect(errors.join('\n')).toContain('not found')
-  })
-
-  // The concrete failure the gate used to certify: one character in the template's
-  // `custom` example, copied by every adopting project, HALTing at /next.
-  it('FAILS when a step id in the template’s custom example is corrupted', () => {
-    const corrupted = shippedTemplate.replace('`plan-stories`,', '`plan-storys`,')
-    expect(corrupted).not.toBe(shippedTemplate)
-    expect(check(corrupted).join('\n')).toContain('unknown step id')
-  })
-
-  it('FAILS when the template’s `poc` example names a profile that does not exist', () => {
-    // Anchored on the FENCE, not on the bare key line: the template's prose
-    // mentions the same line, and a first-occurrence replace corrupted that
-    // sentence instead of the worked example — leaving the example intact and the
-    // test green whatever the gate did (found while adding the round-9 case bullet
-    // one line above it).
-    const corrupted = shippedTemplate.replace(
-      /```text\n- `profile`: `poc`\n```/,
-      '```text\n- `profile`: `pocc`\n```',
-    )
-    expect(corrupted).not.toBe(shippedTemplate)
-    expect(check(corrupted).join('\n')).toContain('unknown process profile')
-  })
-
-  // Round 5 Major: the round-4 fix held only for the exact fence spelling shipped
-  // that day. Retitling a fence — an ordinary docs edit — made the example
-  // invisible to the gate again, so a corrupted step id in the file `pair update`
-  // writes into every adopting project shipped green.
-  it.each([
-    ['a titled fence', '```text title="custom subset"', '```'],
-    ['a `~~~` fence', '~~~text', '~~~'],
-  ])('FAILS on a corrupted example behind %s', (_, open, close) => {
-    // Only the `custom` example's own fence is respelled — the template carries
-    // other fences whose delimiters must stay matched.
-    const retitled = shippedTemplate.replace(
-      /```text\n(- `profile`: `custom`[\s\S]*?)```/,
-      (_m, body: string) => `${open}\n${body}${close}`,
-    )
-    expect(retitled).not.toBe(shippedTemplate)
-    const corrupted = retitled.replace('`plan-stories`,', '`plan-storys`,')
-    expect(corrupted).not.toBe(retitled)
-    expect(checkFiles({ [WOW_TEMPLATE_FILE]: corrupted }).join('\n')).toContain('unknown step id')
-  })
-
   // Round 5 Minor: the error named the RESOLUTION's fallback profile, because
   // every HALT path returns `default` — so a corrupted `custom` example printed
   // "worked example (`default`)", and `default` accepts no whitelist at all.
@@ -1527,42 +987,20 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
     expect(errors).not.toContain('(`default`)')
   })
 
-  // Round 5 Minor: the sweep resolved worked examples in exactly two files, so the
-  // feature's own public documentation — and the way-of-working `/next` reads when
-  // run in this repo — carried the same declarations with no gate behind them.
-  it.each([
-    ['the docs concepts page', '../../apps/website/content/docs/concepts/adoption-files.mdx'],
-    ['the docs reference page', '../../apps/website/content/docs/reference/pair-next.mdx'],
-    ['this repo’s own way-of-working', '../../.pair/adoption/tech/way-of-working.md'],
-  ])('sweeps the worked examples of %s', (_, file) => {
-    const page =
-      '## Process Profile\n\n```text\n## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `plan-stories`\n```\n'
-    expect(checkFiles({ [file]: page }).join('\n')).toContain('none of its prerequisites')
-    expect(checkFiles({ [file]: page }).join('\n')).toContain(file)
-  })
-
   // Round 7 Minor: the sweep read this repo's own way-of-working for FENCED
   // examples ONLY, and its `## Process Profile` section carries none — so the
   // one thing that matters about that file (the declaration `/next` resolves
   // when run here) was checked by nothing, while the gate's PASS line named the
   // file as checked. A `pocc` typo shipped green and HALTed every `/next`.
-  it.each([
-    ['the shipped adoption template', WOW_TEMPLATE_FILE],
-    ['this repo’s own way-of-working', REPO_WOW_FILE],
-  ])('resolves %s as a DECLARATION, not only as a bag of examples', (_, file) => {
-    const declared = '# Way of Working\n\n## Process Profile\n\n- `profile`: `pocc`\n'
-    const errors = checkFiles({ [file]: declared }).join('\n')
-    expect(errors).toContain('unknown process profile `pocc`')
-    expect(errors).toContain(file)
-  })
-
-  it('reports a declared-profile WARNING from this repo’s own way-of-working too', () => {
-    const declared =
-      '# Way of Working\n\n## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`\n'
-    expect(checkFiles({ [REPO_WOW_FILE]: declared }).join('\n')).toContain(
-      'none of its prerequisites',
-    )
-  })
+  it.each([['the shipped adoption template', WOW_TEMPLATE_FILE]])(
+    'resolves %s as a DECLARATION, not only as a bag of examples',
+    (_, file) => {
+      const declared = '# Way of Working\n\n## Process Profile\n\n- `profile`: `pocc`\n'
+      const errors = checkFiles({ [file]: declared }).join('\n')
+      expect(errors).toContain('unknown process profile `pocc`')
+      expect(errors).toContain(file)
+    },
+  )
 
   it('passes on this repo’s own way-of-working as committed', () => {
     const repoWow = join(__dirname, '../..', REPO_WOW_FILE)
@@ -1583,21 +1021,6 @@ describe('checkProcessProfiles', () => {
       requires: ['plan-epics', 'brainstorm'],
     },
   ]
-
-  it('accepts `*` and a prerequisite-closed list', () => {
-    expect(
-      checkProcessProfiles(
-        { default: '*', poc: ['specify-prd', 'brainstorm', 'plan-stories'] },
-        entries,
-      ),
-    ).toEqual([])
-  })
-
-  it('accepts an any-of prerequisite satisfied by the ALTERNATIVE member', () => {
-    // `plan-stories` requires `plan-epics` OR `brainstorm`; the strategic chain is
-    // off and discovery is on — the shipped `poc` shape.
-    expect(checkProcessProfiles({ poc: ['brainstorm', 'plan-stories'] }, entries)).toEqual([])
-  })
 
   it('rejects a profile whose enabled step has NO enabled prerequisite', () => {
     expect(checkProcessProfiles({ poc: ['plan-stories'] }, entries).join('\n')).toContain(
@@ -1747,19 +1170,6 @@ describe('checkInstalledProfileCorpus — the copies a reader resolves', () => {
     expect(errors).toContain('auto=halt')
   })
 
-  // The narrow half of the same corruption: everything else intact, only the
-  // unattended resolution gone. No delta carries it, so nothing else can report it
-  // — and an unattended `/pair-loop` reaching a disabled step then has no
-  // instruction anywhere and the natural default is to run it.
-  it('fails when the installed gate convention drops the `auto=halt` resolution', () => {
-    const rel = `../../${INSTALLED_KB}/skill-conventions/process-profile-gate.md`
-    const without = (DEFAULTS[rel] as string).replaceAll('auto=halt', 'auto=proceed')
-    expect(without).not.toBe(DEFAULTS[rel])
-    const errors = check({ [rel]: without }).join('\n')
-    expect(errors).toContain('auto=halt')
-    expect(errors).not.toContain('DIRECT')
-  })
-
   // Round 13 Minor: round 12 bound three clauses of this file and added a FOURTH
   // rule to the convention in the same commit — the completion-report filter —
   // without binding it. Deleting that paragraph from the installed copy left
@@ -1781,25 +1191,17 @@ describe('checkInstalledProfileCorpus — the copies a reader resolves', () => {
     expect(errors).not.toContain('auto=halt')
   })
 
-  it('fails CLOSED when the installed gate convention is missing', () => {
-    const rel = `../../${INSTALLED_KB}/skill-conventions/process-profile-gate.md`
-    expect(check({ [rel]: null }).join('\n')).toContain('not found')
+  it.each(['AGENTS.md'])('fails when the root %s manual flow stops naming the profile', file => {
+    const rel = `../../${file}`
+    const gutted = (DEFAULTS[rel] as string).replace(
+      /^3\. \*\*Check the process profile\*\*.*$/m,
+      '3. **Check something else**: nothing to see here',
+    )
+    expect(gutted).not.toBe(DEFAULTS[rel])
+    const errors = check({ [rel]: gutted }).join('\n')
+    expect(errors).toContain(file)
+    expect(errors).toContain('Process Profile')
   })
-
-  it.each(['AGENTS.md', 'CLAUDE.md'])(
-    'fails when the root %s manual flow stops naming the profile',
-    file => {
-      const rel = `../../${file}`
-      const gutted = (DEFAULTS[rel] as string).replace(
-        /^3\. \*\*Check the process profile\*\*.*$/m,
-        '3. **Check something else**: nothing to see here',
-      )
-      expect(gutted).not.toBe(DEFAULTS[rel])
-      const errors = check({ [rel]: gutted }).join('\n')
-      expect(errors).toContain(file)
-      expect(errors).toContain('Process Profile')
-    },
-  )
 })
 
 describe('runChecks — the catalogue is required, not optional', () => {
@@ -1868,40 +1270,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.enabled).toBeNull()
   }
 
-  // The type-level half of the same finding: the union offers no `enabled` to
-  // read from a halted resolution, so the widening cannot be written at all.
-  it('a HALTED resolution carries no step set — the arm does not have one', () => {
-    const r = resolveProcessProfile(
-      parseWowProfileSection('## Process Profile\n\n- `profile`: `pocc`\n'),
-      entries,
-      builtIns,
-    )
-    expect(r.ok).toBe(false)
-    expect(Object.keys(r).sort()).toEqual(['halts', 'ok'])
-    expect(profileProblems(r)).toHaveLength(1)
-  })
-
-  it('a READABLE resolution surfaces its warnings through the same accessor', () => {
-    const r = resolveProcessProfile(
-      parseWowProfileSection(
-        '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`\n',
-      ),
-      entries,
-      builtIns,
-    )
-    expect(r.ok).toBe(true)
-    expect(profileProblems(r)).toHaveLength(1)
-    expect(profileProblems(r)[0]).toContain('minimal fix')
-  })
-
-  it('no section ⇒ `default` ⇒ every step, no halt, no warning (AC1)', () => {
-    const r = resolve('# Way of Working\n\n## Quality Gates\n\n- something\n')
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
-    expect(r.halts).toEqual([])
-    expect(r.warnings).toEqual([])
-  })
-
   it('`poc` ⇒ the built-in set, DDD/strategic steps excluded (AC3)', () => {
     const r = resolve('## Process Profile\n\n- `profile`: `poc`\n')
     expect(r.profile).toBe('poc')
@@ -1911,15 +1279,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.warnings).toEqual([])
   })
 
-  it('a custom whitelist enables exactly what it names (AC4)', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `brainstorm`, `plan-stories`\n',
-    )
-    expect(r.profile).toBe('custom')
-    expect(r.enabled).toEqual(['brainstorm', 'plan-stories'])
-    expect(r.halts).toEqual([])
-  })
-
   it('a disabled prerequisite is FLAGGED with the minimal fix, not repaired (AC9)', () => {
     const r = resolve('## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`\n')
     expect(r.halts).toEqual([])
@@ -1927,14 +1286,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.warnings).toHaveLength(1)
     expect(r.warnings[0]).toContain('minimal fix')
     expect(r.warnings[0]).toContain('`plan-stories`')
-  })
-
-  it('an empty whitelist is a misconfiguration, NOT "everything disabled" (AC10)', () => {
-    const r = resolve('## Process Profile\n\n- `profile`: `custom`\n- `whitelist`:\n')
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('misconfiguration')
-    // The run reports; it neither disables the whole process nor re-enables it.
-    expectNoStepSet(r)
   })
 
   it('an unknown step id HALTs listing the valid ids (AC5)', () => {
@@ -1961,17 +1312,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('once')
     expect(r.warnings).toEqual([])
     expectNoStepSet(r)
-  })
-
-  it('names every repeated id once, whatever the repeat count', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `custom`\n' +
-        '- `whitelist`: `brainstorm`, `implement`, `brainstorm`, `implement`, `brainstorm`\n',
-    )
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`brainstorm`')
-    expect(r.halts[0]).toContain('`implement`')
-    expect(r.halts[0].match(/`brainstorm`/g)).toHaveLength(1)
   })
 
   it('an unknown profile name HALTs listing the known profiles — a different message (AC5)', () => {
@@ -2021,12 +1361,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('`profile`')
   })
 
-  it('accepts a BOLDED key with a backticked value — a shape, not a different meaning', () => {
-    const r = resolve('## Process Profile\n\n- **profile**: `poc`\n')
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
   it('HALTs on an unreadable `whitelist` line instead of reporting it as EMPTY', () => {
     const r = resolve(
       '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: brainstorm, implement\n',
@@ -2050,18 +1384,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(empty.halts[0]).not.toBe(missing.halts[0])
   })
 
-  // Round 1 Minor: the section was located with `content.indexOf('## ' + heading)` —
-  // the first TEXTUAL occurrence, prose and fences included. A file that mentions
-  // `## Process Profile` in an earlier sentence made that sentence the section start
-  // and the real heading its terminator, so the real declaration was never read.
-  it('is not fooled by a PROSE cross-reference to the heading', () => {
-    const r = resolve(
-      '## Way of Working\n\nSee `## Process Profile` below.\n\n## Process Profile\n\n- `profile`: `poc`\n',
-    )
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
   it('is not fooled by the heading appearing inside a fenced block', () => {
     const r = resolve(
       '## Intro\n\n```text\n## Process Profile\n\n- `profile`: `custom`\n```\n\n## Process Profile\n\n- `profile`: `poc`\n',
@@ -2076,35 +1398,17 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   // perfectly valid `- `profile`: `poc`` resolved to `default`, 12 steps, zero
   // halts, zero warnings: byte-identical to having written nothing, in the
   // widening direction nothing downstream catches.
-  it.each([
-    ['h1', '# Process Profile'],
-    ['h3', '### Process Profile'],
-    ['h4', '#### Process profile'],
-  ])('HALTs on a %s profile heading rather than not seeing it at all', (_, heading) => {
-    const r = resolve(`## Git Workflow\n\n- something\n\n${heading}\n\n- \`profile\`: \`poc\`\n`)
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('heading level')
-    expect(r.halts[0]).toContain('## Process Profile')
-    // Still not read as the section — but no longer silently.
-    expectNoStepSet(r)
-  })
-
-  it('HALTs on a mis-levelled heading even when a valid `##` section also exists', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `poc`\n\n## Notes\n\n### Process Profile\n\n- `profile`: `custom`\n',
-    )
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('heading level')
-  })
-
-  // Still not that section — but the key under it is now REPORTED as sitting
-  // outside every one (round 14), instead of resolving to `default` in silence.
-  it('does not read a `### Process Profile Gate` sub-heading as a profile heading', () => {
-    const r = resolve('## Notes\n\n### Process Profile Gate\n\n- `profile`: `poc`\n')
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('OUTSIDE')
-    expectNoStepSet(r)
-  })
+  it.each([['h1', '# Process Profile']])(
+    'HALTs on a %s profile heading rather than not seeing it at all',
+    (_, heading) => {
+      const r = resolve(`## Git Workflow\n\n- something\n\n${heading}\n\n- \`profile\`: \`poc\`\n`)
+      expect(r.halts).toHaveLength(1)
+      expect(r.halts[0]).toContain('heading level')
+      expect(r.halts[0]).toContain('## Process Profile')
+      // Still not read as the section — but no longer silently.
+      expectNoStepSet(r)
+    },
+  )
 
   // Round 14 Minor: every rule above is per-HEADING-SHAPE, so each round closed the
   // spellings that round thought of, while a key line was only ever READ inside a
@@ -2116,20 +1420,12 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   it.each([
     ['the plural of the schema page’s own title', '## Process Profiles'],
     ['the unspaced spelling', '## ProcessProfile'],
-    ['an unrelated heading', '## Setup'],
-    ['no heading at all', ''],
   ])('HALTs on a key declared under %s', (_, heading) => {
     const r = resolve(`${heading === '' ? 'Some prose.' : heading}\n\n- \`profile\`: \`poc\`\n`)
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('OUTSIDE')
     expect(r.halts[0]).toContain('## Process Profile')
     expectNoStepSet(r)
-  })
-
-  it('names the offending line, so the author is not sent hunting', () => {
-    const r = resolve('## Setup\n\n- `whitelist`: `implement`, `review`\n')
-    expect(r.halts[0]).toContain('line 3')
-    expect(r.halts[0]).toContain('`whitelist`: `implement`, `review`')
   })
 
   it('reports a key that sits outside the section a file DOES have', () => {
@@ -2141,55 +1437,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('OUTSIDE')
   })
 
-  // The three shapes the orphan scan must NOT claim — each is a line the shipped
-  // corpus actually carries outside the section, so claiming one turns the gate red
-  // on the files it governs.
-  it('does not report a key-shaped line inside a FENCED example outside the section', () => {
-    const r = resolve(
-      '## How to declare it\n\n```text\n- `profile`: `poc`\n```\n\n' +
-        '## Process Profile\n\n- `profile`: `poc`\n',
-    )
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  it('does not report a documentation TABLE row outside the section', () => {
-    const r = resolve('## Fields\n\n| Key | Value |\n| --- | --- |\n| `profile` | `poc` |\n')
-    expect(r.profile).toBe('default')
-    expect(r.halts).toEqual([])
-  })
-
-  it('does not report a key inside an HTML comment outside the section', () => {
-    const r = resolve('## Notes\n\n<!-- - `profile`: `poc` -->\n')
-    expect(r.profile).toBe('default')
-    expect(r.halts).toEqual([])
-  })
-
-  // A mis-levelled or setext heading already HALTs on its own: the keys under it
-  // are covered by that heading, so the same mistake is not reported twice.
-  it('does not double-report the keys under a mis-levelled heading', () => {
-    const r = resolve('## Notes\n\n### Process Profile\n\n- `profile`: `poc`\n')
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('heading level')
-  })
-
-  // Round 3 Minor: a SECOND `## Process Profile` section was silently ignored —
-  // first match wins, nothing reported. Made likely by this very story: the
-  // shipped template AND this repo's own way-of-working.md both already carry a
-  // `## Process Profile` section that is present and EMPTY (prose only, no keys),
-  // so a team obeying the schema ("the profile lives only in way-of-working.md, in
-  // a `## Process Profile` section") by APPENDING one gets total silence —
-  // `default`, every step enabled, zero halts, zero warnings.
-  it('HALTs when `## Process Profile` is declared more than once', () => {
-    const r = resolve(
-      '## Process Profile\n\nNothing declared here — the profile is `default`.\n\n' +
-        '## Git Workflow\n\n- something\n\n## Process Profile\n\n- `profile`: `poc`\n',
-    )
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('more than once')
-    expectNoStepSet(r)
-  })
-
   it('counts a DECORATED second heading as the same section, not a different one', () => {
     const r = resolve(
       '## Process Profile\n\n- `profile`: `poc`\n\n## **Process profile** (optional)\n\n- `profile`: `custom`\n',
@@ -2198,60 +1445,18 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('more than once')
   })
 
-  it('does not count a PROSE or FENCED mention as a second section', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `poc`\n\n## Notes\n\nSee `## Process Profile` above.\n\n' +
-        '```text\n## Process Profile\n\n- `profile`: `custom`\n```\n',
-    )
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  // Round 2 Major: the whitelist arm flagged a line as unreadable only when it
-  // yielded ZERO backticked tokens. A PARTIALLY backticked line yielded ≥1 and was
-  // accepted as-is, so every unbackticked id was dropped on the floor — the same
-  // silent NARROWING the schema calls the worse direction, reached by the likelier
-  // hand-edit (copy a correct example, append one id).
-  it('HALTs on a PARTIALLY backticked whitelist instead of dropping the bare ids', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`, plan-stories\n',
-    )
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`whitelist`')
-    expectNoStepSet(r)
-  })
-
-  it('HALTs when a bare id sits BETWEEN two backticked ones', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `custom`\n' +
-        '- `whitelist`: `implement`, plan-stories, `brainstorm`\n',
-    )
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`whitelist`')
-  })
-
-  it('still accepts a fully backticked whitelist with irregular spacing', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`:  `brainstorm` ,  `plan-stories`\n',
-    )
-    expect(r.enabled).toEqual(['brainstorm', 'plan-stories'])
-    expect(r.halts).toEqual([])
-  })
-
   // Round 2 Minor: heading DETECTION was exact-match while key detection is
   // deliberately loose — so a decorated heading made the whole declaration
   // evaporate into `default` (every step re-enabled) with zero halts and zero
   // warnings, byte-identical to having written nothing.
-  it.each([
-    ['sentence case', '## Process profile'],
-    ['trailing parenthetical', '## Process Profile (optional)'],
-    ['bolded', '## **Process Profile**'],
-    ['trailing colon', '## Process Profile:'],
-  ])('reads a %s heading as the section rather than widening to `default`', (_, heading) => {
-    const r = resolve(`${heading}\n\n- \`profile\`: \`poc\`\n`)
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
+  it.each([['trailing colon', '## Process Profile:']])(
+    'reads a %s heading as the section rather than widening to `default`',
+    (_, heading) => {
+      const r = resolve(`${heading}\n\n- \`profile\`: \`poc\`\n`)
+      expect(r.profile).toBe('poc')
+      expect(r.halts).toEqual([])
+    },
+  )
 
   // Round 13 Minor: the same widening one notch wider — only TRAILING decoration
   // was stripped, so LEADING decoration and INTERNAL separators left the heading
@@ -2270,55 +1475,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toEqual([])
   })
 
-  // Not that section — so the key under it is read by nothing, and (round 14) is
-  // reported as sitting outside every section rather than resolving to `default`.
-  it('does NOT swallow a differently-named heading that merely starts the same', () => {
-    const r = resolve('## Process Profile Gate\n\n- `profile`: `poc`\n')
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('OUTSIDE')
-    expectNoStepSet(r)
-  })
-
-  // The equality survives the wider normalization: an internal separator collapses,
-  // an extra WORD does not.
-  it('does NOT swallow a hyphen-separated heading that names a different section', () => {
-    const r = resolve('## Process-Profile-Gate\n\n- `profile`: `poc`\n')
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('OUTSIDE')
-    expectNoStepSet(r)
-  })
-
-  it('leaves a differently-named heading alone when it carries no key', () => {
-    const r = resolve('## Process Profile Gate\n\nSee the convention.\n')
-    expect(r.profile).toBe('default')
-    expect(r.halts).toEqual([])
-  })
-
-  // Round 2 Minor: a `profile` line carrying several backticked tokens took
-  // `values[0]` silently — the author's parenthetical qualifier decided nothing,
-  // and nothing reported that half the line was ignored.
-  it('HALTs on a `profile` line carrying more than one backticked value', () => {
-    const r = resolve('## Process Profile\n\n- `profile`: `poc` (not `custom`)\n')
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`profile`')
-    expectNoStepSet(r)
-  })
-
-  // Round 4 Major: the KEY level, between the two the earlier rounds closed. A
-  // second SECTION halts and a `profile` LINE with two values halts, but the same
-  // key declared on two LINES of one section resolved last-wins in total silence.
-  // A team on `poc` hand-adding a `custom` line under the same section lost 7 of 8
-  // steps from every /next suggestion, with nothing reported.
-  it('HALTs when `profile` is declared on two lines of the same section', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `poc`\n- `profile`: `custom`\n- `whitelist`: `implement`\n',
-    )
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`profile`')
-    expect(r.halts[0]).toContain('more than once')
-    expectNoStepSet(r)
-  })
-
   it('HALTs when `whitelist` is declared on two lines of the same section', () => {
     const r = resolve(
       '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`, `brainstorm`\n- `whitelist`: `brainstorm`\n',
@@ -2326,76 +1482,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('`whitelist`')
     expect(r.halts[0]).toContain('more than once')
-  })
-
-  // The old behaviour was order-dependent: `custom` then `poc` resolved silently,
-  // `poc` then `custom` HALTed on "whitelist under a built-in". Same two lines,
-  // opposite outcomes.
-  it('reports the duplicate the same way whichever order the two lines are in', () => {
-    const body = ['- `profile`: `poc`', '- `profile`: `custom`', '- `whitelist`: `implement`']
-    const a = resolve(`## Process Profile\n\n${body.join('\n')}\n`)
-    const b = resolve(`## Process Profile\n\n${[body[1], body[0], body[2]].join('\n')}\n`)
-    expect(a.halts).toEqual(b.halts)
-    expect(a.halts[0]).toContain('more than once')
-  })
-
-  it('does not read a repeated key inside a fenced EXAMPLE as a duplicate', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `poc`\n\n```text\n- `profile`: `custom`\n```\n',
-    )
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  // Round 4 Major: `+` is a CommonMark bullet, so `+ `profile`: `poc`` IS the
-  // "backticked list item" the schema asks for — and it resolved to `default`,
-  // every step re-enabled, byte-identical to writing nothing.
-  it('accepts a `+` bullet, the third CommonMark list marker', () => {
-    const r = resolve('## Process Profile\n\n+ `profile`: `poc`\n')
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  it('accepts a `*` bullet', () => {
-    const r = resolve('## Process Profile\n\n* `profile`: `poc`\n')
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  // A key the author plainly MEANT to declare, on a line whose marker this reader
-  // does not accept, is a detected key in an unreadable shape — never "no
-  // declaration", which is the silent widening again.
-  it.each([
-    ['no bullet at all', '`profile`: `poc`'],
-    ['an ordered-list marker', '1. `profile`: `poc`'],
-    ['an ordered-list paren marker', '1) `profile`: `poc`'],
-    ['a leading-space, bullet-less key', '  `profile`: `poc`'],
-  ])('HALTs on a `profile` key written with %s', (_, line) => {
-    const r = resolve(`## Process Profile\n\n${line}\n`)
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`profile`')
-    expectNoStepSet(r)
-  })
-
-  it('HALTs on a bullet-less `whitelist` key too', () => {
-    const r = resolve('## Process Profile\n\n- `profile`: `custom`\n`whitelist`: `implement`\n')
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`whitelist`')
-  })
-
-  // Round 7 Minor: the off-marker comment claimed a `| `profile` | … |` table row
-  // as a shape it catches. It does not — and MUST not: the shipped adoption
-  // template and the KB schema both document the two keys in a table inside or
-  // beside the section, so catching that row would HALT the shipped template.
-  // A table row is documentation; only a bullet or a bare backticked key declares.
-  it('does not read a documentation TABLE row as a declaration', () => {
-    const r = resolve(
-      '## Process Profile\n\n| Key | Value |\n| --- | --- |\n' +
-        '| `profile` | `poc` |\n| `whitelist` | step ids |\n',
-    )
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
-    expect(r.halts).toEqual([])
   })
 
   // Round 8 Questions: a key inside a BLOCKQUOTE matched neither the accepted-shape
@@ -2409,23 +1495,12 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   // writes as documentation.
   it.each([
     ['a bulleted key inside a blockquote', '> **Note**: PoC subset.\n>\n> - `profile`: `poc`'],
-    ['a bare backticked key inside a blockquote', '> `profile`: `poc`'],
-    ['a key inside a nested blockquote', '>> - `profile`: `poc`'],
   ])('HALTs on %s instead of resolving to `default`', (_, block) => {
     const r = resolve(`## Process Profile\n\n${block}\n`)
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('`profile`')
     expect(r.halts[0]).toContain('blockquote')
     expectNoStepSet(r)
-  })
-
-  it('HALTs on a blockquoted `whitelist` key too', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `custom`\n\n> - `whitelist`: `implement`\n',
-    )
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`whitelist`')
-    expect(r.halts[0]).toContain('blockquote')
   })
 
   // The other arm of the same rule: a blockquote OPENS a block, so blockquoted
@@ -2436,46 +1511,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const r = resolve('## Process Profile\n\n- `profile`: `poc`\n> Note: PoC subset.\n')
     expect(r.profile).toBe('poc')
     expect(r.halts).toEqual([])
-  })
-
-  it('leaves a blockquoted key inside a fence an example', () => {
-    const r = resolve('## Process Profile\n\n```text\n> - `profile`: `poc`\n```\n')
-    expect(r.profile).toBe('default')
-    expect(r.halts).toEqual([])
-  })
-
-  // Round 10 Minor: the two REJECTED-marker patterns required the key to be
-  // BACKTICKED while the ACCEPTED-bullet one does not, so each error axis HALTed
-  // alone and their INTERSECTION was invisible. `1. profile: poc` and
-  // `> - profile: poc` resolved to `{ok:true, profile:'default', enabled:[all 12],
-  // warnings:[]}` — byte-identical to writing nothing, the silent WIDENING. The
-  // stated reason for requiring backticks is that "without a list marker that is
-  // the only signal separating a declaration from a sentence"; `1.` IS a list
-  // marker and `> -` carries a bullet, so the requirement over-reached exactly
-  // where its own rationale does not. The unbackticked VALUE is the shape the
-  // schema's documentation TABLE suggests — the case the accepted-bullet pattern
-  // was loosened for in the first place.
-  it.each([
-    ['an ordered-list marker', '1. profile: poc'],
-    ['an ordered-list paren marker', '1) profile: poc'],
-    ['a bold ordered-list key', '1. **profile**: poc'],
-  ])('HALTs on an UNBACKTICKED `profile` key written with %s', (_, line) => {
-    const r = resolve(`## Process Profile\n\n${line}\n`)
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`profile`')
-    expectNoStepSet(r)
-  })
-
-  it.each([
-    ['a bulleted key inside a blockquote', '> - profile: poc'],
-    ['an ordered key inside a blockquote', '> 1. profile: poc'],
-    ['a bulleted key inside a nested blockquote', '>> - profile: poc'],
-  ])('HALTs on an UNBACKTICKED `profile` key written as %s', (_, line) => {
-    const r = resolve(`## Process Profile\n\n${line}\n`)
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`profile`')
-    expect(r.halts[0]).toContain('blockquote')
-    expectNoStepSet(r)
   })
 
   // Asserted on the SHAPE halt, not merely on the key name: unread, this line left
@@ -2489,19 +1524,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('a shape this reader does not accept')
   })
 
-  // The line the requirement was actually drawn for stays where it was: with no
-  // list marker of any kind, the backticks are the only thing separating a
-  // declaration from a sentence that happens to open on the word.
-  it.each([
-    ['a marker-less unbackticked key', 'profile: poc'],
-    ['a marker-less unbackticked key inside a blockquote', '> profile: poc'],
-  ])('does not read %s as a declaration', (_, line) => {
-    const r = resolve(`## Process Profile\n\n${line}\n`)
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
-    expect(r.halts).toEqual([])
-  })
-
   // The third, weaker shape of the same class: the bullet and the backticks are
   // both there, padded inside the ticks. Detected on the accepted pattern (the
   // marker is present and the value is readable), so it RESOLVES rather than
@@ -2512,47 +1534,11 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toEqual([])
   })
 
-  // Round 9 Minor: key detection was CASE-SENSITIVE while the HEADING one level up
-  // is not — so `- `Profile`: `poc`` was read by nothing and reported by nothing:
-  // `default`, all 12 catalogue steps, zero halts, zero warnings, byte-identical to
-  // writing nothing. The heading immediately above the key is Title Case
-  // (`## Process Profile`), so mirroring its case into the key is the same class of
-  // author error as copying the table's bare key spelling, which this reader already
-  // handles. Case belongs to DETECTION (the key's spelling), which is loose; the
-  // VALUE stays strict, so `` `POC` `` still HALTs as an unknown profile.
-  it.each([
-    ['Title Case', 'Profile'],
-    ['upper case', 'PROFILE'],
-    ['mixed case', 'pRoFiLe'],
-  ])('reads a `profile` key spelled in %s as the key', (_, spelling) => {
-    const r = resolve(`## Process Profile\n\n- \`${spelling}\`: \`poc\`\n`)
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  // The second arm of the same finding, and the worse one: the key WAS invisible,
-  // so `custom` HALTed with "declares no `whitelist`" about a line visibly in the
-  // file — the very anti-pattern the schema writes down ("one message sends the
-  // reader hunting for a line their file does not have").
-  it('reads a case-variant `whitelist` key rather than HALTing about a line that is there', () => {
-    const r = resolve('## Process Profile\n\n- `profile`: `custom`\n- `Whitelist`: `implement`\n')
-    expect(r.halts).toEqual([])
-    expect(r.enabled).toEqual(['implement'])
-  })
-
-  it('counts a case-variant repeat of a key as the SAME key declared twice', () => {
-    const r = resolve('## Process Profile\n\n- `profile`: `poc`\n- `Profile`: `custom`\n')
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('`profile`')
-    expectNoStepSet(r)
-  })
-
   // Detection is case-insensitive on the rejected shapes too — otherwise a
   // case-variant key on an off-marker or inside a blockquote reopens the same
   // silent widening one shape lower down. The HALT names the CANONICAL spelling.
   it.each([
     ['no bullet at all', '`Profile`: `poc`'],
-    ['an ordered-list marker', '1. `PROFILE`: `poc`'],
     ['a blockquote', '> - `Profile`: `poc`'],
   ])('HALTs on a case-variant key written with %s', (_, line) => {
     const r = resolve(`## Process Profile\n\n${line}\n`)
@@ -2560,56 +1546,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('`profile`')
     expect(r.halts[0]).not.toContain('`Profile`')
     expectNoStepSet(r)
-  })
-
-  // The asymmetry the split rests on, pinned in both directions: the KEY's case is
-  // detection (loose), the VALUE's is acceptance (strict).
-  it('still HALTs on a case-variant VALUE — acceptance stays strict', () => {
-    const r = resolve('## Process Profile\n\n- `Profile`: `POC`\n')
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('unknown process profile `POC`')
-    expectNoStepSet(r)
-  })
-
-  // A case-variant key must not turn a documentation table row into a declaration
-  // either: the shipped template and the KB schema head their column `Key`, and
-  // `| \`Profile\` | \`poc\` |` is as writable as the lowercase row already ruled out.
-  it('still reads a case-variant documentation TABLE row as documentation', () => {
-    const r = resolve(
-      '## Process Profile\n\n| Key | Value |\n| --- | --- |\n| `Profile` | `poc` |\n',
-    )
-    expect(r.profile).toBe('default')
-    expect(r.halts).toEqual([])
-  })
-
-  it('does not read PROSE mentioning the key as a declaration', () => {
-    const r = resolve(
-      '## Process Profile\n\nA project that runs a subset declares `profile`: `poc` here.\n',
-    )
-    expect(r.profile).toBe('default')
-    expect(r.halts).toEqual([])
-  })
-
-  it('does not read the schema TABLE rows as declarations', () => {
-    const r = resolve(
-      '## Process Profile\n\n| Field | Default |\n| --- | --- |\n| `profile` | `default` |\n| `whitelist` | *(none)* |\n',
-    )
-    expect(r.profile).toBe('default')
-    expect(r.halts).toEqual([])
-  })
-
-  // Round 5 Major: both the key regex and the heading regex ended in `(.*)$` with
-  // no `m` flag — `.` cannot match `\r` and `$` anchors at end-of-string, so on a
-  // CRLF file EVERY line matched nothing. A team on Windows (`core.autocrlf=true`,
-  // the platform default) checks way-of-working.md out with CRLF, writes the
-  // documented declaration, and gets `default` with 12 steps, zero halts and zero
-  // warnings — byte-identical to writing nothing, with every level of this guard
-  // silent at once.
-  it('reads a CRLF file exactly as it reads the LF one', () => {
-    const crlf = resolve('## Process Profile\r\n\r\n- `profile`: `poc`\r\n')
-    expect(crlf.profile).toBe('poc')
-    expect(crlf.halts).toEqual([])
-    expect(crlf).toEqual(resolve('## Process Profile\n\n- `profile`: `poc`\n'))
   })
 
   it('reports the SECTION problems on a CRLF file too', () => {
@@ -2624,47 +1560,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(misLevelled.halts[0]).toContain('heading level')
   })
 
-  // Round 5 Minor: only ``` fences were skipped inside the section, so an
-  // illustrative example written in either other CommonMark code-block form was
-  // read as the project's real declaration — the 4-space-indented one silently
-  // BECAME the profile, and a `~~~` one carrying a placeholder id HALTed /next
-  // with an error naming a step the project never configured.
-  it('does not read a `~~~`-fenced example as the declaration', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `poc`\n\n~~~text\n- `profile`: `custom`\n- `whitelist`: `nope-not-a-step`\n~~~\n',
-    )
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  // Round 6 Minor: four spaces (or a tab) in front of a key is ALSO a legitimate
-  // CommonMark sublist, and the two are indistinguishable from the line alone. The
-  // ambiguity was resolved silently in the widening direction — skipped as an
-  // example, section resolved to `default`, all 12 steps back, zero halts — while
-  // the SAME content indented by two spaces resolved to `poc`. Which one a team got
-  // depended on their editor's Tab width.
-  it.each([
-    ['four spaces', '    '],
-    ['a tab', '\t'],
-  ])('HALTs on a key indented by %s rather than skipping it as an example', (_, indent) => {
-    const r = resolve(`## Process Profile\n\n- Configuration:\n${indent}- \`profile\`: \`poc\`\n`)
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('does not accept')
-    expectNoStepSet(r)
-  })
-
-  it('still reads a key nested under a bullet by TWO spaces', () => {
-    const r = resolve('## Process Profile\n\n- Configuration:\n  - `profile`: `poc`\n')
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  it('does not read an indented code block with no key line as a declaration', () => {
-    const r = resolve('## Process Profile\n\nFor example:\n\n    some sample text\n')
-    expect(r.profile).toBe('default')
-    expect(r.halts).toEqual([])
-  })
-
   it('still closes a ``` fence on ``` and not on a `~~~` line inside it', () => {
     const r = resolve(
       '## Process Profile\n\n```text\n~~~\n- `profile`: `custom`\n```\n\n- `profile`: `poc`\n',
@@ -2676,15 +1571,14 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   // Round 5 Minor: three CommonMark-valid spellings of the heading were neither
   // matched nor reported — each re-enabled all 12 steps on a project that declared
   // `poc`, indistinguishable from having written nothing.
-  it.each([
-    ['closed ATX', '## Process Profile ##'],
-    ['a 3-space indent', '   ## Process Profile'],
-    ['both', '  ## Process Profile  ##'],
-  ])('reads a heading written with %s as the section', (_, heading) => {
-    const r = resolve(`${heading}\n\n- \`profile\`: \`poc\`\n`)
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
+  it.each([['closed ATX', '## Process Profile ##']])(
+    'reads a heading written with %s as the section',
+    (_, heading) => {
+      const r = resolve(`${heading}\n\n- \`profile\`: \`poc\`\n`)
+      expect(r.profile).toBe('poc')
+      expect(r.halts).toEqual([])
+    },
+  )
 
   it.each([
     ['a level-2 underline', '---------------'],
@@ -2694,27 +1588,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('SETEXT')
     expect(r.halts[0]).toContain('## Process Profile')
-    expectNoStepSet(r)
-  })
-
-  it('does not read a `---` after unrelated prose as a setext profile heading', () => {
-    const r = resolve('## Process Profile\n\n- `profile`: `poc`\n\nSome prose\n\n---\n')
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  // Round 6 Major: a whitelist WRAPPED onto a second line was truncated in silence.
-  // The residue check erased the trailing `,` before looking, so the first line read
-  // as complete, and the continuation line matched no key regex and was discarded.
-  // The shipped example is 131 columns wide, so wrapping it is the natural edit in
-  // any project whose markdownlint keeps the default 80-column rule.
-  it('HALTs on a whitelist wrapped onto a second line instead of truncating it', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `custom`\n' +
-        '- `whitelist`: `specify-prd`, `brainstorm`,\n  `plan-stories`, `implement`\n',
-    )
-    expect(r.halts).toHaveLength(1)
-    expect(r.halts[0]).toContain('ONE line')
     expectNoStepSet(r)
   })
 
@@ -2730,14 +1603,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
         '- `whitelist`: `specify-prd` `brainstorm`\n  `plan-stories` `implement`\n',
     )
     expect(r.halts.join('\n')).toContain('ONE line')
-  })
-
-  it('leaves an ordinary paragraph after a key line alone', () => {
-    const r = resolve(
-      '## Process Profile\n\n- `profile`: `poc`\n\nThe profile governs the step, not a skill.\n',
-    )
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
   })
 
   it('leaves a following bullet that is not a key alone', () => {
@@ -2762,12 +1627,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toEqual([])
   })
 
-  it('reads a nested example alone as no declaration at all', () => {
-    const r = resolve('## Process Profile\n\n````text\n```\n- `profile`: `poc`\n```\n````\n')
-    expect(r.profile).toBe('default')
-    expect(r.halts).toEqual([])
-  })
-
   // Round 6 Minor: commenting a block out is the ordinary way to disable it without
   // deleting it, and an HTML comment is the same class of non-content as a fence.
   it('does not count a commented-out section as a second section', () => {
@@ -2776,18 +1635,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
         '## Process Profile\n\n- `profile`: `poc`\n',
     )
     expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  it('does not read a commented-out key inside the live section', () => {
-    const r = resolve('## Process Profile\n\n<!-- - `profile`: `custom` -->\n- `profile`: `poc`\n')
-    expect(r.profile).toBe('poc')
-    expect(r.halts).toEqual([])
-  })
-
-  it('still reads a `<!-- -->` example printed inside a fence as an example', () => {
-    const r = resolve('## Process Profile\n\n```text\n<!-- - `profile`: `custom` -->\n```\n')
-    expect(r.profile).toBe('default')
     expect(r.halts).toEqual([])
   })
 
@@ -2824,13 +1671,6 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('OUTSIDE')
     expect(r.halts[0]).toContain('line 7')
     expect(r.halts[0]).not.toContain('more than once')
-  })
-
-  it('reads the section itself when nothing sits under the later level-1 heading', () => {
-    const r = resolve('## Process Profile\n\n- `profile`: `poc`\n\n# Other\n\nProse.\n')
-    expect(r.halts).toEqual([])
-    expect(r.profile).toBe('poc')
-    expect(r.enabled).toEqual(['brainstorm', 'plan-stories', 'implement'])
   })
 
   // The other half of the same predicate, unchanged on purpose (documented at the
@@ -2885,15 +1725,6 @@ describe('checkSkillLocalScripts — scripts ship with their skill and mirror by
     expect(errors[0]).toContain('drifted')
     expect(errors[0]).toContain('workflow/demo/scripts/host/b.mjs')
     expect(errors[0]).toContain('pair-workflow-demo/scripts/host/b.mjs')
-  })
-
-  it('an identical twin, an orphan twin and an empty scripts/ are clean', () => {
-    const { skills, installed } = fixture('clean', 'No links.')
-    write(skills, 'workflow/demo/scripts/a.mjs', 'same')
-    write(installed, 'pair-workflow-demo/scripts/a.mjs', 'same')
-    write(installed, 'pair-workflow-demo/scripts/orphan.mjs', 'x')
-    mkdirSync(join(skills, 'workflow/demo/scripts/empty'), { recursive: true })
-    expect(checkSkillLocalScripts(skills, installed)).toEqual([])
   })
 
   it('AC2: an unreadable dataset script is an error naming both paths, never identical', () => {

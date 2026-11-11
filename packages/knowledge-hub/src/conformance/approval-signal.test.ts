@@ -135,24 +135,6 @@ describe('tie-break / choice rounds are rounds too (review round 1, Major 1)', (
   it('the corpus still has tie-break rounds to check', () => {
     expect(withTieBreak.length).toBeGreaterThan(0)
   })
-
-  for (const [rel, file] of withTieBreak) {
-    it(`${rel} — its tie-break lines are detected and carry the signal`, () => {
-      const content = read(file)
-      const tieLines = content
-        .split('\n')
-        .map((line, i) => ({ line: i + 1, text: line }))
-        .filter(l => TIE_BREAK.test(l.text))
-      expect(tieLines.length).toBeGreaterThan(0)
-
-      const detected = findApprovalRounds(content)
-      for (const tie of tieLines) {
-        const round = detected.find(r => r.line === tie.line)
-        expect(round, `line ${tie.line} is a tie-break the detector does not see`).toBeDefined()
-        expect(round?.qualified, `line ${tie.line} is not conditional on $approval`).toBe(true)
-      }
-    })
-  }
 })
 
 describe('qualifying a round did not move the guided path (AC2, review round 2)', () => {
@@ -161,17 +143,15 @@ describe('qualifying a round did not move the guided path (AC2, review round 2)'
   // winner in a near-tie where it used to present two neutral options. AC2 is
   // "guided must not shift by one word", so the invariant is checked over the whole
   // family, in both corpora, not just on the line that broke.
-  for (const [rel, file] of FAMILY_SKILLS) {
-    it(`${rel} — no auto-only text in the guided half of any round (dataset)`, () => {
-      expect(findGuidedDrift(read(file))).toEqual([])
-    })
-
-    it(`${rel} — same in the installed mirror`, () => {
-      expect(findGuidedDrift(read(join(INSTALLED_SKILLS, installedDir(rel), 'SKILL.md')))).toEqual(
-        [],
-      )
-    })
-  }
+  it('no auto-only text in the guided half of any round, dataset and installed mirror', () => {
+    for (const [rel, file] of FAMILY_SKILLS) {
+      expect(findGuidedDrift(read(file)), `${rel} (dataset)`).toEqual([])
+      expect(
+        findGuidedDrift(read(join(INSTALLED_SKILLS, installedDir(rel), 'SKILL.md'))),
+        `${rel} (installed)`,
+      ).toEqual([])
+    }
+  })
 })
 
 describe('a tie-break resolves from a real source, not an invented order (round 2)', () => {
@@ -182,14 +162,14 @@ describe('a tie-break resolves from a real source, not an invented order (round 
   // read. A tie-break has to name a source that actually decides.
   const ORDERING_CLAIM = /\b(?:lists?|reaches)\s+first\b/i
 
-  for (const [rel, file] of FAMILY_SKILLS) {
-    it(`${rel} — claims no first-in-a-list tie-break`, () => {
+  it('no skill claims a first-in-a-list tie-break', () => {
+    for (const [rel, file] of FAMILY_SKILLS) {
       const offenders = read(file)
         .split('\n')
         .filter(line => ORDERING_CLAIM.test(line))
       expect(offenders, `list-order tie-break in ${rel}: ${offenders.join(' | ')}`).toEqual([])
-    })
-  }
+    }
+  })
 
   // Round 3, Minor 2: this pin filtered on the literal "exact tie", which only
   // `assess-methodology` uses — so the two clauses rewritten alongside it

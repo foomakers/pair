@@ -31,3 +31,7 @@ out/
 # `tools/prettier-config/dataset/.workflows/` — a path that does not exist, silently
 # matching nothing.
 **/dataset/.workflows/
+
+# US-613: machine output of `pnpm --filter @pair/dev-tools test-audit` (compact JSON)
+**/test-audit/baseline.json
+**/test-audit/report.json

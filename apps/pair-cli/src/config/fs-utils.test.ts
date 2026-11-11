@@ -22,5 +22,6 @@ describe('config fs-utils', () => {
     await fs.mkdir('/test/existing', { recursive: true })
     await ensureDir(fs, '/test/existing')
     expect(await fs.exists('/test/existing')).toBe(true)
+    expect(await fs.readFile('/test/existing/file.txt')).toBe('content')
   })
 })

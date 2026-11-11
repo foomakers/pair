@@ -377,7 +377,7 @@ describe('distributeToSecondaryTargets', () => {
       targets: [],
       baseTarget: '/project',
     })
-    // No error, no-op
+    expect(fs.getSymlinks().size).toBe(0)
   })
 
   it('skips distribution when canonical path does not exist', async () => {

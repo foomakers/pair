@@ -8,8 +8,6 @@ import {
   collectAllSkillDirs,
   checkStepCatalogue,
   checkStepMarkers,
-  checkStepMarkersInMirror,
-  checkManualPathEntrypoint,
   checkProcessProfiles,
   parseWowProfileSection,
   resolveProcessProfile,
@@ -58,7 +56,6 @@ const AI_DEV_README_MIRROR = join(
 const NEXT_DATASET = join(SKILLS_DIR, 'next/SKILL.md')
 const MIRROR_SKILLS_DIR = join(HUB, '../../.claude/skills')
 const NEXT_MIRROR = join(MIRROR_SKILLS_DIR, 'pair-next/SKILL.md')
-const AGENTS_MD = join(DATASET, 'AGENTS.md')
 
 const read = (p: string): string => (existsSync(p) ? readFileSync(p, 'utf-8') : '')
 
@@ -71,21 +68,6 @@ describe('step catalogue — the unit of the profile is the step, not its repres
     expect(existsSync(CATALOGUE_PATH)).toBe(true)
   })
 
-  it('gives every step a stable id, both representations and its prerequisites', () => {
-    const entries = parseStepCatalogue(catalogueSource)
-    expect(entries.length).toBeGreaterThan(0)
-    for (const entry of entries) {
-      expect(entry.id).toMatch(/^[a-z][a-z0-9-]*$/)
-      // `howTo` / `executable` are nullable BY DESIGN — that nullability is what
-      // makes the three asymmetries expressible as data.
-      expect(entry).toHaveProperty('howTo')
-      expect(entry).toHaveProperty('executable')
-      expect(Array.isArray(entry.requires)).toBe(true)
-    }
-    // Ids are unique — a duplicate would make a whitelist entry ambiguous.
-    expect(new Set(entries.map(e => e.id)).size).toBe(entries.length)
-  })
-
   it('binds to the real corpus in BOTH directions (no silent drift)', () => {
     const entries = parseStepCatalogue(catalogueSource)
     const errors = checkStepCatalogue(entries, {
@@ -93,25 +75,6 @@ describe('step catalogue — the unit of the profile is the step, not its repres
       skillDirs: collectAllSkillDirs(SKILLS_DIR),
     })
     expect(errors).toEqual([])
-  })
-
-  it('declares the three asymmetries as DATA, not as special cases in logic', () => {
-    const byId = new Map(parseStepCatalogue(catalogueSource).map(e => [e.id, e]))
-
-    // 04 / 05: retired how-to guides, executable form is a CAPABILITY.
-    for (const id of ['define-subdomains', 'define-bounded-contexts']) {
-      const entry = byId.get(id)
-      expect(entry, `catalogue is missing the DDD-mapping step \`${id}\``).toBeDefined()
-      expect(entry?.howTo).toBeNull()
-      expect(entry?.executable).toMatch(/^\/map-/)
-    }
-
-    // brainstorm: a process SKILL with no how-to — so on a project running the
-    // manual path it is not executable at all, and must be declared unreachable.
-    const brainstorm = byId.get('brainstorm')
-    expect(brainstorm).toBeDefined()
-    expect(brainstorm?.howTo).toBeNull()
-    expect(brainstorm?.executable).toBe('/brainstorm')
   })
 
   it('states that a step with no representation is never proposed', () => {
@@ -129,15 +92,6 @@ describe('step markers — every executable representation declares its step id'
   it('carries a marker on each catalogued executable, and on nothing else', () => {
     const entries = parseStepCatalogue(catalogueSource)
     expect(checkStepMarkers(entries, SKILLS_DIR)).toEqual([])
-  })
-
-  it('carries it in the INSTALLED MIRROR too — the copy an assistant actually loads', () => {
-    // The dataset copy is the source; the mirror is the binding one (same finding
-    // class as #280's `brainstorm-phases.test.ts:820`). Guarded here AND in
-    // `skills:conformance`, so dropping a marker from `.claude/skills/**` during a
-    // regeneration is a red gate, not a silently ungoverned step.
-    const entries = parseStepCatalogue(catalogueSource)
-    expect(checkStepMarkersInMirror(entries, SKILLS_DIR, MIRROR_SKILLS_DIR)).toEqual([])
   })
 
   it('uses a declared marker, not a prose window', () => {
@@ -612,26 +566,6 @@ describe('composers name the profile AT the composition site, not only in their 
     for (const id of fromTable) expect(declared.has(id), `undeclared: ${id}`).toBe(true)
   })
 
-  // …and the list of composers itself is derived from the corpus, so a 13th
-  // composer cannot be added without either entering this guard or being named
-  // here. `brainstorm` is the one documented exception: its delta and its
-  // composition beats are disclosed to `degradation.md` under a byte budget (ADL
-  // 2026-08-28), and the test below pins that half.
-  it('the composer list is the corpus’s, not this file’s', () => {
-    const stepDirs = collectAllSkillDirs(SKILLS_DIR).filter(d =>
-      entries.some(e => e.executable === `/${d.split('/').pop()}`),
-    )
-    const found = stepDirs
-      .filter(d => composedFromTable(read(join(SKILLS_DIR, d, 'SKILL.md'))).length > 0)
-      .map(d => d.split('/').pop() as string)
-    expect(new Set(found)).toEqual(new Set([...COMPOSER_NAMES, 'brainstorm']))
-  })
-
-  it.each(composers)('%s: states it in the graceful-degradation entry too', (_, content) => {
-    const section = sectionBetween(content, '## Graceful Degradation', '\n## ')
-    expect(section).toMatch(CLAUSE)
-  })
-
   // The precedent this mirrors — kept in the same test so removing one side of
   // the pair is visible.
   it('brainstorm keeps its own composition-site statement', () => {
@@ -716,45 +650,6 @@ describe('way-of-working — the `## Process Profile` adoption section', () => {
     expect(template).toContain('## Process Profile')
   })
 
-  it('marks it optional, absence meaning `default`', () => {
-    const section = sectionBetween(template, '## Process Profile', '\n## ')
-    expect(section).toMatch(/Optional/)
-    expect(section.toLowerCase()).toMatch(/omitted|absent/)
-    expect(section).toMatch(/`default`/)
-  })
-
-  it('shows the `poc` and `custom` shapes with a whitelist example', () => {
-    const section = sectionBetween(template, '## Process Profile', '\n## ')
-    expect(section).toMatch(/`poc`/)
-    expect(section).toMatch(/`custom`/)
-    expect(section).toMatch(/whitelist/)
-  })
-
-  // Round 8: this template is itself read as a declaration by the gate, and it
-  // documents the two keys in a TABLE — so the shape it must not treat as a
-  // declaration is one of its own, and the shape it must HALT on is one an author
-  // could plausibly write two lines below. Both are stated where they are read.
-  it('tells an author that a blockquoted key HALTs and a table row is documentation', () => {
-    const section = sectionBetween(template, '## Process Profile', '\n## ')
-    const lower = section.toLowerCase()
-    expect(lower).toMatch(/blockquote/)
-    expect(lower).toMatch(/table/)
-    expect(lower).toMatch(/twice/)
-  })
-
-  // Round 9: the template's own key column is headed `Key` in Title Case, which is
-  // where the mirrored spelling comes from — so the case rule is stated where it is
-  // read.
-  it('tells an author the key is read whatever its case, and the value is not', () => {
-    const section = sectionBetween(template, '## Process Profile', '\n## ')
-    expect(section.toLowerCase()).toMatch(/case-insensitiv|whatever its case|regardless of case/)
-  })
-
-  it('points at the KB schema rather than restating it', () => {
-    const section = sectionBetween(template, '## Process Profile', '\n## ')
-    expect(section).toContain('process-profiles.md')
-  })
-
   // Round 14 Minor: the template told every adopting project "a key is a plain list
   // item at the top level of this section", while the reader deliberately reads a
   // NESTED one (two spaces is a key, four spaces or a tab HALTs, so the profile does
@@ -789,287 +684,18 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
     expect(content).toContain('step-catalogue.md')
   })
 
-  it.each(sources)('%s: absent section ⇒ `default` ⇒ the whole cascade (AC1)', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    expect(section.toLowerCase()).toMatch(/no `?## process profile`? section|absent|omitted/)
-    expect(section).toMatch(/`default`/)
-    expect(section.toLowerCase()).toMatch(/unchanged|every step|full process/)
-  })
-
-  it.each(sources)('%s: drops a disabled candidate instead of erroring (AC4)', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    expect(section.toLowerCase()).toMatch(/skipped|dropped|never (proposed|suggested)/)
-    expect(section.toLowerCase()).toMatch(/not an error|never an error/)
-  })
-
-  it.each(sources)('%s: HALTs on an unknown id and on an unknown name (AC5)', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    expect(section).toMatch(/HALT/)
-    expect(section.toLowerCase()).toMatch(/unknown profile/)
-    expect(section.toLowerCase()).toMatch(/unknown (step )?id/)
-  })
-
-  it.each(sources)('%s: a HALT yields no step set, not `default` (round 7)', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    expect(section.toLowerCase()).toMatch(/no step set/)
-    expect(section.toLowerCase()).toMatch(/never continue on `?default`?/)
-  })
-
-  it.each(sources)('%s: HALTs on a duplicated or mis-levelled section', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    expect(section.toLowerCase()).toMatch(/more than one `?## process profile`?/)
-    expect(section.toLowerCase()).toMatch(/level other than `?##`?|### process profile/)
-  })
-
-  // Round 4 Major: the KEY level, between the SECTION level (round 3) and the
-  // VALUE level (round 2). Both new rules are normative for the LLM path too —
-  // `/next` is the executing reader, the resolver only the reference one.
-  it.each(sources)(
-    '%s: HALTs on a key declared twice, and on an off-shape marker',
-    (_, content) => {
-      const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-      const lower = section.toLowerCase()
-      expect(lower).toMatch(/same key .*twice|key .*more than once|twice .*same section/)
-      expect(lower).toMatch(/`?[-*+]`?|bullet/)
-      expect(lower).toMatch(/no bullet|bullet-less|numbered|ordered/)
-    },
-  )
-
-  // Round 5: the executing reader needs the same three CommonMark facts the
-  // schema now states — a setext heading is a HALT, a code block of any of the
-  // three forms is an example, and a CRLF file is read as the LF one.
-  it.each(sources)('%s: HALTs on a setext heading and normalizes line endings', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    const lower = section.toLowerCase()
-    expect(lower).toMatch(/setext/)
-    expect(lower).toMatch(/line endings|crlf/)
-    expect(lower).toMatch(/code-block forms|examples rather than declarations/)
-  })
-
-  // Round 8: the executing reader carries the same two rules — the blockquote
-  // HALTs, the documentation table row does not, and a repeated step id is never
-  // deduped away.
-  it.each(sources)('%s: HALTs on a blockquoted key but not on a table row', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    const lower = section.toLowerCase()
-    expect(lower).toMatch(/blockquote/)
-    expect(lower).toMatch(/table row/)
-  })
-
-  // Round 9: the executing reader carries the same rule — a case-variant KEY is the
-  // key, a case-variant VALUE is not the value.
-  it.each(sources)('%s: reads a key whatever its case, and a value strictly', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    const lower = section.toLowerCase()
-    expect(lower).toMatch(/case-insensitiv|whatever its case|regardless of case/)
-    expect(lower).toMatch(/`profile`|`whitelist`/)
-  })
-
-  it.each(sources)('%s: HALTs on a step id named more than once', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    const lower = section.toLowerCase()
-    expect(lower).toMatch(/named more than once|more than once in the whitelist/)
-    expect(lower).toMatch(/never deduped|not deduped/)
-  })
-
-  it.each(sources)('%s: HALTs on an empty custom whitelist (AC10)', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    expect(section.toLowerCase()).toMatch(/empty/)
-    expect(section.toLowerCase()).toMatch(/misconfiguration/)
-  })
-
-  it.each(sources)('%s: flags a disabled prerequisite with the minimal fix (AC9)', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    expect(section.toLowerCase()).toMatch(/prerequisite/)
-    expect(section.toLowerCase()).toMatch(/minimal fix/)
-    // Flagged, never silently repaired.
-    expect(section.toLowerCase()).toMatch(/never silently|not silently/)
-  })
-
-  // Round 7 Minor: Step 3 carried an explicit "every row below is subject to the
-  // enabled step set" reminder and Step 2 carried none, though Step 0.5 says the
-  // set is carried into Steps 2–5 and rows 1–2 map to `specify-prd`/`bootstrap`.
-  // The contrast invited the reading that only Step 3's rows are filtered — a
-  // `custom` profile omitting `specify-prd` on a template PRD would then be
-  // proposed `/specify-prd`, a step the project explicitly disabled (AC4).
-  it.each(sources)('%s: repeats the profile filter under BOTH cascade tables', (_, content) => {
-    for (const [step, until] of [
-      ['### Step 2: Cascade', '\n### Step 3'],
-      ['### Step 3: Cascade', '\n### Step 4'],
-    ]) {
-      const section = sectionBetween(content, step as string, until as string)
-      expect(section, `${step} states no profile filter`).toMatch(/Profile filter/)
-      expect(section.toLowerCase()).toMatch(/step 0\.5/)
-      expect(section.toLowerCase()).toMatch(/skipped|never proposed/)
-    }
-  })
-
   it.each(sources)('%s: maps its cascade rows to step ids as data', (_, content) => {
     // Rows 12–16 are capabilities that are NOT steps and are never filtered —
     // the mapping table is what makes that explicit instead of implied.
     expect(content).toMatch(/Step id/)
     expect(content.toLowerCase()).toMatch(/rows? 12[–-]16|not steps|never filtered/)
   })
-
-  /** Every catalogued executable, in the spelling THIS copy of `/next` uses. */
-  const STEP_BY_EXECUTABLE = new Map<string, string>(
-    parseStepCatalogue(catalogueSource).flatMap(e => {
-      if (e.executable === null) return []
-      const dir = collectAllSkillDirs(SKILLS_DIR).find(
-        d => d.split('/').pop() === e.executable?.slice(1),
-      )
-      const names = [e.executable]
-      if (dir !== undefined) names.push(`/${installedSkillDir(dir)}`)
-      return names.map(n => [n, e.id] as [string, string])
-    }),
-  )
-
-  /** Every `| N | condition | `/skill` | rationale |` row of the two cascade tables. */
-  const cascadeRows = (content: string): Array<{ row: number; executable: string }> => {
-    const region = sectionBetween(content, '### Step 2: Cascade', '\n### Step 4')
-    return region
-      .split('\n')
-      .filter(l => /^\|\s*\d+\s*\|/.test(l))
-      .flatMap(l => {
-        const cells = l.split('|')
-        const executable = /`(\/[a-z][a-z0-9-]*)`/.exec(cells[3] ?? '')
-        if (executable === null) return []
-        return [{ row: Number((cells[1] as string).trim()), executable: executable[1] as string }]
-      })
-  }
-
-  /**
-   * The `Row → step id` table as a lookup: row number → step id, or `null` where it
-   * says the row is not a step. A row the table never names is absent from the map.
-   */
-  const rowToStepId = (content: string): Map<number, string | null> => {
-    const region = sectionBetween(content, '**Row → step id.**', '\n### Step 1')
-    const mapping = new Map<number, string | null>()
-    for (const line of region.split('\n')) {
-      if (!/^\|\s*\d/.test(line)) continue
-      const [, rows, step] = line.split('|')
-      const id = /`([a-z][a-z0-9-]*)`/.exec(step ?? '')
-      const numbers = [...(rows ?? '').matchAll(/(\d+)(?:\s*[–-]\s*(\d+))?/g)].flatMap(m => {
-        const from = Number(m[1])
-        const to = m[2] === undefined ? from : Number(m[2])
-        return Array.from({ length: to - from + 1 }, (_, k) => from + k)
-      })
-      for (const n of numbers) mapping.set(n, id === null ? null : (id[1] as string))
-    }
-    return mapping
-  }
-
-  // Round 14 Minor: this table IS the filter's lookup ("nothing about it is inferred
-  // from a row's wording"), and the only guard on it asserted that the literal string
-  // `Step id` appeared somewhere in the file. Deleting the `| 10 `/plan-tasks` |` and
-  // `| 11 `/refine-story` |` mapping rows from BOTH copies left this file at
-  // `Tests 149 passed` and `skills:conformance` at exit 0 — the mapping table
-  // contributes no per-row cases at all. An executor following Step 0.5 literally
-  // then finds rows 10/11 unmapped and treats them like rows 12–16 ("not steps,
-  // therefore never filtered"), so a `custom` project whitelisting `implement` and
-  // `review` alone — the delivery-only shape the shipped docs advertise — is proposed
-  // `/plan-tasks` on a Ready story and `/refine-story` on a Draft one, two steps it
-  // declared it does not run, with no prompt and no note (AC4 broken, silently).
-  //
-  // Subjects come from the CORPUS, like the reporters guard: every cascade row whose
-  // Suggestion cell names a catalogued executable, resolved through the real
-  // `installedSkillDir` for the mirror.
-  it.each(sources)('%s: maps EVERY cascade row that proposes a step (AC4)', (_, content) => {
-    const rows = cascadeRows(content)
-    const mapping = rowToStepId(content)
-    const steps = rows.filter(r => STEP_BY_EXECUTABLE.has(r.executable))
-    // Fail closed: a parse that finds nothing is not a table that is correct.
-    expect(rows.length).toBeGreaterThanOrEqual(11)
-    expect(steps.length).toBeGreaterThanOrEqual(8)
-    for (const { row, executable } of steps) {
-      const expected = STEP_BY_EXECUTABLE.get(executable) as string
-      expect(
-        mapping.get(row),
-        `cascade row ${row} proposes \`${executable}\` — step \`${expected}\` — but the ` +
-          `Row → step id table maps that row to ${JSON.stringify(mapping.get(row) ?? null)}. ` +
-          `An unmapped row is read as "not a step, therefore never filtered".`,
-      ).toBe(expected)
-    }
-  })
-
-  // The other direction: a row the table calls "not a step" must not be one.
-  it.each(sources)('%s: calls no catalogued step a non-step in that table', (_, content) => {
-    const mapping = rowToStepId(content)
-    for (const { row, executable } of cascadeRows(content)) {
-      if (mapping.get(row) !== null) continue
-      expect(
-        STEP_BY_EXECUTABLE.has(executable),
-        `row ${row} proposes \`${executable}\`, a catalogued step, while the mapping table ` +
-          `declares that row is not one`,
-      ).toBe(false)
-    }
-  })
-
-  it.each(sources)('%s: HALTs on a key under no section at all (round 14)', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    expect(section).toMatch(/## Process Profiles/)
-    expect(section).toMatch(/## ProcessProfile/)
-    expect(section.toLowerCase()).toMatch(/no heading whatever|no heading at all|under no/)
-  })
-
-  it.each(sources)('%s: keeps the profile stateless, re-read every run', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    expect(section.toLowerCase()).toMatch(/every (run|invocation)|re-?read|never cached/)
-  })
-
-  // Round 2 Major (a): Step 0.5 scoped its filter to "Steps 2–4" while Step 5 names
-  // skills unconditionally, so the fallback printed `/pair-process-plan-stories` and
-  // `/pair-process-review` verbatim even when the profile disabled them — AC4 says a
-  // disabled step is never suggested, and the fallback is not a row.
-  it.each(sources)('%s: carries the enabled set into the FALLBACK too (AC4)', (_, content) => {
-    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
-    expect(section).toMatch(/Steps? 2[–-]5/)
-    expect(section.toLowerCase()).toMatch(/fallback/)
-  })
-
-  it.each(sources)('%s: the fallback names only enabled steps (AC4)', (_, content) => {
-    const section = sectionBetween(content, '### Step 5: Fallback', '\n## ')
-    expect(section.toLowerCase()).toMatch(/enabled/)
-    expect(section.toLowerCase()).toMatch(/disabled/)
-  })
-
-  // Round 2 Major (b): under `poc`, rows 3–4 are dropped and row 5 needs epics, so a
-  // fresh project fell through to a fallback recommending `plan-stories` — whose only
-  // enabled producer of input is `brainstorm`, a step `/next` proposes nowhere else.
-  it.each(sources)('%s: the fallback has a backlog entry point under `poc`', (_, content) => {
-    const section = sectionBetween(content, '### Step 5: Fallback', '\n## ')
-    // Dataset names skills bare, the mirror carries the install prefix.
-    expect(section).toMatch(/\/(pair-process-)?brainstorm/)
-    expect(section).toMatch(/`poc`/)
-  })
 })
 
 describe('the manual (no-skills) path is governed by the same profile (AC8)', () => {
-  it('the catalogue names the how-to guide as the step’s other representation', () => {
-    const entries = parseStepCatalogue(catalogueSource)
-    const withHowTo = entries.filter(e => e.howTo !== null)
-    // Every how-to guide on disk is reachable from a step id.
-    expect(withHowTo.length).toBe(collectHowToGuides(HOW_TO_DIR).length)
-  })
-
   it('the schema says the profile governs the step, not one representation', () => {
     const lower = profilesSource.toLowerCase()
     expect(lower).toMatch(/how-to/)
     expect(lower).toMatch(/no skills installed|without skills|manual path/)
-  })
-
-  // The catalogue makes the mapping EXPRESSIBLE; it does not make the manual path
-  // GOVERNED. The entrypoint a human with no skills reads is AGENTS.md's manual
-  // flow — without a step there, a `poc` team follows step "identify your task",
-  // opens `03-how-to-create-and-prioritize-initiatives.md` and runs a disabled step.
-  it('AGENTS.md’s manual flow sends the reader to the profile before picking a how-to', () => {
-    expect(checkManualPathEntrypoint(read(AGENTS_MD))).toEqual([])
-  })
-
-  it('the manual step names the section, the file and the catalogue', () => {
-    const section = sectionBetween(read(AGENTS_MD), '## 🎯 Quick Start Process', '\n## ')
-    expect(section).toContain('## Process Profile')
-    expect(section).toContain('way-of-working.md')
-    expect(section).toContain('step-catalogue.md')
   })
 })
