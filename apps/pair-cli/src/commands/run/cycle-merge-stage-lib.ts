@@ -163,20 +163,7 @@ export let remoteHead: string
 export let logs: { resolve: string; merge: string; engine: string }
 export let printed: string[]
 
-// eslint-disable-next-line max-lines-per-function -- test fixture setup, exempt in *.test.ts before the split
-beforeEach(() => {
-  root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-cycle-merge-stage-')))
-  main = join(root, 'main')
-  const bin = join(root, 'bin')
-  const origin = join(root, 'origin.git')
-  logs = {
-    resolve: join(root, 'resolve.log'),
-    merge: join(root, 'merge.log'),
-    engine: join(root, 'engine.log'),
-  }
-  mkdirSync(main, { recursive: true })
-  mkdirSync(bin, { recursive: true })
-
+function initRepos(origin: string): void {
   const git = (cwd: string, ...args: string[]) =>
     execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   git(main, 'init', '-q', '-b', 'main')
@@ -202,7 +189,9 @@ beforeEach(() => {
   git(main, 'remote', 'add', 'origin', origin)
   git(main, 'push', '-q', 'origin', `HEAD:refs/heads/${BRANCH}`)
   remoteHead = git(main, 'rev-parse', 'HEAD').trim()
+}
 
+function installScripts(): void {
   const scripts = join(main, '.claude/skills/pair-workflow-cycle/scripts')
   mkdirSync(scripts, { recursive: true })
   cpSync(join(INSTALLED_SCRIPTS, 'cycle-dispatch.mjs'), join(scripts, 'cycle-dispatch.mjs'))
@@ -213,6 +202,23 @@ beforeEach(() => {
   writeFileSync(join(scripts, 'cycle-merge.mjs'), MERGE_STUB)
   writeFileSync(join(main, '.claude/skills/pair-workflow-cycle/SKILL.md'), '')
   cpSync(join(REPO_ROOT, '.claude/agents'), join(main, '.claude/agents'), { recursive: true })
+}
+
+beforeEach(() => {
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-cycle-merge-stage-')))
+  main = join(root, 'main')
+  const bin = join(root, 'bin')
+  const origin = join(root, 'origin.git')
+  logs = {
+    resolve: join(root, 'resolve.log'),
+    merge: join(root, 'merge.log'),
+    engine: join(root, 'engine.log'),
+  }
+  mkdirSync(main, { recursive: true })
+  mkdirSync(bin, { recursive: true })
+
+  initRepos(origin)
+  installScripts()
 
   vi.stubEnv('FAKE_RESOLVE_LOG', logs.resolve)
   vi.stubEnv('FAKE_MERGE_LOG', logs.merge)
