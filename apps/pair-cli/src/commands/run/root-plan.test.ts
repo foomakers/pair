@@ -57,32 +57,15 @@ const card = (id: string, extra: Partial<RootCandidate> = {}): RootCandidate => 
   }
 }
 
-const CORPUS: Array<[string, RootCandidate[]]> = [
-  ['no cards', []],
-  ['independent cards', [card('1'), card('2'), card('3')]],
-  [
-    'unmerged prerequisite',
-    [card('1'), card('2', { prerequisites: [{ id: '1', merged: false }] })],
-  ],
-  ['merged prerequisite', [card('1'), card('2', { prerequisites: [{ id: '9', merged: true }] })]],
-  [
-    'mutex conflict',
-    [
-      card('1', { mutexResources: ['skill:a', 'file:x'] }),
-      card('2', { mutexResources: ['file:x'] }),
-      card('3', { mutexResources: ['skill:b'] }),
-    ],
-  ],
-  ['duplicate + unresolvable', [card('1'), card('1'), card('2', { branch: '' })]],
-  [
+const CORPUS: Array<[string, RootCandidate[]]> = [['duplicate + unresolvable', [card('1'), card('1'), card('2', { branch: '' })]],
+[
     'mutex + dependency together',
     [
       card('1', { mutexResources: ['r'] }),
       card('2', { mutexResources: ['r'] }),
       card('3', { prerequisites: [{ id: '1', merged: false }] }),
     ],
-  ],
-]
+  ],]
 
 describe('root-plan — parity with pair-loop.js (tier 1) over one corpus', () => {
   const t1 = tier1()

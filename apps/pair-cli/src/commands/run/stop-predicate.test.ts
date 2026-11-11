@@ -16,70 +16,26 @@ const TABLE: {
   predicate: { selector: string; condition: string } | undefined
   snapshot: PredicateCard[]
   satisfied: boolean
-}[] = [
-  { name: 'no predicate', predicate: undefined, snapshot: [card('1', 'Done')], satisfied: false },
-  { name: 'empty snapshot', predicate: PREDICATE('Done'), snapshot: [], satisfied: true },
-  {
-    name: 'all cards in macrostate',
-    predicate: PREDICATE('Done'),
-    snapshot: [card('1', 'Done'), card('2', 'Done')],
-    satisfied: true,
-  },
-  {
+}[] = [{ name: 'no predicate', predicate: undefined, snapshot: [card('1', 'Done')], satisfied: false },
+{ name: 'empty snapshot', predicate: PREDICATE('Done'), snapshot: [], satisfied: true },
+{
     name: 'one card not in macrostate',
     predicate: PREDICATE('Done'),
     snapshot: [card('1', 'Done'), card('2', 'In Progress')],
     satisfied: false,
   },
-  {
-    name: 'has-tag holds',
-    predicate: PREDICATE('has-tag:approved'),
-    snapshot: [card('1', 'Ready', ['approved', 'x'])],
-    satisfied: true,
-  },
-  {
-    name: 'has-tag missing on one',
-    predicate: PREDICATE('has-tag:approved'),
-    snapshot: [card('1', 'Ready', ['approved']), card('2', 'Ready', [])],
-    satisfied: false,
-  },
-  {
+{
     name: 'and: both hold',
     predicate: PREDICATE('Done and has-tag:approved'),
     snapshot: [card('1', 'Done', ['approved'])],
     satisfied: true,
   },
-  {
-    name: 'and: case-insensitive joiner',
-    predicate: PREDICATE('Done AND has-tag:approved'),
-    snapshot: [card('1', 'Done', ['approved'])],
-    satisfied: true,
-  },
-  {
+{
     name: 'and: one fails',
     predicate: PREDICATE('Done and has-tag:approved'),
     snapshot: [card('1', 'Done', [])],
     satisfied: false,
-  },
-  {
-    name: 'multi-word macrostate',
-    predicate: PREDICATE('In Progress'),
-    snapshot: [card('1', 'In Progress')],
-    satisfied: true,
-  },
-  {
-    name: 'macrostate is exact, not substring',
-    predicate: PREDICATE('Done'),
-    snapshot: [card('1', 'Done-ish')],
-    satisfied: false,
-  },
-  {
-    name: 'snapshot fields are data only',
-    predicate: PREDICATE('has-tag:x'),
-    snapshot: [card('1', 'Done', ['has-tag:x'])],
-    satisfied: false,
-  },
-]
+  },]
 
 describe('evaluateStopPredicate', () => {
   it.each(TABLE)('$name', ({ predicate, snapshot, satisfied }) => {

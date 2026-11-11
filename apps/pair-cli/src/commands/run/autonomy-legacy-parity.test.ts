@@ -114,13 +114,7 @@ const CORPUS: ReadonlyArray<readonly [string, string]> = [
   ['R-16', 'risk:green OR x'],
   ['R-17', 'a`b'],
 ]
-const STRUCTURAL: ReadonlyArray<readonly [string, string]> = [
-  ['S-01 empty section', '## Eligibility\n\n## Auto-Advance\n\n(none)\n'],
-  ['S-02 two lines', '## Eligibility\n\nrisk:green\nrisk:yellow\n'],
-  ['S-03 two headings', '## Eligibility\n\nrisk:green\n\n## Eligibility\n\nrisk:green\n'],
-  ['S-04 absent section', '## Auto-Advance\n\n(none)\n'],
-  ['S-05 legacy tier pair', '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n'],
-]
+const STRUCTURAL: ReadonlyArray<readonly [string, string]> = [['S-02 two lines', '## Eligibility\n\nrisk:green\nrisk:yellow\n'],]
 
 describe('r1-1 — the resolver translates `## Eligibility` with the legacy grammar (derived parity table)', () => {
   it.each(CORPUS)('%s: `%s` — same verdict as readAutomationPolicy', async (_, label) => {

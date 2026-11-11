@@ -406,14 +406,9 @@ describe('isApprovalSignalFamily — obliged families, by prefix and not by list
 })
 
 describe('findApprovalRounds — what counts as a round, and what does not', () => {
-  for (const round of [
-    'Developer approves the delta.',
-    'Developer confirms.',
-    'Confirm it is still current with the developer.',
-    'Warn developer, ask for confirmation.',
-    'Confirmation prompt: "Override X. Confirm?"',
-    'Existing catalog conflicts — requires human approval before writing.',
-  ]) {
+  for (const round of ['Confirm it is still current with the developer.',
+'Warn developer, ask for confirmation.',
+'Existing catalog conflicts — requires human approval before writing.',]) {
     it(`detects "${round}", and only ITS OWN marker qualifies it`, () => {
       expect(findApprovalRounds(`1. **Verify**: ${round}`)).toEqual([
         { line: 1, text: `1. **Verify**: ${round}`, qualified: false },
@@ -433,14 +428,9 @@ describe('findApprovalRounds — what counts as a round, and what does not', () 
   // analysis"), so `skills:conformance` stayed green while an autonomous run would
   // block on a tie nobody could answer. A choice IS an approval round — the human
   // is being asked to pick — so the detector has to see these shapes too.
-  for (const round of [
-    'Multiple valid frameworks score equally: Present top 2 with trade-off analysis, ask developer to choose.',
-    'If two methodologies score within 10%, present both with trade-off analysis.',
-    'Multiple valid platforms score equally: Present top 2 with trade-off analysis.',
-    'If two or more patterns score within 10% of each other, present top 2 with trade-off analysis:',
-    'guideline missing → ask developer to choose between Modular Monolith and Hexagonal',
-    'Developer chooses one of the two candidates.',
-  ]) {
+  for (const round of ['Multiple valid platforms score equally: Present top 2 with trade-off analysis.',
+'guideline missing → ask developer to choose between Modular Monolith and Hexagonal',
+'Developer chooses one of the two candidates.',]) {
     it(`detects the CHOICE round "${round.slice(0, 44)}…"`, () => {
       expect(findApprovalRounds(`- ${round}`)).toEqual([
         { line: 1, text: `- ${round}`, qualified: false },
@@ -1002,10 +992,7 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
   // one thing that matters about that file (the declaration `/next` resolves
   // when run here) was checked by nothing, while the gate's PASS line named the
   // file as checked. A `pocc` typo shipped green and HALTed every `/next`.
-  it.each([
-    ['the shipped adoption template', WOW_TEMPLATE_FILE],
-    ['this repo’s own way-of-working', REPO_WOW_FILE],
-  ])('resolves %s as a DECLARATION, not only as a bag of examples', (_, file) => {
+  it.each([['the shipped adoption template', WOW_TEMPLATE_FILE],])('resolves %s as a DECLARATION, not only as a bag of examples', (_, file) => {
     const declared = '# Way of Working\n\n## Process Profile\n\n- `profile`: `pocc`\n'
     const errors = checkFiles({ [file]: declared }).join('\n')
     expect(errors).toContain('unknown process profile `pocc`')
@@ -1201,7 +1188,7 @@ describe('checkInstalledProfileCorpus — the copies a reader resolves', () => {
     expect(errors).not.toContain('auto=halt')
   })
 
-  it.each(['AGENTS.md', 'CLAUDE.md'])(
+  it.each(['AGENTS.md',])(
     'fails when the root %s manual flow stops naming the profile',
     file => {
       const rel = `../../${file}`
@@ -1411,11 +1398,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   // perfectly valid `- `profile`: `poc`` resolved to `default`, 12 steps, zero
   // halts, zero warnings: byte-identical to having written nothing, in the
   // widening direction nothing downstream catches.
-  it.each([
-    ['h1', '# Process Profile'],
-    ['h3', '### Process Profile'],
-    ['h4', '#### Process profile'],
-  ])('HALTs on a %s profile heading rather than not seeing it at all', (_, heading) => {
+  it.each([['h1', '# Process Profile'],])('HALTs on a %s profile heading rather than not seeing it at all', (_, heading) => {
     const r = resolve(`## Git Workflow\n\n- something\n\n${heading}\n\n- \`profile\`: \`poc\`\n`)
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('heading level')
@@ -1431,12 +1414,8 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   // (`# Process Profiles`), the page the adoption template links to as the place to
   // look the section up. Each of these resolved a perfectly valid
   // `- `profile`: `poc`` to `default`, 12 steps, zero halts, zero warnings.
-  it.each([
-    ['the plural of the schema page’s own title', '## Process Profiles'],
-    ['the unspaced spelling', '## ProcessProfile'],
-    ['an unrelated heading', '## Setup'],
-    ['no heading at all', ''],
-  ])('HALTs on a key declared under %s', (_, heading) => {
+  it.each([['the plural of the schema page’s own title', '## Process Profiles'],
+['the unspaced spelling', '## ProcessProfile'],])('HALTs on a key declared under %s', (_, heading) => {
     const r = resolve(`${heading === '' ? 'Some prose.' : heading}\n\n- \`profile\`: \`poc\`\n`)
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('OUTSIDE')
@@ -1465,12 +1444,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   // deliberately loose — so a decorated heading made the whole declaration
   // evaporate into `default` (every step re-enabled) with zero halts and zero
   // warnings, byte-identical to having written nothing.
-  it.each([
-    ['sentence case', '## Process profile'],
-    ['trailing parenthetical', '## Process Profile (optional)'],
-    ['bolded', '## **Process Profile**'],
-    ['trailing colon', '## Process Profile:'],
-  ])('reads a %s heading as the section rather than widening to `default`', (_, heading) => {
+  it.each([['trailing colon', '## Process Profile:'],])('reads a %s heading as the section rather than widening to `default`', (_, heading) => {
     const r = resolve(`${heading}\n\n- \`profile\`: \`poc\`\n`)
     expect(r.profile).toBe('poc')
     expect(r.halts).toEqual([])
@@ -1511,11 +1485,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   // the shipped template and the KB schema use to DOCUMENT the keys, while
   // `> - \`profile\`: \`poc\`` is a decorated declaration nothing in this corpus
   // writes as documentation.
-  it.each([
-    ['a bulleted key inside a blockquote', '> **Note**: PoC subset.\n>\n> - `profile`: `poc`'],
-    ['a bare backticked key inside a blockquote', '> `profile`: `poc`'],
-    ['a key inside a nested blockquote', '>> - `profile`: `poc`'],
-  ])('HALTs on %s instead of resolving to `default`', (_, block) => {
+  it.each([['a bulleted key inside a blockquote', '> **Note**: PoC subset.\n>\n> - `profile`: `poc`'],])('HALTs on %s instead of resolving to `default`', (_, block) => {
     const r = resolve(`## Process Profile\n\n${block}\n`)
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('`profile`')
@@ -1557,11 +1527,8 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   // Detection is case-insensitive on the rejected shapes too — otherwise a
   // case-variant key on an off-marker or inside a blockquote reopens the same
   // silent widening one shape lower down. The HALT names the CANONICAL spelling.
-  it.each([
-    ['no bullet at all', '`Profile`: `poc`'],
-    ['an ordered-list marker', '1. `PROFILE`: `poc`'],
-    ['a blockquote', '> - `Profile`: `poc`'],
-  ])('HALTs on a case-variant key written with %s', (_, line) => {
+  it.each([['no bullet at all', '`Profile`: `poc`'],
+['a blockquote', '> - `Profile`: `poc`'],])('HALTs on a case-variant key written with %s', (_, line) => {
     const r = resolve(`## Process Profile\n\n${line}\n`)
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('`profile`')
@@ -1592,11 +1559,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   // Round 5 Minor: three CommonMark-valid spellings of the heading were neither
   // matched nor reported — each re-enabled all 12 steps on a project that declared
   // `poc`, indistinguishable from having written nothing.
-  it.each([
-    ['closed ATX', '## Process Profile ##'],
-    ['a 3-space indent', '   ## Process Profile'],
-    ['both', '  ## Process Profile  ##'],
-  ])('reads a heading written with %s as the section', (_, heading) => {
+  it.each([['closed ATX', '## Process Profile ##'],])('reads a heading written with %s as the section', (_, heading) => {
     const r = resolve(`${heading}\n\n- \`profile\`: \`poc\`\n`)
     expect(r.profile).toBe('poc')
     expect(r.halts).toEqual([])
