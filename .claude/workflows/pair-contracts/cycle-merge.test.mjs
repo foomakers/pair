@@ -3,7 +3,13 @@
 // park path and the Story Closure sequence. No live host: fake adapters for the decision paths, a
 // recorder `gh` stub for the CLI, real temporary git repositories for the branch/worktree cleanup.
 // RUNS FROM `.claude/workflows` ONLY (the dataset copy's `../../skills/...` imports resolve nowhere).
-for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
+for (const k of Object.keys(process.env))
+  if (
+    /^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(
+      k,
+    )
+  )
+    delete process.env[k]
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -12,39 +18,94 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { publish, resolve, autoAdvancePolicyError, STEPS } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
-import { decideMerge, checkMerge, runMerge, closeStory, checkDodBoxes, parseArgs, readCurrentTier, readSignals, PARK_MARKER } from '../../skills/pair-workflow-cycle/scripts/cycle-merge.mjs'
+import {
+  publish,
+  resolve,
+  autoAdvancePolicyError,
+  STEPS,
+} from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+import {
+  decideMerge,
+  checkMerge,
+  runMerge,
+  closeStory,
+  checkDodBoxes,
+  parseArgs,
+  readCurrentTier,
+  readSignals,
+  PARK_MARKER,
+} from '../../skills/pair-workflow-cycle/scripts/cycle-merge.mjs'
 import github from '../../skills/pair-workflow-cycle/scripts/host/github.mjs'
 import azure from '../../skills/pair-workflow-cycle/scripts/host/azure-devops.mjs'
 
-const CYCLE_MERGE = fileURLToPath(new URL('../../skills/pair-workflow-cycle/scripts/cycle-merge.mjs', import.meta.url))
+const CYCLE_MERGE = fileURLToPath(
+  new URL('../../skills/pair-workflow-cycle/scripts/cycle-merge.mjs', import.meta.url),
+)
 const V = '3.0.0'
 const SHA = c => c.repeat(40)
 const POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
 const GREEN = 'risk:green'
 const RED = 'risk:red'
 const OK = { headSha: SHA('a'), pairReview: 'success', explicitApproval: 'success' }
-const base = { cardTier: GREEN, currentTier: GREEN, autoAdvanceTiers: [GREEN], reviewedHead: SHA('a'), signals: OK, gate: 'green', requireGate: true }
+const base = {
+  cardTier: GREEN,
+  currentTier: GREEN,
+  autoAdvanceTiers: [GREEN],
+  reviewedHead: SHA('a'),
+  signals: OK,
+  gate: 'green',
+  requireGate: true,
+}
 
 // ── AC1 / AC7: `resolve` offers `merge` only when Auto-Advance admits the tier ─────────────────
 function doneRun() {
   const root = mkdtempSync(join(tmpdir(), 'merge-'))
   mkdirSync(join(root, '.pair', 'adoption', 'tech'), { recursive: true })
-  writeFileSync(join(root, '.pair', 'adoption', 'tech', 'way-of-working.md'), '## Assignment\n\n- `default-assignee`: `rucka` — the maintainer.\n')
+  writeFileSync(
+    join(root, '.pair', 'adoption', 'tech', 'way-of-working.md'),
+    '## Assignment\n\n- `default-assignee`: `rucka` — the maintainer.\n',
+  )
   const dir = join(root, '.pair', 'working', 'runs', 'run-1', '42')
   mkdirSync(dir, { recursive: true })
   const file = join(dir, 'tmp-r0.json')
-  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'feature/US-42', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') }, mode: 'first' }))
-  assert.equal(publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: V }).published, true)
+  writeFileSync(
+    file,
+    JSON.stringify({
+      run: 'run-1',
+      story: '42',
+      pr: 7,
+      branch: 'feature/US-42',
+      phase: 'r0',
+      skill: 'review-phase',
+      inputHead: SHA('a'),
+      reviewedHead: SHA('c'),
+      verdict: 'APPROVED',
+      findings: [],
+      custody: { verified: true, contractBreach: false },
+      readiness: { ready: true, remoteHead: SHA('c') },
+      mode: 'first',
+    }),
+  )
+  assert.equal(
+    publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: V }).published,
+    true,
+  )
   return dir
 }
-const resolveWith = (dir, extra = {}) => resolve({ dir, workflowVersion: V, entry: 'pr', pr: 7, ...extra })
+const resolveWith = (dir, extra = {}) =>
+  resolve({ dir, workflowVersion: V, entry: 'pr', pr: 7, ...extra })
 
 test('AC1: a card at ready-for-merge whose tier is in Auto-Advance is offered the merge stage by resolve itself', () => {
   const dir = doneRun()
-  const r = resolveWith(dir, { policy: { ...POLICY, autoAdvance: { tiers: [GREEN] } }, tier: GREEN })
+  const r = resolveWith(dir, {
+    policy: { ...POLICY, autoAdvance: { tiers: [GREEN] } },
+    tier: GREEN,
+  })
   assert.equal(r.next.step, 'merge')
-  assert.deepEqual({ reviewedHead: r.next.reviewedHead, tier: r.next.tier, pr: r.next.pr }, { reviewedHead: SHA('c'), tier: GREEN, pr: 7 })
+  assert.deepEqual(
+    { reviewedHead: r.next.reviewedHead, tier: r.next.tier, pr: r.next.pr },
+    { reviewedHead: SHA('c'), tier: GREEN, pr: 7 },
+  )
   assert.equal(r.status, 'in-progress')
 })
 
@@ -60,14 +121,29 @@ test('AC1: a tier NOT named in Auto-Advance gets the unchanged ready-for-merge t
 test('AC7: no Auto-Advance declaration — or an empty one — never yields merge, for any tier', () => {
   const dir = doneRun()
   for (const policy of [POLICY, { ...POLICY, autoAdvance: { tiers: [] } }])
-    for (const tier of [GREEN, RED, 'risk:yellow']) assert.equal(resolveWith(dir, { policy, tier }).next.step, 'done')
+    for (const tier of [GREEN, RED, 'risk:yellow'])
+      assert.equal(resolveWith(dir, { policy, tier }).next.step, 'done')
 })
 
 test('a malformed Auto-Advance policy is refused, never read as off', () => {
   const dir = doneRun()
-  for (const autoAdvance of [{}, { tiers: 'risk:green' }, { tiers: [GREEN, 'a b'] }, { tiers: [3] }, null, 'risk:green']) {
-    assert.equal(autoAdvancePolicyError(autoAdvance), 'policy-auto-advance-invalid', JSON.stringify(autoAdvance))
-    assert.equal(resolveWith(dir, { policy: { ...POLICY, autoAdvance }, tier: GREEN }).status, 'invalid')
+  for (const autoAdvance of [
+    {},
+    { tiers: 'risk:green' },
+    { tiers: [GREEN, 'a b'] },
+    { tiers: [3] },
+    null,
+    'risk:green',
+  ]) {
+    assert.equal(
+      autoAdvancePolicyError(autoAdvance),
+      'policy-auto-advance-invalid',
+      JSON.stringify(autoAdvance),
+    )
+    assert.equal(
+      resolveWith(dir, { policy: { ...POLICY, autoAdvance }, tier: GREEN }).status,
+      'invalid',
+    )
   }
   assert.equal(autoAdvancePolicyError(undefined), null)
 })
@@ -76,15 +152,44 @@ test('merge is not a stage that resolve offers before ready-for-merge: an unfini
   const root = mkdtempSync(join(tmpdir(), 'merge-'))
   const dir = join(root, '.pair', 'working', 'runs', 'run-1', '42')
   mkdirSync(dir, { recursive: true })
-  const r = resolve({ dir, workflowVersion: V, policy: { ...POLICY, autoAdvance: { tiers: [GREEN] } }, entry: 'fresh', tier: GREEN })
+  const r = resolve({
+    dir,
+    workflowVersion: V,
+    policy: { ...POLICY, autoAdvance: { tiers: [GREEN] } },
+    entry: 'fresh',
+    tier: GREEN,
+  })
   assert.equal(r.next.step, 'implement')
   assert.ok(STEPS.includes('merge'))
 })
 
 test('the resolve CLI takes --tier, and the merge step reaches a shell caller', () => {
   const dir = doneRun()
-  const cli = fileURLToPath(new URL('../../skills/pair-workflow-cycle/scripts/cycle-state.mjs', import.meta.url))
-  const run = tier => JSON.parse(spawnSync(process.execPath, [cli, 'resolve', '--dir', dir, '--workflowVersion', V, '--entry', 'pr', '--pr', '7', '--policy', JSON.stringify({ ...POLICY, autoAdvance: { tiers: [GREEN] } }), ...(tier ? ['--tier', tier] : [])], { encoding: 'utf8' }).stdout)
+  const cli = fileURLToPath(
+    new URL('../../skills/pair-workflow-cycle/scripts/cycle-state.mjs', import.meta.url),
+  )
+  const run = tier =>
+    JSON.parse(
+      spawnSync(
+        process.execPath,
+        [
+          cli,
+          'resolve',
+          '--dir',
+          dir,
+          '--workflowVersion',
+          V,
+          '--entry',
+          'pr',
+          '--pr',
+          '7',
+          '--policy',
+          JSON.stringify({ ...POLICY, autoAdvance: { tiers: [GREEN] } }),
+          ...(tier ? ['--tier', tier] : []),
+        ],
+        { encoding: 'utf8' },
+      ).stdout,
+    )
   assert.equal(run(GREEN).next.step, 'merge')
   assert.equal(run(RED).next.step, 'done')
   assert.equal(run().next.step, 'done')
@@ -93,20 +198,53 @@ test('the resolve CLI takes --tier, and the merge step reaches a shell caller', 
 // ── AC2: the conjunction, each condition failing individually ───────────────────────────────────
 test('AC2: all six conditions true -> mergeAllowed', () => {
   const d = decideMerge(base)
-  assert.deepEqual({ ok: d.mergeAllowed, failed: d.failed, reason: d.reason, parkKind: d.parkKind }, { ok: true, failed: [], reason: null, parkKind: null })
+  assert.deepEqual(
+    { ok: d.mergeAllowed, failed: d.failed, reason: d.reason, parkKind: d.parkKind },
+    { ok: true, failed: [], reason: null, parkKind: null },
+  )
 })
 
 const single = [
-  ['tier raised mid-run', { currentTier: RED, autoAdvanceTiers: [GREEN, RED] }, 'tier-changed', 'halted'],
-  ['tier no longer in Auto-Advance', { autoAdvanceTiers: [] }, 'tier-not-auto-advance', 'awaiting-human'],
+  [
+    'tier raised mid-run',
+    { currentTier: RED, autoAdvanceTiers: [GREEN, RED] },
+    'tier-changed',
+    'halted',
+  ],
+  [
+    'tier no longer in Auto-Advance',
+    { autoAdvanceTiers: [] },
+    'tier-not-auto-advance',
+    'awaiting-human',
+  ],
   ['signals unreadable (null)', { signals: null }, 'signals-unreadable', 'halted'],
-  ['signals unreadable (no 40-hex head)', { signals: { ...OK, headSha: 'abc' } }, 'signals-unreadable', 'halted'],
-  ['signals unreadable (non-string conclusion)', { signals: { ...OK, pairReview: undefined } }, 'signals-unreadable', 'halted'],
-  ['head moved since the review', { signals: { ...OK, headSha: SHA('b') } }, 'head-moved', 'halted'],
+  [
+    'signals unreadable (no 40-hex head)',
+    { signals: { ...OK, headSha: 'abc' } },
+    'signals-unreadable',
+    'halted',
+  ],
+  [
+    'signals unreadable (non-string conclusion)',
+    { signals: { ...OK, pairReview: undefined } },
+    'signals-unreadable',
+    'halted',
+  ],
+  [
+    'head moved since the review',
+    { signals: { ...OK, headSha: SHA('b') } },
+    'head-moved',
+    'halted',
+  ],
   ['pair-review failure', { signals: { ...OK, pairReview: 'failure' } }, 'pair-review', 'halted'],
   ['pair-review pending', { signals: { ...OK, pairReview: 'pending' } }, 'pair-review', 'halted'],
   ['pair-review empty', { signals: { ...OK, pairReview: '' } }, 'pair-review', 'halted'],
-  ['explicit approval not success (D10)', { signals: { ...OK, explicitApproval: 'failure' } }, 'explicit-approval', 'halted'],
+  [
+    'explicit approval not success (D10)',
+    { signals: { ...OK, explicitApproval: 'failure' } },
+    'explicit-approval',
+    'halted',
+  ],
   ['gate red', { gate: 'red' }, 'gate-red', 'halted'],
   ['gate evidence absent', { gate: undefined }, 'gate-unverified', 'halted'],
   ['gate evidence malformed', { gate: 'yes' }, 'gate-unverified', 'halted'],
@@ -115,7 +253,10 @@ for (const [name, patch, code, parkKind] of single)
   test(`AC2: ${name} -> not allowed, naming ${code}`, () => {
     const d = decideMerge({ ...base, ...patch })
     assert.equal(d.mergeAllowed, false)
-    assert.deepEqual(d.failed.map(f => f.code), [code])
+    assert.deepEqual(
+      d.failed.map(f => f.code),
+      [code],
+    )
     assert.equal(d.parkKind, parkKind)
     assert.ok(d.reason && d.reason === d.failed[0].detail)
   })
@@ -127,12 +268,18 @@ for (const conclusion of ['missing', 'pending'])
   test(`D3: explicit approval ${conclusion} (only failure, risk:red) -> awaiting-human`, () => {
     const d = decideMerge({ ...RED_BASE, signals: { ...OK, explicitApproval: conclusion } })
     assert.equal(d.mergeAllowed, false)
-    assert.deepEqual(d.failed.map(f => f.code), ['explicit-approval'])
+    assert.deepEqual(
+      d.failed.map(f => f.code),
+      ['explicit-approval'],
+    )
     assert.equal(d.parkKind, 'awaiting-human')
   })
 
 test('D3: explicit approval missing BESIDE another failure (head moved) -> halted', () => {
-  const d = decideMerge({ ...RED_BASE, signals: { ...OK, headSha: SHA('b'), explicitApproval: 'missing' } })
+  const d = decideMerge({
+    ...RED_BASE,
+    signals: { ...OK, headSha: SHA('b'), explicitApproval: 'missing' },
+  })
   assert.equal(d.parkKind, 'halted')
 })
 
@@ -141,36 +288,99 @@ test('D3: explicit approval missing BESIDE another failure (head moved) -> halte
 // there. The tier is the PR's CURRENT risk tier (`effectiveTier`), never a stale one.
 const YELLOW = 'risk:yellow'
 const D4 = {
-  [GREEN]: { missing: ['allowed'], success: ['allowed'], failure: ['halted', 'explicit-approval'], pending: ['awaiting-human', 'explicit-approval'] },
-  [YELLOW]: { missing: ['allowed'], success: ['allowed'], failure: ['halted', 'explicit-approval'], pending: ['awaiting-human', 'explicit-approval'] },
-  [RED]: { missing: ['awaiting-human', 'explicit-approval'], success: ['allowed'], failure: ['halted', 'explicit-approval'], pending: ['awaiting-human', 'explicit-approval'] },
+  [GREEN]: {
+    missing: ['allowed'],
+    success: ['allowed'],
+    failure: ['halted', 'explicit-approval'],
+    pending: ['awaiting-human', 'explicit-approval'],
+  },
+  [YELLOW]: {
+    missing: ['allowed'],
+    success: ['allowed'],
+    failure: ['halted', 'explicit-approval'],
+    pending: ['awaiting-human', 'explicit-approval'],
+  },
+  [RED]: {
+    missing: ['awaiting-human', 'explicit-approval'],
+    success: ['allowed'],
+    failure: ['halted', 'explicit-approval'],
+    pending: ['awaiting-human', 'explicit-approval'],
+  },
 }
 for (const [tier, row] of Object.entries(D4))
   for (const [conclusion, [want, code]] of Object.entries(row))
     test(`D4: ${tier} x pair-explicit-approval ${conclusion} -> ${want}`, () => {
-      const d = decideMerge({ ...base, cardTier: tier, currentTier: tier, effectiveTier: tier, autoAdvanceTiers: [tier], signals: { ...OK, explicitApproval: conclusion } })
-      if (want === 'allowed') return assert.deepEqual({ ok: d.mergeAllowed, failed: d.failed, parkKind: d.parkKind }, { ok: true, failed: [], parkKind: null })
+      const d = decideMerge({
+        ...base,
+        cardTier: tier,
+        currentTier: tier,
+        effectiveTier: tier,
+        autoAdvanceTiers: [tier],
+        signals: { ...OK, explicitApproval: conclusion },
+      })
+      if (want === 'allowed')
+        return assert.deepEqual(
+          { ok: d.mergeAllowed, failed: d.failed, parkKind: d.parkKind },
+          { ok: true, failed: [], parkKind: null },
+        )
       assert.equal(d.mergeAllowed, false)
-      assert.deepEqual(d.failed.map(f => f.code), [code])
+      assert.deepEqual(
+        d.failed.map(f => f.code),
+        [code],
+      )
       assert.equal(d.parkKind, want)
     })
 
 test('D4: the approval rule follows the PR tier, not the card tier (card green, PR raised to red: missing parks)', () => {
-  const d = decideMerge({ ...base, effectiveTier: RED, autoAdvanceTiers: [GREEN, RED], signals: { ...OK, explicitApproval: 'missing' } })
-  assert.deepEqual(d.failed.map(f => f.code), ['explicit-approval'])
+  const d = decideMerge({
+    ...base,
+    effectiveTier: RED,
+    autoAdvanceTiers: [GREEN, RED],
+    signals: { ...OK, explicitApproval: 'missing' },
+  })
+  assert.deepEqual(
+    d.failed.map(f => f.code),
+    ['explicit-approval'],
+  )
   assert.equal(d.parkKind, 'awaiting-human')
-  assert.equal(decideMerge({ ...base, effectiveTier: YELLOW, autoAdvanceTiers: [GREEN, YELLOW], signals: { ...OK, explicitApproval: 'missing' } }).mergeAllowed, true)
+  assert.equal(
+    decideMerge({
+      ...base,
+      effectiveTier: YELLOW,
+      autoAdvanceTiers: [GREEN, YELLOW],
+      signals: { ...OK, explicitApproval: 'missing' },
+    }).mergeAllowed,
+    true,
+  )
 })
 
 test('AC2: an explicit approval on a different head than the remote head is not a success for THIS head', () => {
   // the adapter reads the conclusion ON the remote head: a stale approval reads as `missing` (at the tier that requires it).
   const d = decideMerge({ ...RED_BASE, signals: { ...OK, explicitApproval: 'missing' } })
-  assert.deepEqual(d.failed.map(f => f.code), ['explicit-approval'])
+  assert.deepEqual(
+    d.failed.map(f => f.code),
+    ['explicit-approval'],
+  )
 })
 
 test('AC2: precedence is the one pair-loop applied — tier first, then signals, head, conclusions, gate', () => {
-  const d = decideMerge({ ...base, currentTier: RED, signals: { headSha: SHA('b'), pairReview: 'failure', explicitApproval: 'failure' }, gate: 'red' })
-  assert.deepEqual(d.failed.map(f => f.code), ['tier-changed', 'tier-not-auto-advance', 'head-moved', 'pair-review', 'explicit-approval', 'gate-red'])
+  const d = decideMerge({
+    ...base,
+    currentTier: RED,
+    signals: { headSha: SHA('b'), pairReview: 'failure', explicitApproval: 'failure' },
+    gate: 'red',
+  })
+  assert.deepEqual(
+    d.failed.map(f => f.code),
+    [
+      'tier-changed',
+      'tier-not-auto-advance',
+      'head-moved',
+      'pair-review',
+      'explicit-approval',
+      'gate-red',
+    ],
+  )
   assert.match(d.reason, /^tier changed risk:green -> risk:red mid-run/)
 })
 
@@ -182,24 +392,51 @@ test('check mode does not require the gate; run mode does', () => {
 // ── live reads through the adapters ─────────────────────────────────────────────────────────────
 const fakeHosts = (o = {}) => {
   const calls = []
-  const rec = (name, fn) => (...a) => {
-    calls.push([name, ...a])
-    return fn(...a)
-  }
+  const rec =
+    (name, fn) =>
+    (...a) => {
+      calls.push([name, ...a])
+      return fn(...a)
+    }
   const pm = {
-    readCard: rec('readCard', (id, opts) => (opts?.fields ? { labels: o.labels ?? [{ name: GREEN }] } : { body: o.body ?? '## Definition of Done Checklist\n\n- [ ] one\n- [x] two\n\n## Notes\n\n- [ ] keep\n' })),
+    readCard: rec('readCard', (id, opts) =>
+      opts?.fields
+        ? { labels: o.labels ?? [{ name: GREEN }] }
+        : {
+            body:
+              o.body ??
+              '## Definition of Done Checklist\n\n- [ ] one\n- [x] two\n\n## Notes\n\n- [ ] keep\n',
+          },
+    ),
     updateCard: rec('updateCard', () => ({})),
     closeAndCascade: rec('closeAndCascade', () => o.close ?? { closed: [42], stoppedAt: null }),
-    setBoardState: rec('setBoardState', ({ id }) => o.board?.(id) ?? { applied: 'Done', confirmed: true, error: null }),
+    setBoardState: rec(
+      'setBoardState',
+      ({ id }) => o.board?.(id) ?? { applied: 'Done', confirmed: true, error: null },
+    ),
     commentOnCard: rec('commentOnCard', () => o.comment ?? { action: 'created', id: 1 }),
   }
   const code = {
     readLabels: rec('readLabels', () => o.prLabels ?? [GREEN]),
     prHead: rec('prHead', () => o.head ?? SHA('a')),
-    readCheck: rec('readCheck', ({ context }) => (o.checks ?? { 'pair-review': 'success', 'pair-explicit-approval': 'success' })[context] ?? null),
+    readCheck: rec(
+      'readCheck',
+      ({ context }) =>
+        (o.checks ?? { 'pair-review': 'success', 'pair-explicit-approval': 'success' })[context] ??
+        null,
+    ),
     readCheckRun: rec('readCheckRun', ({ context }) => (o.runs ?? {})[context] ?? null),
     isMerged: rec('isMerged', () => o.merged ?? false),
-    clearPrState: rec('clearPrState', () => o.clear ?? { applied: null, removed: ['pr-state:to-be-reviewed'], confirmed: true, error: null }),
+    clearPrState: rec(
+      'clearPrState',
+      () =>
+        o.clear ?? {
+          applied: null,
+          removed: ['pr-state:to-be-reviewed'],
+          confirmed: true,
+          error: null,
+        },
+    ),
     merge: rec('merge', args => {
       if (o.mergeThrows) throw new Error(o.mergeThrows)
       return { merged: true, ...args }
@@ -207,14 +444,35 @@ const fakeHosts = (o = {}) => {
   }
   return { calls, hosts: { pm, code } }
 }
-const input = h => ({ hosts: h.hosts, story: 42, pr: 7, repo: 'o/r', reviewedHead: SHA('a'), cardTier: GREEN, autoAdvanceTiers: [GREEN] })
+const input = h => ({
+  hosts: h.hosts,
+  story: 42,
+  pr: 7,
+  repo: 'o/r',
+  reviewedHead: SHA('a'),
+  cardTier: GREEN,
+  autoAdvanceTiers: [GREEN],
+})
 
 test('readCurrentTier: one risk label is the tier; untagged, ambiguous or unreadable is red', () => {
   const pm = labels => fakeHosts({ labels }).hosts.pm
   assert.equal(readCurrentTier({ pm: pm([{ name: 'bug' }, { name: GREEN }]), story: 42 }), GREEN)
   assert.equal(readCurrentTier({ pm: pm([{ name: 'bug' }]), story: 42 }), RED)
-  assert.equal(readCurrentTier({ pm: pm([{ name: GREEN }, { name: 'risk:yellow' }]), story: 42 }), RED)
-  assert.equal(readCurrentTier({ pm: { readCard: () => { throw new Error('boom') } }, story: 42 }), RED)
+  assert.equal(
+    readCurrentTier({ pm: pm([{ name: GREEN }, { name: 'risk:yellow' }]), story: 42 }),
+    RED,
+  )
+  assert.equal(
+    readCurrentTier({
+      pm: {
+        readCard: () => {
+          throw new Error('boom')
+        },
+      },
+      story: 42,
+    }),
+    RED,
+  )
 })
 
 // Paired-canary finding: the tier grammar is the removed `pair-loop.js` `isLabelShape`
@@ -224,17 +482,38 @@ test('readCurrentTier: one risk label is the tier; untagged, ambiguous or unread
 test('readCurrentTier: a risk label outside the family:tier grammar is unreadable and fails safe to red', async t => {
   const pm = labels => fakeHosts({ labels }).hosts.pm
   for (const shape of ['risk:a.b', 'risk:a/b', 'risk:a_b', 'risk:a:b', 'risk:1x', 'risk:'])
-    await t.test(`witness ${shape}`, () => assert.equal(readCurrentTier({ pm: pm([{ name: 'bug' }, { name: shape }]), story: 42 }), RED))
+    await t.test(`witness ${shape}`, () =>
+      assert.equal(readCurrentTier({ pm: pm([{ name: 'bug' }, { name: shape }]), story: 42 }), RED),
+    )
   for (const tier of [GREEN, 'risk:yellow', RED])
-    await t.test(`control ${tier}`, () => assert.equal(readCurrentTier({ pm: pm([{ name: tier }]), story: 42 }), tier))
+    await t.test(`control ${tier}`, () =>
+      assert.equal(readCurrentTier({ pm: pm([{ name: tier }]), story: 42 }), tier),
+    )
 })
 
 test('readSignals: conclusions come from the remote head; a check run is the fallback; anything unreadable is null', () => {
-  const h = fakeHosts({ checks: { 'pair-review': 'success' }, runs: { 'pair-explicit-approval': 'success' } })
+  const h = fakeHosts({
+    checks: { 'pair-review': 'success' },
+    runs: { 'pair-explicit-approval': 'success' },
+  })
   assert.deepEqual(readSignals({ code: h.hosts.code, pr: 7 }), OK)
   const none = fakeHosts({ checks: {}, runs: {} })
-  assert.deepEqual(readSignals({ code: none.hosts.code, pr: 7 }), { headSha: SHA('a'), pairReview: 'missing', explicitApproval: 'missing' })
-  assert.equal(readSignals({ code: { prHead: () => { throw new Error('offline') } }, pr: 7 }), null)
+  assert.deepEqual(readSignals({ code: none.hosts.code, pr: 7 }), {
+    headSha: SHA('a'),
+    pairReview: 'missing',
+    explicitApproval: 'missing',
+  })
+  assert.equal(
+    readSignals({
+      code: {
+        prHead: () => {
+          throw new Error('offline')
+        },
+      },
+      pr: 7,
+    }),
+    null,
+  )
 })
 
 // ── AC4: park — never a HALT, never a silent no-op ─────────────────────────────────────────────
@@ -242,19 +521,27 @@ test('AC4: check parks with ONE marker-keyed comment on the card naming the fail
   const h = fakeHosts({ checks: { 'pair-review': 'failure', 'pair-explicit-approval': 'success' } })
   const out = checkMerge(input(h))
   assert.equal(out.mergeAllowed, false)
-  assert.deepEqual(out.failed.map(f => f.code), ['pair-review'])
+  assert.deepEqual(
+    out.failed.map(f => f.code),
+    ['pair-review'],
+  )
   assert.deepEqual(out.comment, { posted: true })
   const post = h.calls.find(c => c[0] === 'commentOnCard')[1]
   assert.equal(post.id, 42)
   assert.equal(post.marker, PARK_MARKER(7))
   assert.match(post.body, /not\*\* merged automatically/)
   assert.match(post.body, /`pair-review` — pair-review conclusion on head a{40} is failure/)
-  assert.equal(h.calls.some(c => c[0] === 'merge'), false)
+  assert.equal(
+    h.calls.some(c => c[0] === 'merge'),
+    false,
+  )
 })
 
 test('AC4: a comment that cannot be posted is reported, not swallowed', () => {
   const h = fakeHosts({ headSha: SHA('b'), head: SHA('b') })
-  h.hosts.pm.commentOnCard = () => { throw new Error('rate limited') }
+  h.hosts.pm.commentOnCard = () => {
+    throw new Error('rate limited')
+  }
   const out = checkMerge(input(h))
   assert.equal(out.mergeAllowed, false)
   assert.deepEqual(out.comment, { posted: false, error: 'rate limited' })
@@ -269,22 +556,40 @@ test('AC4: every single failing condition parks with a comment naming it (run mo
   ]
   for (const [o, code] of cases) {
     const h = fakeHosts(o)
-    const out = runMerge({ ...input(h), autoAdvanceTiers: [GREEN, RED], gate: 'green', message: 'm' })
+    const out = runMerge({
+      ...input(h),
+      autoAdvanceTiers: [GREEN, RED],
+      gate: 'green',
+      message: 'm',
+    })
     assert.equal(out.merged, false, code)
     assert.equal(out.failed[0].code, code)
-    assert.equal(h.calls.some(c => c[0] === 'merge'), false, `${code}: merged`)
+    assert.equal(
+      h.calls.some(c => c[0] === 'merge'),
+      false,
+      `${code}: merged`,
+    )
     assert.match(h.calls.find(c => c[0] === 'commentOnCard')[1].body, new RegExp(`\`${code}\``))
   }
   const red = fakeHosts()
   assert.equal(runMerge({ ...input(red), gate: 'red', message: 'm' }).failed[0].code, 'gate-red')
-  assert.equal(red.calls.some(c => c[0] === 'merge'), false)
+  assert.equal(
+    red.calls.some(c => c[0] === 'merge'),
+    false,
+  )
 })
 
 test('AC4: a code host that refuses the merge parks with merge-failed, and nothing after the merge runs', () => {
   const h = fakeHosts({ mergeThrows: 'required check missing' })
   const out = runMerge({ ...input(h), gate: 'green', message: 'm' })
-  assert.deepEqual({ merged: out.merged, cascaded: out.cascaded, code: out.failed[0].code }, { merged: false, cascaded: false, code: 'merge-failed' })
-  assert.equal(h.calls.some(c => c[0] === 'closeAndCascade'), false)
+  assert.deepEqual(
+    { merged: out.merged, cascaded: out.cascaded, code: out.failed[0].code },
+    { merged: false, cascaded: false, code: 'merge-failed' },
+  )
+  assert.equal(
+    h.calls.some(c => c[0] === 'closeAndCascade'),
+    false,
+  )
   assert.ok(h.calls.some(c => c[0] === 'commentOnCard'))
 })
 
@@ -301,7 +606,18 @@ function gitFixture() {
   mkdirSync(main)
   sh(root, 'init', '--bare', '-q', remote)
   sh(main, 'init', '-q', '-b', 'main')
-  sh(main, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init')
+  sh(
+    main,
+    '-c',
+    'user.name=t',
+    '-c',
+    'user.email=t@t',
+    'commit',
+    '-q',
+    '--allow-empty',
+    '-m',
+    'init',
+  )
   sh(main, 'remote', 'add', 'origin', remote)
   sh(main, 'push', '-q', 'origin', 'main')
   sh(main, 'branch', 'feature/US-42-x')
@@ -316,21 +632,75 @@ function gitFixture() {
 test('AC3: all green -> squash merge with the message, DoD boxes, close+cascade, board Done, branch (worktree first), checkpoint — in order', () => {
   const g = gitFixture()
   const h = fakeHosts({ close: { closed: [42, 9], stoppedAt: 3 } })
-  const out = runMerge({ ...input(h), gate: 'green', message: '[#42] feat: thing\n\nbody', branch: 'feature/US-42-x', root: g.main })
-  assert.deepEqual({ merged: out.merged, cascaded: out.cascaded, mergeAllowed: out.mergeAllowed }, { merged: true, cascaded: true, mergeAllowed: true }, JSON.stringify(out))
-  assert.deepEqual(h.calls.map(c => c[0]).filter(n => n !== 'readCard' && n !== 'readLabels' && n !== 'prHead' && n !== 'readCheck' && n !== 'readCheckRun' && n !== 'isMerged'), ['merge', 'clearPrState', 'updateCard', 'closeAndCascade', 'setBoardState', 'setBoardState'])
-  assert.deepEqual(h.calls.find(c => c[0] === 'merge')[1], { pr: 7, repo: 'o/r', strategy: 'squash', message: '[#42] feat: thing\n\nbody', headSha: SHA('a') })
-  assert.deepEqual(h.calls.filter(c => c[0] === 'setBoardState').map(c => c[1].id), [42, 9]) // the story AND every closed parent
-  assert.equal(h.calls.some(c => c[0] === 'commentOnCard'), false)
+  const out = runMerge({
+    ...input(h),
+    gate: 'green',
+    message: '[#42] feat: thing\n\nbody',
+    branch: 'feature/US-42-x',
+    root: g.main,
+  })
+  assert.deepEqual(
+    { merged: out.merged, cascaded: out.cascaded, mergeAllowed: out.mergeAllowed },
+    { merged: true, cascaded: true, mergeAllowed: true },
+    JSON.stringify(out),
+  )
+  assert.deepEqual(
+    h.calls
+      .map(c => c[0])
+      .filter(
+        n =>
+          n !== 'readCard' &&
+          n !== 'readLabels' &&
+          n !== 'prHead' &&
+          n !== 'readCheck' &&
+          n !== 'readCheckRun' &&
+          n !== 'isMerged',
+      ),
+    ['merge', 'clearPrState', 'updateCard', 'closeAndCascade', 'setBoardState', 'setBoardState'],
+  )
+  assert.deepEqual(h.calls.find(c => c[0] === 'merge')[1], {
+    pr: 7,
+    repo: 'o/r',
+    strategy: 'squash',
+    message: '[#42] feat: thing\n\nbody',
+    headSha: SHA('a'),
+  })
+  assert.deepEqual(
+    h.calls.filter(c => c[0] === 'setBoardState').map(c => c[1].id),
+    [42, 9],
+  ) // the story AND every closed parent
+  assert.equal(
+    h.calls.some(c => c[0] === 'commentOnCard'),
+    false,
+  )
   assert.equal(existsSync(g.wt), false, 'worktree removed')
-  assert.equal(spawnSync('git', ['rev-parse', '--verify', '--quiet', 'refs/heads/feature/US-42-x'], { cwd: g.main }).status, 1, 'local branch deleted')
-  assert.equal(spawnSync('git', ['ls-remote', '--exit-code', '--heads', g.remote, 'feature/US-42-x']).status, 2, 'remote branch deleted')
-  assert.equal(existsSync(join(g.main, '.pair', 'working', 'checkpoints', '42.md')), false, 'checkpoint removed')
+  assert.equal(
+    spawnSync('git', ['rev-parse', '--verify', '--quiet', 'refs/heads/feature/US-42-x'], {
+      cwd: g.main,
+    }).status,
+    1,
+    'local branch deleted',
+  )
+  assert.equal(
+    spawnSync('git', ['ls-remote', '--exit-code', '--heads', g.remote, 'feature/US-42-x']).status,
+    2,
+    'remote branch deleted',
+  )
+  assert.equal(
+    existsSync(join(g.main, '.pair', 'working', 'checkpoints', '42.md')),
+    false,
+    'checkpoint removed',
+  )
 })
 
 test('AC3: checkDodBoxes ticks only the Definition of Done section', () => {
-  const out = checkDodBoxes('## Tasks\n\n- [ ] a\n\n## Definition of Done Checklist\n\n### Dev\n\n- [ ] one\n  - [ ] nested\n- [x] two\n\n## Notes\n\n- [ ] keep\n')
-  assert.equal(out, '## Tasks\n\n- [ ] a\n\n## Definition of Done Checklist\n\n### Dev\n\n- [x] one\n  - [x] nested\n- [x] two\n\n## Notes\n\n- [ ] keep\n')
+  const out = checkDodBoxes(
+    '## Tasks\n\n- [ ] a\n\n## Definition of Done Checklist\n\n### Dev\n\n- [ ] one\n  - [ ] nested\n- [x] two\n\n## Notes\n\n- [ ] keep\n',
+  )
+  assert.equal(
+    out,
+    '## Tasks\n\n- [ ] a\n\n## Definition of Done Checklist\n\n### Dev\n\n- [x] one\n  - [x] nested\n- [x] two\n\n## Notes\n\n- [ ] keep\n',
+  )
   assert.equal(checkDodBoxes('no sections'), 'no sections')
 })
 
@@ -339,16 +709,33 @@ test('AC3 edge: a branch already gone is not a failure; every other step still c
   g.sh(g.main, 'worktree', 'remove', g.wt)
   g.sh(g.main, 'push', '-q', 'origin', '--delete', 'feature/US-42-x')
   g.sh(g.main, 'branch', '-D', 'feature/US-42-x')
-  const out = closeStory({ hosts: fakeHosts().hosts, story: 42, repo: 'o/r', branch: 'feature/US-42-x', root: g.main })
+  const out = closeStory({
+    hosts: fakeHosts().hosts,
+    story: 42,
+    repo: 'o/r',
+    branch: 'feature/US-42-x',
+    root: g.main,
+  })
   assert.equal(out.cascaded, true, JSON.stringify(out))
-  assert.deepEqual(out.steps.branch.notes, ['remote branch already gone', 'local branch already gone'])
+  assert.deepEqual(out.steps.branch.notes, [
+    'remote branch already gone',
+    'local branch already gone',
+  ])
 })
 
 test('AC3 edge: a merge that landed with a closure step unfinished is { merged: true, cascaded: false } and PARKED naming the step', () => {
   const g = gitFixture()
-  const h = fakeHosts({ board: () => ({ applied: 'Done', confirmed: false, error: 'not a project item' }) })
+  const h = fakeHosts({
+    board: () => ({ applied: 'Done', confirmed: false, error: 'not a project item' }),
+  })
   writeFileSync(join(g.wt, 'dirty.txt'), 'x') // an untracked file: `git worktree remove` refuses, and is never forced
-  const out = runMerge({ ...input(h), gate: 'green', message: 'm', branch: 'feature/US-42-x', root: g.main })
+  const out = runMerge({
+    ...input(h),
+    gate: 'green',
+    message: 'm',
+    branch: 'feature/US-42-x',
+    root: g.main,
+  })
   assert.equal(out.merged, true)
   assert.equal(out.cascaded, false)
   assert.match(out.reason, /board \(#42: not a project item\)/)
@@ -363,14 +750,35 @@ test('AC3 edge: a merge that landed with a closure step unfinished is { merged: 
 test('AC3 edge: an unsafe or absent branch is reported, never handed to git', () => {
   const g = gitFixture()
   for (const branch of ['-D main', 'a b', '--upload-pack=x'])
-    assert.equal(closeStory({ hosts: fakeHosts().hosts, story: 42, repo: 'o/r', branch, root: g.main }).steps.branch.ok, false, branch)
-  assert.equal(closeStory({ hosts: fakeHosts().hosts, story: 42, repo: 'o/r', root: g.main }).steps.branch.ok, false)
+    assert.equal(
+      closeStory({ hosts: fakeHosts().hosts, story: 42, repo: 'o/r', branch, root: g.main }).steps
+        .branch.ok,
+      false,
+      branch,
+    )
+  assert.equal(
+    closeStory({ hosts: fakeHosts().hosts, story: 42, repo: 'o/r', root: g.main }).steps.branch.ok,
+    false,
+  )
 })
 
 // ── CLI contract ────────────────────────────────────────────────────────────────────────────────
 const argv = (cmd, extra = {}) => {
-  const o = { dir: '/x', story: '42', pr: '7', reviewedHead: SHA('a'), cardTier: GREEN, autoAdvance: '["risk:green"]', ...extra }
-  return [cmd, ...Object.entries(o).filter(([, v]) => v !== undefined).flatMap(([k, v]) => [`--${k}`, v])]
+  const o = {
+    dir: '/x',
+    story: '42',
+    pr: '7',
+    reviewedHead: SHA('a'),
+    cardTier: GREEN,
+    autoAdvance: '["risk:green"]',
+    ...extra,
+  }
+  return [
+    cmd,
+    ...Object.entries(o)
+      .filter(([, v]) => v !== undefined)
+      .flatMap(([k, v]) => [`--${k}`, v]),
+  ]
 }
 
 test('parseArgs: every value that reaches gh/git is validated as a safe segment', () => {
@@ -388,7 +796,8 @@ test('parseArgs: every value that reaches gh/git is validated as a safe segment'
     ['run', { gate: 'green' }, /--message is required/],
     ['run', { gate: 'maybe', message: 'm' }, /green \| red/],
   ]
-  for (const [cmd, extra, re] of bad) assert.throws(() => parseArgs(argv(cmd, extra)), re, JSON.stringify(extra))
+  for (const [cmd, extra, re] of bad)
+    assert.throws(() => parseArgs(argv(cmd, extra)), re, JSON.stringify(extra))
   assert.throws(() => parseArgs(['merge']), /unknown command/)
 })
 
@@ -399,7 +808,15 @@ function fakeGh(seed = {}) {
   const merged = join(dir, 'merged.log')
   writeFileSync(log, '')
   writeFileSync(merged, '')
-  const cfg = { labels: [GREEN], head: SHA('a'), statuses: [{ context: 'pair-review', state: 'success' }, { context: 'pair-explicit-approval', state: 'success' }], ...seed }
+  const cfg = {
+    labels: [GREEN],
+    head: SHA('a'),
+    statuses: [
+      { context: 'pair-review', state: 'success' },
+      { context: 'pair-explicit-approval', state: 'success' },
+    ],
+    ...seed,
+  }
   writeFileSync(
     join(dir, 'gh'),
     `#!/usr/bin/env node
@@ -435,13 +852,30 @@ process.stderr.write('fake gh: unhandled ' + j); process.exit(1)
 `,
   )
   chmodSync(join(dir, 'gh'), 0o755)
-  return { bin: join(dir, 'gh'), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)), merged: () => readFileSync(merged, 'utf8').split('\n').filter(Boolean) }
+  return {
+    bin: join(dir, 'gh'),
+    calls: () =>
+      readFileSync(log, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map(l => JSON.parse(l)),
+    merged: () => readFileSync(merged, 'utf8').split('\n').filter(Boolean),
+  }
 }
 
 function runCli(cmd, gh, extra = {}) {
   const g = gitFixture()
-  const args = argv(cmd, { dir: join(g.main, '.pair', 'working', 'runs', 'story-42', '42'), repo: 'o/r', ...extra })
-  const r = spawnSync(process.execPath, [CYCLE_MERGE, ...args], { encoding: 'utf8', cwd: g.main, env: { ...process.env, PAIR_GH_BIN: gh.bin } })
+  const args = argv(cmd, {
+    dir: join(g.main, '.pair', 'working', 'runs', 'story-42', '42'),
+    repo: 'o/r',
+    ...extra,
+  })
+  const r = spawnSync(process.execPath, [CYCLE_MERGE, ...args], {
+    encoding: 'utf8',
+    cwd: g.main,
+    env: { ...process.env, PAIR_GH_BIN: gh.bin },
+  })
   return { out: JSON.parse(r.stdout), status: r.status, g }
 }
 
@@ -449,8 +883,15 @@ test('CLI check: all-green signals through the real GitHub adapter -> mergeAllow
   const gh = fakeGh()
   const { out, status } = runCli('check', gh)
   assert.equal(status, 0)
-  assert.deepEqual({ mergeAllowed: out.mergeAllowed, failed: out.failed }, { mergeAllowed: true, failed: [] }, JSON.stringify(out))
-  assert.equal(gh.calls().some(c => c[0] === 'pr' && c[1] === 'merge'), false)
+  assert.deepEqual(
+    { mergeAllowed: out.mergeAllowed, failed: out.failed },
+    { mergeAllowed: true, failed: [] },
+    JSON.stringify(out),
+  )
+  assert.equal(
+    gh.calls().some(c => c[0] === 'pr' && c[1] === 'merge'),
+    false,
+  )
 })
 
 test('CLI check: a moved head parks with a POSTed comment on the CARD (issues/42), not the PR', () => {
@@ -460,19 +901,42 @@ test('CLI check: a moved head parks with a POSTed comment on the CARD (issues/42
   assert.equal(out.failed[0].code, 'head-moved')
   assert.equal(out.comment.posted, true)
   const post = gh.calls().find(c => c.includes('POST'))
-  assert.ok(post.some(x => x.endsWith('/issues/42/comments')), JSON.stringify(post))
+  assert.ok(
+    post.some(x => x.endsWith('/issues/42/comments')),
+    JSON.stringify(post),
+  )
 })
 
 test('CLI run: all green -> gh pr merge --squash with the subject, the card closed, the board written', () => {
   const gh = fakeGh()
-  const { out, status, g } = runCli('run', gh, { gate: 'green', message: '[#42] feat: thing', branch: 'feature/US-42-x' })
+  const { out, status, g } = runCli('run', gh, {
+    gate: 'green',
+    message: '[#42] feat: thing',
+    branch: 'feature/US-42-x',
+  })
   assert.equal(status, 0)
   assert.equal(out.merged, true, JSON.stringify(out))
   const calls = gh.calls()
-  assert.ok(calls.some(c => c[0] === 'pr' && c[1] === 'merge' && c.includes('--squash') && c.includes('[#42] feat: thing')))
+  assert.ok(
+    calls.some(
+      c =>
+        c[0] === 'pr' &&
+        c[1] === 'merge' &&
+        c.includes('--squash') &&
+        c.includes('[#42] feat: thing'),
+    ),
+  )
   assert.ok(calls.some(c => c[0] === 'issue' && c[1] === 'close'))
-  assert.ok(calls.some(c => c[0] === 'api' && c[1] === 'graphql' && c.some(x => x === 'option=opt-done')))
-  assert.ok(calls.some(c => c[0] === 'api' && c[2] === 'DELETE' && c[3] === 'repos/o/r/git/refs/heads/feature/US-42-x'), 'remote branch deleted via the API')
+  assert.ok(
+    calls.some(c => c[0] === 'api' && c[1] === 'graphql' && c.some(x => x === 'option=opt-done')),
+  )
+  assert.ok(
+    calls.some(
+      c =>
+        c[0] === 'api' && c[2] === 'DELETE' && c[3] === 'repos/o/r/git/refs/heads/feature/US-42-x',
+    ),
+    'remote branch deleted via the API',
+  )
   assert.equal(out.cascade.board.per[0].confirmed, true)
   assert.equal(out.cascaded, true, JSON.stringify(out.cascade)) // root defaults to the cwd: the main checkout
   assert.equal(existsSync(g.wt), false)
@@ -483,12 +947,18 @@ test('CLI run: a red gate never reaches gh pr merge', () => {
   const { out } = runCli('run', gh, { gate: 'red', message: 'm' })
   assert.equal(out.merged, false)
   assert.equal(out.failed[0].code, 'gate-red')
-  assert.equal(gh.calls().some(c => c[0] === 'pr' && c[1] === 'merge'), false)
+  assert.equal(
+    gh.calls().some(c => c[0] === 'pr' && c[1] === 'merge'),
+    false,
+  )
 })
 
 test('CLI: a usage error is exit 2 with a JSON error, before any host call', () => {
   const gh = fakeGh()
-  const r = spawnSync(process.execPath, [CYCLE_MERGE, ...argv('check', { story: 'x' })], { encoding: 'utf8', env: { ...process.env, PAIR_GH_BIN: gh.bin } })
+  const r = spawnSync(process.execPath, [CYCLE_MERGE, ...argv('check', { story: 'x' })], {
+    encoding: 'utf8',
+    env: { ...process.env, PAIR_GH_BIN: gh.bin },
+  })
   assert.equal(r.status, 2)
   assert.match(JSON.parse(r.stdout).error, /--story/)
   assert.equal(gh.calls().length, 0)
@@ -501,7 +971,12 @@ test('github.setBoardState: variables never interpolated; read back from the mut
   const ok = a.setBoardState({ id: 42, state: 'Done', repo: 'o/r' })
   assert.deepEqual(ok, { applied: 'Done', confirmed: true, error: null })
   const mutation = gh.calls().find(c => c.some(x => x.startsWith('query=mutation')))
-  assert.ok(mutation.includes('option=opt-done') && mutation.includes('item=PVTI_1') && mutation.includes('project=PVT_1') && mutation.includes('field=PVTSSF_1'))
+  assert.ok(
+    mutation.includes('option=opt-done') &&
+      mutation.includes('item=PVTI_1') &&
+      mutation.includes('project=PVT_1') &&
+      mutation.includes('field=PVTSSF_1'),
+  )
   const missing = a.setBoardState({ id: 42, state: 'Nope', repo: 'o/r' })
   assert.equal(missing.confirmed, false)
   assert.match(missing.error, /no Status option "Nope"/)
@@ -512,22 +987,31 @@ test('github.commentOnCard: a marker-keyed create on the card thread; a re-run e
   const a = github.instantiate({ ghBin: gh.bin })
   const r = a.commentOnCard({ id: 42, marker: '<!-- m -->', body: 'hello', repo: 'o/r' })
   assert.equal(r.action, 'created')
-  assert.ok(gh.calls().some(c => c.includes('POST') && c.some(x => x === 'repos/o/r/issues/42/comments')))
+  assert.ok(
+    gh.calls().some(c => c.includes('POST') && c.some(x => x === 'repos/o/r/issues/42/comments')),
+  )
 })
 
 test('github.readCheckRun: the most recent run of the name; in-flight is pending; absent is null', () => {
   const dir = mkdtempSync(join(tmpdir(), 'gh-runs-'))
   const bin = join(dir, 'gh')
-  writeFileSync(bin, `#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ check_runs: [{ name: 'pair-explicit-approval', status: 'completed', conclusion: 'failure', started_at: '2026-01-01' }, { name: 'pair-explicit-approval', status: 'completed', conclusion: 'success', started_at: '2026-01-02' }, { name: 'other', status: 'completed', conclusion: 'failure', started_at: '2026-01-03' }] }))\n`)
+  writeFileSync(
+    bin,
+    `#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ check_runs: [{ name: 'pair-explicit-approval', status: 'completed', conclusion: 'failure', started_at: '2026-01-01' }, { name: 'pair-explicit-approval', status: 'completed', conclusion: 'success', started_at: '2026-01-02' }, { name: 'other', status: 'completed', conclusion: 'failure', started_at: '2026-01-03' }] }))\n`,
+  )
   chmodSync(bin, 0o755)
   const a = github.instantiate({ ghBin: bin })
-  assert.equal(a.readCheckRun({ sha: SHA('a'), repo: 'o/r', context: 'pair-explicit-approval' }), 'success')
+  assert.equal(
+    a.readCheckRun({ sha: SHA('a'), repo: 'o/r', context: 'pair-explicit-approval' }),
+    'success',
+  )
   assert.equal(a.readCheckRun({ sha: SHA('a'), repo: 'o/r', context: 'missing' }), null)
 })
 
 // ── r0-1: the merge is PINNED to the reviewed head (gh pr merge --match-head-commit) ────────────
 const mergeCall = gh => gh.calls().find(c => c[0] === 'pr' && c[1] === 'merge')
-const pinOf = c => (c && c.indexOf('--match-head-commit') !== -1 ? c[c.indexOf('--match-head-commit') + 1] : null)
+const pinOf = c =>
+  c && c.indexOf('--match-head-commit') !== -1 ? c[c.indexOf('--match-head-commit') + 1] : null
 
 test('r1-g1-w1: runMerge hands the adapter merge the reviewed head as headSha', () => {
   const h = fakeHosts()
@@ -539,14 +1023,22 @@ test('r1-g1-w1: runMerge hands the adapter merge the reviewed head as headSha', 
 test('r1-g1-w2: github.merge with headSha pins the merge: --match-head-commit <headSha>', () => {
   const gh = fakeGh()
   const a = github.instantiate({ ghBin: gh.bin })
-  assert.deepEqual(a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm', headSha: SHA('a') }), { merged: true, pr: 7, strategy: 'squash' })
+  assert.deepEqual(
+    a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm', headSha: SHA('a') }),
+    { merged: true, pr: 7, strategy: 'squash' },
+  )
   assert.equal(pinOf(mergeCall(gh)), SHA('a'), JSON.stringify(mergeCall(gh)))
 })
 
 test('r1-g1-w3: github.merge refuses a malformed headSha before any gh call', () => {
   const gh = fakeGh()
   const a = github.instantiate({ ghBin: gh.bin })
-  for (const headSha of ['', 'abc', SHA('A'), `${SHA('a')} --admin`, 42]) assert.throws(() => a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm', headSha }), e => e?.name === 'HostError', JSON.stringify(headSha))
+  for (const headSha of ['', 'abc', SHA('A'), `${SHA('a')} --admin`, 42])
+    assert.throws(
+      () => a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm', headSha }),
+      e => e?.name === 'HostError',
+      JSON.stringify(headSha),
+    )
   assert.equal(gh.calls().length, 0)
 })
 
@@ -554,7 +1046,16 @@ test('r1-g1-c1: github.merge without headSha keeps the unpinned argv (the adapte
   const gh = fakeGh()
   const a = github.instantiate({ ghBin: gh.bin })
   a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm' })
-  assert.deepEqual(mergeCall(gh), ['pr', 'merge', '7', '--squash', '--repo', 'o/r', '--subject', 'm'])
+  assert.deepEqual(mergeCall(gh), [
+    'pr',
+    'merge',
+    '7',
+    '--squash',
+    '--repo',
+    'o/r',
+    '--subject',
+    'm',
+  ])
 })
 
 test('r1-g1-w4: CLI run all green -> the gh pr merge argv carries --match-head-commit equal to --reviewedHead', () => {
@@ -567,11 +1068,27 @@ test('r1-g1-w4: CLI run all green -> the gh pr merge argv carries --match-head-c
 
 test('r1-g1-w5: CLI run — a push landing between the signals read and gh pr merge is refused by the host: merged:false, merge-failed, parked, nothing closed', () => {
   const gh = fakeGh({ head: SHA('a'), mergeHead: SHA('b') })
-  const { out, status } = runCli('run', gh, { gate: 'green', message: 'm', branch: 'feature/US-42-x' })
+  const { out, status } = runCli('run', gh, {
+    gate: 'green',
+    message: 'm',
+    branch: 'feature/US-42-x',
+  })
   assert.equal(status, 0)
   assert.deepEqual(gh.merged(), [], 'the unreviewed head was never merged')
-  assert.deepEqual({ merged: out.merged, cascaded: out.cascaded, code: out.failed?.[0]?.code, parkKind: out.parkKind }, { merged: false, cascaded: false, code: 'merge-failed', parkKind: 'halted' }, JSON.stringify(out))
-  assert.equal(gh.calls().some(c => c[0] === 'issue' && c[1] === 'close'), false)
+  assert.deepEqual(
+    {
+      merged: out.merged,
+      cascaded: out.cascaded,
+      code: out.failed?.[0]?.code,
+      parkKind: out.parkKind,
+    },
+    { merged: false, cascaded: false, code: 'merge-failed', parkKind: 'halted' },
+    JSON.stringify(out),
+  )
+  assert.equal(
+    gh.calls().some(c => c[0] === 'issue' && c[1] === 'close'),
+    false,
+  )
   assert.equal(out.comment?.posted, true)
 })
 
@@ -591,7 +1108,16 @@ test('r1-g1-c2: CLI run — a head already moved at the signals read parks head-
 function fakeAzPr(seed = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'az-fake-'))
   const state = join(dir, 'state.json')
-  writeFileSync(state, JSON.stringify({ head: seed.head ?? SHA('a'), readHead: seed.head ?? SHA('a'), raceTo: seed.raceTo ?? null, status: 'active', completedHead: null }))
+  writeFileSync(
+    state,
+    JSON.stringify({
+      head: seed.head ?? SHA('a'),
+      readHead: seed.head ?? SHA('a'),
+      raceTo: seed.raceTo ?? null,
+      status: 'active',
+      completedHead: null,
+    }),
+  )
   writeFileSync(
     join(dir, 'az'),
     `#!/usr/bin/env node
@@ -624,41 +1150,108 @@ process.stderr.write('fake az: unhandled ' + a.join(' ')); process.exit(1)
 test('r1-g1-w6: azure-devops merge with a headSha that is not the PR source head never completes the PR', () => {
   const az = fakeAzPr({ head: SHA('b') })
   const a = azure.instantiate({ azBin: az.bin })
-  assert.throws(() => a.merge({ pr: 3, repo: 'Proj/app', strategy: 'squash', message: 'm', headSha: SHA('a') }), e => e?.name === 'HostError')
-  assert.deepEqual({ status: az.state().status, completedHead: az.state().completedHead }, { status: 'active', completedHead: null })
+  assert.throws(
+    () => a.merge({ pr: 3, repo: 'Proj/app', strategy: 'squash', message: 'm', headSha: SHA('a') }),
+    e => e?.name === 'HostError',
+  )
+  assert.deepEqual(
+    { status: az.state().status, completedHead: az.state().completedHead },
+    { status: 'active', completedHead: null },
+  )
 })
 
 test('r1-g1-c3: azure-devops merge with the matching headSha completes the PR on that head', () => {
   const az = fakeAzPr({ head: SHA('a') })
   const a = azure.instantiate({ azBin: az.bin })
-  assert.equal(a.merge({ pr: 3, repo: 'Proj/app', strategy: 'squash', message: 'm', headSha: SHA('a') }).merged, true)
-  assert.deepEqual({ status: az.state().status, completedHead: az.state().completedHead }, { status: 'completed', completedHead: SHA('a') })
+  assert.equal(
+    a.merge({ pr: 3, repo: 'Proj/app', strategy: 'squash', message: 'm', headSha: SHA('a') })
+      .merged,
+    true,
+  )
+  assert.deepEqual(
+    { status: az.state().status, completedHead: az.state().completedHead },
+    { status: 'completed', completedHead: SHA('a') },
+  )
 })
 
 test('r1-g1-w6-race: azure-devops merge — head reads as the reviewed head, a push lands before completion: HostError, the PR stays active', () => {
   const az = fakeAzPr({ head: SHA('a'), raceTo: SHA('b') })
   const a = azure.instantiate({ azBin: az.bin })
-  assert.throws(() => a.merge({ pr: 3, repo: 'Proj/app', strategy: 'squash', message: 'm', headSha: SHA('a') }), e => e?.name === 'HostError')
-  assert.deepEqual({ status: az.state().status, completedHead: az.state().completedHead }, { status: 'active', completedHead: null })
+  assert.throws(
+    () => a.merge({ pr: 3, repo: 'Proj/app', strategy: 'squash', message: 'm', headSha: SHA('a') }),
+    e => e?.name === 'HostError',
+  )
+  assert.deepEqual(
+    { status: az.state().status, completedHead: az.state().completedHead },
+    { status: 'active', completedHead: null },
+  )
 })
 
 // ── spaced label conditions + run-dir guard on `escalate` ───────────────────────────────────────────────────────
 const SPACED_COND = 'has:good first issue'
 test('parseArgs escalate: accepts every label the gate grammar accepts (spaces), still refuses quote / $( / backtick', () => {
-  assert.deepEqual(parseArgs(['escalate', '--dir', '/x/42', '--story', '42', '--stage', 'merge', '--conditions', JSON.stringify([SPACED_COND])]).opts.conditions, [SPACED_COND])
-  for (const bad of ["has:x'; rm -rf /", 'has:$(id)', 'has:`id`', 'has:a"b', 'has:a\\b', 'has:a;b']) assert.throws(() => parseArgs(['escalate', '--dir', '/x/42', '--story', '42', '--stage', 'merge', '--conditions', JSON.stringify([bad])]), /conditions/, bad)
+  assert.deepEqual(
+    parseArgs([
+      'escalate',
+      '--dir',
+      '/x/42',
+      '--story',
+      '42',
+      '--stage',
+      'merge',
+      '--conditions',
+      JSON.stringify([SPACED_COND]),
+    ]).opts.conditions,
+    [SPACED_COND],
+  )
+  for (const bad of ["has:x'; rm -rf /", 'has:$(id)', 'has:`id`', 'has:a"b', 'has:a\\b', 'has:a;b'])
+    assert.throws(
+      () =>
+        parseArgs([
+          'escalate',
+          '--dir',
+          '/x/42',
+          '--story',
+          '42',
+          '--stage',
+          'merge',
+          '--conditions',
+          JSON.stringify([bad]),
+        ]),
+      /conditions/,
+      bad,
+    )
 })
 test('CLI escalate: a spaced label condition posts the ONE comment through a stubbed gh', () => {
   const gh = fakeGh()
-  const { out, status } = runCli('escalate', gh, { stage: 'merge', conditions: JSON.stringify([SPACED_COND]), pr: undefined, reviewedHead: undefined, cardTier: undefined, autoAdvance: undefined })
+  const { out, status } = runCli('escalate', gh, {
+    stage: 'merge',
+    conditions: JSON.stringify([SPACED_COND]),
+    pr: undefined,
+    reviewedHead: undefined,
+    cardTier: undefined,
+    autoAdvance: undefined,
+  })
   assert.equal(status, 0, JSON.stringify(out))
   assert.equal(out.comment.posted, true)
-  assert.ok(gh.calls().some(c => c.includes('POST') && c.some(x => String(x).endsWith('/issues/42/comments'))))
+  assert.ok(
+    gh
+      .calls()
+      .some(c => c.includes('POST') && c.some(x => String(x).endsWith('/issues/42/comments'))),
+  )
 })
 test('CLI escalate: a run dir that does not belong to --story is refused — exit non-zero, no gh call', () => {
   for (const dir of ['/x/43', '/x/anything']) {
     const gh = fakeGh()
-    const { out, status } = runCli('escalate', gh, { dir, stage: 'merge', conditions: JSON.stringify(['has:cost:red']), pr: undefined, reviewedHead: undefined, cardTier: undefined, autoAdvance: undefined })
+    const { out, status } = runCli('escalate', gh, {
+      dir,
+      stage: 'merge',
+      conditions: JSON.stringify(['has:cost:red']),
+      pr: undefined,
+      reviewedHead: undefined,
+      cardTier: undefined,
+      autoAdvance: undefined,
+    })
     assert.notEqual(status, 0)
     assert.match(out.error, /run dir/)
     assert.equal(gh.calls().length, 0)
@@ -680,7 +1273,15 @@ process.stdout.write(''); process.exit(0)
 `,
   )
   chmodSync(join(dir, 'gh'), 0o755)
-  return { bin: join(dir, 'gh'), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+  return {
+    bin: join(dir, 'gh'),
+    calls: () =>
+      readFileSync(log, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map(l => JSON.parse(l)),
+  }
 }
 
 test('D6: updateCard without --repo resolves the slug (gh repo view) and never passes an empty/undefined --repo', () => {
@@ -694,22 +1295,36 @@ test('D6: updateCard without --repo resolves the slug (gh repo view) and never p
 test('D6: updateCard with an explicit repo uses it and does not look it up', () => {
   const gh = recGh()
   github.instantiate({ ghBin: gh.bin }).updateCard({ repo: 'x/y', id: 1, body: 'b' })
-  assert.deepEqual(gh.calls().map(c => c.slice(0, 2).join(' ')), ['issue edit'])
+  assert.deepEqual(
+    gh.calls().map(c => c.slice(0, 2).join(' ')),
+    ['issue edit'],
+  )
   assert.equal(gh.calls()[0][gh.calls()[0].indexOf('--repo') + 1], 'x/y')
 })
 
 test('D6: an unresolvable repo fails closed with a clear message BEFORE any write', () => {
   const gh = recGh({ viewFails: true })
   const h = github.instantiate({ ghBin: gh.bin })
-  assert.throws(() => h.updateCard({ repo: undefined, id: 1, body: 'b' }), /repo.*(resolve|--repo)/i)
-  assert.equal(gh.calls().some(c => c[0] === 'issue' && c[1] === 'edit'), false)
+  assert.throws(
+    () => h.updateCard({ repo: undefined, id: 1, body: 'b' }),
+    /repo.*(resolve|--repo)/i,
+  )
+  assert.equal(
+    gh.calls().some(c => c[0] === 'issue' && c[1] === 'edit'),
+    false,
+  )
 })
 
 test('D7: github deleteBranch deletes the ref through the API (no git push), a missing ref is "gone"', () => {
   const gh = recGh()
   const h = github.instantiate({ ghBin: gh.bin })
   assert.deepEqual(h.deleteBranch({ branch: 'feature/US-42-x', repo: 'o/r' }), { deleted: true })
-  assert.deepEqual(gh.calls()[0], ['api', '-X', 'DELETE', 'repos/o/r/git/refs/heads/feature/US-42-x'])
+  assert.deepEqual(gh.calls()[0], [
+    'api',
+    '-X',
+    'DELETE',
+    'repos/o/r/git/refs/heads/feature/US-42-x',
+  ])
 })
 
 test('D7: closeStory deletes the remote branch via the code host, never `git push --delete` (pre-push gate)', () => {
@@ -717,11 +1332,21 @@ test('D7: closeStory deletes the remote branch via the code host, never `git pus
   const f = fakeHosts()
   const seen = []
   f.hosts.code.deleteBranch = a => (seen.push(a), { deleted: true })
-  const out = closeStory({ hosts: f.hosts, story: 42, repo: 'o/r', branch: 'feature/US-42-x', root: g.main })
+  const out = closeStory({
+    hosts: f.hosts,
+    story: 42,
+    repo: 'o/r',
+    branch: 'feature/US-42-x',
+    root: g.main,
+  })
   assert.deepEqual(seen, [{ branch: 'feature/US-42-x', repo: 'o/r' }])
   assert.equal(out.steps.branch.ok, true, JSON.stringify(out))
   assert.ok(out.steps.branch.notes.includes('remote branch deleted'))
-  assert.equal(spawnSync('git', ['ls-remote', '--exit-code', '--heads', g.remote, 'feature/US-42-x']).status, 0, 'git was not used to delete the remote ref')
+  assert.equal(
+    spawnSync('git', ['ls-remote', '--exit-code', '--heads', g.remote, 'feature/US-42-x']).status,
+    0,
+    'git was not used to delete the remote ref',
+  )
 })
 
 // F1-F3: branch deletion hardening. Stubs only — no real GitHub/Azure.
@@ -741,20 +1366,47 @@ process.stdout.write(r.stdout || ''); process.stderr.write(r.stderr || ''); proc
 `,
   )
   chmodSync(join(dir, 'cli'), 0o755)
-  return { bin: join(dir, 'cli'), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+  return {
+    bin: join(dir, 'cli'),
+    calls: () =>
+      readFileSync(log, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map(l => JSON.parse(l)),
+  }
 }
 
 test('F1: github deleteBranch rejects unsafe branch names before any call', () => {
-  for (const branch of ['feature/US-1#x', '%2e%2e', 'a?b', 'a b', 'a\tb', 'a..b', '-x', 'a/', 'a@{b', 'a\\b']) {
+  for (const branch of [
+    'feature/US-1#x',
+    '%2e%2e',
+    'a?b',
+    'a b',
+    'a\tb',
+    'a..b',
+    '-x',
+    'a/',
+    'a@{b',
+    'a\\b',
+  ]) {
     const s = stubCli()
-    assert.throws(() => github.instantiate({ ghBin: s.bin }).deleteBranch({ branch, repo: 'o/r' }), /branch/i, branch)
+    assert.throws(
+      () => github.instantiate({ ghBin: s.bin }).deleteBranch({ branch, repo: 'o/r' }),
+      /branch/i,
+      branch,
+    )
     assert.equal(s.calls().length, 0, branch)
   }
 })
 
 test('r1-1: deleteBranch rejects @{…} reflog expansion even from a repo with checkout history', () => {
   const repo = mkdtempSync(join(tmpdir(), 'reflog-'))
-  const g = (...a) => spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { cwd: repo, encoding: 'utf8' })
+  const g = (...a) =>
+    spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...a], {
+      cwd: repo,
+      encoding: 'utf8',
+    })
   g('init', '-q', '-b', 'main')
   g('commit', '-q', '--allow-empty', '-m', 'x')
   g('checkout', '-q', '-b', 'one')
@@ -765,7 +1417,11 @@ test('r1-1: deleteBranch rejects @{…} reflog expansion even from a repo with c
   try {
     for (const branch of ['@{-1}', '@{u}', 'a@{-1}', 'HEAD']) {
       const s = stubCli()
-      assert.throws(() => github.instantiate({ ghBin: s.bin }).deleteBranch({ branch, repo: 'o/r' }), /branch/i, branch)
+      assert.throws(
+        () => github.instantiate({ ghBin: s.bin }).deleteBranch({ branch, repo: 'o/r' }),
+        /branch/i,
+        branch,
+      )
       assert.equal(s.calls().length, 0, branch)
     }
   } finally {
@@ -783,8 +1439,16 @@ test('F1: github deleteBranch encodes each segment, keeps "/" separators', () =>
 })
 
 test('F1: parseArgs rejects an unsafe --branch (fail closed)', () => {
-  for (const branch of ['feature/US-1#x', '%2e%2e', 'a?b', 'a b', 'a..b']) assert.throws(() => parseArgs(argv('run', { gate: 'green', message: 'm', branch })), /--branch/, branch)
-  assert.equal(parseArgs(argv('run', { gate: 'green', message: 'm', branch: 'feature/US-1-x' })).opts.branch, 'feature/US-1-x')
+  for (const branch of ['feature/US-1#x', '%2e%2e', 'a?b', 'a b', 'a..b'])
+    assert.throws(
+      () => parseArgs(argv('run', { gate: 'green', message: 'm', branch })),
+      /--branch/,
+      branch,
+    )
+  assert.equal(
+    parseArgs(argv('run', { gate: 'green', message: 'm', branch: 'feature/US-1-x' })).opts.branch,
+    'feature/US-1-x',
+  )
 })
 
 test('F1: closeStory refuses a `#` branch (no host call)', () => {
@@ -792,7 +1456,13 @@ test('F1: closeStory refuses a `#` branch (no host call)', () => {
   const f = fakeHosts()
   let called = false
   f.hosts.code.deleteBranch = () => ((called = true), { deleted: true })
-  const out = closeStory({ hosts: f.hosts, story: 42, repo: 'o/r', branch: 'feature/US-1#x', root: g.main })
+  const out = closeStory({
+    hosts: f.hosts,
+    story: 42,
+    repo: 'o/r',
+    branch: 'feature/US-1#x',
+    root: g.main,
+  })
   assert.equal(out.steps.branch.ok, false)
   assert.equal(called, false)
 })
@@ -802,15 +1472,30 @@ test('F1b: closeStory on a non-SAFE_REF head branch reports `branch-cleanup-manu
   const f = fakeHosts()
   let called = false
   f.hosts.code.deleteBranch = () => ((called = true), { deleted: true })
-  const out = closeStory({ hosts: f.hosts, story: 42, repo: 'o/r', branch: 'feature/#262-dogfood-migration', root: g.main })
+  const out = closeStory({
+    hosts: f.hosts,
+    story: 42,
+    repo: 'o/r',
+    branch: 'feature/#262-dogfood-migration',
+    root: g.main,
+  })
   assert.equal(called, false)
   assert.equal(out.steps.branch.ok, false)
   assert.equal(out.steps.branch.status, 'branch-cleanup-manual')
-  assert.equal(out.steps.branch.command, "gh api -X DELETE 'repos/o/r/git/refs/heads/feature/%23262-dogfood-migration'")
+  assert.equal(
+    out.steps.branch.command,
+    "gh api -X DELETE 'repos/o/r/git/refs/heads/feature/%23262-dogfood-migration'",
+  )
   assert.match(out.reason, /branch-cleanup-manual/)
   assert.match(out.reason, /gh api -X DELETE/)
   // a quote in the name cannot break out of the command
-  const q = closeStory({ hosts: fakeHosts().hosts, story: 42, repo: 'o/r', branch: "a'b", root: g.main })
+  const q = closeStory({
+    hosts: fakeHosts().hosts,
+    story: 42,
+    repo: 'o/r',
+    branch: "a'b",
+    root: g.main,
+  })
   assert.equal(q.steps.branch.command, "gh api -X DELETE 'repos/o/r/git/refs/heads/a'\\''b'")
 })
 
@@ -824,12 +1509,18 @@ test('CI-wait park: `deferPark` skips the park comment on a ciPending poll only;
   const out = checkMerge({ ...input(polled), deferPark: 'true' })
   assert.equal(out.ciPending, true)
   assert.equal('comment' in out, false)
-  assert.equal(polled.calls.some(c => c[0] === 'commentOnCard'), false, 'no comment while waiting')
+  assert.equal(
+    polled.calls.some(c => c[0] === 'commentOnCard'),
+    false,
+    'no comment while waiting',
+  )
   const final = pending()
   assert.deepEqual(checkMerge(input(final)).comment, { posted: true })
   assert.equal(final.calls.filter(c => c[0] === 'commentOnCard').length, 1)
   // a NON-pending refusal is parked even when deferPark is set (nothing to wait for)
-  const failing = fakeHosts({ checks: { 'pair-review': 'failure', 'pair-explicit-approval': 'success' } })
+  const failing = fakeHosts({
+    checks: { 'pair-review': 'failure', 'pair-explicit-approval': 'success' },
+  })
   assert.deepEqual(checkMerge({ ...input(failing), deferPark: 'true' }).comment, { posted: true })
 })
 
@@ -839,10 +1530,19 @@ test('F1c: the manual cleanup command resolves the repo from the origin remote; 
     const r = spawnSync('git', args, { cwd, encoding: 'utf8' })
     return { status: r.status, stdout: r.stdout, stderr: r.stderr }
   }
-  const remote = url => (args, cwd) => (args[0] === 'remote' ? { status: 0, stdout: `${url}\n`, stderr: '' } : real(args, cwd))
-  const run = git => closeStory({ hosts: fakeHosts().hosts, story: 42, branch: 'feature/#1-x', root: g.main, git }).steps.branch
-  assert.equal(run(remote('git@github.com:acme/widgets.git')).command, "gh api -X DELETE 'repos/acme/widgets/git/refs/heads/feature/%231-x'")
-  assert.equal(run(remote('https://github.com/acme/widgets')).command, "gh api -X DELETE 'repos/acme/widgets/git/refs/heads/feature/%231-x'")
+  const remote = url => (args, cwd) =>
+    args[0] === 'remote' ? { status: 0, stdout: `${url}\n`, stderr: '' } : real(args, cwd)
+  const run = git =>
+    closeStory({ hosts: fakeHosts().hosts, story: 42, branch: 'feature/#1-x', root: g.main, git })
+      .steps.branch
+  assert.equal(
+    run(remote('git@github.com:acme/widgets.git')).command,
+    "gh api -X DELETE 'repos/acme/widgets/git/refs/heads/feature/%231-x'",
+  )
+  assert.equal(
+    run(remote('https://github.com/acme/widgets')).command,
+    "gh api -X DELETE 'repos/acme/widgets/git/refs/heads/feature/%231-x'",
+  )
   const unknown = run(remote('/local/path/remote.git'))
   assert.equal('command' in unknown, false)
   assert.match(unknown.error, /repo unknown/)
@@ -852,7 +1552,8 @@ test('F1c: the manual cleanup command resolves the repo from the origin remote; 
 test('F2: github deleteBranch: only "Reference does not exist" means already gone', () => {
   const run = stderr => {
     const s = stubCli({ stderr, status: 1 })
-    return () => github.instantiate({ ghBin: s.bin }).deleteBranch({ branch: 'feature/x', repo: 'o/r' })
+    return () =>
+      github.instantiate({ ghBin: s.bin }).deleteBranch({ branch: 'feature/x', repo: 'o/r' })
   }
   assert.throws(run('gh: Not Found (HTTP 404)'), /404|Not Found/)
   assert.throws(run('gh: Required status check / protected branch (HTTP 422)'), /422/)
@@ -874,95 +1575,284 @@ test('F3: azure deleteBranch: repo required, success, not-found, success:false',
     }
   }
   let t = mk([])
-  assert.throws(() => t.h.deleteBranch({ branch: 'feature/x' }), e => e.code === 'unsupported' || /repo/i.test(e.message))
+  assert.throws(
+    () => t.h.deleteBranch({ branch: 'feature/x' }),
+    e => e.code === 'unsupported' || /repo/i.test(e.message),
+  )
   assert.equal(t.s.calls().length, 0)
-  t = mk([{ match: 'ref list', stdout: JSON.stringify(refs) }, { match: 'ref delete', stdout: JSON.stringify({ success: true }) }])
-  assert.deepEqual(withEnv(t.env, () => t.h.deleteBranch({ branch: 'feature/x', repo: 'P/R' })), { deleted: true })
+  t = mk([
+    { match: 'ref list', stdout: JSON.stringify(refs) },
+    { match: 'ref delete', stdout: JSON.stringify({ success: true }) },
+  ])
+  assert.deepEqual(
+    withEnv(t.env, () => t.h.deleteBranch({ branch: 'feature/x', repo: 'P/R' })),
+    { deleted: true },
+  )
   t = mk([{ match: 'ref list', stdout: '[]' }])
-  assert.deepEqual(withEnv(t.env, () => t.h.deleteBranch({ branch: 'feature/x', repo: 'P/R' })), { deleted: false, gone: true })
-  t = mk([{ match: 'ref list', stdout: JSON.stringify(refs) }, { match: 'ref delete', stdout: JSON.stringify({ success: false, updateStatus: 'rejected' }) }])
-  assert.throws(() => withEnv(t.env, () => t.h.deleteBranch({ branch: 'feature/x', repo: 'P/R' })), /delete|success|rejected/i)
+  assert.deepEqual(
+    withEnv(t.env, () => t.h.deleteBranch({ branch: 'feature/x', repo: 'P/R' })),
+    { deleted: false, gone: true },
+  )
+  t = mk([
+    { match: 'ref list', stdout: JSON.stringify(refs) },
+    { match: 'ref delete', stdout: JSON.stringify({ success: false, updateStatus: 'rejected' }) },
+  ])
+  assert.throws(
+    () => withEnv(t.env, () => t.h.deleteBranch({ branch: 'feature/x', repo: 'P/R' })),
+    /delete|success|rejected/i,
+  )
 })
 
 // ── AL: the PR's CI checks on the pinned head are part of the merge decision ──────────────────────────────────
 test('AL decideMerge: a failed CI check on the head halts the merge (`ci-not-green`); a pending one parks awaiting-human; green/neutral/skipped and pair-* contexts do not count', () => {
   const ci = list => ({ ...OK, ci: list })
-  const failed = decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'failure' }, { name: 'lint', conclusion: 'success' }]) })
+  const failed = decideMerge({
+    ...base,
+    signals: ci([
+      { name: 'build', conclusion: 'failure' },
+      { name: 'lint', conclusion: 'success' },
+    ]),
+  })
   assert.equal(failed.mergeAllowed, false)
-  assert.deepEqual(failed.failed.map(f => f.code), ['ci-not-green'])
+  assert.deepEqual(
+    failed.failed.map(f => f.code),
+    ['ci-not-green'],
+  )
   assert.match(failed.reason, /build/)
   assert.equal(failed.parkKind, 'halted')
   const pending = decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'pending' }]) })
   assert.equal(pending.parkKind, 'awaiting-human')
-  assert.deepEqual(pending.failed.map(f => f.code), ['ci-not-green'])
-  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'success' }, { name: 'docs', conclusion: 'success' }]) }).mergeAllowed, true)
-  assert.equal(decideMerge({ ...base, signals: ci([]) }).mergeAllowed, true, 'no CI configured is not a failure')
-  const own = decideMerge({ ...base, signals: ci([{ name: 'pair-review', conclusion: 'failure' }, { name: 'pair-explicit-approval', conclusion: 'pending' }]) })
-  assert.equal(own.failed.some(f => f.code === 'ci-not-green'), false, 'pair-review / pair-explicit-approval are judged by their own conditions')
-  const both = decideMerge({ ...base, signals: ci([{ name: 'a', conclusion: 'pending' }, { name: 'b', conclusion: 'failure' }]) })
+  assert.deepEqual(
+    pending.failed.map(f => f.code),
+    ['ci-not-green'],
+  )
+  assert.equal(
+    decideMerge({
+      ...base,
+      signals: ci([
+        { name: 'build', conclusion: 'success' },
+        { name: 'docs', conclusion: 'success' },
+      ]),
+    }).mergeAllowed,
+    true,
+  )
+  assert.equal(
+    decideMerge({ ...base, signals: ci([]) }).mergeAllowed,
+    true,
+    'no CI configured is not a failure',
+  )
+  const own = decideMerge({
+    ...base,
+    signals: ci([
+      { name: 'pair-review', conclusion: 'failure' },
+      { name: 'pair-explicit-approval', conclusion: 'pending' },
+    ]),
+  })
+  assert.equal(
+    own.failed.some(f => f.code === 'ci-not-green'),
+    false,
+    'pair-review / pair-explicit-approval are judged by their own conditions',
+  )
+  const both = decideMerge({
+    ...base,
+    signals: ci([
+      { name: 'a', conclusion: 'pending' },
+      { name: 'b', conclusion: 'failure' },
+    ]),
+  })
   assert.equal(both.parkKind, 'halted', 'a failure beside a pending one stays halted')
 })
 
 test('CI-wait decideMerge: `ciPending` is true ONLY when every failure is a pending CI check (a driver may poll); never with a failed check or another failed condition', () => {
   const ci = list => ({ ...OK, ci: list })
-  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'pending' }]) }).ciPending, true)
-  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'success' }]) }).ciPending, false)
-  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'a', conclusion: 'pending' }, { name: 'b', conclusion: 'failure' }]) }).ciPending, false)
-  assert.equal(decideMerge({ ...base, signals: { ...ci([{ name: 'a', conclusion: 'pending' }]), pairReview: 'failure' } }).ciPending, false)
+  assert.equal(
+    decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'pending' }]) }).ciPending,
+    true,
+  )
+  assert.equal(
+    decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'success' }]) }).ciPending,
+    false,
+  )
+  assert.equal(
+    decideMerge({
+      ...base,
+      signals: ci([
+        { name: 'a', conclusion: 'pending' },
+        { name: 'b', conclusion: 'failure' },
+      ]),
+    }).ciPending,
+    false,
+  )
+  assert.equal(
+    decideMerge({
+      ...base,
+      signals: { ...ci([{ name: 'a', conclusion: 'pending' }]), pairReview: 'failure' },
+    }).ciPending,
+    false,
+  )
 })
 
 test('US-575 AC7 decideMerge: `ciFailed` is true ONLY when CI is the sole obstacle and a check FAILED (a driver may re-run it)', () => {
   const ci = list => ({ ...OK, ci: list })
-  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'failure' }]) }).ciFailed, true)
-  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'a', conclusion: 'pending' }, { name: 'b', conclusion: 'failure' }]) }).ciFailed, true)
-  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'pending' }]) }).ciFailed, false)
-  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'success' }]) }).ciFailed, false)
-  assert.equal(decideMerge({ ...base, signals: { ...ci([{ name: 'b', conclusion: 'failure' }]), pairReview: 'failure' } }).ciFailed, false)
+  assert.equal(
+    decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'failure' }]) }).ciFailed,
+    true,
+  )
+  assert.equal(
+    decideMerge({
+      ...base,
+      signals: ci([
+        { name: 'a', conclusion: 'pending' },
+        { name: 'b', conclusion: 'failure' },
+      ]),
+    }).ciFailed,
+    true,
+  )
+  assert.equal(
+    decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'pending' }]) }).ciFailed,
+    false,
+  )
+  assert.equal(
+    decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'success' }]) }).ciFailed,
+    false,
+  )
+  assert.equal(
+    decideMerge({
+      ...base,
+      signals: { ...ci([{ name: 'b', conclusion: 'failure' }]), pairReview: 'failure' },
+    }).ciFailed,
+    false,
+  )
 })
 
 test('AL readSignals: reads the CI checks through the adapter on the pinned head; an adapter without the method leaves `ci` absent; a read that throws makes the signals unreadable', () => {
   const h = fakeHosts({ checks: { 'pair-review': 'success', 'pair-explicit-approval': 'success' } })
-  const code = { ...h.hosts.code, readCiChecks: ({ sha }) => (assert.equal(sha, SHA('a')), [{ name: 'build', conclusion: 'failure' }]) }
+  const code = {
+    ...h.hosts.code,
+    readCiChecks: ({ sha }) => (
+      assert.equal(sha, SHA('a')),
+      [{ name: 'build', conclusion: 'failure' }]
+    ),
+  }
   assert.deepEqual(readSignals({ code, pr: 7 }).ci, [{ name: 'build', conclusion: 'failure' }])
   assert.equal('ci' in readSignals({ code: h.hosts.code, pr: 7 }), false)
-  assert.equal(readSignals({ code: { ...h.hosts.code, readCiChecks: () => { throw new Error('rate limited') } }, pr: 7 }), null)
+  assert.equal(
+    readSignals({
+      code: {
+        ...h.hosts.code,
+        readCiChecks: () => {
+          throw new Error('rate limited')
+        },
+      },
+      pr: 7,
+    }),
+    null,
+  )
 })
 
 test('AL/C6 decideMerge: approval not yet recorded (missing/pending) + CI still pending ⇒ awaiting-human (both are waits), but any real failure beside them stays halted', () => {
   const red = { ...base, cardTier: RED, currentTier: RED, autoAdvanceTiers: [RED] }
   const sig = (approval, ci) => ({ ...OK, explicitApproval: approval, ci })
-  const wait = decideMerge({ ...red, signals: sig('pending', [{ name: 'build', conclusion: 'pending' }]) })
+  const wait = decideMerge({
+    ...red,
+    signals: sig('pending', [{ name: 'build', conclusion: 'pending' }]),
+  })
   assert.deepEqual(wait.failed.map(f => f.code).sort(), ['ci-not-green', 'explicit-approval'])
   assert.equal(wait.parkKind, 'awaiting-human')
-  assert.equal(decideMerge({ ...red, signals: sig('missing', [{ name: 'build', conclusion: 'pending' }]) }).parkKind, 'awaiting-human')
-  assert.equal(decideMerge({ ...red, signals: sig('pending', [{ name: 'build', conclusion: 'failure' }]) }).parkKind, 'halted')
-  assert.equal(decideMerge({ ...red, signals: sig('failure', [{ name: 'build', conclusion: 'pending' }]) }).parkKind, 'halted')
+  assert.equal(
+    decideMerge({ ...red, signals: sig('missing', [{ name: 'build', conclusion: 'pending' }]) })
+      .parkKind,
+    'awaiting-human',
+  )
+  assert.equal(
+    decideMerge({ ...red, signals: sig('pending', [{ name: 'build', conclusion: 'failure' }]) })
+      .parkKind,
+    'halted',
+  )
+  assert.equal(
+    decideMerge({ ...red, signals: sig('failure', [{ name: 'build', conclusion: 'pending' }]) })
+      .parkKind,
+    'halted',
+  )
 })
 
 // ── US-576 AC2: `merge: hold-never` waives the red / untagged explicit approval, nothing else ──
-const NO_APPROVAL = { headSha: SHA('a'), pairReview: 'success', explicitApproval: 'missing', ci: [{ name: 'build', conclusion: 'success' }] }
-const WAIVER = { cardTier: RED, currentTier: RED, effectiveTier: RED, reviewedHead: SHA('a'), signals: NO_APPROVAL, gate: 'green', requireGate: true }
-for (const [tier, labels] of [['risk:red', ['risk:red']], ['untagged (read as risk:red)', ['user story']]]) {
+const NO_APPROVAL = {
+  headSha: SHA('a'),
+  pairReview: 'success',
+  explicitApproval: 'missing',
+  ci: [{ name: 'build', conclusion: 'success' }],
+}
+const WAIVER = {
+  cardTier: RED,
+  currentTier: RED,
+  effectiveTier: RED,
+  reviewedHead: SHA('a'),
+  signals: NO_APPROVAL,
+  gate: 'green',
+  requireGate: true,
+}
+for (const [tier, labels] of [
+  ['risk:red', ['risk:red']],
+  ['untagged (read as risk:red)', ['user story']],
+]) {
   test(`US-576 AC2: hold-never merges a review-approved ${tier} card with no pair-explicit-approval`, () => {
     const d = decideMerge({ ...WAIVER, labels, mergeGate: { mode: 'never', has: [], lacks: [] } })
     assert.equal(d.mergeAllowed, true, JSON.stringify(d))
-    assert.equal(decideMerge({ ...WAIVER, labels, mergeGate: { mode: 'hold-never' }, signals: { ...NO_APPROVAL, explicitApproval: 'pending' } }).mergeAllowed, true)
+    assert.equal(
+      decideMerge({
+        ...WAIVER,
+        labels,
+        mergeGate: { mode: 'hold-never' },
+        signals: { ...NO_APPROVAL, explicitApproval: 'pending' },
+      }).mergeAllowed,
+      true,
+    )
   })
 }
 test('US-576 AC2: hold-never still requires pair-review success on the reviewed head, green CI, the green gate, and a rejected approval still halts', () => {
   const g = { mode: 'never', has: [], lacks: [] }
-  const codes = o => decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: g, ...o }).failed.map(f => f.code)
+  const codes = o =>
+    decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: g, ...o }).failed.map(f => f.code)
   assert.deepEqual(codes({ signals: { ...NO_APPROVAL, pairReview: 'failure' } }), ['pair-review'])
   assert.deepEqual(codes({ signals: { ...NO_APPROVAL, headSha: SHA('b') } }), ['head-moved'])
-  assert.deepEqual(codes({ signals: { ...NO_APPROVAL, ci: [{ name: 'build', conclusion: 'failure' }] } }), ['ci-not-green'])
+  assert.deepEqual(
+    codes({ signals: { ...NO_APPROVAL, ci: [{ name: 'build', conclusion: 'failure' }] } }),
+    ['ci-not-green'],
+  )
   assert.deepEqual(codes({ gate: 'red' }), ['gate-red'])
-  assert.deepEqual(codes({ signals: { ...NO_APPROVAL, explicitApproval: 'failure' } }), ['explicit-approval'])
+  assert.deepEqual(codes({ signals: { ...NO_APPROVAL, explicitApproval: 'failure' } }), [
+    'explicit-approval',
+  ])
 })
 test('US-576 AC2: hold-when; has: risk:red and hold-always keep the red hold; the legacy tier path keeps requiring the approval', () => {
-  assert.deepEqual(decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: { mode: 'when', has: ['risk:red'], lacks: [] } }).failed.map(f => f.code), ['escalated', 'explicit-approval'])
-  assert.ok(decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: { mode: 'always', has: [], lacks: [] } }).failed.some(f => f.code === 'explicit-approval'))
-  assert.ok(decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: { mode: 'when', has: ['cost:red'], lacks: [] } }).failed.some(f => f.code === 'explicit-approval'))
-  assert.ok(decideMerge({ ...WAIVER, autoAdvanceTiers: [RED] }).failed.some(f => f.code === 'explicit-approval'))
+  assert.deepEqual(
+    decideMerge({
+      ...WAIVER,
+      labels: ['risk:red'],
+      mergeGate: { mode: 'when', has: ['risk:red'], lacks: [] },
+    }).failed.map(f => f.code),
+    ['escalated', 'explicit-approval'],
+  )
+  assert.ok(
+    decideMerge({
+      ...WAIVER,
+      labels: ['risk:red'],
+      mergeGate: { mode: 'always', has: [], lacks: [] },
+    }).failed.some(f => f.code === 'explicit-approval'),
+  )
+  assert.ok(
+    decideMerge({
+      ...WAIVER,
+      labels: ['risk:red'],
+      mergeGate: { mode: 'when', has: ['cost:red'], lacks: [] },
+    }).failed.some(f => f.code === 'explicit-approval'),
+  )
+  assert.ok(
+    decideMerge({ ...WAIVER, autoAdvanceTiers: [RED] }).failed.some(
+      f => f.code === 'explicit-approval',
+    ),
+  )
 })
 
 // ── US-599: merged PRs shed premerge state labels ───────────────────────────────────────────────
@@ -976,36 +1866,79 @@ test('US-599 AC1: confirmed merge clears the PR premerge labels (merge first, th
 })
 
 test('US-599 AC3: unconfirmed cleanup is merged-but-unfinished, names the failure, never full success', () => {
-  const h = fakeHosts({ clear: { applied: null, removed: [], confirmed: false, error: 'read-back: labels are ["pr-state:to-be-reviewed"]' } })
+  const h = fakeHosts({
+    clear: {
+      applied: null,
+      removed: [],
+      confirmed: false,
+      error: 'read-back: labels are ["pr-state:to-be-reviewed"]',
+    },
+  })
   const out = runMerge({ ...input(h), gate: 'green', message: 'm' })
-  assert.deepEqual({ merged: out.merged, cascaded: out.cascaded }, { merged: true, cascaded: false })
+  assert.deepEqual(
+    { merged: out.merged, cascaded: out.cascaded },
+    { merged: true, cascaded: false },
+  )
   assert.match(out.reason, /prState \(read-back/)
 })
 
 test('US-599 AC3: a thrown cleanup is reported as a failed step, not a refused merge', () => {
   const h = fakeHosts()
-  h.hosts.code.clearPrState = () => { throw new Error('denied') }
+  h.hosts.code.clearPrState = () => {
+    throw new Error('denied')
+  }
   const out = runMerge({ ...input(h), gate: 'green', message: 'm' })
-  assert.deepEqual({ merged: out.merged, cascaded: out.cascaded }, { merged: true, cascaded: false })
+  assert.deepEqual(
+    { merged: out.merged, cascaded: out.cascaded },
+    { merged: true, cascaded: false },
+  )
   assert.equal(out.cascade.prState.error, 'denied')
 })
 
 test('US-599 AC4: refused or parked merge never runs the cleanup', () => {
   const refused = fakeHosts({ mergeThrows: 'protected' })
   assert.equal(runMerge({ ...input(refused), gate: 'green', message: 'm' }).merged, false)
-  const parked = fakeHosts({ checks: { 'pair-review': 'failure', 'pair-explicit-approval': 'success' } })
+  const parked = fakeHosts({
+    checks: { 'pair-review': 'failure', 'pair-explicit-approval': 'success' },
+  })
   assert.equal(runMerge({ ...input(parked), gate: 'green', message: 'm' }).merged, false)
-  for (const h of [refused, parked]) assert.equal(h.calls.some(c => c[0] === 'clearPrState'), false)
+  for (const h of [refused, parked])
+    assert.equal(
+      h.calls.some(c => c[0] === 'clearPrState'),
+      false,
+    )
 })
 
 test('US-599 AC2: retry after a host merge finishes cleanup without merging again or fresh approval', () => {
   const h = fakeHosts({ merged: true, checks: { 'pair-review': 'failure' } })
   assert.equal(checkMerge(input(h)).mergeAllowed, true)
   const g = gitFixture()
-  const out = runMerge({ ...input(h), gate: 'green', message: 'm', branch: 'feature/US-42-x', root: g.main })
-  assert.deepEqual({ merged: out.merged, cascaded: out.cascaded }, { merged: true, cascaded: true }, JSON.stringify(out))
-  assert.equal(h.calls.some(c => c[0] === 'merge'), false)
-  assert.equal(h.calls.some(c => c[0] === 'clearPrState'), true)
+  const out = runMerge({
+    ...input(h),
+    gate: 'green',
+    message: 'm',
+    branch: 'feature/US-42-x',
+    root: g.main,
+  })
+  assert.deepEqual(
+    { merged: out.merged, cascaded: out.cascaded },
+    { merged: true, cascaded: true },
+    JSON.stringify(out),
+  )
+  assert.equal(
+    h.calls.some(c => c[0] === 'merge'),
+    false,
+  )
+  assert.equal(
+    h.calls.some(c => c[0] === 'clearPrState'),
+    true,
+  )
+  // the already-merged path carries no refusal from the gate decision (pair-review failure)
+  assert.deepEqual(
+    { mergeAllowed: out.mergeAllowed, reason: out.reason ?? null },
+    { mergeAllowed: true, reason: null },
+    JSON.stringify(out),
+  )
 })
 
 test('US-599: a host without the cleanup capability skips the step explicitly', () => {
@@ -1021,7 +1954,9 @@ function ghStub(labels, merged) {
   const log = join(dir, 'log')
   const state = join(dir, 'labels.json')
   writeFileSync(state, JSON.stringify(labels))
-  writeFileSync(join(dir, 'gh'), `#!/usr/bin/env node
+  writeFileSync(
+    join(dir, 'gh'),
+    `#!/usr/bin/env node
 const fs = require('fs')
 const a = process.argv.slice(2)
 fs.appendFileSync(${JSON.stringify(log)}, a.join(' ') + '\\n')
@@ -1030,23 +1965,33 @@ if (a[0] === 'pr' && a[1] === 'view') process.stdout.write(JSON.stringify({ merg
 else if (a.includes('DELETE')) { const n = decodeURIComponent(a[a.length - 1].split('/labels/')[1]); l = l.filter(x => x !== n); fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(l)) }
 else if (a.includes('POST')) { l.push(...JSON.parse(fs.readFileSync(0, 'utf8')).labels); fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(l)) }
 else process.stdout.write(JSON.stringify(l.map(name => ({ name }))))
-`)
+`,
+  )
   chmodSync(join(dir, 'gh'), 0o755)
   return { dir, log, state }
 }
 const withGh = (stub, fn) => {
   const old = process.env.PATH
   process.env.PATH = `${stub.dir}:${old}`
-  try { return fn() } finally { process.env.PATH = old }
+  try {
+    return fn()
+  } finally {
+    process.env.PATH = old
+  }
 }
 
 test('US-599 AC1/AC5 (github boundary): clearPrState drops only pr-state labels; setPrState on a merged PR does not restore one', () => {
-  const stub = ghStub(['pr-state:to-be-reviewed', 'pr-state:not-approved', 'risk:green', 'foreign'], true)
+  const stub = ghStub(
+    ['pr-state:to-be-reviewed', 'pr-state:not-approved', 'risk:green', 'foreign'],
+    true,
+  )
   const code = github.instantiate({ ghBin: join(stub.dir, 'gh') })
   const out = withGh(stub, () => code.clearPrState({ pr: 7, repo: 'o/r' }))
   assert.equal(out.confirmed, true)
   assert.deepEqual(JSON.parse(readFileSync(stub.state, 'utf8')), ['risk:green', 'foreign'])
-  const again = withGh(stub, () => code.setPrState({ pr: 7, repo: 'o/r', label: 'pr-state:to-be-reviewed' }))
+  const again = withGh(stub, () =>
+    code.setPrState({ pr: 7, repo: 'o/r', label: 'pr-state:to-be-reviewed' }),
+  )
   assert.equal(again.confirmed, true)
   assert.deepEqual(JSON.parse(readFileSync(stub.state, 'utf8')), ['risk:green', 'foreign'])
 })
@@ -1054,7 +1999,14 @@ test('US-599 AC1/AC5 (github boundary): clearPrState drops only pr-state labels;
 test('US-599 AC4 (github boundary): setPrState on an unmerged PR still sets the label; isMerged is false', () => {
   const stub = ghStub(['pr-state:not-approved'], false)
   const code = github.instantiate({ ghBin: join(stub.dir, 'gh') })
-  assert.equal(withGh(stub, () => code.isMerged({ pr: 7, repo: 'o/r' })), false)
-  assert.equal(withGh(stub, () => code.setPrState({ pr: 7, repo: 'o/r', label: 'pr-state:ready-to-merge' })).confirmed, true)
+  assert.equal(
+    withGh(stub, () => code.isMerged({ pr: 7, repo: 'o/r' })),
+    false,
+  )
+  assert.equal(
+    withGh(stub, () => code.setPrState({ pr: 7, repo: 'o/r', label: 'pr-state:ready-to-merge' }))
+      .confirmed,
+    true,
+  )
   assert.deepEqual(JSON.parse(readFileSync(stub.state, 'utf8')), ['pr-state:ready-to-merge'])
 })
