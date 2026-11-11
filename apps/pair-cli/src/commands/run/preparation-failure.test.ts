@@ -77,4 +77,11 @@ describe('preparation failure diagnostics (US-591 AC-5/AC-6)', () => {
     expect(f.pushedHead).toBe('not pushed')
     expect(f.pr).toMatch(/^#57 /)
   })
+
+  it('platform darwin/linux: a changed path holding a space is reported as the real path, not a quoted one', () => {
+    const { main, wt, runDir } = fixture()
+    writeFileSync(join(wt, 'with space.ts'), 'x')
+    const f = observePreparationFailure({ next, main, card: '591', runDir })
+    expect(f.localChanges).toEqual(['with space.ts'])
+  })
 })

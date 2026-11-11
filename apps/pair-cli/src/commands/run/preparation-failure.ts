@@ -18,7 +18,7 @@ const realGit: Git = (cwd, args) => {
       encoding: 'utf-8',
       timeout: 15000,
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
+    }).trimEnd()
   } catch {
     return undefined
   }
@@ -72,17 +72,20 @@ const RECOVERY = [
 const pushedHeadOf = (git: Git, path: string, branch: string | undefined): string => {
   const remote =
     branch === undefined ? undefined : git(path, ['ls-remote', '--heads', 'origin', branch])
-  return remote === undefined ? UNAVAILABLE : remote.split(/\s/)[0] || 'not pushed'
+  return remote === undefined ? UNAVAILABLE : remote.trim().split(/\s/)[0] || 'not pushed'
 }
 
+/** `-z`: raw NUL-separated paths (never quoted); a rename/copy entry is followed by its source path field, skipped. */
 const changesOf = (git: Git, path: string | undefined): PreparationFailure['localChanges'] => {
-  const status = path && git(path, ['status', '--porcelain', '--untracked-files=all'])
-  return typeof status === 'string'
-    ? status
-        .split('\n')
-        .filter(Boolean)
-        .map(l => l.slice(3))
-    : UNAVAILABLE
+  const status = path && git(path, ['status', '--porcelain', '-z', '--untracked-files=all'])
+  if (typeof status !== 'string') return UNAVAILABLE
+  const fields = status.split('\0').filter(Boolean)
+  const paths: string[] = []
+  for (let i = 0; i < fields.length; i++) {
+    paths.push(fields[i]!.slice(3))
+    if (/^[RC]/.test(fields[i]!)) i++
+  }
+  return paths
 }
 
 const observeWorktree = (
