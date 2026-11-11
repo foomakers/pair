@@ -103,6 +103,8 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/analyze-debt`          | Analysis        | Analyze technical debt with prioritization                                   |
 | `/analyze-code-quality`  | Analysis        | Analyze code quality with metrics                                            |
 | `/analyze-delivery-metrics` | Analysis     | Delivery/AI metrics for a period (bug resolution, PR lead time, adoption) → one period panel |
+| `/analyze-test-speed`    | Analysis        | Test/pre-push speed report: bottlenecks, causes, gains |
+| `/analyze-test-prune`    | Analysis        | Test prune candidates report (mutation in a disposable worktree) |
 | `/estimate`              | Planning        | Estimate story using adopted methodology                                     |
 | `/setup-gates`           | Configuration   | Configure CI/CD quality gates                                                |
 | `/manage-flags`          | Configuration   | Manage feature flag lifecycle                                                |

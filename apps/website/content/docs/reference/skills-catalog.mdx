@@ -1,9 +1,9 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 51 pair skills organized by type, process, capability, workflow, and meta.
+description: Complete catalog of all 53 pair skills organized by type, process, capability, workflow, and meta.
 ---
 
-pair ships with 51 skills organized into four types: **process** (lifecycle orchestration), **capability** (atomic operations), **workflow** (delivery stages dispatched by the batch engine), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 53 skills organized into four types: **process** (lifecycle orchestration), **capability** (atomic operations), **workflow** (delivery stages dispatched by the batch engine), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
 > **Last updated:** 2026-09-24. Source: `packages/knowledge-hub/dataset/.skills/`
 
@@ -83,6 +83,8 @@ All `analyze-*` skills **analyze and report**: they propose no adoption decision
 | **analyze-code-quality** | `/pair-capability-analyze-code-quality` | Produces an objective code quality report, complexity, size, coverage, duplication, maintainability score, for a repo or package, with actionable recommendations. |
 | **analyze-debt** | `/pair-capability-analyze-debt` | Produces a technical debt report, categorized items (code, design, test, documentation, infrastructure), prioritized by impact x effort. |
 | **analyze-delivery-metrics** | `/pair-capability-analyze-delivery-metrics` | Generates the delivery/AI-metrics retro panel for a period, bug resolution time, PR lead time, process adoption, computed from the adopted PM tool/code host against the delivery-metrics guideline (definitions, aggregation, low-sample rule, bug mapping) and written as ONE period-keyed panel under .pair/working/reports/metrics/: headline numbers + trend first, raw breakdowns collapsed, idempotent by period key. |
+| **analyze-test-speed** | `/pair-capability-analyze-test-speed` | Analyzes where test and pre-push time goes for a module: measures it (3 seeded runs, median), profiles the pre-push steps, ranks bottlenecks, classifies causes, estimates gains and writes ONE report under .pair/working/reports/test-speed/. |
+| **analyze-test-prune** | `/pair-capability-analyze-test-prune` | Analyzes which tests of a module are prune candidates, following the #613 path: baseline, mutation, U1-U8 classes, protections, candidates per module and file, removal waves; writes ONE report under .pair/working/reports/test-prune/. |
 
 ### Verification Capabilities
 

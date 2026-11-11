@@ -85,6 +85,8 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 | `/analyze-debt` | Technical debt detection + prioritization (report-only) |
 | `/analyze-code-quality` | Code quality metrics — complexity, size, coverage, maintainability (report-only) |
 | `/analyze-delivery-metrics` | Delivery/AI metrics for a period — bug resolution time, PR lead time, process adoption — computed from the adopted PM tool/code host against the [delivery-metrics guideline](guidelines/quality-assurance/delivery-metrics.md) and written as one period-keyed panel under `.pair/working/reports/metrics/` per the [report-panel convention](guidelines/collaboration/working-area.md). Report-only, but (like `/assess-security`'s audit) it writes its own panel — the D14 operational-artifact exception; never blocks, never touches adoption |
+| `/analyze-test-speed` | Test and pre-push speed — measure, profile, rank bottlenecks, classify causes; asks before opening a card (report-only) |
+| `/analyze-test-prune` | Test prune candidates — baseline, mutation in a disposable worktree, U1–U8, protections, waves; asks before opening a card (report-only) |
 
 #### Verification Skills (3)
 
@@ -183,6 +185,8 @@ Delivery-stage skills the batch engine (`pair-implement-batch`) or the in-sessio
 │   ├── analyze-debt/          # report-only
 │   ├── analyze-code-quality/  # report-only
 │   ├── analyze-delivery-metrics/ # report-only, writes one period panel
+│   ├── analyze-test-speed/    # report-only
+│   ├── analyze-test-prune/    # report-only
 │   ├── checkpoint/
 │   ├── publish-pr/
 │   ├── manage-flags/
