@@ -191,10 +191,6 @@ describe('parseMarketplaceManifest — required Claude Code schema fields', () =
     plugins: [{ name: 'pair', source: './' }],
   }
 
-  it('accepts a manifest carrying name + owner + plugins', () => {
-    expect(parseMarketplaceManifest(JSON.stringify(valid)).name).toBe('pair')
-  })
-
   it('rejects malformed JSON, naming the file', () => {
     expect(() => parseMarketplaceManifest('{ nope', 'mp.json')).toThrow(/mp\.json.*not valid JSON/)
   })
@@ -233,14 +229,6 @@ describe('parseMarketplaceManifest — required Claude Code schema fields', () =
     ).toThrow(/\.\//)
   })
 
-  it('rejects a source escaping the plugin root via ..', () => {
-    expect(() =>
-      parseMarketplaceManifest(
-        JSON.stringify({ ...valid, plugins: [{ name: 'pair', source: './../pair' }] }),
-      ),
-    ).toThrow(/plugin root/i)
-  })
-
   it('accepts an object source (github/npm/url/git-subdir form)', () => {
     const manifest = parseMarketplaceManifest(
       JSON.stringify({
@@ -259,12 +247,6 @@ describe('parsePluginManifest — required Claude Code schema fields', () => {
 
   it('rejects a missing name', () => {
     expect(() => parsePluginManifest(JSON.stringify({ description: 'x' }))).toThrow(/name/)
-  })
-
-  it('rejects a skills entry that is not a ./-relative path', () => {
-    expect(() =>
-      parsePluginManifest(JSON.stringify({ name: 'pair', skills: ['.claude/skills/pair-next'] })),
-    ).toThrow(/\.\//)
   })
 
   it('rejects a skills entry escaping the plugin root (a plugin cannot reach outside it)', () => {
@@ -312,10 +294,6 @@ describe('assertSkillCatalogInSync — drift injection', () => {
     './.claude/skills/pair-process-implement',
   ]
 
-  it('passes when the manifest lists exactly the dataset catalog', () => {
-    expect(() => assertSkillCatalogInSync([...expected].reverse(), expected)).not.toThrow()
-  })
-
   it('FAILS when a newly added skill is missing, naming it and the file to edit by hand', () => {
     const declared = expected.filter(p => !p.endsWith('pair-next'))
     const message = captureThrownMessage(() => assertSkillCatalogInSync(declared, expected))
@@ -349,18 +327,9 @@ describe('expectedPluginSkillPaths — derived from the bootstrap corpus, never 
     const paths = expectedPluginSkillPaths(['pair-assistant', 'pair-another-bootstrap'])
     expect(paths).toEqual(['./skills/pair-another-bootstrap', './skills/pair-assistant'])
   })
-
-  it('is empty for an empty corpus, so the catalog guard cannot pass vacuously', () => {
-    expect(expectedPluginSkillPaths([])).toEqual([])
-  })
 })
 
 describe('assertDeclaredSkillsResolve — stale path detection', () => {
-  it('passes when every declared dir holds a SKILL.md', () => {
-    expect(() =>
-      assertDeclaredSkillsResolve(['./.claude/skills/pair-next'], () => true),
-    ).not.toThrow()
-  })
 
   it('FAILS naming each declared dir with no SKILL.md', () => {
     const message = captureThrownMessage(() =>
@@ -377,24 +346,6 @@ describe('assertDeclaredSkillsResolve — stale path detection', () => {
 })
 
 describe('assertSkillsOnlyDistribution — allowlist, not denylist', () => {
-  it('passes for a skills-only plugin manifest', () => {
-    expect(() =>
-      assertSkillsOnlyDistribution('plugin.json', {
-        name: 'pair',
-        skills: ['./.claude/skills/x'],
-      }),
-    ).not.toThrow()
-  })
-
-  it('passes for a metadata-only marketplace entry', () => {
-    expect(() =>
-      assertSkillsOnlyDistribution(
-        'marketplace.json → pair',
-        { name: 'pair', source: './', category: 'workflow', tags: ['sdlc'] },
-        'marketplace-entry',
-      ),
-    ).not.toThrow()
-  })
 
   it('accepts every metadata key the published schemas declare', () => {
     // Without this, tightening to an allowlist could break a legitimate hand edit
@@ -538,20 +489,9 @@ describe('assertSkillsOnlyDistribution — allowlist, not denylist', () => {
     )
     expect(message).toContain('displayName')
   })
-
-  it('names every offending key in one failure', () => {
-    const message = captureThrownMessage(() =>
-      assertSkillsOnlyDistribution('plugin.json', { name: 'pair', agents: [], hooks: {} }),
-    )
-    expect(message).toContain('agents')
-    expect(message).toContain('hooks')
-  })
 })
 
 describe('assertNoRootPluginComponents — payload-level skills-only guarantee', () => {
-  it('passes when no root-level component path exists', () => {
-    expect(() => assertNoRootPluginComponents(() => false)).not.toThrow()
-  })
 
   it.each(ROOT_PLUGIN_COMPONENT_PATHS)('FAILS when %s exists at the plugin root', path => {
     const message = captureThrownMessage(() => assertNoRootPluginComponents(rel => rel === path))

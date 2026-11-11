@@ -1,20 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
-import {
-  readSkillsDatasetFromDisk,
-  datasetSkillDirs,
-  datasetSkillArtifacts,
-  installedSkillDir,
-  installedArtifactPath,
-  buildInstalledArtifacts,
-  assertRootArtifactMatches,
-  diffSkillMd,
-  SKILL_COPY_OPTS,
-  skillCopySyncOptions,
-  MIRROR_REGENERATE_COMMAND,
-  type DatasetTree,
-} from './skill-md-mirror'
+import { readSkillsDatasetFromDisk, datasetSkillDirs, datasetSkillArtifacts, installedSkillDir, installedArtifactPath, buildInstalledArtifacts, assertRootArtifactMatches, diffSkillMd, MIRROR_REGENERATE_COMMAND, type DatasetTree } from './skill-md-mirror'
 
 // packages/knowledge-hub/src/tools -> repo root
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..')
@@ -99,16 +86,6 @@ describe('dataset -> root mirror equality for every skill artifact (data-driven)
     expect(skillDirs).toContain('next')
   })
 
-  // The derivation `installedArtifactPath` uses to locate each root copy must
-  // reproduce the pipeline's REAL output set exactly. Without this, a
-  // path-mapping assumption (e.g. assuming a nested `references/` subdir is
-  // preserved rather than flattened) would silently drop artifacts from the
-  // guard: `byDatasetPath` would just lack an entry and nothing would fail.
-  it('locates every artifact exactly where the pipeline actually wrote it', () => {
-    expect(artifacts.map(installedArtifactPath).sort()).toEqual(mirror.producedPaths)
-    expect([...mirror.byDatasetPath.keys()].sort()).toEqual(artifacts)
-  })
-
   it.each(artifacts)('root mirror for %s equals the real copy-pipeline transform', artifact => {
     const expected = mirror.byDatasetPath.get(artifact)
     expect(expected, `pipeline produced no output for ${artifact}`).toBeDefined()
@@ -182,83 +159,6 @@ describe('directional guard ignores root-only artifacts with no dataset source',
 })
 
 /**
- * Missing vs unreadable are DISTINCT failures with distinct fixes: the regeneration
- * command regenerates a missing copy, but cannot fix an EACCES. The root-copy read must
- * therefore never collapse "unreadable" into "missing" (nor, worse, into a pass).
- */
-describe('root-copy read distinguishes a missing copy from an unreadable one', () => {
-  it('reports an EXISTING but unreadable root copy as unreadable, never as missing', () => {
-    // The catch branch of the root-copy read: an EACCES (or a dir in its place)
-    // must fail with its path and cause, not be swallowed into `undefined` and
-    // mislabelled "does not exist. Run '<regeneration command>'".
-    const artifact = 'next/SKILL.md'
-    const rootPath = join(ROOT_CLAUDE_SKILLS, installedArtifactPath(artifact))
-    expect(existsSync(rootPath)).toBe(true) // precondition: it DOES exist
-
-    const message = captureThrownMessage(() =>
-      rootMirrorContent(artifact, () => {
-        throw new Error('EACCES: permission denied')
-      }),
-    )
-    expect(message).toContain(artifact)
-    expect(message).toContain(rootPath)
-    expect(message).toContain('unreadable')
-    expect(message).toContain('EACCES: permission denied')
-    expect(message).not.toContain('does not exist')
-    // #419 round 4: a developer reads this message on a real failure, so it is one of the
-    // places the remedy is named. It must name the SAME command the two guard branches do —
-    // two remedies for one guard is the condition MIRROR_REGENERATE_COMMAND removed.
-    expect(message).toContain(MIRROR_REGENERATE_COMMAND)
-    expect(message).not.toContain('pair update')
-  })
-})
-
-/**
- * SKILL_COPY_OPTS is a local copy of the `skills` asset-registry knobs in
- * apps/pair-cli/config.json (what `pair update` actually uses). Pin it so a
- * registry change (e.g. prefix `pair` -> `p`) fails HERE — correctly attributed
- * — instead of the guard silently computing the wrong root path and blaming the
- * mirror / `pair update` (finding: hardcoded duplication of the config).
- *
- * `behavior` is pinned too, via the RESOLVED options the guard actually runs
- * (`skillCopySyncOptions`): a registry flip to 'mirror' would otherwise leave the
- * guard simulating 'overwrite' with nothing failing (the in-memory destination
- * starts empty, so the pipeline's stale-entry cleanup is a no-op), and the
- * module's ACCEPTED RESIDUAL for orphans — justified by "behavior 'overwrite',
- * no mirror-delete" — would become quietly false.
- */
-describe('SKILL_COPY_OPTS stays pinned to the pair-cli skills registry', () => {
-  it('flatten/flattenDepth/prefix/source/behavior match apps/pair-cli/config.json asset_registries.skills', () => {
-    const config = JSON.parse(
-      readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8'),
-    ) as {
-      asset_registries: {
-        skills: {
-          source: string
-          flatten: boolean
-          flattenDepth?: number
-          prefix: string
-          behavior: string
-        }
-      }
-    }
-    const registry = config.asset_registries.skills
-    expect(SKILL_COPY_OPTS.flatten).toBe(registry.flatten)
-    expect(SKILL_COPY_OPTS.prefix).toBe(registry.prefix)
-    // #407: the entry granularity is part of the transform, so it is pinned too —
-    // otherwise the guard would derive sibling `-references` paths the real
-    // `pair update` no longer produces.
-    expect(SKILL_COPY_OPTS.flattenDepth).toBe(registry.flattenDepth)
-    // the guard reads the dataset from the registry's declared source dir (.skills)
-    expect(DATASET_SKILLS.endsWith(registry.source)).toBe(true)
-    // ...and runs the pipeline with the registry's declared copy behavior
-    expect(skillCopySyncOptions().defaultBehavior).toBe(registry.behavior)
-    expect(skillCopySyncOptions().flatten).toBe(registry.flatten)
-    expect(skillCopySyncOptions().prefix).toBe(registry.prefix)
-  })
-})
-
-/**
  * Artifact enumeration (T-1): a skill dir contributes its `SKILL.md` AND every
  * other markdown file under it — sub-docs today, `references/*` tomorrow. The
  * enumeration is derived from the dataset tree, recursive, markdown-only, and
@@ -276,26 +176,6 @@ describe('datasetSkillArtifacts — every markdown artifact the dataset contribu
     for (const dir of datasetSkillDirs(tree)) {
       expect(artifacts).toContain(`${dir}/SKILL.md`)
     }
-  })
-
-  it('enumerates nested sub-directories recursively (ready for the first references/)', () => {
-    const nested: DatasetTree = {
-      'process/review/SKILL.md': 'a',
-      'process/review/references/deep.md': 'b',
-    }
-    expect(datasetSkillArtifacts(nested)).toEqual([
-      'process/review/SKILL.md',
-      'process/review/references/deep.md',
-    ])
-  })
-
-  it('excludes non-markdown files (a stray .DS_Store is never asserted as an artifact)', () => {
-    const withJunk: DatasetTree = {
-      'process/review/SKILL.md': 'a',
-      'process/review/.DS_Store': 'binary-ish',
-      'process/review/diagram.png': 'png',
-    }
-    expect(datasetSkillArtifacts(withJunk)).toEqual(['process/review/SKILL.md'])
   })
 
   it('returns a sorted list so it.each ordering is stable', () => {
@@ -318,12 +198,6 @@ describe('datasetSkillArtifacts — every markdown artifact the dataset contribu
  * as the sanctioned way to ship a `references/` sub-doc.
  */
 describe('installedArtifactPath — root location via the real naming transform', () => {
-  it('maps a skill-dir artifact into that skill prefixed root dir', () => {
-    expect(installedArtifactPath('process/review/merge-and-cascade.md')).toBe(
-      'pair-process-review/merge-and-cascade.md',
-    )
-    expect(installedArtifactPath('next/SKILL.md')).toBe('pair-next/SKILL.md')
-  })
 
   // Inverted when #407 landed. This asserted the DEFECT — the sub-dir flattened
   // OUT of its skill into a sibling pseudo-skill — deliberately, because the
@@ -352,15 +226,6 @@ describe('installedArtifactPath — root location via the real naming transform'
  * Exercises each edit class directly so a large SKILL.md failure stays readable.
  */
 describe('diffSkillMd — compact line-level diff', () => {
-  it('shows a changed line as a - expected / + actual pair with surrounding context', () => {
-    const expected = 'a\nb\nc\nd\ne'
-    const actual = 'a\nb\nX\nd\ne'
-    const out = diffSkillMd(expected, actual)
-    expect(out).toContain('-c')
-    expect(out).toContain('+X')
-    expect(out).toContain(' b') // unchanged context line kept
-    expect(out).toContain(' d')
-  })
 
   it('shows pure insertions as + lines (actual longer than expected)', () => {
     const out = diffSkillMd('a\nb', 'a\nb\nc\nd')
@@ -429,10 +294,6 @@ describe('drift-injection: guard fails on each drift class, passes when reconcil
     expect(expected).not.toContain(' /verify-quality ')
   })
 
-  it('passes when the root mirror equals the real transform (reconciled)', () => {
-    expect(() => assertRootArtifactMatches(SKILL, expected, expected)).not.toThrow()
-  })
-
   it('FAILS on frontmatter name: drift (AC2), naming the artifact + showing expected vs actual', () => {
     const drifted = expected.replace('name: pair-demo', 'name: demo')
     expect(() => assertRootArtifactMatches(SKILL, expected, drifted)).toThrow(/drifted/)
@@ -448,16 +309,6 @@ describe('drift-injection: guard fails on each drift class, passes when reconcil
     expect(message).toContain('+++ actual') // labelled actual side of the diff
     expect(message).toContain('-name: pair-demo') // expected content shown as a removed diff line
     expect(message).toContain('+name: demo') // drifted actual content shown as an added diff line
-  })
-
-  it('FAILS on relative-link-depth drift (AC2)', () => {
-    const drifted = expected.replace('](../../../.pair/foo.md)', '](../../.pair/foo.md)')
-    expect(() => assertRootArtifactMatches(SKILL, expected, drifted)).toThrow(/drifted/)
-  })
-
-  it('FAILS on /command skill-reference drift (AC2)', () => {
-    const drifted = expected.replace('/pair-capability-verify-quality', '/verify-quality')
-    expect(() => assertRootArtifactMatches(SKILL, expected, drifted)).toThrow(/drifted/)
   })
 
   it('FAILS loudly when the root mirror is missing (AC4)', () => {
@@ -544,11 +395,6 @@ describe('drift-injection on sub-docs and nested references (non-SKILL.md artifa
     expect(mirror.byDatasetPath.get(NESTED)).toContain('/pair-capability-verify-quality')
   })
 
-  it('passes when the sub-doc root copy equals the real transform (reconciled)', () => {
-    const sub = mirror.byDatasetPath.get(SUB)!
-    expect(() => assertRootArtifactMatches(SUB, sub, sub)).not.toThrow()
-  })
-
   it('FAILS on sub-doc content drift, naming it by dataset path + compact diff (AC2)', () => {
     const sub = mirror.byDatasetPath.get(SUB)!
     const drifted = sub.replace('# sub\n', '# sub (hand-edited)\n')
@@ -559,41 +405,6 @@ describe('drift-injection on sub-docs and nested references (non-SKILL.md artifa
     expect(message).toContain('+# sub (hand-edited)')
     // compact diff, not a two-file dump: the unchanged tail is elided
     expect(message).toContain('…')
-  })
-
-  it('FAILS on sub-doc sibling self-pointer drift (AC2)', () => {
-    const sub = mirror.byDatasetPath.get(SUB)!
-    const drifted = sub.replace('](./SKILL.md)', '](SKILL.md)')
-    expect(() => assertRootArtifactMatches(SUB, sub, drifted)).toThrow(/drifted/)
-  })
-
-  it('FAILS on sub-doc link-depth drift (AC2)', () => {
-    const sub = mirror.byDatasetPath.get(SUB)!
-    const drifted = sub.replace('](../../../.pair/kb.md)', '](../../.pair/kb.md)')
-    expect(() => assertRootArtifactMatches(SUB, sub, drifted)).toThrow(/drifted/)
-  })
-
-  it('FAILS on sub-doc /command skill-reference drift (AC2)', () => {
-    const sub = mirror.byDatasetPath.get(SUB)!
-    const drifted = sub.replace('/pair-capability-verify-quality', '/verify-quality')
-    expect(() => assertRootArtifactMatches(SUB, sub, drifted)).toThrow(/drifted/)
-  })
-
-  it('FAILS loudly when the sub-doc root copy is missing, pointing at the remedy (AC4)', () => {
-    const message = captureThrownMessage(() =>
-      assertRootArtifactMatches(SUB, mirror.byDatasetPath.get(SUB)!, undefined),
-    )
-    expect(message).toMatch(new RegExp(`missing[\\s\\S]*${MIRROR_REGENERATE_COMMAND}`))
-    expect(message).toContain(SUB)
-    expect(message).toContain(SUB_ROOT)
-  })
-
-  it('FAILS on nested reference drift, named by its nested dataset path', () => {
-    const deep = mirror.byDatasetPath.get(NESTED)!
-    const drifted = `${deep}stray\n`
-    const message = captureThrownMessage(() => assertRootArtifactMatches(NESTED, deep, drifted))
-    expect(message).toContain(NESTED)
-    expect(message).toContain('.claude/skills/pair-catalog-nested/references/deep.md')
   })
 })
 

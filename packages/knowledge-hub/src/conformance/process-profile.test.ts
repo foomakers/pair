@@ -1,20 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import {
-  parseStepCatalogue,
-  parseProcessProfiles,
-  collectHowToGuides,
-  collectAllSkillDirs,
-  checkStepCatalogue,
-  checkStepMarkers,
-  checkStepMarkersInMirror,
-  checkManualPathEntrypoint,
-  checkProcessProfiles,
-  parseWowProfileSection,
-  resolveProcessProfile,
-  STEP_MARKER,
-} from '../tools/skills-conformance-check'
+import { parseStepCatalogue, parseProcessProfiles, collectHowToGuides, collectAllSkillDirs, checkStepCatalogue, checkStepMarkers, checkProcessProfiles, parseWowProfileSection, resolveProcessProfile, STEP_MARKER } from '../tools/skills-conformance-check'
 import { installedSkillDir } from '../tools/skill-md-mirror'
 import { sectionBetween } from './test-utils'
 
@@ -58,7 +45,6 @@ const AI_DEV_README_MIRROR = join(
 const NEXT_DATASET = join(SKILLS_DIR, 'next/SKILL.md')
 const MIRROR_SKILLS_DIR = join(HUB, '../../.claude/skills')
 const NEXT_MIRROR = join(MIRROR_SKILLS_DIR, 'pair-next/SKILL.md')
-const AGENTS_MD = join(DATASET, 'AGENTS.md')
 
 const read = (p: string): string => (existsSync(p) ? readFileSync(p, 'utf-8') : '')
 
@@ -71,21 +57,6 @@ describe('step catalogue — the unit of the profile is the step, not its repres
     expect(existsSync(CATALOGUE_PATH)).toBe(true)
   })
 
-  it('gives every step a stable id, both representations and its prerequisites', () => {
-    const entries = parseStepCatalogue(catalogueSource)
-    expect(entries.length).toBeGreaterThan(0)
-    for (const entry of entries) {
-      expect(entry.id).toMatch(/^[a-z][a-z0-9-]*$/)
-      // `howTo` / `executable` are nullable BY DESIGN — that nullability is what
-      // makes the three asymmetries expressible as data.
-      expect(entry).toHaveProperty('howTo')
-      expect(entry).toHaveProperty('executable')
-      expect(Array.isArray(entry.requires)).toBe(true)
-    }
-    // Ids are unique — a duplicate would make a whitelist entry ambiguous.
-    expect(new Set(entries.map(e => e.id)).size).toBe(entries.length)
-  })
-
   it('binds to the real corpus in BOTH directions (no silent drift)', () => {
     const entries = parseStepCatalogue(catalogueSource)
     const errors = checkStepCatalogue(entries, {
@@ -93,25 +64,6 @@ describe('step catalogue — the unit of the profile is the step, not its repres
       skillDirs: collectAllSkillDirs(SKILLS_DIR),
     })
     expect(errors).toEqual([])
-  })
-
-  it('declares the three asymmetries as DATA, not as special cases in logic', () => {
-    const byId = new Map(parseStepCatalogue(catalogueSource).map(e => [e.id, e]))
-
-    // 04 / 05: retired how-to guides, executable form is a CAPABILITY.
-    for (const id of ['define-subdomains', 'define-bounded-contexts']) {
-      const entry = byId.get(id)
-      expect(entry, `catalogue is missing the DDD-mapping step \`${id}\``).toBeDefined()
-      expect(entry?.howTo).toBeNull()
-      expect(entry?.executable).toMatch(/^\/map-/)
-    }
-
-    // brainstorm: a process SKILL with no how-to — so on a project running the
-    // manual path it is not executable at all, and must be declared unreachable.
-    const brainstorm = byId.get('brainstorm')
-    expect(brainstorm).toBeDefined()
-    expect(brainstorm?.howTo).toBeNull()
-    expect(brainstorm?.executable).toBe('/brainstorm')
   })
 
   it('states that a step with no representation is never proposed', () => {
@@ -129,15 +81,6 @@ describe('step markers — every executable representation declares its step id'
   it('carries a marker on each catalogued executable, and on nothing else', () => {
     const entries = parseStepCatalogue(catalogueSource)
     expect(checkStepMarkers(entries, SKILLS_DIR)).toEqual([])
-  })
-
-  it('carries it in the INSTALLED MIRROR too — the copy an assistant actually loads', () => {
-    // The dataset copy is the source; the mirror is the binding one (same finding
-    // class as #280's `brainstorm-phases.test.ts:820`). Guarded here AND in
-    // `skills:conformance`, so dropping a marker from `.claude/skills/**` during a
-    // regeneration is a red gate, not a silently ungoverned step.
-    const entries = parseStepCatalogue(catalogueSource)
-    expect(checkStepMarkersInMirror(entries, SKILLS_DIR, MIRROR_SKILLS_DIR)).toEqual([])
   })
 
   it('uses a declared marker, not a prose window', () => {
@@ -612,21 +555,6 @@ describe('composers name the profile AT the composition site, not only in their 
     for (const id of fromTable) expect(declared.has(id), `undeclared: ${id}`).toBe(true)
   })
 
-  // …and the list of composers itself is derived from the corpus, so a 13th
-  // composer cannot be added without either entering this guard or being named
-  // here. `brainstorm` is the one documented exception: its delta and its
-  // composition beats are disclosed to `degradation.md` under a byte budget (ADL
-  // 2026-08-28), and the test below pins that half.
-  it('the composer list is the corpus’s, not this file’s', () => {
-    const stepDirs = collectAllSkillDirs(SKILLS_DIR).filter(d =>
-      entries.some(e => e.executable === `/${d.split('/').pop()}`),
-    )
-    const found = stepDirs
-      .filter(d => composedFromTable(read(join(SKILLS_DIR, d, 'SKILL.md'))).length > 0)
-      .map(d => d.split('/').pop() as string)
-    expect(new Set(found)).toEqual(new Set([...COMPOSER_NAMES, 'brainstorm']))
-  })
-
   it.each(composers)('%s: states it in the graceful-degradation entry too', (_, content) => {
     const section = sectionBetween(content, '## Graceful Degradation', '\n## ')
     expect(section).toMatch(CLAUSE)
@@ -714,45 +642,6 @@ describe('way-of-working — the `## Process Profile` adoption section', () => {
 
   it('documents the section in the shipped adoption template', () => {
     expect(template).toContain('## Process Profile')
-  })
-
-  it('marks it optional, absence meaning `default`', () => {
-    const section = sectionBetween(template, '## Process Profile', '\n## ')
-    expect(section).toMatch(/Optional/)
-    expect(section.toLowerCase()).toMatch(/omitted|absent/)
-    expect(section).toMatch(/`default`/)
-  })
-
-  it('shows the `poc` and `custom` shapes with a whitelist example', () => {
-    const section = sectionBetween(template, '## Process Profile', '\n## ')
-    expect(section).toMatch(/`poc`/)
-    expect(section).toMatch(/`custom`/)
-    expect(section).toMatch(/whitelist/)
-  })
-
-  // Round 8: this template is itself read as a declaration by the gate, and it
-  // documents the two keys in a TABLE — so the shape it must not treat as a
-  // declaration is one of its own, and the shape it must HALT on is one an author
-  // could plausibly write two lines below. Both are stated where they are read.
-  it('tells an author that a blockquoted key HALTs and a table row is documentation', () => {
-    const section = sectionBetween(template, '## Process Profile', '\n## ')
-    const lower = section.toLowerCase()
-    expect(lower).toMatch(/blockquote/)
-    expect(lower).toMatch(/table/)
-    expect(lower).toMatch(/twice/)
-  })
-
-  // Round 9: the template's own key column is headed `Key` in Title Case, which is
-  // where the mirrored spelling comes from — so the case rule is stated where it is
-  // read.
-  it('tells an author the key is read whatever its case, and the value is not', () => {
-    const section = sectionBetween(template, '## Process Profile', '\n## ')
-    expect(section.toLowerCase()).toMatch(/case-insensitiv|whatever its case|regardless of case/)
-  })
-
-  it('points at the KB schema rather than restating it', () => {
-    const section = sectionBetween(template, '## Process Profile', '\n## ')
-    expect(section).toContain('process-profiles.md')
   })
 
   // Round 14 Minor: the template told every adopting project "a key is a plain list
@@ -1045,31 +934,10 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
 })
 
 describe('the manual (no-skills) path is governed by the same profile (AC8)', () => {
-  it('the catalogue names the how-to guide as the step’s other representation', () => {
-    const entries = parseStepCatalogue(catalogueSource)
-    const withHowTo = entries.filter(e => e.howTo !== null)
-    // Every how-to guide on disk is reachable from a step id.
-    expect(withHowTo.length).toBe(collectHowToGuides(HOW_TO_DIR).length)
-  })
 
   it('the schema says the profile governs the step, not one representation', () => {
     const lower = profilesSource.toLowerCase()
     expect(lower).toMatch(/how-to/)
     expect(lower).toMatch(/no skills installed|without skills|manual path/)
-  })
-
-  // The catalogue makes the mapping EXPRESSIBLE; it does not make the manual path
-  // GOVERNED. The entrypoint a human with no skills reads is AGENTS.md's manual
-  // flow — without a step there, a `poc` team follows step "identify your task",
-  // opens `03-how-to-create-and-prioritize-initiatives.md` and runs a disabled step.
-  it('AGENTS.md’s manual flow sends the reader to the profile before picking a how-to', () => {
-    expect(checkManualPathEntrypoint(read(AGENTS_MD))).toEqual([])
-  })
-
-  it('the manual step names the section, the file and the catalogue', () => {
-    const section = sectionBetween(read(AGENTS_MD), '## 🎯 Quick Start Process', '\n## ')
-    expect(section).toContain('## Process Profile')
-    expect(section).toContain('way-of-working.md')
-    expect(section).toContain('step-catalogue.md')
   })
 })

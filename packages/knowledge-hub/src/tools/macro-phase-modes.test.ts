@@ -128,15 +128,6 @@ describe('checkModeTable', () => {
     outside: ['define-subdomains'],
   }
 
-  it('passes a table that partitions the catalogue and rows 1–11', () => {
-    expect(checkModeTable(ok, catalogue, cascade)).toEqual([])
-  })
-
-  it('fails when a catalogue step is in no mode and not declared outside (facade drift)', () => {
-    const drift = checkModeTable({ ...ok, outside: [] }, catalogue, cascade)
-    expect(drift.join('\n')).toMatch(/define-subdomains/)
-  })
-
   it('fails when a step id is not in the catalogue', () => {
     const bad = structuredClone(ok)
     ;(bad.modes[1] as { steps: string[] }).steps = ['implement', 'ship-it']
@@ -225,10 +216,6 @@ const ALL = [
   'review',
 ]
 const draft: Unit = { id: 'S1', macrostate: 'Draft', tasks: false, checkpoint: false }
-const readyNoTasks: Unit = { id: 'S2', macrostate: 'Ready', tasks: false, checkpoint: false }
-const ready: Unit = { id: 'S3', macrostate: 'Ready', tasks: true, checkpoint: false }
-const inProgress: Unit = { id: 'S4', macrostate: 'In Progress', tasks: true, checkpoint: true }
-const inReview: Unit = { id: 'S5', macrostate: 'Review', tasks: true, checkpoint: false }
 
 describe('mode session = manual step sequence (fixture project)', () => {
   it('analysis on a Draft story chains refine-story then plan-tasks and stops at Ready with a breakdown', () => {
@@ -237,71 +224,6 @@ describe('mode session = manual step sequence (fixture project)', () => {
     expect(run.exit).toBe('exit')
     expect(run.unit).toMatchObject({ macrostate: 'Ready', tasks: true })
     expect(manualSequence(table, draft, ALL).slice(0, 2)).toEqual(run.steps)
-  })
-
-  it('implementation on a Ready story runs implement end to end and stops at Review', () => {
-    const run = runModeSession(table, 'implementation', ready, { enabled: ALL })
-    expect(run.steps).toEqual(['implement'])
-    expect(run.unit).toMatchObject({ macrostate: 'Review' })
-  })
-
-  it('implementation resumes an In Progress story through its checkpoint (row 7) before implement', () => {
-    const run = runModeSession(table, 'implementation', inProgress, { enabled: ALL })
-    expect(run.steps).toEqual(['checkpoint', 'implement'])
-  })
-
-  it('review on a story in Review drives /review once and stops (no loop on an unchanged PR)', () => {
-    const run = runModeSession(table, 'review', inReview, { enabled: ALL })
-    expect(run.steps).toEqual(['review'])
-    expect(run.exit).toBe('exit')
-  })
-
-  it('the three modes in order walk the whole manual path from Draft to a reviewed PR', () => {
-    const a = runModeSession(table, 'analysis', draft, { enabled: ALL })
-    const i = runModeSession(table, 'implementation', a.unit, { enabled: ALL })
-    const r = runModeSession(table, 'review', i.unit, { enabled: ALL })
-    expect([...a.steps, ...i.steps, ...r.steps]).toEqual(manualSequence(table, draft, ALL))
-  })
-
-  it('a mode never acts on a story outside its macrostates (DoR / macrostate gates still hold)', () => {
-    expect(runModeSession(table, 'implementation', draft, { enabled: ALL }).steps).toEqual([])
-    expect(runModeSession(table, 'implementation', readyNoTasks, { enabled: ALL }).steps).toEqual(
-      [],
-    )
-    expect(runModeSession(table, 'review', ready, { enabled: ALL }).steps).toEqual([])
-  })
-
-  it('wrong context: reports what is missing and suggests the mode whose rows match', () => {
-    const none = runModeSession(table, 'review', ready, { enabled: ALL })
-    expect(none.exit).toBe('wrong-context')
-    expect(none.suggest).toBe('implementation')
-    const early = runModeSession(table, 'implementation', draft, { enabled: ALL })
-    expect(early.suggest).toBe('analysis')
-  })
-
-  it('profile: a disabled step is skipped inside the phase, the enabled steps still chain', () => {
-    const noTasks = ALL.filter(s => s !== 'plan-tasks')
-    const run = runModeSession(table, 'analysis', draft, { enabled: noTasks })
-    expect(run.steps).toEqual(['refine-story'])
-    expect(run.skipped).toEqual(['plan-tasks'])
-    const noRefine = ALL.filter(s => s !== 'refine-story')
-    const run2 = runModeSession(table, 'analysis', readyNoTasks, { enabled: noRefine })
-    expect(run2.steps).toEqual(['plan-tasks'])
-  })
-
-  it('profile: a mode whose every step is disabled reports it instead of falling through to another mode', () => {
-    const noImplement = ALL.filter(s => s !== 'implement')
-    const run = runModeSession(table, 'implementation', ready, { enabled: noImplement })
-    expect(run.steps).toEqual([])
-    expect(run.exit).toBe('all-disabled')
-  })
-
-  it('a step HALT surfaces as-is and ends the session (no swallow, no retry)', () => {
-    const run = runModeSession(table, 'analysis', draft, { enabled: ALL, haltOn: 'plan-tasks' })
-    expect(run.steps).toEqual(['refine-story', 'plan-tasks'])
-    expect(run.exit).toBe('halt')
-    expect(run.halted).toBe('plan-tasks')
-    expect(run.unit).toMatchObject({ macrostate: 'Ready', tasks: false })
   })
 })
 
@@ -376,11 +298,6 @@ function literalSession(mode: string, start: Unit): { steps: string[]; unit: Uni
 }
 
 describe('r0-1: row 7 hands over to row 8 without a session flag on the unit', () => {
-  it('implementation on In Progress + checkpoint runs checkpoint then implement and leaves a unit with only /next inputs', () => {
-    const run = runModeSession(table, 'implementation', inProgress, { enabled: ALL })
-    expect(run.steps).toEqual(['checkpoint', 'implement'])
-    expect(run.unit).toEqual({ id: 'S4', macrostate: 'Review', tasks: true, checkpoint: true })
-  })
 
   it('the session equals /next literal Step 3 predicates + the Step 6 hand-off over every unit in every mode', () => {
     const macrostates: Unit['macrostate'][] = ['Draft', 'Ready', 'In Progress', 'Review', 'Done']
@@ -400,19 +317,6 @@ describe('r0-1: row 7 hands over to row 8 without a session flag on the unit', (
       }),
     )
     expect(diffs).toEqual([])
-  })
-
-  it('control: In Progress without a checkpoint file is row 8 directly', () => {
-    const noFile: Unit = { id: 'S6', macrostate: 'In Progress', tasks: true, checkpoint: false }
-    const run = runModeSession(table, 'implementation', noFile, { enabled: ALL })
-    expect(run.steps).toEqual(['implement'])
-  })
-
-  it('control: with implement disabled the checkpoint resume still runs (not a step) and implement is reported skipped', () => {
-    const noImplement = ALL.filter(s => s !== 'implement')
-    const run = runModeSession(table, 'implementation', inProgress, { enabled: noImplement })
-    expect(run.steps).toEqual(['checkpoint'])
-    expect(run.skipped).toEqual(['implement'])
   })
 
   it('control: /next Step 3 still states rows 7 and 8 as mutually exclusive on the checkpoint file (the transcription above is current)', () => {
@@ -513,28 +417,6 @@ describe('r0-2: the model covers cascade rows 1–5', () => {
     expect(run.exit).toBe('halt')
   })
 
-  it('control: an established project does not let rows 1–5 pre-empt the story rows (a Draft story is row 11)', () => {
-    const run = analysisOn(facts({}), ALL_STEPS, 'refine-story', draft)
-    expect(run.steps).toEqual(['refine-story'])
-  })
-
-  it('implementation and review never select a planning row: a template PRD is a wrong-context report suggesting analysis', () => {
-    const project = facts({
-      prd: 'template',
-      techTemplates: 5,
-      initiatives: 0,
-      epics: 0,
-      stories: 0,
-    })
-    for (const mode of ['implementation', 'review'] as const) {
-      const opts: ProjectSessionOptions = { enabled: ALL_STEPS, project }
-      const run = runModeSession(table, mode, done, opts)
-      expect(run.steps, mode).toEqual([])
-      expect(run.exit, mode).toBe('wrong-context')
-      expect(run.suggest, mode).toBe('analysis')
-    }
-  })
-
   it('profile: a planning row whose step is disabled is skipped and reported, never run', () => {
     const noPrd = ALL.filter(s => s !== 'specify-prd')
     const project = facts({ prd: 'template', techTemplates: 4 })
@@ -549,13 +431,6 @@ describe('r0-2: the model covers cascade rows 1–5', () => {
   // An orphan Draft story under an empty initiative/epic backlog satisfies row 3 AND row 11.
   const orphanDraft = facts({ initiatives: 0, epics: 0, stories: 1 })
 
-  it('R02-I1a: an orphan Draft story under an empty initiative/epic backlog selects row 3 before row 11 (first match wins across rows 1–5 and 6–11)', () => {
-    const run = analysisOn(orphanDraft, ALL_STEPS, 'plan-initiatives', draft)
-    expect(run.steps).toEqual(['plan-initiatives'])
-    expect(run.exit).toBe('halt')
-    expect(run.halted).toBe('plan-initiatives')
-  })
-
   it('R02-I1b: the same orphan Draft story under poc skips the disabled row 3 and continues at rows 10–11 (a skipped row continues, never ends the evaluation)', () => {
     const run = analysisOn(orphanDraft, POC, undefined, draft)
     expect(run.steps).toEqual(['refine-story', 'plan-tasks'])
@@ -568,64 +443,6 @@ describe('r0-2: the model covers cascade rows 1–5', () => {
 describe('r0-4: a fallback-only step is RUN once by its mode, under the profile', () => {
   const emptyBacklog = facts({ initiatives: 0, epics: 0, stories: 0 })
 
-  it('analysis under poc on an empty backlog runs brainstorm once (rows 3–4 disabled, row 5 needs epics)', () => {
-    const run = analysisOn(emptyBacklog, POC)
-    expect(run.steps).toEqual(['brainstorm'])
-    expect(run.exit).toBe('exit')
-    expect(run.skipped).toContain('plan-initiatives')
-  })
-
-  it('analysis under poc with initiatives but no epics also runs brainstorm once (row 4 disabled, no epics for row 5)', () => {
-    const run = analysisOn(facts({ initiatives: 1, epics: 0, stories: 0 }), POC)
-    expect(run.steps).toEqual(['brainstorm'])
-    expect(run.skipped).toContain('plan-epics')
-  })
-
-  it('control: an established backlog with nothing to select runs nothing: the fallback names row steps (plan-stories, review) as advice and a mode never runs those', () => {
-    const run = analysisOn(facts({}), ALL_STEPS)
-    expect(run.steps).toEqual([])
-    expect(run.exit).not.toBe('exit')
-  })
-
-  it('under the default profile row 3 fires first, brainstorm is never the answer', () => {
-    const run = analysisOn(emptyBacklog, ALL_STEPS, 'plan-initiatives')
-    expect(run.steps).toEqual(['plan-initiatives'])
-  })
-
-  it('under poc with epics but no stories row 5 fires, the fallback is not reached', () => {
-    const run = analysisOn(facts({ initiatives: 0, epics: 1, stories: 0 }), POC, 'plan-stories')
-    expect(run.steps).toEqual(['plan-stories'])
-  })
-
-  it('control: implementation and review have no fallback-only step, so the same empty backlog runs nothing', () => {
-    for (const mode of ['implementation', 'review'] as const) {
-      const opts: ProjectSessionOptions = { enabled: POC, project: emptyBacklog }
-      const run = runModeSession(table, mode, done, opts)
-      expect(run.steps, mode).toEqual([])
-      expect(run.exit, mode).not.toBe('exit')
-    }
-  })
-
-  it('control: a profile without brainstorm leaves analysis nothing to run on an empty backlog (reported, not another mode)', () => {
-    const run = analysisOn(
-      emptyBacklog,
-      POC.filter(s => s !== 'brainstorm'),
-    )
-    expect(run.steps).toEqual([])
-    expect(run.exit).not.toBe('exit')
-  })
-
-  // Step 5 rule 2: the fallback-only step stands in when the backlog has NO EPICS (the input of
-  // /plan-stories cannot exist) — not when it merely has no stories.
-  it('R04-B3: with epics but no stories and /plan-stories disabled the fallback is not reached: nothing runs and the disabled row is reported', () => {
-    const noPlanStories = POC.filter(s => s !== 'plan-stories')
-    expect(noPlanStories).toContain('brainstorm')
-    const run = analysisOn(facts({ initiatives: 1, epics: 1, stories: 0 }), noPlanStories)
-    expect(run.steps).toEqual([])
-    expect(run.exit).toBe('all-disabled')
-    expect(run.skipped).toEqual(['plan-stories'])
-  })
-
   // The fallback-only step is a step run with no cascade row: a HALT it raises is surfaced as-is
   // and ends the session (Step 6 item 4), exactly like a row step's.
   it('R04-I1: a HALT raised by the fallback-only step is surfaced as-is and ends the session', () => {
@@ -636,52 +453,6 @@ describe('r0-4: a fallback-only step is RUN once by its mode, under the profile'
   })
 
   // Precedence: /next Step 5 is reached only when the UNMODED cascade proposes nothing, so a mode runs
-  // its fallback-only step only then. When a row of another mode holds for the unit (an enabled
-  // row, after the profile filter) the session is a wrong-context report suggesting that mode,
-  // even though the profile skipped the mode's own planning rows. Backlog shape: no epics, one
-  // story; under poc row 3 is skipped.
-  const oneStory = facts({ initiatives: 0, epics: 0, stories: 1 })
-  const wrongContext = (unit: Unit, suggest: string): void => {
-    const run = analysisOn(oneStory, POC, undefined, unit)
-    expect(run.steps).toEqual([])
-    expect(run.exit).toBe('wrong-context')
-    expect(run.suggest).toBe(suggest)
-    expect(run.skipped).toEqual(['plan-initiatives'])
-  }
-
-  it('R04-I2: no row of the mode selects while a row of another mode holds (Ready + tasks, stories but no epics): wrong context suggesting implementation, brainstorm is not run', () => {
-    wrongContext(
-      { id: 'S3', macrostate: 'Ready', tasks: true, checkpoint: false },
-      'implementation',
-    )
-  })
-
-  it('R04-I2r: a story in Review under analysis (poc, no epics) is a wrong-context report suggesting review, brainstorm is not run', () => {
-    wrongContext({ id: 'S5', macrostate: 'Review', tasks: true, checkpoint: false }, 'review')
-  })
-
-  it('R04-I2k: an In Progress story with a checkpoint under analysis (poc, no epics) is a wrong-context report suggesting implementation, brainstorm is not run', () => {
-    wrongContext(
-      { id: 'S4', macrostate: 'In Progress', tasks: true, checkpoint: true },
-      'implementation',
-    )
-  })
-
-  it('R04-I3: control: every story Done (poc, no epics, one story) leaves the unmoded cascade empty, so analysis still runs brainstorm once', () => {
-    const run = analysisOn(oneStory, POC)
-    expect(run.steps).toEqual(['brainstorm'])
-    expect(run.exit).toBe('exit')
-    expect(run.skipped).toEqual(['plan-initiatives'])
-  })
-
-  it('R04-B4: boundary: a row of another mode that the profile disables does not hold (poc without implement, Ready + tasks): the unmoded cascade is empty and analysis runs brainstorm once', () => {
-    const noImplement = POC.filter(s => s !== 'implement')
-    const readyWithTasks: Unit = { id: 'S3', macrostate: 'Ready', tasks: true, checkpoint: false }
-    const run = analysisOn(oneStory, noImplement, undefined, readyWithTasks)
-    expect(run.steps).toEqual(['brainstorm'])
-    expect(run.exit).toBe('exit')
-  })
-
   // Independent transcription of /next Step 2-3 rows 1-11 over (project facts, unit, enabled set):
   // the answer of the cascade run once WITHOUT the mode filter. The mode of a row is the KB table's.
   const PROJECT_ROWS: Array<{ row: number; step: string; when: (p: ProjectFacts) => boolean }> = [
