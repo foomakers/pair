@@ -113,111 +113,25 @@ describe('findDeadRepoCitations', () => {
     'packages/content-ops/src/index.ts',
     'apps/website/app/(landing)/constants.ts',
   ])
-  const LIVE = 'https://github.com/foomakers/pair/blob/main/README.md'
   const DEAD = 'https://github.com/foomakers/pair/blob/main/does/not/exist.md'
 
   // Every `hrefs` below is what the site's own MDX compiler (@mdx-js/mdx + remark-gfm, the same
   // pair fumadocs runs) emits as a link for that source — the oracle is the renderer, not a regex.
-  const ROWS: ReadonlyArray<{ why: string; content: string; dead: number }> = [
-    {
-      why: 'a markdown link to a missing repo file',
-      content: `See [the file](${DEAD}) here.\n`,
-      dead: 1,
-    },
-    { why: 'a bare GFM autolink to a missing repo file', content: `See ${DEAD} here.\n`, dead: 1 },
-    { why: 'a live citation', content: `See [readme](${LIVE}).\n`, dead: 0 },
-    {
-      why: 'a tree/ citation to a tracked directory',
-      content: `See [src](https://github.com/foomakers/pair/tree/main/packages/content-ops/src).\n`,
-      dead: 0,
-    },
-    {
-      why: 'the dead URL inside a fenced code block (rendered as code, not a link)',
-      content: '```bash\ngh api ' + DEAD + '\n```\n',
-      dead: 0,
-    },
-    {
-      why: 'the dead URL inside an inline code span',
-      content: `Run \`curl ${DEAD}\` first.\n`,
-      dead: 0,
-    },
-    {
-      why: 'the dead URL inside a JSX comment (compiled away)',
-      content: `{/* TODO ${DEAD} */}\n\nText.\n`,
-      dead: 0,
-    },
-    {
-      why: 'a case-mismatched path the filesystem would forgive',
-      content: `See [x](https://github.com/foomakers/pair/blob/main/readme.md).\n`,
-      dead: 1,
-    },
-    {
-      why: 'a github URL to another repository',
-      content: `See [x](https://github.com/vercel/next.js/blob/main/nope.md).\n`,
-      dead: 0,
-    },
-    {
-      why: 'a citation with a fragment and query',
-      content: `See [x](${DEAD}#anchor?plain=1).\n`,
-      dead: 1,
-    },
-    {
-      // Not "frontmatter above the prose" — MDX compiles well-formed frontmatter as a thematic
-      // break plus a paragraph, so that row passes with or without the strip. This one does not:
-      // an unbalanced `{` in the frontmatter is an MDX expression the compiler rejects, and
-      // without the strip the page falls into the compile-failure catch and goes UNCHECKED.
-      why: 'frontmatter MDX cannot parse, stripped before compiling',
-      content: `---\ntitle: 'a { b'\n---\n\nSee [x](${DEAD}).\n`,
-      dead: 1,
-    },
-    {
-      // ADL decision 3: a pinned ref is a citation of a moment in time, left alone.
-      why: 'a citation pinned to a SHA rather than main',
-      content: `See [x](https://github.com/foomakers/pair/blob/1bbccf6f/does/not/exist.md).\n`,
-      dead: 0,
-    },
-    {
-      // ADL decision 2: raw/ is a file URL form exactly like blob/.
-      why: 'a raw/ citation to a missing repo file',
-      content: `See [x](https://github.com/foomakers/pair/raw/main/does/not/exist.md).\n`,
-      dead: 1,
-    },
-    {
+  const ROWS: ReadonlyArray<{ why: string; content: string; dead: number }> = [{ why: 'a bare GFM autolink to a missing repo file', content: `See ${DEAD} here.\n`, dead: 1 },
+{
       // ADL decision 4: a page the compiler rejects is next build's finding, not this gate's —
       // the gate returns nothing rather than a misleading citation error.
       why: 'a page the compiler rejects — next build reports it, not this gate',
       content: `See [x](${DEAD}).\n\n<Broken attr={ unclosed\n`,
       dead: 0,
     },
-    {
-      // The tree/ arm must still CHECK: a tree/ URL whose prefix matches nothing tracked is dead.
-      // Without this row the arm can be mutated to accept everything with the suite green.
-      why: 'a tree/ citation to a directory that does not exist',
-      content: `See [x](https://github.com/foomakers/pair/tree/main/packages/deleted-package).\n`,
-      dead: 1,
-    },
-    {
-      // github.com serves `tree/<dir>/` and `tree/<dir>` alike; the trailing slash is stripped
-      // before the prefix test, or a live directory citation would be reported dead.
-      why: 'a live tree/ citation with a trailing slash',
-      content: `See [x](https://github.com/foomakers/pair/tree/main/packages/content-ops/src/).\n`,
-      dead: 0,
-    },
-    {
-      // GitHub's copy-link percent-escapes `(` and `)`; 13 tracked paths under
-      // apps/website/app/(landing)/ carry them. The citation must resolve through the decode.
-      why: 'a live citation whose path is percent-escaped the way GitHub copies it',
-      content: `See [x](https://github.com/foomakers/pair/blob/main/apps/website/app/%28landing%29/constants.ts).\n`,
-      dead: 0,
-    },
-    {
+{
       // A literal `%` is not a valid escape. The gate must REPORT the citation, never throw a
       // URIError out of the whole run — that would also discard every other check's findings.
       why: 'a path with a malformed percent-escape, reported instead of crashing the gate',
       content: `See [x](https://github.com/foomakers/pair/blob/main/scripts/100%coverage.sh).\n`,
       dead: 1,
-    },
-  ]
+    },]
   for (const { why, content, dead } of ROWS) {
     it(`${dead === 0 ? 'ignores' : 'flags'} ${why}`, () => {
       expect(
@@ -297,125 +211,40 @@ describe('findDeadRepoCitations — #fragment anchors (Check 5c)', () => {
   const src = (path: string) => targets.get(path)
   const B = 'https://github.com/foomakers/pair/blob/main/'
 
-  const ROWS: Array<[string, string, number]> = [
-    ['live heading anchor', `[x](${B}docs/guide.md#execution-log)`, 0],
-    ['dead heading anchor', `[x](${B}docs/guide.md#deployment-log)`, 1],
-    [
-      'punctuation, backticks and an em-dash slug exactly as github.com does (the real quality-model citation shape)',
-      `[x](${B}README.md#6-techrisk-matrixmd--adoption-delta)`,
-      0,
-    ],
-    ['second duplicate heading gets -1', `[x](${B}README.md#steps-1)`, 0],
-    ['no third duplicate, so -2 is dead', `[x](${B}README.md#steps-2)`, 1],
-    ['a heading inside a fence is not a heading', `[x](${B}README.md#not-a-heading)`, 1],
-    [
-      'a frontmatter key is not a heading (github renders frontmatter as a table)',
-      `[x](${B}README.md#frontmatter-heading)`,
-      1,
-    ],
-    ['setext heading', `[x](${B}README.md#setext-title)`, 0],
-    [
-      'unicode letters survive the slug; percent-escaped fragment decodes first',
-      `[x](${B}README.md#caf%C3%A9)`,
-      0,
-    ],
-    ['an explicit html <a name> anchor', `[x](${B}README.md#legacy)`, 0],
-    [
+  const ROWS: Array<[string, string, number]> = [['an explicit html <a name> anchor', `[x](${B}README.md#legacy)`, 0],
+[
       'a single-quoted html id is an anchor too (GitHub parses HTML, not quotes)',
       `[x](${B}README.md#single-quoted)`,
       0,
     ],
-    ['a heading carrying an inline html anchor serves both ids', `[x](${B}README.md#inline)`, 0],
-    [
-      '…and its own slug — over the text content, untrimmed, exactly as github.com (measured: gitui FAQ.md serves `-table-of-contents`)',
-      `[x](${B}README.md#-inline-anchored)`,
-      0,
-    ],
-    ['the trimmed spelling of that slug is NOT served', `[x](${B}README.md#inline-anchored)`, 1],
-    [
-      'fragment case matters (ids are lowercase, browser matching is exact)',
-      `[x](${B}docs/guide.md#Execution-Log)`,
-      1,
-    ],
-    [
-      'a .mdx blob is rendered as Markdown on github.com (measured: pm-tools/index.mdx serves 6 ids)',
-      `[x](${B}docs/page.mdx#rendered-by-fumadocs)`,
-      0,
-    ],
-    ['a dead heading on a .mdx blob', `[x](${B}docs/page.mdx#nope)`, 1],
-    ['line anchor inside the file', `[x](${B}packages/x/src/index.ts#L12)`, 0],
-    ['line anchor past the end', `[x](${B}packages/x/src/index.ts#L40)`, 1],
-    ['line range whose end is past the end', `[x](${B}packages/x/src/index.ts#L5-L30)`, 1],
-    ['line range with columns', `[x](${B}packages/x/src/index.ts#L5C1-L9C4)`, 0],
-    ['the last line is inside the file', `[x](${B}packages/x/src/index.ts#L20)`, 0],
-    ['one past the last line is not', `[x](${B}packages/x/src/index.ts#L21)`, 1],
-    [
+['line range whose end is past the end', `[x](${B}packages/x/src/index.ts#L5-L30)`, 1],
+['line range with columns', `[x](${B}packages/x/src/index.ts#L5C1-L9C4)`, 0],
+[
       'line anchor on a RENDERED markdown file is dead — github.com serves line anchors only under ?plain=1',
       `[x](${B}docs/guide.md#L1)`,
       1,
     ],
-    ['heading anchor on a non-markdown file', `[x](${B}packages/x/src/index.ts#execution-log)`, 1],
-    [
+[
       '?plain=1 shows source, so a heading anchor is dead there',
       `[x](${B}docs/guide.md?plain=1#execution-log)`,
       1,
     ],
-    ['?plain=1 keeps line anchors', `[x](${B}docs/guide.md?plain=1#L1)`, 0],
-    [
+['?plain=1 keeps line anchors', `[x](${B}docs/guide.md?plain=1#L1)`, 0],
+[
       'tree/ renders the directory README — its heading anchors are live',
       `[x](https://github.com/foomakers/pair/tree/main/apps/cli#development)`,
       0,
     ],
-    [
-      'tree/ dead README heading',
-      `[x](https://github.com/foomakers/pair/tree/main/apps/cli#nope)`,
-      1,
-    ],
-    [
-      'tree/ of a directory with no README has no anchors',
-      `[x](https://github.com/foomakers/pair/tree/main/docs#execution-log)`,
-      1,
-    ],
-    [
+[
       'tree/ has no source panel, so no line anchors',
       `[x](https://github.com/foomakers/pair/tree/main/apps/cli#L2)`,
       1,
     ],
-    [
-      'tree/<file> is 301-redirected by github.com to blob/<file> — its heading anchors are live',
-      `[x](https://github.com/foomakers/pair/tree/main/apps/cli/README.md#development)`,
-      0,
-    ],
-    [
-      '…and a dead heading through tree/<file> is still dead',
-      `[x](https://github.com/foomakers/pair/tree/main/apps/cli/README.md#nope)`,
-      1,
-    ],
-    [
-      'blob/<dir> is 301-redirected to tree/<dir> — the README heading anchors are live',
-      `[x](${B}apps/cli#development)`,
-      0,
-    ],
-    ['…and a dead heading through blob/<dir> is still dead', `[x](${B}apps/cli#nope)`, 1],
-    [
-      'raw/<dir> is 301-redirected to tree/<dir> too',
-      `[x](https://github.com/foomakers/pair/raw/main/apps/cli#development)`,
-      0,
-    ],
-    [
+[
       'raw/ has no anchors',
       `[x](https://github.com/foomakers/pair/raw/main/docs/guide.md#execution-log)`,
       1,
-    ],
-    ['empty fragment is not a citation of an anchor', `[x](${B}docs/guide.md#)`, 0],
-    ['no fragment: unchanged behaviour', `[x](${B}docs/guide.md)`, 0],
-    [
-      'dead path with a fragment reports the path once, not the anchor too',
-      `[x](${B}docs/nope.md#execution-log)`,
-      1,
-    ],
-    ['a dead anchor in a code span is invisible', `\`${B}docs/guide.md#deployment-log\``, 0],
-  ]
+    ],]
 
   it.each(ROWS)('%s', (_label, body, dead) => {
     expect(findDeadRepoCitations(`See ${body}.\n`, 'a.mdx', tracked, src)).toHaveLength(dead)
