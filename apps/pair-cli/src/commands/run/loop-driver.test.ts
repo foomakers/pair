@@ -108,6 +108,23 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
     expect(out()).toContain('0 merged · 0 parked · 1 prepared · 0 failed')
   })
 
+  it.each([
+    ['merged', '1 merged · 0 parked · 0 prepared · 0 failed'],
+    ['failed', '0 merged · 0 parked · 0 prepared · 1 failed'],
+  ])('a card prepared then %s counts once under its latest result', async (last, line) => {
+    const runIteration: IterationRunner = input => {
+      input.onRunEvent?.({ event: 'card-end', card: '596', status: 'prepared' })
+      input.onRunEvent?.({ event: 'card-end', card: '596', status: last })
+      return replay('claude-success.jsonl')(input)
+    }
+    const { out } = capture()
+    await handleRunCommand(parseRunCommand({ root: '212' }), projectFs(), {
+      runIteration,
+      runAudit: () => undefined,
+    })
+    expect(out()).toContain(line)
+  })
+
   it('the audit opens with loop-start (root + effective policy) and carries every event, then loop-end', async () => {
     const { audit } = await drive('claude-workflow-events.jsonl')
     expect(audit[0]).toMatchObject({ event: 'loop-start', card: null, detail: { root: cwd } })
