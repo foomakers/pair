@@ -85,3 +85,24 @@ describe('merge park reporting', () => {
     expect(events.find(event => event.event === 'card-end')).toMatchObject({ status: expected })
   })
 })
+
+describe('merge park reporting is platform independent', () => {
+  const original = process.platform
+  afterEach(() => Object.defineProperty(process, 'platform', { value: original }))
+
+  it.each(['darwin', 'linux'])('reports a halted park as failed on %s', async platform => {
+    Object.defineProperty(process, 'platform', { value: platform })
+    const output: string[] = []
+    vi.spyOn(process.stdout, 'write').mockImplementation(
+      chunk => (output.push(String(chunk)), true),
+    )
+    const { deps } = harness(parked('halted', 'gate', 'merge reason'))
+    await handleRunCommand(parseRunCommand({ card: '596', cardTags: '', json: true }), files(), deps)
+    const events = output
+      .join('')
+      .split('\n')
+      .filter(line => line.startsWith('{'))
+      .map(line => JSON.parse(line))
+    expect(events.find(event => event.event === 'card-end')).toMatchObject({ status: 'failed' })
+  })
+})
