@@ -52,7 +52,7 @@ const MARKER_STATUS: Record<string, string> = { skipped: 'skipped' }
 const TAG = /<(\/?)(testsuite|testcase)\b((?:[^>"]|"[^"]*")*?)(\/?)>|<(failure|error|skipped)\b/g
 
 /** node:test junit → same id grammar as the inventory (`file::suite > name`, `#n` on repeats). */
-export function parseJunit(root: string, xml: string): Record<string, RunTest> {
+export function parseJunit(root: string, xml: string, only?: string): Record<string, RunTest> {
   const out: Record<string, RunTest> = {}
   const seen = new Map<string, number>()
   const stack: string[] = []
@@ -62,7 +62,7 @@ export function parseJunit(root: string, xml: string): Record<string, RunTest> {
     open = undefined
   }
   const begin = (attrs: string | undefined): void => {
-    const base = `${relative(root, attr(attrs, 'file'))}::${[...stack, attr(attrs, 'name')].join(' > ')}`
+    const base = `${only ?? relative(root, attr(attrs, 'file'))}::${[...stack, attr(attrs, 'name')].join(' > ')}`
     const n = (seen.get(base) ?? 0) + 1
     seen.set(base, n)
     open = {
@@ -105,20 +105,33 @@ function trackedTests(root: string, dir: string): string[] {
   return execFileSync('git', ['ls-files', dir], { cwd: root, encoding: 'utf8' })
     .split('\n')
     .filter(f => TEST_FILE_RE.test(f))
-    .map(f => join(root, f))
+}
+
+function junitOf(cwd: string, out: string, files: string[]): string {
+  spawnSync('node', ['--test', '--test-reporter=junit', `--test-reporter-destination=${out}`, ...files], {
+    cwd,
+    stdio: 'ignore',
+    timeout: 590_000,
+  })
+  return readFileSync(out, 'utf8')
 }
 
 export function runNodeTest(root: string, suite: NodeTestSuite, seed: number): Run {
   const tmp = mkdtempSync(join(tmpdir(), 'node-test-'))
   const out = join(tmp, 'junit.xml')
-  const files = suite.dir ? trackedTests(root, suite.dir) : []
-  const args = ['--test', '--test-reporter=junit', `--test-reporter-destination=${out}`, ...files]
+  const cwd = join(root, suite.cwd)
+  const files = trackedTests(root, suite.dir ?? suite.cwd)
   try {
     const t0 = Date.now()
-    spawnSync('node', args, { cwd: join(root, suite.cwd), stdio: 'ignore', timeout: 590_000 })
+    const xml = junitOf(cwd, out, suite.dir ? files.map(f => join(root, f)) : [])
     const wall_ms = Date.now() - t0
-    // node reports real paths
-    const tests = parseJunit(realpathSync(root), readFileSync(out, 'utf8'))
+    // node reports real paths; node < 24 omits the testcase `file` attribute: one run per file
+    const tests = /classname="[^"]*" file="/.test(xml)
+      ? parseJunit(realpathSync(root), xml)
+      : Object.assign(
+          {},
+          ...files.map(f => parseJunit(root, junitOf(cwd, out, [join(root, f)]), f)),
+        )
     return { seed, wall_ms, tests }
   } finally {
     rmSync(tmp, { recursive: true, force: true })
