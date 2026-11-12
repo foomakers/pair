@@ -1,0 +1,194 @@
+{
+  "$meta": {
+    "pr": "632",
+    "phase": "r2-g1",
+    "base": "aa7014e5bc248ef7b260e8ab3c140f5918990807",
+    "trailer": "Pair-RED-Snapshot: pr=632; phase=r2-g1; base=aa7014e5bc248ef7b260e8ab3c140f5918990807; manifest=.pair/red-snapshots/pr-632-r2-g1.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/owner-approval-bound.test.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/owner-approval-bound.test.mjs"
+    ]
+  },
+  "sourceOfTruth": "owner-approvals.json (recorded approval) via cycle-state.mjs pendingCorrection; publish and seal enforce it",
+  "fixScope": {
+    "owner": "owner-approval enforcement at publish/seal (US-591 r0-1)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md",
+      ".claude/skills/pair-workflow-red-spec/SKILL.md"
+    ]
+  },
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "cycle-state.mjs publish (red-spec revision handoff guard) reading pendingCorrection(readApprovals(dir)); sealer red-snapshot.mjs seal reads contract.ownerApproval.rows",
+      "inputs": [
+        "owner-approvals.json record {decisionRef, rows, status}",
+        "revision red-spec handoff + contract (ownerApproval?, changedRows)",
+        "dispatched next.ownerApproval {decisionRef, actor, delta, reason} (no rows)"
+      ],
+      "representations": [
+        "6 dataset + 6 installed cycle-state.mjs copies",
+        "dataset + installed red-snapshot.mjs (red-verify, review-phase)",
+        "red-spec SKILL.md dataset + installed"
+      ],
+      "consumers": [
+        "red-verify seal (rows-outside-approval)",
+        "resolve/deriveNext validate step (carries ownerApproval)"
+      ],
+      "classes": [
+        "pending approval, contract lacks ownerApproval -> refused",
+        "pending approval, contract links other decisionRef -> refused",
+        "pending approval, contract has dispatched approval (no rows) + changedRows outside recorded rows -> refused rows-outside-approval",
+        "pending approval, recorded approval + approved rows only -> publishes",
+        "no pending approval -> unchanged",
+        "SKILL.md documents $ownerApproval in both copies"
+      ],
+      "interactions": [
+        "dispatched approval lacks rows x sealer bound reads ap.rows (unbounded unless publish derives rows from owner-approvals.json)",
+        "approval consumed (line advanced, pendingCorrection null) x later revisions of the line: not bound (c-6)"
+      ]
+    }
+  ],
+  "matrix": [
+    {
+      "id": "w-5",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "approved line (rows [row-1]) pending; red-spec revision contract lacks ownerApproval",
+      "oracle": "node .claude/workflows/pair-contracts/owner-approval-bound.test.mjs (test 'r0-1 VERIFY/ASSERT: publish of a revision')",
+      "expected": "publish refused, reason owner-approval-missing:<decisionRef>, no handoff written",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/owner-approval-bound.test.mjs"
+    },
+    {
+      "id": "w-6",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "contract links a decisionRef different from the recorded approval",
+      "oracle": "node .claude/workflows/pair-contracts/owner-approval-bound.test.mjs (test 'r0-1 ASSERT: publish refuses a contract linking a different decisionRef')",
+      "expected": "publish refused, reason names owner-approval",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/owner-approval-bound.test.mjs"
+    },
+    {
+      "id": "w-7",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "contract carries the DISPATCHED ownerApproval (no rows) and edits row-2 outside recorded rows [row-1]",
+      "oracle": "node .claude/workflows/pair-contracts/owner-approval-bound.test.mjs (test 'r0-1 ASSERT: publish bounds changedRows to the RECORDED approval rows')",
+      "expected": "publish refused rows-outside-approval naming row-2 (bound comes from owner-approvals.json, not the agent-written rows)",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/owner-approval-bound.test.mjs"
+    },
+    {
+      "id": "w-8",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "red-spec SKILL.md (dataset source + installed copy) Arguments table",
+      "oracle": "node .claude/workflows/pair-contracts/owner-approval-bound.test.mjs (test 'r0-1 ASSERT: red-spec SKILL.md documents the $ownerApproval argument')",
+      "expected": "table row for `$ownerApproval` in both copies",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/owner-approval-bound.test.mjs"
+    },
+    {
+      "id": "c-5",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "approved revision carries the recorded approval, edits only approved rows",
+      "oracle": "node .claude/workflows/pair-contracts/owner-approval-bound.test.mjs (test 'r0-1 control c-5')",
+      "expected": "publishes",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/owner-approval-bound.test.mjs"
+    },
+    {
+      "id": "c-6",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "revision with NO pending approval (no owner-approvals.json entry / line moved on)",
+      "oracle": "node .claude/workflows/pair-contracts/owner-approval-bound.test.mjs (test 'r0-1 control c-6')",
+      "expected": "publishes without ownerApproval (unapproved revisions unchanged)",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/owner-approval-bound.test.mjs"
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/owner-approval-bound.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:378af65f9eb8f421d32dee8d58c53e48fc1765b97d40b96f73f0e9df45fe2125",
+      "command": "node .claude/workflows/pair-contracts/owner-approval-bound.test.mjs",
+      "observed": "13 tests, 9 pass, 4 fail: publish accepted a revision for an approved line lacking ownerApproval ({\"published\":true}); same for wrong decisionRef and rows outside approval; SKILL.md has no $ownerApproval row"
+    },
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/owner-approval-bound.test.mjs",
+      "kind": "fixture",
+      "sha256": "sha256:378af65f9eb8f421d32dee8d58c53e48fc1765b97d40b96f73f0e9df45fe2125",
+      "consumedBy": ".claude/workflows/pair-contracts/owner-approval-bound.test.mjs"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r2-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "owner-approval enforcement at publish/seal (US-591 r0-1)",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md",
+          ".claude/skills/pair-workflow-red-spec/SKILL.md"
+        ],
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  }
+}
