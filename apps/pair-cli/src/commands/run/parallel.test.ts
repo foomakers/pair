@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import { InMemoryFileSystemService } from '@pair/content-ops'
+import { handleRunCommand } from './handler'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, posix, win32 } from 'path'
@@ -586,42 +588,103 @@ describe('US-573 AC2: the pool reports each card live — start, relayed stages,
     })
   })
 
-  it('US-592 AC-2/3: a clean root skip ends skipped and keeps siblings and batch exit independent', async () => {
-    const area = mkdtempSync(join(tmpdir(), 'pair-592-'))
-    const events: unknown[] = []
-    const root = await runPlannedCard({
-      card: card('9'),
-      config: parseRunCommand({ root: '9', parallel: '2' }),
-      cwd: area,
-      workingArea: area,
-      acquireLock: acquireCardLock,
-      runCardProcess: async () => ({
-        exitCode: 0,
-        signal: null,
-        skipReason: 'prepare-needs-human',
-      }),
-      onEvent: event => events.push(event),
+  // US-592 AC-3, PR #635 r0-2: both outcomes must come from scheduled cards.
+  describe.each([
+    { scheduling: 'sequential', limit: 1, resources: [] },
+    { scheduling: 'shared mutex', limit: 2, resources: ['shared-scope'] },
+  ])('US-592 r0-2 $scheduling', ({ limit, resources }) => {
+    it.each([
+      {
+        name: 'completed descendant',
+        exit: { exitCode: 0, signal: null },
+        outcome: 'completed',
+        detail: 'exit 0',
+        status: 'completed',
+        batchExit: 0,
+      },
+      {
+        name: 'all-skipped batch',
+        exit: { exitCode: 0, signal: null, skipReason: 'prepare-needs-human' },
+        outcome: 'skipped',
+        detail: 'prepare-needs-human',
+        status: 'skipped',
+        batchExit: 0,
+      },
+      {
+        name: 'failed descendant control',
+        exit: { exitCode: 2, signal: null },
+        outcome: 'failed',
+        detail: 'exit 2',
+        status: 'failed (failed)',
+        batchExit: 1,
+      },
+      {
+        name: 'crashed descendant control',
+        exit: { exitCode: null, signal: 'SIGKILL' },
+        outcome: 'crashed',
+        detail: 'killed by SIGKILL',
+        status: 'failed (crashed)',
+        batchExit: 1,
+      },
+    ])('$name', async testCase => {
+      const area = mkdtempSync(join(tmpdir(), 'pair-592-pool-'))
+      const events: unknown[] = []
+      const runCardProcess = vi.fn<CardProcessRunner>(async ({ card }) =>
+        card.id === '9'
+          ? { exitCode: 0, signal: null, skipReason: 'prepare-needs-human' }
+          : testCase.exit,
+      )
+      try {
+        const outcomes = await runPool({
+          items: ['9', '10'],
+          limit,
+          resources: () => resources,
+          worker: id =>
+            runPlannedCard({
+              card: card(id, { mutexResources: resources }),
+              config: parseRunCommand({ root: '9', parallel: String(limit) }),
+              cwd: area,
+              workingArea: area,
+              acquireLock: acquireCardLock,
+              runCardProcess,
+              onEvent: event => events.push(event),
+            }),
+          ...poolDefaults,
+        })
+        expect(runCardProcess.mock.calls.map(([input]) => input.card.id)).toEqual(['9', '10'])
+        expect(outcomes.map(({ id, outcome, detail }) => ({ id, outcome, detail }))).toEqual([
+          { id: '9', outcome: 'skipped', detail: 'prepare-needs-human' },
+          { id: '10', outcome: testCase.outcome, detail: testCase.detail },
+        ])
+        expect(events).toEqual([
+          { event: 'card-start', card: '9', title: 'Card 9' },
+          { event: 'card-end', card: '9', status: 'skipped', reason: 'prepare-needs-human' },
+          { event: 'card-start', card: '10', title: 'Card 10' },
+          {
+            event: 'card-end',
+            card: '10',
+            status: testCase.status,
+            ...(testCase.outcome !== 'completed' && { reason: testCase.detail }),
+          },
+        ])
+        const audit = renderBatchAuditLine({
+          at: 't',
+          startedAt: 't',
+          root: '9',
+          requested: limit,
+          effective: limit,
+          outcomes,
+          excluded: [],
+        })
+        expect(audit).toContain('attempted=9,10 ')
+        expect(audit).toContain(
+          `outcomes=9:skipped(prepare-needs-human),10:${testCase.outcome}(${testCase.detail})`,
+        )
+        expect(batchExitCode(outcomes)).toBe(testCase.batchExit)
+      } finally {
+        rmSync(area, { recursive: true, force: true })
+      }
     })
-    const child = { id: '10', outcome: 'completed' as const, detail: 'exit 0' }
-    expect(events.at(-1)).toEqual({
-      event: 'card-end',
-      card: '9',
-      status: 'skipped',
-      reason: 'prepare-needs-human',
-    })
-    expect(
-      renderBatchAuditLine({
-        at: 't',
-        startedAt: 't',
-        root: '9',
-        requested: 2,
-        effective: 2,
-        outcomes: [root, child],
-        excluded: [],
-      }),
-    ).toContain('outcomes=9:skipped(prepare-needs-human),10:completed(exit 0)')
-    expect(batchExitCode([root, child])).toBe(0)
-    expect(batchExitCode([root, { id: '11', outcome: 'crashed', detail: 'signal' }])).toBe(1)
   })
 })
 
@@ -762,5 +825,243 @@ describe('US-592 r0-1', () => {
       vi.restoreAllMocks()
       rmSync(area, { recursive: true, force: true })
     }
+  })
+})
+
+// US-592 AC-3 / PR #635 r0-2: preserve descendants at every batch consumer and admission rule.
+const descendantCases = [
+  {
+    name: 'completed',
+    exit: { exitCode: 0, signal: null },
+    outcome: 'completed',
+    detail: 'exit 0',
+    status: 'completed',
+    batchExit: 0,
+  },
+  {
+    name: 'skipped',
+    exit: { exitCode: 0, signal: null, skipReason: 'prepare-needs-human' },
+    outcome: 'skipped',
+    detail: 'prepare-needs-human',
+    status: 'skipped',
+    batchExit: 0,
+  },
+  {
+    name: 'failed',
+    exit: { exitCode: 2, signal: null },
+    outcome: 'failed',
+    detail: 'exit 2',
+    status: 'failed (failed)',
+    batchExit: 1,
+  },
+  {
+    name: 'crashed',
+    exit: { exitCode: null, signal: 'SIGKILL' },
+    outcome: 'crashed',
+    detail: 'killed by SIGKILL',
+    status: 'failed (crashed)',
+    batchExit: 1,
+  },
+] as const
+
+function descendantRunner(testCase: (typeof descendantCases)[number], overlap: boolean) {
+  const descendantStarted = deferred<void>()
+  const rootEnded = deferred<void>()
+  const order: string[] = []
+  const runCardProcess = vi.fn<CardProcessRunner>(async ({ card }) => {
+    order.push(`start:${card.id}`)
+    if (card.id === '9') {
+      if (overlap) await descendantStarted.promise
+      return { exitCode: 0, signal: null, skipReason: 'prepare-needs-human' }
+    }
+    descendantStarted.resolve()
+    if (overlap) await rootEnded.promise
+    return testCase.exit
+  })
+  const onEnd = (id: string) => {
+    order.push(`end:${id}`)
+    if (id === '9') rootEnded.resolve()
+  }
+  return { runCardProcess, onEnd, order }
+}
+
+function expectDescendantAudit(audit: string, testCase: (typeof descendantCases)[number]) {
+  expect(audit).toContain('attempted=9,10 ')
+  expect(audit).toContain(
+    `outcomes=9:skipped(prepare-needs-human),10:${testCase.outcome}(${testCase.detail})`,
+  )
+}
+
+describe('US-592 r0-2 unconstrained parallel', () => {
+  it.each(descendantCases)(
+    '$name descendant retains its result with overlapping workers',
+    async testCase => {
+      const area = mkdtempSync(join(tmpdir(), 'pair-592-uncontended-'))
+      const events: unknown[] = []
+      const h = descendantRunner(testCase, true)
+      try {
+        const outcomes = await runPool({
+          items: ['9', '10'],
+          limit: 2,
+          resources: () => [],
+          ...poolDefaults,
+          worker: id =>
+            runPlannedCard({
+              card: card(id),
+              config: parseRunCommand({ root: '9', parallel: '2' }),
+              cwd: area,
+              workingArea: area,
+              acquireLock: acquireCardLock,
+              runCardProcess: h.runCardProcess,
+              onEvent: event => {
+                events.push(event)
+                if (event.event === 'card-end') h.onEnd(event.card!)
+              },
+            }),
+        })
+        expect(h.runCardProcess.mock.calls.map(([input]) => input.card.id)).toEqual(['9', '10'])
+        expect(h.order).toEqual(['start:9', 'start:10', 'end:9', 'end:10'])
+        expect(outcomes.map(({ id, outcome, detail }) => ({ id, outcome, detail }))).toEqual([
+          { id: '9', outcome: 'skipped', detail: 'prepare-needs-human' },
+          { id: '10', outcome: testCase.outcome, detail: testCase.detail },
+        ])
+        expect(events).toEqual([
+          { event: 'card-start', card: '9', title: 'Card 9' },
+          { event: 'card-start', card: '10', title: 'Card 10' },
+          { event: 'card-end', card: '9', status: 'skipped', reason: 'prepare-needs-human' },
+          {
+            event: 'card-end',
+            card: '10',
+            status: testCase.status,
+            ...(testCase.outcome !== 'completed' && { reason: testCase.detail }),
+          },
+        ])
+        expectDescendantAudit(
+          renderBatchAuditLine({
+            at: 't',
+            startedAt: 't',
+            root: '9',
+            requested: 2,
+            effective: 2,
+            outcomes,
+            excluded: [],
+          }),
+          testCase,
+        )
+        expect(batchExitCode(outcomes)).toBe(testCase.batchExit)
+      } finally {
+        rmSync(area, { recursive: true, force: true })
+      }
+    },
+  )
+})
+
+describe.each([
+  { scheduling: 'sequential', limit: 1, resources: [], overlap: false },
+  { scheduling: 'shared-mutex', limit: 2, resources: ['shared-scope'], overlap: false },
+  { scheduling: 'unconstrained', limit: 2, resources: [], overlap: true },
+])('US-592 r0-2 CLI $scheduling', ({ limit, resources, overlap }) => {
+  describe.each([false, true])('watch=%s', watch => {
+    it.each(descendantCases)(
+      '$name descendant reaches handler output, events, audit and exit',
+      async testCase => {
+        const area = mkdtempSync(join(tmpdir(), 'pair-592-cli-'))
+        const previousPath = process.env['PATH']
+        const h = descendantRunner(testCase, overlap)
+        const audit: string[] = []
+        const events: Array<{ event: string; card?: string; detail: Record<string, unknown> }> = []
+        const output: string[] = []
+        const selectCandidates = vi.fn(async () =>
+          ['9', '10'].map(id =>
+            card(id, { macrostate: 'Ready', labels: ['risk:green'], mutexResources: resources }),
+          ),
+        )
+        try {
+          process.env['PATH'] = area
+          vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+            output.push(args.map(String).join(' '))
+          })
+          vi.spyOn(process.stdout, 'write').mockImplementation(chunk => {
+            output.push(String(chunk))
+            return true
+          })
+          const fs = new InMemoryFileSystemService(
+            {
+              [`${area}/config.json`]: JSON.stringify({ asset_registries: {} }),
+              [`${area}/claude`]: '',
+              [`${area}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
+              [`${area}/.pair/adoption/tech/automation.md`]:
+                '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n2',
+            },
+            area,
+            area,
+          )
+          const code = await handleRunCommand(
+            parseRunCommand({
+              root: '9',
+              parallel: String(limit),
+              autonomous: true,
+              watch,
+              ...(watch && { maxIterations: '1' }),
+            }),
+            fs,
+            {
+              selectCandidates,
+              readPrereqState: () => ({ blocked: false, prerequisites: [] }),
+              runCardProcess: h.runCardProcess,
+              acquireLock: acquireCardLock,
+              appendAudit: (_path, line) => {
+                audit.push(line)
+              },
+              runAudit: (_path, line) => {
+                const event = JSON.parse(line) as (typeof events)[number]
+                events.push(event)
+                if (event.event === 'card-end') h.onEnd(event.card!)
+              },
+              wait: async () => {
+                throw new Error('one-iteration batch must not wait')
+              },
+            },
+          )
+          expect(selectCandidates).toHaveBeenCalledTimes(1)
+          expect(h.runCardProcess.mock.calls.map(([input]) => input.card.id)).toEqual(['9', '10'])
+          expect(h.order).toEqual(
+            overlap
+              ? ['start:9', 'start:10', 'end:9', 'end:10']
+              : ['start:9', 'end:9', 'start:10', 'end:10'],
+          )
+          expect(
+            events.filter(event => event.event === 'card-start').map(event => event.card),
+          ).toEqual(['9', '10'])
+          expect(
+            events
+              .filter(event => event.event === 'card-end')
+              .map(event => ({
+                card: event.card,
+                status: event.detail['status'],
+                reason: event.detail['reason'],
+              })),
+          ).toEqual([
+            { card: '9', status: 'skipped', reason: 'prepare-needs-human' },
+            {
+              card: '10',
+              status: testCase.status,
+              reason: testCase.outcome === 'completed' ? undefined : testCase.detail,
+            },
+          ])
+          const batches = audit.filter(line => line.includes('event=batch'))
+          expect(batches).toHaveLength(1)
+          expectDescendantAudit(batches[0]!, testCase)
+          expect(output.join('')).toContain('#9: skipped — prepare-needs-human')
+          expect(output.join('')).toContain(`#10: ${testCase.outcome} — ${testCase.detail}`)
+          expect(audit.some(line => line.includes('event=loop-end'))).toBe(watch)
+          expect(code).toBe(testCase.batchExit)
+        } finally {
+          vi.restoreAllMocks()
+          process.env['PATH'] = previousPath
+          rmSync(area, { recursive: true, force: true })
+        }
+      },
+    )
   })
 })
