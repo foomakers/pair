@@ -406,6 +406,14 @@ async function reconcileBlocked(
   let inserted = 0
   for (const { candidate, reason, at } of pending) {
     const risk = candidate.tier.startsWith('risk:')
+    const RANK = ['risk:green', 'risk:yellow', 'risk:red']
+    const floor = risk
+      ? Math.max(-1, ...(await host.readLabels(candidate.id).catch(() => [] as string[])).map(l => RANK.indexOf(l)))
+      : -1
+    if (floor > RANK.indexOf(candidate.tier)) {
+      blocked.push(`${reason} — card risk floor exceeds reviewed tier ${candidate.tier}`)
+      continue
+    }
     const result = risk
       ? await reconcileCardRiskLabel({
           card: candidate.id,
