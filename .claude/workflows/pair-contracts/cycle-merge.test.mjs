@@ -1935,8 +1935,22 @@ test('US-599 AC2: retry after a host merge finishes cleanup without merging agai
   )
   // the already-merged path carries no refusal from the gate decision (pair-review failure)
   assert.deepEqual(
-    { mergeAllowed: out.mergeAllowed, reason: out.reason ?? null },
-    { mergeAllowed: true, reason: null },
+    {
+      mergeAllowed: out.mergeAllowed,
+      reason: out.reason ?? null,
+      parkKind: out.parkKind ?? null,
+      ciPending: out.ciPending ?? false,
+      ciFailed: out.ciFailed ?? false,
+      failed: out.failed,
+    },
+    {
+      mergeAllowed: true,
+      reason: null,
+      parkKind: null,
+      ciPending: false,
+      ciFailed: false,
+      failed: [],
+    },
     JSON.stringify(out),
   )
 })
