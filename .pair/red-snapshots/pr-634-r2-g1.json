@@ -1,0 +1,212 @@
+{
+  "$meta": {
+    "pr": "634",
+    "phase": "r2-g1",
+    "base": "33cbf1f1c354c8cd8c5979990d167db28c063784",
+    "trailer": "Pair-RED-Snapshot: pr=634; phase=r2-g1; base=33cbf1f1c354c8cd8c5979990d167db28c063784; manifest=.pair/red-snapshots/pr-634-r2-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/loop-driver.test.ts"
+    ]
+  },
+  "mode": "repair",
+  "inputHead": "33cbf1f1c354c8cd8c5979990d167db28c063784",
+  "sourceOfTruth": "r2 findings r0-1 and r1-2; loop-driver.ts reportOutcome and cycle-entry.ts driveWithCardLine",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "apps/pair-cli/src/commands/run/loop-driver.ts emit maps card-end status into run.cards; reportOutcome emits the summary through handleRunCommand",
+      "inputs": [
+        "latest card-end status per card",
+        "iteration completion and summary output",
+        "card-end status omitted: default to failed"
+      ],
+      "representations": [
+        "RunEvent status",
+        "run.cards map",
+        "plain CLI Cards summary",
+        "audit event"
+      ],
+      "consumers": [
+        "loop terminal summary",
+        "operator",
+        "audit reader"
+      ],
+      "classes": [
+        "escalated: failed",
+        "escalate and failed: failed",
+        "awaiting-human, ready-for-merge, target-ready: parked",
+        "merged: merged",
+        "prepared: prepared",
+        "unknown: unknown",
+        "missing status: failed by emit default"
+      ],
+      "interactions": [
+        "prepared then escalated for the same card: latest result only",
+        "prepared then merged or failed for the same card: latest result only"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli/src/commands/run/loop-driver.ts",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/loop-driver.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "one escalated card-end through handleRunCommand",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'counts a escalated card-end'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "Cards: 0 merged · 0 parked · 0 prepared · 1 failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-W2",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "prepared card-end followed by escalated card-end for same card",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'counts the latest escalation'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "latest result replaces prepared; 0 parked · 0 prepared · 1 failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "awaiting-human card-end",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'counts a awaiting-human card-end'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "0 merged · 1 parked · 0 prepared · 0 failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-C2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "ready-for-merge card-end",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'counts a ready-for-merge card-end'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "0 merged · 1 parked · 0 prepared · 0 failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-C3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "target-ready card-end",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'counts a target-ready card-end'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "0 merged · 1 parked · 0 prepared · 0 failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-C4",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "escalate card-end",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'counts a escalate card-end'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "0 merged · 0 parked · 0 prepared · 1 failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-C5",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unknown card-end",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'keeps an unknown card-end'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "0 failed · 1 unknown",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-C6",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "prepared then merged or failed for same card",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'a card prepared then'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "only latest terminal result counted",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-C7",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "prepared without later result",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'counts a prepared terminal card'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "1 prepared · 0 failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-C8",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "recorded workflow card-end parks",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'a completed workflow run'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "1 parked · 0 failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-missing-status",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "card-end without status through handleRunCommand",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t 'counts a card-end without status'",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "expected": "Cards: 0 merged · 0 parked · 0 prepared · 1 failed",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Absent status follows emit default; distinct from explicit failed or escalate status."
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:30fcc529515cb7e242fbcd1dfae99de30b33abb9600c411b9dbf1954aa292bd7",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts",
+      "observed": "2 failed, 17 passed; escalated summary showed Cards: 0 merged · 1 parked · 0 prepared · 0 failed · 0 unknown"
+    }
+  ],
+  "testExempt": false,
+  "changedRows": [
+    "r0-1-missing-status",
+    "card-end-status-default"
+  ],
+  "reconciled": [
+    {
+      "path": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "sha256": "sha256:86e684c3d14512c2691f7a14a38a76627f7beed2eafdd2781f41954c1c665e0d"
+    }
+  ]
+}

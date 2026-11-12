@@ -108,6 +108,78 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
     expect(out()).toContain('0 merged · 0 parked · 1 prepared · 0 failed')
   })
 
+  it.each(['escalated', 'escalate'])(
+    'counts a %s card-end as failed in the loop summary',
+    async status => {
+      const runIteration: IterationRunner = input => {
+        input.onRunEvent?.({ event: 'card-end', card: '596', status })
+        return replay('claude-success.jsonl')(input)
+      }
+      const { out } = capture()
+      await handleRunCommand(parseRunCommand({ root: '212' }), projectFs(), {
+        runIteration,
+        runAudit: () => undefined,
+      })
+      expect(out()).toContain('Cards: 0 merged · 0 parked · 0 prepared · 1 failed')
+    },
+  )
+
+  it('counts a card-end without status as failed in the loop summary', async () => {
+    const runIteration: IterationRunner = input => {
+      input.onRunEvent?.({ event: 'card-end', card: '596' })
+      return replay('claude-success.jsonl')(input)
+    }
+    const { out } = capture()
+    await handleRunCommand(parseRunCommand({ root: '212' }), projectFs(), {
+      runIteration,
+      runAudit: () => undefined,
+    })
+    expect(out()).toContain('Cards: 0 merged · 0 parked · 0 prepared · 1 failed')
+  })
+
+  it.each(['awaiting-human', 'ready-for-merge', 'target-ready'])(
+    'counts a %s card-end as parked in the loop summary',
+    async status => {
+      const runIteration: IterationRunner = input => {
+        input.onRunEvent?.({ event: 'card-end', card: '596', status })
+        return replay('claude-success.jsonl')(input)
+      }
+      const { out } = capture()
+      await handleRunCommand(parseRunCommand({ root: '212' }), projectFs(), {
+        runIteration,
+        runAudit: () => undefined,
+      })
+      expect(out()).toContain('Cards: 0 merged · 1 parked · 0 prepared · 0 failed')
+    },
+  )
+
+  it('counts the latest escalation after preparation as failed', async () => {
+    const runIteration: IterationRunner = input => {
+      input.onRunEvent?.({ event: 'card-end', card: '596', status: 'prepared' })
+      input.onRunEvent?.({ event: 'card-end', card: '596', status: 'escalated' })
+      return replay('claude-success.jsonl')(input)
+    }
+    const { out } = capture()
+    await handleRunCommand(parseRunCommand({ root: '212' }), projectFs(), {
+      runIteration,
+      runAudit: () => undefined,
+    })
+    expect(out()).toContain('Cards: 0 merged · 0 parked · 0 prepared · 1 failed')
+  })
+
+  it('keeps an unknown card-end out of the failed count', async () => {
+    const runIteration: IterationRunner = input => {
+      input.onRunEvent?.({ event: 'card-end', card: '596', status: 'unknown' })
+      return replay('claude-success.jsonl')(input)
+    }
+    const { out } = capture()
+    await handleRunCommand(parseRunCommand({ root: '212' }), projectFs(), {
+      runIteration,
+      runAudit: () => undefined,
+    })
+    expect(out()).toContain('Cards: 0 merged · 0 parked · 0 prepared · 0 failed · 1 unknown')
+  })
+
   it.each([
     ['merged', '1 merged · 0 parked · 0 prepared · 0 failed'],
     ['failed', '0 merged · 0 parked · 0 prepared · 1 failed'],
