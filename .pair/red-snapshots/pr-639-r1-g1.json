@@ -1,0 +1,512 @@
+{
+  "$meta": {
+    "pr": "639",
+    "phase": "r1-g1",
+    "base": "95742a66d9afee04befa2cc162635e888b644a4f",
+    "trailer": "Pair-RED-Snapshot: pr=639; phase=r1-g1; base=95742a66d9afee04befa2cc162635e888b644a4f; manifest=.pair/red-snapshots/pr-639-r1-g1.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs"
+    ]
+  },
+  "status": "red",
+  "mode": "repair",
+  "inputHead": "95742a66d9afee04befa2cc162635e888b644a4f",
+  "sourceOfTruth": "cycle-state.mjs dependencyIds/prereqState (dataset .skills/workflow/*/scripts, mirrored to .claude/skills)",
+  "inventory": [
+    {
+      "id": "r0-4",
+      "producer": "dependencyIds (cycle-state.mjs) canonical-field read",
+      "inputs": [
+        "card body"
+      ],
+      "representations": [
+        "6 skill copies + 6 dataset sources (byte-identical, enforced by cycle-coordinator.test.mjs AC12-w3)"
+      ],
+      "consumers": [
+        "prereqState",
+        "pair-cli withPrereqState",
+        "pair-loop"
+      ],
+      "classes": [
+        "canonical inline ids",
+        "canonical multiline list",
+        "canonical story key / prose (non-id, non-none) => uncertain",
+        "canonical none/n/a"
+      ],
+      "interactions": [
+        "canonical + Depends-on lines: canonical ids + foreign line => fail-closed; canonical none + #3 line => ids [3]"
+      ]
+    },
+    {
+      "id": "r0-5",
+      "producer": "dependencyIds none/negation test",
+      "inputs": [
+        "Depends on/Blocked by rest text",
+        "canonical rest text"
+      ],
+      "representations": [
+        "same copies"
+      ],
+      "consumers": [
+        "prereqState"
+      ],
+      "classes": [
+        "explicit none",
+        "explicit nothing",
+        "words prefixed none/nothing => uncertain",
+        "keyword dimension: Depends on and Blocked by"
+      ],
+      "interactions": []
+    },
+    {
+      "id": "r0-6",
+      "producer": "issueRefs in dependencyIds",
+      "inputs": [
+        "reference text"
+      ],
+      "representations": [
+        "same copies"
+      ],
+      "consumers": [
+        "prereqState"
+      ],
+      "classes": [
+        "bare #N",
+        "link to bound tracker (o/r control)",
+        "owner/repo#N => uncertain",
+        "foreign-host issues URL => uncertain",
+        "same-host foreign-repo issues URL => uncertain",
+        "local + foreign ref in the same declaration (same line, list items, canonical inline) => fail closed, prerequisites []"
+      ],
+      "interactions": [
+        "canonical + Depends-on lines"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "dependencyIds grammar (cycle-state.mjs)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "G-4a",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "**Prerequisite Stories**:\\n- #3\\n- #2",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-4a",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "ids [3,2], blocked",
+      "covers": [
+        "r0-4"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "G-4b",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "canonical: US-12",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-4b",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked, guidance /Depends on #<id>/",
+      "covers": [
+        "r0-4"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "G-4c",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "canonical: the adapter story",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-4c",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance",
+      "covers": [
+        "r0-4"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "C-4a",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "canonical inline #3, #2",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 C-4a",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "ids [3,2]",
+      "covers": [
+        "r0-4"
+      ],
+      "observed": "pass"
+    },
+    {
+      "id": "C-4b",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "canonical n/a",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 C-4b",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "not blocked",
+      "covers": [
+        "r0-4"
+      ],
+      "observed": "pass"
+    },
+    {
+      "id": "G-5a",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Depends on nonexistent adapter",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-5a",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance",
+      "covers": [
+        "r0-5"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "G-5b",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Depends on nothingness",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-5b",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance",
+      "covers": [
+        "r0-5"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "G-5c",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "canonical: nonexistent",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-5c",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance",
+      "covers": [
+        "r0-5",
+        "r0-4"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "C-5a",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "Depends on none",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 C-5a",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "not blocked",
+      "covers": [
+        "r0-5"
+      ],
+      "observed": "pass"
+    },
+    {
+      "id": "C-5b",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "Depends on nothing",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 C-5b",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "not blocked",
+      "covers": [
+        "r0-5"
+      ],
+      "observed": "pass"
+    },
+    {
+      "id": "G-6a",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Depends on other/repo#12",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-6a",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance, no ids",
+      "covers": [
+        "r0-6"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "G-6b",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Depends on https://gitlab.example.com/other/repo/issues/7",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-6b",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance",
+      "covers": [
+        "r0-6"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "G-6c",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "canonical: other/repo#12",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-6c",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance",
+      "covers": [
+        "r0-6",
+        "r0-4"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "C-6a",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "Depends on https://github.com/acme/pair/issues/3 ; fixture bound repo acme/pair (pm.parseCardRef accepts only that repo URL, #N, N)",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 C-6a",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "ids [3], blocked",
+      "covers": [
+        "r0-6"
+      ],
+      "observed": "pass"
+    },
+    {
+      "id": "G-6d",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Depends on https://github.com/other/repo/issues/7 (same host, foreign repo)",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-6d",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance, prerequisites []",
+      "covers": [
+        "r0-6"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "G-5d",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Blocked by nonexistent adapter",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-5d",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance, prerequisites []",
+      "covers": [
+        "r0-5"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "G-6e",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Blocked by other/repo#12",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-6e",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance, prerequisites []",
+      "covers": [
+        "r0-6"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "G-4d",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "canonical #3 + line \"Depends on other/repo#12\"",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-4d",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked fail-closed with guidance, prerequisites [] (ids from canonical not kept)",
+      "covers": [
+        "r0-4",
+        "r0-6"
+      ],
+      "observed": "red: assertion failed against base"
+    },
+    {
+      "id": "C-4c",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "canonical none + line \"Depends on #3\"",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 C-4c",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "ids [3], blocked",
+      "covers": [
+        "r0-4",
+        "r0-6"
+      ],
+      "observed": "pass"
+    },
+    {
+      "id": "C-5c",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "Blocked by none",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 C-5c",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "not blocked",
+      "covers": [
+        "r0-5"
+      ],
+      "observed": "pass"
+    },
+    {
+      "id": "C-4d",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "12 declared copies of cycle-state.mjs (6 dataset + 6 skill mirrors) are byte-identical, so a fix landing in one copy fails the existing parity tests; dependencyIds output parity follows from byte identity for G-4a/G-5a/G-6a bodies",
+      "oracle": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs AC12-w3",
+      "file": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "expected": "all 12 copies byte-identical to canonical",
+      "covers": [
+        "r0-4"
+      ],
+      "observed": "pass",
+      "rationale": "existing parity test AC12-w3 (cycle-coordinator.test.mjs) enforces the 12 copies; cycle-state.test.mjs \"ships byte-identical\" covers 10 of them"
+    },
+    {
+      "id": "G-6f",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Depends on #3 and other/repo#12",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-6f",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance, prerequisites [] (local id 3 not kept, foreign 12 not dropped)",
+      "covers": [
+        "r0-6"
+      ],
+      "observed": "red: ids [3,12] returned, expected []"
+    },
+    {
+      "id": "G-6g",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Depends on:\\n- #3\\n- other/repo#12",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-6g",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance, prerequisites [] (local id 3 not kept, foreign 12 not dropped)",
+      "covers": [
+        "r0-6"
+      ],
+      "observed": "red: ids [3,12] returned, expected []"
+    },
+    {
+      "id": "G-6h",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "canonical: #3, other/repo#12",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1g1 G-6h",
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "expected": "blocked with guidance, prerequisites [] (local id 3 not kept, foreign 12 not dropped)",
+      "covers": [
+        "r0-6"
+      ],
+      "observed": "red: ids [3,12] returned, expected []"
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:be3916845ac47cdb74970b92ffab5bd00a7840c679aad00cf0835b292bb9c6c4",
+      "command": "node --test --test-name-pattern=r1g1 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "observed": "16 of 23 r1g1 tests fail (G-*), 7 controls pass"
+    },
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:38bc99a2a4518026937eeb245a3c22ab01891462e069de9d13b6398da3dae99e",
+      "command": "node --test --test-name-pattern=AC12-w3 .claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "observed": "ok 1 pass 1"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-4",
+          "r0-5",
+          "r0-6"
+        ],
+        "owner": "dependencyIds grammar (cycle-state.mjs)",
+        "mode": "behavioral",
+        "allowedPaths": [
+          ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs"
+        ],
+        "oracle": "node --test --test-name-pattern=r1g1 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-1",
+          "r0-2"
+        ],
+        "owner": "live guard at implementation entry + loop selection via prereq-state",
+        "mode": "behavioral",
+        "allowedPaths": [
+          ".claude/workflows/pair-loop.js",
+          "packages/knowledge-hub/dataset/.workflows/pair-loop.js",
+          "apps/pair-cli/src/commands/run/",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs"
+        ],
+        "oracle": "pair-loop.test.mjs + pair-cli run tests",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g3",
+        "findings": [
+          "r0-3"
+        ],
+        "owner": "parallel-entry selection-to-child integration test",
+        "mode": "test",
+        "allowedPaths": [],
+        "oracle": "apps/pair-cli parallel-entry.test.ts",
+        "dependsOn": [
+          "r1-g1"
+        ]
+      }
+    ],
+    "carried": []
+  },
+  "groupId": "r1-g1",
+  "remediationBatchId": "r1",
+  "changedRows": [
+    "G-6f",
+    "G-6g",
+    "G-6h"
+  ]
+}
