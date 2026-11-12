@@ -9,7 +9,7 @@ import { computeRootPlan } from './root-plan'
 
 /** US-575 AC6: no card in this suite has a prerequisite (the deterministic read is faked). */
 const NO_PREREQS = () => ({ blocked: false, prerequisites: [] })
-import { parseCandidates } from './root-select'
+import { parseCandidates, parseSelection } from './root-select'
 
 /**
  * US-491 review r0-2 — the plan and the child must agree on `## Eligibility`.
@@ -73,7 +73,9 @@ type Verdict =
 function verdict(json: string, eligibility: string | undefined, extra = {}): Verdict {
   let candidates
   try {
-    candidates = parseCandidates(json)
+    const answer = parseSelection(json)
+    if (answer.blocked?.length) return { kind: 'refused', message: answer.blocked[0]! }
+    candidates = answer.candidates
   } catch (error) {
     return { kind: 'refused', message: (error as Error).message }
   }
