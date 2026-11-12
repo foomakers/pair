@@ -146,7 +146,7 @@ function tierMismatch(id: string, tier: string, labels: readonly string[]): stri
   if (untagged ? risk.length === 0 : risk.length === 1 && risk[0] === tier) return undefined
   return (
     `candidate ${id}: tier ${JSON.stringify(tier)} disagrees with its risk labels ` +
-      `${JSON.stringify(risk)} (labels ${JSON.stringify(labels)}) — the tier must be its one risk:* label`
+    `${JSON.stringify(risk)} (labels ${JSON.stringify(labels)}) — the tier must be its one risk:* label`
   )
 }
 
@@ -367,12 +367,15 @@ async function selectOnce(input: SelectRootInput, correction: string): Promise<S
  * stalled process is never retried, and a second malformed answer fails closed.
  */
 export async function selectRootAnswer(input: SelectRootInput): Promise<SelectionAnswer> {
+  let answer: SelectionAnswer
   try {
-    return await selectOnce(input, '')
+    answer = await selectOnce(input, '')
   } catch (error) {
     if (!(error instanceof SelectionFormatError)) throw error
-    return selectOnce(input, formatCorrectionNote(error.message))
+    answer = await selectOnce(input, formatCorrectionNote(error.message))
   }
+  for (const reason of answer.blocked ?? []) console.log(`  blocked, skipped: ${reason}`)
+  return answer
 }
 
 /** Runs the selection in ONE fresh engine process and returns its candidate set — or throws. */

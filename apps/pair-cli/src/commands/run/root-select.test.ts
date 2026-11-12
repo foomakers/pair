@@ -145,6 +145,25 @@ describe('selectRootCandidates — one engine process, its marker read back', ()
     timeoutSeconds: 60,
   }
 
+  it('AC3: a card blocked for its risk labels is named in the output, the healthy one is returned', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const runIteration = vi.fn(async (spawn: SpawnIterationInput) => {
+      spawn.onEvent?.({
+        type: 'assistant',
+        text: marker({
+          candidates: [{ ...candidate, id: '36', tier: 'risk:yellow', labels: [] }, candidate],
+        }),
+      })
+      return { outcome: 'success' as const, detail: 'ok' }
+    })
+
+    const result = await selectRootCandidates({ ...input, runIteration })
+
+    expect(result.map(c => c.id)).toEqual(['491'])
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/blocked.*candidate 36: tier/))
+    log.mockRestore()
+  })
+
   it('spawns pair-next once, in the project, and returns the candidates the stream carried', async () => {
     const runIteration = vi.fn(async (spawn: SpawnIterationInput) => {
       spawn.onEvent?.({ type: 'assistant', text: marker({ candidates: [candidate] }) })
