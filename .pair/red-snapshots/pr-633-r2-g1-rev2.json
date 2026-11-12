@@ -1,0 +1,155 @@
+{
+  "$meta": {
+    "pr": "633",
+    "phase": "r2-g1-rev2",
+    "base": "0338d246f638708ac7fb1a52ab4f0ca630512d53",
+    "trailer": "Pair-RED-Snapshot: pr=633; phase=r2-g1-rev2; base=0338d246f638708ac7fb1a52ab4f0ca630512d53; manifest=.pair/red-snapshots/pr-633-r2-g1-rev2.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs"
+    ]
+  },
+  "mode": "revision",
+  "phase": "r2-g1-rev2",
+  "inputHead": "0338d246f638708ac7fb1a52ab4f0ca630512d53",
+  "sourceOfTruth": "runMerge",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "runMerge in .claude/skills/pair-workflow-cycle/scripts/cycle-merge.mjs (already-merged result construction)",
+      "inputs": [
+        "isMerged true",
+        "pair-review failure",
+        "cascade completes"
+      ],
+      "representations": [
+        "cycle-merge.mjs",
+        "dataset mirror .skills/workflow/cycle/scripts/cycle-merge.mjs"
+      ],
+      "consumers": [
+        "cycle-merge CLI run",
+        "pair-workflow-cycle driver"
+      ],
+      "classes": [
+        "already merged + gate refusal: no parkKind/ciPending/ciFailed/reason, failed [] (defect: parkKind halted)",
+        "not merged + gate refusal: parks, keeps refusal fields (control)"
+      ],
+      "interactions": [
+        "already-merged x pair-review failure x cascade complete"
+      ]
+    },
+    {
+      "id": "r2-g1-gap1",
+      "producer": "dataset mirror of the sealed cycle-merge.test.mjs, checked by src/tools/workflow-mirror.test.ts",
+      "inputs": [
+        "sealed .claude/workflows/pair-contracts/cycle-merge.test.mjs bytes"
+      ],
+      "representations": [
+        ".claude/workflows/pair-contracts/cycle-merge.test.mjs",
+        "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs"
+      ],
+      "consumers": [
+        "pre-push workflow-mirror.test.ts"
+      ],
+      "classes": [
+        "dataset test copy byte-identical to sealed copy (defect: lacked r2-g1 witness)"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "cycle-merge runMerge",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-merge.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-merge.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "isMerged true, pair-review failure, cascade completes, runMerge",
+      "oracle": "node --test --test-name-pattern=US-599.AC2 .claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "expected": "parkKind null/absent, ciPending/ciFailed false, mergeAllowed true, reason null, failed []",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "not merged, refusal parks without cleanup keeps refusal",
+      "oracle": "node --test --test-name-pattern=US-599.AC4 .claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "expected": "refusal kept, no clearPrState",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r2-g1-gap1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset copy of cycle-merge.test.mjs equals the sealed copy",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/tools/workflow-mirror.test.ts",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs",
+      "expected": "workflow-mirror suite passes",
+      "covers": [
+        "r2-g1-gap1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:815f28e2f90a28e5f147bb3499c90445f59a85881d1aae52b4f097f4a0bdc2b6",
+      "command": "node --test --test-name-pattern=US-599.AC2 .claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "observed": "fail: AssertionError actual parkKind:\"halted\" expected parkKind:null"
+    },
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:815f28e2f90a28e5f147bb3499c90445f59a85881d1aae52b4f097f4a0bdc2b6",
+      "command": "pnpm --dir packages/knowledge-hub exec vitest run src/tools/workflow-mirror.test.ts",
+      "observed": "20 passed"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r2-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "cycle-merge runMerge",
+        "mode": "behavioral",
+        "allowedPaths": [
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-merge.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-merge.mjs",
+          "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs"
+        ],
+        "dependsOn": [],
+        "oracle": "node --test --test-name-pattern=US-599.AC2 .claude/workflows/pair-contracts/cycle-merge.test.mjs",
+        "widen": true
+      }
+    ],
+    "carried": []
+  },
+  "revision": 2,
+  "predecessorContractHash": "sha256:b5156d6cd71afc262540f2077d69f70b6bc868ae38ca1e7da3eea194cd6b418e",
+  "changedRows": [
+    "r2-g1-gap1-c1"
+  ],
+  "reattest": {
+    "reason": "witness unchanged at head"
+  }
+}
