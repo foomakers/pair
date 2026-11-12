@@ -65,7 +65,7 @@ export function outcomeOfExit(id: string, exit: CardProcessExit): Omit<CardOutco
   if (exit.signal !== null) return { id, outcome: 'crashed', detail: `killed by ${exit.signal}` }
   const prepare = exit.prepare !== undefined ? { prepare: exit.prepare } : {}
   if (exit.exitCode === 0) {
-    if (exit.skipReason !== undefined)
+    if (exit.skipReason !== undefined && exit.cycleStatus === undefined)
       return { id, outcome: 'skipped', detail: exit.skipReason, ...prepare }
     return { id, outcome: 'completed', detail: 'exit 0', ...prepare }
   }
