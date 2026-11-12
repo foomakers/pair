@@ -156,3 +156,7 @@ One row, and it is inert unless a project turns it on. When **all four** hold �
 - [`tier-resolve.sh`](../../../assets/tier-resolve.sh) — the provider-agnostic, tags-only tier resolver
 - [code-review-template.md](../templates/code-review-template.md) — the verdict-first review body whose verdict this flow consumes
 - [github-implementation.md](github-implementation.md) — GitHub check-run + branch-protection mechanics for the two pair checks
+
+## After merge
+
+A merged PR carries none of the three states. The merge stage removes every `pr-state:*` label after the host confirms the merge, reads back their absence and reports an unconfirmed cleanup as `merged, closure unfinished` (idempotent retry). A state writer re-invoked on a merged PR clears, never restores.

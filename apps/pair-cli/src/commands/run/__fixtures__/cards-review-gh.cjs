@@ -49,6 +49,13 @@ function list() {
 }
 function read() {
   if (args[0] === 'pr' && args[1] === 'list') return list()
+  if (args[0] === 'pr' && args[1] === 'view') {
+    const opts = options(3, ['--repo', '--json'])
+    return project(
+      state.prs.find(pr => String(pr.number) === args[2]),
+      opts['--json'],
+    )
+  }
   if (args[0] === 'issue' && args[1] === 'view') {
     const opts = options(3, ['--repo', '--json'])
     return project(state.cards[args[2]], opts['--json'])

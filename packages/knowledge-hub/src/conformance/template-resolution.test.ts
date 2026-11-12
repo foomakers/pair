@@ -172,3 +172,75 @@ describe('every template-linking guideline carries the resolution pointer (AC5, 
     },
   )
 })
+
+describe('PR title publication precedence', () => {
+  const read = (...p: string[]) => readFileSync(join(...p), 'utf-8').replace(/\s+/g, ' ')
+  const PUBLISH = [
+    { label: 'dataset', skill: read(DATASET_SKILLS, 'capability/publish-pr/SKILL.md') },
+    { label: 'mirror', skill: read(MIRROR, 'pair-capability-publish-pr/SKILL.md') },
+  ]
+  // Exact clauses: each fails when removed or inverted.
+  const OVERRIDE =
+    'Explicit PR title naming rules there override conflicting title examples in the resolved template.'
+  const TEMPLATE_ONLY =
+    'including an adoption template found by file existence without a `## Templates` entry'
+  const MISMATCH = 'report a title mismatch as a publication failure, never success'
+  const RETAINED = [
+    'update its title and body and tags in place',
+    'never open a second PR',
+    'the PR is created with **no classification tags**',
+    '`Refs:` (PR Information)',
+    'its assignee **conditionally**',
+    'Keep story references in the body.',
+  ]
+
+  it.each(PUBLISH)(
+    '$label: states the exact override direction and failure clause',
+    ({ skill }) => {
+      expect(skill).toContain(OVERRIDE)
+      expect(skill).toContain(MISMATCH)
+      expect(skill).toMatch(/unrelated naming rules leave the resolved template in control/i)
+      expect(skill).toMatch(/no code prefix removes/i)
+      expect(skill).toMatch(/no type prefix also removes/i)
+    },
+  )
+
+  it.each(PUBLISH)(
+    '$label: template-only override (no ## Templates entry) stays in control',
+    ({ skill }) => {
+      expect(skill).toContain(TEMPLATE_ONLY)
+    },
+  )
+
+  it.each(PUBLISH)(
+    '$label: body, update-in-place, tag, Refs and assignee clauses retained',
+    ({ skill }) => {
+      for (const clause of RETAINED) expect(skill).toContain(clause)
+    },
+  )
+
+  it('guards discriminate: inverted or dropped clauses fail the exact predicates', () => {
+    const { skill } = PUBLISH[0]
+    const inverted = skill.replace(
+      'naming rules there override',
+      'naming rules there never override',
+    )
+    expect(inverted).not.toContain(OVERRIDE)
+    // the former loose regex could not tell the two apart
+    expect(inverted).toMatch(/explicit PR title naming rules.*override/i)
+    expect(skill.replace(MISMATCH, 'read the title')).not.toContain(MISMATCH)
+    expect(skill.replace(TEMPLATE_ONLY, '')).not.toContain(TEMPLATE_ONLY)
+  })
+
+  it('direct publish-pr and the cycle share one title rule: implement-phase delegates PR publication', () => {
+    const phase = read(DATASET_SKILLS, 'workflow/implement-phase/SKILL.md')
+    const mirror = read(MIRROR, 'pair-workflow-implement-phase/SKILL.md')
+    for (const text of [phase, mirror]) {
+      expect(text).toContain('Publish the PR by invoking `$publishPr`. Do NOT hand-roll the PR')
+      expect(text).not.toMatch(/Naming & References/)
+      expect(text).not.toMatch(/PR title/i)
+    }
+    // the title rule lives only in publish-pr
+    expect(PUBLISH[0].skill).toContain('Naming & References')
+  })
+})
