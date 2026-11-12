@@ -195,6 +195,19 @@ describe('outcomeOfExit / batchExitCode', () => {
     )
   })
 
+  it('US-592 AC-1/2: a clean preparation skip keeps its reason; a nonzero exit remains failed', () => {
+    expect(
+      outcomeOfExit('7', { exitCode: 0, signal: null, skipReason: 'prepare-needs-human' }),
+    ).toEqual({
+      id: '7',
+      outcome: 'skipped',
+      detail: 'prepare-needs-human',
+    })
+    expect(
+      outcomeOfExit('7', { exitCode: 2, signal: null, skipReason: 'prepare-needs-human' }).outcome,
+    ).toBe('failed')
+  })
+
   it('US-523: only an exact PREPARE-RESULT line parses', () => {
     expect(parsePrepareResult('PREPARE-RESULT: prepared')).toBe('prepared')
     expect(parsePrepareResult('PREPARE-RESULT: needs-human')).toBe('needs-human')
@@ -486,6 +499,20 @@ describe('spawnCardProcess — a genuinely separate OS process (a stub CLI, neve
     expect(lines).toContain('  [#9] PREPARE-RESULT: escalated')
   })
 
+  it('US-592 AC-1: carries the card skip marker from the child', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'pair-592-cli-'))
+    const stub = join(dir, 'stub-cli.cjs')
+    writeFileSync(stub, "console.log('CARD-SKIP: prepare-needs-human')\nprocess.exit(0)")
+    process.argv[1] = stub
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    expect(await spawnCardProcess({ card: card('9'), args: [], cwd: dir })).toEqual({
+      exitCode: 0,
+      signal: null,
+      skipReason: 'prepare-needs-human',
+    })
+  })
+
   it('a crashed card process (killed) is reported by its signal', async () => {
     dir = mkdtempSync(join(tmpdir(), 'pair-491-cli-'))
     const stub = join(dir, 'stub-cli.cjs')
@@ -556,5 +583,43 @@ describe('US-573 AC2: the pool reports each card live — start, relayed stages,
       status: 'failed (crashed)',
       reason: 'killed by SIGKILL',
     })
+  })
+
+  it('US-592 AC-2/3: a clean root skip ends skipped and keeps siblings and batch exit independent', async () => {
+    const area = mkdtempSync(join(tmpdir(), 'pair-592-'))
+    const events: unknown[] = []
+    const root = await runPlannedCard({
+      card: card('9'),
+      config: parseRunCommand({ root: '9', parallel: '2' }),
+      cwd: area,
+      workingArea: area,
+      acquireLock: acquireCardLock,
+      runCardProcess: async () => ({
+        exitCode: 0,
+        signal: null,
+        skipReason: 'prepare-needs-human',
+      }),
+      onEvent: event => events.push(event),
+    })
+    const child = { id: '10', outcome: 'completed' as const, detail: 'exit 0' }
+    expect(events.at(-1)).toEqual({
+      event: 'card-end',
+      card: '9',
+      status: 'skipped',
+      reason: 'prepare-needs-human',
+    })
+    expect(
+      renderBatchAuditLine({
+        at: 't',
+        startedAt: 't',
+        root: '9',
+        requested: 2,
+        effective: 2,
+        outcomes: [root, child],
+        excluded: [],
+      }),
+    ).toContain('outcomes=9:skipped(prepare-needs-human),10:completed(exit 0)')
+    expect(batchExitCode([root, child])).toBe(0)
+    expect(batchExitCode([root, { id: '11', outcome: 'crashed', detail: 'signal' }])).toBe(1)
   })
 })

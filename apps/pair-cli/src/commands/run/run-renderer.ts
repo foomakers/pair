@@ -52,6 +52,7 @@ export const displayId = (id: string): string => (/^\d+$/.test(id) ? `#${id}` : 
 function icon(card: CardView, color: boolean, frame: number): string {
   if (card.status === undefined) return paint(color, 36, SPINNER[frame % SPINNER.length]!)
   if (DONE.has(card.status)) return paint(color, 32, '✔')
+  if (card.status === 'skipped') return paint(color, 90, '–')
   if (PARKED.has(card.status)) return paint(color, 33, '⏸')
   if (card.status === 'escalated') return paint(color, 33, '⚠')
   if (card.status === 'unknown') return paint(color, 90, '?')
@@ -71,8 +72,11 @@ function stateText(card: CardView): string | undefined {
     !DONE.has(card.status) &&
     !PARKED.has(card.status) &&
     card.status !== 'escalated' &&
+    card.status !== 'skipped' &&
     card.status !== 'unknown'
-  return failed && card.reason ? `${card.status}: ${card.reason.slice(0, 60)}` : card.status
+  return (failed || card.status === 'skipped') && card.reason
+    ? `${card.status}: ${card.reason.slice(0, 60)}`
+    : card.status
 }
 
 /** An ANSI CSI sequence (built from the ESC code so no control character sits in a regex literal). */

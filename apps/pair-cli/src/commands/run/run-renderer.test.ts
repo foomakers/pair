@@ -64,6 +64,15 @@ describe('cardLine — pure over (card, columns, color, now)', () => {
     ).toMatch(/^✖ .* failed-implement: gate red/)
   })
 
+  it('US-592 AC-2: skipped root shows a neutral mark and its reason', () => {
+    expect(
+      cardLine(
+        { ...running, status: 'skipped', reason: 'prepare-needs-human', endedAt: T0 },
+        { columns: 120, color: false, now: T0 },
+      ),
+    ).toMatch(/^– #573 .* skipped: prepare-needs-human/)
+  })
+
   it('truncates the title to the width, and drops it first when id + stage do not fit', () => {
     const narrow = cardLine(running, { columns: 40, color: false, now: T0 })
     expect(narrow.length).toBeLessThanOrEqual(40)
