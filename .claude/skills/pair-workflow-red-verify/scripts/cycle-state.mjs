@@ -2385,10 +2385,10 @@ const declRefs = (text, parse) => {
   const ids = []
   let foreign = false
   const rest = String(text)
-    .replace(/\[(#\d+)\]\(https?:[^)]*\)/g, '$1')
+    .replace(/\[([^\]]*)\]\((https?:[^)]*)\)/g, (_, t, u) => (parse ? u : t))
     .replace(/https?:\/\/[^\s)>\]]+/g, u => {
       const r = parse?.(u)
-      if (r?.id) ids.push(String(r.id))
+      if (r?.id && r.inScope !== false) ids.push(String(r.id))
       else foreign = true
       return ' '
     })
@@ -2432,7 +2432,7 @@ export function prereqState({ story, dir, host }) {
   } catch (e) {
     return closed(`card unreadable: ${hostDetail(e)}`)
   }
-  const { ids, uncertain } = dependencyIds(body, story, ref => h.pm.parseCardRef?.(ref))
+  const { ids, uncertain } = dependencyIds(body, story, h.pm.parseCardRef ? ref => h.pm.parseCardRef(ref) : undefined)
   if (uncertain) return closed(`dependency declaration unrecognised: "${uncertain}" — write "Depends on #<id>" or set **Prerequisite Stories**: none`)
   const prerequisites = ids.map(id => {
     try {
@@ -3185,7 +3185,7 @@ const priorStepOfRole = (handoffs, toStep) => {
 const withContext = (next, handoffs, contextPolicy) =>
   next && typeof next === 'object' && next.context === undefined ? { ...next, context: contextOf(priorStepOfRole(handoffs, next.step), next.step, contextPolicy) } : next
 
-export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels }) {
+export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels, host }) {
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
   const policyError = contextPolicyError(contextPolicy)
   if (policyError) throw new Error(policyError)
@@ -3201,6 +3201,14 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   const autonomyError = autonomyPolicyError(policy.autonomy)
   if (autonomyError) return { status: 'invalid', reason: autonomyError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
   const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
+  // US-597 AC4: live guard — implementation never starts on a stale selection; prerequisites are reread through the ONE grammar.
+  if (out.next?.step === 'implement' && story) {
+    const g = prereqState({ story, dir, host })
+    if (g.blocked) {
+      const next = blocked('prerequisite-blocked', { prerequisite: g.blockedBy.id, detail: `blocked by #${g.blockedBy.id}: ${g.blockedBy.reason}` })
+      return { ...out, status: 'blocked', next, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
+    }
+  }
   // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
 }

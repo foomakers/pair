@@ -56,6 +56,7 @@
         "pair-contracts/autonomy-parity.test.mjs",
         "pair-contracts/autonomy-parity.fixtures.json",
         "pair-contracts/delta-review-witnesses.test.mjs",
+        "pair-contracts/dependency-foreign-597.test.mjs",
         "pair-contracts/ensure-contract.test.mjs",
         "pair-contracts/red-snapshot-1.test.mjs",
         "pair-contracts/red-snapshot-2.test.mjs",

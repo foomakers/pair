@@ -169,7 +169,10 @@ export default defineAdapter({
         const bare = /^#?(\d+)$/.exec(String(ref ?? ''))
         if (bare) return { id: bare[1], number: Number(bare[1]), inScope: true }
         const m = ISSUE_URL_RE.exec(String(ref ?? ''))
-        return m ? { id: m[3], number: Number(m[3]), inScope: `${m[1]}/${m[2]}` === repo } : null
+        if (!m) return null
+        let bound = repo
+        if (bound === undefined) try { bound = resolveRepo() } catch { /* unresolved: foreign, fail closed */ }
+        return { id: m[3], number: Number(m[3]), inScope: `${m[1]}/${m[2]}` === bound }
       },
       // Close the card (`completed`), then walk up: a parent whose sub-issues are ALL closed is
       // closed too, recursively (merge-and-cascade.md Steps 6.2–6.4). Board state is the caller's.
