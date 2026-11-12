@@ -478,7 +478,7 @@ async function driveWithCardLine(
   const restore = routeConsoleTo(sink)
   try {
     const outcome = await drive(event => sink.event(event))
-    sink.event({ event: 'card-end', card, status: cardStatusOf(outcome), reason: outcome.status })
+    sink.event({ event: 'card-end', card, status: cardStatusOf(outcome), reason: cardReasonOf(outcome) })
     return reportOutcome(outcome)
   } finally {
     sink.finish()
@@ -500,6 +500,12 @@ function cardStatusOf(outcome: DriveCycleResult): string {
     return outcome.status
   if (outcome.status === 'merge-parked' && exitCodeFor(outcome) === 0) return 'awaiting-human'
   return 'failed'
+}
+
+/** The merge park keeps its actionable reason; any other outcome reports its status. */
+function cardReasonOf(outcome: DriveCycleResult): string {
+  const reason = (outcome.merge as { reason?: unknown } | undefined)?.reason
+  return outcome.status === 'merge-parked' && typeof reason === 'string' && reason !== '' ? reason : outcome.status
 }
 
 /** Success = the card ended where its target says (PR, ready, merged) or awaits a human; `escalated` is a failure (exit 1). */
