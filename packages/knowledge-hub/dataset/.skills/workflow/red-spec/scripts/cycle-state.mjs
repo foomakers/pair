@@ -3201,7 +3201,7 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   const autonomyError = autonomyPolicyError(policy.autonomy)
   if (autonomyError) return { status: 'invalid', reason: autonomyError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
   const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
-  // US-597 AC4: live guard — implementation never starts on a stale selection; prerequisites are reread through the ONE grammar.
+  // US-597: live guard — implementation never starts on a stale selection; prerequisites are reread through the ONE grammar.
   if (out.next?.step === 'implement' && story) {
     const g = prereqState({ story, dir, host })
     if (g.blocked) {
