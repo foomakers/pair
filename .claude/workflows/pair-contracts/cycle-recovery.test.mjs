@@ -420,6 +420,45 @@ const pm = cards => ({ pm: { readCard: (id, { fields } = {}) => {
   return fields ? Object.fromEntries(fields.filter(f => f in cards[id]).map(f => [f, cards[id][f]])) : { body: cards[id].body }
 } } })
 
+test('explicit dependency prose is discovered alongside canonical prerequisites', () => {
+  const host = pm({
+    42: { body: '**Prerequisite Stories**: #2\n\n## Dependencies\nDepends on #3\nBlocked by #2' },
+    2: { state: 'CLOSED', stateReason: 'COMPLETED', labels: [] },
+    3: { state: 'OPEN', labels: [] },
+  })
+  const out = prereqState({ story: '42', host })
+  assert.deepEqual(out.prerequisites.map(p => p.id), ['2', '3'])
+  assert.deepEqual(out.blockedBy, { id: '3', reason: 'not merged' })
+})
+
+// US-597 AC2/AC5: finite declaration grammar — each row is one equivalence class.
+const open9 = { 9: { state: 'OPEN', labels: [] }, 2: { state: 'OPEN', labels: [] }, 3: { state: 'OPEN', labels: [] } }
+for (const [name, body, ids] of [
+  ['Depends on with colon and several ids, stable order', 'Depends on: #3, #2 and #3', ['3', '2']],
+  ['Blocked by list continuation', '- Blocked by:\n  - #3\n  - #2\n\ntext #9', ['3', '2']],
+  ['issue link', 'Depends on [#2](https://github.com/o/r/issues/2)', ['2']],
+  ['incidental mention', 'See #9 and the follow-up in #3', []],
+  ['dependent stories', '**Dependent Stories**: #9', []],
+  ['task dependency', 'Depends on T-1 and T-2', []],
+  ['explicit none', 'Depends on: none\nBlocked by nothing', []],
+  ['fenced example', '```\nDepends on #9\n```', []],
+  ['html comment', '<!-- Blocked by #9 -->', []],
+  ['inline code', 'Use `Depends on #9` syntax', []],
+  ['self reference', 'Depends on #42', []],
+]) {
+  test(`US-597 grammar: ${name}`, () => {
+    const out = prereqState({ story: '42', host: pm({ 42: { body }, ...open9 }) })
+    assert.deepEqual(out.prerequisites.map(p => p.id), ids)
+    assert.equal(out.blocked, ids.length > 0)
+  })
+}
+
+test('US-597 AC5: an unrecognised Depends on line fails closed with repair guidance', () => {
+  const out = prereqState({ story: '42', host: pm({ 42: { body: 'Depends on the adapter landing' } }) })
+  assert.equal(out.blocked, true)
+  assert.match(out.blockedBy.reason, /Depends on #<id>/)
+})
+
 test('AC6: prerequisite state is read from the card, each one merged / open / parked; unreadable fails closed', () => {
   const host = pm({
     42: { body: '**Prerequisite Stories**: #572 (adapter), #573\n', state: 'OPEN', labels: [] },

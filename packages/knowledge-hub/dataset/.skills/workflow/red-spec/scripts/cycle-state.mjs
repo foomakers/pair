@@ -2376,6 +2376,30 @@ export function whoami({ dir, host }) {
 }
 
 const PREREQ_RE = /^\*\*Prerequisite Stories\*\*:[ \t]*(.*)$/m
+// US-597: the ONE dependency grammar (selection and the live guard both go through prereqState). Supported: the canonical
+// field, and line-start `Depends on` / `Blocked by` (optional bullet, bold, colon; ids inline or as following list items).
+// Ignored: fenced code, comments, inline code, "none" text, task refs (T-n), any other mention.
+const DEP_LINE_RE = /^[ \t]*(?:[-*][ \t]+)?(?:\*\*)?(?:depends on|blocked by)(?:\*\*)?[ \t]*:?[ \t]*(.*)$/i
+const issueRefs = text => [...String(text).matchAll(/#(\d+)|issues\/(\d+)/g)].map(m => m[1] ?? m[2])
+export function dependencyIds(body, self) {
+  const text = String(body ?? '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1.*$/gm, '')
+    .replace(/`[^`\n]*`/g, '')
+  const ids = issueRefs(PREREQ_RE.exec(text)?.[1] ?? '')
+  const lines = text.split('\n')
+  let uncertain
+  lines.forEach((line, i) => {
+    const m = DEP_LINE_RE.exec(line)
+    if (!m) return
+    let rest = m[1]
+    if (!rest.trim()) for (let j = i + 1; /^[ \t]*(?:[-*]|\d+\.)[ \t]/.test(lines[j] ?? ''); j++) rest += ` ${lines[j]}`
+    const found = issueRefs(rest)
+    if (found.length) ids.push(...found)
+    else if (!/^\s*(?:none|n\/a|no\b|nothing|T-\d)/i.test(rest)) uncertain ??= line.trim()
+  })
+  return { ids: [...new Set(ids)].filter(id => id !== String(self)), uncertain }
+}
 const PARK_LABELS = ['needs-review', 'pr-state:not-approved']
 export function prereqState({ story, dir, host }) {
   const closed = reason => ({ story: String(story), blocked: true, prerequisites: [], blockedBy: { id: String(story), reason } })
@@ -2391,7 +2415,8 @@ export function prereqState({ story, dir, host }) {
   } catch (e) {
     return closed(`card unreadable: ${hostDetail(e)}`)
   }
-  const ids = [...new Set((PREREQ_RE.exec(String(body ?? ''))?.[1] ?? '').match(/#\d+/g) ?? [])].map(id => id.slice(1))
+  const { ids, uncertain } = dependencyIds(body, story)
+  if (uncertain) return closed(`dependency declaration unrecognised: "${uncertain}" — write "Depends on #<id>" or set **Prerequisite Stories**: none`)
   const prerequisites = ids.map(id => {
     try {
       const card = h.pm.readCard(id, { fields: ['state', 'stateReason', 'labels'] })
