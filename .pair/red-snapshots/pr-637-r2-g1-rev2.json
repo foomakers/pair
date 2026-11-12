@@ -1,0 +1,297 @@
+{
+  "$meta": {
+    "pr": "637",
+    "phase": "r2-g1-rev2",
+    "base": "94c9cd1487fb279ce03ab5f900d63f84717c8e6d",
+    "trailer": "Pair-RED-Snapshot: pr=637; phase=r2-g1-rev2; base=94c9cd1487fb279ce03ab5f900d63f84717c8e6d; manifest=.pair/red-snapshots/pr-637-r2-g1-rev2.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "apps/pair-cli/src/commands/run/root-select.test.ts"
+    ]
+  },
+  "status": "red",
+  "mode": "revision",
+  "inputHead": "94c9cd1487fb279ce03ab5f900d63f84717c8e6d",
+  "sourceOfTruth": "story 595 AC1/AC2/AC3/AC4",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "NEW ghCardLabelHost(cwd, gh?) in card-risk-label.ts (CardLabelHost over `gh issue view --json labels` / `gh issue edit --add-label/--remove-label`) + selectRootAnswer in root-select.ts, which reconciles a candidate blocked by tier-vs-labels mismatch via reconcileCardRiskLabel (tier = reviewed, link unique, projection on) using SelectRootInput.labelHost (default ghCardLabelHost(cwd))",
+      "inputs": [
+        "gh stub / CardLabelHost",
+        "candidate {tier risk:*, labels}",
+        "engine selection marker"
+      ],
+      "representations": [
+        "card-risk-label.ts",
+        "root-select.ts selectRootAnswer",
+        "classify SKILL.md (dataset + .claude mirror) must name the reachable entry"
+      ],
+      "consumers": [
+        "run --root/--watch/--loop selection (parallel-entry selectRootAnswer)",
+        "classify skill Step 5"
+      ],
+      "classes": [
+        "gh host happy path",
+        "gh host dropped write",
+        "selection: unlabelled reviewed tier reconciled and selected",
+        "selection: refused write stays blocked with card reason",
+        "selection: consistent candidate leaves host untouched",
+        "gh host: issue view throws",
+        "gh host: issue edit throws",
+        "selection: throwing host keeps 36 blocked, 491 proceeds",
+        "classify SKILL.md both copies name ghCardLabelHost/selectRootAnswer"
+      ],
+      "interactions": [
+        "reconcile read-back labels feed the candidate returned by selection (AC2)",
+        "throwing host x selection path"
+      ]
+    },
+    {
+      "id": "r1-1",
+      "producer": "reconcileCardRiskLabel tier validation (RANK)",
+      "inputs": [
+        "reviewed tier not in RANK",
+        "card labels [] | [risk:green]"
+      ],
+      "representations": [
+        "card-risk-label.ts"
+      ],
+      "consumers": [
+        "ghCardLabelHost path",
+        "selectRootAnswer"
+      ],
+      "classes": [
+        "unknown tier, no card risk label",
+        "unknown tier, existing lower label"
+      ],
+      "interactions": []
+    },
+    {
+      "id": "r2-g1-gap1",
+      "producer": "card-risk-label.test.ts SKILL.md-root resolution (tsc module=CommonJS in apps/pair-cli forbids import.meta, TS1470)",
+      "inputs": [
+        "apps/pair-cli tsconfig (CommonJS output)"
+      ],
+      "representations": [
+        "apps/pair-cli/src/commands/run/card-risk-label.test.ts"
+      ],
+      "consumers": [
+        "pre-commit ts:check (tsc --noEmit)",
+        "vitest"
+      ],
+      "classes": [
+        "test file typechecks without TS1470 (uses __dirname, not import.meta)"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "card-risk-label",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/card-risk-label.ts",
+      "apps/pair-cli/src/commands/run/root-select.ts",
+      "packages/knowledge-hub/dataset/.skills/capability/classify/SKILL.md",
+      ".claude/skills/pair-capability-classify/SKILL.md",
+      ".changeset/595.md",
+      ".pair/adoption/decision-log/"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "unknown reviewed tier, no card risk label",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: US-595 r1-1 reviewed risk:purple ... labels [] (pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "expected": "unconfirmed, reason has 36 and risk:purple, writes empty",
+      "covers": [
+        "r1-1"
+      ]
+    },
+    {
+      "id": "W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "unknown reviewed tier, card risk:green",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: US-595 r1-1 reviewed risk:purple ... [\"risk:green\"] (pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "expected": "same as W1, labels unchanged",
+      "covers": [
+        "r1-1"
+      ]
+    },
+    {
+      "id": "W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "gh-backed host, unlabelled card with foreign labels, reviewed yellow",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: a real label host reconciles ... unlabelled card 36 (pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "expected": "confirmed; tracker ends foreign labels + exactly risk:yellow",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "W4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "gh-backed host, tracker drops write",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: a tracker that silently drops the write is unconfirmed (pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "expected": "unconfirmed, reason names 36",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "W5",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "selection answer: card 36 tier yellow labels [] + 491 green",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: the reported case: reviewed risk:yellow, unlabelled card 36 is reconciled and selected (pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "expected": "host ends exactly risk:yellow, candidates [36,491], 36 labels carry read-back, nothing blocked/logged for 36",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "W6",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "selection answer with host refusing write",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: a refused write keeps 36 blocked with a card-specific reason (pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "expected": "candidates [491], host unchanged, log 'blocked ... 36 ... unconfirmed'",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "selection answer with only a consistent candidate",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: a consistent candidate never touches the host (pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "expected": "host read/write never called",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "W7",
+      "kind": "witness",
+      "baseline": "red",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: gh issue %s exiting non-zero is unconfirmed naming card 36 (view, edit) (pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "covers": [
+        "r0-1"
+      ],
+      "condition": "gh stub throws on issue view / issue edit",
+      "expected": "reconcile unconfirmed, reason names 36, no throw"
+    },
+    {
+      "id": "W8",
+      "kind": "interaction",
+      "baseline": "red",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: gh issue %s throws during selection (view, edit) (pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "covers": [
+        "r0-1"
+      ],
+      "condition": "selection answer, gh-backed host throws",
+      "expected": "36 blocked with log blocked...36...unconfirmed; 491 proceeds"
+    },
+    {
+      "id": "W9",
+      "kind": "witness",
+      "baseline": "red",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: classify SKILL.md copies name the reachable owner (dataset + .claude mirror) (pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "covers": [
+        "r0-1"
+      ],
+      "condition": "both SKILL.md copies",
+      "expected": "each names ghCardLabelHost and selectRootAnswer",
+      "rationale": "Mirrors differ in frontmatter by design (generated), so byte-equality is not asserted; each copy must name the reachable entry."
+    },
+    {
+      "id": "W10",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-label.test.ts :: typechecked by pre-commit ts:check (tsc --noEmit); run via vitest typecheck-equivalent: pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts",
+      "covers": [
+        "r2-g1-gap1"
+      ],
+      "condition": "ts:check over the sealed test file",
+      "expected": "no TS1470; tsc exits 0 once ghCardLabelHost is exported",
+      "rationale": "At base tsc fails only with TS2724 (ghCardLabelHost not exported); a lingering import.meta would keep it failing after the fix."
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:8797f84a1ef4bef28d237c30cb8118870a7d282ec6c3321697318e043e99c926",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-label.test.ts",
+      "observed": "12 failed | 15 passed: ghCardLabelHost is not a function; unknown tier confirmed; selection leaves 36 blocked; SKILL.md lacks ghCardLabelHost"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:21c54048bca9d79c808361aedef85f2ec3a8dd19eb62cfd35e590d6fa7ff0017",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts",
+      "observed": "pass: 40 passed (40); existing AC3 test now injects an offline labelHost so it stays hermetic once selection reconciles"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r2-g1",
+        "owner": "card-risk-label",
+        "mode": "behavioral",
+        "findings": [
+          "r0-1",
+          "r1-1"
+        ],
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/card-risk-label.ts",
+          "apps/pair-cli/src/commands/run/root-select.ts",
+          "packages/knowledge-hub/dataset/.skills/capability/classify/SKILL.md",
+          ".claude/skills/pair-capability-classify/SKILL.md",
+          ".changeset/595.md",
+          ".pair/adoption/decision-log/"
+        ],
+        "dependsOn": [],
+        "oracle": "story 595 AC1-AC4"
+      }
+    ],
+    "carried": []
+  },
+  "reconciled": [],
+  "preserved": [],
+  "changedRows": [
+    "W1",
+    "W2",
+    "W3",
+    "W4",
+    "W5",
+    "W6",
+    "C1",
+    "W7",
+    "W8",
+    "W9",
+    "W10"
+  ],
+  "revision": 2,
+  "predecessorContractHash": "sha256:3c04670e939b15401e823b79b0b60ccd7a2c463d0fdfd45738dba53476ffe9df"
+}

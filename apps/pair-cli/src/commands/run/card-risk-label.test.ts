@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 import { describe, it, expect, vi } from 'vitest'
 import { ENGINES } from './engines'
 import { ghCardLabelHost, reconcileCardRiskLabel, type CardLabelHost } from './card-risk-label'
@@ -363,7 +363,7 @@ describe('US-595 r0-1: a throwing label host keeps 36 blocked, 491 proceeds (AC3
 })
 
 describe('US-595 r0-1: classify SKILL.md copies name the reachable owner (AC4)', () => {
-  const root = fileURLToPath(new URL('../../../../../', import.meta.url))
+  const root = resolve(__dirname, '../../../../..') + '/'
   it.each([
     ['packages/knowledge-hub/dataset/.skills/capability/classify/SKILL.md'],
     ['.claude/skills/pair-capability-classify/SKILL.md'],
