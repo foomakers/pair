@@ -73,7 +73,8 @@ type Gh = (args: readonly string[]) => string
 /** CardLabelHost over the user's authenticated `gh` (the same tracker access the rest of the run uses). */
 export function ghCardLabelHost(
   cwd: string,
-  gh: Gh = args => execFileSync('gh', [...args], { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }),
+  gh: Gh = args =>
+    execFileSync('gh', [...args], { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }),
 ): CardLabelHost {
   const read = async (card: string): Promise<string[]> =>
     (JSON.parse(gh(['issue', 'view', card, '--json', 'labels'])).labels ?? []).map(
