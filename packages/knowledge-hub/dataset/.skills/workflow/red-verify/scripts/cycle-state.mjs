@@ -2375,28 +2375,45 @@ export function whoami({ dir, host }) {
   }
 }
 
-const PREREQ_RE = /^\*\*Prerequisite Stories\*\*:[ \t]*(.*)$/m
+const PREREQ_RE = /^\*\*Prerequisite Stories\*\*:[ \t]*(.*)$/
 // US-597: the ONE dependency grammar (selection and the live guard both go through prereqState). Supported: the canonical
 // field, and line-start `Depends on` / `Blocked by` (optional bullet, bold, colon; ids inline or as following list items).
 // Ignored: fenced code, comments, inline code, "none" text, task refs (T-n), any other mention.
 const DEP_LINE_RE = /^[ \t]*(?:[-*][ \t]+)?(?:\*\*)?(?:depends on|blocked by)(?:\*\*)?[ \t]*:?[ \t]*(.*)$/i
-const issueRefs = text => [...String(text).matchAll(/#(\d+)|issues\/(\d+)/g)].map(m => m[1] ?? m[2])
-export function dependencyIds(body, self) {
+// A declaration's refs: bare local `#N`, or an issue URL the bound adapter parses; owner/repo#N, foreign URLs are `foreign`.
+const declRefs = (text, parse) => {
+  const ids = []
+  let foreign = false
+  const rest = String(text)
+    .replace(/\[(#\d+)\]\(https?:[^)]*\)/g, '$1')
+    .replace(/https?:\/\/[^\s)>\]]+/g, u => {
+      const r = parse?.(u)
+      if (r?.id) ids.push(String(r.id))
+      else foreign = true
+      return ' '
+    })
+    .replace(/[\w.-]+\/[\w.-]+#\d+/g, () => ((foreign = true), ' '))
+  for (const m of rest.matchAll(/(?<![\w/])#(\d+)/g)) ids.push(m[1])
+  return { ids, foreign }
+}
+export function dependencyIds(body, self, parse) {
   const text = String(body ?? '')
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1.*$/gm, '')
     .replace(/`[^`\n]*`/g, '')
-  const ids = issueRefs(PREREQ_RE.exec(text)?.[1] ?? '')
+  const ids = []
   const lines = text.split('\n')
   let uncertain
   lines.forEach((line, i) => {
-    const m = DEP_LINE_RE.exec(line)
+    const m = DEP_LINE_RE.exec(line) ?? PREREQ_RE.exec(line)
     if (!m) return
+    const canonical = !DEP_LINE_RE.test(line)
     let rest = m[1]
     if (!rest.trim()) for (let j = i + 1; /^[ \t]*(?:[-*]|\d+\.)[ \t]/.test(lines[j] ?? ''); j++) rest += ` ${lines[j]}`
-    const found = issueRefs(rest)
-    if (found.length) ids.push(...found)
-    else if (!/^\s*(?:none|n\/a|no\b|nothing|T-\d)/i.test(rest)) uncertain ??= line.trim()
+    const found = declRefs(rest, parse)
+    if (found.foreign) uncertain ??= line.trim()
+    else if (found.ids.length) ids.push(...found.ids)
+    else if (canonical ? rest.trim() && !/^\s*(?:none|n\/a|no|nothing)\b/i.test(rest) : !/^\s*(?:none|n\/a|no|nothing|T-\d)\b/i.test(rest)) uncertain ??= line.trim()
   })
   return { ids: [...new Set(ids)].filter(id => id !== String(self)), uncertain }
 }
@@ -2415,7 +2432,7 @@ export function prereqState({ story, dir, host }) {
   } catch (e) {
     return closed(`card unreadable: ${hostDetail(e)}`)
   }
-  const { ids, uncertain } = dependencyIds(body, story)
+  const { ids, uncertain } = dependencyIds(body, story, ref => h.pm.parseCardRef?.(ref))
   if (uncertain) return closed(`dependency declaration unrecognised: "${uncertain}" — write "Depends on #<id>" or set **Prerequisite Stories**: none`)
   const prerequisites = ids.map(id => {
     try {
