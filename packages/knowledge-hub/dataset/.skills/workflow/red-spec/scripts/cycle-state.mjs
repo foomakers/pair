@@ -3205,7 +3205,7 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   if (out.next?.step === 'implement' && story) {
     const g = prereqState({ story, dir, host })
     if (g.blocked) {
-      const next = blocked('prerequisite-blocked', { prerequisite: g.blockedBy.id, detail: `blocked by #${g.blockedBy.id}: ${g.blockedBy.reason}` })
+      const next = blocked('failed-resume', { prerequisite: g.blockedBy.id, detail: `blocked by #${g.blockedBy.id}: ${g.blockedBy.reason}` })
       return { ...out, status: 'blocked', next, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
     }
   }
