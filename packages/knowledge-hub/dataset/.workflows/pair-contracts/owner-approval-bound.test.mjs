@@ -291,7 +291,10 @@ test('r0-1 control (c-4): a successor revision without ownerApproval and with ch
 // ── r2-g1 (r0-1): the bound is ENFORCED at publish from owner-approvals.json, never opt-in by the agent ──
 // An `a0-rev2` revision handoff + its contract on disk; `contract` extras decide what the agent wrote.
 const publishRev = (dir, contract, handoff = {}, attempt = 1) => {
-  const contractPath = join(dir, attempt > 1 ? `a0-rev2-red-contract.attempt-${attempt}.json` : 'a0-rev2-red-contract.json')
+  const contractPath = join(
+    dir,
+    attempt > 1 ? `a0-rev2-red-contract.attempt-${attempt}.json` : 'a0-rev2-red-contract.json',
+  )
   const c = {
     fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
     redTests: [
@@ -331,7 +334,15 @@ const publishRev = (dir, contract, handoff = {}, attempt = 1) => {
   const repoRoot = mkdtempSync(join(tmpdir(), 'owner-repo-'))
   mkdirSync(join(repoRoot, 'test'))
   writeFileSync(join(repoRoot, 'test', 'a.test.ts'), 'x\n')
-  return publish({ dir, file, phase: 'a0-rev2', skill: 'red-spec', workflowVersion: V, repoRoot, attempt })
+  return publish({
+    dir,
+    file,
+    phase: 'a0-rev2',
+    skill: 'red-spec',
+    workflowVersion: V,
+    repoRoot,
+    attempt,
+  })
 }
 const dispatched = { ...APPROVAL } // what `next.ownerApproval` carries: no `rows`
 const recorded = { ...APPROVAL, rows: ['row-1'] }
@@ -367,7 +378,10 @@ test('r0-1 ASSERT: publish bounds changedRows to the RECORDED approval rows even
 const repair = (contract, changedRows = ['row-1']) => {
   const dir = runDir()
   assert.equal(approve(dir, ['row-1']).approved, true)
-  assert.equal(publishRev(dir, { ownerApproval: recorded }, { ownerApproval: dispatched }).published, true)
+  assert.equal(
+    publishRev(dir, { ownerApproval: recorded }, { ownerApproval: dispatched }).published,
+    true,
+  )
   return publishRev(dir, { changedRows, ...contract }, {}, 2)
 }
 
