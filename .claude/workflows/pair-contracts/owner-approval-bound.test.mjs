@@ -290,8 +290,11 @@ test('r0-1 control (c-4): a successor revision without ownerApproval and with ch
 
 // ── r2-g1 (r0-1): the bound is ENFORCED at publish from owner-approvals.json, never opt-in by the agent ──
 // An `a0-rev2` revision handoff + its contract on disk; `contract` extras decide what the agent wrote.
-const publishRev = (dir, contract, handoff = {}) => {
-  const contractPath = join(dir, 'a0-rev2-red-contract.json')
+const publishRev = (dir, contract, handoff = {}, attempt = 1) => {
+  const contractPath = join(
+    dir,
+    attempt > 1 ? `a0-rev2-red-contract.attempt-${attempt}.json` : 'a0-rev2-red-contract.json',
+  )
   const c = {
     fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
     redTests: [
@@ -321,6 +324,7 @@ const publishRev = (dir, contract, handoff = {}) => {
       status: 'red',
       mode: 'revision',
       revision: 2,
+      attempt,
       changedRows: c.changedRows,
       contractPath,
       contractHash: contractHash(c),
@@ -330,7 +334,15 @@ const publishRev = (dir, contract, handoff = {}) => {
   const repoRoot = mkdtempSync(join(tmpdir(), 'owner-repo-'))
   mkdirSync(join(repoRoot, 'test'))
   writeFileSync(join(repoRoot, 'test', 'a.test.ts'), 'x\n')
-  return publish({ dir, file, phase: 'a0-rev2', skill: 'red-spec', workflowVersion: V, repoRoot })
+  return publish({
+    dir,
+    file,
+    phase: 'a0-rev2',
+    skill: 'red-spec',
+    workflowVersion: V,
+    repoRoot,
+    attempt,
+  })
 }
 const dispatched = { ...APPROVAL } // what `next.ownerApproval` carries: no `rows`
 const recorded = { ...APPROVAL, rows: ['row-1'] }
@@ -360,6 +372,40 @@ test('r0-1 ASSERT: publish bounds changedRows to the RECORDED approval rows even
   assert.equal(out.published, false, JSON.stringify(out))
   assert.match(String(out.reason), /rows-outside-approval/)
   assert.match(String(out.reason), /row-2/)
+})
+
+// a0-rev2 attempt 1 published (approved) and rejected by the verifier; the repair is attempt 2 of the SAME phase
+const repair = (contract, changedRows = ['row-1']) => {
+  const dir = runDir()
+  assert.equal(approve(dir, ['row-1']).approved, true)
+  assert.equal(
+    publishRev(dir, { ownerApproval: recorded }, { ownerApproval: dispatched }).published,
+    true,
+  )
+  return publishRev(dir, { changedRows, ...contract }, {}, 2)
+}
+
+test('r3 r0-1 ASSERT: attempt-2 repair of an approved revision without ownerApproval is refused', () => {
+  const out = repair({})
+  assert.equal(out.published, false, JSON.stringify(out))
+  assert.match(String(out.reason), /owner-approval-missing/)
+})
+
+test('r3 r0-1 ASSERT: attempt-2 repair bounds changedRows to the approved rows', () => {
+  const out = repair({ ownerApproval: recorded }, ['row-1', 'row-2'])
+  assert.equal(out.published, false, JSON.stringify(out))
+  assert.match(String(out.reason), /rows-outside-approval: row-2/)
+})
+
+test('r3 r0-1 ASSERT: attempt-2 repair with a different decisionRef is refused', () => {
+  const out = repair({ ownerApproval: { ...recorded, decisionRef: 'pr7#c-99' } })
+  assert.equal(out.published, false, JSON.stringify(out))
+  assert.match(String(out.reason), /owner-approval-mismatch/)
+})
+
+test('r3 r0-1 control c-7: attempt-2 repair carrying the recorded approval and only its rows publishes', () => {
+  const out = repair({ ownerApproval: recorded })
+  assert.equal(out.published, true, JSON.stringify(out))
 })
 
 test('r0-1 control c-5: an approved revision carrying the recorded approval and only its rows publishes', () => {
