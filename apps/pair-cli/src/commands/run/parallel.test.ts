@@ -14,6 +14,7 @@ import {
   prefixLine,
   renderBatchAuditLine,
   resourceLockId,
+  runCardInProcess,
   runPlannedCard,
   runPool,
   spawnCardProcess,
@@ -621,5 +622,145 @@ describe('US-573 AC2: the pool reports each card live — start, relayed stages,
     ).toContain('outcomes=9:skipped(prepare-needs-human),10:completed(exit 0)')
     expect(batchExitCode([root, child])).toBe(0)
     expect(batchExitCode([root, { id: '11', outcome: 'crashed', detail: 'signal' }])).toBe(1)
+  })
+})
+
+describe('US-592 r0-1', () => {
+  it.each(
+    [
+      {
+        runner: 'in-process',
+        caseName: 'conflicting skip and delivered cycle',
+        lines: ['CARD-SKIP: prepare-needs-human', '  Cycle status: ready-for-merge'],
+        exitCode: 0,
+        outcome: 'completed',
+        detail: 'exit 0',
+        status: 'ready-for-merge',
+        batchExit: 0,
+      },
+      {
+        runner: 'child',
+        caseName: 'conflicting skip and delivered cycle',
+        lines: ['CARD-SKIP: prepare-needs-human', '  Cycle status: ready-for-merge'],
+        exitCode: 0,
+        outcome: 'completed',
+        detail: 'exit 0',
+        status: 'ready-for-merge',
+        batchExit: 0,
+      },
+      ...(['in-process', 'child'] as const).flatMap(runner => [
+        {
+          runner,
+          caseName: `control: delivered ${runner} without a skip marker completes the batch`,
+          lines: ['  Cycle status: ready-for-merge'],
+          exitCode: 0,
+          outcome: 'completed',
+          detail: 'exit 0',
+          status: 'ready-for-merge',
+          batchExit: 0,
+        },
+        {
+          runner,
+          caseName: `control: clean ${runner} skip reaches card-end and audit`,
+          lines: ['CARD-SKIP: prepare-needs-human'],
+          exitCode: 0,
+          outcome: 'skipped',
+          detail: 'prepare-needs-human',
+          status: 'skipped',
+          batchExit: 0,
+        },
+        {
+          runner,
+          caseName: `control: nonzero ${runner} exit with skip marker`,
+          lines: ['CARD-SKIP: prepare-needs-human'],
+          exitCode: 2,
+          outcome: 'failed',
+          detail: 'exit 2',
+          status: 'failed (failed)',
+          batchExit: 1,
+        },
+      ]),
+      {
+        runner: 'child',
+        caseName: 'control: child skip marker followed by a signal remains crashed',
+        lines: ['CARD-SKIP: prepare-needs-human'],
+        exitCode: null,
+        outcome: 'crashed',
+        detail: 'killed by SIGKILL',
+        status: 'failed (crashed)',
+        batchExit: 1,
+      },
+    ].map(testCase => [`US-592 r0-1 ${testCase.caseName} (${testCase.runner})`, testCase] as const),
+  )('%s', async (_name, testCase) => {
+    const area = mkdtempSync(join(tmpdir(), 'pair-592-r0-1-'))
+    const originalEntry = process.argv[1]
+    const events: unknown[] = []
+    try {
+      const stub = join(area, 'stub-cli.cjs')
+      writeFileSync(
+        stub,
+        [
+          ...testCase.lines.map(line => `console.log(${JSON.stringify(line)})`),
+          testCase.exitCode === null
+            ? "process.kill(process.pid, 'SIGKILL')"
+            : `process.exit(${testCase.exitCode})`,
+        ].join('\n'),
+      )
+      process.argv[1] = stub
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      const runCardProcess =
+        testCase.runner === 'child'
+          ? spawnCardProcess
+          : runCardInProcess(async () => {
+              for (const line of testCase.lines) console.log(line)
+              return testCase.exitCode!
+            })
+      const outcome = await runPlannedCard({
+        card: card('9'),
+        config: parseRunCommand({ root: '9', parallel: '1' }),
+        cwd: area,
+        workingArea: area,
+        acquireLock: acquireCardLock,
+        runCardProcess: async input => {
+          const exit = await runCardProcess(input)
+          expect
+            .soft(exit.skipReason)
+            .toBe(
+              testCase.lines.includes('CARD-SKIP: prepare-needs-human')
+                ? 'prepare-needs-human'
+                : undefined,
+            )
+          return exit
+        },
+        onEvent: event => events.push(event),
+      })
+      expect
+        .soft(outcome)
+        .toMatchObject({ id: '9', outcome: testCase.outcome, detail: testCase.detail })
+      expect.soft(events.at(-1)).toEqual({
+        event: 'card-end',
+        card: '9',
+        status: testCase.status,
+        ...(testCase.status !== 'ready-for-merge' && { reason: testCase.detail }),
+      })
+      expect
+        .soft(
+          renderBatchAuditLine({
+            at: 't',
+            startedAt: 't',
+            root: '9',
+            requested: 1,
+            effective: 1,
+            outcomes: [outcome],
+            excluded: [],
+          }),
+        )
+        .toContain(`outcomes=9:${testCase.outcome}(${testCase.detail})`)
+      expect(batchExitCode([outcome])).toBe(testCase.batchExit)
+    } finally {
+      process.argv[1] = originalEntry!
+      vi.restoreAllMocks()
+      rmSync(area, { recursive: true, force: true })
+    }
   })
 })

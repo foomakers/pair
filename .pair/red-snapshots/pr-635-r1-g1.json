@@ -1,0 +1,298 @@
+{
+  "$meta": {
+    "pr": "635",
+    "phase": "r1-g1",
+    "base": "4ab5d9db356fcd435cde0ceca88c9a624f1387fc",
+    "trailer": "Pair-RED-Snapshot: pr=635; phase=r1-g1; base=4ab5d9db356fcd435cde0ceca88c9a624f1387fc; manifest=.pair/red-snapshots/pr-635-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/parallel.test.ts"
+    ]
+  },
+  "status": "red",
+  "mode": "repair",
+  "inputHead": "4ab5d9db356fcd435cde0ceca88c9a624f1387fc",
+  "sourceOfTruth": "PR #635 review r0 finding r0-1; US-592 AC-1, AC-2 and AC-4; apps/pair-cli/src/commands/run/parallel.ts",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "outcomeOfExit classifies CardProcessExit; runCardInProcess and spawnCardProcess capture terminal lines; runPlannedCard emits card-end from outcome; renderBatchAuditLine serializes outcome",
+      "inputs": [
+        "exitCode 0 or nonzero",
+        "skipReason absent or prepare-needs-human",
+        "cycleStatus absent or ready-for-merge",
+        "runner in-process or spawned child"
+      ],
+      "representations": [
+        "CARD-SKIP line from card entry",
+        "Cycle status line from card cycle",
+        "CardProcessExit",
+        "CardOutcome",
+        "card-end event",
+        "batch audit line"
+      ],
+      "consumers": [
+        "runPlannedCard card-end",
+        "renderBatchAuditLine",
+        "batchExitCode"
+      ],
+      "classes": [
+        "clean skip: exit 0, skip marker, no completed cycle",
+        "delivered: exit 0, completed cycle, no skip marker",
+        "conflicting terminal signals: exit 0, skip marker before completed cycle",
+        "nonzero exit with skip marker remains failed",
+        "spawn error or signal remains crashed"
+      ],
+      "interactions": [
+        "in-process runner × conflicting signals × card-end × audit",
+        "spawned runner × conflicting signals × card-end × audit",
+        "clean skip × both runner paths",
+        "nonzero exit × skip marker",
+        "delivered exit-0 without skip marker × card-end × audit × batch exit",
+        "clean skip marker × spawned and in-process capture × card-end × audit × batch exit",
+        "skip marker × SIGKILL × card-end × audit × batch exit",
+        "in-process delivered without marker × capture × card-end × audit × batch exit",
+        "nonzero marker × each runner × marker capture × card-end × audit × batch exit",
+        "conflicting signals × each runner × batch exit 0"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli/src/commands/run/parallel.ts",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/parallel.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w-in-process",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "in-process run emits skip, then ready-for-merge, exits 0",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts US-592 r0-1",
+      "expected": "completed outcome, ready-for-merge card-end, completed batch audit, batch exit 0",
+      "covers": [
+        "r0-1"
+      ],
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 r0-1 conflicting'"
+    },
+    {
+      "id": "r0-1-w-child",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "spawned stub child emits skip, then ready-for-merge, exits 0",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts US-592 r0-1",
+      "expected": "completed outcome, ready-for-merge card-end, completed batch audit, batch exit 0",
+      "covers": [
+        "r0-1"
+      ],
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 r0-1 conflicting'"
+    },
+    {
+      "id": "r0-1-c-clean-skip",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "exit 0 with skip marker and no cycle status",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 AC-1/2'",
+      "expected": "skipped with prepare-needs-human",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c-child-skip",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "spawned stub child emits clean skip marker, exits 0",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 AC-1:'",
+      "expected": "skip reason is carried",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c-failure",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "nonzero exit with skip marker",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 AC-1/2'",
+      "expected": "failed outcome",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c-delivered",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "spawned child emits ready-for-merge without skip marker and exits 0",
+      "file": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 r0-1 control'",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts US-592 r0-1 control: delivered child without a skip marker completes the batch",
+      "expected": "completed exit 0; ready-for-merge card-end; completed audit; batch exit 0",
+      "observed": "passed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c-clean-skip-paths",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "spawned child emits CARD-SKIP: prepare-needs-human and exits 0",
+      "file": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 r0-1 control'",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts US-592 r0-1 control: clean child skip reaches card-end and audit",
+      "expected": "skipped with prepare-needs-human; skipped card-end with reason; skipped audit; batch exit 0",
+      "observed": "passed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c-clean-skip-in-process",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "in-process runner emits CARD-SKIP: prepare-needs-human and returns 0",
+      "file": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 r0-1 control'",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts US-592 r0-1 control: clean in-process skip reaches card-end and audit",
+      "expected": "skipped with prepare-needs-human; skipped card-end with reason; skipped audit; batch exit 0",
+      "observed": "passed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c-crash-marker",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "spawned child emits CARD-SKIP then receives SIGKILL",
+      "file": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 r0-1 control'",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts US-592 r0-1 control: child skip marker followed by a signal remains crashed",
+      "expected": "crashed with SIGKILL; failed (crashed) card-end with reason; crashed audit; batch exit 1",
+      "observed": "passed",
+      "rationale": "outcomeOfExit checks exit.error and exit.signal before exitCode and skipReason; both terminal faults share the crashed precedence rule, so SIGKILL represents their interaction with a marker",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c-in-process-delivered",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "in-process runner emits ready-for-merge without skip marker and exits 0",
+      "expected": "completed outcome; ready-for-merge card-end; completed audit; batch exit 0",
+      "file": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts US-592 r0-1",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 r0-1 control'",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c-nonzero-marker-paths",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "in-process runner captures CARD-SKIP: prepare-needs-human then exits 2",
+      "expected": "skipReason captured; failed outcome; failed (failed) card-end with exit 2 reason; failed audit; batch exit 1",
+      "file": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts US-592 r0-1",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 r0-1 control'",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c-nonzero-marker-child",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "spawned child captures CARD-SKIP: prepare-needs-human then exits 2",
+      "expected": "skipReason captured; failed outcome; failed (failed) card-end with exit 2 reason; failed audit; batch exit 1",
+      "file": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts US-592 r0-1",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 r0-1 control'",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w-batch-exit",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "both runners capture skip followed by ready-for-merge and exit 0",
+      "expected": "completed outcome; ready-for-merge card-end; completed audit; batch exit 0; soft assertions ensure every consumer assertion executes",
+      "file": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "oracle": "apps/pair-cli/src/commands/run/parallel.test.ts US-592 r0-1",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts -t 'US-592 r0-1 conflicting'",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:c2f39ea7df9a07e8bddd7410d6620327d19146705a86e19baa804d8dca64b01d",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel.test.ts",
+      "observed": "2 failed, 44 passed (46), duration 645ms. Both conflicting-signal witnesses received skipped instead of completed in outcome, card-end and audit. Batch exit 0 assertions executed."
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "owner": "apps/pair-cli/src/commands/run/parallel.ts",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/parallel.ts"
+        ],
+        "oracle": "US-592 AC-4 delivered cycle classified completed; PR #635 r0-1",
+        "findings": [
+          "r0-1"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-1": [
+            "apps/pair-cli/src/commands/run/parallel.ts"
+          ]
+        }
+      },
+      {
+        "groupId": "r1-g2",
+        "owner": "apps/pair-cli/src/commands/run/parallel.test.ts",
+        "mode": "test",
+        "allowedPaths": [],
+        "oracle": "US-592 AC-3 skipped root does not prevent descendant; all-skipped batch exits 0; PR #635 r0-2",
+        "findings": [
+          "r0-2"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-2": [
+            "apps/pair-cli/src/commands/run/parallel.test.ts"
+          ]
+        }
+      }
+    ],
+    "carried": []
+  },
+  "changedRows": [
+    "contract-hash",
+    "r0-1-c-in-process-delivered",
+    "r0-1-c-nonzero-marker-paths",
+    "r0-1-c-nonzero-marker-child",
+    "r0-1-w-batch-exit",
+    "r0-1-w-in-process",
+    "r0-1-w-child"
+  ],
+  "contractPath": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-592/592/r1-g1-red-contract.attempt-3.json",
+  "contractHash": "sha256:6ff7898969e691285a46f62fc21df609a4492464b73d76e475af3cbf4643e8ad"
+}
