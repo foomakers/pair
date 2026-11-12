@@ -286,7 +286,7 @@ function stopText(outcome: LoopOutcome): string {
     : STOP_REASONS[outcome.stopReason]
 }
 
-const PARKED = new Set(['awaiting-human', 'ready-for-merge', 'target-ready', 'escalated'])
+const PARKED = new Set(['awaiting-human', 'ready-for-merge', 'target-ready'])
 
 /** US-573 AC8: cards merged / parked / failed / unknown, why the run stopped and what it left eligible. */
 function reportOutcome(outcome: LoopOutcome, run: RunSinks): void {
