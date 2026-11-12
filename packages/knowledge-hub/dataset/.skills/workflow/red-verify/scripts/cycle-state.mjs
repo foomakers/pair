@@ -1906,8 +1906,8 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       }
       const shapeErrs = contractErrors(parsed)
       if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
-      // US-591 r0-1: the owner-approval bound is read from owner-approvals.json, never left to the agent.
-      const pending = pendingCorrection(readHandoffs(dir).filter(h => h.data && h.data.recordType !== 'migration'), readApprovals(dir), predecessorEvidence(dir))
+      // US-591 r0-1: the owner-approval bound is read from owner-approvals.json, never left to the agent. A repair attempt of the same phase must not hide its own approval: ignore the phase's prior handoffs.
+      const pending = pendingCorrection(readHandoffs(dir).filter(h => h.data && h.data.recordType !== 'migration' && h.phase !== phase), readApprovals(dir), predecessorEvidence(dir))
       if (pending && phase === `${pending.line}-rev${pending.revision}`) {
         const rec = pending.approval
         const ap = parsed?.ownerApproval
