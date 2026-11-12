@@ -1,3 +1,4 @@
+import { ghCardLabelHost, reconcileCardRiskLabel, type CardLabelHost } from './card-risk-label'
 import { formatCorrectionNote } from './cycle'
 import type { EngineDefinition } from './engines'
 import { buildPromptText } from './invocation'
@@ -162,7 +163,9 @@ function parsePrerequisites(value: unknown, id: string): RootCandidate['prerequi
   })
 }
 
-function parseCandidate(entry: unknown, loop: boolean): RootCandidate | { blocked: string } {
+type Blocked = { blocked: string; candidate: RootCandidate }
+
+function parseCandidate(entry: unknown, loop: boolean): RootCandidate | Blocked {
   const c = (entry ?? {}) as Record<string, unknown>
   const id = c['id']
   // The id becomes an argv element and a lock-directory name: the `--root` rule, not free text.
@@ -177,14 +180,13 @@ function parseCandidate(entry: unknown, loop: boolean): RootCandidate | { blocke
   const labels = parseLabels(c['labels'], id)
   // Card-local: block this card with its reason, never fail the whole selection or invent a tier.
   const blocked = tierMismatch(id, tier, labels)
-  if (blocked !== undefined) return { blocked }
   const escalated = c['escalated']
   if (loop && typeof escalated !== 'boolean') {
     fail(
       `candidate ${id}: \`escalated\` must be a boolean in loop mode (received ${JSON.stringify(escalated)})`,
     )
   }
-  return {
+  const candidate: RootCandidate = {
     id,
     title: text('title'),
     branch: text('branch'),
@@ -195,6 +197,7 @@ function parseCandidate(entry: unknown, loop: boolean): RootCandidate | { blocke
     prerequisites: parsePrerequisites(c['prerequisites'], id),
     ...(loop && { escalated: escalated as boolean }),
   }
+  return blocked === undefined ? candidate : { blocked, candidate }
 }
 
 function parseSnapshot(value: unknown): PredicateCard[] {
@@ -223,6 +226,8 @@ export interface SelectionAnswer {
   readonly candidates: RootCandidate[]
   /** Cards skipped for a card-local risk inconsistency, each with its reason. */
   readonly blocked?: string[]
+  /** Blocked cards awaiting reconciliation (internal to selection; `at` = insertion index in `candidates`). */
+  readonly pending?: { candidate: RootCandidate; reason: string; at: number }[]
   readonly snapshot?: PredicateCard[]
 }
 
@@ -245,9 +250,16 @@ export function parseSelection(json: string, options: ParseOptions = {}): Select
   const list = body?.candidates
   if (!Array.isArray(list)) fail('the candidates line carries no `candidates` array')
   const parsedList = list.map(entry => parseCandidate(entry, options.loop === true))
+  const pending: NonNullable<SelectionAnswer['pending']> = []
+  let kept = 0
+  for (const c of parsedList) {
+    if ('blocked' in c) pending.push({ candidate: c.candidate, reason: c.blocked, at: kept })
+    else kept++
+  }
   return {
     candidates: parsedList.filter((c): c is RootCandidate => !('blocked' in c)),
-    blocked: parsedList.flatMap(c => ('blocked' in c ? [c.blocked] : [])),
+    blocked: pending.map(p => p.reason),
+    ...(pending.length > 0 && { pending }),
     ...(options.snapshot === true && { snapshot: parseSnapshot(body.snapshot) }),
   }
 }
@@ -296,6 +308,8 @@ export interface SelectRootInput extends SelectionScope {
   /** US-573: seconds without an engine event before the stage is stopped (default 30 min). */
   readonly idleTimeoutSeconds?: number | undefined
   readonly runIteration?: (input: SpawnIterationInput) => Promise<IterationResult>
+  /** US-595: tracker label access used to reconcile a reviewed tier onto an unlabelled card (default: `gh`). */
+  readonly labelHost?: CardLabelHost
 }
 
 /**
@@ -374,8 +388,40 @@ export async function selectRootAnswer(input: SelectRootInput): Promise<Selectio
     if (!(error instanceof SelectionFormatError)) throw error
     answer = await selectOnce(input, formatCorrectionNote(error.message))
   }
+  answer = await reconcileBlocked(answer, input)
   for (const reason of answer.blocked ?? []) console.log(`  blocked, skipped: ${reason}`)
   return answer
+}
+
+/** US-595: a card blocked only because it lacks the reviewed risk label gets it written (verified) and is selected. */
+async function reconcileBlocked(
+  answer: SelectionAnswer,
+  input: SelectRootInput,
+): Promise<SelectionAnswer> {
+  const { pending, ...rest } = answer
+  if (pending === undefined) return answer
+  const host = input.labelHost ?? ghCardLabelHost(input.cwd)
+  const candidates = [...answer.candidates]
+  const blocked: string[] = []
+  let inserted = 0
+  for (const { candidate, reason, at } of pending) {
+    const risk = candidate.tier.startsWith('risk:')
+    const result = risk
+      ? await reconcileCardRiskLabel({
+          card: candidate.id,
+          reviewed: candidate.tier,
+          link: 'unique',
+          projection: true,
+          host,
+        })
+      : undefined
+    if (result?.status === 'confirmed' && result.labels !== undefined) {
+      candidates.splice(at + inserted++, 0, { ...candidate, labels: result.labels })
+    } else {
+      blocked.push(result?.reason ? `${reason} — ${result.reason}` : reason)
+    }
+  }
+  return { ...rest, candidates, blocked }
 }
 
 /** Runs the selection in ONE fresh engine process and returns its candidate set — or throws. */

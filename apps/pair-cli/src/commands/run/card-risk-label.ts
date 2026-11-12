@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process'
+
 export interface CardLabelHost {
   readLabels(card: string): Promise<string[]>
   writeLabels(card: string, labels: string[]): Promise<void>
@@ -27,6 +29,7 @@ export async function reconcileCardRiskLabel(input: {
     status: 'unconfirmed',
     reason: `card ${card} propagation unconfirmed: ${why}`,
   })
+  if (!RANK.includes(reviewed)) return fail(`unknown reviewed tier ${JSON.stringify(reviewed)}`)
   if (link !== 'unique') return fail(`PR link to the card is ${link}`)
   try {
     const current = await host.readLabels(card)
@@ -63,4 +66,33 @@ async function verify(host: CardLabelHost, card: string, final: string): Promise
     return fail(`read-back shows ${JSON.stringify(got)}, expected ["${final}"] (write dropped)`)
   }
   return { status: 'confirmed', labels: back }
+}
+
+type Gh = (args: readonly string[]) => string
+
+/** CardLabelHost over the user's authenticated `gh` (the same tracker access the rest of the run uses). */
+export function ghCardLabelHost(
+  cwd: string,
+  gh: Gh = args => execFileSync('gh', [...args], { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }),
+): CardLabelHost {
+  const read = async (card: string): Promise<string[]> =>
+    (JSON.parse(gh(['issue', 'view', card, '--json', 'labels'])).labels ?? []).map(
+      (l: { name?: string }) => l.name ?? '',
+    )
+  return {
+    readLabels: read,
+    async writeLabels(card, labels) {
+      const current = await read(card)
+      const add = labels.filter(l => !current.includes(l))
+      const remove = current.filter(l => !labels.includes(l))
+      if (!add.length && !remove.length) return
+      gh([
+        'issue',
+        'edit',
+        card,
+        ...(add.length ? ['--add-label', add.join(',')] : []),
+        ...(remove.length ? ['--remove-label', remove.join(',')] : []),
+      ])
+    },
+  }
 }
