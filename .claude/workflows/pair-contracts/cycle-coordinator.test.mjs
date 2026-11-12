@@ -25,7 +25,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, cpSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -55,10 +55,18 @@ const CARD = { id: '42', title: 'T', branch: 'feature/US-42-x' }
 // the hash is recorded unverified, deterministically); a test that needs a fake `gh` passes its own
 // `env`, which replaces this one whole.
 const NO_GH = join(tmpdir(), 'us486-hermetic-no-gh', 'gh')
+// US-597: a fresh story's implementation start rereads its card live (fail closed). A `runDir()` root carries a
+// filesystem backlog with a card declaring no prerequisite; the CLI is pointed at it through the run dir it is handed.
+const pmRoot = args => {
+  const d = args[args.indexOf('--dir') + 1]
+  return d && args.includes('--dir')
+    ? { PAIR_PM_ROOT: resolve(d, '..', '..', '..', '..', '..') }
+    : {}
+}
 const run = (cli, args, opts = {}) => {
   const r = spawnSync(process.execPath, [cli, ...args], {
     encoding: 'utf8',
-    env: { ...process.env, PAIR_GH_BIN: NO_GH },
+    env: { ...process.env, PAIR_GH_BIN: NO_GH, ...pmRoot(args) },
     ...opts,
   })
   let json = null
@@ -77,7 +85,13 @@ function runDir(runId = 'story-42', story = '42') {
   mkdirSync(join(root, '.pair', 'adoption', 'tech'), { recursive: true })
   writeFileSync(
     join(root, '.pair', 'adoption', 'tech', 'way-of-working.md'),
-    '## Assignment\n\n- `default-assignee`: `rucka` — the maintainer.\n',
+    '## Assignment\n\n- `default-assignee`: `rucka` — the maintainer.\n\n- `pm-tool`: `filesystem`\n- `code-host`: `github`\n',
+  )
+  const backlog = join(root, '.pair', 'adoption', 'product', 'backlog')
+  mkdirSync(backlog, { recursive: true })
+  writeFileSync(
+    join(backlog, `${story}.md`),
+    `# US ${story}: T\n\n**Status**: Refined\n\n**Prerequisite Stories**: none\n`,
   )
   return { root, dir }
 }
