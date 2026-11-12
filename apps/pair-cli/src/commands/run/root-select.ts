@@ -401,6 +401,24 @@ async function floorExceeds(host: CardLabelHost, c: RootCandidate): Promise<bool
   return Math.max(-1, ...labels.map(l => RISK_RANK.indexOf(l))) > RISK_RANK.indexOf(c.tier)
 }
 
+async function reconcileOne(
+  host: CardLabelHost,
+  candidate: RootCandidate,
+): Promise<{ labels?: string[] | undefined; why?: string | undefined }> {
+  if (!candidate.tier.startsWith('risk:')) return {}
+  if (await floorExceeds(host, candidate)) {
+    return { why: `card risk floor exceeds reviewed tier ${candidate.tier}` }
+  }
+  const result = await reconcileCardRiskLabel({
+    card: candidate.id,
+    reviewed: candidate.tier,
+    link: 'unique',
+    projection: true,
+    host,
+  })
+  return result.status === 'confirmed' ? { labels: result.labels } : { why: result.reason }
+}
+
 /** US-595: a card blocked only because it lacks the reviewed risk label gets it written (verified) and is selected. */
 async function reconcileBlocked(
   answer: SelectionAnswer,
@@ -413,24 +431,11 @@ async function reconcileBlocked(
   const blocked: string[] = []
   let inserted = 0
   for (const { candidate, reason, at } of pending) {
-    const risk = candidate.tier.startsWith('risk:')
-    if (risk && (await floorExceeds(host, candidate))) {
-      blocked.push(`${reason} — card risk floor exceeds reviewed tier ${candidate.tier}`)
-      continue
-    }
-    const result = risk
-      ? await reconcileCardRiskLabel({
-          card: candidate.id,
-          reviewed: candidate.tier,
-          link: 'unique',
-          projection: true,
-          host,
-        })
-      : undefined
-    if (result?.status === 'confirmed' && result.labels !== undefined) {
-      candidates.splice(at + inserted++, 0, { ...candidate, labels: result.labels })
+    const outcome = await reconcileOne(host, candidate)
+    if (outcome.labels) {
+      candidates.splice(at + inserted++, 0, { ...candidate, labels: outcome.labels })
     } else {
-      blocked.push(result?.reason ? `${reason} — ${result.reason}` : reason)
+      blocked.push(outcome.why ? `${reason} — ${outcome.why}` : reason)
     }
   }
   return { ...rest, candidates, blocked }
