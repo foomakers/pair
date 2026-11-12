@@ -396,9 +396,12 @@ export async function selectRootAnswer(input: SelectRootInput): Promise<Selectio
 const RISK_RANK = ['risk:green', 'risk:yellow', 'risk:red']
 
 /** The card already carries a risk label above the reviewed tier: reconcile never lowers it, so the tier cannot stand. */
-async function floorExceeds(host: CardLabelHost, c: RootCandidate): Promise<boolean> {
-  const labels = await host.readLabels(c.id).catch(() => [] as string[])
+async function floorBlock(host: CardLabelHost, c: RootCandidate): Promise<string | undefined> {
+  const labels = await host.readLabels(c.id).catch(() => null)
+  if (!labels) return 'unconfirmed: card risk floor unreadable'
   return Math.max(-1, ...labels.map(l => RISK_RANK.indexOf(l))) > RISK_RANK.indexOf(c.tier)
+    ? `card risk floor exceeds reviewed tier ${c.tier}`
+    : undefined
 }
 
 async function reconcileOne(
@@ -406,9 +409,8 @@ async function reconcileOne(
   candidate: RootCandidate,
 ): Promise<{ labels?: string[] | undefined; why?: string | undefined }> {
   if (!candidate.tier.startsWith('risk:')) return {}
-  if (await floorExceeds(host, candidate)) {
-    return { why: `card risk floor exceeds reviewed tier ${candidate.tier}` }
-  }
+  const floor = await floorBlock(host, candidate)
+  if (floor) return { why: floor }
   const result = await reconcileCardRiskLabel({
     card: candidate.id,
     reviewed: candidate.tier,
