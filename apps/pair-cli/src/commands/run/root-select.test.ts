@@ -135,6 +135,13 @@ describe('candidatesInEvent / parseCandidates', () => {
   })
 })
 
+const deadHost = {
+  readLabels: async () => {
+    throw new Error('offline')
+  },
+  writeLabels: async () => {},
+}
+
 describe('selectRootCandidates — one engine process, its marker read back', () => {
   const input = {
     engine: ENGINES.claude,
@@ -157,7 +164,11 @@ describe('selectRootCandidates — one engine process, its marker read back', ()
       return { outcome: 'success' as const, detail: 'ok' }
     })
 
-    const result = await selectRootCandidates({ ...input, runIteration })
+    const result = await selectRootCandidates({
+      ...input,
+      runIteration,
+      labelHost: deadHost,
+    } as never)
 
     expect(result.map(c => c.id)).toEqual(['491'])
     expect(log).toHaveBeenCalledWith(expect.stringMatching(/blocked.*candidate 36: tier/))

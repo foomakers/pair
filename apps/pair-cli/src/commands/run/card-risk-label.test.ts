@@ -1,6 +1,10 @@
-import { describe, it, expect } from 'vitest'
-import { reconcileCardRiskLabel, type CardLabelHost } from './card-risk-label'
-import { parseSelection } from './root-select'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { describe, it, expect, vi } from 'vitest'
+import { ENGINES } from './engines'
+import { ghCardLabelHost, reconcileCardRiskLabel, type CardLabelHost } from './card-risk-label'
+import { CANDIDATES_MARKER, parseSelection, selectRootAnswer } from './root-select'
+import type { SpawnIterationInput } from './spawn'
 
 /**
  * US-595 r0-1 — verified card-label propagation (AC1, AC2, AC4). Oracle: the story AC, not the code.
@@ -153,5 +157,219 @@ describe('AC2: reconcile then select', () => {
     )
     expect(answer.candidates.map(c => c.id)).toEqual(['36', '491'])
     expect(answer.blocked).toEqual([])
+  })
+})
+
+describe('US-595 r1-1: unknown reviewed tier is rejected before any read/write (AC3)', () => {
+  it.each([[[]], [['risk:green']]])(
+    'reviewed risk:purple with card labels %j is unconfirmed, nothing written',
+    async labels => {
+      const host = fake(labels)
+      const result = await run(host, { reviewed: 'risk:purple' })
+      expect(result.status).toBe('unconfirmed')
+      expect(result.reason).toContain('36')
+      expect(result.reason).toContain('risk:purple')
+      expect(host.writes).toEqual([])
+      expect(host.labels).toEqual(labels)
+    },
+  )
+})
+
+/** A tracker behind a stubbed `gh`: `issue view --json labels` / `issue edit --add-label/--remove-label`. */
+function ghStub(initial: string[], drop = false, throwOn?: 'view' | 'edit') {
+  const state = { labels: [...initial], calls: [] as string[][] }
+  const gh = (args: readonly string[]): string => {
+    state.calls.push([...args])
+    if (throwOn && args[0] === 'issue' && args[1] === throwOn)
+      throw new Error(`gh ${throwOn} exited 1`)
+    if (args[0] === 'issue' && args[1] === 'view')
+      return JSON.stringify({ labels: state.labels.map(name => ({ name })) })
+    if (args[0] === 'issue' && args[1] === 'edit') {
+      const values = (flag: string) =>
+        args.flatMap((a, i) => (args[i - 1] === flag ? a.split(',') : []))
+      if (!drop) {
+        const removed = values('--remove-label')
+        state.labels = [...state.labels.filter(l => !removed.includes(l)), ...values('--add-label')]
+      }
+      return ''
+    }
+    throw new Error(`unexpected gh ${args.join(' ')}`)
+  }
+  return { state, gh }
+}
+
+describe('US-595 r0-1: a real label host reconciles through the PM tool (AC1, AC4)', () => {
+  it('unlabelled card 36 ends with foreign labels + exactly risk:yellow via the gh-backed host', async () => {
+    const { state, gh } = ghStub(['pair-ready', 'area:cli'])
+    const result = await reconcileCardRiskLabel({
+      card: '36',
+      reviewed: 'risk:yellow',
+      link: 'unique',
+      projection: true,
+      host: ghCardLabelHost('/project', gh),
+    })
+    expect(result.status).toBe('confirmed')
+    expect(state.labels.filter(l => l.startsWith('risk:'))).toEqual(['risk:yellow'])
+    expect(state.labels).toEqual(expect.arrayContaining(['pair-ready', 'area:cli']))
+  })
+
+  it('a tracker that silently drops the write is unconfirmed naming card 36', async () => {
+    const { gh } = ghStub(['x'], true)
+    const result = await reconcileCardRiskLabel({
+      card: '36',
+      reviewed: 'risk:yellow',
+      link: 'unique',
+      projection: true,
+      host: ghCardLabelHost('/project', gh),
+    })
+    expect(result.status).toBe('unconfirmed')
+    expect(result.reason).toContain('36')
+  })
+})
+
+describe('US-595 r0-1: gh failures map to unconfirmed, never a throw (AC3)', () => {
+  it.each([['view' as const], ['edit' as const]])(
+    'gh issue %s exiting non-zero is unconfirmed naming card 36',
+    async throwOn => {
+      const { gh } = ghStub(['x'], false, throwOn)
+      const result = await reconcileCardRiskLabel({
+        card: '36',
+        reviewed: 'risk:yellow',
+        link: 'unique',
+        projection: true,
+        host: ghCardLabelHost('/project', gh),
+      })
+      expect(result.status).toBe('unconfirmed')
+      expect(result.reason).toContain('36')
+    },
+  )
+})
+
+describe('US-595 r0-1: the selection path reconciles before blocking (AC1, AC2, AC4)', () => {
+  const input = {
+    engine: ENGINES.claude,
+    root: '66',
+    eligibility: 'risk:green',
+    cwd: '/project',
+    autonomyArgs: ['--dangerously-skip-permissions'],
+    timeoutSeconds: 60,
+  }
+  const card = (id: string, tier: string, labels: string[]) => ({
+    id,
+    title: 't',
+    branch: 'b',
+    tier,
+    labels,
+    mutexResources: [],
+    prerequisites: [],
+  })
+  const iteration = (candidates: unknown[]) =>
+    vi.fn(async (spawn: SpawnIterationInput) => {
+      spawn.onEvent?.({
+        type: 'assistant',
+        text: `${CANDIDATES_MARKER} ${JSON.stringify({ candidates })}`,
+      })
+      return { outcome: 'success' as const, detail: 'ok' }
+    })
+
+  it('the reported case: reviewed risk:yellow, unlabelled card 36 is reconciled and selected, not blocked', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const host = fake(['pair-ready'])
+    const answer = await selectRootAnswer({
+      ...input,
+      labelHost: host,
+      runIteration: iteration([
+        card('36', 'risk:yellow', []),
+        card('491', 'risk:green', ['risk:green']),
+      ]),
+    } as never)
+    expect(host.labels.filter(l => l.startsWith('risk:'))).toEqual(['risk:yellow'])
+    expect(answer.candidates.map(c => c.id)).toEqual(['36', '491'])
+    expect(answer.candidates[0]!.labels).toEqual(
+      expect.arrayContaining(['risk:yellow', 'pair-ready']),
+    )
+    expect(answer.blocked ?? []).toEqual([])
+    expect(log).not.toHaveBeenCalledWith(expect.stringMatching(/blocked.*36/))
+    log.mockRestore()
+  })
+
+  it('a refused write keeps 36 blocked with a card-specific reason; 491 proceeds', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const host = fake([], 'refuse-write')
+    const answer = await selectRootAnswer({
+      ...input,
+      labelHost: host,
+      runIteration: iteration([
+        card('36', 'risk:yellow', []),
+        card('491', 'risk:green', ['risk:green']),
+      ]),
+    } as never)
+    expect(answer.candidates.map(c => c.id)).toEqual(['491'])
+    expect(host.labels).toEqual([])
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/blocked.*36.*unconfirmed/))
+    log.mockRestore()
+  })
+
+  it('a consistent candidate never touches the host', async () => {
+    const host = fake([])
+    const reads = vi.spyOn(host, 'readLabels')
+    const answer = await selectRootAnswer({
+      ...input,
+      labelHost: host,
+      runIteration: iteration([card('491', 'risk:green', ['risk:green'])]),
+    } as never)
+    expect(answer.candidates.map(c => c.id)).toEqual(['491'])
+    expect(reads).not.toHaveBeenCalled()
+    expect(host.writes).toEqual([])
+  })
+})
+
+describe('US-595 r0-1: a throwing label host keeps 36 blocked, 491 proceeds (AC3)', () => {
+  it.each([['view' as const], ['edit' as const]])(
+    'gh issue %s throws during selection',
+    async throwOn => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const { gh } = ghStub([], false, throwOn)
+      const answer = await selectRootAnswer({
+        engine: ENGINES.claude,
+        root: '66',
+        eligibility: 'risk:green',
+        cwd: '/project',
+        autonomyArgs: ['--dangerously-skip-permissions'],
+        timeoutSeconds: 60,
+        labelHost: ghCardLabelHost('/project', gh),
+        runIteration: vi.fn(async (spawn: SpawnIterationInput) => {
+          const c = (id: string, tier: string, labels: string[]) => ({
+            id,
+            title: 't',
+            branch: 'b',
+            tier,
+            labels,
+            mutexResources: [],
+            prerequisites: [],
+          })
+          spawn.onEvent?.({
+            type: 'assistant',
+            text: `${CANDIDATES_MARKER} ${JSON.stringify({ candidates: [c('36', 'risk:yellow', []), c('491', 'risk:green', ['risk:green'])] })}`,
+          })
+          return { outcome: 'success' as const, detail: 'ok' }
+        }),
+      } as never)
+      expect(answer.candidates.map(c => c.id)).toEqual(['491'])
+      expect(log).toHaveBeenCalledWith(expect.stringMatching(/blocked.*36.*unconfirmed/))
+      log.mockRestore()
+    },
+  )
+})
+
+describe('US-595 r0-1: classify SKILL.md copies name the reachable owner (AC4)', () => {
+  const root = fileURLToPath(new URL('../../../../../', import.meta.url))
+  it.each([
+    ['packages/knowledge-hub/dataset/.skills/capability/classify/SKILL.md'],
+    ['.claude/skills/pair-capability-classify/SKILL.md'],
+  ])('%s names ghCardLabelHost and selectRootAnswer', path => {
+    const text = readFileSync(root + path, 'utf8')
+    expect(text).toContain('ghCardLabelHost')
+    expect(text).toContain('selectRootAnswer')
   })
 })
