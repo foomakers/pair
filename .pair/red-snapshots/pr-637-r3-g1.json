@@ -1,0 +1,136 @@
+{
+  "$meta": {
+    "pr": "637",
+    "phase": "r3-g1",
+    "base": "490a5e27d59d214da29661321be01f38b78a66b2",
+    "trailer": "Pair-RED-Snapshot: pr=637; phase=r3-g1; base=490a5e27d59d214da29661321be01f38b78a66b2; manifest=.pair/red-snapshots/pr-637-r3-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts"
+    ]
+  },
+  "status": "red",
+  "mode": "repair",
+  "inputHead": "490a5e27d59d214da29661321be01f38b78a66b2",
+  "sourceOfTruth": "story 595 AC3 + root-select.ts tierMismatch tier/labels invariant",
+  "inventory": [
+    {
+      "id": "r2-1",
+      "producer": "reconcileBlocked in selectRootAnswer (root-select.ts) over reconcileCardRiskLabel + tierMismatch",
+      "inputs": [
+        "candidate {tier,labels}",
+        "CardLabelHost"
+      ],
+      "representations": [
+        "root-select.ts"
+      ],
+      "consumers": [
+        "run --root/--watch/--loop selection",
+        "plan eligibility gate on tier"
+      ],
+      "classes": [
+        "card floor above tier, single label (green/red, yellow/red)",
+        "card floor above tier, multiple risk labels (yellow+red)",
+        "card floor below tier: raised, tier==label (control)"
+      ],
+      "interactions": [
+        "reconcile confirmed x tier!=final risk label"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "root-select",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/root-select.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "tier risk:green, labels [risk:red]",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts :: pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-tier-floor.test.ts",
+      "file": "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts",
+      "expected": "36 not in candidates, blocked names 36, host.writes empty",
+      "covers": [
+        "r2-1"
+      ]
+    },
+    {
+      "id": "W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "tier risk:yellow, labels [risk:red]",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts :: pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-tier-floor.test.ts",
+      "file": "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts",
+      "expected": "same as W1",
+      "covers": [
+        "r2-1"
+      ]
+    },
+    {
+      "id": "W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "tier risk:yellow, labels [risk:yellow,risk:red]",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts :: pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-tier-floor.test.ts",
+      "file": "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts",
+      "expected": "same as W1",
+      "covers": [
+        "r2-1"
+      ]
+    },
+    {
+      "id": "C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "tier risk:red, labels [risk:yellow] (floor below tier)",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts :: pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-tier-floor.test.ts",
+      "file": "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts",
+      "expected": "36 selected, single risk label equals tier, label written",
+      "covers": [
+        "r2-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:b72818f5c345ce51297da01fbf8214ca7a9511bb7c7b45aa25b7c19f6235c220",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-tier-floor.test.ts",
+      "observed": "3 failed | 1 passed: expected [36,491] to deeply equal [491]"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r3-g1",
+        "owner": "root-select",
+        "mode": "behavioral",
+        "findings": [
+          "r2-1"
+        ],
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/root-select.ts"
+        ],
+        "dependsOn": [],
+        "oracle": "story 595 AC3"
+      }
+    ],
+    "carried": []
+  },
+  "reconciled": [
+    {
+      "path": "apps/pair-cli/src/commands/run/card-risk-tier-floor.test.ts",
+      "sha256": "sha256:65ccf5f3ab8ef4646520ca5cdfd50556d59a6dec84cee7510a36434e5d4e5126"
+    }
+  ],
+  "preserved": [],
+  "changedRows": [
+    "C1"
+  ]
+}
