@@ -1,0 +1,106 @@
+{
+  "$meta": {
+    "pr": "637",
+    "phase": "r4-g1",
+    "base": "11ceb3fdd2fb298b5cf57245cd3e0cf6b1727ee6",
+    "trailer": "Pair-RED-Snapshot: pr=637; phase=r4-g1; base=11ceb3fdd2fb298b5cf57245cd3e0cf6b1727ee6; manifest=.pair/red-snapshots/pr-637-r4-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/card-risk-tier-floor-read.test.ts"
+    ]
+  },
+  "status": "red",
+  "mode": "repair",
+  "inputHead": "11ceb3fdd2fb298b5cf57245cd3e0cf6b1727ee6",
+  "sourceOfTruth": "story 595 AC3 + root-select.ts tierMismatch tier/labels invariant",
+  "inventory": [
+    {
+      "id": "r2-1",
+      "producer": "floorExceeds/reconcileOne in root-select.ts over reconcileCardRiskLabel",
+      "inputs": [
+        "candidate {tier,labels}",
+        "CardLabelHost.readLabels (may throw)"
+      ],
+      "representations": [
+        "root-select.ts"
+      ],
+      "consumers": [
+        "run --root/--watch/--loop selection",
+        "plan eligibility gate on tier"
+      ],
+      "classes": [
+        "first floor read throws, re-read shows risk:red, tier green",
+        "first floor read throws, re-read shows risk:yellow, tier green"
+      ],
+      "interactions": [
+        "floor read failure x reconcile confirmed (labels unchanged) x tier!=final risk label"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "root-select",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/root-select.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "tier risk:green, 1st readLabels throws then [risk:red]",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-tier-floor-read.test.ts :: pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-tier-floor-read.test.ts",
+      "file": "apps/pair-cli/src/commands/run/card-risk-tier-floor-read.test.ts",
+      "expected": "36 not in candidates, blocked names 36, host.writes empty",
+      "covers": [
+        "r2-1"
+      ]
+    },
+    {
+      "id": "W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "tier risk:green, 1st readLabels throws then [risk:yellow]",
+      "oracle": "apps/pair-cli/src/commands/run/card-risk-tier-floor-read.test.ts :: pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-tier-floor-read.test.ts",
+      "file": "apps/pair-cli/src/commands/run/card-risk-tier-floor-read.test.ts",
+      "expected": "36 not in candidates, blocked names 36, host.writes empty",
+      "covers": [
+        "r2-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/card-risk-tier-floor-read.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:d4ccbaae250a929345e8d6e767824a13d8a701b676c05c20caf8e900630c995f",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/card-risk-tier-floor-read.test.ts",
+      "observed": "2 failed (2): expected [ '36', '491' ] to deeply equal [ '491' ]; tsc --noEmit clean"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r4-g1",
+        "owner": "root-select",
+        "mode": "behavioral",
+        "findings": [
+          "r2-1"
+        ],
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/root-select.ts"
+        ],
+        "dependsOn": [],
+        "oracle": "story 595 AC3"
+      }
+    ],
+    "carried": []
+  },
+  "reconciled": [],
+  "preserved": [],
+  "changedRows": [
+    "W1"
+  ]
+}
