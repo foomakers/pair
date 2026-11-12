@@ -1,0 +1,102 @@
+{
+  "$meta": {
+    "pr": "609",
+    "phase": "r6-g1",
+    "base": "a4708e2e41b4233d646df97bb30346d52e9422e2",
+    "trailer": "Pair-RED-Snapshot: pr=609; phase=r6-g1; base=a4708e2e41b4233d646df97bb30346d52e9422e2; manifest=.pair/red-snapshots/pr-609-r6-g1.json",
+    "artifacts": []
+  },
+  "status": "red",
+  "mode": "repair",
+  "inputHead": "a4708e2e41b4233d646df97bb30346d52e9422e2",
+  "sourceOfTruth": [
+    "packages/knowledge-hub/dataset/.skills/capability/publish-pr/SKILL.md"
+  ],
+  "inventory": [
+    {
+      "id": "r3-1",
+      "producer": "git merge of origin/main into the story branch; owner of text: packages/knowledge-hub/dataset/.skills/capability/publish-pr/SKILL.md (mirror .claude/skills/pair-capability-publish-pr/SKILL.md regenerated from it)",
+      "inputs": [
+        "HEAD a4708e2e41b4233d646df97bb30346d52e9422e2",
+        "origin/main with #598 title-rule text"
+      ],
+      "representations": [
+        "dataset SKILL.md",
+        "installed .claude mirror"
+      ],
+      "consumers": [
+        "@pair/website lib/skills-catalog-merge-coherence.test.ts r0-6 w1",
+        "pnpm quality-gate"
+      ],
+      "classes": [
+        "conflict in both SKILL.md copies"
+      ],
+      "interactions": [
+        "#598 title rule x #589 native-link/body-update/verify additions"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "publish-pr SKILL.md merge resolution",
+    "mode": "doc",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.skills/capability/publish-pr/SKILL.md",
+      ".claude/skills/pair-capability-publish-pr/SKILL.md"
+    ]
+  },
+  "matrix": [],
+  "redTests": [],
+  "testExempt": false,
+  "checklist": [
+    {
+      "id": "CL-1",
+      "finding": "r3-1",
+      "requirement": "Phase 3/4 keep origin/main #598 text verbatim: Title step \"Read `## Naming & References` in `way-of-working.md`. Explicit PR title naming rules there override…\" and PR-exists bullet \"update its title and body and tags in place\"",
+      "authority": "origin/main:packages/knowledge-hub/dataset/.skills/capability/publish-pr/SKILL.md lines 98 and 117"
+    },
+    {
+      "id": "CL-2",
+      "finding": "r3-1",
+      "requirement": "Keep this PR's additions: Native story link bullet, Body update bullet (preserve unrelated body/human edits), step 9 independent native-link verify, and `Native story link:` output row",
+      "authority": "HEAD:packages/knowledge-hub/dataset/.skills/capability/publish-pr/SKILL.md (a4708e2e) lines 104,119,147,192"
+    },
+    {
+      "id": "CL-3",
+      "finding": "r3-1",
+      "requirement": "No conflict markers in either copy; mirror .claude/skills/pair-capability-publish-pr/SKILL.md equals the output of `pnpm mirrors:regenerate` applied to the dataset source (differs from it by design: name, skill refs, title heading), checked by `pnpm skills:conformance` and the skills-catalog-merge-coherence test (apps/website/lib/skills-catalog-merge-coherence.test.ts); `git merge-tree --write-tree HEAD origin/main` exits 0",
+      "authority": "scripts/regenerate-mirrors.sh (`pnpm mirrors:regenerate`, the only writer); `pnpm skills:conformance` (mirror-equality guards, the checker)"
+    }
+  ],
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r6-g1",
+        "findings": [
+          "r3-1"
+        ],
+        "mode": "doc",
+        "owner": "publish-pr SKILL.md merge resolution",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/capability/publish-pr/SKILL.md",
+          ".claude/skills/pair-capability-publish-pr/SKILL.md"
+        ],
+        "findingPaths": {
+          "r3-1": [
+            "packages/knowledge-hub/dataset/.skills/capability/publish-pr/SKILL.md",
+            ".claude/skills/pair-capability-publish-pr/SKILL.md"
+          ]
+        }
+      }
+    ],
+    "carried": [
+      {
+        "id": "r0-1",
+        "disposition": "No executable producer: capability/publish-pr/SKILL.md is agent instructions (only script: word-limits.mjs); an outcome probe would test a stub, not the skill, and a real agent/gh run is disallowed. Correction lies outside the repo: human records a test-exemption with justification in the PR body (finding recommendation, second option) or decides otherwise. Stays blocking until dispositioned."
+      }
+    ]
+  },
+  "groupId": "r6-g1",
+  "changedRows": [
+    "CL-3"
+  ]
+}
