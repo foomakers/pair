@@ -1906,6 +1906,16 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       }
       const shapeErrs = contractErrors(parsed)
       if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
+      // US-591 r0-1: the owner-approval bound is read from owner-approvals.json, never left to the agent.
+      const pending = pendingCorrection(readHandoffs(dir).filter(h => h.data && h.data.recordType !== 'migration'), readApprovals(dir), predecessorEvidence(dir))
+      if (pending && phase === `${pending.line}-rev${pending.revision}`) {
+        const rec = pending.approval
+        const ap = parsed?.ownerApproval
+        if (!ap) return { published: false, reason: `owner-approval-missing: ${rec.decisionRef}` }
+        if (ap.decisionRef !== rec.decisionRef) return { published: false, reason: `owner-approval-mismatch: ${rec.decisionRef} expected, ${ap.decisionRef} stated` }
+        const outside = [...new Set([...(parsed.changedRows ?? []), ...(data.changedRows ?? [])])].filter(id => !rec.rows.includes(id))
+        if (outside.length) return { published: false, reason: `rows-outside-approval: ${outside.join(',')}` }
+      }
       const cmdErrs = commandRefusals(parsed)
       if (cmdErrs.length) return { published: false, reason: cmdErrs[0].split(' ')[0], errors: cmdErrs }
       // A sealed byte can never be reformatted: a test artifact the adopted format check rejects is refused HERE, before
