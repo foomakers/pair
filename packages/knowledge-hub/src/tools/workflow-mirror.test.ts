@@ -501,7 +501,10 @@ describe('US-219 — development artifacts do not install', () => {
       f => f.endsWith('.test.mjs'),
     )
     expect(tests.length, 'no dry-run suites found — the scan broke').toBeGreaterThan(0)
-    expect(tests.filter(t => !exclude.includes(t))).toEqual([])
+    expect(
+      tests.filter(t => !exclude.includes(t)),
+      'dataset test files missing from apps/pair-cli/config.json workflows.exclude',
+    ).toEqual([])
   })
 
   it('excludes nothing that is not there — a stale entry silently protects nothing', () => {

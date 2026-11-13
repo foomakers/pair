@@ -63,8 +63,9 @@ export function buildSelectionPrompt(engine: EngineDefinition, scope: SelectionS
       '`warnings` when filtering and reporting. Validate `--status` with the same script. ' +
       'Exclude out-of-process and Done items; report their cause and every Ready/DoR warning. ' +
       'If the script cannot load or rejects the adoption, fail the selection with its cause.',
-    'For every candidate issue also determine: its declared `**Prerequisite Stories**` (with each ' +
-      "prerequisite's MERGED status, checked on the code host, never assumed), its declared " +
+    'For every candidate issue also determine: its declared `**Prerequisite Stories**` (report the ' +
+      'ids only — merge state is resolved by the deterministic `prereq-state` script after selection, ' +
+      'any claim of yours about it is ignored; set `merged` to false), its declared ' +
       'touched-surface (Technical Analysis "Key Components" / task list) rendered as a flat list of ' +
       'mutex-resource strings (skill names, file paths, module names), its canonical `macrostate` ' +
       'from pair-next Control-State Resolution (including its `## State Mapping` and DoR fallback; ' +
@@ -76,7 +77,7 @@ export function buildSelectionPrompt(engine: EngineDefinition, scope: SelectionS
       `${CANDIDATES_MARKER} {"candidates":[{"id":"<id>","title":"<title>","branch":"<branch>",` +
       `"tier":"<risk:* or untagged>","macrostate":"<canonical state or unmapped literal>",` +
       `"labels":["<label>"],"mutexResources":["<resource>"],` +
-      `"prerequisites":[{"id":"<id>","merged":true}]}]} — single-line JSON, {"candidates":[]} ` +
+      `"prerequisites":[{"id":"<id>","merged":false}]}]} — single-line JSON, {"candidates":[]} ` +
       'when the scope selects nothing.',
     ...(scope.loop !== undefined ? loopRequest(scope.loop.predicateSelector, scope) : []),
   ].join('\n')
