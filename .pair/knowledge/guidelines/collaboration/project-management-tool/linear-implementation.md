@@ -305,6 +305,10 @@ When closing a story after merge, evaluate the parent hierarchy:
 
 ## Code Review & PR Management
 
+### Optional native link recipe for GitHub
+
+Only when the Linear/GitHub integration is already configured for the PR repository, use a Linear [magic words](https://linear.app/docs/github) line such as `Fixes ENG-123` in the PR description's conditional native-link slot, using the resolved issue's exact identifier. Confirm on that Linear issue that its linked PR has the exact code-host URL; an item id in the body is not confirmation. If the integration is absent, the issue cannot be read, or the link is absent, keep `Refs: <issue-id>` and the deduplicated PR URL back-link; report `fallback — native link unconfirmed` and the manual link/integration remedy. Repeat publication checks for the exact URL and keeps one magic-word line, preserving unrelated PR body content. A link does not prove status automation is enabled.
+
 **Linear hosts no pull requests.** Everything in this section happens on the declared `code-host`; Linear's role is limited to the item side of the cross-link. Use the code host's own implementation guide for the concrete commands — e.g. [github-implementation.md](github-implementation.md) for GitHub or [azure-devops-implementation.md](azure-devops-implementation.md) for Azure Repos.
 
 The split works through two text conventions and nothing else — no native integration is required (Linear's own GitHub/GitLab integration may be enabled, but no skill depends on it):
