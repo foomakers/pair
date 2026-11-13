@@ -51,17 +51,28 @@ export function isInterrupted(): boolean {
 const exited = (child: ChildProcess): boolean =>
   child.exitCode !== null || child.signalCode !== null
 
+/** Signals the engine's process group (engines are detached leaders); falls back to the leader alone. */
+function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
+  try {
+    if (child.pid === undefined) throw new Error('no pid')
+    process.kill(-child.pid, signal)
+  } catch {
+    child.kill(signal)
+  }
+}
+
 /** SIGTERM every running engine, wait for them (bounded), SIGKILL whatever is still there. */
 async function stopEngines(): Promise<void> {
   const children = [...running].filter(child => !exited(child))
-  for (const child of children) child.kill('SIGTERM')
+  for (const child of children) signalGroup(child, 'SIGTERM')
   const allExited = Promise.all(
     children.map(child =>
       exited(child) ? Promise.resolve() : new Promise(resolve => child.once('exit', resolve)),
     ),
   )
   await Promise.race([allExited, new Promise(resolve => setTimeout(resolve, ENGINE_GRACE_MS))])
-  for (const child of children) if (!exited(child)) child.kill('SIGKILL')
+  // the leader may be gone while descendants linger in its group: always SIGKILL the group
+  for (const child of children) signalGroup(child, 'SIGKILL')
 }
 
 /** The conventional exit code of a process ended by `signal`: 128 + its number (143, 130). */
