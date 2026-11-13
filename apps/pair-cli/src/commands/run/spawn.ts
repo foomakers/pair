@@ -197,9 +197,15 @@ function openLastMessageChannel(engine: EngineDefinition) {
 
 /** Leaves no engine behind; after a timeout it is SIGKILLed and its pipes released (US-600). */
 function reap(child: ChildProcess, hardStop: boolean): void {
-  if (child.exitCode !== null || child.signalCode !== null) return
-  child.kill(hardStop ? 'SIGKILL' : 'SIGTERM')
-  if (hardStop) child.stdout?.destroy()
+  const exited = child.exitCode !== null || child.signalCode !== null
+  if (!hardStop) return void (exited || child.kill('SIGTERM'))
+  // The engine leads its own process group (detached): descendants die with it, even after it exited.
+  try {
+    process.kill(-child.pid!, 'SIGKILL')
+  } catch {
+    if (!exited) child.kill('SIGKILL')
+  }
+  child.stdout?.destroy()
 }
 
 /**
@@ -221,6 +227,7 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   const child = spawn(input.engine.command, buildEngineArgs({ ...input, lastMessagePath }), {
     cwd: input.cwd,
     stdio: [HEADLESS_STDIN, 'pipe', 'pipe'],
+    detached: true,
     // US-573 AC7: an engine's own env (claude: no background-wait ceiling) over the driver's.
     ...engineEnv(input.engine, isolation),
   })
