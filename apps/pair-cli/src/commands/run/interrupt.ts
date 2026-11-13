@@ -21,7 +21,7 @@ export type InterruptSignal = 'SIGTERM' | 'SIGINT'
 const SIGNALS: readonly InterruptSignal[] = ['SIGTERM', 'SIGINT']
 
 /** How long an engine gets to exit on SIGTERM before it is SIGKILLed. */
-const ENGINE_GRACE_MS = 5_000
+export const ENGINE_GRACE_MS = 5_000
 
 const running = new Set<ChildProcess>()
 let interrupted = false

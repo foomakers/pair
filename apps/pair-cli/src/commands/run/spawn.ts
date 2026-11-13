@@ -3,7 +3,7 @@ import type { EngineDefinition } from './engines'
 import { HEADLESS_STDIN } from './autonomy'
 import { readIterationOutcome, toLines, type IterationResult } from './stream-reader'
 import type { RunEvent } from './run-events'
-import { isInterrupted, trackEngine } from './interrupt'
+import { ENGINE_GRACE_MS, isInterrupted, trackEngine } from './interrupt'
 
 /**
  * Spawning one iteration (US-451 T-9).
@@ -81,13 +81,17 @@ export interface SpawnIterationInput extends EngineArgsInput {
  */
 function createWatchdog(
   input: Pick<SpawnIterationInput, 'idleTimeoutSeconds' | 'timeoutSeconds'>,
-  kill: () => void,
+  kill: (signal: 'SIGTERM' | 'SIGKILL') => void,
 ) {
   let stopped: string | undefined
   let where = ''
+  // US-600: after the soft stop a bounded grace elapses, then the read is abandoned (`grace`).
+  let graceOver!: () => void
+  const grace = new Promise<undefined>(done => (graceOver = () => done(undefined)))
   const stop = (detail: () => string) => () => {
+    if (stopped === undefined) setTimeout(graceOver, ENGINE_GRACE_MS).unref()
     stopped ??= detail()
-    kill()
+    kill('SIGTERM')
   }
   const idleSeconds = input.idleTimeoutSeconds ?? DEFAULT_IDLE_TIMEOUT_SECONDS
   const onIdle = stop(() => `timed out (idle)${where}: no engine event for ${idleSeconds}s`)
@@ -112,10 +116,23 @@ function createWatchdog(
         where = ` at ${event.card}${event.stage ? `/${event.stage}` : ''}`
     },
     stopped: () => stopped,
+    grace,
     clear: () => {
       clearTimeout(idle)
       clearTimeout(cap)
     },
+  }
+}
+
+function stalledFailure(detail: string | undefined, result: IterationResult | undefined): IterationResult {
+  const { skippedLines, runEvents } = result ?? {}
+  return {
+    outcome: 'failed',
+    cause: 'timed-out',
+    detail: detail ?? 'timed out',
+    stalled: true,
+    ...(skippedLines !== undefined && { skippedLines }),
+    ...(runEvents !== undefined && { runEvents }),
   }
 }
 
@@ -142,10 +159,10 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   // Relayed, never inherited: a raw write to the terminal moves the cursor under the live card rows.
   const stderr = relayLines(child.stderr, input.engine.id)
 
-  const watchdog = createWatchdog(input, () => child.kill('SIGTERM'))
+  const watchdog = createWatchdog(input, signal => child.kill(signal))
   try {
     child.stdout.setEncoding('utf-8')
-    const result = await readIterationOutcome(
+    const read = readIterationOutcome(
       toLines(child.stdout),
       input.engine,
       payload => {
@@ -158,21 +175,20 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
       },
       { maxFixRounds: input.maxFixRounds },
     )
+    read.catch(() => undefined)
+    const result = await Promise.race([read, watchdog.grace])
     // US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one.
+    // US-600 AC3: a terminal event arriving after expiry never turns the timeout into success.
     const stopped = watchdog.stopped()
-    if (stopped === undefined || result.outcome === 'success') return result
-    const { skippedLines, runEvents } = result
-    return {
-      outcome: 'failed',
-      cause: 'timed-out',
-      detail: stopped,
-      stalled: true,
-      ...(skippedLines !== undefined && { skippedLines }),
-      ...(runEvents !== undefined && { runEvents }),
-    }
+    if (stopped === undefined && result !== undefined) return result
+    return stalledFailure(stopped, result)
   } finally {
     watchdog.clear()
-    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
+    if (child.exitCode === null && child.signalCode === null) {
+      const hardStop = watchdog.stopped() !== undefined
+      child.kill(hardStop ? 'SIGKILL' : 'SIGTERM')
+      if (hardStop) child.stdout.destroy()
+    }
     // ponytail: 1s drain bound — a grandchild holding stderr open must not hold the iteration.
     await Promise.race([stderr, new Promise(done => setTimeout(done, 1000).unref())])
   }
