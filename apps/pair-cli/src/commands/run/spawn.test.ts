@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { writeFileSync, mkdtempSync } from 'fs'
+import { writeFileSync, mkdtempSync, readFileSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
@@ -230,6 +230,78 @@ describe('spawnIteration — idle timeout, not a wall-clock kill (US-573 AC5)', 
       cwd: dir,
     }
   }
+
+  it('settles after idle expiry when the engine ignores SIGTERM', async () => {
+    const { engine, cwd } = stub(
+      `require('fs').writeFileSync('pid', String(process.pid));process.on('SIGTERM',()=>{});setInterval(()=>{},1000)`,
+    )
+    const run = spawnIteration({
+      engine,
+      cwd,
+      promptText: 'go',
+      autonomyArgs: [],
+      idleTimeoutSeconds: 1,
+    })
+    let guard: ReturnType<typeof setTimeout> | undefined
+    try {
+      const result = await Promise.race([
+        run,
+        new Promise<never>((_, reject) => {
+          guard = setTimeout(() => reject(new Error('did not settle')), 8000)
+        }),
+      ])
+      expect(result).toMatchObject({ outcome: 'failed', cause: 'timed-out', stalled: true })
+    } finally {
+      clearTimeout(guard)
+      const pid = join(cwd, 'pid')
+      if (existsSync(pid)) {
+        try {
+          process.kill(Number(readFileSync(pid, 'utf8')), 'SIGKILL')
+        } catch {
+          /* already exited */
+        }
+      }
+      await run
+    }
+  }, 12000)
+
+  it('settles after idle expiry when a descendant keeps the output pipes open', async () => {
+    const { engine, cwd } = stub(
+      `const c=require('child_process').spawn(process.execPath,['-e','require("fs").writeFileSync("pid",String(process.pid));setInterval(()=>{},1000)'],{stdio:'inherit'});setInterval(()=>{},1000)`,
+    )
+    try {
+      const result = await Promise.race([
+        spawnIteration({ engine, cwd, promptText: 'go', autonomyArgs: [], idleTimeoutSeconds: 1 }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('did not settle')), 8000).unref(),
+        ),
+      ])
+      expect(result).toMatchObject({ outcome: 'failed', cause: 'timed-out', stalled: true })
+    } finally {
+      const pid = join(cwd, 'pid')
+      if (existsSync(pid)) {
+        try {
+          process.kill(Number(readFileSync(pid, 'utf8')), 'SIGKILL')
+        } catch {
+          /* already exited */
+        }
+      }
+    }
+  }, 12000)
+
+  it('a terminal success arriving after idle expiry stays a timeout', async () => {
+    const { engine, cwd } = stub(
+      `process.on('SIGTERM',()=>{});setTimeout(()=>{process.stdout.write(JSON.stringify({type:'result',subtype:'success'})+'\\n');process.exit(0)},2000)`,
+    )
+    const result = await spawnIteration({
+      engine,
+      cwd,
+      promptText: 'go',
+      autonomyArgs: [],
+      idleTimeoutSeconds: 1,
+    })
+    expect(result).toMatchObject({ outcome: 'failed', cause: 'timed-out', stalled: true })
+  }, 12000)
 
   it('an engine that keeps emitting events outlives the idle bound: every event resets the timer', async () => {
     const { engine, cwd } = stub(

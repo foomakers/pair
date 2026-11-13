@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { spawn, type ChildProcess } from 'child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
@@ -11,7 +11,7 @@ import {
   type IterationResult,
 } from './stream-reader'
 import type { RunEvent } from './run-events'
-import { isInterrupted, trackEngine } from './interrupt'
+import { ENGINE_GRACE_MS, isInterrupted, trackEngine } from './interrupt'
 
 /**
  * Spawning one iteration (US-451 T-9).
@@ -94,13 +94,17 @@ export interface SpawnIterationInput extends EngineArgsInput {
  */
 function createWatchdog(
   input: Pick<SpawnIterationInput, 'idleTimeoutSeconds' | 'timeoutSeconds'>,
-  kill: () => void,
+  kill: (signal: 'SIGTERM' | 'SIGKILL') => void,
 ) {
   let stopped: string | undefined
   let where = ''
+  // US-600: after the soft stop a bounded grace elapses, then the read is abandoned (`grace`).
+  let graceOver!: () => void
+  const grace = new Promise<undefined>(done => (graceOver = () => done(undefined)))
   const stop = (detail: () => string) => () => {
+    if (stopped === undefined) setTimeout(graceOver, ENGINE_GRACE_MS).unref()
     stopped ??= detail()
-    kill()
+    kill('SIGTERM')
   }
   const idleSeconds = input.idleTimeoutSeconds ?? DEFAULT_IDLE_TIMEOUT_SECONDS
   const onIdle = stop(() => `timed out (idle)${where}: no engine event for ${idleSeconds}s`)
@@ -125,6 +129,7 @@ function createWatchdog(
         where = ` at ${event.card}${event.stage ? `/${event.stage}` : ''}`
     },
     stopped: () => stopped,
+    grace,
     clear: () => {
       clearTimeout(idle)
       clearTimeout(cap)
@@ -132,14 +137,20 @@ function createWatchdog(
   }
 }
 
-/** US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one. */
-function stalledOrResult(result: IterationResult, stopped: string | undefined): IterationResult {
-  if (stopped === undefined || result.outcome === 'success') return result
-  const { skippedLines, runEvents } = result
+/**
+ * US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one.
+ * US-600 AC3: a terminal event arriving after expiry never turns the timeout into success.
+ */
+function stalledOrResult(
+  result: IterationResult | undefined,
+  stopped: string | undefined,
+): IterationResult {
+  if (stopped === undefined && result !== undefined) return result
+  const { skippedLines, runEvents } = result ?? {}
   return {
     outcome: 'failed',
     cause: 'timed-out',
-    detail: stopped,
+    detail: stopped ?? 'timed out',
     stalled: true,
     ...(skippedLines !== undefined && { skippedLines }),
     ...(runEvents !== undefined && { runEvents }),
@@ -184,6 +195,19 @@ function openLastMessageChannel(engine: EngineDefinition) {
   }
 }
 
+/** Leaves no engine behind; after a timeout it is SIGKILLed and its pipes released (US-600). */
+function reap(child: ChildProcess, hardStop: boolean): void {
+  const exited = child.exitCode !== null || child.signalCode !== null
+  if (!hardStop) return void (exited || child.kill('SIGTERM'))
+  // The engine leads its own process group (detached): descendants die with it, even after it exited.
+  try {
+    process.kill(-child.pid!, 'SIGKILL')
+  } catch {
+    if (!exited) child.kill('SIGKILL')
+  }
+  child.stdout?.destroy()
+}
+
 /**
  * Runs one iteration and returns what its STREAM said.
  *
@@ -203,6 +227,7 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   const child = spawn(input.engine.command, buildEngineArgs({ ...input, lastMessagePath }), {
     cwd: input.cwd,
     stdio: [HEADLESS_STDIN, 'pipe', 'pipe'],
+    detached: true,
     // US-573 AC7: an engine's own env (claude: no background-wait ceiling) over the driver's.
     ...engineEnv(input.engine, isolation),
   })
@@ -211,10 +236,10 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   // Relayed, never inherited: a raw write to the terminal moves the cursor under the live card rows.
   const stderr = relayLines(child.stderr, input.engine.id)
 
-  const watchdog = createWatchdog(input, () => child.kill('SIGTERM'))
+  const watchdog = createWatchdog(input, signal => child.kill(signal))
   try {
     child.stdout.setEncoding('utf-8')
-    const result = await readIterationOutcome(
+    const read = readIterationOutcome(
       toLines(child.stdout),
       input.engine,
       payload => {
@@ -227,13 +252,15 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
       },
       { maxFixRounds: input.maxFixRounds },
     )
+    read.catch(() => undefined)
+    const result = await Promise.race([read, watchdog.grace])
     // US-623 AC3: the stream's last text carried no result ⇒ the engine's dedicated channel is read.
-    const channelResult = channel?.merge(result)
+    const channelResult = result && channel?.merge(result)
     return stalledOrResult(channelResult ?? result, watchdog.stopped())
   } finally {
     watchdog.clear()
     channel?.close()
-    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
+    reap(child, watchdog.stopped() !== undefined)
     // ponytail: 1s drain bound — a grandchild holding stderr open must not hold the iteration.
     await Promise.race([stderr, new Promise(done => setTimeout(done, 1000).unref())])
   }

@@ -820,7 +820,7 @@ pair-cli run [options]
 | `--profile <name>`              | With `--card`, `--root` or `--parallel` (forwarded to every child card): the named workflow profile (per-stage engine/model/effort/context) from `pair.config.json`'s `workflowProfiles`. An unknown name halts `profile-unresolved`, never the KB default |
 | `--workflow-config <path>`      | With `--card`, `--root` or `--parallel` (forwarded to every child card): an external profile file, used verbatim, wins over `--profile` and `pair.config.json`  |
 | `--iteration-timeout <seconds>` | Opt-in **total** wall-clock cap per iteration. No default: the idle timeout is the hang guard     |
-| `--idle-timeout <seconds>`      | Stop an iteration after this long with **no engine event** (default `1800`); any event resets it. Precedence: flag > `## Stop Predicate` `idle-timeout:` > `pair.config.json` `engine.idleTimeout` > default |
+| `--idle-timeout <seconds>`      | Stop an iteration after this long with **no engine event** (default `1800`); any event resets it. On expiry the engine gets `SIGTERM`, after a 5 s grace `SIGKILL`, and its pipes are released. Precedence: flag > `## Stop Predicate` `idle-timeout:` > `pair.config.json` `engine.idleTimeout` > default |
 | `--quiet`                       | Plain output as before live progress: one line per iteration, no live card lines                   |
 | `--verbose`                     | Live terminal: also print the driver's technical lines (stage records, dispatch records, banner), hidden by default |
 | `--json`                        | The run events as NDJSON on stdout (one object per line); every human line goes to stderr. Not combinable with `--quiet` |
@@ -1140,7 +1140,7 @@ concurrency comes from running several driver processes.
 A workflow **HALT**, a background workflow **cut** before its `loop-end` (the engine turn ended while
 the workflow still ran), or the **idle watchdog** is never `success`, even when the engine turn itself
 reports success: the iteration is reported with that outcome (`halted: <reason>`, `cut: …`,
-`timed out (idle) at <card>/<stage>: no engine event for <n>s`) and the run exits `1`. The `claude`
+`timed out (idle) at <card>/<stage>: no engine event for <n>s`) and the run exits `1`. On expiry the engine gets `SIGTERM`, then after a 5 s grace `SIGKILL`, and its pipes are released; a terminal event arriving after expiry stays a timeout, never success. The `claude`
 engine runs with `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`, so `claude -p` does not stop a background
 workflow after its 10-minute wait ceiling.
 
