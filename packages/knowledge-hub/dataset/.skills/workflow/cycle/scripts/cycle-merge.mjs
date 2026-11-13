@@ -36,13 +36,15 @@
 //
 // `merged` and `cascaded` are separate signals: a merge that landed with any closure step unfinished
 // is `{ merged: true, cascaded: false }` with every step's outcome in `cascade`, never a plain success.
-import { existsSync, rmSync, realpathSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { decide as decideAutonomy, effectiveLabels, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate, conditionError, normalizeGate, checkCardId } from './autonomy-policy.mjs'
 import { assertBranchName } from './host/adapter-kit.mjs'
 import { assertRunOwnsStory } from './run-guard.mjs'
+import { checkDodBoxes, stateMapping } from './board-sync.mjs'
+export { checkDodBoxes } from './board-sync.mjs'
 
 const SHA_RE = /^[0-9a-f]{40}$/
 const TIER_RE = /^[A-Za-z0-9][A-Za-z0-9:_./-]*$/
@@ -212,17 +214,6 @@ export function escalate({ hosts, story, repo, stage, conditions }) {
 // ── Story Closure ──────────────────────────────────────────────────────────────────────────
 // Check every unchecked box under the card's `## Definition of Done…` heading. Anything else in the
 // body is returned byte-identical.
-export function checkDodBoxes(body) {
-  let inDod = false
-  return String(body ?? '')
-    .split('\n')
-    .map(line => {
-      if (/^##\s+/.test(line)) inDod = /^##\s+Definition of Done/i.test(line)
-      return inDod ? line.replace(/^(\s*[-*]\s+)\[ \]/, '$1[x]') : line
-    })
-    .join('\n')
-}
-
 const defaultGit = (args, cwd) => {
   const r = spawnSync('git', args, { encoding: 'utf8', cwd })
   return { status: r.status, stdout: r.stdout ?? '', stderr: (r.stderr ?? '').trim() }
@@ -274,8 +265,20 @@ export function closeStory({ hosts, story, pr, repo, branch, root = process.cwd(
     closed = r.closed ?? closed
     return { ok: true, closed, stoppedAt: r.stoppedAt ?? null }
   })
+  run('epic', () => {
+    if (typeof hosts.pm.syncEpic !== 'function') return { ok: true, skipped: true }
+    const r = hosts.pm.syncEpic({ id: story, repo })
+    if (r.gap === 'parent-absent') return { ok: true, skipped: true, gap: r.gap }
+    return { ok: r.confirmed, ...r }
+  })
   run('board', () => {
-    const per = closed.map(id => ({ id, ...hosts.pm.setBoardState({ id, state: 'Done', repo }) }))
+    const wow = join(root, '.pair', 'adoption', 'tech', 'way-of-working.md')
+    const done = stateMapping(existsSync(wow) ? readFileSync(wow, 'utf8') : '').Done
+    if (!done) return { ok: false, error: 'State Mapping has no Done board state' }
+    const per = closed.map(id => {
+      const membership = typeof hosts.pm.ensureBoardMembership === 'function' ? hosts.pm.ensureBoardMembership({ id, repo }) : { confirmed: true }
+      return { id, ...(membership.confirmed ? hosts.pm.setBoardState({ id, state: done, repo }) : { confirmed: false, error: membership.error ?? 'membership not confirmed' }) }
+    })
     const bad = per.filter(p => !p.confirmed)
     return { ok: bad.length === 0, per, ...(bad.length ? { error: bad.map(b => `#${b.id}: ${b.error}`).join('; ') } : {}) }
   })
