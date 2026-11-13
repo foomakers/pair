@@ -235,19 +235,31 @@ describe('spawnIteration — idle timeout, not a wall-clock kill (US-573 AC5)', 
     const { engine, cwd } = stub(
       `require('fs').writeFileSync('pid', String(process.pid));process.on('SIGTERM',()=>{});setInterval(()=>{},1000)`,
     )
-    const run = spawnIteration({ engine, cwd, promptText: 'go', autonomyArgs: [], idleTimeoutSeconds: 1 })
+    const run = spawnIteration({
+      engine,
+      cwd,
+      promptText: 'go',
+      autonomyArgs: [],
+      idleTimeoutSeconds: 1,
+    })
     let guard: ReturnType<typeof setTimeout> | undefined
     try {
       const result = await Promise.race([
         run,
-        new Promise<never>((_, reject) => { guard = setTimeout(() => reject(new Error('did not settle')), 8000) }),
+        new Promise<never>((_, reject) => {
+          guard = setTimeout(() => reject(new Error('did not settle')), 8000)
+        }),
       ])
       expect(result).toMatchObject({ outcome: 'failed', cause: 'timed-out', stalled: true })
     } finally {
       clearTimeout(guard)
       const pid = join(cwd, 'pid')
       if (existsSync(pid)) {
-        try { process.kill(Number(readFileSync(pid, 'utf8')), 'SIGKILL') } catch { /* already exited */ }
+        try {
+          process.kill(Number(readFileSync(pid, 'utf8')), 'SIGKILL')
+        } catch {
+          /* already exited */
+        }
       }
       await run
     }
@@ -260,13 +272,19 @@ describe('spawnIteration — idle timeout, not a wall-clock kill (US-573 AC5)', 
     try {
       const result = await Promise.race([
         spawnIteration({ engine, cwd, promptText: 'go', autonomyArgs: [], idleTimeoutSeconds: 1 }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('did not settle')), 8000).unref()),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('did not settle')), 8000).unref(),
+        ),
       ])
       expect(result).toMatchObject({ outcome: 'failed', cause: 'timed-out', stalled: true })
     } finally {
       const pid = join(cwd, 'pid')
       if (existsSync(pid)) {
-        try { process.kill(Number(readFileSync(pid, 'utf8')), 'SIGKILL') } catch { /* already exited */ }
+        try {
+          process.kill(Number(readFileSync(pid, 'utf8')), 'SIGKILL')
+        } catch {
+          /* already exited */
+        }
       }
     }
   }, 12000)
@@ -275,7 +293,13 @@ describe('spawnIteration — idle timeout, not a wall-clock kill (US-573 AC5)', 
     const { engine, cwd } = stub(
       `process.on('SIGTERM',()=>{});setTimeout(()=>{process.stdout.write(JSON.stringify({type:'result',subtype:'success'})+'\\n');process.exit(0)},2000)`,
     )
-    const result = await spawnIteration({ engine, cwd, promptText: 'go', autonomyArgs: [], idleTimeoutSeconds: 1 })
+    const result = await spawnIteration({
+      engine,
+      cwd,
+      promptText: 'go',
+      autonomyArgs: [],
+      idleTimeoutSeconds: 1,
+    })
     expect(result).toMatchObject({ outcome: 'failed', cause: 'timed-out', stalled: true })
   }, 12000)
 
