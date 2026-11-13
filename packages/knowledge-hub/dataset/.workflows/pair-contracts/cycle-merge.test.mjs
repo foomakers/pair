@@ -624,6 +624,8 @@ function gitFixture() {
   sh(main, 'push', '-q', 'origin', 'feature/US-42-x')
   const wt = join(root, 'wt')
   sh(main, 'worktree', 'add', '-q', wt, 'feature/US-42-x')
+  mkdirSync(join(main, '.pair', 'adoption', 'tech'), { recursive: true })
+  writeFileSync(join(main, '.pair', 'adoption', 'tech', 'way-of-working.md'), '## PM Tool\n\n- `pm-project`: `Board`\n')
   mkdirSync(join(main, '.pair', 'working', 'checkpoints'), { recursive: true })
   writeFileSync(join(main, '.pair', 'working', 'checkpoints', '42.md'), 'cp')
   return { main, wt, remote, sh }
@@ -828,6 +830,7 @@ const j = a.join(' ')
 const out = v => { process.stdout.write(typeof v === 'string' ? v : JSON.stringify(v)); process.exit(0) }
 if (a[0] === 'issue' && a[1] === 'view' && j.includes('--json labels')) out({ labels: cfg.labels.map(name => ({ name })) })
 if (a[0] === 'issue' && a[1] === 'view') out('## Definition of Done Checklist\\n\\n- [ ] x\\n')
+if (a[0] === 'project' && a[1] === 'list') out({ projects: [{ id: 'PVT_1', title: 'Board' }] })
 if (a[0] === 'pr' && a[1] === 'view') out(cfg.head + '\\n')
 if (a[0] === 'api' && /commits\\/[0-9a-f]{40}\\/status$/.test(a[1])) out({ statuses: cfg.statuses })
 if (a[0] === 'api' && /issues\\/[0-9]+\\/labels$/.test(a[1]) && !a.includes('-X')) out((cfg.prLabels ?? cfg.labels).map(name => ({ name })))
@@ -835,7 +838,7 @@ if (a[0] === 'api' && a[1].includes('check-runs')) out({ check_runs: [] })
 if (a[0] === 'api' && a.includes('--paginate')) out('[]')
 if (a[0] === 'api' && a.includes('POST') && a[a.indexOf('POST') - 1] === '-X' && /comments$/.test(a[a.indexOf('POST') + 1])) out({ id: 900, html_url: 'https://github.com/o/r/issues/42#issuecomment-900' })
 if (a[0] === 'api' && /\\/parent$/.test(a[1])) { process.stderr.write('gh: Not Found (HTTP 404)'); process.exit(1) }
-if (a[0] === 'api' && a[1] === 'graphql' && j.includes('projectItems')) out({ data: { repository: { issue: { projectItems: { nodes: [{ id: 'PVTI_1', project: { id: 'PVT_1', title: 'Board', fields: { nodes: [{ id: 'PVTSSF_1', name: 'Status', options: [{ id: 'opt-done', name: 'Done' }] }] } } }] } } } } })
+if (a[0] === 'api' && a[1] === 'graphql' && j.includes('projectItems')) out({ data: { repository: { issue: { id: 'I_42', projectItems: { nodes: [{ id: 'PVTI_1', project: { id: 'PVT_1', title: 'Board', fields: { nodes: [{ id: 'PVTSSF_1', name: 'Status', options: [{ id: 'opt-done', name: 'Done' }] }] } } }] } } } } })
 if (a[0] === 'api' && a[1] === 'graphql') out({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'PVTI_1', fieldValueByName: { name: 'Done' } } } } })
 // gh pr merge semantics: --match-head-commit <sha> is refused when the remote head is not <sha>;
 // without it the CURRENT remote head (mergeHead: a push that landed after pr view) is merged.

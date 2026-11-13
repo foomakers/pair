@@ -1,0 +1,64 @@
+name: Pair board sync
+
+on:
+  issues:
+    types: [opened, labeled]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, closed]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  created:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add story to board
+        env:
+          GH_TOKEN: ${{ secrets.PAIR_PROJECT_TOKEN || github.token }}
+          STORY: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          is_story=$(node -e 'const fs=require("fs"); const e=require(process.env.GITHUB_EVENT_PATH); const w=fs.readFileSync(".pair/adoption/tech/way-of-working.md","utf8"); const label=/`story-label`\s*:\s*`([^`]+)`/.exec(w)?.[1]; const labels=e.issue.labels.map(x=>x.name); process.stdout.write(String(/^## Story Statement\s*$/m.test(e.issue.body??"") || Boolean(label && labels.includes(label))))')
+          if [ "$is_story" != true ]; then echo 'Issue is not a configured story'; exit 0; fi
+          result=$(node .claude/skills/pair-workflow-cycle/scripts/board-transition.mjs --story "$STORY" --pr-state none --repo "$REPO")
+          echo "$result"
+          echo "$result" | jq -e '.confirmed == true'
+
+  pr-state:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Align story after PR change
+        env:
+          GH_TOKEN: ${{ secrets.PAIR_PROJECT_TOKEN || github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          story=$(node -e '
+            const { spawnSync } = require("node:child_process");
+            const e = require(process.env.GITHUB_EVENT_PATH);
+            const repo = e.repository;
+            const pr = e.pull_request;
+            const sender = e.sender?.login;
+            if (!repo?.full_name || !repo?.id || !sender || !pr?.head?.repo || !pr?.base?.repo) process.exit(0);
+            if ([pr.head.repo, pr.base.repo].some(r => r.id !== repo.id || r.full_name !== repo.full_name)) process.exit(0);
+            const body = String(pr.body ?? "");
+            const story = /^(?:Closes|Fixes|Resolves)\s+#(\d+)\s*$/im.exec(body)?.[1]
+              ?? /#(\d+)(?!\d)/.exec(String(pr.head.ref ?? ""))?.[1];
+            if (!story) process.exit(0);
+            const response = spawnSync("gh", ["api", `repos/${repo.full_name}/collaborators/${sender}/permission`, "--method", "GET"], { encoding: "utf8", timeout: 5000 });
+            if (response.status !== 0) process.exit(0);
+            let permission;
+            try { permission = JSON.parse(response.stdout); } catch { process.exit(0); }
+            if (["admin", "maintain", "write"].includes(permission.role_name ?? permission.permission)) process.stdout.write(story);
+          ')
+          if [ -z "$story" ]; then echo 'No linked story; nothing to sync'; exit 0; fi
+          if [ "${{ github.event.action }}" != closed ]; then state=open; elif [ "${{ github.event.pull_request.merged }}" = true ]; then state=merged; else state=closed-unmerged; fi
+          result=$(node .claude/skills/pair-workflow-cycle/scripts/board-transition.mjs --story "$story" --pr-state "$state" --repo "$REPO")
+          echo "$result"
+          echo "$result" | jq -e '.confirmed == true'

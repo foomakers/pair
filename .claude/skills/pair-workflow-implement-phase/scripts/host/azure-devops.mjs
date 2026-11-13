@@ -29,7 +29,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES, updateEpicBody } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const CHECK_GENRE = 'pair'
@@ -99,7 +99,10 @@ export default defineAdapter({
       const hex = String(wi?.fields?.['System.Tags'] ?? '').split(';').map(t => TAG_RE.exec(t.trim())?.[1]).find(Boolean)
       return hex ? `<!-- pair:scope-decision:${hex.toLowerCase()} -->${body}` : body
     }
-    const asCard = wi => ({ number: wi?.id, url: cardUrl(wi), title: wi?.fields?.['System.Title'], body: bodyOf(wi) })
+    const asCard = wi => {
+      const state = wi?.fields?.['System.State'] ?? null
+      return { number: wi?.id, url: cardUrl(wi), title: wi?.fields?.['System.Title'], body: bodyOf(wi), state: ['Done', 'Closed', 'Removed'].includes(state) ? 'CLOSED' : 'OPEN', stateReason: state === 'Removed' ? 'NOT_PLANNED' : ['Done', 'Closed'].includes(state) ? 'COMPLETED' : null, projectItems: state ? [{ status: { name: state } }] : [] }
+    }
     const relatedIds = (wi, rel) => (wi?.relations ?? []).filter(r => r.rel === rel).map(r => Number(/\/workItems\/(\d+)$/i.exec(String(r.url))?.[1])).filter(Number.isInteger)
 
     const prShow = pr => azJson(['repos', 'pr', 'show', '--id', String(pr)], 'repos pr show')
@@ -169,6 +172,22 @@ export default defineAdapter({
         const rows = azJson(['boards', 'query', '--wiql', wiql], 'boards query')
         return (Array.isArray(rows) ? rows : []).map(asCard)
       },
+      listCards({ repo }) {
+        const { project } = splitRepo(repo)
+        const where = `[System.WorkItemType] = '${CARD_TYPE}'${project ? ` AND [System.TeamProject] = '${project.replace(/'/g, "''")}'` : ''}`
+        const rows = azJson(['boards', 'query', '--wiql', `SELECT [System.Id] FROM WorkItems WHERE ${where}`], 'boards query')
+        return (Array.isArray(rows) ? rows : []).map(row => ({ id: String(row.id) }))
+      },
+      linkedPr({ id, repo }) {
+        const { project, repository } = splitRepo(repo)
+        const scope = [...(project ? ['--project', project] : []), ...(repository ? ['--repository', repository] : [])]
+        const rows = azJson(['repos', 'pr', 'list', '--status', 'all', ...scope], 'repos pr list')
+        const ref = new RegExp(`^(?:Refs:\\s*(?:AB#|#)?|(?:Closes|Fixes)\\s+(?:AB#|#))${String(id).replace(/[^0-9]/g, '')}\\s*$`, 'im')
+        const hits = (Array.isArray(rows) ? rows : []).filter(pr => ref.test(String(pr.description ?? '')))
+        if (hits.length > 1) return 'unknown'
+        if (!hits.length) return 'none'
+        return hits[0].status === 'completed' ? 'merged' : hits[0].status === 'abandoned' ? 'closed-unmerged' : hits[0].status === 'active' ? 'open' : 'unknown'
+      },
       createCard({ repo, title, body }) {
         const { project } = splitRepo(repo)
         const hex = MARKER_RE.exec(String(body ?? ''))?.[1]
@@ -178,6 +197,43 @@ export default defineAdapter({
       updateCard({ id, body }) {
         azJson(['boards', 'work-item', 'update', '--id', cardId(id), '--description', body], 'boards work-item update')
         return { id }
+      },
+      ensureBoardMembership({ id }) {
+        try {
+          showCard(id)
+          return { confirmed: true, implicit: true }
+        } catch (e) {
+          return { confirmed: false, error: e.message }
+        }
+      },
+      setBoardState({ id, state }) {
+        try {
+          const before = showCard(id)?.fields?.['System.State']
+          if (before !== state) azJson(['boards', 'work-item', 'update', '--id', cardId(id), '--state', state], 'boards work-item update')
+          const now = showCard(id)?.fields?.['System.State']
+          return { applied: state, confirmed: now === state, error: now === state ? null : `read-back: state is ${JSON.stringify(now)}` }
+        } catch (e) {
+          return { applied: state, confirmed: false, error: e.message }
+        }
+      },
+      closeCard({ id, reason }) {
+        const state = reason === 'merged' ? 'Done' : reason === 'unmerged' ? 'Removed' : null
+        return state ? this.setBoardState({ id, state }) : { confirmed: false, error: `unknown close reason ${JSON.stringify(reason)}` }
+      },
+      syncEpic({ id }) {
+        try {
+          const parent = relatedIds(showCard(id, 'relations'), 'System.LinkTypes.Hierarchy-Reverse')[0]
+          if (parent === undefined) return { confirmed: false, gap: 'parent-absent', error: `work item ${id} has no parent` }
+          const children = relatedIds(showCard(parent, 'relations'), 'System.LinkTypes.Hierarchy-Forward').map(child => ({ id: String(child), closed: ['Done', 'Closed'].includes(showCard(child)?.fields?.['System.State']) }))
+          const before = bodyOf(showCard(parent))
+          const next = updateEpicBody(before, children)
+          if (next.trimEnd() !== before.trimEnd()) azJson(['boards', 'work-item', 'update', '--id', String(parent), '--description', next], 'boards work-item update')
+          const after = bodyOf(showCard(parent))
+          const confirmed = updateEpicBody(after, children).trimEnd() === after.trimEnd()
+          return { confirmed, parent, changed: next.trimEnd() !== before.trimEnd(), error: confirmed ? null : `read-back: epic ${parent} checklist differs` }
+        } catch (e) {
+          return { confirmed: false, gap: 'epic-sync-failed', error: e.message }
+        }
       },
       // US-523: Azure Boards labels are work-item tags (`System.Tags`, `;`-separated) — added once, READ BACK.
       // Reported, never thrown, like the board write.
