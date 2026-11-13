@@ -21,7 +21,7 @@ Rules, causes and per-stack fixes live in [fast-tests.md](../../../.pair/knowled
 
 ### Step 1: Measure
 
-Quiet machine, build done first. Run `pnpm test-audit:baseline` (3 seeded runs, median). A noisy run is discarded and the report says so. A suite the tool cannot measure is `not measured`, never estimated.
+Quiet machine, build done first. Run `pnpm test-audit:baseline` (3 seeded runs, median). It rewrites the tracked `test-audit/baseline.json`: read the numbers, then restore it with `git checkout -- test-audit/baseline.json`. A noisy run is discarded and the report says so. A suite the tool cannot measure is `not measured`, never estimated.
 
 ### Step 2: Profile pre-push
 
@@ -45,4 +45,4 @@ End with: "Open a card for these steps?", listing the steps (one per bottleneck,
 
 ## Safety
 
-Production code and tests unchanged: confirm with `git status` after the run. No deletion of any test.
+Production code and tests unchanged: confirm with `git status` after the run: clean, `test-audit/baseline.json` restored (Step 1). No deletion of any test.

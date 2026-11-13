@@ -21,11 +21,11 @@ Classes (U1–U8), protections and cleanup order live in [behavior-first-tests.m
 
 ### Step 1: Baseline
 
-Run `pnpm test-audit:baseline`: counts, median duration per module. Noisy run: discard and say so.
+Run `pnpm test-audit:baseline`: counts, median duration per module. It rewrites the tracked `test-audit/baseline.json`: read the numbers, then restore it with `git checkout -- test-audit/baseline.json`. Noisy run: discard and say so.
 
 ### Step 2: Worktree for mutation
 
-Mutation mutates in place and restores with `git checkout` and `git clean`. Run it ONLY in a clean, disposable worktree (`git worktree add`), never in the working checkout. After the run assert `git status` is clean there; the worktree is then discarded.
+Mutation mutates in place and restores with `git checkout` and `git clean`. Run it ONLY in a clean, disposable worktree (`git worktree add`), never in the working checkout. After the run assert `git status` is clean there (and in the working checkout, with `test-audit/baseline.json` restored, Step 1); the worktree is then discarded.
 
 ### Step 3: Mutation
 
