@@ -246,7 +246,7 @@ const repoFromRemote = (git, root) => {
   return m ? m[1] : null
 }
 
-export function closeStory({ hosts, story, repo, branch, root = process.cwd(), git = defaultGit, fs = { exists: existsSync, rm: rmSync } }) {
+export function closeStory({ hosts, story, pr, repo, branch, root = process.cwd(), git = defaultGit, fs = { exists: existsSync, rm: rmSync } }) {
   const steps = {}
   const run = (name, fn) => {
     try {
@@ -255,6 +255,12 @@ export function closeStory({ hosts, story, repo, branch, root = process.cwd(), g
       steps[name] = { ok: false, error: e?.message ?? String(e) }
     }
   }
+  // Post-merge: the PR sheds its premerge state labels (US-599). Host without the capability: explicit skip, never a fake success.
+  run('prState', () => {
+    if (pr === undefined || typeof hosts.code?.clearPrState !== 'function') return { ok: true, skipped: true }
+    const r = hosts.code.clearPrState({ pr, repo })
+    return r.confirmed ? { ok: true, removed: r.removed } : { ok: false, error: r.error ?? 'premerge labels not confirmed absent' }
+  })
   run('dod', () => {
     const { body } = hosts.pm.readCard(story, { repo })
     const next = checkDodBoxes(body)
@@ -334,7 +340,17 @@ const record = (input, decision, merged = false) =>
     ? escalate({ hosts: input.hosts, story: input.story, repo: input.repo, stage: 'merge', conditions: decision.conditions ?? [] })
     : park({ hosts: input.hosts, story: input.story, pr: input.pr, repo: input.repo, decision, merged })
 
+// A host-confirmed merge already landed (resume). An unreadable answer is not a merge: the normal gates decide.
+const alreadyMerged = input => {
+  try {
+    return input.hosts.code?.isMerged?.({ pr: input.pr, repo: input.repo }) === true
+  } catch {
+    return false
+  }
+}
+
 export function checkMerge(input) {
+  if (alreadyMerged(input)) return { stage: 'merge', mode: 'check', mergeAllowed: true, alreadyMerged: true, failed: [] }
   const decision = evaluate({ ...input, requireGate: false })
   const out = { stage: 'merge', mode: 'check', ...decision }
   // A ciPending POLL (`--deferPark true`) posts nothing: the driver parks once, after the wait ends (cap) — not ~60 edits of a
@@ -346,15 +362,19 @@ export function checkMerge(input) {
 export function runMerge({ message, branch, root, git, fs, ...input }) {
   const decision = evaluate({ ...input, requireGate: true })
   const out = { stage: 'merge', mode: 'run', ...decision, merged: false, cascaded: false }
+  // Already merged: the refusal (spread from the gate decision) no longer applies.
+  if (alreadyMerged(input)) { delete out.reason; delete out.parkKind; delete out.conditions; Object.assign(out, { mergeAllowed: true, ciPending: false, ciFailed: false, failed: [] }) }
   const parkWith = (d, merged) => ({ ...out, ...d, merged, comment: record(input, d, merged) })
-  if (!decision.mergeAllowed) return parkWith(decision, false)
-  try {
+  // Retry after an interruption past the host merge: finish the closure, never merge twice (US-599).
+  const already = alreadyMerged(input)
+  if (!already && !decision.mergeAllowed) return parkWith(decision, false)
+  if (!already) try {
     input.hosts.code.merge({ pr: input.pr, repo: input.repo, strategy: 'squash', message, headSha: input.reviewedHead })
   } catch (e) {
     const failed = [{ code: 'merge-failed', detail: `the code host refused the merge: ${e.message}` }]
     return parkWith({ mergeAllowed: false, failed, reason: failed[0].detail, parkKind: 'halted' }, false)
   }
-  const closure = closeStory({ hosts: input.hosts, story: input.story, repo: input.repo, branch, root, git, fs })
+  const closure = closeStory({ hosts: input.hosts, story: input.story, pr: input.pr, repo: input.repo, branch, root, git, fs })
   const merged = { ...out, merged: true, cascaded: closure.cascaded, cascade: closure.steps, ...(closure.reason ? { reason: closure.reason } : {}) }
   if (closure.cascaded) return merged
   const failed = [{ code: 'cascade-incomplete', detail: closure.reason }]

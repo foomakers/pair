@@ -131,6 +131,12 @@ const PAIRS: MirrorPair[] = [
           'test nothing where it landed.',
         unresolvableIfMirrored: ['../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs'],
       },
+      'pair-contracts/role-docblock.test.mjs': {
+        why:
+          'Same reason as role-packet: it reads the INSTALLED `pair-workflow-cycle` scripts ' +
+          'through `../../skills/`, a layout the dataset does not have.',
+        unresolvableIfMirrored: ['../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs'],
+      },
       'pair-contracts/cycle-hooks.test.mjs': {
         why:
           'Same reason as cycle-coordinator: it drives the INSTALLED `pair-workflow-cycle` scripts ' +
@@ -142,11 +148,22 @@ const PAIRS: MirrorPair[] = [
           '../../skills/pair-workflow-cycle/SKILL.md',
         ],
       },
-      'pair-contracts/cycle-hooks-timeout.test.mjs': {
+      ...Object.fromEntries(
+        [1, 2, 3].map(n => [
+          `pair-contracts/cycle-hooks-timeout-${n}.test.mjs`,
+          {
+            why:
+              'Part of the split cycle-hooks-timeout suite (parallel files): same reason as ' +
+              'cycle-hooks, it drives the INSTALLED `pair-workflow-cycle` scripts through ' +
+              '`../../skills/` (see its -lib), a layout the dataset does not have.',
+          },
+        ]),
+      ),
+      'pair-contracts/cycle-hooks-timeout-lib.mjs': {
         why:
-          'Same reason as cycle-hooks: it drives the INSTALLED `pair-workflow-cycle` scripts ' +
-          '(`cycle-hooks.mjs`) and SKILL.md through `../../skills/`, a layout the dataset does ' +
-          'not have, so a mirrored copy would test nothing where it landed.',
+          'Shared helpers of the split cycle-hooks-timeout suite: it names the INSTALLED ' +
+          '`pair-workflow-cycle` scripts and SKILL.md through `../../skills/`, a layout the ' +
+          'dataset does not have, so a mirrored copy would test nothing where it landed.',
         unresolvableIfMirrored: [
           '../../skills/pair-workflow-cycle/scripts/cycle-hooks.mjs',
           '../../skills/pair-workflow-cycle/SKILL.md',
@@ -484,7 +501,10 @@ describe('US-219 — development artifacts do not install', () => {
       f => f.endsWith('.test.mjs'),
     )
     expect(tests.length, 'no dry-run suites found — the scan broke').toBeGreaterThan(0)
-    expect(tests.filter(t => !exclude.includes(t))).toEqual([])
+    expect(
+      tests.filter(t => !exclude.includes(t)),
+      'dataset test files missing from apps/pair-cli/config.json workflows.exclude',
+    ).toEqual([])
   })
 
   it('excludes nothing that is not there — a stale entry silently protects nothing', () => {

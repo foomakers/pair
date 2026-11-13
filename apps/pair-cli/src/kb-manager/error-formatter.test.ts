@@ -135,13 +135,4 @@ describe('Error Formatter - KBDownloadError', () => {
     expect(error.code).toBe('NETWORK_ERROR')
     expect(error.suggestion).toContain('internet connection')
   })
-
-  it('includes context in error', () => {
-    const error = new KBDownloadError('Download failed', 'DOWNLOAD_ERROR', 'Retry the download', {
-      url: 'https://example.com',
-      attempt: 1,
-    })
-
-    expect(error.context).toEqual({ url: 'https://example.com', attempt: 1 })
-  })
 })

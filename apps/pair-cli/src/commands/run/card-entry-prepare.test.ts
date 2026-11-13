@@ -217,6 +217,7 @@ describe('AC1/AC2: the default and `always` never reach Ready autonomously', () 
       expect(r.stdout.join('\n')).toMatch(/needs a human/)
       expect(skipAudits(r)).toHaveLength(1)
       expect(skipAudits(r)[0]).toContain('reason=prepare-needs-human')
+      expect(r.stdout).toContain('CARD-SKIP: prepare-needs-human')
     },
   )
 

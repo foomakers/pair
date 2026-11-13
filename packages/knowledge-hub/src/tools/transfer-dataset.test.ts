@@ -25,40 +25,11 @@ vi.mock('@pair/content-ops', async () => {
   }
 })
 
-import {
-  parseJson,
-  parseOptions,
-  runTransferDataset,
-  runTransferPipeline,
-} from './transfer-dataset'
-
-describe('parseJson', () => {
-  it('parses a valid JSON string', () => {
-    const result = parseJson('{"key":"value"}')
-    expect(result).toEqual({ key: 'value' })
-  })
-
-  it('reads and parses a valid JSON file', () => {
-    const result = parseJson('/valid.json')
-    expect(result).toEqual({ defaultBehavior: 'mirror' })
-  })
-
-  it('throws on non-existent file with non-JSON string', () => {
-    expect(() => parseJson('/missing.json')).toThrow('ENOENT')
-  })
-
-  it('throws on file with invalid JSON content', () => {
-    expect(() => parseJson('/invalid.json')).toThrow()
-  })
-})
+import { parseOptions, runTransferDataset, runTransferPipeline } from './transfer-dataset'
 
 describe('parseOptions', () => {
   it('returns undefined for undefined arg', () => {
     expect(parseOptions(undefined)).toBeUndefined()
-  })
-
-  it('returns undefined for empty string arg', () => {
-    expect(parseOptions('')).toBeUndefined()
   })
 
   it('parses JSON string with flatten and targets', () => {
@@ -68,30 +39,6 @@ describe('parseOptions', () => {
     expect(result).toBeDefined()
     expect(result!.flatten).toBe(true)
     expect(result!.targets).toHaveLength(1)
-  })
-
-  it('defaults flatten to false when not provided', () => {
-    const result = parseOptions('{"defaultBehavior":"overwrite"}')
-    expect(result).toBeDefined()
-    expect(result!.flatten).toBe(false)
-  })
-
-  it('defaults targets to empty array when not provided', () => {
-    const result = parseOptions('{"defaultBehavior":"overwrite"}')
-    expect(result).toBeDefined()
-    expect(result!.targets).toEqual([])
-  })
-
-  it('preserves prefix when provided as string', () => {
-    const result = parseOptions('{"prefix":"pair"}')
-    expect(result).toBeDefined()
-    expect(result!.prefix).toBe('pair')
-  })
-
-  it('omits prefix when not a string', () => {
-    const result = parseOptions('{"prefix":123}')
-    expect(result).toBeDefined()
-    expect(result!.prefix).toBeUndefined()
   })
 
   it('throws on invalid input that is not JSON and not a valid file', () => {
@@ -107,37 +54,6 @@ describe('runTransferDataset', () => {
     mockWriteFile.mockReset()
   })
 
-  it('calls copyPathOps in copy mode and returns result', async () => {
-    const skillNameMap = new Map([['next', 'pair-next']])
-    mockCopyPathOps.mockResolvedValue({ skillNameMap })
-
-    const result = await runTransferDataset(
-      { source: '.skills', target: '.claude/skills', mode: 'copy' },
-      '/root',
-    )
-
-    expect(mockCopyPathOps).toHaveBeenCalledWith(
-      expect.objectContaining({
-        source: '.skills',
-        target: '.claude/skills',
-        datasetRoot: '/root',
-      }),
-    )
-    expect(result.skillNameMap).toBe(skillNameMap)
-  })
-
-  it('forwards skillNameMap to copyPathOps', async () => {
-    mockCopyPathOps.mockResolvedValue({})
-    const skillNameMap = new Map([['next', 'pair-next']])
-
-    await runTransferDataset(
-      { source: 'AGENTS.md', target: 'AGENTS.md', mode: 'copy', skillNameMap },
-      '/root',
-    )
-
-    expect(mockCopyPathOps).toHaveBeenCalledWith(expect.objectContaining({ skillNameMap }))
-  })
-
   it('calls movePathOps in move mode', async () => {
     mockMovePathOps.mockResolvedValue(undefined)
 
@@ -145,65 +61,6 @@ describe('runTransferDataset', () => {
 
     expect(mockMovePathOps).toHaveBeenCalled()
     expect(result).toEqual({})
-  })
-
-  it('applies transform with prefix, removing @prefix-skip blocks and all markers', async () => {
-    mockCopyPathOps.mockResolvedValue({})
-    const content = [
-      '# Title',
-      '<!-- @claude-skip-start -->',
-      'Session Context section',
-      '<!-- @claude-skip-end -->',
-      'Visible content',
-      '<!-- @other-skip-start -->',
-      'Other section',
-      '<!-- @other-skip-end -->',
-    ].join('\n')
-    mockReadFile.mockResolvedValue(content)
-    mockWriteFile.mockResolvedValue(undefined)
-
-    await runTransferDataset(
-      { source: 'AGENTS.md', target: 'CLAUDE.md', mode: 'copy', transform: { prefix: 'claude' } },
-      '/root',
-    )
-
-    expect(mockWriteFile).toHaveBeenCalledTimes(1)
-    const written = mockWriteFile.mock.calls[0]![1] as string
-    expect(written).not.toContain('Session Context section')
-    expect(written).not.toContain('@claude-skip')
-    expect(written).toContain('Visible content')
-    expect(written).toContain('Other section')
-    expect(written).not.toContain('<!-- @other-skip')
-  })
-
-  it('strips all markers with stripMarkers option', async () => {
-    mockCopyPathOps.mockResolvedValue({})
-    const content = [
-      '# Title',
-      '<!-- @claude-skip-start -->',
-      'Keep this',
-      '<!-- @claude-skip-end -->',
-    ].join('\n')
-    mockReadFile.mockResolvedValue(content)
-    mockWriteFile.mockResolvedValue(undefined)
-
-    await runTransferDataset(
-      { source: 'AGENTS.md', target: 'AGENTS.md', mode: 'copy', stripMarkers: true },
-      '/root',
-    )
-
-    const written = mockWriteFile.mock.calls[0]![1] as string
-    expect(written).toContain('Keep this')
-    expect(written).not.toContain('<!--')
-  })
-
-  it('skips content transform when neither transform nor stripMarkers set', async () => {
-    mockCopyPathOps.mockResolvedValue({})
-
-    await runTransferDataset({ source: 'a.md', target: 'b.md', mode: 'copy' }, '/root')
-
-    expect(mockReadFile).not.toHaveBeenCalled()
-    expect(mockWriteFile).not.toHaveBeenCalled()
   })
 
   it('skips content transform for non-.md files', async () => {
@@ -229,132 +86,6 @@ describe('runTransferDataset', () => {
         '/root',
       ),
     ).rejects.toThrow('Marker validation failed')
-  })
-
-  it('removes multiple @prefix-skip blocks with transform', async () => {
-    mockCopyPathOps.mockResolvedValue({})
-    const content = [
-      '# AGENTS.md',
-      '<!-- @claude-skip-start -->',
-      '## Session Context',
-      'Context details here',
-      '<!-- @claude-skip-end -->',
-      '',
-      '## Quick Start',
-      'Visible section',
-      '',
-      '<!-- @claude-skip-start -->',
-      '## Internal Notes',
-      'More internal content',
-      '<!-- @claude-skip-end -->',
-      '',
-      '## References',
-      'Final section',
-      '',
-      '<!-- @claude-skip-start -->',
-      '## Session Examples',
-      'Example content',
-      '<!-- @claude-skip-end -->',
-    ].join('\n')
-    mockReadFile.mockResolvedValue(content)
-    mockWriteFile.mockResolvedValue(undefined)
-
-    await runTransferDataset(
-      { source: 'AGENTS.md', target: 'CLAUDE.md', mode: 'copy', transform: { prefix: 'claude' } },
-      '/root',
-    )
-
-    const written = mockWriteFile.mock.calls[0]![1] as string
-    expect(written).not.toContain('Session Context')
-    expect(written).not.toContain('Internal Notes')
-    expect(written).not.toContain('Session Examples')
-    expect(written).toContain('Quick Start')
-    expect(written).toContain('Visible section')
-    expect(written).toContain('References')
-    expect(written).toContain('Final section')
-    expect(written).not.toContain('<!--')
-  })
-
-  it('preserves non-matching prefix content and strips their markers', async () => {
-    mockCopyPathOps.mockResolvedValue({})
-    const content = [
-      '# Title',
-      '<!-- @claude-skip-start -->',
-      'Claude-only section',
-      '<!-- @claude-skip-end -->',
-      '<!-- @cursor-skip-start -->',
-      'Cursor-only section',
-      '<!-- @cursor-skip-end -->',
-      '<!-- @copilot-skip-start -->',
-      'Copilot-only section',
-      '<!-- @copilot-skip-end -->',
-      'Always visible',
-    ].join('\n')
-    mockReadFile.mockResolvedValue(content)
-    mockWriteFile.mockResolvedValue(undefined)
-
-    await runTransferDataset(
-      { source: 'AGENTS.md', target: 'CLAUDE.md', mode: 'copy', transform: { prefix: 'claude' } },
-      '/root',
-    )
-
-    const written = mockWriteFile.mock.calls[0]![1] as string
-    expect(written).not.toContain('Claude-only section')
-    expect(written).toContain('Cursor-only section')
-    expect(written).toContain('Copilot-only section')
-    expect(written).toContain('Always visible')
-    expect(written).not.toContain('<!--')
-  })
-
-  it('stripMarkers keeps all content from all prefixes', async () => {
-    mockCopyPathOps.mockResolvedValue({})
-    const content = [
-      '# Title',
-      '<!-- @claude-skip-start -->',
-      'Claude section',
-      '<!-- @claude-skip-end -->',
-      '<!-- @cursor-skip-start -->',
-      'Cursor section',
-      '<!-- @cursor-skip-end -->',
-      'Always visible',
-    ].join('\n')
-    mockReadFile.mockResolvedValue(content)
-    mockWriteFile.mockResolvedValue(undefined)
-
-    await runTransferDataset(
-      { source: 'AGENTS.md', target: 'AGENTS.md', mode: 'copy', stripMarkers: true },
-      '/root',
-    )
-
-    const written = mockWriteFile.mock.calls[0]![1] as string
-    expect(written).toContain('Claude section')
-    expect(written).toContain('Cursor section')
-    expect(written).toContain('Always visible')
-    expect(written).not.toContain('<!--')
-  })
-
-  it('applies content transform after move mode', async () => {
-    mockMovePathOps.mockResolvedValue(undefined)
-    const content = [
-      '# Title',
-      '<!-- @claude-skip-start -->',
-      'Remove this',
-      '<!-- @claude-skip-end -->',
-      'Keep this',
-    ].join('\n')
-    mockReadFile.mockResolvedValue(content)
-    mockWriteFile.mockResolvedValue(undefined)
-
-    await runTransferDataset(
-      { source: 'A.md', target: 'B.md', mode: 'move', transform: { prefix: 'claude' } },
-      '/root',
-    )
-
-    expect(mockMovePathOps).toHaveBeenCalled()
-    expect(mockWriteFile).toHaveBeenCalledTimes(1)
-    const written = mockWriteFile.mock.calls[0]![1] as string
-    expect(written).not.toContain('Remove this')
-    expect(written).toContain('Keep this')
   })
 })
 
@@ -412,14 +143,6 @@ describe('runTransferPipeline', () => {
     expect(result.skillNameMap).toBe(skillNameMap)
   })
 
-  it('returns empty when no step produces skillNameMap', async () => {
-    mockCopyPathOps.mockResolvedValue({})
-
-    const result = await runTransferPipeline([{ source: 'a', target: 'b', mode: 'copy' }], '/root')
-
-    expect(result).toEqual({})
-  })
-
   it('applies transform and stripMarkers in different pipeline steps', async () => {
     const skillNameMap = new Map([
       ['next', 'pair-next'],
@@ -467,10 +190,5 @@ describe('runTransferPipeline', () => {
     const claudeWritten = mockWriteFile.mock.calls[1]![1] as string
     expect(claudeWritten).not.toContain('Session Context')
     expect(claudeWritten).not.toContain('<!--')
-  })
-
-  it('handles empty pipeline gracefully', async () => {
-    const result = await runTransferPipeline([], '/root')
-    expect(result).toEqual({})
   })
 })

@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
 import { tokensCommandMetadata } from './metadata'
+import { CLI_ENTRY } from '../../test-utils/cli-entry'
 
 const CLI_CWD = resolve(__dirname, '../../..')
 const AREAS = [
@@ -19,11 +20,10 @@ const AREAS = [
 // async, never spawnSync: a blocked worker cannot answer vitest's RPC ("Timeout calling onTaskUpdate")
 const run = (root: string, ...args: string[]) =>
   new Promise<{ code: number | null; out: string; err: string }>((done, fail) => {
-    const c = spawn(
-      'node',
-      ['-r', 'ts-node/register/transpile-only', 'src/cli.ts', 'tokens', '--root', root, ...args],
-      { cwd: CLI_CWD, env: { ...process.env, NO_COLOR: '1' } },
-    )
+    const c = spawn('node', [...CLI_ENTRY, 'tokens', '--root', root, ...args], {
+      cwd: CLI_CWD,
+      env: { ...process.env, NO_COLOR: '1' },
+    })
     let out = ''
     let err = ''
     c.stdout.setEncoding('utf-8').on('data', d => (out += d))

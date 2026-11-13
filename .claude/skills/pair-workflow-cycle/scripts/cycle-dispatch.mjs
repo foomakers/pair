@@ -154,6 +154,12 @@ function fail(halt, detail, extra = {}) {
 // (`.agents/skills/`) sits three levels below `.agents/`, not below the agents' own target (r0-9).
 const AGENTS_DIR = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'agents')
 
+/** US-623 BR2: the role's `tools:` frontmatter — a harness constraint the instruction engines never enforce, so the prompt states it. */
+export function roleToolsFor(agentType, agentsDir = AGENTS_DIR) {
+  const path = join(agentsDir, `${agentType}.md`)
+  return /^tools:\s*(.+)$/m.exec(/^---\n([\s\S]*?)\n---\n/.exec(readFileSync(path, 'utf8'))?.[1] ?? '')?.[1].trim()
+}
+
 /**
  * The BODY of a stage's agent definition — frontmatter stripped, since `model`/`tools` are harness
  * configuration, not role instructions. A missing definition HALTs `agent-definition-missing`
@@ -508,9 +514,13 @@ function packetCommand(opts) {
     const bare = skill.replace(/^\//, '')
     const body = `${args} $workflowVersion=${workflowVersion}`
     const role = roleBodyFor(agentType, agentsDir)
+    const toolsNote = type => {
+      const tools = roleToolsFor(type, agentsDir)
+      return tools ? `\n\nTool allowlist for this role (this engine does not enforce it — stay within it): ${tools}.` : ''
+    }
     return style === 'slash'
       ? `/${bare} ${body}\n\n${role}\n\n${guardrails}`
-      : `${role}\n\nRun the ${bare} skill with these arguments: ${body}\n\n${guardrails}`
+      : `${role}${toolsNote(agentType)}\n\nRun the ${bare} skill with these arguments: ${body}\n\n${guardrails}`
   }
   const notesArg = card.notes ? ` $notes=${JSON.stringify(card.notes)}` : ''
   const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
@@ -525,7 +535,7 @@ function packetCommand(opts) {
     skill = SK.redSpec
     agentType = 'pair-fix-test-author'
     phaseLabel = 'Prepare'
-    args = `${common} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(card.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle, ...(n.group.widen && { widen: true }) })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg}`
+    args = `${common} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(card.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle, ...(n.group.widen && { widen: true }) })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.ownerApproval ? ` $ownerApproval=${JSON.stringify(n.ownerApproval)}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg}`
   } else if (n.step === 'validate') {
     skill = SK.redVerify
     agentType = 'pair-red-contract-verifier'

@@ -1,0 +1,12 @@
+{
+  "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts::AC15 through handleRunCommand > an AUTONOMOUS run on a card without the label never starts the delivery cycle": {
+    "class": "U4",
+    "verdict": "dismissed",
+    "reason": "mocks the injected driveCycle port (boundary) and asserts the observable outcome 'cycle not started'"
+  },
+  "apps/pair-cli/src/config/kb-resolver.test.ts::Release context always downloads KB (no bundled dataset) > probes the cache when PAIR_DIAG is on (the [diag] line needs the answer)": {
+    "class": "U4",
+    "verdict": "dismissed",
+    "reason": "mocks console and the cache probe at the I/O boundary; asserts the probe is consulted only under PAIR_DIAG (documented behavior)"
+  }
+}

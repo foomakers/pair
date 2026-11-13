@@ -6,6 +6,8 @@ Complete guide for implementing filesystem-based project management using markdo
 
 ## Overview
 
+Filesystem PM has no native-link association to a code-host PR: report `fallback — native-link unsupported`. Keep the split `Refs: <issue-id>` PR line and one PR URL in the item's Activity Log; read the log before posting to avoid duplicates. A text reference alone is not a native association.
+
 This guide provides comprehensive instructions for integrating pair with filesystem-based project management. Unlike external tools like GitHub Projects, the filesystem approach uses local markdown files organized in structured directories to manage initiatives, epics, user stories, and tasks.
 
 ### Key Benefits

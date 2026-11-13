@@ -100,6 +100,8 @@ export interface RunCommandConfig {
   noColor?: true
   /** Present only when `--card` was passed: the run is a tag-driven dispatch (US-217). */
   dispatch?: RunDispatchRequest
+  /** US-614: `--cards a,b,c` — the ordered card list, run serially in passes; never with `--card`/`--root`/`--filter`/`--parallel`. */
+  cards?: readonly string[]
   /** US-488: `--profile <name>` — present only when passed. */
   profile?: string
   /** US-488: `--workflow-config <path>` — present only when passed. */
@@ -156,6 +158,8 @@ interface ParseRunOptions {
   /** commander's `--no-color` ⇒ `color: false`. */
   color?: boolean
   card?: string
+  /** US-614: `--cards a,b,c`. */
+  cards?: string
   cardTags?: string
   dryRun?: boolean
   /** US-487: `--pr` — meaningful only with `--card` (the cycle coordinator's own entry). */
@@ -240,6 +244,52 @@ function resolveInvocation(options: ParseRunOptions): RunInvocationRequest {
   if (prompt === undefined) return { kind: 'skill', ...(skill && { name: skill }) }
   if (prompt.trim().length === 0) throw new Error('--prompt was passed with an empty value')
   return { kind: 'prompt', text: prompt }
+}
+
+/** US-614: a usage refusal — the CLI exits 2 for it (AC9), never 1. */
+export class UsageError extends Error {
+  readonly exitCode = 2
+}
+
+const CARDS_CONFLICTS = [
+  ['card', '--card'],
+  ['root', '--root'],
+  ['filter', '--filter'],
+  ['skill', '--skill'],
+  ['prompt', '--prompt'],
+  ['watch', '--watch'],
+  ['interval', '--interval'],
+  ['predicate', '--predicate'],
+  ['stateOrder', '--state-order'],
+  ['pr', '--pr'],
+  ['runId', '--run-id'],
+  ['rounds', '--rounds'],
+  ['cardTags', '--card-tags'],
+] as const
+
+/** US-614 AC1/AC10: `--cards a,b,c` — ordered, each id safe, none empty or repeated, nothing that selects or fans out beside it. */
+function resolveCards(options: ParseRunOptions): { cards?: readonly string[] } {
+  if (options.cards === undefined) return {}
+  try {
+    const conflicting: string[] = CARDS_CONFLICTS.filter(([key]) => options[key] !== undefined).map(
+      ([, flag]) => flag,
+    )
+    if (options.parallel !== undefined && Number(options.parallel) !== 1)
+      conflicting.push('--parallel')
+    if (conflicting.length > 0)
+      throw new Error(
+        `--cards cannot be combined with ${conflicting.join(' or ')}: the list is the whole scope, run one card at a time`,
+      )
+    const cards = options.cards.split(',').map(id => id.trim())
+    if (cards.some(id => id.length === 0))
+      throw new Error(`--cards has an empty entry (received: ${options.cards})`)
+    for (const id of cards) if (!isSafeId(id)) throw new Error(idSafetyFailure('--cards', id))
+    const dup = cards.find((id, i) => cards.indexOf(id) !== i)
+    if (dup !== undefined) throw new Error(`--cards names card ${dup} twice`)
+    return { cards }
+  } catch (error) {
+    throw new UsageError((error as Error).message)
+  }
 }
 
 function resolveEngineFlag(engine: string | undefined): EngineId | undefined {
@@ -503,6 +553,7 @@ function resolveProfileSelection(options: ParseRunOptions): {
   if (
     (profile !== undefined || workflowConfig !== undefined) &&
     options.card === undefined &&
+    options.cards === undefined &&
     options.parallel === undefined &&
     options.root === undefined
   ) {
@@ -555,7 +606,7 @@ function resolveAutonomyArguments(options: ParseRunOptions): RunAutonomyArgument
   const prepare = promptSafeText(options.prepare, '--prepare')
   const merge = promptSafeText(options.merge, '--merge')
   if ([preset, until, prepare, merge].every(v => v === undefined)) return undefined
-  if (options.card === undefined && options.parallel === undefined)
+  if (options.card === undefined && options.cards === undefined && options.parallel === undefined)
     refuseAutonomyOffCycle(preset, until, prepare)
   return {
     ...(preset && { preset }),
@@ -631,7 +682,7 @@ const LOOP_ONLY_FLAGS = [
  * it is never returned as an argument request (omission inherits policy).
  */
 function withImpliedParallel(options: ParseRunOptions): ParseRunOptions {
-  if (options.parallel !== undefined) return options
+  if (options.parallel !== undefined || options.cards !== undefined) return options
   if (FLAGS_CONFLICTING_WITH_PARALLEL.some(([key]) => options[key] !== undefined)) return options
   return LOOP_ONLY_FLAGS.some(key => options[key] !== undefined)
     ? { ...options, parallel: 1 }
@@ -640,19 +691,25 @@ function withImpliedParallel(options: ParseRunOptions): ParseRunOptions {
 
 export function isParallelRun(config: RunCommandConfig): boolean {
   return (
-    config.parallel !== undefined ||
-    (config.invocation.kind === 'skill' &&
-      config.invocation.name === undefined &&
-      config.dispatch?.card === undefined &&
-      (config.watch !== undefined ||
-        config.interval !== undefined ||
-        config.predicate !== undefined ||
-        config.autonomy !== undefined))
+    config.cards === undefined &&
+    (config.parallel !== undefined ||
+      (config.invocation.kind === 'skill' &&
+        config.invocation.name === undefined &&
+        config.dispatch?.card === undefined &&
+        (config.watch !== undefined ||
+          config.interval !== undefined ||
+          config.predicate !== undefined ||
+          config.autonomy !== undefined)))
   )
 }
 
-function explicitParallel(input: ParseRunOptions, parallel: Pick<RunCommandConfig, 'parallel'>) {
-  return input.parallel !== undefined ? parallel : {}
+/** `--parallel 1` beside `--cards` is accepted and dropped: a card list is serial by definition. */
+function explicitParallel(
+  input: ParseRunOptions,
+  parallel: Pick<RunCommandConfig, 'parallel'>,
+  cards: Pick<RunCommandConfig, 'cards'>,
+) {
+  return input.parallel !== undefined && cards.cards === undefined ? parallel : {}
 }
 
 export function parseRunCommand(input: ParseRunOptions, args: string[] = []): RunCommandConfig {
@@ -663,6 +720,7 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
 
   const engine = resolveEngineFlag(options.engine)
   const cwd = optionalText(options.cwd, '--cwd')
+  const cards = resolveCards(options)
   const parallel = resolveParallel(options)
   const stateOrder = resolveStateOrder(options)
   const watch = resolveWatch(options)
@@ -674,6 +732,7 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
     command: 'run',
     ...(engine && { engine }),
     ...(dispatch && { dispatch }),
+    ...cards,
     ...profileSelection,
     invocation: resolveInvocation(options),
     scope: resolveScope(options),
@@ -695,7 +754,7 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
     }),
     ...outputModeOf(options),
     dryRun: options.dryRun === true,
-    ...explicitParallel(input, parallel),
+    ...explicitParallel(input, parallel, cards),
     ...stateOrder,
     ...watch,
   }

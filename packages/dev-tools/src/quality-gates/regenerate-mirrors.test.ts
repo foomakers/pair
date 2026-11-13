@@ -1328,25 +1328,29 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       // arms the trap (mktemp returns -> trap installed): a SIGTERM in that gap leaked the file.
       // Interrupting repeatedly at the earliest observable moment makes the gap a certainty, not luck.
       tmp = makeToolchainFixture()
-      writeTurboStub(tmp, 'sleep 30\n')
-      const tmpEnvDir = join(tmp, '.tmpdir')
-      mkdirSync(tmpEnvDir, { recursive: true })
-      for (let i = 0; i < EARLY_INTERRUPT_RUNS; i++) {
-        const child = spawn(join(tmp, 'scripts/regenerate-mirrors.sh'), [], {
-          cwd: tmp,
-          detached: true,
-          env: { ...process.env, ...isolatedHome(tmp), TMPDIR: tmpEnvDir },
-        })
-        const exited = new Promise<void>(resolve => child.on('close', () => resolve()))
-        // Poll close to mktemp, but yield 1ms per check: a setImmediate spin pins a CPU and, on a
-        // loaded CI runner, starved the very script it observes until the test timed out.
-        const deadline = Date.now() + EARLY_INTERRUPT_POLL_MS
-        while (readdirSync(tmpEnvDir).length === 0 && Date.now() < deadline)
-          await new Promise(r => setTimeout(r, 1))
-        process.kill(-(child.pid as number), 'SIGTERM')
-        await exited
-        expect(readdirSync(tmpEnvDir), `run ${i}`).toEqual([])
-      }
+      writeTurboStub(tmp, 'sleep 3\n')
+      const root = tmp
+      // Runs are independent (own TMPDIR), so they interrupt concurrently: same race, 1/12th the wall.
+      await Promise.all(
+        Array.from({ length: EARLY_INTERRUPT_RUNS }, async (_, i) => {
+          const tmpEnvDir = join(root, `.tmpdir-${i}`)
+          mkdirSync(tmpEnvDir, { recursive: true })
+          const child = spawn(join(root, 'scripts/regenerate-mirrors.sh'), [], {
+            cwd: root,
+            detached: true,
+            env: { ...process.env, ...isolatedHome(root), TMPDIR: tmpEnvDir },
+          })
+          const exited = new Promise<void>(resolve => child.on('close', () => resolve()))
+          // Poll close to mktemp, but yield 1ms per check: a setImmediate spin pins a CPU and, on a
+          // loaded CI runner, starved the very script it observes until the test timed out.
+          const deadline = Date.now() + EARLY_INTERRUPT_POLL_MS
+          while (readdirSync(tmpEnvDir).length === 0 && Date.now() < deadline)
+            await new Promise(r => setTimeout(r, 1))
+          process.kill(-(child.pid as number), 'SIGTERM')
+          await exited
+          expect(readdirSync(tmpEnvDir), `run ${i}`).toEqual([])
+        }),
+      )
     },
     // Budget the worst case of every run (poll deadline + exit), not one script run.
     EARLY_INTERRUPT_RUNS * (EARLY_INTERRUPT_POLL_MS + 5_000),

@@ -38,6 +38,7 @@ Prepare the executable acceptance contract a change must satisfy, before any age
 | `$predecessorRun`  | No       | `{ runId, phase }` when the contract you revise was sealed in an EARLIER run directory bound by a migration acknowledgment. Read it there, read-only; never edit, move or re-seal it. |
 | `$regressionGuards`| No       | The ACTIVE regression risks (US-479 S11): `{ riskId, introducedByRemediationBatchId, lastCleanReviewedHead, firstFailingHead, reproducerRef, closureAssertions, affectedBoundaryRefs }`. Every one of them belongs in THIS single complete contract, as a row whose oracle is its own reproducer. Do not split them across contracts and do not drop one. |
 | `$regressionRepairOf`| No     | The remediation batch a review invalidated because it introduced a regression. You are preparing that SAME batch again — a LOGICAL rewind, on the current head: the fix goes forward, and `lastCleanReviewedHead` is only the behavioural baseline the guard is compared against. Never a Git revert, reset, rebase or seal deletion. |
+| `$ownerApproval`    | No       | `{ decisionRef, actor, delta, reason }` of the maintainer approval a `revision` carries. Copy it verbatim into the contract's `ownerApproval`; `publish` refuses a revision for an approved line without it (`owner-approval-missing`) and bounds `changedRows` to the approved rows (`rows-outside-approval`). |
 | `$notes`           | No       | Scope directive from the card; it overrides the issue body where they conflict.                                                               |
 | `$workflowVersion` | Yes      | The coordinator's version; every handoff records it.                                                                                          |
 
@@ -74,6 +75,14 @@ For every obligation — each AC of the card (`initial`; read the card with `nod
 **Grouping (`remediation`, the preparation that PLANS the round — the one dispatched with NO `$scope`; ordinarily `r<n>-g1`, but a regression repair lands on the producing group whatever its number, and it is handed a `$scope` precisely because it plans nothing, US-479 F-8/DR-04):** group the findings (each group lists its ids as `findings: [<id>…]`) by canonical owner + authoritative oracle + one compatible mode (`behavioral` | `structural` | `test`), exact `allowedPaths` (`[]` for `test`), `dependsOn`; every finding id lands in exactly one group, or in `carried` with a one-line `disposition` when its correction lies OUTSIDE the repository (the card, the PR body, a human decision) — `carried` is a LOCATION, the finding stays blocking until a human dispositions it or a read-back proves the correction. **Every group's `groupId` is the FULL phase-id `r<n>-g<k>`, never the bare `g<k>` — `cycle-state.mjs` reads `plan.groups[].groupId` and `dependsOn` entries literally as phase strings when it advances to the next group; a bare `g<k>` is not a phase id and stalls the round with a malformed `next`.** Return the whole `plan` and contract the first group in dependency order; later groups are contracted by later dispatches with `$scope`. `dependsOn` names a real SEMANTIC dependency only (one group's fix changes the input/expected output another group's oracle reads) — never invent one to force serialization of groups that merely touch the shared worktree: the write mutex already serializes filesystem access, and an artificial `dependsOn` between two independent findings only stalls the round without closing anything faster (US-479 T-21, S3).
 
 **Carry-forward:** a finding carrying `observedHead`, `oracle`, `probe`, `observed` is a verified prior result — re-run its oracle on the base first; a `missedUpstream` finding gets a `regression` row that stays in the suite for good.
+
+The validator re-derives every class independently and rejects a missing one even when every row passes — so enumerate them yourself BEFORE writing rows (same checklist, same words, for every engine):
+
+**Enumerate first, only then decide** — for every inventory producer list, and check each has a discriminating row:
+
+- (a) every representation/consumer: the pure function AND every CLI/script entry that wires it;
+- (b) every value of every enumerated input dimension the guard is generic over (each channel, mode, kind — never one standing for all);
+- (c) the interaction pairs between (a) and (b).
 
 ### Step 3: The matrix
 

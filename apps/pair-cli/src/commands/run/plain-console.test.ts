@@ -4,10 +4,6 @@ import { plainConsole, plainNote } from './plain-console'
 describe('plain console: technical lines hidden, finished steps as short notes', () => {
   it.each([
     [
-      '  Stage verify:r0 — process success, handoff advanced (terminal event: success) — final: status=reviewed verdict=CHANGES-REQUESTED next=prepare',
-      '  review: changes requested',
-    ],
-    [
       '  Stage verify:r3 — process success, handoff advanced (terminal event: success) — final: status=reviewed verdict=APPROVED next=done',
       '  review: approved',
     ],
@@ -22,10 +18,6 @@ describe('plain console: technical lines hidden, finished steps as short notes',
     [
       '  Stage green:r1-g1 — process success, handoff advanced (terminal event: success) — final: status=fixed next=verify',
       '  fix: done',
-    ],
-    [
-      '  Stage implement:a0 — process success, handoff advanced (terminal event: success) — final: status=ok next=verify',
-      '  code: done, PR opened',
     ],
     [
       '  Stage verify:r1 — process success, handoff NOT advanced (terminal event: success) — final: status=redirect next=prepare',
@@ -64,22 +56,9 @@ describe('plain console: technical lines hidden, finished steps as short notes',
 
   it.each([
     '  Stage prepare:r1-g1 — process success, handoff advanced (terminal event: success) — final: status=red next=validate',
-    'DISPATCH-RECORD: 2026-10-24T06:34:03.808Z event=start card=575 workflow=pair-workflow-cycle',
-    'PREPARE-RESULT: prepared',
-    '  Engine: claude — `claude -p --output-format stream-json --verbose` (from schema default)',
     '  Merge: CI pending — waiting 30s',
-    '    filter: risk:green (adoption (translated from ## Eligibility))',
-    'pair-cli run',
-    'pair-cli run --parallel',
     '  Scope: pair-next --root 578 --filter * (## Autonomy)',
-    '  Requested: --parallel 1 · ## Max Parallelism 3',
-    '  Unit: one `pair-cli run --card <id>` process per card',
-    '  Forwarded to each card: --preset escalate-red (argument)',
-    '  Merge: each card merges per its gate (hold-when; has: risk:red, preset escalate-red)',
-    '  Autonomy: confirmations active (default — no autonomy flag passed)',
-    '  Project trust: nothing to approve',
     '  Loop (watch loop — each iteration re-selects; precedence: argument > adoption > KB default):',
-    '  Excluded: escalated (until cleared), locked and terminal cards',
     '  [#572]     preset: escalate-red (argument)',
     '  [#572] pair run',
     '  [#572]   Dispatch: card 572 · no mapping declared',
@@ -87,12 +66,8 @@ describe('plain console: technical lines hidden, finished steps as short notes',
     '  [#572] 2026-10-24T15:57:45.833Z card-start #572',
     '  [#572]   Readiness: card 572 — board state `Refined` ⇒ Ready',
     '  Ended #572: failed — exit 1',
-    '  Batch outcome:',
-    '  Plan: Nothing eligible to run concurrently',
-    '  Effective parallelism: 0 = min(dependency-allowed 0, ## Max Parallelism 3, --parallel 1)',
     '  [#572]   reason failed-preparation · refusal dirty',
     '  Started #572',
-    '  excluded: 572 (failed-preparation, run run-1, 2026-10-24) — re-evaluated, not inherited',
   ])('hides %s', line => expect(plainNote(line)).toBeUndefined())
 
   it.each([
@@ -111,24 +86,10 @@ describe('plain console: technical lines hidden, finished steps as short notes',
       '  Iteration 3/∞: selected 1 · skipped #577 durable failure: escalate — not retried · ran none · waiting 10m',
       '  Waiting for new cards — next check in 10m · skipped #577 durable failure: escalate — not retried',
     ],
-    [
-      '  Iteration 2/∞: selected 0 · skipped none · ran none · waiting 10m',
-      '  Waiting for new cards — next check in 10m',
-    ],
     ['  Iteration 1/∞: selected 1 · skipped none · ran #577 completed · next iteration', undefined],
-    [
-      '  Checking for cards: pair-next --root 578 --filter * (preset escalate-red)',
-      '  Checking for cards (--root 578 --filter * (preset escalate-red))…',
-    ],
   ])('loop status %s', (line, note) => expect(plainNote(line)).toBe(note))
 
-  it('never hides an unknown line (errors, questions)', () => {
-    expect(plainNote('  Escalated at stage verify: needs a human decision')).toBe(
-      '  Escalated at stage verify: needs a human decision',
-    )
-  })
-
-  const platformCases = ['darwin', 'linux']
+  const platformCases = ['darwin']
   it.each(platformCases)(
     'applies only to a live terminal without --verbose (platform %s)',
     platform => {

@@ -1,0 +1,49 @@
+{
+  "budgets": {
+    "unit": {
+      "maxTestMs": 100,
+      "totalMs": 60000
+    },
+    "integration": {
+      "maxTestMs": 2000,
+      "totalMs": 300000
+    },
+    "e2e": {
+      "maxTestMs": 30000,
+      "totalMs": 900000
+    }
+  },
+  "maxLevelGrowthPct": 5,
+  "minMutationScoreOnDiffPct": 80,
+  "minUniqueKillsPerNewTest": 1,
+  "flakyRuns": {
+    "audit": 10,
+    "pr": 5
+  },
+  "maxMockAssertionRatio": 2,
+  "maxSnapshotLines": 50,
+  "maxTestToCodeRatio": 3,
+  "rollout": "report-only",
+  "criticalModules": ["*"],
+  "quarantine": [
+    {
+      "id": "packages/dev-tools/src/quality-gates/sync-version-in-docs.test.ts::readGitignoreExcludes > returns [] when no .gitignore exists at root",
+      "class": "U6",
+      "evidence": "failed in 6/10 seeded random-order runs (seeds 201-210): shared tmp root written by a sibling test",
+      "issue": null
+    },
+    {
+      "id": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts::checkStepMarkers > fails when neither the skill nor a disclosed sibling points at the gate convention",
+      "class": "U6",
+      "evidence": "failed in 4/10 seeded random-order runs (seeds 201-210): shared fixture root mutated across tests",
+      "issue": null
+    },
+    {
+      "id": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts::checkStepMarkers > accepts the convention pointer in a DISCLOSED SIBLING (progressive disclosure)",
+      "class": "U6",
+      "evidence": "failed in 6/10 seeded random-order runs (seeds 201-210): shared fixture root mutated across tests",
+      "issue": null
+    }
+  ],
+  "repeatedGates": ["implement (verify-quality)", "pre-push (quality-gate)", "review (verify)"]
+}

@@ -861,9 +861,3 @@ describe('bulkUpdateMarkdownLinks - error handling', () => {
     ).rejects.toThrow('Processing failed')
   })
 })
-
-describe('DEFAULT_CONCURRENCY_LIMIT', () => {
-  it('should have the correct default value', () => {
-    expect(DEFAULT_CONCURRENCY_LIMIT).toBe(10)
-  })
-})

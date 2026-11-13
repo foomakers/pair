@@ -81,6 +81,14 @@ Since both Codex and Claude Code read `AGENTS.md`, teams can switch between tool
 
 Codex reads `AGENTS.md` while Cursor reads `.cursor/rules/` and Copilot reads `.github/agents/`: all pointing to the same `.pair/` directory. The AI tool is an implementation detail; the standards are consistent.
 
+### Running the Delivery Cycle on Codex
+
+`pair-cli run` drives `codex exec` and keeps its behavior aligned with `claude`:
+
+- **Result channel**: the stage's final result is read from the stream's last message; when that is not the result JSON, from the file `codex exec --output-last-message` wrote. No JSON in either place fails the stage with the tail of what it said.
+- **Role constraints**: the role's `tools:` allowlist is stated in the prompt (codex does not enforce it).
+- **Isolation (opt-in)**: set `PAIR_CODEX_HOME=<dir>` to run codex under its own `CODEX_HOME`, so your personal skills and MCP servers do not load. The directory must hold an `auth.json` (`CODEX_HOME=<dir> codex login`); without it the stage fails with a clear error and never falls back to your home. Unset, codex loads your own `~/.codex` config: errors from external skills or MCP servers there come from it, not from the repository.
+
 ## Verify It Works
 
 Open Codex in your pair-enabled project and run:

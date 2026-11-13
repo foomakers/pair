@@ -75,9 +75,10 @@ describe('dataset AGENTS.md shrink (#433 T-7)', () => {
     for (const a of anchors) expect(AGENTS_MD.toLowerCase(), a).toContain(a.toLowerCase())
   })
 
-  it('is at most 1100 words (was 1437); the installed CLAUDE.md at most 800 (was 944)', () => {
-    expect(wordCount(AGENTS_MD)).toBeLessThanOrEqual(1100)
-    expect(wordCount(CLAUDE_MD)).toBeLessThanOrEqual(800)
+  // #613: +146 words for the mandated Testing section (behavior-first rules, brief, linked to the guideline)
+  it('is at most 1250 words (was 1437); the installed CLAUDE.md at most 950 (was 944)', () => {
+    expect(wordCount(AGENTS_MD)).toBeLessThanOrEqual(1250)
+    expect(wordCount(CLAUDE_MD)).toBeLessThanOrEqual(950)
   })
 })
 

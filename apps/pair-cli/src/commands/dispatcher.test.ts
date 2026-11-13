@@ -162,9 +162,9 @@ describe('dispatchCommand() - real handlers integration', () => {
     }
 
     await dispatchCommand(config, fs)
-    // Effect check - it should have processed the file
-    // We don't verify exact link transformation here as that's handler responsibility,
-    // but just checking it ran without error.
+
+    // routed to the real handler: the file is still there and the unresolvable link is untouched
+    expect(await fs.readFile(`${cwd}/docs/a.md`)).toBe('[link](/abs/path)')
   })
 
   test('dispatches package command', async () => {

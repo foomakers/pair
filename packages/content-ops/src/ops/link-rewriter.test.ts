@@ -80,7 +80,6 @@ describe('rewriteLinksInFile', () => {
       '/',
     )
 
-    // Should not throw
     await rewriteLinksInFile({
       fileService: fs,
       filePath: '/dataset/target/skill/SKILL.md',
@@ -88,6 +87,10 @@ describe('rewriteLinksInFile', () => {
       newDir: 'target/skill',
       datasetRoot: '/dataset',
     })
+
+    expect(await fs.readFile('/dataset/target/skill/SKILL.md')).toBe(
+      '# Skill\n[broken](../../nonexistent/file.md)',
+    )
   })
 
   it('rewrites multiple links in a single file without offset corruption', async () => {

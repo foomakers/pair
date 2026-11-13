@@ -1,3 +1,4 @@
+import { ghCardLabelHost, reconcileCardRiskLabel, type CardLabelHost } from './card-risk-label'
 import { formatCorrectionNote } from './cycle'
 import type { EngineDefinition } from './engines'
 import { buildPromptText } from './invocation'
@@ -62,8 +63,9 @@ export function buildSelectionPrompt(engine: EngineDefinition, scope: SelectionS
       '`warnings` when filtering and reporting. Validate `--status` with the same script. ' +
       'Exclude out-of-process and Done items; report their cause and every Ready/DoR warning. ' +
       'If the script cannot load or rejects the adoption, fail the selection with its cause.',
-    'For every candidate issue also determine: its declared `**Prerequisite Stories**` (with each ' +
-      "prerequisite's MERGED status, checked on the code host, never assumed), its declared " +
+    'For every candidate issue also determine: its declared `**Prerequisite Stories**` (report the ' +
+      'ids only — merge state is resolved by the deterministic `prereq-state` script after selection, ' +
+      'any claim of yours about it is ignored; set `merged` to false), its declared ' +
       'touched-surface (Technical Analysis "Key Components" / task list) rendered as a flat list of ' +
       'mutex-resource strings (skill names, file paths, module names), its canonical `macrostate` ' +
       'from pair-next Control-State Resolution (including its `## State Mapping` and DoR fallback; ' +
@@ -75,7 +77,7 @@ export function buildSelectionPrompt(engine: EngineDefinition, scope: SelectionS
       `${CANDIDATES_MARKER} {"candidates":[{"id":"<id>","title":"<title>","branch":"<branch>",` +
       `"tier":"<risk:* or untagged>","macrostate":"<canonical state or unmapped literal>",` +
       `"labels":["<label>"],"mutexResources":["<resource>"],` +
-      `"prerequisites":[{"id":"<id>","merged":true}]}]} — single-line JSON, {"candidates":[]} ` +
+      `"prerequisites":[{"id":"<id>","merged":false}]}]} — single-line JSON, {"candidates":[]} ` +
       'when the scope selects nothing.',
     ...(scope.loop !== undefined ? loopRequest(scope.loop.predicateSelector, scope) : []),
   ].join('\n')
@@ -140,13 +142,13 @@ function parseLabels(value: unknown, id: string): string[] {
  * the two must name the same `risk:*` — the tier among the labels, or no risk label on an untagged
  * card — or the plan would run a card its child refuses (r0-2).
  */
-function checkTierAgainstLabels(id: string, tier: string, labels: readonly string[]): void {
+function tierMismatch(id: string, tier: string, labels: readonly string[]): string | undefined {
   const risk = labels.filter(label => label.startsWith('risk:'))
   const untagged = tier === '' || tier === 'untagged'
-  if (untagged ? risk.length === 0 : risk.length === 1 && risk[0] === tier) return
-  fail(
+  if (untagged ? risk.length === 0 : risk.length === 1 && risk[0] === tier) return undefined
+  return (
     `candidate ${id}: tier ${JSON.stringify(tier)} disagrees with its risk labels ` +
-      `${JSON.stringify(risk)} (labels ${JSON.stringify(labels)}) — the tier must be its one risk:* label`,
+    `${JSON.stringify(risk)} (labels ${JSON.stringify(labels)}) — the tier must be its one risk:* label`
   )
 }
 
@@ -162,7 +164,9 @@ function parsePrerequisites(value: unknown, id: string): RootCandidate['prerequi
   })
 }
 
-function parseCandidate(entry: unknown, loop: boolean): RootCandidate {
+type Blocked = { blocked: string; candidate: RootCandidate }
+
+function parseCandidate(entry: unknown, loop: boolean): RootCandidate | Blocked {
   const c = (entry ?? {}) as Record<string, unknown>
   const id = c['id']
   // The id becomes an argv element and a lock-directory name: the `--root` rule, not free text.
@@ -175,14 +179,15 @@ function parseCandidate(entry: unknown, loop: boolean): RootCandidate {
   }
   const tier = text('tier')
   const labels = parseLabels(c['labels'], id)
-  checkTierAgainstLabels(id, tier, labels)
+  // Card-local: block this card with its reason, never fail the whole selection or invent a tier.
+  const blocked = tierMismatch(id, tier, labels)
   const escalated = c['escalated']
   if (loop && typeof escalated !== 'boolean') {
     fail(
       `candidate ${id}: \`escalated\` must be a boolean in loop mode (received ${JSON.stringify(escalated)})`,
     )
   }
-  return {
+  const candidate: RootCandidate = {
     id,
     title: text('title'),
     branch: text('branch'),
@@ -193,6 +198,7 @@ function parseCandidate(entry: unknown, loop: boolean): RootCandidate {
     prerequisites: parsePrerequisites(c['prerequisites'], id),
     ...(loop && { escalated: escalated as boolean }),
   }
+  return blocked === undefined ? candidate : { blocked, candidate }
 }
 
 function parseSnapshot(value: unknown): PredicateCard[] {
@@ -219,6 +225,10 @@ function parseSnapshot(value: unknown): PredicateCard[] {
 /** What one selection returned: the candidates and, when the request asked for it, the predicate snapshot. */
 export interface SelectionAnswer {
   readonly candidates: RootCandidate[]
+  /** Cards skipped for a card-local risk inconsistency, each with its reason. */
+  readonly blocked?: string[]
+  /** Blocked cards awaiting reconciliation (internal to selection; `at` = insertion index in `candidates`). */
+  readonly pending?: { candidate: RootCandidate; reason: string; at: number }[]
   readonly snapshot?: PredicateCard[]
 }
 
@@ -240,8 +250,17 @@ export function parseSelection(json: string, options: ParseOptions = {}): Select
   const body = parsed as { candidates?: unknown; snapshot?: unknown }
   const list = body?.candidates
   if (!Array.isArray(list)) fail('the candidates line carries no `candidates` array')
+  const parsedList = list.map(entry => parseCandidate(entry, options.loop === true))
+  const pending: NonNullable<SelectionAnswer['pending']> = []
+  let kept = 0
+  for (const c of parsedList) {
+    if ('blocked' in c) pending.push({ candidate: c.candidate, reason: c.blocked, at: kept })
+    else kept++
+  }
   return {
-    candidates: list.map(entry => parseCandidate(entry, options.loop === true)),
+    candidates: parsedList.filter((c): c is RootCandidate => !('blocked' in c)),
+    blocked: pending.map(p => p.reason),
+    ...(pending.length > 0 && { pending }),
     ...(options.snapshot === true && { snapshot: parseSnapshot(body.snapshot) }),
   }
 }
@@ -290,6 +309,8 @@ export interface SelectRootInput extends SelectionScope {
   /** US-573: seconds without an engine event before the stage is stopped (default 30 min). */
   readonly idleTimeoutSeconds?: number | undefined
   readonly runIteration?: (input: SpawnIterationInput) => Promise<IterationResult>
+  /** US-595: tracker label access used to reconcile a reviewed tier onto an unlabelled card (default: `gh`). */
+  readonly labelHost?: CardLabelHost
 }
 
 /**
@@ -361,12 +382,66 @@ async function selectOnce(input: SelectRootInput, correction: string): Promise<S
  * stalled process is never retried, and a second malformed answer fails closed.
  */
 export async function selectRootAnswer(input: SelectRootInput): Promise<SelectionAnswer> {
+  let answer: SelectionAnswer
   try {
-    return await selectOnce(input, '')
+    answer = await selectOnce(input, '')
   } catch (error) {
     if (!(error instanceof SelectionFormatError)) throw error
-    return selectOnce(input, formatCorrectionNote(error.message))
+    answer = await selectOnce(input, formatCorrectionNote(error.message))
   }
+  answer = await reconcileBlocked(answer, input)
+  for (const reason of answer.blocked ?? []) console.log(`  blocked, skipped: ${reason}`)
+  return answer
+}
+
+const RISK_RANK = ['risk:green', 'risk:yellow', 'risk:red']
+
+/** The card already carries a risk label above the reviewed tier: reconcile never lowers it, so the tier cannot stand. */
+async function floorBlock(host: CardLabelHost, c: RootCandidate): Promise<string | undefined> {
+  const labels = await host.readLabels(c.id).catch(() => null)
+  if (!labels) return 'unconfirmed: card risk floor unreadable'
+  return Math.max(-1, ...labels.map(l => RISK_RANK.indexOf(l))) > RISK_RANK.indexOf(c.tier)
+    ? `card risk floor exceeds reviewed tier ${c.tier}`
+    : undefined
+}
+
+async function reconcileOne(
+  host: CardLabelHost,
+  candidate: RootCandidate,
+): Promise<{ labels?: string[] | undefined; why?: string | undefined }> {
+  if (!candidate.tier.startsWith('risk:')) return {}
+  const floor = await floorBlock(host, candidate)
+  if (floor) return { why: floor }
+  const result = await reconcileCardRiskLabel({
+    card: candidate.id,
+    reviewed: candidate.tier,
+    link: 'unique',
+    projection: true,
+    host,
+  })
+  return result.status === 'confirmed' ? { labels: result.labels } : { why: result.reason }
+}
+
+/** US-595: a card blocked only because it lacks the reviewed risk label gets it written (verified) and is selected. */
+async function reconcileBlocked(
+  answer: SelectionAnswer,
+  input: SelectRootInput,
+): Promise<SelectionAnswer> {
+  const { pending, ...rest } = answer
+  if (pending === undefined) return answer
+  const host = input.labelHost ?? ghCardLabelHost(input.cwd)
+  const candidates = [...answer.candidates]
+  const blocked: string[] = []
+  let inserted = 0
+  for (const { candidate, reason, at } of pending) {
+    const outcome = await reconcileOne(host, candidate)
+    if (outcome.labels) {
+      candidates.splice(at + inserted++, 0, { ...candidate, labels: outcome.labels })
+    } else {
+      blocked.push(outcome.why ? `${reason} — ${outcome.why}` : reason)
+    }
+  }
+  return { ...rest, candidates, blocked }
 }
 
 /** Runs the selection in ONE fresh engine process and returns its candidate set — or throws. */

@@ -10,6 +10,7 @@ export const runCommandMetadata = {
     'pair-cli run --prompt "/pair-next --root 212" --max-iterations 1',
     'pair-cli run --card 217 --card-tags "auto-dev,risk:green"   # tag-driven: the mapping picks the workflow',
     "pair-cli run --card 487                                # Ready, no mapping: drives this story's own delivery cycle",
+    'pair-cli run --cards 12,15,9 --autonomous             # ordered list: serial, retried in passes while progress is made',
     'pair-cli run --card 487 --pr 42                        # enters the cycle at {verify, first, r0} — never prepare',
     'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',
     'pair-cli run --root 66 --parallel 3 --autonomous       # fan-out: up to 3 `run --card` processes at once',
@@ -64,6 +65,11 @@ export const runCommandMetadata = {
       flags: '--card <id>',
       description:
         'Dispatch this card: its tag selects the workflow from `## Workflows` in tech/automation.md (cannot be combined with --skill/--prompt)',
+    },
+    {
+      flags: '--cards <list>',
+      description:
+        'US-614: run the listed cards (comma-separated ids) one at a time, in the given order, each through its own `--card` lifecycle and policy gates. After a pass, only the unfinished retryable cards run again, in the same order, while the previous pass made verifiable progress (a card moved to a later lifecycle state, read from durable state); a full pass with no progress stops the run and reports each remaining card with its reason. Escalated, awaiting-human and gate-red cards are never retried; a safety halt (perimeter/trust) stops at once. Passes are capped by --max-iterations (else policy max-iterations). Re-running the same list skips cards at target. Exit 0 = all at target, 1 = any card failed/escalated/stalled, 2 = invalid usage. Refused with --card, --root, --filter, --parallel > 1, --skill, --prompt, duplicate or unsafe ids',
     },
     {
       flags: '--card-tags <list>',

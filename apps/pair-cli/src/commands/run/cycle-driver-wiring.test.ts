@@ -15,12 +15,18 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { createDefaultCycleDriver } from './cycle-wiring'
+import { runCycle } from './cycle'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 import { POLICY_PATH } from './automation-policy'
 import type { LockAcquirer } from './card-lock'
 import { CYCLE_WORKFLOW_VERSION, CYCLE_BASE_BRANCH_DEFAULT } from './cycle-scripts'
 import { ENGINES, type EngineDefinition } from './engines'
+
+vi.mock('./cycle', async importOriginal => {
+  const original = await importOriginal<typeof import('./cycle')>()
+  return { ...original, runCycle: vi.fn(original.runCycle) }
+})
 
 /**
  * US-487 — the PRODUCTION driver, end to end, over the REAL installed scripts.
@@ -146,6 +152,34 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     expect(calls()).toHaveLength(2) // the stage, plus the one retry — never a third
     expect(outcome.status).toBe('failed-implement')
     expect(outcome.stagesRun).toBe(2)
+  }, 60_000)
+
+  it("US-623 AC6/r0-2: the production driver hands runCycle a beforePrepare that stashes the failed attempt's stray files", async () => {
+    vi.mocked(runCycle).mockClear()
+    await drive(ENGINES.claude)
+
+    const input = vi.mocked(runCycle).mock.calls[0]?.[0]
+    expect(input?.beforePrepare).toBeTypeOf('function')
+
+    const tree = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: main,
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .find(
+        l =>
+          l.startsWith('worktree ') && l.includes('story-7') === false && l !== `worktree ${main}`,
+      )
+      ?.slice('worktree '.length)
+    expect(tree).toBeDefined()
+    writeFileSync(join(tree as string, 'stray.test.ts'), 'x')
+
+    await input?.beforePrepare?.({ step: 'prepare', phase: 'r1-g1', attempt: 2 })
+
+    expect(existsSync(join(tree as string, 'stray.test.ts'))).toBe(false)
+    expect(execFileSync('git', ['stash', 'list'], { cwd: tree, encoding: 'utf8' })).toContain(
+      'pair-recovery: story 7 r1-g1 attempt 2',
+    )
   }, 60_000)
 
   it('creates the story worktree through the real cycle-dispatch, and starts the stage in the MAIN checkout (AC1)', async () => {

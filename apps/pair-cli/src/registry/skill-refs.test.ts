@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { SkillNameMap } from '@pair/content-ops'
 import {
@@ -101,13 +101,15 @@ describe('rewriteSkillRefsInTarget', () => {
     const fs = new InMemoryFileSystemService({}, '/project', '/project')
     const map = makeSkillNameMap([['next', 'pair-process-next']])
 
-    // Should not throw
+    const log = vi.fn()
     await rewriteSkillRefsInTarget(
       fs,
       '/project/nonexistent.md',
       { skillNameMap: map, skillLinkPathMap: new Map() },
-      noopLog,
+      log,
     )
+    expect(fs.existsSync('/project/nonexistent.md')).toBe(false)
+    expect(log).not.toHaveBeenCalled()
   })
 
   it('skips non-markdown files', async () => {
@@ -306,13 +308,14 @@ describe('detectOrphanedSkillReferences', () => {
       },
     }
 
+    const log = vi.fn()
     await detectOrphanedSkillReferences(
-      { fs, baseTarget: '/project', pushLog: noopLog },
+      { fs, baseTarget: '/project', pushLog: log },
       registries,
       [],
     )
-
-    // no-op — nothing to assert beyond "did not throw"
+    expect(log).not.toHaveBeenCalled()
+    expect(await fs.readFile('/project/AGENTS.md')).toBe('# AGENTS')
   })
 
   it('warns when an orphaned installed name is still referenced', async () => {

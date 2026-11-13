@@ -1084,6 +1084,19 @@ const recoverDirtyFor =
     return stashed
   }
 
+/** US-623 AC6: a prepare after a failed attempt starts from a clean tree — its stray files stashed, never deleted. */
+const stashBeforePrepareFor =
+  (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
+  async (next: CycleNext): Promise<void> => {
+    const worktree = worktreePathOf(await worktreeFor(ctx, input, co)())
+    if (worktree === undefined) return
+    const stashed = stashStrayFiles(
+      worktree,
+      `pair-recovery: story ${input.card} ${String(next['phase'] ?? '')} attempt ${String(next['attempt'])}`,
+    )
+    if (stashed) console.log('  Recovery: stray files of the failed attempt stashed before prepare')
+  }
+
 /** A stage stopped for a transient cause: one `stage-retry` recovery round, then the same step again. */
 const recoverStopFor =
   (input: CycleDriverRequest, co: Coordinates) =>
@@ -1352,6 +1365,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       mergeStage: mergeFor(ctx, input, co, progress),
       escalate: escalateFor(input, co),
       recoverDirty: recoverDirtyFor(ctx, input, co),
+      beforePrepare: stashBeforePrepareFor(ctx, input, co),
       recoverStop: recoverStopFor(input, co),
       policy,
       ...(input.rounds !== undefined && { rounds: input.rounds }),

@@ -11,10 +11,11 @@ import {
 } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { CLI_ENTRY } from '../../test-utils/cli-entry'
 
 // r1-6: `tokens --json` on a PIPE must not be cut at 64 KiB by main()'s process.exit().
 const CLI_CWD = resolve(__dirname, '../../..')
-const ARGS = ['-r', 'ts-node/register/transpile-only', 'src/cli.ts', 'tokens']
+const ARGS = [...CLI_ENTRY, 'tokens']
 const ENV = { ...process.env, NO_COLOR: '1' }
 const PIPE_CHUNK = 65536
 

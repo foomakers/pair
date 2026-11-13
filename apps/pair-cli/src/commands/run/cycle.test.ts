@@ -632,3 +632,32 @@ describe('US-573: onDispatch announces each stage BEFORE it runs (live progress)
     expect(seen).toEqual(['implement', 'spawn', 'verify', 'spawn'])
   })
 })
+
+describe('US-623 AC6 — stray files of a failed attempt are stashed before the next prepare', () => {
+  it('beforePrepare runs before a prepare with attempt > 1, never before attempt 1 or other steps', async () => {
+    const order: string[] = []
+    const run = async (first: { step: string; [key: string]: unknown }) => {
+      order.length = 0
+      await runCycle({
+        resolve: scriptedResolve([
+          { status: 'in-progress', next: first },
+          { status: 'completed', next: DONE },
+        ]),
+        worktree,
+        packet,
+        spawnStage: async () => {
+          order.push('spawn')
+          return { processOutcome: 'success' } as CycleStageResult
+        },
+        policy: {},
+        beforePrepare: async next => void order.push(`stash:${String(next['attempt'])}`),
+      })
+      return [...order]
+    }
+    expect(await run({ ...PREPARE_A0, attempt: 2 })).toEqual(['stash:2', 'spawn'])
+    expect(await run(PREPARE_A0)).toEqual(['spawn'])
+    expect(await run(VALIDATE_A0)).toEqual(['spawn'])
+    // A repair works ON the predecessor's untracked contract files: stashing them makes it `unprovable`.
+    expect(await run({ ...PREPARE_A0, mode: 'repair', attempt: 2 })).toEqual(['spawn'])
+  })
+})

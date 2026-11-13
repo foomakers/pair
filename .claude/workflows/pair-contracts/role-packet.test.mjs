@@ -185,3 +185,27 @@ test('S: a packet rendered from an autonomy policy carries no autonomy, so the s
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+// ══ US-623 AC2 / BR2 — the engines' packets differ ONLY where the style says they must ══
+const renderFor = (next, style) => {
+  const r = spawnSync(process.execPath, [join(SCRIPTS, 'cycle-dispatch.mjs'), 'packet', '--next', JSON.stringify(next), '--card', CARD, '--run', 'story-135', '--workflow-version', '4.0.1', '--style', style], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  return JSON.parse(r.stdout).prompt
+}
+const ALLOWED_DIFF = [/^\/pair-workflow-\S+ /, /^Run the pair-workflow-\S+ skill with these arguments: /, /^Tool allowlist for this role/]
+const paragraphs = text => text.split('\n\n').filter(p => !ALLOWED_DIFF.some(re => re.test(p)))
+
+test('US-623 BR2: the `tools:` constraint of the role is stated in the instruction (codex) prompt, not in the slash one', () => {
+  const instruction = renderFor(NEXTS[0], 'instruction')
+  assert.match(instruction, /^Tool allowlist for this role.*: Read, Edit, Write, Bash, Grep, Glob, Skill\.?$/m)
+  assert.doesNotMatch(renderFor(NEXTS[0], 'slash'), /Tool allowlist/)
+})
+
+test('US-623 AC2: for every step the slash and instruction packets are identical except the invocation line and the tool allowlist', () => {
+  for (const next of NEXTS) {
+    const slash = paragraphs(renderFor(next, 'slash'))
+    const instruction = paragraphs(renderFor(next, 'instruction'))
+    assert.deepEqual([...instruction].sort(), [...slash].sort(), `${next.step}${next.contract ? '+contract' : ''}`)
+    assert.ok(instruction.length >= 2, 'role body and guardrails are carried')
+  }
+})

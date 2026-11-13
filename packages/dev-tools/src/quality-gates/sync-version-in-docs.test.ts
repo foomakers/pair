@@ -92,7 +92,8 @@ describe('readGitignoreExcludes', () => {
   const root = mkdtempSync(join(tmpdir(), 'gitignore-read-'))
   afterAll(() => rmSync(root, { recursive: true, force: true }))
 
-  it('returns [] when no .gitignore exists at root', () => {
+  // QUARANTINE U6 (#613): fails when the sibling test that writes .gitignore into the shared `root` runs first (random order). Tracking: docs/testing/test-policy.config.json `quarantine`.
+  it.skip('returns [] when no .gitignore exists at root', () => {
     expect(readGitignoreExcludes(root)).toEqual([])
   })
 
