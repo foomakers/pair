@@ -40,6 +40,8 @@ export function applyBoardState({ pm, id, pr, repo, mapping = DEFAULT }) {
     let current = pm.cardState({ id, repo })
     const wanted = decideBoardState({ pr, issue: current.issueState, reason: current.issueReason, member: current.member })
     if (wanted.gap) return { confirmed: false, gaps: [wanted.gap] }
+    const target = wanted.status === 'Todo' ? mapping.Draft : wanted.status === 'Not planned' ? 'Not planned' : wanted.status ? mapping[wanted.status] : null
+    if (wanted.status && !target && wanted.status !== 'Review') return { confirmed: false, gaps: [`state-unmapped:${wanted.status}`] }
     const actions = []
     if (wanted.close) {
       const result = pm.closeCard({ id, repo, reason: wanted.close })
@@ -64,9 +66,7 @@ export function applyBoardState({ pm, id, pr, repo, mapping = DEFAULT }) {
       actions.push('membership')
       current = pm.cardState({ id, repo })
     }
-    const target = wanted.status === 'Todo' ? mapping.Draft : wanted.status === 'Not planned' ? 'Not planned' : wanted.status ? mapping[wanted.status] : null
     if (wanted.status === 'Review' && !target) return { confirmed: true, expected: null, actions, skipped: 'no-review-state' }
-    if (wanted.status && !target) return { confirmed: false, gaps: [`state-unmapped:${wanted.status}`], actions }
     if (target && current.boardState !== target) {
       const result = pm.setBoardState({ id, repo, state: target })
       if (!result.confirmed) return { confirmed: false, gaps: ['board-write-failed'], error: result.error, actions }

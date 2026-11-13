@@ -53,6 +53,14 @@ test('AC-6: a minimal board without Review confirms membership and reports a ski
   assert.deepEqual(calls, ['member'])
 })
 
+test('AC-6: an unmapped Done state reports a gap before closing a merged story', () => {
+  const pm = {
+    cardState: () => ({ issueState: 'OPEN', issueReason: null, boardState: 'Review', member: true }),
+    closeCard: () => { throw Error('should not close') },
+  }
+  assert.deepEqual(applyBoardState({ pm, id: '42', pr: 'merged', mapping: { Review: 'Inspect' } }), { confirmed: false, gaps: ['state-unmapped:Done'] })
+})
+
 test('AC-2: report-only lists drift, apply repairs it, rerun lists none', () => {
   const cards = new Map([
     ['1', { issueState: 'OPEN', issueReason: null, boardState: 'Todo', member: true }],
