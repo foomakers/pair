@@ -5,6 +5,7 @@
 - Minimal documentation: key decisions and usage documented in markdown files.
 - Collaboration and process guidelines follow the standards in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md`.
 - Github Projects is adopted for project management, using Kanban as the workflow methodology. The project is pair under the github organization foomakers. See `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` for usage. use #github MCP to access Github Projects, boards and issues.
+- `story-label`: `user story` — also identifies manually created stories without the story template heading.
 - High risk tolerance: quick rollbacks and fast recovery from errors.
 - Team communication is informal and direct, with decisions validated collaboratively.
 - **Commit History Policy:**: feature branches are squashed into a single commit at PR merge, unless the story or epic says otherwise ([commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md)). Unless specified, commit per task (commit title marks the task number besides the story number), completing all the story's tasks and updating the story body at each commit without confirmation. At the end of the story raise a draft PR per the PR template.

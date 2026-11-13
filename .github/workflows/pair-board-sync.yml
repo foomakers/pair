@@ -1,0 +1,47 @@
+name: Pair board sync
+
+on:
+  issues:
+    types: [opened, labeled]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, closed]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  created:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add story to board
+        env:
+          GH_TOKEN: ${{ secrets.PAIR_PROJECT_TOKEN || github.token }}
+          STORY: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          is_story=$(node -e 'const fs=require("fs"); const e=require(process.env.GITHUB_EVENT_PATH); const w=fs.readFileSync(".pair/adoption/tech/way-of-working.md","utf8"); const label=/`story-label`\s*:\s*`([^`]+)`/.exec(w)?.[1]; const labels=e.issue.labels.map(x=>x.name); process.stdout.write(String(/^## Story Statement\s*$/m.test(e.issue.body??"") || Boolean(label && labels.includes(label))))')
+          if [ "$is_story" != true ]; then echo 'Issue is not a configured story'; exit 0; fi
+          result=$(node .claude/skills/pair-workflow-cycle/scripts/board-transition.mjs --story "$STORY" --pr-state none --repo "$REPO")
+          echo "$result"
+          echo "$result" | jq -e '.confirmed == true'
+
+  pr-state:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Align story after PR change
+        env:
+          GH_TOKEN: ${{ secrets.PAIR_PROJECT_TOKEN || github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          story=$(node -e 'const e=require(process.env.GITHUB_EVENT_PATH); const body=String(e.pull_request.body ?? ""); const title=String(e.pull_request.title ?? ""); const m=/^(?:Closes|Fixes|Resolves|Refs:)\s+#(\d+)\s*$/im.exec(body) ?? /^\[(?:#|US-)(\d+)\]/.exec(title); if(m) process.stdout.write(m[1])')
+          if [ -z "$story" ]; then echo 'No linked story; nothing to sync'; exit 0; fi
+          if [ "${{ github.event.action }}" != closed ]; then state=open; elif [ "${{ github.event.pull_request.merged }}" = true ]; then state=merged; else state=closed-unmerged; fi
+          result=$(node .claude/skills/pair-workflow-cycle/scripts/board-transition.mjs --story "$story" --pr-state "$state" --repo "$REPO")
+          echo "$result"
+          echo "$result" | jq -e '.confirmed == true'

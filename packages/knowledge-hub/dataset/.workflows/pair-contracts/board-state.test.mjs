@@ -54,15 +54,16 @@ else if (a[0] === 'api') process.stdout.write(JSON.stringify({ data: { repositor
 else { process.stderr.write('unexpected command ' + a.join(' ')); process.exit(3) }
 `)
   chmodSync(ghBin, 0o755)
-  const pm = github.instantiate({ ghBin, projectTitle: 'board' })
+  const pm = github.instantiate({ ghBin, projectTitle: 'board', storyLabel: 'user story' })
   assert.equal(pm.ensureBoardMembership({ id: 42, repo: 'owner/repo' }).confirmed, true)
   assert.equal(pm.ensureBoardMembership({ id: 42, repo: 'owner/repo' }).confirmed, true)
   assert.deepEqual(JSON.parse(readFileSync(state, 'utf8')), { member: true, adds: 1, issues: [], prs: [] })
   writeFileSync(state, JSON.stringify({ member: true, adds: 1, issues: [
     { number: 42, body: '## Story Statement\nA story' },
     { number: 43, body: '## Epic Context\nAn epic' },
+    { number: 44, body: 'Manual entry', labels: [{ name: 'user story' }] },
   ], prs: [{ title: '[#42] feat: change', body: 'Closes #42', state: 'open', merged_at: null }] }))
-  assert.deepEqual(pm.listCards({ repo: 'owner/repo' }), [{ id: '42' }])
+  assert.deepEqual(pm.listCards({ repo: 'owner/repo' }), [{ id: '42' }, { id: '44' }])
   assert.equal(pm.linkedPr({ id: '42', repo: 'owner/repo' }), 'open')
   assert.equal(pm.linkedPr({ id: '43', repo: 'owner/repo' }), 'none')
 })

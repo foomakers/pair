@@ -59,6 +59,14 @@ export default defineAdapter({
         if (dirname(dir) === dir) return null
       }
     }
+    const storyLabel = () => {
+      if (transport.storyLabel) return transport.storyLabel
+      for (let dir = process.cwd(); ; dir = dirname(dir)) {
+        const file = join(dir, '.pair', 'adoption', 'tech', 'way-of-working.md')
+        if (existsSync(file)) return /`story-label`\s*:\s*`([^`]+)`/.exec(readFileSync(file, 'utf8'))?.[1] ?? null
+        if (dirname(dir) === dir) return null
+      }
+    }
 
     const listComments = ({ pr, repo }) => {
       const out = gh(['api', '--paginate', `${apiRepo(repo)}/issues/${pr}/comments`])
@@ -194,7 +202,8 @@ export default defineAdapter({
       },
       listCards({ repo }) {
         const pages = splitPages(gh(['api', '--paginate', `${apiRepo(repo)}/issues?state=all&per_page=100`]))
-        return pages.flat().filter(issue => !issue.pull_request && /^## Story Statement\s*$/m.test(String(issue.body ?? ''))).map(issue => ({ id: String(issue.number) }))
+        const label = storyLabel()
+        return pages.flat().filter(issue => !issue.pull_request && (/^## Story Statement\s*$/m.test(String(issue.body ?? '')) || (label && issue.labels?.some(item => item.name === label)))).map(issue => ({ id: String(issue.number) }))
       },
       linkedPr({ id, repo }) {
         const pages = splitPages(gh(['api', '--paginate', `${apiRepo(repo)}/pulls?state=all&per_page=100`]))
