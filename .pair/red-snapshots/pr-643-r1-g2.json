@@ -1,0 +1,208 @@
+{
+  "$meta": {
+    "pr": "643",
+    "phase": "r1-g2",
+    "base": "fb7e062f4081b8df5e8b9921b3c615b0fdbbd949",
+    "trailer": "Pair-RED-Snapshot: pr=643; phase=r1-g2; base=fb7e062f4081b8df5e8b9921b3c615b0fdbbd949; manifest=.pair/red-snapshots/pr-643-r1-g2.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts"
+    ]
+  },
+  "status": "red",
+  "mode": "remediation",
+  "inputHead": "fb7e062f4081b8df5e8b9921b3c615b0fdbbd949",
+  "sourceOfTruth": "apps/pair-cli/src/commands/run/spawn.ts spawnIteration/reap/createWatchdog",
+  "inventory": [
+    {
+      "id": "r0-2",
+      "producer": "reap() hard stop in spawn.ts",
+      "inputs": [
+        "engine ignoring SIGTERM",
+        "idle=1"
+      ],
+      "representations": [
+        "spawn.ts only"
+      ],
+      "consumers": [
+        "run iteration loop"
+      ],
+      "classes": [
+        "engine alive at hardStop must be SIGKILLed"
+      ],
+      "interactions": []
+    },
+    {
+      "id": "r0-3",
+      "producer": "spawnIteration onEvent->watchdog.rearm (decoded stdout events only)",
+      "inputs": [
+        "stderr lines",
+        "malformed JSON lines",
+        "partial line without newline"
+      ],
+      "representations": [
+        "spawn.ts + stream-reader.ts"
+      ],
+      "consumers": [
+        "run iteration loop"
+      ],
+      "classes": [
+        "stderr-only",
+        "malformed",
+        "partial: none re-arm idle"
+      ],
+      "interactions": []
+    },
+    {
+      "id": "r0-4",
+      "producer": "createWatchdog per-call state in spawn.ts",
+      "inputs": [
+        "two concurrent spawnIteration calls"
+      ],
+      "representations": [
+        "spawn.ts only"
+      ],
+      "consumers": [
+        "parallel path"
+      ],
+      "classes": [
+        "silent engine + healthy engine concurrently"
+      ],
+      "interactions": [
+        "stalled watchdog x healthy engine"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli/src/commands/run/spawn-reap.test.ts",
+    "mode": "test",
+    "allowedPaths": []
+  },
+  "matrix": [
+    {
+      "id": "r0-2-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "engine ignores SIGTERM, records epid, idle=1",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-idle-guards.test.ts (apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts",
+      "expected": "result timed-out/stalled; epid not alive after spawnIteration settles (process.kill(pid,0) throws ESRCH), no test-side kill in assertion path",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "mode test: passes on current source; fails on injected regression: reap SIGKILL->SIGTERM only: test fails"
+    },
+    {
+      "id": "r0-3-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "engine writes only stderr every 300ms, idle=1",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-idle-guards.test.ts (apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts",
+      "expected": "outcome failed timed-out, stalled true",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "mode test: passes on current source; fails on injected regression: child.stderr.on('data',rearm) in spawnIteration: test fails"
+    },
+    {
+      "id": "r0-3-w2",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "engine writes malformed JSON lines every 300ms, idle=1",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-idle-guards.test.ts (apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts",
+      "expected": "outcome failed timed-out, stalled true",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "mode test: passes on current source; fails on injected regression: reader decoding malformed lines as events (same parameterized case)"
+    },
+    {
+      "id": "r0-3-w3",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "engine writes partial lines without newline every 300ms, idle=1",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-idle-guards.test.ts (apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts",
+      "expected": "outcome failed timed-out, stalled true",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "mode test: passes on current source; fails on injected regression: reader emitting partial lines as events (same parameterized case)"
+    },
+    {
+      "id": "r0-4-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "healthy engine (events every 300ms, then success) and silent engine run concurrently, idle=1",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-idle-guards.test.ts (apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts",
+      "expected": "healthy outcome success; silent failed timed-out stalled true",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "mode test: passes on current source; fails on injected regression: module-level shared watchdog stopped state: test fails"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:b375b38e40ae54ffd69d2c3b0a5490bf406933f197a5ca70bdbed90c33000de6",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-idle-guards.test.ts",
+      "observed": "5 passed (5)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "apps/pair-cli/src/commands/run/spawn.ts reap()/spawnIteration",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/spawn.ts"
+        ],
+        "dependsOn": [],
+        "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-reap.test.ts"
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-2",
+          "r0-3",
+          "r0-4"
+        ],
+        "owner": "apps/pair-cli/src/commands/run/spawn-reap.test.ts",
+        "mode": "test",
+        "allowedPaths": [],
+        "dependsOn": [],
+        "oracle": "spawnIteration test guards vs injected regression"
+      },
+      {
+        "groupId": "r1-g3",
+        "findings": [
+          "r0-5"
+        ],
+        "owner": "delivery-cycle.md dataset source + commands.mdx",
+        "mode": "doc",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          ".pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          "apps/website/content/docs/reference/cli/commands.mdx"
+        ],
+        "dependsOn": [
+          "r1-g1"
+        ],
+        "oracle": "docs conformance"
+      }
+    ],
+    "carried": []
+  },
+  "reconciled": [],
+  "preserved": []
+}
