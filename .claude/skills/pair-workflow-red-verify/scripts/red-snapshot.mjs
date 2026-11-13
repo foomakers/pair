@@ -612,6 +612,11 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
   if (prev) {
     // Derivation only widens: the agent's list plus every row the diff proves edited.
     contract.changedRows = [...new Set([...(Array.isArray(contract.changedRows) ? contract.changedRows : []), ...diffRows({ prev, contract })])]
+    const ap = contract.ownerApproval
+    if (ap && Array.isArray(ap.rows)) {
+      const outside = contract.changedRows.filter(id => !ap.rows.includes(id))
+      if (outside.length) return { sealed: false, reason: 'rows-outside-approval', rows: outside }
+    }
     const omitted = changedRowsErrors({ prev, contract, cwd })
     if (omitted) return { sealed: false, predecessor, ...omitted }
   }

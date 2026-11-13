@@ -1644,6 +1644,107 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer, workflowVers
   return { applied: discovered.some(d => d.applied && d.reason !== 'already-applied'), discovered }
 }
 
+// ── owner-approved contract correction (US-591) ─────────────────────────────────────────────
+// The owner's bounded approval to correct a WRONG sealed oracle. The approval is read from the ACTUAL
+// host comment (never a supplied name): a `User`, the adopted maintainer, on THIS PR, naming this story,
+// the sealed predecessor's hash, the rows and the exact delta. It authorizes ONLY that successor: never
+// a merge, a wider scope or an arbitrary reseal; the sealer and custody checks stay the only authority
+// on the bytes. Persisted idempotently (keyed by decisionRef) in `owner-approvals.json`; `resolve` routes
+// the successor preparation once, and the revision line advancing is what consumes it.
+export const APPROVALS_FILE = 'owner-approvals.json'
+export const readApprovals = dir => {
+  try {
+    const a = JSON.parse(readFileSync(join(dir, APPROVALS_FILE), 'utf8'))
+    return Array.isArray(a) ? a : []
+  } catch {
+    return []
+  }
+}
+export function parseCorrectionComment(body) {
+  const m = /```json\s*([\s\S]*?)```/.exec(String(body ?? ''))
+  if (!m) return { error: 'no-fenced-json' }
+  let p
+  try {
+    p = JSON.parse(m[1])
+  } catch {
+    return { error: 'invalid-json' }
+  }
+  if (!p || typeof p !== 'object' || p.schemaVersion !== 1 || p.kind !== 'contract-correction') return { error: 'not-a-contract-correction' }
+  if (!/^sha256:[0-9a-f]{64}$/.test(String(p.predecessorContractHash ?? ''))) return { error: 'predecessorContractHash-invalid' }
+  if (!Array.isArray(p.rows) || !p.rows.length || p.rows.some(r => typeof r !== 'string' || !r.trim())) return { error: 'rows-invalid' }
+  for (const k of ['story', 'delta', 'reason']) if (typeof p[k] !== 'string' || !p[k].trim()) return { error: `${k}-missing` }
+  return { value: { story: p.story.trim(), pr: Number(p.pr), predecessorContractHash: p.predecessorContractHash, rows: [...new Set(p.rows)].sort(), delta: p.delta, reason: p.reason.trim() } }
+}
+// The sealed contract a still-unconsumed approval targets, or null: its predecessor must be the LATEST sealed
+// contract of its succession line (a stale approval, the line moved on, never routes anything).
+function pendingCorrection(list, approvals, predecessors = []) {
+  for (const a of approvals) {
+    if (a.status !== 'approved') continue
+    const target = resolveSealedContract({ handoffs: list, predecessors, contractHash: a.predecessorContractHash })
+    const line = target && !target.error ? successionLineOf(target.phase) : null
+    if (!line) continue
+    const lineRevisions = [...list, ...(target.origin === 'predecessor' ? (target.handoffs ?? []) : [])].filter(h => h.phase === line || h.phase.startsWith(`${line}-rev`)).map(h => phaseParts(h.phase)?.revision ?? 1)
+    const top = Math.max(1, ...lineRevisions)
+    if (top > (phaseParts(target.phase)?.revision ?? 1)) continue
+    return { approval: a, target, line, revision: top + 1 }
+  }
+  return null
+}
+export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now = new Date(), lockWaitMs = 5000, host: bound, ...transport }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { approved: false, reason: where.error }
+  const list = readHandoffs(dir).filter(h => h.data && h.data.recordType !== 'migration')
+  if (!list.length) return { approved: false, reason: 'no-cycle-evidence' }
+  const who = resolveMaintainer({ dir, maintainer })
+  if (who.error) return { approved: false, reason: who.error }
+  let host
+  try {
+    host = bound ?? bindHosts({ dir, transport })
+  } catch (e) {
+    return { approved: false, reason: e.kind === 'host-unsupported' ? 'host-unsupported' : `host-error:${e.message}` }
+  }
+  let ref, comment
+  try {
+    ref = host.code.parseCommentRef(String(decisionRef ?? ''), { repo })
+    if (!ref) return { approved: false, reason: 'decisionRef-invalid' }
+    if (!ref.inScope) return { approved: false, reason: 'decisionRef-repo-mismatch' }
+    if (ref.pr !== Number(pr)) return { approved: false, reason: 'decisionRef-pr-mismatch' }
+    comment = host.code.readComment({ id: ref.id, pr: ref.pr, repo })
+  } catch (e) {
+    return { approved: false, reason: hostReason(host.code, 'api', e) }
+  }
+  if (!comment?.authorIsUser) return { approved: false, reason: 'author-not-a-user' }
+  if (comment.authorLogin !== who.login) return { approved: false, reason: `author-not-authorized:${comment.authorLogin}` }
+  if (comment.pr !== ref.pr) return { approved: false, reason: 'decisionRef-pr-mismatch' }
+  const parsed = parseCorrectionComment(comment.body)
+  if (parsed.error) return { approved: false, reason: parsed.error }
+  const c = parsed.value
+  const story = String(list[list.length - 1].data.story ?? '')
+  if (c.story !== story) return { approved: false, reason: 'story-mismatch' }
+  if (c.pr !== Number(pr)) return { approved: false, reason: 'pr-mismatch' }
+  const predecessors = predecessorEvidence(dir)
+  const target = resolveSealedContract({ handoffs: list, predecessors, contractHash: c.predecessorContractHash })
+  if (!target || target.error) return { approved: false, reason: 'predecessor-not-sealed', detail: target?.error }
+  let known = null
+  try {
+    known = new Set((JSON.parse(readFileSync(target.spec.data.contractPath, 'utf8')).matrix ?? []).map(r => r?.id))
+  } catch {
+    /* sealed contract unreadable: the sealer still validates the rows */
+  }
+  const unknown = known ? c.rows.filter(r => !known.has(r)) : []
+  if (unknown.length) return { approved: false, reason: 'rows-unknown', rows: unknown }
+  return withLock(dir, lockWaitMs, () => {
+    const all = readApprovals(dir)
+    if (all.some(a => a.decisionRef === decisionRef)) return { approved: true, reason: 'already-applied' }
+    const open = pendingCorrection(list, all, predecessors)
+    if (open) return { approved: false, reason: 'conflicting-approval', pending: open.approval.decisionRef }
+    if (!pendingCorrection(list, [{ ...c, status: 'approved' }], predecessors)) return { approved: false, reason: 'stale-predecessor' }
+    const record = { decisionRef, status: 'approved', actor: comment.authorLogin, at: (now instanceof Date ? now : new Date(now)).toISOString(), ...c }
+    writeFileSync(join(dir, APPROVALS_FILE), JSON.stringify([...all, record], null, 2))
+    return { approved: true, record }
+  })
+}
+
 // US-514 T-5 (#514/AC6): the correct `predecessorContractHash` for a repair/revision contract — the
 // canonical hash (`contractHash`, `$meta` and friends already stripped) of the manifest a SEALED
 // snapshot of `phase` actually committed, read from git history. Best-effort, not a security
@@ -1805,6 +1906,16 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       }
       const shapeErrs = contractErrors(parsed)
       if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
+      // US-591 r0-1: the owner-approval bound is read from owner-approvals.json, never left to the agent. A repair attempt of the same phase must not hide its own approval: ignore the phase's prior handoffs.
+      const pending = pendingCorrection(readHandoffs(dir).filter(h => h.data && h.data.recordType !== 'migration' && h.phase !== phase), readApprovals(dir), predecessorEvidence(dir))
+      if (pending && phase === `${pending.line}-rev${pending.revision}`) {
+        const rec = pending.approval
+        const ap = parsed?.ownerApproval
+        if (!ap) return { published: false, reason: `owner-approval-missing: ${rec.decisionRef}` }
+        if (ap.decisionRef !== rec.decisionRef) return { published: false, reason: `owner-approval-mismatch: ${rec.decisionRef} expected, ${ap.decisionRef} stated` }
+        const outside = [...new Set([...(parsed.changedRows ?? []), ...(data.changedRows ?? [])])].filter(id => !rec.rows.includes(id))
+        if (outside.length) return { published: false, reason: `rows-outside-approval: ${outside.join(',')}` }
+      }
       const cmdErrs = commandRefusals(parsed)
       if (cmdErrs.length) return { published: false, reason: cmdErrs[0].split(' ')[0], errors: cmdErrs }
       // A sealed byte can never be reformatted: a test artifact the adopted format check rejects is refused HERE, before
@@ -2375,7 +2486,48 @@ export function whoami({ dir, host }) {
   }
 }
 
-const PREREQ_RE = /^\*\*Prerequisite Stories\*\*:[ \t]*(.*)$/m
+const PREREQ_RE = /^\*\*Prerequisite Stories\*\*:[ \t]*(.*)$/
+// US-597: the ONE dependency grammar (selection and the live guard both go through prereqState). Supported: the canonical
+// field, and line-start `Depends on` / `Blocked by` (optional bullet, bold, colon; ids inline or as following list items).
+// Ignored: fenced code, comments, inline code, "none" text, task refs (T-n), any other mention.
+const DEP_LINE_RE = /^[ \t]*(?:[-*][ \t]+)?(?:\*\*)?(?:depends on|blocked by)(?:\*\*)?[ \t]*:?[ \t]*(.*)$/i
+// A declaration's refs: bare local `#N`, or an issue URL the bound adapter parses; owner/repo#N, foreign URLs are `foreign`.
+const declRefs = (text, parse) => {
+  const ids = []
+  let foreign = false
+  const rest = String(text)
+    .replace(/\[([^\]]*)\]\((https?:[^)]*)\)/g, (_, t, u) => (parse ? u : t))
+    .replace(/https?:\/\/[^\s)>\]]+/g, u => {
+      const r = parse?.(u)
+      if (r?.id && r.inScope !== false) ids.push(String(r.id))
+      else foreign = true
+      return ' '
+    })
+    .replace(/[\w.-]+\/[\w.-]+#\d+/g, () => ((foreign = true), ' '))
+  for (const m of rest.matchAll(/(?<![\w/])#(\d+)/g)) ids.push(m[1])
+  return { ids, foreign }
+}
+export function dependencyIds(body, self, parse) {
+  const text = String(body ?? '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1.*$/gm, '')
+    .replace(/`[^`\n]*`/g, '')
+  const ids = []
+  const lines = text.split('\n')
+  let uncertain
+  lines.forEach((line, i) => {
+    const m = DEP_LINE_RE.exec(line) ?? PREREQ_RE.exec(line)
+    if (!m) return
+    const canonical = !DEP_LINE_RE.test(line)
+    let rest = m[1]
+    if (!rest.trim()) for (let j = i + 1; /^[ \t]*(?:[-*]|\d+\.)[ \t]/.test(lines[j] ?? ''); j++) rest += ` ${lines[j]}`
+    const found = declRefs(rest, parse)
+    if (found.foreign) uncertain ??= line.trim()
+    else if (found.ids.length) ids.push(...found.ids)
+    else if (canonical ? rest.trim() && !/^\s*(?:none|n\/a|no|nothing)\b/i.test(rest) : !/^\s*(?:none|n\/a|no|nothing|T-\d)\b/i.test(rest)) uncertain ??= line.trim()
+  })
+  return { ids: [...new Set(ids)].filter(id => id !== String(self)), uncertain }
+}
 const PARK_LABELS = ['needs-review', 'pr-state:not-approved']
 export function prereqState({ story, dir, host }) {
   const closed = reason => ({ story: String(story), blocked: true, prerequisites: [], blockedBy: { id: String(story), reason } })
@@ -2391,7 +2543,8 @@ export function prereqState({ story, dir, host }) {
   } catch (e) {
     return closed(`card unreadable: ${hostDetail(e)}`)
   }
-  const ids = [...new Set((PREREQ_RE.exec(String(body ?? ''))?.[1] ?? '').match(/#\d+/g) ?? [])].map(id => id.slice(1))
+  const { ids, uncertain } = dependencyIds(body, story, h.pm.parseCardRef ? ref => h.pm.parseCardRef(ref) : undefined)
+  if (uncertain) return closed(`dependency declaration unrecognised: "${uncertain}" — write "Depends on #<id>" or set **Prerequisite Stories**: none`)
   const prerequisites = ids.map(id => {
     try {
       const card = h.pm.readCard(id, { fields: ['state', 'stateReason', 'labels'] })
@@ -2603,6 +2756,28 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     return { step: 'verify', mode: 're-review', phase: `r${reviewRound}`, round: reviewRound, attempt: byPhase('review-phase', `r${reviewRound}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings() }
   }
 
+  // US-591: an owner-approved correction of a wrong sealed oracle routes the minimal successor preparation ONCE
+  // (the revision line advancing consumes the approval); the sealer still validates predecessor and changed rows.
+  const correction = pendingCorrection(list, ctx.approvals ?? [], ctx.predecessors ?? [])
+  if (correction) {
+    const { approval, target, line, revision } = correction
+    const tp = phaseParts(target.phase) ?? {}
+    return {
+      step: 'prepare',
+      mode: 'revision',
+      phase: `${line}-rev${revision}`,
+      revision,
+      round: tp.round ?? 0,
+      attempt: 1,
+      base: d.outputHead ?? d.reviewedHead ?? d.inputHead,
+      contract: { path: target.spec.data.contractPath, hash: target.spec.data.contractHash, revision: tp.revision ?? 1, snapshot: target.sealed.data.snapshot },
+      group: groupOf(line),
+      changedRows: approval.rows,
+      ownerApproval: { decisionRef: approval.decisionRef, actor: approval.actor, delta: approval.delta, reason: approval.reason },
+      detail: `owner-approved correction of ${target.phase}: ${approval.rows.join(', ')}`,
+    }
+  }
+
   if (last.skill === 'red-spec') {
     // US-479 B1 (S3, AC-08, DT-04): a CONTRADICTION with sealed rows is not a dead end — it routes
     // the minimal successor revision of the contract it names, in the same canonical cycle. The
@@ -2666,7 +2841,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     }
     // US-479 F-RR-03: the INDEPENDENT verifier receives the same derived guard set the resolver
     // holds — it cannot check a contract against authority it was never given.
-    if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined }
+    if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), ...(d.ownerApproval ? { ownerApproval: d.ownerApproval } : {}), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined }
     // A refusal whose cause is OUTSIDE the cycle — a dirty worktree, a moved head — is retryable
     // once a human clears it: the same phase, the next attempt. A refusal the cycle owns
     // (`unprovable`, `split-required`) is terminal at once; a second identical external refusal too
@@ -3143,7 +3318,7 @@ const priorStepOfRole = (handoffs, toStep) => {
 const withContext = (next, handoffs, contextPolicy) =>
   next && typeof next === 'object' && next.context === undefined ? { ...next, context: contextOf(priorStepOfRole(handoffs, next.step), next.step, contextPolicy) } : next
 
-export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels }) {
+export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels, host }) {
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
   const policyError = contextPolicyError(contextPolicy)
   if (policyError) throw new Error(policyError)
@@ -3159,6 +3334,14 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   const autonomyError = autonomyPolicyError(policy.autonomy)
   if (autonomyError) return { status: 'invalid', reason: autonomyError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
   const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
+  // US-597: live guard — implementation never starts on a stale selection; prerequisites are reread through the ONE grammar.
+  if (out.next?.step === 'implement' && story) {
+    const g = prereqState({ story, dir, host })
+    if (g.blocked) {
+      const next = blocked('failed-resume', { prerequisite: g.blockedBy.id, detail: `blocked by #${g.blockedBy.id}: ${g.blockedBy.reason}` })
+      return { ...out, status: 'blocked', next, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
+    }
+  }
   // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
 }
@@ -3234,7 +3417,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // A `worktree-clean` round (the driver stashed what made the worktree dirty) after the failure was seen clears its cause too.
   const cleaned = !!recorded && recorded.reason === 'failed-preparation' && recovery.rounds.some(r => r.kind === 'worktree-clean' && r.at >= recorded.at)
   const stale = !!recorded && (recorded.stale !== undefined || moved || cleaned)
-  let next = deriveNext(handoffs, policy, { entry, head, stale, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger })
+  let next = deriveNext(handoffs, policy, { entry, head, stale, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger, approvals: readApprovals(dir) })
   if (stale && next.step !== 'blocked') {
     if (recorded.stale === undefined) writeRecovery(dir, { ...recovery, failures: { ...recovery.failures, [failureId]: { ...recorded, stale: heads } } })
   } else if (next.step === 'blocked' && DURABLE_FAILURES.has(next.reason)) {
@@ -3635,6 +3818,7 @@ if (isMain()) {
       'activate-card': ['dir', 'story', 'worktree'],
       inputs: ['json', 'story', 'workflowVersion'],
       'apply-scope-decisions': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo', 'workflowVersion'],
+      'approve-correction': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo'],
       'scope-baseline': ['dir'],
       'migrate-inspect': ['dir'],
       'migrate-acknowledge': ['branch', 'dir', 'head', 'legacy', 'pr', 'run', 'story', 'workflowVersion'],
@@ -3754,6 +3938,12 @@ if (isMain()) {
         : discoverScopeDecisions({ dir: opts.dir, repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer, workflowVersion: opts.workflowVersion })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.applied ? 0 : 1)
+    } else if (cmd === 'approve-correction') {
+      // US-591: record the owner's bounded approval to correct a wrong sealed oracle; `resolve` then routes the successor.
+      need('dir', 'decision-ref', 'repo', 'pr')
+      out = approveCorrection({ dir: opts.dir, decisionRef: opts['decision-ref'], repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.approved ? 0 : 1)
     } else if (cmd === 'scope-baseline') {
       // t9d-8: the value the reviewer prints into the scope-decision packet and the maintainer
       // echoes back verbatim — the producer for the one field `apply-scope-decisions` refuses the
@@ -3830,7 +4020,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | card | whoami | test-identity | version)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | approve-correction | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | card | whoami | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

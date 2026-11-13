@@ -99,6 +99,29 @@ export default defineAdapter({
       return [...byName].map(([name, conclusion]) => ({ name, conclusion }))
     }
     const readLabels = ({ pr, repo }) => JSON.parse(gh(['api', `${apiRepo(repo)}/issues/${pr}/labels`])).map(l => String(l.name))
+    // True only on a host-confirmed merge (`mergedAt` set): closed-unmerged and unreadable are false / thrown.
+    const isMerged = ({ pr, repo }) => {
+      return Boolean(parseJson(gh(withRepo(['pr', 'view', String(pr)], repo).concat(['--json', 'mergedAt'])), { command: 'gh pr view' })?.mergedAt)
+    }
+    const mergedSafe = a => {
+      try {
+        return isMerged(a)
+      } catch {
+        return false // unreadable PR: the open-PR write path decides, as before
+      }
+    }
+    // Post-merge cleanup: every premerge state label removed, foreign labels untouched, then READ BACK absence.
+    const clearPrState = ({ pr, repo }) => {
+      try {
+        const removed = readLabels({ pr, repo }).filter(l => STATE_LABELS.includes(l))
+        for (const l of removed) gh(['api', '-X', 'DELETE', `${apiRepo(repo)}/issues/${pr}/labels/${encodeURIComponent(l)}`])
+        const after = readLabels({ pr, repo })
+        const confirmed = !after.some(l => STATE_LABELS.includes(l))
+        return { applied: null, removed, confirmed, error: confirmed ? null : `read-back: labels are ${JSON.stringify(after)}` }
+      } catch (e) {
+        return { applied: null, removed: [], confirmed: false, error: e.message }
+      }
+    }
     const closeIssue = (id, repo) => gh(withRepo(['issue', 'close', String(id), '--reason', 'completed'], repo))
     const subIssues = (id, repo) => parseJson(gh(['api', `${apiRepo(repo)}/issues/${id}/sub_issues`]), { command: 'gh api sub_issues' })
     // The parent of an issue through the REST sub-issues API. A 404 means "no parent"; any other
@@ -169,7 +192,10 @@ export default defineAdapter({
         const bare = /^#?(\d+)$/.exec(String(ref ?? ''))
         if (bare) return { id: bare[1], number: Number(bare[1]), inScope: true }
         const m = ISSUE_URL_RE.exec(String(ref ?? ''))
-        return m ? { id: m[3], number: Number(m[3]), inScope: `${m[1]}/${m[2]}` === repo } : null
+        if (!m) return null
+        let bound = repo
+        if (bound === undefined) try { bound = resolveRepo() } catch { /* unresolved: foreign, fail closed */ }
+        return { id: m[3], number: Number(m[3]), inScope: `${m[1]}/${m[2]}` === bound }
       },
       // Close the card (`completed`), then walk up: a parent whose sub-issues are ALL closed is
       // closed too, recursively (merge-and-cascade.md Steps 6.2–6.4). Board state is the caller's.
@@ -289,6 +315,8 @@ export default defineAdapter({
       readCheckRun,
       readCiChecks,
       readLabels,
+      isMerged,
+      clearPrState,
       // The required check on the EXACT head sha (a commit status). A refused write is reported, not
       // thrown: a token without `repo:status` degrades to advisory (github-implementation.md).
       concludeCheck({ sha, repo, state, description, targetUrl, context = CHECK_CONTEXT }) {
@@ -306,6 +334,8 @@ export default defineAdapter({
       // that silently no-ops must not render a state the PR does not carry.
       setPrState({ pr, repo, label }) {
         try {
+          // A merged PR has no premerge state: a re-invoked writer clears instead of restoring (US-599).
+          if (mergedSafe({ pr, repo })) return clearPrState({ pr, repo })
           const before = readLabels({ pr, repo })
           const removed = before.filter(l => STATE_LABELS.includes(l) && l !== label)
           for (const l of removed) gh(['api', '-X', 'DELETE', `${apiRepo(repo)}/issues/${pr}/labels/${encodeURIComponent(l)}`])

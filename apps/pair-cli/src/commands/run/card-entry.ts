@@ -352,6 +352,7 @@ function skipUnattendedPreparation(
   )
   console.log(chalk.dim('  Nothing was spawned.'))
   recordSkip(input.context, deps, { ...input.decision, reason: 'prepare-needs-human' })
+  console.log('CARD-SKIP: prepare-needs-human')
   return 0
 }
 

@@ -23,6 +23,13 @@ afterEach(() => {
 })
 
 describe('the loop drives each card in its own process — no nested pair-cli run', () => {
+  it('US-592 AC-2: in-process card skips retain their reason', async () => {
+    const exit = await runCardInProcess(async () => {
+      console.log('CARD-SKIP: prepare-needs-human')
+      return 0
+    })({ card: card('9'), args: [], cwd: '/repo' })
+    expect(exit).toMatchObject({ exitCode: 0, skipReason: 'prepare-needs-human' })
+  })
   it('the card argv parses to the same --card run the child would have been', () => {
     const loop = parseRunCommand({ root: '578', watch: true, preset: 'escalate-red' })
     const args = buildCardProcessArgs(loop, card('572'), '/repo', '*')

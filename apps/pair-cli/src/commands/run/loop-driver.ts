@@ -286,7 +286,7 @@ function stopText(outcome: LoopOutcome): string {
     : STOP_REASONS[outcome.stopReason]
 }
 
-const PARKED = new Set(['awaiting-human', 'ready-for-merge', 'target-ready', 'escalated'])
+const PARKED = new Set(['awaiting-human', 'ready-for-merge', 'target-ready'])
 
 /** US-573 AC8: cards merged / parked / failed / unknown, why the run stopped and what it left eligible. */
 function reportOutcome(outcome: LoopOutcome, run: RunSinks): void {
@@ -294,7 +294,8 @@ function reportOutcome(outcome: LoopOutcome, run: RunSinks): void {
   const merged = statuses.filter(s => s === 'merged').length
   const parked = statuses.filter(s => PARKED.has(s)).length
   const unknown = statuses.filter(s => s === 'unknown').length
-  const failed = statuses.length - merged - parked - unknown
+  const prepared = statuses.filter(s => s === PREPARED).length
+  const failed = statuses.length - merged - parked - unknown - prepared
   const left = run.lastLoopEnd?.eligibleLeft
   const failedRun = outcome.stopReason === 'iteration-failed'
   const paint = failedRun ? chalk.red : chalk.green
@@ -304,7 +305,7 @@ function reportOutcome(outcome: LoopOutcome, run: RunSinks): void {
     ),
   )
   run.sink.log(
-    `  Cards: ${merged} merged · ${parked} parked · ${failed} failed · ${unknown} unknown`,
+    `  Cards: ${merged} merged · ${parked} parked · ${prepared} prepared · ${failed} failed · ${unknown} unknown`,
   )
   run.sink.log(
     paint(

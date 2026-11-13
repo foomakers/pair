@@ -46,6 +46,8 @@ export interface CardProcessExit {
   readonly cycleStatus?: string
   /** US-575 AC8: the reason the child parked the card (`needs-human: <reason>`), when it printed one. */
   readonly needsHuman?: string
+  /** The card's explicit clean skip, reported by its own entry point. */
+  readonly skipReason?: string
 }
 
 export type CardProcessRunner = (input: {
@@ -62,7 +64,11 @@ export function outcomeOfExit(id: string, exit: CardProcessExit): Omit<CardOutco
     return { id, outcome: 'crashed', detail: `spawn failed: ${exit.error}` }
   if (exit.signal !== null) return { id, outcome: 'crashed', detail: `killed by ${exit.signal}` }
   const prepare = exit.prepare !== undefined ? { prepare: exit.prepare } : {}
-  if (exit.exitCode === 0) return { id, outcome: 'completed', detail: 'exit 0', ...prepare }
+  if (exit.exitCode === 0) {
+    if (exit.skipReason !== undefined && exit.cycleStatus === undefined)
+      return { id, outcome: 'skipped', detail: exit.skipReason, ...prepare }
+    return { id, outcome: 'completed', detail: 'exit 0', ...prepare }
+  }
   const cycle = exit.cycleStatus !== undefined ? { cycleStatus: exit.cycleStatus } : {}
   const detail =
     exit.needsHuman !== undefined
@@ -275,10 +281,16 @@ export function parseNeedsHuman(line: string): string | undefined {
   return /^\s*needs-human: (.+?)\s*$/.exec(line)?.[1]
 }
 
+/** The card entry's exact clean-skip marker. */
+export function parseCardSkip(line: string): string | undefined {
+  return /^CARD-SKIP: ([a-z][a-z0-9-]*)$/.exec(line)?.[1]
+}
+
 interface RelayHandlers {
   readonly onPrepare: (result: PrepareResult) => void
   readonly onCycle: (status: string) => void
   readonly onNeedsHuman?: (reason: string) => void
+  readonly onSkip?: (reason: string) => void
   /** US-573: present ⇒ the child's `PAIR_EVENT` lines are relayed here instead of printed. */
   readonly onEvent?: ((event: RunEvent) => void) | undefined
 }
@@ -306,6 +318,8 @@ function relayLine(
   if (cycle !== undefined) handlers.onCycle(cycle)
   const human = parseNeedsHuman(line)
   if (human !== undefined) handlers.onNeedsHuman?.(human)
+  const skip = parseCardSkip(line)
+  if (skip !== undefined) handlers.onSkip?.(skip)
   print(prefixLine(id, line))
 }
 
@@ -345,10 +359,12 @@ export const runCardInProcess =
     let prepare: PrepareResult | undefined
     let cycleStatus: string | undefined
     let needsHuman: string | undefined
+    let skipReason: string | undefined
     const handlers: RelayHandlers = {
       onPrepare: result => (prepare = result),
       onCycle: status => (cycleStatus = status),
       onNeedsHuman: reason => (needsHuman = reason),
+      onSkip: reason => (skipReason = reason),
       onEvent,
     }
     const relayed = (line: string, print: (line: string) => void) =>
@@ -368,6 +384,7 @@ export const runCardInProcess =
       ...(prepare !== undefined && { prepare }),
       ...(cycleStatus !== undefined && { cycleStatus }),
       ...(needsHuman !== undefined && { needsHuman }),
+      ...(skipReason !== undefined && { skipReason }),
     }
   }
 
@@ -405,10 +422,12 @@ export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd, onEvent }
     let prepare: PrepareResult | undefined
     let cycleStatus: string | undefined
     let needsHuman: string | undefined
+    let skipReason: string | undefined
     relay(child, card.id, {
       onPrepare: result => (prepare = result),
       onCycle: status => (cycleStatus = status),
       onNeedsHuman: reason => (needsHuman = reason),
+      onSkip: reason => (skipReason = reason),
       onEvent,
     })
     child.once('error', error => resolve({ exitCode: null, signal: null, error: error.message }))
@@ -419,6 +438,7 @@ export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd, onEvent }
         ...(prepare !== undefined && { prepare }),
         ...(cycleStatus !== undefined && { cycleStatus }),
         ...(needsHuman !== undefined && { needsHuman }),
+        ...(skipReason !== undefined && { skipReason }),
       }),
     )
   })
@@ -462,7 +482,10 @@ function cardEndEvent(
   return {
     event: 'card-end',
     card: id,
-    status: exit.cycleStatus ?? (completed ? 'completed' : `failed (${outcome.outcome})`),
+    status:
+      outcome.outcome === 'skipped'
+        ? 'skipped'
+        : (exit.cycleStatus ?? (completed ? 'completed' : `failed (${outcome.outcome})`)),
     ...(!completed && { reason: outcome.detail }),
   }
 }
