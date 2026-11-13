@@ -1,0 +1,431 @@
+// US-591 r1-g1 (r0-1, r0-2): an owner approval is bounded to its rows end to end — dispatch forwards it,
+// the sealer refuses edits outside it, the successor handoff links it, approval refuses unknown rows.
+// RUNS FROM `.claude/workflows` ONLY: execute via `pnpm workflows:test`.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import {
+  resolve,
+  approveCorrection,
+  readApprovals,
+  publish,
+  contractHash,
+} from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+import { chainRepo, revision } from './red-snapshot-lib.mjs'
+
+const DISPATCH = fileURLToPath(
+  new URL('../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs', import.meta.url),
+)
+const V = '4.0.1'
+const SHA = c => c.repeat(40)
+const H = `sha256:${'a'.repeat(64)}`
+const POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
+const APPROVAL = {
+  decisionRef: 'pr7#c-1',
+  actor: 'rucka',
+  delta: 'oracle expects 9 not 8',
+  reason: 'wrong pnpm oracle',
+}
+let seq = 0
+const put = (dir, phase, skill, data) =>
+  writeFileSync(
+    join(dir, `${phase}-${skill}.json`),
+    JSON.stringify({
+      schemaVersion: 3,
+      workflowVersion: V,
+      run: 'run-1',
+      story: '42',
+      phase,
+      skill,
+      inputHead: SHA('a'),
+      seq: ++seq,
+      attempt: 1,
+      ...data,
+    }),
+  )
+
+// A real sealed contract file (matrix rows row-1, row-2) behind the a0 handoff: approval rows are checked against it.
+const runDir = () => {
+  const root = mkdtempSync(join(tmpdir(), 'owner-bound-'))
+  const dir = join(root, '.pair', 'working', 'runs', 'run-1', '42')
+  mkdirSync(dir, { recursive: true })
+  mkdirSync(join(root, '.pair', 'adoption', 'tech'), { recursive: true })
+  writeFileSync(
+    join(root, '.pair', 'adoption', 'tech', 'way-of-working.md'),
+    '- `default-assignee`: `rucka`\n',
+  )
+  const contractPath = join(dir, 'a0-red-contract.json')
+  writeFileSync(contractPath, JSON.stringify({ matrix: [{ id: 'row-1' }, { id: 'row-2' }] }))
+  put(dir, 'a0', 'red-spec', { status: 'red', contractPath, contractHash: H })
+  put(dir, 'a0', 'red-verify', {
+    verified: true,
+    sealed: true,
+    contractHash: H,
+    snapshot: SHA('b'),
+  })
+  put(dir, 'r0', 'review-phase', {
+    pr: 7,
+    reviewedHead: SHA('c'),
+    verdict: 'approved',
+    findings: [],
+    custody: { contractBreach: false },
+    readiness: { ready: true, remoteHead: SHA('c') },
+  })
+  return dir
+}
+const body = rows =>
+  '```json\n' +
+  JSON.stringify({
+    schemaVersion: 1,
+    kind: 'contract-correction',
+    story: '42',
+    pr: 7,
+    predecessorContractHash: H,
+    rows,
+    delta: APPROVAL.delta,
+    reason: APPROVAL.reason,
+  }) +
+  '\n```'
+const approve = (dir, rows) =>
+  approveCorrection({
+    dir,
+    decisionRef: APPROVAL.decisionRef,
+    repo: 'o/r',
+    pr: 7,
+    host: {
+      code: {
+        parseCommentRef: () => ({ id: 1, pr: 7, inScope: true }),
+        readComment: () => ({ authorLogin: 'rucka', authorIsUser: true, pr: 7, body: body(rows) }),
+      },
+    },
+  })
+
+test('r0-1 VERIFY: the dispatch packet for an owner-approved revision carries the approval (decisionRef, delta) to red-spec', () => {
+  const next = {
+    step: 'prepare',
+    mode: 'revision',
+    phase: 'a0-rev2',
+    revision: 2,
+    round: 0,
+    attempt: 1,
+    base: SHA('c'),
+    changedRows: ['row-1'],
+    ownerApproval: { ...APPROVAL, rows: ['row-1'] },
+  }
+  const card = { id: '42', branch: 'feature/US-42-x', base: 'origin/main', title: 't' }
+  const r = spawnSync(
+    process.execPath,
+    [
+      DISPATCH,
+      'packet',
+      '--next',
+      JSON.stringify(next),
+      '--card',
+      JSON.stringify(card),
+      '--run',
+      'story-42',
+      '--workflow-version',
+      V,
+    ],
+    { encoding: 'utf8' },
+  )
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = JSON.parse(r.stdout).prompt
+  assert.match(prompt, /\$ownerApproval=\{[^\n]*pr7#c-1/)
+  assert.match(prompt, /\$ownerApproval=\{[^\n]*oracle expects 9 not 8/)
+})
+
+test('r0-1 ORACLE/ASSERT: the sealer refuses a successor that edits a row outside the approved rows', () => {
+  const approval = { ...APPROVAL, rows: ['row-1'] }
+  const outside = chainRepo()
+  const refused = revision(outside.cwd, outside.head1, {
+    ownerApproval: approval,
+    changedRows: ['row-1', 'row-2'],
+    matrix: [
+      {
+        id: 'row-1',
+        kind: 'witness',
+        baseline: 'red',
+        condition: 'default',
+        oracle: 'node test/a.test.js',
+        expected: '3',
+        covers: ['r0-1'],
+      },
+      {
+        id: 'row-2',
+        kind: 'witness',
+        baseline: 'red',
+        condition: 'empty',
+        oracle: 'node test/a.test.js',
+        expected: '0',
+        covers: ['r1-1'],
+      },
+    ],
+  })
+  assert.deepEqual(
+    [refused.sealed, refused.reason, refused.rows],
+    [false, 'rows-outside-approval', ['row-2']],
+    JSON.stringify(refused),
+  )
+  rmSync(outside.cwd, { recursive: true, force: true })
+})
+
+test('r0-1 control: a successor editing only the approved row seals', () => {
+  const approval = { ...APPROVAL, rows: ['row-1'] }
+  const inside = chainRepo()
+  const ok = revision(inside.cwd, inside.head1, {
+    ownerApproval: approval,
+    changedRows: ['row-1'],
+    matrix: [
+      {
+        id: 'row-1',
+        kind: 'witness',
+        baseline: 'red',
+        condition: 'default',
+        oracle: 'node test/a.test.js',
+        expected: '3',
+        covers: ['r0-1'],
+      },
+    ],
+  })
+  assert.equal(ok.sealed, true, JSON.stringify(ok))
+  rmSync(inside.cwd, { recursive: true, force: true })
+})
+
+test('r0-1 ASSERT: the successor red-spec handoff links the approval; the validate step carries it forward', () => {
+  const dir = runDir()
+  assert.equal(approve(dir, ['row-1']).approved, true)
+  const prep = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
+  assert.equal(prep.ownerApproval.decisionRef, APPROVAL.decisionRef)
+  put(dir, 'a0-rev2', 'red-spec', {
+    status: 'red',
+    contractPath: join(dir, 'a0-rev2-red-contract.json'),
+    contractHash: `sha256:${'d'.repeat(64)}`,
+    mode: 'revision',
+    changedRows: ['row-1'],
+    ownerApproval: prep.ownerApproval,
+  })
+  const next = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
+  assert.equal(next.step, 'validate')
+  assert.equal(next.ownerApproval?.decisionRef, APPROVAL.decisionRef)
+})
+
+test('r0-2 ORACLE/ASSERT: approval naming a row absent from the sealed matrix is refused rows-unknown and records nothing; known rows are approved', () => {
+  const dir = runDir()
+  const refused = approve(dir, ['ZZ-9'])
+  assert.deepEqual(
+    [refused.approved, refused.reason],
+    [false, 'rows-unknown'],
+    JSON.stringify(refused),
+  )
+  assert.deepEqual(readApprovals(dir), [])
+  assert.equal(approve(dir, ['row-1', 'ZZ-9']).reason, 'rows-unknown')
+  assert.equal(approve(dir, ['row-1', 'row-2']).approved, true)
+})
+
+test('r0-1 control (c-3): the dispatch packet of a revision without ownerApproval carries no $ownerApproval line', () => {
+  const next = {
+    step: 'prepare',
+    mode: 'revision',
+    phase: 'a0-rev2',
+    revision: 2,
+    round: 0,
+    attempt: 1,
+    base: SHA('c'),
+    changedRows: ['row-1'],
+  }
+  const card = { id: '42', branch: 'feature/US-42-x', base: 'origin/main', title: 't' }
+  const r = spawnSync(
+    process.execPath,
+    [
+      DISPATCH,
+      'packet',
+      '--next',
+      JSON.stringify(next),
+      '--card',
+      JSON.stringify(card),
+      '--run',
+      'story-42',
+      '--workflow-version',
+      V,
+    ],
+    { encoding: 'utf8' },
+  )
+  assert.equal(r.status, 0, r.stderr)
+  assert.doesNotMatch(JSON.parse(r.stdout).prompt, /ownerApproval/)
+})
+
+test('r0-1 control (c-4): a successor revision without ownerApproval and with changed rows still seals', () => {
+  const plain = chainRepo()
+  const ok = revision(plain.cwd, plain.head1, {
+    changedRows: ['row-1', 'row-2'],
+    matrix: [
+      {
+        id: 'row-1',
+        kind: 'witness',
+        baseline: 'red',
+        condition: 'default',
+        oracle: 'node test/a.test.js',
+        expected: '3',
+        covers: ['r0-1'],
+      },
+      {
+        id: 'row-2',
+        kind: 'witness',
+        baseline: 'red',
+        condition: 'empty',
+        oracle: 'node test/a.test.js',
+        expected: '0',
+        covers: ['r1-1'],
+      },
+    ],
+  })
+  assert.equal(ok.sealed, true, JSON.stringify(ok))
+  rmSync(plain.cwd, { recursive: true, force: true })
+})
+
+// ── r2-g1 (r0-1): the bound is ENFORCED at publish from owner-approvals.json, never opt-in by the agent ──
+// An `a0-rev2` revision handoff + its contract on disk; `contract` extras decide what the agent wrote.
+const publishRev = (dir, contract, handoff = {}, attempt = 1) => {
+  const contractPath = join(
+    dir,
+    attempt > 1 ? `a0-rev2-red-contract.attempt-${attempt}.json` : 'a0-rev2-red-contract.json',
+  )
+  const c = {
+    fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
+    redTests: [
+      {
+        file: 'test/a.test.ts',
+        sha256: `sha256:${'1'.repeat(64)}`,
+        command: 'node --test',
+        baseline: 'red',
+        observed: 'FAIL 1 of 1',
+      },
+    ],
+    changedRows: ['row-1'],
+    ...contract,
+  }
+  writeFileSync(contractPath, JSON.stringify(c))
+  const file = join(mkdtempSync(join(tmpdir(), 'owner-draft-')), 'draft.json')
+  writeFileSync(
+    file,
+    JSON.stringify({
+      run: 'run-1',
+      story: '42',
+      pr: 7,
+      branch: 'b',
+      phase: 'a0-rev2',
+      skill: 'red-spec',
+      inputHead: SHA('a'),
+      status: 'red',
+      mode: 'revision',
+      revision: 2,
+      attempt,
+      changedRows: c.changedRows,
+      contractPath,
+      contractHash: contractHash(c),
+      ...handoff,
+    }),
+  )
+  const repoRoot = mkdtempSync(join(tmpdir(), 'owner-repo-'))
+  mkdirSync(join(repoRoot, 'test'))
+  writeFileSync(join(repoRoot, 'test', 'a.test.ts'), 'x\n')
+  return publish({
+    dir,
+    file,
+    phase: 'a0-rev2',
+    skill: 'red-spec',
+    workflowVersion: V,
+    repoRoot,
+    attempt,
+  })
+}
+const dispatched = { ...APPROVAL } // what `next.ownerApproval` carries: no `rows`
+const recorded = { ...APPROVAL, rows: ['row-1'] }
+
+test('r0-1 VERIFY/ASSERT: publish of a revision for an approved line whose contract lacks ownerApproval is refused, reason names the missing approval', () => {
+  const dir = runDir()
+  assert.equal(approve(dir, ['row-1']).approved, true)
+  const out = publishRev(dir, {})
+  assert.equal(out.published, false, JSON.stringify(out))
+  assert.match(String(out.reason), /owner-approval-missing/)
+  assert.match(String(out.reason), /pr7#c-1/)
+  assert.equal(existsSync(join(dir, 'a0-rev2-red-spec.json')), false)
+})
+
+test('r0-1 ASSERT: publish refuses a contract linking a different decisionRef than the recorded approval', () => {
+  const dir = runDir()
+  assert.equal(approve(dir, ['row-1']).approved, true)
+  const out = publishRev(dir, { ownerApproval: { ...recorded, decisionRef: 'pr7#c-99' } })
+  assert.equal(out.published, false, JSON.stringify(out))
+  assert.match(String(out.reason), /owner-approval/)
+})
+
+test('r0-1 ASSERT: publish bounds changedRows to the RECORDED approval rows even when the contract carries the dispatched approval (no rows)', () => {
+  const dir = runDir()
+  assert.equal(approve(dir, ['row-1']).approved, true)
+  const out = publishRev(dir, { ownerApproval: dispatched, changedRows: ['row-1', 'row-2'] })
+  assert.equal(out.published, false, JSON.stringify(out))
+  assert.match(String(out.reason), /rows-outside-approval/)
+  assert.match(String(out.reason), /row-2/)
+})
+
+// a0-rev2 attempt 1 published (approved) and rejected by the verifier; the repair is attempt 2 of the SAME phase
+const repair = (contract, changedRows = ['row-1']) => {
+  const dir = runDir()
+  assert.equal(approve(dir, ['row-1']).approved, true)
+  assert.equal(
+    publishRev(dir, { ownerApproval: recorded }, { ownerApproval: dispatched }).published,
+    true,
+  )
+  return publishRev(dir, { changedRows, ...contract }, {}, 2)
+}
+
+test('r3 r0-1 ASSERT: attempt-2 repair of an approved revision without ownerApproval is refused', () => {
+  const out = repair({})
+  assert.equal(out.published, false, JSON.stringify(out))
+  assert.match(String(out.reason), /owner-approval-missing/)
+})
+
+test('r3 r0-1 ASSERT: attempt-2 repair bounds changedRows to the approved rows', () => {
+  const out = repair({ ownerApproval: recorded }, ['row-1', 'row-2'])
+  assert.equal(out.published, false, JSON.stringify(out))
+  assert.match(String(out.reason), /rows-outside-approval: row-2/)
+})
+
+test('r3 r0-1 ASSERT: attempt-2 repair with a different decisionRef is refused', () => {
+  const out = repair({ ownerApproval: { ...recorded, decisionRef: 'pr7#c-99' } })
+  assert.equal(out.published, false, JSON.stringify(out))
+  assert.match(String(out.reason), /owner-approval-mismatch/)
+})
+
+test('r3 r0-1 control c-7: attempt-2 repair carrying the recorded approval and only its rows publishes', () => {
+  const out = repair({ ownerApproval: recorded })
+  assert.equal(out.published, true, JSON.stringify(out))
+})
+
+test('r0-1 control c-5: an approved revision carrying the recorded approval and only its rows publishes', () => {
+  const dir = runDir()
+  assert.equal(approve(dir, ['row-1']).approved, true)
+  const out = publishRev(dir, { ownerApproval: recorded }, { ownerApproval: dispatched })
+  assert.equal(out.published, true, JSON.stringify(out))
+})
+
+test('r0-1 control c-6: a revision with NO pending approval publishes without ownerApproval', () => {
+  const dir = runDir()
+  assert.equal(publishRev(dir, {}).published, true)
+})
+
+test('r0-1 ASSERT: red-spec SKILL.md documents the $ownerApproval argument (dataset source and installed copy)', () => {
+  for (const rel of [
+    '../../../packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md',
+    '../../skills/pair-workflow-red-spec/SKILL.md',
+  ]) {
+    const md = readFileSync(new URL(rel, import.meta.url), 'utf8')
+    assert.ok(/^\| *`\$ownerApproval` *\|/m.test(md), rel)
+  }
+})

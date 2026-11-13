@@ -67,6 +67,7 @@
         "pair-contracts/gitleaks-allowlist.test.mjs",
         "pair-contracts/gitleaks-allowlist-control.test.mjs",
         "pair-contracts/cycle-recovery.test.mjs",
+        "pair-contracts/owner-correction.test.mjs",
         "pair-contracts/stage-achash.test.mjs",
         "pair-contracts/workflow-profile.test.mjs",
         "pair-contracts/cycle-metrics.test.mjs",
@@ -87,6 +88,7 @@
         "pair-contracts/fixtures/linear/world.json",
         "pair-contracts/filesystem-roundtrip.test.mjs",
         "pair-contracts/opaque-card-ids.test.mjs",
+        "pair-contracts/owner-approval-bound.test.mjs",
         "pair-contracts/pm-agnostic-conformance.test.mjs",
         "pair-contracts/word-limits.test.mjs"
       ],

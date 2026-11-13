@@ -1,4 +1,6 @@
+import { join } from 'node:path'
 import { pooledCard } from './pooled-card'
+import { reportPreparationFailure } from './preparation-failure'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
 import type { RunCommandConfig, RunDispatchRequest } from './parser'
@@ -423,18 +425,50 @@ export function prepareCycleCoordinator(
   })
 
   return () =>
-    driveWithCardLine(config, card, onRunEvent =>
-      driveCycle({
-        runId: dispatch.runId,
-        card,
-        ...(dispatch.pr !== undefined && { pr: dispatch.pr }),
-        ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
-        // Only an ACTIVE policy (an argument or `## Autonomy` declared a target/merge gate) changes behavior.
-        ...(autonomy?.active === true && { autonomy: { policy: autonomy.policy } }),
-        ...budgetsOf(autonomy, dispatch.rounds),
-        onRunEvent,
-      }),
+    driveWithCardLine(
+      config,
+      card,
+      onRunEvent => driveCycle(cycleArgs(card, dispatch, autonomy, onRunEvent)),
+      outcome =>
+        onPreparationFailure(outcome, cwd, card, { runId: dispatch.runId, pr: dispatch.pr }),
     )
+}
+
+function cycleArgs(
+  card: string,
+  dispatch: NonNullable<RunCommandConfig['dispatch']>,
+  autonomy: AutonomyResolution | undefined,
+  onRunEvent: (event: RunEvent) => void,
+) {
+  return {
+    runId: dispatch.runId,
+    card,
+    ...(dispatch.pr !== undefined && { pr: dispatch.pr }),
+    ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
+    // Only an ACTIVE policy (an argument or `## Autonomy` declared a target/merge gate) changes behavior.
+    ...(autonomy?.active === true && { autonomy: { policy: autonomy.policy } }),
+    ...budgetsOf(autonomy, dispatch.rounds),
+    onRunEvent,
+  }
+}
+
+/** US-591 AC-5: a preparation that stopped the cycle reports the actual local/published state. */
+function onPreparationFailure(
+  outcome: DriveCycleResult,
+  cwd: string,
+  card: string,
+  { runId, pr }: { runId: string; pr?: number | undefined },
+) {
+  const next = outcome.next as { reason?: unknown; refusal?: unknown } | undefined
+  if (next?.reason !== 'failed-preparation' && next?.refusal === undefined) return
+  const main = mainCheckoutOrCwd(cwd)
+  reportPreparationFailure({
+    next: next,
+    main,
+    card,
+    runDir: join(main, '.pair', 'working', 'runs', runId, card),
+    ...(pr !== undefined && { pr }),
+  })
 }
 
 /**
@@ -459,6 +493,7 @@ async function driveWithCardLine(
   config: RunCommandConfig,
   card: string,
   drive: (onRunEvent: (event: RunEvent) => void) => ReturnType<CycleDriver>,
+  onOutcome?: (outcome: DriveCycleResult) => void,
 ): Promise<number> {
   // Driven by the loop in its own process: the loop draws the card line, this card only reports.
   const pooled = pooledCard()
@@ -466,7 +501,7 @@ async function driveWithCardLine(
     const outcome = await drive(event => {
       if (event.event !== 'card-start') pooled.onEvent?.(event)
     })
-    return reportOutcome(outcome)
+    return reportOutcome(outcome, onOutcome)
   }
   const sink = createConsoleSink({
     out: process.stdout,
@@ -484,16 +519,20 @@ async function driveWithCardLine(
       status: cardStatusOf(outcome),
       reason: cardReasonOf(outcome),
     })
-    return reportOutcome(outcome)
+    return reportOutcome(outcome, onOutcome)
   } finally {
     sink.finish()
     restore()
   }
 }
 
-function reportOutcome(outcome: DriveCycleResult): number {
+function reportOutcome(
+  outcome: DriveCycleResult,
+  onOutcome?: (o: DriveCycleResult) => void,
+): number {
   console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
   reportCycleReason(outcome.next)
+  onOutcome?.(outcome)
   return exitCodeFor(outcome)
 }
 
