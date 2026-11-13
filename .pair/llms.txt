@@ -209,6 +209,7 @@
 - [Decision: `analyze-test-speed` and `analyze-test-prune` may open a card, only after an explicit yes](.pair/adoption/decision-log/2026-11-11-analyze-test-skills-open-a-card-only-after-explicit-yes.md)
 - [Decision: an owner-approved correction routes a successor; it never waives custody](.pair/adoption/decision-log/2026-11-11-owner-approval-routes-a-successor-never-waives-custody.md)
 - [Decision: no affected-only pre-push; rely on turbo cache and parallel gate](.pair/adoption/decision-log/2026-11-11-prepush-affected-only-not-adopted.md)
+- [Decision: Run the quality gate serially](.pair/adoption/decision-log/2026-11-13-serial-quality-gate.md)
 
 ## How-To Guides
 
