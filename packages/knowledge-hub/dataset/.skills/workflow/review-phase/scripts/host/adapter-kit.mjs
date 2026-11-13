@@ -37,23 +37,34 @@ export const CHECK_STATES = ['success', 'failure', 'pending']
 
 // Keep an epic's visible child checklist in sync with its PM-tool relations.
 export function updateEpicBody(body, children) {
-  const source = String(body ?? '').trimEnd()
-  const heading = /^## Sub-Issues[ \t]*$/m
-  const start = heading.exec(source)
-  const prefix = start ? source.slice(0, start.index + start[0].length) : `${source}\n\n## Sub-Issues`
-  const tail = start ? source.slice(start.index + start[0].length) : ''
-  const nextHeading = /^## /m.exec(tail)
-  const section = nextHeading ? tail.slice(0, nextHeading.index) : tail
-  const suffix = nextHeading ? tail.slice(nextHeading.index) : ''
-  const lines = section.trim().split('\n').filter(Boolean)
+  let source = String(body ?? '')
+  if (!children.length) return source
+  const escape = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const missing = []
   for (const child of children) {
-    const ref = /^\d+$/.test(String(child.id)) ? `#${child.id}` : String(child.id)
-    const exact = new RegExp(`(?:^|\\s)${ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|\\s|[—:,])`)
-    const at = lines.findIndex(line => exact.test(line) && /^\s*[-*]\s+\[[ xX]\]\s+/.test(line))
-    if (at >= 0) lines[at] = lines[at].replace(/^(\s*[-*]\s+)\[[ xX]\]/, `$1[${child.closed ? 'x' : ' '}]`)
-    else lines.push(`- [${child.closed ? 'x' : ' '}] ${ref}`)
+    const id = String(child.id)
+    const ref = /^\d+$/.test(id) ? `#${id}` : id
+    const token = escape(ref)
+    const leading = new RegExp(`^(?:\\[${token}\\]\\([^\\n)]*\\)|${/^\d+$/.test(id) ? `\\*\\*US-${escape(id)}:\\*\\*|` : ''}${token}(?=$|[\\s—:,]))`)
+    let found = false
+    source = source.replace(/^(\s*[-*]\s+)\[([ xX])\](\s+)([^\n]*)/gm, (line, bullet, mark, space, content) => {
+      if (found || !leading.test(content)) return line
+      found = true
+      return `${bullet}[${child.closed ? 'x' : ' '}]${space}${content}`
+    })
+    if (!found) missing.push(`- [${child.closed ? 'x' : ' '}] ${ref}`)
   }
-  return `${prefix}\n\n${lines.join('\n')}${suffix ? `\n\n${suffix.trimStart()}` : ''}\n`
+  if (!missing.length) return source
+  const heading = /^## Sub-Issues[ \t]*$/m.exec(source)
+  if (!heading) return `${source.trimEnd()}\n\n## Sub-Issues\n\n${missing.join('\n')}\n`
+  const afterHeading = heading.index + heading[0].length
+  const rest = source.slice(afterHeading)
+  const next = /^## /m.exec(rest)
+  const end = next ? afterHeading + next.index : source.length
+  const section = source.slice(afterHeading, end)
+  const before = source.slice(0, end).trimEnd()
+  const after = source.slice(end)
+  return `${before}${section.trim() ? '\n' : '\n\n'}${missing.join('\n')}${after ? `\n\n${after.trimStart()}` : '\n'}`
 }
 
 export class HostError extends Error {
