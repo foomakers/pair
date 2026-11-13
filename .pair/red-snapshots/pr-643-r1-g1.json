@@ -1,0 +1,170 @@
+{
+  "$meta": {
+    "pr": "643",
+    "phase": "r1-g1",
+    "base": "e7b53c90d00c51aa9ce69f1d534185943f6d68d1",
+    "trailer": "Pair-RED-Snapshot: pr=643; phase=r1-g1; base=e7b53c90d00c51aa9ce69f1d534185943f6d68d1; manifest=.pair/red-snapshots/pr-643-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/spawn-reap.test.ts",
+      "apps/pair-cli/src/commands/run/spawn.test.ts"
+    ]
+  },
+  "status": "red",
+  "mode": "remediation",
+  "inputHead": "e7b53c90d00c51aa9ce69f1d534185943f6d68d1",
+  "sourceOfTruth": "apps/pair-cli/src/commands/run/spawn.ts reap()",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "spawnIteration/reap() in apps/pair-cli/src/commands/run/spawn.ts",
+      "inputs": [
+        "idleTimeoutSeconds",
+        "engine process tree (engine exits on SIGTERM, or ignores it; descendant inherits stdio)"
+      ],
+      "representations": [
+        "spawn.ts only (no generated/dataset copy)"
+      ],
+      "consumers": [
+        "run command iteration loop",
+        "parallel path via spawnIteration"
+      ],
+      "classes": [
+        "descendant default SIGTERM handling",
+        "descendant ignoring SIGTERM",
+        "engine already exited at hardStop (reap early-return)",
+        "engine alive at hardStop (ignores SIGTERM) with live descendant holding inherited stdio"
+      ],
+      "interactions": [
+        "engine exit on SIGTERM x descendant holding inherited stdout",
+        "engine-alive-at-hardStop x descendant holding inherited stdio"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli/src/commands/run/spawn.ts reap()/spawnIteration",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/spawn.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "engine exits on SIGTERM; descendant (default SIGTERM) inherits stdio; idle=1",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-reap.test.ts (apps/pair-cli/src/commands/run/spawn-reap.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/spawn-reap.test.ts",
+      "expected": "descendant pid not alive within 1s of spawnIteration settling (process.kill(pid,0) throws)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "engine exits on SIGTERM; descendant ignores SIGTERM and inherits stdio; idle=1",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-reap.test.ts (apps/pair-cli/src/commands/run/spawn-reap.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/spawn-reap.test.ts",
+      "expected": "descendant pid not alive within 1s of settlement",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "engine ignores SIGTERM and spawns a stdio-inheriting descendant; idle=1",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-reap.test.ts (apps/pair-cli/src/commands/run/spawn-reap.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/spawn-reap.test.ts",
+      "expected": "result failed/timed-out/stalled; engine pid and descendant pid both not alive within 1s of settlement (process.kill(pid,0) throws)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "existing idle-timeout behavior (SIGTERM-ignoring engine, terminal-after-expiry, reset by events) unchanged",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn.test.ts -t idle (apps/pair-cli/src/commands/run/spawn.test.ts)",
+      "file": "apps/pair-cli/src/commands/run/spawn.test.ts",
+      "expected": "6 idle tests pass",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/spawn-reap.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:16f4b8fc04f0a304d41902f3eec79881bab671ee408c6583beb4e892460dd12d",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-reap.test.ts",
+      "observed": "3 failed: AssertionError expected false to be true (descendant still alive 1s after settlement) in all 3 tests incl. r0-1-w3 at spawn-reap.test.ts:93"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/spawn.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:802692c810cfc9ed4798c8a772809f65cd9b655e9946faae6840aaad3fc41d69",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn.test.ts -t idle",
+      "observed": "6 passed | 29 skipped (35)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "apps/pair-cli/src/commands/run/spawn.ts reap()/spawnIteration",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/spawn.ts"
+        ],
+        "dependsOn": [],
+        "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-reap.test.ts"
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-2",
+          "r0-3",
+          "r0-4"
+        ],
+        "owner": "apps/pair-cli/src/commands/run/spawn-reap.test.ts",
+        "mode": "test",
+        "allowedPaths": [],
+        "dependsOn": [],
+        "oracle": "spawnIteration test guards vs injected regression"
+      },
+      {
+        "groupId": "r1-g3",
+        "findings": [
+          "r0-5"
+        ],
+        "owner": "delivery-cycle.md dataset source + commands.mdx",
+        "mode": "doc",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          ".pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          "apps/website/content/docs/reference/cli/commands.mdx"
+        ],
+        "dependsOn": [
+          "r1-g1"
+        ],
+        "oracle": "docs conformance"
+      }
+    ],
+    "carried": []
+  },
+  "changedRows": [
+    "r0-1-w3"
+  ]
+}
