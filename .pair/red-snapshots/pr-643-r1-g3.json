@@ -1,0 +1,83 @@
+{
+  "$meta": {
+    "pr": "643",
+    "phase": "r1-g3",
+    "base": "53bd028fd05b2ac47b211bef481522be6aaaca94",
+    "trailer": "Pair-RED-Snapshot: pr=643; phase=r1-g3; base=53bd028fd05b2ac47b211bef481522be6aaaca94; manifest=.pair/red-snapshots/pr-643-r1-g3.json",
+    "artifacts": []
+  },
+  "status": "red",
+  "mode": "repair",
+  "inputHead": "53bd028fd05b2ac47b211bef481522be6aaaca94",
+  "sourceOfTruth": "apps/pair-cli/src/commands/run/spawn.ts reap()/createWatchdog; interrupt.ts ENGINE_GRACE_MS=5000",
+  "inventory": [
+    {
+      "id": "r0-5",
+      "producer": "idle-expiry stop behavior in spawn.ts (SIGTERM, ENGINE_GRACE_MS=5s, SIGKILL, pipe release; terminal event read before expiry keeps outcome); terminal event arriving AFTER expiry stays a timeout, never success (spawn.ts:142, AC3)",
+      "inputs": [
+        "idle expiry"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md (source)",
+        ".pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md (generated mirror, regenerated from source)",
+        "apps/website/content/docs/reference/cli/commands.mdx"
+      ],
+      "consumers": [
+        "pair-cli run operators"
+      ],
+      "classes": [
+        "delivery-cycle.md row 'pair-cli run'",
+        "commands.mdx idle-timeout flag row",
+        "commands.mdx idle watchdog paragraph"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "delivery-cycle.md dataset source + commands.mdx",
+    "mode": "doc",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+      ".pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+      "apps/website/content/docs/reference/cli/commands.mdx"
+    ]
+  },
+  "matrix": [],
+  "redTests": [],
+  "checklist": [
+    {
+      "id": "r0-5-c1",
+      "finding": "r0-5",
+      "requirement": "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md line ~315 no longer says the engine 'gets `SIGTERM`' alone: names SIGTERM, then a 5s grace, then SIGKILL, and release of the engine pipes",
+      "authority": "spawn.ts reap() + interrupt.ts ENGINE_GRACE_MS = 5_000"
+    },
+    {
+      "id": "r0-5-c2",
+      "finding": "r0-5",
+      "requirement": "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md states a terminal event already read before expiry keeps its outcome, AND a terminal event arriving after expiry stays a timeout, never success",
+      "authority": "spawn.ts:142 (US-600 AC3); finding r0-5 description"
+    },
+    {
+      "id": "r0-5-c3",
+      "finding": "r0-5",
+      "requirement": "mirror .pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md regenerated from the dataset source: identical text for that row (incl. after-expiry-timeout); grep 'gets `SIGTERM`' finds no stale text in dataset source or mirror",
+      "authority": "mirror-from-dataset rule"
+    },
+    {
+      "id": "r0-5-c4",
+      "finding": "r0-5",
+      "requirement": "apps/website/content/docs/reference/cli/commands.mdx (idle watchdog paragraph ~1139-1143 and --idle-timeout row ~823) names SIGTERM, 5s grace, SIGKILL and pipe release; a terminal event after expiry stays a timeout (per finding), consistent with packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md wording",
+      "authority": "spawn.ts; finding r0-5 description"
+    }
+  ],
+  "testExempt": true,
+  "exemptionRationale": "doc group: prose only, acceptance checklist; oracle docs conformance",
+  "reconciled": [],
+  "preserved": [],
+  "changedRows": [
+    "r0-5-c1",
+    "r0-5-c2",
+    "r0-5-c3",
+    "r0-5-c4"
+  ]
+}
