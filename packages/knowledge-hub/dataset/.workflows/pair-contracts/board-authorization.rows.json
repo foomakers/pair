@@ -1,0 +1,570 @@
+[
+  {
+    "id": "r1-g2-allow-admin",
+    "role": "admin",
+    "allow": true
+  },
+  {
+    "id": "r1-g2-allow-maintain",
+    "role": "maintain",
+    "allow": true
+  },
+  {
+    "id": "r1-g2-allow-write",
+    "role": "write",
+    "allow": true,
+    "allStates": true
+  },
+  {
+    "id": "r1-g2-deny-role-read",
+    "role": "read",
+    "allow": false,
+    "allStates": true
+  },
+  {
+    "id": "r1-g2-deny-role-triage",
+    "role": "triage",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-deny-role-none",
+    "role": "none",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-deny-role-unknown",
+    "role": "unknown",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-deny-role-missing",
+    "role": null,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-deny-fork-admin",
+    "role": "admin",
+    "fork": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-deny-fork-maintain",
+    "role": "maintain",
+    "fork": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-deny-fork-write",
+    "role": "write",
+    "fork": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-deny-fork-none",
+    "role": "none",
+    "fork": true,
+    "allow": false,
+    "allStates": true
+  },
+  {
+    "id": "r1-g2-association-owner",
+    "role": "read",
+    "association": "OWNER",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-association-member",
+    "role": "read",
+    "association": "MEMBER",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-association-collaborator",
+    "role": "read",
+    "association": "COLLABORATOR",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-association-contributor",
+    "role": "read",
+    "association": "CONTRIBUTOR",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-association-first_time_contributor",
+    "role": "read",
+    "association": "FIRST_TIME_CONTRIBUTOR",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-association-first_timer",
+    "role": "read",
+    "association": "FIRST_TIMER",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-association-mannequin",
+    "role": "read",
+    "association": "MANNEQUIN",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-association-none",
+    "role": "read",
+    "association": "NONE",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-body-closes",
+    "role": "write",
+    "body": "Closes #42",
+    "allow": true
+  },
+  {
+    "id": "r1-g2-body-fixes",
+    "role": "write",
+    "body": "Fixes #42",
+    "allow": true
+  },
+  {
+    "id": "r1-g2-body-resolves",
+    "role": "write",
+    "body": "Resolves #42",
+    "allow": true
+  },
+  {
+    "id": "r1-g2-branch-reference",
+    "role": "write",
+    "body": "",
+    "branch": "feature/#42-update",
+    "allow": true,
+    "allStates": true
+  },
+  {
+    "id": "r1-g2-deny-refs",
+    "role": "write",
+    "body": "Refs: #42",
+    "allow": false,
+    "allStates": true
+  },
+  {
+    "id": "r1-g2-deny-title",
+    "role": "write",
+    "body": "",
+    "title": "[#42] Update feature",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-deny-us-title",
+    "role": "write",
+    "body": "",
+    "title": "[US-42] Update feature",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-no-reference",
+    "role": "write",
+    "body": "",
+    "allow": false
+  },
+  {
+    "id": "r1-g2-missingSender",
+    "role": "write",
+    "missingSender": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-missingHead",
+    "role": "write",
+    "missingHead": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-missingBase",
+    "role": "write",
+    "missingBase": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-apiError",
+    "role": "write",
+    "apiError": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-malformed",
+    "role": "write",
+    "malformed": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-replay-denied",
+    "role": "none",
+    "replay": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-replay-allowed",
+    "role": "admin",
+    "replay": true,
+    "allow": true
+  },
+  {
+    "id": "r1-g2-server-permission-read",
+    "role": "admin",
+    "allow": true,
+    "requireLookup": true
+  },
+  {
+    "id": "r1-g2-interaction-fixes-role",
+    "body": "Fixes #42",
+    "role": "read",
+    "fork": false,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-interaction-fixes-fork",
+    "body": "Fixes #42",
+    "role": "admin",
+    "fork": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-interaction-resolves-role",
+    "body": "Resolves #42",
+    "role": "read",
+    "fork": false,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-interaction-resolves-fork",
+    "body": "Resolves #42",
+    "role": "admin",
+    "fork": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-interaction-branch-role",
+    "body": "",
+    "branch": "feature/#42-update",
+    "role": "read",
+    "fork": false,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-interaction-branch-fork",
+    "body": "",
+    "branch": "feature/#42-update",
+    "role": "admin",
+    "fork": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-missing-both-repositories",
+    "role": "write",
+    "missingHead": true,
+    "missingBase": true,
+    "allow": false
+  },
+  {
+    "id": "r1-g2-replay-revoked",
+    "role": "admin",
+    "allow": true,
+    "replay": true,
+    "revoke": true
+  },
+  {
+    "id": "r1-g2-identity-card-trusted",
+    "body": "Closes #73",
+    "story": 73,
+    "role": "write",
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-identity-card-denied",
+    "body": "Closes #73",
+    "story": 73,
+    "role": "read",
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-identity-repository-trusted",
+    "repo": "beta/widgets",
+    "role": "write",
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-identity-repository-denied",
+    "repo": "beta/widgets",
+    "role": "read",
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-identity-sender-trusted",
+    "sender": "alternate-sender",
+    "role": "write",
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-identity-sender-denied",
+    "sender": "alternate-sender",
+    "role": "read",
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-identity-body-title-trusted",
+    "body": "Closes #73",
+    "title": "[#99] Wrong card",
+    "story": 73,
+    "role": "write",
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-identity-body-title-denied",
+    "body": "Closes #73",
+    "title": "[#99] Wrong card",
+    "story": 73,
+    "role": "read",
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-lower-closes-trusted",
+    "body": "closes #73",
+    "story": 73,
+    "role": "write",
+    "fork": false,
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-lower-closes-denied",
+    "body": "closes #73",
+    "story": 73,
+    "role": "read",
+    "fork": false,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-lower-closes-fork",
+    "body": "closes #73",
+    "story": 73,
+    "role": "admin",
+    "fork": true,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-lower-fixes-trusted",
+    "body": "fixes #73",
+    "story": 73,
+    "role": "write",
+    "fork": false,
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-lower-fixes-denied",
+    "body": "fixes #73",
+    "story": 73,
+    "role": "read",
+    "fork": false,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-lower-fixes-fork",
+    "body": "fixes #73",
+    "story": 73,
+    "role": "admin",
+    "fork": true,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-lower-resolves-trusted",
+    "body": "resolves #73",
+    "story": 73,
+    "role": "write",
+    "fork": false,
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-lower-resolves-denied",
+    "body": "resolves #73",
+    "story": 73,
+    "role": "read",
+    "fork": false,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-lower-resolves-fork",
+    "body": "resolves #73",
+    "story": 73,
+    "role": "admin",
+    "fork": true,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-mixed-closes-trusted",
+    "body": "cLoSeS #73",
+    "story": 73,
+    "role": "write",
+    "fork": false,
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-mixed-closes-denied",
+    "body": "cLoSeS #73",
+    "story": 73,
+    "role": "read",
+    "fork": false,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-mixed-closes-fork",
+    "body": "cLoSeS #73",
+    "story": 73,
+    "role": "admin",
+    "fork": true,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-multiline-trusted",
+    "body": "Description\nfixes #73\nMore text",
+    "story": 73,
+    "role": "write",
+    "fork": false,
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-multiline-denied",
+    "body": "Description\nfixes #73\nMore text",
+    "story": 73,
+    "role": "read",
+    "fork": false,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-multiline-fork",
+    "body": "Description\nfixes #73\nMore text",
+    "story": 73,
+    "role": "admin",
+    "fork": true,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-branch-other-trusted",
+    "body": "",
+    "branch": "feature/#91-work",
+    "story": 91,
+    "role": "write",
+    "fork": false,
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-branch-other-denied",
+    "body": "",
+    "branch": "feature/#91-work",
+    "story": 91,
+    "role": "read",
+    "fork": false,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-branch-other-fork",
+    "body": "",
+    "branch": "feature/#91-work",
+    "story": 91,
+    "role": "admin",
+    "fork": true,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-prose-branch-trusted",
+    "body": "Discuss #73 without closing",
+    "branch": "feature/#91-work",
+    "story": 91,
+    "role": "write",
+    "fork": false,
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-prose-branch-denied",
+    "body": "Discuss #73 without closing",
+    "branch": "feature/#91-work",
+    "story": 91,
+    "role": "read",
+    "fork": false,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-prose-branch-fork",
+    "body": "Discuss #73 without closing",
+    "branch": "feature/#91-work",
+    "story": 91,
+    "role": "admin",
+    "fork": true,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-refs-branch-trusted",
+    "body": "Refs: #73",
+    "branch": "feature/#91-work",
+    "story": 91,
+    "role": "write",
+    "fork": false,
+    "allow": true,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-refs-branch-denied",
+    "body": "Refs: #73",
+    "branch": "feature/#91-work",
+    "story": 91,
+    "role": "read",
+    "fork": false,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-refs-branch-fork",
+    "body": "Refs: #73",
+    "branch": "feature/#91-work",
+    "story": 91,
+    "role": "admin",
+    "fork": true,
+    "allow": false,
+    "bindIdentities": true
+  },
+  {
+    "id": "r1-g2-reference-prose-only",
+    "body": "Discuss #73 without closing",
+    "role": "write",
+    "allow": false,
+    "bindIdentities": true
+  }
+]

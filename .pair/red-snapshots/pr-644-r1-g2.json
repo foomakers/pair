@@ -1,0 +1,2988 @@
+{
+  "$meta": {
+    "pr": "644",
+    "phase": "r1-g2",
+    "base": "87f7257e66e6f0c9b9b1072b5b5925d315e8231c",
+    "trailer": "Pair-RED-Snapshot: pr=644; phase=r1-g2; base=87f7257e66e6f0c9b9b1072b5b5925d315e8231c; manifest=.pair/red-snapshots/pr-644-r1-g2.json",
+    "artifacts": [
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.rows.json"
+    ]
+  },
+  "status": "red",
+  "mode": "repair",
+  "inputHead": "87f7257e66e6f0c9b9b1072b5b5925d315e8231c",
+  "sourceOfTruth": {
+    "story": "https://github.com/foomakers/pair/issues/642",
+    "section": "Maintainer Decision — board-sync authorization (2026-11-13)",
+    "finding": "r0-1",
+    "security": ".pair/knowledge/guidelines/quality-assurance/security/security-guidelines.md#A01",
+    "rule": "Allow only same-repository PR + triggering sender repository role admin/maintain/write + Closes/Fixes/Resolves #N body or branch carrying #N. Otherwise no write, failure or comment.",
+    "acHash": "sha256:8f59d8fe1cd45d8b58dec755c3661fa2aa047bb91c5b4378d533d69d4b5effcf"
+  },
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "pair-board-sync.yml jobs.pr-state trigger/conditions/env and executable shell before board-transition.mjs",
+      "inputs": {
+        "repository": [
+          "same",
+          "fork",
+          "missing head",
+          "missing base",
+          "both missing"
+        ],
+        "senderRoles": [
+          "admin",
+          "maintain",
+          "write",
+          "read",
+          "triage",
+          "none",
+          "unknown",
+          "absent",
+          "API error",
+          "malformed JSON"
+        ],
+        "actor": "event.sender.login, distinct from privileged PR author; missing sender refuses",
+        "authorAssociation": [
+          "OWNER",
+          "MEMBER",
+          "COLLABORATOR",
+          "CONTRIBUTOR",
+          "FIRST_TIME_CONTRIBUTOR",
+          "FIRST_TIMER",
+          "MANNEQUIN",
+          "NONE"
+        ],
+        "association": [
+          "Closes #42",
+          "Fixes #42",
+          "Resolves #42",
+          "feature/#42-update branch",
+          "Refs: #42",
+          "[#42] title",
+          "[US-42] title",
+          "absent"
+        ],
+        "events": [
+          "opened",
+          "reopened",
+          "ready_for_review",
+          "closed merged=false",
+          "closed merged=true"
+        ],
+        "replay": [
+          "unchanged allow",
+          "unchanged denial",
+          "admin permission revoked to read"
+        ]
+      },
+      "representations": [
+        "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+        ".github/workflows/pair-board-sync.yml"
+      ],
+      "consumers": [
+        "privileged board-transition.mjs CLI; PM board/status/closure writes",
+        "GitHub permission GET for the triggering sender; no comment API permitted"
+      ],
+      "classes": [
+        {
+          "id": "r1-g2-allow-admin",
+          "condition": {
+            "role": "admin",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-allow-maintain",
+          "condition": {
+            "role": "maintain",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-allow-write",
+          "condition": {
+            "role": "write",
+            "allStates": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "opened/reopened/ready_for_review/closed-unmerged/merged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-role-read",
+          "condition": {
+            "role": "read",
+            "allStates": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "opened/reopened/ready_for_review/closed-unmerged/merged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-role-triage",
+          "condition": {
+            "role": "triage",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-role-none",
+          "condition": {
+            "role": "none",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-role-unknown",
+          "condition": {
+            "role": "unknown",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-role-missing",
+          "condition": {
+            "role": null,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-fork-admin",
+          "condition": {
+            "role": "admin",
+            "fork": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-fork-maintain",
+          "condition": {
+            "role": "maintain",
+            "fork": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-fork-write",
+          "condition": {
+            "role": "write",
+            "fork": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-fork-none",
+          "condition": {
+            "role": "none",
+            "fork": true,
+            "allStates": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "opened/reopened/ready_for_review/closed-unmerged/merged"
+          }
+        },
+        {
+          "id": "r1-g2-association-owner",
+          "condition": {
+            "role": "read",
+            "association": "OWNER",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-association-member",
+          "condition": {
+            "role": "read",
+            "association": "MEMBER",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-association-collaborator",
+          "condition": {
+            "role": "read",
+            "association": "COLLABORATOR",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-association-contributor",
+          "condition": {
+            "role": "read",
+            "association": "CONTRIBUTOR",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-association-first_time_contributor",
+          "condition": {
+            "role": "read",
+            "association": "FIRST_TIME_CONTRIBUTOR",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-association-first_timer",
+          "condition": {
+            "role": "read",
+            "association": "FIRST_TIMER",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-association-mannequin",
+          "condition": {
+            "role": "read",
+            "association": "MANNEQUIN",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-association-none",
+          "condition": {
+            "role": "read",
+            "association": "NONE",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-body-closes",
+          "condition": {
+            "role": "write",
+            "body": "Closes #42",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-body-fixes",
+          "condition": {
+            "role": "write",
+            "body": "Fixes #42",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-body-resolves",
+          "condition": {
+            "role": "write",
+            "body": "Resolves #42",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-branch-reference",
+          "condition": {
+            "role": "write",
+            "body": "",
+            "branch": "feature/#42-update",
+            "allStates": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "opened/reopened/ready_for_review/closed-unmerged/merged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-refs",
+          "condition": {
+            "role": "write",
+            "body": "Refs: #42",
+            "allStates": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "opened/reopened/ready_for_review/closed-unmerged/merged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-title",
+          "condition": {
+            "role": "write",
+            "body": "",
+            "title": "[#42] Update feature",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-deny-us-title",
+          "condition": {
+            "role": "write",
+            "body": "",
+            "title": "[US-42] Update feature",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-no-reference",
+          "condition": {
+            "role": "write",
+            "body": "",
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-missingSender",
+          "condition": {
+            "role": "write",
+            "missingSender": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-missingHead",
+          "condition": {
+            "role": "write",
+            "missingHead": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-missingBase",
+          "condition": {
+            "role": "write",
+            "missingBase": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-apiError",
+          "condition": {
+            "role": "write",
+            "apiError": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-malformed",
+          "condition": {
+            "role": "write",
+            "malformed": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-replay-denied",
+          "condition": {
+            "role": "none",
+            "replay": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-replay-allowed",
+          "condition": {
+            "role": "admin",
+            "replay": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-server-permission-read",
+          "condition": {
+            "role": "admin",
+            "requireLookup": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-interaction-fixes-role",
+          "condition": {
+            "body": "Fixes #42",
+            "role": "read",
+            "fork": false,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-interaction-fixes-fork",
+          "condition": {
+            "body": "Fixes #42",
+            "role": "admin",
+            "fork": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-interaction-resolves-role",
+          "condition": {
+            "body": "Resolves #42",
+            "role": "read",
+            "fork": false,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-interaction-resolves-fork",
+          "condition": {
+            "body": "Resolves #42",
+            "role": "admin",
+            "fork": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-interaction-branch-role",
+          "condition": {
+            "body": "",
+            "branch": "feature/#42-update",
+            "role": "read",
+            "fork": false,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-interaction-branch-fork",
+          "condition": {
+            "body": "",
+            "branch": "feature/#42-update",
+            "role": "admin",
+            "fork": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-missing-both-repositories",
+          "condition": {
+            "role": "write",
+            "missingHead": true,
+            "missingBase": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-replay-revoked",
+          "condition": {
+            "role": "admin",
+            "replay": true,
+            "revoke": true,
+            "representations": [
+              "root workflow",
+              "dataset workflow"
+            ],
+            "events": "closed-unmerged"
+          }
+        },
+        {
+          "id": "r1-g2-ledger-families-na",
+          "condition": "cycle ledger predecessors, immutable run/head/batch/scope identities, multi-group convergence and regression-risk discharge"
+        }
+      ],
+      "interactions": [
+        "Each representation x each role, repository, reference, association and event value.",
+        "Every event x allow-write/deny-read/deny-fork/deny-Refs/branch-reference.",
+        "Fixes/Resolves/branch reference x insufficient role/fork.",
+        "PR author privilege x unprivileged triggering sender.",
+        "Repeated event x permission revocation; fresh process rechecks current authority."
+      ],
+      "authority": [
+        "https://github.com/foomakers/pair/issues/642 — Maintainer Decision — board-sync authorization (2026-11-13)",
+        ".pair/knowledge/guidelines/quality-assurance/security/security-guidelines.md#A01"
+      ]
+    },
+    {
+      "id": "r1-g2-bound-identities",
+      "obligationIds": [
+        "r0-1"
+      ],
+      "producer": "pair-board-sync.yml jobs.pr-state trigger/conditions/env and executable shell before board-transition.mjs",
+      "inputs": {
+        "fixtures": [
+          {
+            "id": "r1-g2-identity-card-trusted",
+            "body": "Closes #73",
+            "story": 73,
+            "role": "write",
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-identity-card-denied",
+            "body": "Closes #73",
+            "story": 73,
+            "role": "read",
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-identity-repository-trusted",
+            "repo": "beta/widgets",
+            "role": "write",
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-identity-repository-denied",
+            "repo": "beta/widgets",
+            "role": "read",
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-identity-sender-trusted",
+            "sender": "alternate-sender",
+            "role": "write",
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-identity-sender-denied",
+            "sender": "alternate-sender",
+            "role": "read",
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-identity-body-title-trusted",
+            "body": "Closes #73",
+            "title": "[#99] Wrong card",
+            "story": 73,
+            "role": "write",
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-identity-body-title-denied",
+            "body": "Closes #73",
+            "title": "[#99] Wrong card",
+            "story": 73,
+            "role": "read",
+            "allow": false,
+            "bindIdentities": true
+          }
+        ]
+      },
+      "representations": [
+        "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+        ".github/workflows/pair-board-sync.yml"
+      ],
+      "consumers": [
+        "privileged board-transition.mjs CLI; PM board/status/closure writes",
+        "GitHub permission GET for the triggering sender; no comment API permitted"
+      ],
+      "classes": [
+        "independent card 73",
+        "independent repository beta/widgets",
+        "independent sender alternate-sender",
+        "body card 73 with title card 99",
+        "branch card 91"
+      ],
+      "interactions": [
+        "both workflow representations x each class",
+        "each new valid reference source x trusted write / denied read / fork admin",
+        "identity variants x trusted write / denied read"
+      ],
+      "equivalence": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target."
+    },
+    {
+      "id": "r1-g2-reference-classes",
+      "obligationIds": [
+        "r0-1"
+      ],
+      "producer": "pair-board-sync.yml jobs.pr-state trigger/conditions/env and executable shell before board-transition.mjs",
+      "inputs": {
+        "fixtures": [
+          {
+            "id": "r1-g2-reference-lower-closes-trusted",
+            "body": "closes #73",
+            "story": 73,
+            "role": "write",
+            "fork": false,
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-lower-closes-denied",
+            "body": "closes #73",
+            "story": 73,
+            "role": "read",
+            "fork": false,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-lower-closes-fork",
+            "body": "closes #73",
+            "story": 73,
+            "role": "admin",
+            "fork": true,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-lower-fixes-trusted",
+            "body": "fixes #73",
+            "story": 73,
+            "role": "write",
+            "fork": false,
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-lower-fixes-denied",
+            "body": "fixes #73",
+            "story": 73,
+            "role": "read",
+            "fork": false,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-lower-fixes-fork",
+            "body": "fixes #73",
+            "story": 73,
+            "role": "admin",
+            "fork": true,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-lower-resolves-trusted",
+            "body": "resolves #73",
+            "story": 73,
+            "role": "write",
+            "fork": false,
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-lower-resolves-denied",
+            "body": "resolves #73",
+            "story": 73,
+            "role": "read",
+            "fork": false,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-lower-resolves-fork",
+            "body": "resolves #73",
+            "story": 73,
+            "role": "admin",
+            "fork": true,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-mixed-closes-trusted",
+            "body": "cLoSeS #73",
+            "story": 73,
+            "role": "write",
+            "fork": false,
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-mixed-closes-denied",
+            "body": "cLoSeS #73",
+            "story": 73,
+            "role": "read",
+            "fork": false,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-mixed-closes-fork",
+            "body": "cLoSeS #73",
+            "story": 73,
+            "role": "admin",
+            "fork": true,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-multiline-trusted",
+            "body": "Description\nfixes #73\nMore text",
+            "story": 73,
+            "role": "write",
+            "fork": false,
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-multiline-denied",
+            "body": "Description\nfixes #73\nMore text",
+            "story": 73,
+            "role": "read",
+            "fork": false,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-multiline-fork",
+            "body": "Description\nfixes #73\nMore text",
+            "story": 73,
+            "role": "admin",
+            "fork": true,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-branch-other-trusted",
+            "body": "",
+            "branch": "feature/#91-work",
+            "story": 91,
+            "role": "write",
+            "fork": false,
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-branch-other-denied",
+            "body": "",
+            "branch": "feature/#91-work",
+            "story": 91,
+            "role": "read",
+            "fork": false,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-branch-other-fork",
+            "body": "",
+            "branch": "feature/#91-work",
+            "story": 91,
+            "role": "admin",
+            "fork": true,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-prose-branch-trusted",
+            "body": "Discuss #73 without closing",
+            "branch": "feature/#91-work",
+            "story": 91,
+            "role": "write",
+            "fork": false,
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-prose-branch-denied",
+            "body": "Discuss #73 without closing",
+            "branch": "feature/#91-work",
+            "story": 91,
+            "role": "read",
+            "fork": false,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-prose-branch-fork",
+            "body": "Discuss #73 without closing",
+            "branch": "feature/#91-work",
+            "story": 91,
+            "role": "admin",
+            "fork": true,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-refs-branch-trusted",
+            "body": "Refs: #73",
+            "branch": "feature/#91-work",
+            "story": 91,
+            "role": "write",
+            "fork": false,
+            "allow": true,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-refs-branch-denied",
+            "body": "Refs: #73",
+            "branch": "feature/#91-work",
+            "story": 91,
+            "role": "read",
+            "fork": false,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-refs-branch-fork",
+            "body": "Refs: #73",
+            "branch": "feature/#91-work",
+            "story": 91,
+            "role": "admin",
+            "fork": true,
+            "allow": false,
+            "bindIdentities": true
+          },
+          {
+            "id": "r1-g2-reference-prose-only",
+            "body": "Discuss #73 without closing",
+            "role": "write",
+            "allow": false,
+            "bindIdentities": true
+          }
+        ]
+      },
+      "representations": [
+        "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+        ".github/workflows/pair-board-sync.yml"
+      ],
+      "consumers": [
+        "privileged board-transition.mjs CLI; PM board/status/closure writes",
+        "GitHub permission GET for the triggering sender; no comment API permitted"
+      ],
+      "classes": [
+        "lowercase closes/fixes/resolves",
+        "mixed case closing keyword",
+        "closing line inside multiline body",
+        "ordinary nonclosing prose with #N",
+        "nonclosing prose plus branch #91",
+        "Refs #73 plus branch #91"
+      ],
+      "interactions": [
+        "both workflow representations x each class",
+        "each new valid reference source x trusted write / denied read / fork admin",
+        "identity variants x trusted write / denied read"
+      ],
+      "equivalence": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target."
+    }
+  ],
+  "fixScope": {
+    "owner": "PR event authorization",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+      ".github/workflows/pair-board-sync.yml"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r1-g2-allow-admin",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "role": "admin",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state follows event; no other privileged calls",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-allow-maintain",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "role": "maintain",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state follows event; no other privileged calls",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-allow-write",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "role": "write",
+        "allStates": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "opened/reopened/ready_for_review/closed-unmerged/merged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state follows event; no other privileged calls",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-role-read",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "read",
+        "allStates": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "opened/reopened/ready_for_review/closed-unmerged/merged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-role-triage",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "triage",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-role-none",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "none",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-role-unknown",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "unknown",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-role-missing",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": {
+        "role": null,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-fork-admin",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "admin",
+        "fork": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-fork-maintain",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "maintain",
+        "fork": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-fork-write",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "fork": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-fork-none",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "none",
+        "fork": true,
+        "allStates": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "opened/reopened/ready_for_review/closed-unmerged/merged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-association-owner",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "read",
+        "association": "OWNER",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-association-member",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "read",
+        "association": "MEMBER",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-association-collaborator",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "read",
+        "association": "COLLABORATOR",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-association-contributor",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "read",
+        "association": "CONTRIBUTOR",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-association-first_time_contributor",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "read",
+        "association": "FIRST_TIME_CONTRIBUTOR",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-association-first_timer",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "read",
+        "association": "FIRST_TIMER",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-association-mannequin",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "read",
+        "association": "MANNEQUIN",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-association-none",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "read",
+        "association": "NONE",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-body-closes",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "role": "write",
+        "body": "Closes #42",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state follows event; no other privileged calls",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-body-fixes",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "role": "write",
+        "body": "Fixes #42",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state follows event; no other privileged calls",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-body-resolves",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "role": "write",
+        "body": "Resolves #42",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state follows event; no other privileged calls",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-branch-reference",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "body": "",
+        "branch": "feature/#42-update",
+        "allStates": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "opened/reopened/ready_for_review/closed-unmerged/merged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state follows event; no other privileged calls",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-refs",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "body": "Refs: #42",
+        "allStates": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "opened/reopened/ready_for_review/closed-unmerged/merged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-title",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "body": "",
+        "title": "[#42] Update feature",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-deny-us-title",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "body": "",
+        "title": "[US-42] Update feature",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-no-reference",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "role": "write",
+        "body": "",
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-missingSender",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "missingSender": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-missingHead",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "missingHead": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-missingBase",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "missingBase": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-apiError",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "apiError": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-malformed",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "malformed": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-replay-denied",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": {
+        "role": "none",
+        "replay": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments on both fresh executions",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-replay-allowed",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": {
+        "role": "admin",
+        "replay": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state follows event; no other privileged calls on both fresh executions",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-server-permission-read",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "role": "admin",
+        "requireLookup": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state follows event; no other privileged calls; sender permission read before transition",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-interaction-fixes-role",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": {
+        "body": "Fixes #42",
+        "role": "read",
+        "fork": false,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-interaction-fixes-fork",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": {
+        "body": "Fixes #42",
+        "role": "admin",
+        "fork": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-interaction-resolves-role",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": {
+        "body": "Resolves #42",
+        "role": "read",
+        "fork": false,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-interaction-resolves-fork",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": {
+        "body": "Resolves #42",
+        "role": "admin",
+        "fork": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-interaction-branch-role",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": {
+        "body": "",
+        "branch": "feature/#42-update",
+        "role": "read",
+        "fork": false,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-interaction-branch-fork",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": {
+        "body": "",
+        "branch": "feature/#42-update",
+        "role": "admin",
+        "fork": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-missing-both-repositories",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": {
+        "role": "write",
+        "missingHead": true,
+        "missingBase": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and zero comments",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-replay-revoked",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": {
+        "role": "admin",
+        "replay": true,
+        "revoke": true,
+        "representations": [
+          "root workflow",
+          "dataset workflow"
+        ],
+        "events": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state follows event; no other privileged calls on first invocation; after permission revocation replay is exit 0 with zero writes",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Both representations executed. All event values crossed with allow-write, denied-role, denied-fork, denied-Refs and allowed-branch. Other authorization classes use closed-unmerged: actor/repository/reference authorization is independent of event-to-state mapping."
+    },
+    {
+      "id": "r1-g2-ledger-families-na",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "cycle ledger predecessors, immutable run/head/batch/scope identities, multi-group convergence and regression-risk discharge",
+      "oracle": "The workflow pr-state job accepts GitHub PR events, not cycle-ledger mutations. Its only effect is invoking board-transition.",
+      "expected": "No cycle-ledger transition or metric effect belongs to this authorization owner.",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "The two allowed workflow files neither read nor write a run ledger, sealed evidence, metrics, group state or regression-risk state. Such gates remain with their existing owners. Authorization before a PM terminal write IS applicable and covered for merged/closed events; replay revocation is separately executable."
+    },
+    {
+      "id": "r1-g2-identity-card-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-identity-card-trusted",
+        "body": "Closes #73",
+        "story": 73,
+        "role": "write",
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 73 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-bound-identities"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-identity-card-denied",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-identity-card-denied",
+        "body": "Closes #73",
+        "story": 73,
+        "role": "read",
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-bound-identities"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-identity-repository-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-identity-repository-trusted",
+        "repo": "beta/widgets",
+        "role": "write",
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in beta/widgets; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-bound-identities"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-identity-repository-denied",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-identity-repository-denied",
+        "repo": "beta/widgets",
+        "role": "read",
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-bound-identities"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-identity-sender-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-identity-sender-trusted",
+        "sender": "alternate-sender",
+        "role": "write",
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 42 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender alternate-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-bound-identities"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-identity-sender-denied",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-identity-sender-denied",
+        "sender": "alternate-sender",
+        "role": "read",
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-bound-identities"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-identity-body-title-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-identity-body-title-trusted",
+        "body": "Closes #73",
+        "title": "[#99] Wrong card",
+        "story": 73,
+        "role": "write",
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 73 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-bound-identities"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-identity-body-title-denied",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-identity-body-title-denied",
+        "body": "Closes #73",
+        "title": "[#99] Wrong card",
+        "story": 73,
+        "role": "read",
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-bound-identities"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-lower-closes-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-lower-closes-trusted",
+        "body": "closes #73",
+        "story": 73,
+        "role": "write",
+        "fork": false,
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 73 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-lower-closes-denied",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-lower-closes-denied",
+        "body": "closes #73",
+        "story": 73,
+        "role": "read",
+        "fork": false,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-lower-closes-fork",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-lower-closes-fork",
+        "body": "closes #73",
+        "story": 73,
+        "role": "admin",
+        "fork": true,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-lower-fixes-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-lower-fixes-trusted",
+        "body": "fixes #73",
+        "story": 73,
+        "role": "write",
+        "fork": false,
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 73 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-lower-fixes-denied",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-lower-fixes-denied",
+        "body": "fixes #73",
+        "story": 73,
+        "role": "read",
+        "fork": false,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-lower-fixes-fork",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-lower-fixes-fork",
+        "body": "fixes #73",
+        "story": 73,
+        "role": "admin",
+        "fork": true,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-lower-resolves-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-lower-resolves-trusted",
+        "body": "resolves #73",
+        "story": 73,
+        "role": "write",
+        "fork": false,
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 73 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-lower-resolves-denied",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-lower-resolves-denied",
+        "body": "resolves #73",
+        "story": 73,
+        "role": "read",
+        "fork": false,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-lower-resolves-fork",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-lower-resolves-fork",
+        "body": "resolves #73",
+        "story": 73,
+        "role": "admin",
+        "fork": true,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-mixed-closes-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-mixed-closes-trusted",
+        "body": "cLoSeS #73",
+        "story": 73,
+        "role": "write",
+        "fork": false,
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 73 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-mixed-closes-denied",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-mixed-closes-denied",
+        "body": "cLoSeS #73",
+        "story": 73,
+        "role": "read",
+        "fork": false,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-mixed-closes-fork",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-mixed-closes-fork",
+        "body": "cLoSeS #73",
+        "story": 73,
+        "role": "admin",
+        "fork": true,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-multiline-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-multiline-trusted",
+        "body": "Description\nfixes #73\nMore text",
+        "story": 73,
+        "role": "write",
+        "fork": false,
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 73 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-multiline-denied",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-multiline-denied",
+        "body": "Description\nfixes #73\nMore text",
+        "story": 73,
+        "role": "read",
+        "fork": false,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-multiline-fork",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-multiline-fork",
+        "body": "Description\nfixes #73\nMore text",
+        "story": 73,
+        "role": "admin",
+        "fork": true,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-branch-other-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-branch-other-trusted",
+        "body": "",
+        "branch": "feature/#91-work",
+        "story": 91,
+        "role": "write",
+        "fork": false,
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 91 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-branch-other-denied",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "id": "r1-g2-reference-branch-other-denied",
+        "body": "",
+        "branch": "feature/#91-work",
+        "story": 91,
+        "role": "read",
+        "fork": false,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "pass; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-branch-other-fork",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "id": "r1-g2-reference-branch-other-fork",
+        "body": "",
+        "branch": "feature/#91-work",
+        "story": 91,
+        "role": "admin",
+        "fork": true,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "pass; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-prose-branch-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-prose-branch-trusted",
+        "body": "Discuss #73 without closing",
+        "branch": "feature/#91-work",
+        "story": 91,
+        "role": "write",
+        "fork": false,
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 91 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-prose-branch-denied",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "id": "r1-g2-reference-prose-branch-denied",
+        "body": "Discuss #73 without closing",
+        "branch": "feature/#91-work",
+        "story": 91,
+        "role": "read",
+        "fork": false,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "pass; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-prose-branch-fork",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "id": "r1-g2-reference-prose-branch-fork",
+        "body": "Discuss #73 without closing",
+        "branch": "feature/#91-work",
+        "story": 91,
+        "role": "admin",
+        "fork": true,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "pass; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-refs-branch-trusted",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-refs-branch-trusted",
+        "body": "Refs: #73",
+        "branch": "feature/#91-work",
+        "story": 91,
+        "role": "write",
+        "fork": false,
+        "allow": true,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; exactly one transition for card 91 in acme/project; state closed-unmerged; server-side permission GET binds triggering sender event-sender in that repository before write; no other privileged effect",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-refs-branch-denied",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-refs-branch-denied",
+        "body": "Refs: #73",
+        "branch": "feature/#91-work",
+        "story": 91,
+        "role": "read",
+        "fork": false,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-refs-branch-fork",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": {
+        "id": "r1-g2-reference-refs-branch-fork",
+        "body": "Refs: #73",
+        "branch": "feature/#91-work",
+        "story": 91,
+        "role": "admin",
+        "fork": true,
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "red; r1-g2-proof.attempt-2.tap"
+    },
+    {
+      "id": "r1-g2-reference-prose-only",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": {
+        "id": "r1-g2-reference-prose-only",
+        "body": "Discuss #73 without closing",
+        "role": "write",
+        "allow": false,
+        "bindIdentities": true,
+        "representations": [
+          "packages/knowledge-hub/dataset/.github/workflows/pair-board-sync.yml",
+          ".github/workflows/pair-board-sync.yml"
+        ],
+        "event": "closed-unmerged"
+      },
+      "oracle": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs; #642 Maintainer Decision 2026-11-13 and producer /im closing-link grammar",
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "expected": "exit 0; zero privileged calls and comments; any permission GET binds event repository and triggering sender",
+      "covers": [
+        "r0-1",
+        "r1-g2-reference-classes"
+      ],
+      "rationale": "Closing keywords share the producer case-insensitive multiline anchored grammar; enumerate each keyword and case variation. Nonclosing prose and Refs are distinct rejected body classes; valid branch association remains independent of both. Title does not authorize or replace a valid body target. Both workflow shells execute. Existing event cross-product preserves event/state coverage.",
+      "observed": "pass; r1-g2-proof.attempt-2.tap"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:a26bc95d64f61e56fabdfadec2a662d86237f0670415c7df1c06b885f8abfa81",
+      "command": "node --test --test-timeout=55000 --test-reporter=tap packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "observed": "Exit 1; 77 case subtests: 62 assertion failures, 15 pass; parent also fails (78 total tests, 63 fail); zero cancelled/skipped; duration 22337.588834 ms. Exact run: r1-g2-proof.attempt-2.tap."
+    },
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.rows.json",
+      "kind": "fixture",
+      "baseline": "red",
+      "sha256": "sha256:ad04de16cc1f793858e78849b2e980b5d467895674b494f0ed39c7d87e7bc3a1",
+      "consumedBy": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs"
+    }
+  ],
+  "testExempt": false,
+  "reconciled": [
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "sha256": "sha256:3e2c32034b394bf9fac77b82fdcbf67617c35893167bae525e305d3eafd02153",
+      "preservedArtifact": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-642/642/r1-g2-attempt-1-board-authorization.test.mjs"
+    },
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.rows.json",
+      "sha256": "sha256:61e10850d952b38f6390dbe393e5b1484d517f6b762d48beef3609b72e3ed050",
+      "preservedArtifact": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-642/642/r1-g2-attempt-1-board-authorization.rows.json"
+    }
+  ],
+  "preserved": [],
+  "transitions": [
+    {
+      "name": "authorize-pr-board-transition",
+      "source": "GitHub pull_request_target event PR head/base repository identities, triggering sender and same-PR body/branch; current sender role from collaborators permission GET.",
+      "event": "opened/reopened/ready_for_review or closed with merged boolean; fixtures independently vary card 42/73/91, repository acme/project/beta/widgets and triggering sender event-sender/alternate-sender; title 99 cannot override body 73.",
+      "predecessor": "All three maintainer authorization conditions must hold before the privileged CLI. author_association and PR author privilege are not sender permission. No historical cycle seal is required by this owner.",
+      "nextState": "Authorized events invoke exactly one bound card transition: open, merged or closed-unmerged; denied/missing/unreadable authority returns successful no-op, no comment.",
+      "persistentEffects": "Only authorized CLI dispatch may reach PM membership/status/closure writes; zero dispatch is the boundary proof for denial. Downstream mapping is outside this group.",
+      "immutable": [
+        "target repository",
+        "card selected by authorized PR body or branch",
+        "triggering sender identity rather than author identity"
+      ],
+      "forbidden": "Fork (including admin), insufficient/unknown/missing permission, missing repository/sender, unreadable permission, title-only or Refs-only association cannot dispatch even a terminal close/merge transition. Typed policy result: successful no-op, no comment.",
+      "replay": "Fresh execution reauthorizes each replay; unchanged denial remains no-op; unchanged authorization preserves dispatch target/state; revoked permission prevents subsequent dispatch.",
+      "staleWriter": "A prior admin result cannot authorize a later replay after role becomes read. Event/head freshness and downstream concurrent board writes are not changed by this scoped authorization rule.",
+      "terminalPreconditions": "Same conjunction for merged and closed-unmerged as open; no direct terminal shortcut.",
+      "metrics": "No metric mutation in these workflow files; telemetry remains outside r0-1 scope."
+    }
+  ],
+  "verification": {
+    "lint": "pnpm exec lint dataset/.workflows/pair-contracts/board-authorization.test.mjs; cwd packages/knowledge-hub; exit 0 (adopted dataset workflow exclusion applies)",
+    "format": "pnpm exec prettier-fix packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.rows.json; exit 0; publish performs adopted check before handoff",
+    "mutation": "not measured",
+    "testsAdded": 77,
+    "testsRemoved": 0,
+    "durationDeltaMs": 22337.588834,
+    "baselineHead": "87f7257e66e6f0c9b9b1072b5b5925d315e8231c",
+    "proofRef": "r1-g2-proof.attempt-2.tap",
+    "isolation": "Real workflow YAML is parsed; run blocks execute with bash -eo pipefail in empty temporary directories. PATH contains fixture node/gh and selected standard utilities only. No real engine, gh, project checkout or network host is reached; privileged CLI is a logging stub. Supported Actions expressions are evaluated; unsupported actions fail the harness.",
+    "repairAdded": 33,
+    "execution": "Four concurrent case subtests execute real workflow shells in isolated temporary directories; each shell bounded to 5 seconds. Entire suite completed in 22.3 seconds.",
+    "custody": "Earlier contract remains byte-identical; earlier test/fixture bytes preserved with verified SHA256 in run directory. Replacement contract records canonical contractHash (hash excludes that field)."
+  },
+  "changedRows": [
+    "r1-g2-contract-hash",
+    "r1-g2-bound-identities",
+    "pr-card-association",
+    "r1-g2-reference-classes",
+    "r1-g2-identity-card-trusted",
+    "r1-g2-identity-card-denied",
+    "r1-g2-identity-repository-trusted",
+    "r1-g2-identity-repository-denied",
+    "r1-g2-identity-sender-trusted",
+    "r1-g2-identity-sender-denied",
+    "r1-g2-identity-body-title-trusted",
+    "r1-g2-identity-body-title-denied",
+    "r1-g2-reference-lower-closes-trusted",
+    "r1-g2-reference-lower-closes-denied",
+    "r1-g2-reference-lower-closes-fork",
+    "r1-g2-reference-lower-fixes-trusted",
+    "r1-g2-reference-lower-fixes-denied",
+    "r1-g2-reference-lower-fixes-fork",
+    "r1-g2-reference-lower-resolves-trusted",
+    "r1-g2-reference-lower-resolves-denied",
+    "r1-g2-reference-lower-resolves-fork",
+    "r1-g2-reference-mixed-closes-trusted",
+    "r1-g2-reference-mixed-closes-denied",
+    "r1-g2-reference-mixed-closes-fork",
+    "r1-g2-reference-multiline-trusted",
+    "r1-g2-reference-multiline-denied",
+    "r1-g2-reference-multiline-fork",
+    "r1-g2-reference-branch-other-trusted",
+    "r1-g2-reference-branch-other-denied",
+    "r1-g2-reference-branch-other-fork",
+    "r1-g2-reference-prose-branch-trusted",
+    "r1-g2-reference-prose-branch-denied",
+    "r1-g2-reference-prose-branch-fork",
+    "r1-g2-reference-refs-branch-trusted",
+    "r1-g2-reference-refs-branch-denied",
+    "r1-g2-reference-refs-branch-fork",
+    "r1-g2-reference-prose-only"
+  ],
+  "contractPath": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-642/642/r1-g2-red-contract.attempt-2.json",
+  "contractHash": "sha256:1efc4f077de12c4010819cf70cc668346e4aa33a1670ca6d1fa53361afd096b9"
+}
