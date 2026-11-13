@@ -86,6 +86,8 @@
         "pair-contracts/board-sync.test.mjs",
         "pair-contracts/board-transition.test.mjs",
         "pair-contracts/board-audit.test.mjs",
+        "pair-contracts/board-authorization.test.mjs",
+        "pair-contracts/board-authorization.rows.json",
         "pair-contracts/filesystem-adapter.test.mjs",
         "pair-contracts/linear-adapter.test.mjs",
         "pair-contracts/fixtures/linear/fake-linear.mjs",
