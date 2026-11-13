@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted (amended 2026-11-13 — board and content reconciliation)
 
 ## Date
 
-2026-09-23
+2026-09-23 (amended 2026-11-13)
 
 ## Context
 
@@ -28,6 +28,7 @@ Accepted
 
 1. **Layout.** `scripts/host/` contains `index.mjs`, `adapter-kit.mjs`, `github.mjs` and `azure-devops.mjs`. It ships byte-identical in every workflow skill that runs a cycle script, and a parity test guards the copies. The registry is every `<id>.mjs` in the directory whose default export is `defineAdapter({ id: '<id>', … })`. A file that fails to load is recorded as broken, is never bound, and does not stop the other adapters from loading.
 2. **Interface.** It has the eight named methods: `readCard`, `cardHash`, `prHead`, `upsertComment`, `concludeCheck`, `setPrState`, `merge`, `closeAndCascade`.
+   - US-642 extends the optional adapter surface with `listCards`, `linkedPr`, `ensureBoardMembership`, `closeCard`, and `syncEpic`; `cardState` is derived from `readCard`. The shared board transition and audit scripts own the state decision. A new PM tool implements this surface without changing those scripts. See the 2026-11-13 amendment below.
    - `cardHash` is derived by `defineAdapter` from `readCard`, and an adapter may not define its own. The canonicalization is sha256 over the raw body exactly as `readCard` returns it, so hashes stamped before US-492 still compare equal.
    - There are also ten **optional** primitives, taken from existing call sites: `createCard`, `findCards`, `updateCard`, `parseCardRef`, `listComments`, `readComment`, `parseCommentRef`, `commentRef`, `readCheck`, `readLabels`. If one is omitted, the feature that needs it fails typed `not-implemented`, naming the method.
    - Every method is a CLI spawn through the kit's `runCli`. No adapter reads a credential.
@@ -81,3 +82,11 @@ Accepted
 - **Team binding**: the `linear-team` key (`<KEY>`, or the prose `Team: <KEY>.`) in way-of-working; an issue of another team is refused naming both; no team ⇒ `createCard` is `unsupported`.
 - **States**: `setBoardState` takes a board state or a macrostate (translated through `## State Mapping`) and writes the team's workflow state by name; `closeAndCascade` writes the `Done`-mapped state and cascades to a parent only when every sub-issue is `completed`.
 - **Rate limit**: HTTP 429 / `RATELIMITED` ⇒ one retry, then `failed` with detail `linear-rate-limited`. Error prefix `linear` (§5).
+
+## Amendment 2026-11-13 — US-642: Board and content reconciliation
+
+- **Context:** PR transitions and story creation left board status or membership stale. A host-specific audit would duplicate state rules and require changes for each PM tool.
+- **Options:** host-specific transition scripts; or one shared decision over adapter facts. The shared decision was chosen to keep a single state table and existing PM/code-host routing.
+- **Decision:** `board-transition.mjs` applies PR-open, merged, closed-unmerged and creation events; `board-audit.mjs` reports drift by default and repairs with `--apply`. Both use the bound adapters. PM adapters implement `listCards`, `ensureBoardMembership`, `closeCard`, `syncEpic`, and the `readCard` fields used by derived `cardState`; code adapters implement `linkedPr`. Unsupported or missing configuration is a reported gap. GitHub's manually created stories use the adopted `story-label` value when the story heading is absent.
+- **Consequences:** GitHub workflow events cover manual issue and PR changes, while the publish and merge skills call the same state code. A repo using another host supplies its own event trigger, with no change to the shared decision. Board write failures remain visible.
+- **Adoption impact:** `architecture.md` records the expanded adapter boundary; `way-of-working.md` declares the local story label; the KB host adapter guide documents the new methods and audit command.

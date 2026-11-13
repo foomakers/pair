@@ -44,6 +44,8 @@ Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-d
 
 `defineAdapter` also derives `cardState({ id, repo })` from `readCard` fields (`state`, `stateReason`, `projectItems`): `{ issueState, issueReason, boardState, member }`. Every PM adapter must return those fields in its card view. The board audit uses this one shape, so a new PM tool needs no audit changes.
 
+Run `node .claude/skills/pair-workflow-cycle/scripts/board-audit.mjs --repo owner/repo` to report board drift. Add `--apply` to repair it, then run the report again. A missing board, unsupported state, or ambiguous PR link is a `gaps` entry. GitHub installations set `story-label` in `way-of-working.md` to include manual stories without the `## Story Statement` heading; project identity comes from `pm-project` or the adopted project prose. The repository's `pair-board-sync.yml` invokes the same transition script on issue and PR events. Other code hosts supply their own event trigger.
+
 | Method            | Side (ADR-018) | Contract                                                                                                       |
 | ----------------- | -------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `createCard`      | pm-tool        | `createCard({ repo, title, body })` → returns the created card (adapter-shaped, at least a `url`)               |
