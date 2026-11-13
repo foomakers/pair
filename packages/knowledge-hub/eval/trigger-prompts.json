@@ -1,6 +1,6 @@
 {
   "$comment": "Trigger eval prompt sets (story #313, T7). One entry per skill family. Prompt types: should-trigger (expected = the skill an executor must load) and should-not-trigger (expected = the correct destination — a sibling skill or 'none'; near_miss_for = the skill the prompt is a decoy for and must NOT fire). Prompts are grounded in the frontmatter descriptions of packages/knowledge-hub/dataset/.skills/**/SKILL.md. Run procedure: see README.md in this directory.",
-  "corpus_size": 36,
+  "corpus_size": 38,
   "families": [
     {
       "family": "router",
@@ -211,7 +211,12 @@
     },
     {
       "family": "analyze-report",
-      "skills": ["analyze-code-quality", "analyze-debt"],
+      "skills": [
+        "analyze-code-quality",
+        "analyze-debt",
+        "analyze-test-speed",
+        "analyze-test-prune"
+      ],
       "prompts": [
         {
           "id": "AR-01",
@@ -236,6 +241,18 @@
           "type": "should-trigger",
           "expected": "analyze-debt",
           "prompt": "The code is full of TODO and FIXME comments — prioritize the cleanup for us."
+        },
+        {
+          "id": "AR-05",
+          "type": "should-trigger",
+          "expected": "analyze-test-speed",
+          "prompt": "Why is our test suite and pre-push so slow? Profile it and rank the bottlenecks."
+        },
+        {
+          "id": "AR-06",
+          "type": "should-trigger",
+          "expected": "analyze-test-prune",
+          "prompt": "Which tests in packages/content-ops are redundant and could be removed? Report candidates only."
         },
         {
           "id": "AR-N1",

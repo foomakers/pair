@@ -206,6 +206,7 @@
 - [Decision: use native GitHub issue references in commits](.pair/adoption/decision-log/2026-11-06-native-issue-commit-references.md)
 - [Decision: expose the canonical Review state on the project board](.pair/adoption/decision-log/2026-11-06-review-board-state.md)
 - [Decision: named Claude and Codex workflow profiles](.pair/adoption/decision-log/2026-11-07-codex-workflow-profile.md)
+- [Decision: `analyze-test-speed` and `analyze-test-prune` may open a card, only after an explicit yes](.pair/adoption/decision-log/2026-11-11-analyze-test-skills-open-a-card-only-after-explicit-yes.md)
 - [Decision: an owner-approved correction routes a successor; it never waives custody](.pair/adoption/decision-log/2026-11-11-owner-approval-routes-a-successor-never-waives-custody.md)
 - [Decision: no affected-only pre-push; rely on turbo cache and parallel gate](.pair/adoption/decision-log/2026-11-11-prepush-affected-only-not-adopted.md)
 
@@ -629,6 +630,7 @@
 - [Behavior Driven Development (BDD)](.pair/knowledge/guidelines/testing/test-strategy/bdd-behavior-driven-development.md)
 - [Behavior-First Tests: Choosing, Writing, Auditing and Cleaning](.pair/knowledge/guidelines/testing/test-strategy/behavior-first-tests.md)
 - [Coverage Strategy](.pair/knowledge/guidelines/testing/test-strategy/coverage-strategy.md)
+- [Fast Tests: Measuring and Cutting Test and Pre-Push Time](.pair/knowledge/guidelines/testing/test-strategy/fast-tests.md)
 - [Test Driven Development (TDD)](.pair/knowledge/guidelines/testing/test-strategy/tdd-test-driven-development.md)
 - [Test Pyramid](.pair/knowledge/guidelines/testing/test-strategy/test-pyramid.md)
 - [Testing Philosophy](.pair/knowledge/guidelines/testing/test-strategy/testing-philosophy.md)

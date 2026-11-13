@@ -655,25 +655,25 @@ describe('brainstorm — catalog registration (#230)', () => {
       '/pair-process-brainstorm',
     ],
   ] as const) {
-    it(`${label} next catalog lists brainstorm and states 10 process / 51 total`, () => {
+    it(`${label} next catalog lists brainstorm and states 10 process / 53 total`, () => {
       expect(next).toContain(`\`${command}\``)
       expect(next).toContain('10 process')
-      expect(next).toContain('51 skills')
+      expect(next).toContain('53 skills')
     })
 
-    it(`${label} skills-guide lists brainstorm and states 10 process / 51 total`, () => {
+    it(`${label} skills-guide lists brainstorm and states 10 process / 53 total`, () => {
       expect(guide).toContain(`\`${command}\``)
       expect(guide).toContain('10 process')
-      expect(guide).toMatch(/Total: 51/)
+      expect(guide).toMatch(/Total: 53/)
     })
 
-    it(`${label} way-of-working states the 51-skill catalog`, () => {
-      expect(wow).toContain('51 skills')
+    it(`${label} way-of-working states the 53-skill catalog`, () => {
+      expect(wow).toContain('53 skills')
     })
 
-    it(`${label} getting-started states 51 Agent Skills (10 process + 32 capability + 7 workflow + 2 navigator)`, () => {
-      expect(gettingStarted).toContain('51 Agent Skills')
-      expect(gettingStarted).toContain('(10 process + 32 capability + 7 workflow + 2 navigator)')
+    it(`${label} getting-started states 53 Agent Skills (10 process + 34 capability + 7 workflow + 2 navigator)`, () => {
+      expect(gettingStarted).toContain('53 Agent Skills')
+      expect(gettingStarted).toContain('(10 process + 34 capability + 7 workflow + 2 navigator)')
     })
   }
 })
