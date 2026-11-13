@@ -285,7 +285,7 @@ export default defineAdapter({
           if (!title) return { confirmed: false, gap: 'board-unconfigured', error: 'no project named in way-of-working.md' }
           const slug = resolveRepo(repo)
           const [owner, name] = slug.split('/')
-          const projects = parseJson(gh(['project', 'list', '--owner', owner, '--format', 'json']), { command: 'gh project list' })?.projects ?? []
+          const projects = parseJson(gh(['project', 'list', '--owner', owner, '--limit', '1000', '--format', 'json']), { command: 'gh project list' })?.projects ?? []
           const matches = projects.filter(p => p.title === title)
           if (matches.length !== 1 || !matches[0].id) return { confirmed: false, gap: 'board-unresolved', error: `project ${JSON.stringify(title)} matched ${matches.length} boards` }
           const query = () => parseJson(gh(['api', 'graphql', '-f', `query=${BOARD_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `n=${Number(id)}`]), { command: 'gh api graphql board' })?.data?.repository?.issue
