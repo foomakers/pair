@@ -15,7 +15,7 @@
 // exits 64 and the call fails `host-unconfigured`, naming the variable.
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { defineAdapter, runCli, parseJson, upsertByMarker, HostError } from './adapter-kit.mjs'
+import { defineAdapter, runCli, parseJson, upsertByMarker, HostError, updateEpicBody } from './adapter-kit.mjs'
 
 export const API_URL = 'https://api.linear.app/graphql'
 export const TOKEN_VAR = 'LINEAR_API_KEY'
@@ -161,6 +161,18 @@ export default defineAdapter({
         const rows = gql(`query PairFind($filter: IssueFilter) { issues(filter: $filter, first: 50) { nodes { ${ISSUE} } } }`, { filter })?.issues?.nodes ?? []
         return rows.map(view).map(({ number, url, title, body }) => ({ number, url, title, body }))
       },
+      listCards() {
+        const cards = []
+        let after = null
+        for (;;) {
+          const filter = team ? { team: { key: { eq: team } } } : undefined
+          const page = gql(`query PairStories($filter: IssueFilter, $after: String) { issues(filter: $filter, first: 100, after: $after) { nodes { identifier description } pageInfo { hasNextPage endCursor } } }`, { filter, after })?.issues
+          for (const issue of page?.nodes ?? []) if (/^## Story Statement\s*$/m.test(String(issue.description ?? ''))) cards.push({ id: issue.identifier })
+          if (!page?.pageInfo?.hasNextPage) return cards
+          if (!page.pageInfo.endCursor || page.pageInfo.endCursor === after) throw fail('invalid-output', 'issues pagination did not advance', 'listCards')
+          after = page.pageInfo.endCursor
+        }
+      },
       createCard({ title, body }) {
         const r = gql('mutation PairCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { identifier url } } }', { input: { teamId: teamId(), title, description: body } })?.issueCreate
         if (!r?.success || !r.issue?.url) throw fail('invalid-output', 'issueCreate returned no issue', 'createCard')
@@ -207,6 +219,46 @@ export default defineAdapter({
           return { applied: state, confirmed: false, error: e.message }
         }
       },
+      ensureBoardMembership({ id }) {
+        try {
+          issue(id, 'ensureBoardMembership')
+          return { confirmed: true, implicit: true }
+        } catch (e) {
+          return { confirmed: false, error: e.message }
+        }
+      },
+      closeCard({ id, reason }) {
+        try {
+          if (reason === 'merged') {
+            const r = writeState(id, 'Done', 'closeCard')
+            return { confirmed: r.confirmed, error: r.error }
+          }
+          if (reason !== 'unmerged') return { confirmed: false, error: `unknown close reason ${JSON.stringify(reason)}` }
+          const i = issue(id, 'closeCard', 'team { id key states { nodes { id name type } } }')
+          const canceled = (i.team?.states?.nodes ?? []).find(s => s.type === 'canceled')
+          if (!canceled) return { confirmed: false, gap: 'canceled-state-unavailable', error: `team ${i.team?.key} has no canceled state` }
+          if (i.state?.name !== canceled.name) gql('mutation PairCancel($id: String!, $stateId: String!) { issueUpdate(id: $id, input: { stateId: $stateId }) { success } }', { id: i.identifier, stateId: canceled.id })
+          const now = issue(i.identifier, 'closeCard').state?.type
+          return { confirmed: now === 'canceled', error: now === 'canceled' ? null : `read-back: ${i.identifier} state type is ${JSON.stringify(now)}` }
+        } catch (e) {
+          return { confirmed: false, error: e.message }
+        }
+      },
+      syncEpic({ id }) {
+        try {
+          const parent = issue(id, 'syncEpic', 'parent { identifier children { nodes { identifier state { type } } } }').parent
+          if (!parent) return { confirmed: false, gap: 'parent-absent', error: `issue ${id} has no parent` }
+          const children = (parent.children?.nodes ?? []).map(child => ({ id: child.identifier, closed: child.state?.type === 'completed' }))
+          const before = issue(parent.identifier, 'syncEpic').description ?? ''
+          const next = updateEpicBody(before, children)
+          if (next.trimEnd() !== before.trimEnd()) gql('mutation PairEpic($id: String!, $body: String!) { issueUpdate(id: $id, input: { description: $body }) { success } }', { id: parent.identifier, body: next })
+          const after = issue(parent.identifier, 'syncEpic').description ?? ''
+          const confirmed = updateEpicBody(after, children).trimEnd() === after.trimEnd()
+          return { confirmed, parent: parent.identifier, changed: next.trimEnd() !== before.trimEnd(), error: confirmed ? null : `read-back: epic ${parent.identifier} checklist differs` }
+        } catch (e) {
+          return { confirmed: false, gap: 'epic-sync-failed', error: e.message }
+        }
+      },
       commentOnCard({ id, marker, body }) {
         const key = keyOf(id, 'commentOnCard')
         return upsertByMarker({
@@ -242,6 +294,7 @@ export default defineAdapter({
 
       // ── code side: never this adapter's (hostsCode: false) ──
       prHead: codeSide('prHead'),
+      linkedPr: codeSide('linkedPr'),
       upsertComment: codeSide('upsertComment'),
       concludeCheck: codeSide('concludeCheck'),
       setPrState: codeSide('setPrState'),

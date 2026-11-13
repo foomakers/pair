@@ -42,10 +42,15 @@ On a **local** host (no repository at all, `hostsCode: false`), `repo` is simply
 
 Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-decision and `pr-state find` paths:
 
+`defineAdapter` also derives `cardState({ id, repo })` from `readCard` fields (`state`, `stateReason`, `projectItems`): `{ issueState, issueReason, boardState, member }`. Every PM adapter must return those fields in its card view. The board audit uses this one shape, so a new PM tool needs no audit changes.
+
 | Method            | Side (ADR-018) | Contract                                                                                                       |
 | ----------------- | -------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `createCard`      | pm-tool        | `createCard({ repo, title, body })` → returns the created card (adapter-shaped, at least a `url`)               |
 | `findCards`       | pm-tool        | `findCards({ repo, search })` → an array of matching cards                                                       |
+| `listCards`       | pm-tool        | `listCards({ repo })` → all user-story cards as `{ id }` rows for the board audit; paginate instead of silently truncating |
+| `linkedPr`        | code-host      | `linkedPr({ id, repo })` → `open`, `merged`, `closed-unmerged`, `none`, or `unknown` for ambiguous/unreadable linkage; the audit treats `unknown` as a gap |
+| `syncEpic`        | pm-tool        | `syncEpic({ id, repo })` → `{ confirmed, parent?, changed?, gap?, error? }`; finds the existing parent and its children, then lists and ticks the epic's Sub-Issues checklist. It never sets a parent |
 | `updateCard`      | pm-tool        | `updateCard({ repo, id, body })` → `{ id }`                                                                       |
 | `parseCardRef`    | pm-tool        | `parseCardRef(ref, { repo })` → `{ id, number, inScope }` or `null` when `ref` is not a card reference; a bare id (`572`, `#572`, `IN-01`) is the bound tracker's own card (`inScope: true`). The ONE validator of a card id (`--root`, `--story`) — an unsafe id throws `HostError('invalid-input')` |
 | `listComments`    | code-host      | `listComments({ pr, repo })` → an array of `{ id, body, url }`                                                    |
@@ -60,6 +65,8 @@ Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-d
 | `commentOnCard`   | pm-tool        | `commentOnCard({ id, marker, body, repo })` → the marker-keyed upsert result (`{ action, id, url, marker }` or `{ error }`) on the CARD's thread, never the PR's. `merge` stage: the park comment |
 | `resolveUser`     | pm-tool        | `resolveUser()` → the login the tracker's CLI is authenticated as (`--assignee @me`); a tracker with no user (filesystem) leaves it out and `@me` HALTs `not-implemented` naming `resolveUser` |
 | `setBoardState`   | pm-tool        | `setBoardState({ id, state, repo })` → `{ applied, confirmed, error }`; writes the card's board `Status` and reads it back. A card that is not a board item, sits on several boards or lacks the option is `confirmed: false` with the reason, never a silent skip. `merge` stage: `Done` after the merge |
+| `ensureBoardMembership` | pm-tool | `ensureBoardMembership({ id, repo })` → `{ confirmed, error? }`; explicit hosts add then read back, implicit hosts confirm the card exists. Missing board configuration returns a reported gap |
+| `closeCard`       | pm-tool        | `closeCard({ id, repo, reason })` → `{ confirmed, error? }` with `reason` = `merged` or `unmerged`; read back the result, and report an unsupported state as a gap |
 
 Omit one and only the feature that needs it fails, typed `not-implemented` with the method name. Their shapes are the shipped adapters' (`github.mjs`, `azure-devops.mjs`, `filesystem.mjs`).
 

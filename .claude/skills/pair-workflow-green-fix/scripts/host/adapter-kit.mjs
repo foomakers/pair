@@ -23,10 +23,10 @@ export const REQUIRED_METHODS = INTERFACE_METHODS.filter(m => m !== 'cardHash')
 // Primitives the cycle's scope-decision and pr-state paths already used through `gh` beyond the
 // eight (card create/search/edit, one comment read, the check/label read-backs, ref parsing). An
 // adapter MAY omit them: the feature that needs one then fails typed, naming the method.
-export const SUPPORT_METHODS = ['createCard', 'findCards', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState', 'resolveUser']
+export const SUPPORT_METHODS = ['createCard', 'findCards', 'listCards', 'linkedPr', 'syncEpic', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState', 'ensureBoardMembership', 'closeCard', 'resolveUser']
 // ADR-018's split: card operations resolve `pm-tool`, pull-request operations resolve `code-host`.
-export const PM_METHODS = ['readCard', 'cardHash', 'closeAndCascade', 'createCard', 'findCards', 'updateCard', 'parseCardRef', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard', 'resolveUser']
-export const CODE_METHODS = ['prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'deleteBranch']
+export const PM_METHODS = ['readCard', 'cardHash', 'cardState', 'closeAndCascade', 'closeCard', 'ensureBoardMembership', 'syncEpic', 'createCard', 'findCards', 'listCards', 'updateCard', 'parseCardRef', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard', 'resolveUser']
+export const CODE_METHODS = ['prHead', 'linkedPr', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'deleteBranch']
 // setClassification's family/value vocabulary (the review's classification tags, pr-states.md /
 // quality-model.md §5): each family carries its own chromatic enum — never shared across families.
 export const CLASSIFICATION_FAMILIES = { risk: ['green', 'yellow', 'red'], cost: ['green', 'yellow', 'orange', 'red'] }
@@ -34,6 +34,27 @@ export const CLASSIFICATION_FAMILIES = { risk: ['green', 'yellow', 'red'], cost:
 // declares its own spelling of them; these are the vocabulary pr-state.mjs maps a verdict onto.
 export const MERGE_STRATEGIES = ['squash', 'merge', 'rebase']
 export const CHECK_STATES = ['success', 'failure', 'pending']
+
+// Keep an epic's visible child checklist in sync with its PM-tool relations.
+export function updateEpicBody(body, children) {
+  const source = String(body ?? '').trimEnd()
+  const heading = /^## Sub-Issues[ \t]*$/m
+  const start = heading.exec(source)
+  const prefix = start ? source.slice(0, start.index + start[0].length) : `${source}\n\n## Sub-Issues`
+  const tail = start ? source.slice(start.index + start[0].length) : ''
+  const nextHeading = /^## /m.exec(tail)
+  const section = nextHeading ? tail.slice(0, nextHeading.index) : tail
+  const suffix = nextHeading ? tail.slice(nextHeading.index) : ''
+  const lines = section.trim().split('\n').filter(Boolean)
+  for (const child of children) {
+    const ref = /^\d+$/.test(String(child.id)) ? `#${child.id}` : String(child.id)
+    const exact = new RegExp(`(?:^|\\s)${ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|\\s|[—:,])`)
+    const at = lines.findIndex(line => exact.test(line) && /^\s*[-*]\s+\[[ xX]\]\s+/.test(line))
+    if (at >= 0) lines[at] = lines[at].replace(/^(\s*[-*]\s+)\[[ xX]\]/, `$1[${child.closed ? 'x' : ' '}]`)
+    else lines.push(`- [${child.closed ? 'x' : ' '}] ${ref}`)
+  }
+  return `${prefix}\n\n${lines.join('\n')}${suffix ? `\n\n${suffix.trimStart()}` : ''}\n`
+}
 
 export class HostError extends Error {
   // kind: failed (the CLI exited non-zero) | invalid-json | invalid-output | not-implemented |
@@ -226,6 +247,16 @@ export function defineAdapter(spec) {
         cardHash(id, opts = {}) {
           const { body } = readCard(id, { ...opts, fields: undefined })
           return canonicalCardHash(body)
+        },
+        cardState({ id, repo }) {
+          const card = readCard(id, { repo, fields: ['state', 'stateReason', 'projectItems'] })
+          const items = card.projectItems ?? []
+          return {
+            issueState: card.state ?? null,
+            issueReason: card.stateReason ?? null,
+            boardState: items.length === 1 ? items[0]?.status?.name ?? null : null,
+            member: items.length > 0,
+          }
         },
       })
     },
