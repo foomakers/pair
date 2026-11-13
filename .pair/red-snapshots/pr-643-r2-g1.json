@@ -1,0 +1,87 @@
+{
+  "$meta": {
+    "pr": "643",
+    "phase": "r2-g1",
+    "base": "bd0ec9f8ad37f5a808a7f5d7dc32a756cb382e1f",
+    "trailer": "Pair-RED-Snapshot: pr=643; phase=r2-g1; base=bd0ec9f8ad37f5a808a7f5d7dc32a756cb382e1f; manifest=.pair/red-snapshots/pr-643-r2-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/interrupt-group.test.ts"
+    ]
+  },
+  "status": "red",
+  "mode": "remediation",
+  "inputHead": "bd0ec9f8ad37f5a808a7f5d7dc32a756cb382e1f",
+  "sourceOfTruth": "apps/pair-cli/src/commands/run/interrupt.ts stopEngines; spawn.ts spawn detached:true",
+  "inventory": [
+    {
+      "id": "r1-1",
+      "producer": "stopEngines in apps/pair-cli/src/commands/run/interrupt.ts (signals engine leader only)",
+      "inputs": [
+        "SIGINT/SIGTERM on driver",
+        "tracked detached engine child with descendant"
+      ],
+      "representations": [
+        "interrupt.ts stopEngines"
+      ],
+      "consumers": [
+        "whileInterruptible handler",
+        "pair run --card / --parallel interrupt paths"
+      ],
+      "classes": [
+        "descendant with default SIGTERM handling, engine exits on SIGTERM",
+        "descendant ignoring SIGTERM, engine exits on SIGTERM (needs group SIGKILL after leader exit)"
+      ],
+      "interactions": [
+        "detached engine group (spawn.ts) x interrupt stop"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli/src/commands/run/interrupt.ts",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/interrupt.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r1-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "descendant default SIGTERM handling",
+      "oracle": "apps/pair-cli/src/commands/run/interrupt-group.test.ts",
+      "expected": "descendant not alive within 1s of handler settling",
+      "covers": [
+        "r1-1"
+      ]
+    },
+    {
+      "id": "r1-1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "descendant ignoring SIGTERM, leader exits on SIGTERM",
+      "oracle": "apps/pair-cli/src/commands/run/interrupt-group.test.ts",
+      "expected": "descendant not alive within 1s of handler settling",
+      "covers": [
+        "r1-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/interrupt-group.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:111cf5eb0bbfa1717630f82cbec367e20399a7f73f6f170f69c519a285c416ab",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/interrupt-group.test.ts",
+      "observed": "2 failed: descendant still alive 1s after interrupt handler settled (AssertionError expected false to be true); tsc reports no error in file"
+    }
+  ],
+  "testExempt": false,
+  "reconciled": [],
+  "preserved": [],
+  "changedRows": [
+    "r1-1-w1",
+    "r1-1-w2"
+  ]
+}
