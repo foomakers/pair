@@ -35,10 +35,19 @@ import {
   type CardDocument,
 } from './card-readiness'
 import type { Config } from '#registry'
+import { version as pairVersion } from '../../index'
 import { resolveBlockingSeverities } from './blocking-severities'
 import { checkWithCiWait, type CiWaitOptions } from './ci-wait'
 import { wait } from './wait'
 import { stageSettings, type ResolvedWorkflowProfile } from './workflow-profile'
+import {
+  appendTelemetry,
+  cardTelemetryRecord,
+  readInterventions,
+  readCycleProgress,
+  readTelemetry,
+  stageTelemetryRecord,
+} from './telemetry'
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -390,6 +399,7 @@ export function mainCheckoutOrCwd(cwd: string): string {
 }
 
 export interface CycleDriverContext {
+  readonly telemetryEnabled?: boolean
   readonly engine: EngineDefinition
   readonly cwd: string
   readonly fs: FileSystemService
@@ -479,6 +489,8 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   return {
     bridge,
     main,
+    runId: input.runId,
+    cardId: input.card,
     branch,
     title: record.title,
     runDir,
@@ -679,21 +691,56 @@ const packetFor =
     }) as never
   }
 
-const spawnStageFor =
-  (ctx: CycleDriverContext, co: Coordinates, progress?: CardProgress) =>
-  async (packet: unknown) => {
-    const spawn = stageSpawnFor(ctx, (packet as { step?: string }).step ?? '')
-    return (await runStage({
+function recordStageTelemetry(input: {
+  enabled: boolean
+  co: Coordinates
+  stage: { step?: string; phase?: string }
+  spawn: ReturnType<typeof stageSpawnFor>
+  key: string
+  start: number
+  end: number
+  previousEnd: number
+  retries: number
+  result: CycleStageResult
+}): void {
+  const { co, stage, spawn, key, start, end, previousEnd, retries, result } = input
+  if (!input.enabled) return
+  appendTelemetry(
+    co.main,
+    stageTelemetryRecord({
+      id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
+      run: co.runId,
+      card: co.cardId,
+      step: stage.step ?? 'unknown',
+      ...(stage.phase !== undefined && { phase: stage.phase }),
+      start,
+      end,
+      previousEnd,
+      engine: spawn.engine.id,
+      ...(spawn.model !== undefined && { model: spawn.model }),
+      processOutcome: result.processOutcome,
+      ...(result.final?.status !== undefined && { finalStatus: result.final.status }),
+      retries,
+      observation: result.telemetry ?? {},
+    }),
+  )
+}
+
+const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates, progress?: CardProgress) => {
+  let previousEnd = Date.now()
+  const attempts = new Map<string, number>()
+  return async (packet: unknown) => {
+    const stage = packet as { step?: string; phase?: string }
+    const spawn = stageSpawnFor(ctx, stage.step ?? '')
+    const key = `${stage.step ?? 'unknown'}:${stage.phase ?? ''}`
+    const retries = attempts.get(key) ?? 0
+    attempts.set(key, retries + 1)
+    const start = Date.now()
+    const result = await runStage({
       engine: spawn.engine,
-      // The stage starts in the MAIN CHECKOUT, never in the story's worktree. Every phase skill's
-      // Step 0 reads `MAIN="$(pwd)"` — "the main checkout, you have not cd'd yet" — and resolves the
-      // run directory from it; the packet's own `$worktree` is what tells the agent where to cd, and
-      // it is relative to that same anchor. Spawned in the worktree instead, the stage does all its
-      // work and writes its handoffs INSIDE the worktree, which the skills forbid in as many words
-      // ("never inside a story or review worktree"). The driver then finds no handoff where the
-      // contract says one must be, reads the stage as not advanced, retries, and reports
-      // `failed-<step>` — for a stage that actually succeeded. Silent, and invisible to any test
-      // whose bridge is a fake.
+      // Every phase skill anchors its run directory in the MAIN checkout. The packet's worktree
+      // still names where the agent edits; spawning there would misplace the handoff and make a
+      // successful stage appear not advanced.
       packet: { ...(packet as object), worktree: co.main } as never,
       autonomyArgs: spawn.autonomyArgs,
       ...(spawn.model !== undefined && { model: spawn.model }),
@@ -707,8 +754,24 @@ const spawnStageFor =
           if (task !== undefined) progress.task(task)
         },
       }),
-    })) as CycleStageResult
+    })
+    const end = Date.now()
+    recordStageTelemetry({
+      enabled: ctx.telemetryEnabled === true,
+      co,
+      stage,
+      spawn,
+      key,
+      start,
+      end,
+      previousEnd,
+      retries,
+      result,
+    })
+    previousEnd = end
+    return result as CycleStageResult
   }
+}
 
 export { stageLabel }
 
@@ -1338,6 +1401,44 @@ export function finalPart(record: CycleStageRecord): string {
   return ` — no final result (the stage ended without its structured JSON; the retry resumes from the commits already on the branch)${noResultWhy(record)}`
 }
 
+function recordCardTelemetry({
+  ctx,
+  input,
+  co,
+  outcome,
+  startedAt,
+}: {
+  ctx: CycleDriverContext
+  input: CycleDriverRequest
+  co: Coordinates
+  outcome: CycleOutcome
+  startedAt: number
+}): void {
+  if (outcome.status === 'rounds-bound-reached' || outcome.status === 'other-run') return
+  appendTelemetry(
+    co.main,
+    cardTelemetryRecord({
+      id: `${input.runId}:${input.card}`,
+      card: input.card,
+      run: input.runId,
+      ...(input.pr !== undefined && { pr: input.pr }),
+      pairVersion,
+      workflowVersion: ctx.workflowVersion,
+      profile: ctx.profile?.name ?? 'default',
+      engine: ctx.engine.id,
+      ...(ctx.model !== undefined && { model: ctx.model }),
+      start: startedAt,
+      end: Date.now(),
+      outcome: outcome.status,
+      ...(outcome.status !== 'ready-for-merge' &&
+        outcome.status !== 'merged' && { cause: outcome.reason ?? outcome.status }),
+      stages: readTelemetry(co.main, input.runId, input.card),
+      interventions: readInterventions(co.runDir),
+      ...readCycleProgress(co.runDir),
+    }),
+  )
+}
+
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
     let input = requested
@@ -1356,7 +1457,8 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
     recordRunProfile(ctx, co)
     const hooks = loadCycleHooks(ctx, co)
     const progress = progressFor(input.card, policy, co.title, input.onRunEvent)
-    return await runCycle({
+    const startedAt = Date.now()
+    const outcome = await runCycle({
       hooks,
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),
@@ -1383,5 +1485,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
             finalPart(record),
         ),
     })
+    if (ctx.telemetryEnabled === true) recordCardTelemetry({ ctx, input, co, outcome, startedAt })
+    return outcome
   }
 }
