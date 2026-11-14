@@ -47,7 +47,8 @@ for (const [id, selectors] of selected) {
           cwd: pkg,
           env: { PATH: `${bin}:/usr/bin:/bin`, HOME: bin, CI: 'true' },
           encoding: 'utf8',
-          timeout: 180_000,
+          // Allow up to three selected Vitest tests at 180s each plus runner overhead.
+          timeout: 600_000,
           maxBuffer: 4 * 1024 * 1024,
         },
       )
