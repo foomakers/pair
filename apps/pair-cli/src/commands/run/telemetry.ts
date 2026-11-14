@@ -23,6 +23,64 @@ const object = (value: unknown): Record<string, unknown> | undefined =>
 const count = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
 
+function codexTokens(usage: Record<string, unknown>): Tokens | undefined {
+  const input = count(usage['input_tokens'])
+  const cached = count(usage['cached_input_tokens'])
+  const out = count(usage['output_tokens'])
+  if (input === undefined || cached === undefined || out === undefined || cached > input)
+    return undefined
+  return {
+    freshIn: input - cached,
+    cachedIn: cached,
+    out,
+    reasoning: count(usage['reasoning_output_tokens']) ?? 'not measured',
+  }
+}
+
+function claudeTokens(usage: Record<string, unknown>): Tokens | undefined {
+  const fresh = count(usage['input_tokens'])
+  const cached = count(usage['cache_read_input_tokens'])
+  const out = count(usage['output_tokens'])
+  return fresh === undefined || cached === undefined || out === undefined
+    ? undefined
+    : { freshIn: fresh, cachedIn: cached, out, reasoning: 'not measured' }
+}
+
+function piUsage(
+  event: Record<string, unknown>,
+): { fresh: number; cached: number; out: number } | undefined {
+  if (event['type'] !== 'message_end') return undefined
+  const message = object(event['message'])
+  if (message?.['role'] !== 'assistant') return undefined
+  const usage = object(message['usage'])
+  if (usage === undefined) return undefined
+  const fresh = count(usage['input'])
+  const cached = count(usage['cacheRead'])
+  const out = count(usage['output'])
+  if (fresh === undefined || cached === undefined || out === undefined) return undefined
+  return { fresh, cached, out }
+}
+
+function piTokens(event: Record<string, unknown>, prior: Tokens): Tokens | undefined {
+  const usage = piUsage(event)
+  if (usage === undefined) return undefined
+  const previous = typeof prior === 'string' ? undefined : prior
+  return {
+    freshIn: (previous?.freshIn ?? 0) + usage.fresh,
+    cachedIn: (previous?.cachedIn ?? 0) + usage.cached,
+    out: (previous?.out ?? 0) + usage.out,
+    reasoning: 'not measured',
+  }
+}
+
+function observedTokens(engine: string, event: Record<string, unknown>, prior: Tokens): Tokens {
+  const usage = object(event['usage'])
+  if (engine === 'codex' && usage !== undefined) return codexTokens(usage) ?? prior
+  if (engine === 'claude' && usage !== undefined) return claudeTokens(usage) ?? prior
+  if (engine === 'pi') return piTokens(event, prior) ?? prior
+  return prior
+}
+
 /** Read only fields present in the engine event; never infer missing usage. */
 export function observeEngineEvent(
   prior: EngineObservation,
@@ -31,51 +89,14 @@ export function observeEngineEvent(
 ): EngineObservation {
   const event = object(payload)
   if (event === undefined) return prior
-  const session =
-    engine === 'codex'
-      ? event['thread_id']
-      : engine === 'pi'
-        ? event['sessionId']
-        : event['session_id']
+  const sessionKey = engine === 'codex' ? 'thread_id' : engine === 'pi' ? 'sessionId' : 'session_id'
+  const session = event[sessionKey]
   const sessionId = typeof session === 'string' ? session : prior.sessionId
-  const usage = object(event['usage'])
-  let tokens = prior.tokens ?? 'not measured'
-  if (usage !== undefined && engine === 'codex') {
-    const input = count(usage['input_tokens'])
-    const cached = count(usage['cached_input_tokens'])
-    const out = count(usage['output_tokens'])
-    if (input !== undefined && cached !== undefined && cached <= input && out !== undefined)
-      tokens = {
-        freshIn: input - cached,
-        cachedIn: cached,
-        out,
-        reasoning: count(usage['reasoning_output_tokens']) ?? 'not measured',
-      }
+  const previous = prior.tokens ?? 'not measured'
+  return {
+    ...(sessionId !== undefined && { sessionId }),
+    tokens: observedTokens(engine, event, previous),
   }
-  if (usage !== undefined && engine === 'claude') {
-    const fresh = count(usage['input_tokens'])
-    const cached = count(usage['cache_read_input_tokens'])
-    const out = count(usage['output_tokens'])
-    if (fresh !== undefined && cached !== undefined && out !== undefined)
-      tokens = { freshIn: fresh, cachedIn: cached, out, reasoning: 'not measured' }
-  }
-  if (engine === 'pi' && event['type'] === 'message_end') {
-    const message = object(event['message'])
-    const piUsage = message?.['role'] === 'assistant' ? object(message['usage']) : undefined
-    const fresh = count(piUsage?.['input'])
-    const cached = count(piUsage?.['cacheRead'])
-    const out = count(piUsage?.['output'])
-    if (fresh !== undefined && cached !== undefined && out !== undefined) {
-      const previous = typeof tokens === 'string' ? undefined : tokens
-      tokens = {
-        freshIn: (previous?.freshIn ?? 0) + fresh,
-        cachedIn: (previous?.cachedIn ?? 0) + cached,
-        out: (previous?.out ?? 0) + out,
-        reasoning: 'not measured',
-      }
-    }
-  }
-  return { ...(sessionId !== undefined && { sessionId }), tokens }
 }
 
 export interface TelemetryRecord {
@@ -103,32 +124,37 @@ export interface ManualIntervention {
   readonly reason: string
 }
 
-/** Read the cycle's own durable intervention trail, without treating card prose as authority. */
-export function readInterventions(runDir: string): ManualIntervention[] {
-  if (!existsSync(runDir)) return []
+function readSupersedes(runDir: string): ManualIntervention[] {
   const entries: ManualIntervention[] = []
   const index = join(runDir, 'maintainer-interventions.md')
-  if (existsSync(index)) {
-    for (const line of readFileSync(index, 'utf8').split('\n')) {
-      if (!line.startsWith('| ') || line.includes('| --- |') || line.includes('| file |')) continue
-      const cells = line
-        .split('|')
-        .slice(1, -1)
-        .map(cell => cell.trim())
-      if (cells.length === 5 && cells[2] && cells[3])
-        entries.push({ kind: 'supersede', reason: cells[2], who: cells[3] })
-    }
+  if (!existsSync(index)) return entries
+  for (const line of readFileSync(index, 'utf8').split('\n')) {
+    if (!line.startsWith('| ') || line.includes('| --- |') || line.includes('| file |')) continue
+    const cells = line
+      .split('|')
+      .slice(1, -1)
+      .map(cell => cell.trim())
+    if (cells.length === 5 && cells[2] && cells[3])
+      entries.push({ kind: 'supersede', reason: cells[2], who: cells[3] })
   }
+  return entries
+}
+
+function readDecisionFile(path: string): Record<string, unknown> | undefined {
+  try {
+    return object(JSON.parse(readFileSync(path, 'utf8')))
+  } catch {
+    return undefined
+  }
+}
+
+function readHumanDecisions(runDir: string): ManualIntervention[] {
+  const entries: ManualIntervention[] = []
   const seen = new Set<string>()
   for (const name of readdirSync(runDir)
     .filter(name => /review-phase-\d+\.json$/.test(name))
     .sort()) {
-    let data: Record<string, unknown> | undefined
-    try {
-      data = object(JSON.parse(readFileSync(join(runDir, name), 'utf8')))
-    } catch {
-      continue
-    }
+    const data = readDecisionFile(join(runDir, name))
     if (data?.['recordType'] !== 'decision' || !Array.isArray(data['humanDecisions'])) continue
     for (const raw of data['humanDecisions']) {
       const decision = object(raw)
@@ -140,6 +166,12 @@ export function readInterventions(runDir: string): ManualIntervention[] {
     }
   }
   return entries
+}
+
+/** Read the cycle's own durable intervention trail, without treating card prose as authority. */
+export function readInterventions(runDir: string): ManualIntervention[] {
+  if (!existsSync(runDir)) return []
+  return [...readSupersedes(runDir), ...readHumanDecisions(runDir)]
 }
 
 export interface CardTelemetryInput {
@@ -162,30 +194,31 @@ export interface CardTelemetryInput {
   readonly repairs?: number
 }
 
+function cardTokens(
+  stages: readonly TelemetryRecord[],
+): Tokens | Omit<Exclude<Tokens, string>, 'reasoning'> {
+  const measured = stages.map(stage => stage['tokens'])
+  if (measured.length === 0 || measured.some(value => object(value) === undefined))
+    return 'not measured'
+  return {
+    freshIn: measured.reduce<number>(
+      (total, value) => total + Number(object(value)?.['freshIn'] ?? 0),
+      0,
+    ),
+    cachedIn: measured.reduce<number>(
+      (total, value) => total + Number(object(value)?.['cachedIn'] ?? 0),
+      0,
+    ),
+    out: measured.reduce<number>((total, value) => total + Number(object(value)?.['out'] ?? 0), 0),
+  }
+}
+
 /** The card's numbers come from observed stage records; missing usage stays missing. */
 export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord {
   const stages = input.stages
   const activeMs = stages.reduce((total, stage) => total + Number(stage['durationMs'] ?? 0), 0)
   const start = Math.min(input.start, ...stages.map(stage => Number(stage['start'] ?? input.start)))
   const wallMs = input.end - start
-  const measured = stages.map(stage => stage['tokens'])
-  const tokens =
-    measured.length > 0 && measured.every(value => object(value) !== undefined)
-      ? {
-          freshIn: measured.reduce<number>(
-            (total, value) => total + Number(object(value)?.['freshIn'] ?? 0),
-            0,
-          ),
-          cachedIn: measured.reduce<number>(
-            (total, value) => total + Number(object(value)?.['cachedIn'] ?? 0),
-            0,
-          ),
-          out: measured.reduce<number>(
-            (total, value) => total + Number(object(value)?.['out'] ?? 0),
-            0,
-          ),
-        }
-      : 'not measured'
   return {
     kind: 'card',
     id: input.id,
@@ -210,9 +243,26 @@ export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord 
     retries: stages.reduce((total, stage) => total + Number(stage['retries'] ?? 0), 0),
     findingsByRound: input.findingsByRound ?? {},
     repairs: input.repairs ?? 0,
-    tokens,
+    tokens: cardTokens(stages),
     interventions: input.interventions,
   }
+}
+
+function repairCount(handoff: Record<string, unknown>): number {
+  if (handoff['skill'] === 'green-fix') return 1
+  if (handoff['skill'] !== 'red-spec') return 0
+  const attempt = count(handoff['attempt'])
+  return attempt !== undefined && attempt > 1 ? 1 : 0
+}
+
+function reviewFindings(handoff: Record<string, unknown>): Record<string, number> | undefined {
+  if (handoff['skill'] !== 'review-phase' || !Array.isArray(handoff['findings'])) return undefined
+  const severities: Record<string, number> = {}
+  for (const raw of handoff['findings']) {
+    const severity = object(raw)?.['severity']
+    if (typeof severity === 'string') severities[severity] = (severities[severity] ?? 0) + 1
+  }
+  return severities
 }
 
 /** Count only durable handoffs, so a resumed invocation sees the full card history. */
@@ -226,30 +276,12 @@ export function readCycleProgress(runDir: string): {
   for (const name of readdirSync(runDir)
     .filter(name => name.endsWith('.json'))
     .sort()) {
-    let handoff: Record<string, unknown> | undefined
-    try {
-      handoff = object(JSON.parse(readFileSync(join(runDir, name), 'utf8')))
-    } catch {
-      continue
-    }
-    if (!handoff) continue
-    if (
-      handoff['skill'] === 'red-spec' &&
-      count(handoff['attempt']) !== undefined &&
-      Number(handoff['attempt']) > 1
-    )
-      repairs++
-    if (handoff['skill'] === 'green-fix') repairs++
-    if (handoff['skill'] !== 'review-phase' || !Array.isArray(handoff['findings'])) continue
+    const handoff = readDecisionFile(join(runDir, name))
+    if (handoff === undefined) continue
+    repairs += repairCount(handoff)
     const phase = handoff['phase']
-    if (typeof phase !== 'string') continue
-    const severities: Record<string, number> = {}
-    for (const raw of handoff['findings']) {
-      const finding = object(raw)
-      const severity = finding?.['severity']
-      if (typeof severity === 'string') severities[severity] = (severities[severity] ?? 0) + 1
-    }
-    findingsByRound[phase] = severities
+    const severities = reviewFindings(handoff)
+    if (typeof phase === 'string' && severities !== undefined) findingsByRound[phase] = severities
   }
   return { findingsByRound, repairs }
 }
@@ -284,15 +316,16 @@ export interface StageTelemetryInput {
   readonly observation: EngineObservation
 }
 
+function stageOutcomeClass(input: StageTelemetryInput): string {
+  if (input.finalStatus === 'rejected') return 'rejected'
+  if (input.finalStatus === 'refused') return 'refused'
+  if (input.finalStatus === 'parked') return 'parked'
+  return input.processOutcome === 'success' && !input.finalStatus?.startsWith('failed')
+    ? 'ok'
+    : 'failed'
+}
+
 export function stageTelemetryRecord(input: StageTelemetryInput): TelemetryRecord {
-  const outcomeClass =
-    input.finalStatus === 'rejected' ||
-    input.finalStatus === 'refused' ||
-    input.finalStatus === 'parked'
-      ? input.finalStatus
-      : input.processOutcome === 'success' && !input.finalStatus?.startsWith('failed')
-        ? 'ok'
-        : 'failed'
   return {
     kind: 'stage',
     id: input.id,
@@ -308,7 +341,7 @@ export function stageTelemetryRecord(input: StageTelemetryInput): TelemetryRecor
     model: input.model ?? 'not measured',
     sessionId: input.observation.sessionId ?? 'not measured',
     tokens: input.observation.tokens ?? 'not measured',
-    outcomeClass,
+    outcomeClass: stageOutcomeClass(input),
     retries: input.retries,
   }
 }

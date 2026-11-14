@@ -690,6 +690,39 @@ const packetFor =
     }) as never
   }
 
+function recordStageTelemetry(input: {
+  co: Coordinates
+  stage: { step?: string; phase?: string }
+  spawn: ReturnType<typeof stageSpawnFor>
+  key: string
+  start: number
+  end: number
+  previousEnd: number
+  retries: number
+  result: CycleStageResult
+}): void {
+  const { co, stage, spawn, key, start, end, previousEnd, retries, result } = input
+  appendTelemetry(
+    co.main,
+    stageTelemetryRecord({
+      id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
+      run: co.runId,
+      card: co.cardId,
+      step: stage.step ?? 'unknown',
+      ...(stage.phase !== undefined && { phase: stage.phase }),
+      start,
+      end,
+      previousEnd,
+      engine: spawn.engine.id,
+      ...(spawn.model !== undefined && { model: spawn.model }),
+      processOutcome: result.processOutcome,
+      ...(result.final?.status !== undefined && { finalStatus: result.final.status }),
+      retries,
+      observation: result.telemetry ?? {},
+    }),
+  )
+}
+
 const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates, progress?: CardProgress) => {
   let previousEnd = Date.now()
   const attempts = new Map<string, number>()
@@ -726,25 +759,7 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates, progress?: Card
       }),
     })
     const end = Date.now()
-    appendTelemetry(
-      co.main,
-      stageTelemetryRecord({
-        id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
-        run: co.runId,
-        card: co.cardId,
-        step: stage.step ?? 'unknown',
-        ...(stage.phase !== undefined && { phase: stage.phase }),
-        start,
-        end,
-        previousEnd,
-        engine: spawn.engine.id,
-        ...(spawn.model !== undefined && { model: spawn.model }),
-        processOutcome: result.processOutcome,
-        ...(result.final?.status !== undefined && { finalStatus: result.final.status }),
-        retries,
-        observation: result.telemetry ?? {},
-      }),
-    )
+    recordStageTelemetry({ co, stage, spawn, key, start, end, previousEnd, retries, result })
     previousEnd = end
     return result as CycleStageResult
   }
@@ -1378,6 +1393,44 @@ export function finalPart(record: CycleStageRecord): string {
   return ` — no final result (the stage ended without its structured JSON; the retry resumes from the commits already on the branch)${noResultWhy(record)}`
 }
 
+function recordCardTelemetry({
+  ctx,
+  input,
+  co,
+  outcome,
+  startedAt,
+}: {
+  ctx: CycleDriverContext
+  input: CycleDriverRequest
+  co: Coordinates
+  outcome: CycleOutcome
+  startedAt: number
+}): void {
+  if (outcome.status === 'rounds-bound-reached' || outcome.status === 'other-run') return
+  appendTelemetry(
+    co.main,
+    cardTelemetryRecord({
+      id: `${input.runId}:${input.card}`,
+      card: input.card,
+      run: input.runId,
+      ...(input.pr !== undefined && { pr: input.pr }),
+      pairVersion,
+      workflowVersion: ctx.workflowVersion,
+      profile: ctx.profile?.name ?? 'default',
+      engine: ctx.engine.id,
+      ...(ctx.model !== undefined && { model: ctx.model }),
+      start: startedAt,
+      end: Date.now(),
+      outcome: outcome.status,
+      ...(outcome.status !== 'ready-for-merge' &&
+        outcome.status !== 'merged' && { cause: outcome.reason ?? outcome.status }),
+      stages: readTelemetry(co.main, input.runId, input.card),
+      interventions: readInterventions(co.runDir),
+      ...readCycleProgress(co.runDir),
+    }),
+  )
+}
+
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
     let input = requested
@@ -1424,32 +1477,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
             finalPart(record),
         ),
     })
-    if (outcome.status !== 'rounds-bound-reached' && outcome.status !== 'other-run') {
-      appendTelemetry(
-        co.main,
-        cardTelemetryRecord({
-          id: `${input.runId}:${input.card}`,
-          card: input.card,
-          run: input.runId,
-          ...(input.pr !== undefined && { pr: input.pr }),
-          pairVersion,
-          workflowVersion: ctx.workflowVersion,
-          profile: ctx.profile?.name ?? 'default',
-          engine: ctx.engine.id,
-          ...(ctx.model !== undefined && { model: ctx.model }),
-          start: startedAt,
-          end: Date.now(),
-          outcome: outcome.status,
-          ...(outcome.status !== 'ready-for-merge' &&
-            outcome.status !== 'merged' && {
-              cause: outcome.reason ?? outcome.status,
-            }),
-          stages: readTelemetry(co.main, input.runId, input.card),
-          interventions: readInterventions(co.runDir),
-          ...readCycleProgress(co.runDir),
-        }),
-      )
-    }
+    recordCardTelemetry({ ctx, input, co, outcome, startedAt })
     return outcome
   }
 }

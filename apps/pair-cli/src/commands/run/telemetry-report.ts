@@ -27,6 +27,43 @@ function measure(values: readonly unknown[]): Measure {
   return { mean, median, sd }
 }
 
+function tokenCount(stage: TelemetryRecord): number | undefined {
+  const tokens = stage['tokens']
+  if (typeof tokens !== 'object' || tokens === null) return undefined
+  const values = tokens as Record<string, unknown>
+  const fresh = number(values['freshIn'])
+  const cached = number(values['cachedIn'])
+  const out = number(values['out'])
+  return fresh === undefined || cached === undefined || out === undefined
+    ? undefined
+    : fresh + cached + out
+}
+
+function wastedShare(stages: readonly TelemetryRecord[]): number | undefined {
+  if (stages.length === 0) return undefined
+  let wasted = 0
+  let total = 0
+  for (const stage of stages) {
+    const tokens = tokenCount(stage)
+    if (tokens === undefined) return undefined
+    total += tokens
+    if (stage['outcomeClass'] !== 'ok') wasted += tokens
+  }
+  return total > 0 ? wasted / total : undefined
+}
+
+function stageMeasures(stages: readonly TelemetryRecord[]): Record<string, Measure> {
+  const names = new Set(
+    stages.map(stage => stage['step']).filter((step): step is string => typeof step === 'string'),
+  )
+  return Object.fromEntries(
+    [...names].map(name => [
+      name,
+      measure(stages.filter(stage => stage['step'] === name).map(stage => stage['durationMs'])),
+    ]),
+  )
+}
+
 /** Population statistics over recorded cards; an incomplete field is never estimated. */
 export function summarizeTelemetry(
   records: readonly TelemetryRecord[],
@@ -47,45 +84,20 @@ export function summarizeTelemetry(
         ),
     )
     if (cards.length === 0 && stages.length === 0) continue
-    const names = new Set(
-      stages.map(stage => stage['step']).filter((step): step is string => typeof step === 'string'),
-    )
-    const stageMeasures = Object.fromEntries(
-      [...names].map(name => [
-        name,
-        measure(stages.filter(stage => stage['step'] === name).map(stage => stage['durationMs'])),
-      ]),
-    )
     const stageCards = terminalCards.filter(card =>
       stages.some(stage => stage['card'] === card['card'] && stage['run'] === card['run']),
     )
-    const wasteShares = stageCards.map(card => {
-      let wasted = 0
-      let total = 0
-      const cardStages = stages.filter(
-        stage => stage['card'] === card['card'] && stage['run'] === card['run'],
-      )
-      if (cardStages.length === 0) return undefined
-      for (const stage of cardStages) {
-        const raw = stage['tokens']
-        const tokens =
-          typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : undefined
-        const fresh = number(tokens?.['freshIn'])
-        const cached = number(tokens?.['cachedIn'])
-        const output = number(tokens?.['out'])
-        if (fresh === undefined || cached === undefined || output === undefined) return undefined
-        const count = fresh + cached + output
-        total += count
-        if (stage['outcomeClass'] !== 'ok') wasted += count
-      }
-      return total > 0 ? wasted / total : undefined
-    })
+    const wasteShares = stageCards.map(card =>
+      wastedShare(
+        stages.filter(stage => stage['card'] === card['card'] && stage['run'] === card['run']),
+      ),
+    )
     result[engine] = {
       rounds: measure(cards.map(card => card['rounds'])),
       wallMs: measure(cards.map(card => card['wallMs'])),
       activeMs: measure(cards.map(card => card['activeMs'])),
       idleMs: measure(cards.map(card => card['idleMs'])),
-      stages: stageMeasures,
+      stages: stageMeasures(stages),
       wastedTokenShare: measure(wasteShares),
     }
   }
