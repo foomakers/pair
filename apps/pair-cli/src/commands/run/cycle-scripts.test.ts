@@ -168,7 +168,9 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     spawnSync('git', ['init', '-q', tree])
     writeFileSync(join(tree, 'tracked.txt'), 'tracked')
     spawnSync('git', ['add', 'tracked.txt'], { cwd: tree })
-    spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'base'], { cwd: tree })
+    spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'base'], {
+      cwd: tree,
+    })
     writeFileSync(join(tree, 'stray.txt'), 'stray')
     const dir = join(runsRoot, 'story-487/487')
     mkdirSync(dir, { recursive: true })

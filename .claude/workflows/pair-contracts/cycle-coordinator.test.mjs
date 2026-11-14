@@ -45,7 +45,7 @@ const withPolicyText = a =>
     : a
 
 const WORKFLOW_VERSION = '4.0.1'
-const POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
+const POLICY = { maxFixRounds: 3, autoRecoveryRounds: 5, redRepairs: 1, greenRetries: 1, reviewers: 1 }
 const CARD = { id: '42', title: 'T', branch: 'feature/US-42-x' }
 
 // ── helpers ───────────────────────────────────────────────────────────────────────────────────
@@ -2554,7 +2554,7 @@ function scopeDecisionFixture() {
 const seededRunDir = draft => {
   const { root, dir } = runDir()
   const f = join(root, `seed-${Math.random().toString(36).slice(2)}.json`)
-  writeFileSync(f, JSON.stringify(draft))
+  writeFileSync(f, JSON.stringify(draft.contractPath === '@dir' ? { ...draft, contractPath: join(dir, 'gone.json') } : draft))
   const pub = state([
     'publish',
     '--dir',
@@ -2605,6 +2605,39 @@ const INVOCATIONS = {
         'fresh',
       ],
       accepted: r => r.status === 0 && r.json?.superseded === true,
+    }
+  },
+  'reset-group': version => {
+    const dir = seededRunDir({
+      run: 'story-42',
+      story: '42',
+      branch: 'feature/US-42-x',
+      phase: 'a0',
+      skill: 'red-spec',
+      inputHead: SHA40('a'),
+      mode: 'initial',
+      status: 'red',
+      contractPath: '@dir',
+      contractHash: `sha256:${'1'.repeat(64)}`,
+    })
+    return {
+      dir,
+      args: [
+        'reset-group',
+        '--dir',
+        dir,
+        '--phase',
+        'a0',
+        '--reason',
+        'probe',
+        '--by',
+        'rucka',
+        '--workflowVersion',
+        version,
+        '--entry',
+        'fresh',
+      ],
+      accepted: r => r.status === 0 && r.json?.reset === true,
     }
   },
   decide: version => {

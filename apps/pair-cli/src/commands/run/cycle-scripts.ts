@@ -654,7 +654,10 @@ function prepareMethods(
 function stateMethods(
   runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
   cycleStatePath: string,
-): Pick<CycleScriptsBridge, 'resolve' | 'recover' | 'gateRed' | 'baseSync' | 'worktreeClean' | 'prereqState'> {
+): Pick<
+  CycleScriptsBridge,
+  'resolve' | 'recover' | 'gateRed' | 'baseSync' | 'worktreeClean' | 'prereqState'
+> {
   return {
     resolve: options =>
       runScript(cycleStatePath, 'resolve', resolveArgs(options)) as CycleResolveResult,
