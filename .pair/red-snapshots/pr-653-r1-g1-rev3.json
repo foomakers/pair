@@ -1,0 +1,2105 @@
+{
+  "$meta": {
+    "pr": "653",
+    "phase": "r1-g1-rev3",
+    "base": "1590d453ff4a298145f665c7d345d4ae58a3d8fe",
+    "trailer": "Pair-RED-Snapshot: pr=653; phase=r1-g1-rev3; base=1590d453ff4a298145f665c7d345d4ae58a3d8fe; manifest=.pair/red-snapshots/pr-653-r1-g1-rev3.json",
+    "artifacts": [
+      "scripts/dev/delivery-process-overwrite.test.mjs",
+      "scripts/dev/sealed-manifest-format.test.mjs",
+      "scripts/contract-tests/dev-scripts-sandbox.test.mjs"
+    ]
+  },
+  "status": "red",
+  "mode": "repair",
+  "inputHead": "1590d453ff4a298145f665c7d345d4ae58a3d8fe",
+  "sourceOfTruth": "{\"predecessorContract\": \"/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-646/646/r1-g1-rev2-red-contract.attempt-3.json\", \"finding\": \"r1-g1-rev2-gap1\", \"authority\": \"dispatch: pnpm quality-gate sandbox omits cycle-state and formatter dependencies\", \"requirement\": \"The isolated gate must run all scripts/dev suites with their actual dependencies and retain both regression controls.\", \"base\": \"1590d453ff4a298145f665c7d345d4ae58a3d8fe\"}",
+  "inventory": [
+    {
+      "id": "r0-2",
+      "producer": "batch prepare result classification",
+      "inputs": [
+        "bare contract-hash-mismatch",
+        "contract-attempt-overwritten:<first-attempt basename>",
+        "contract-attempt-overwritten:<numbered-attempt basename>",
+        "empty/null/non-string reason",
+        "unknown or lookalike reason",
+        "budget granted/exhausted",
+        "reset accepted/refused/non-tail",
+        "initial/remediation/repair/revision"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+        ".claude/workflows/pair-implement-batch.js"
+      ],
+      "consumers": [
+        "agentRetry",
+        "formatDefect",
+        "prepare handler",
+        "recoverProcess"
+      ],
+      "classes": [
+        "bare contract-hash-mismatch",
+        "contract-attempt-overwritten:<first-attempt basename>",
+        "contract-attempt-overwritten:<numbered-attempt basename>",
+        "empty/null/non-string reason",
+        "unknown or lookalike reason",
+        "budget granted/exhausted",
+        "reset accepted/refused/non-tail",
+        "initial/remediation/repair/revision"
+      ],
+      "interactions": [
+        "reason grammar × driver representation × mode × attempt filename",
+        "normalization × agentRetry acceptance × formatDefect × prepare handler × recoverProcess",
+        "recognized fault × recovery budget × reset result"
+      ]
+    },
+    {
+      "id": "r0-2-format-defect",
+      "producer": "publish refusal grammar -> prepare acceptance -> formatDefect process-fault exemption",
+      "inputs": [
+        "real hash refusal",
+        "real overwrite refusal",
+        "prepare.next absent",
+        "prepare.next malformed",
+        "prepare.next valid"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+        ".claude/workflows/pair-implement-batch.js"
+      ],
+      "consumers": [
+        "agentRetry",
+        "formatDefect",
+        "prepare handler",
+        "recoverProcess"
+      ],
+      "classes": [
+        "recognized failure with absent next bypasses format retry",
+        "recognized failure with malformed next bypasses format retry",
+        "recognized failure with valid next (existing rows)"
+      ],
+      "interactions": [
+        "both representations x hash/overwrite x absent/malformed next"
+      ],
+      "authority": "r0-2 and verifier rejection prepare-format-exemption"
+    },
+    {
+      "id": "r0-2-reset-continuation",
+      "producer": "recoverProcess consumes reset-group result; nextDefect validates reset.next",
+      "inputs": [
+        "reset:true + valid distinct next",
+        "reset:true + absent next",
+        "reset:true + malformed next",
+        "reset:false + reset-group-not-tail + distinct next",
+        "reset:false + other refusal (existing rows)"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+        ".claude/workflows/pair-implement-batch.js"
+      ],
+      "consumers": [
+        "batch loop",
+        "blockedResult",
+        "park resume token"
+      ],
+      "classes": [
+        "valid reset.next is authoritative",
+        "absent reset.next parks",
+        "malformed reset.next parks",
+        "non-tail refusal uses prepare.next",
+        "other reset refusal parks (existing rows)"
+      ],
+      "interactions": [
+        "both representations x reset result x distinguishable prepare/reset next"
+      ],
+      "authority": "r0-2 and verifier rejection reset-next-authority"
+    },
+    {
+      "id": "r1-g1-gap1",
+      "producer": "tools/prettier-config/bin/_ignore-args.sh: ignore-source assembly consumed by real Prettier check/fix wrappers",
+      "inputs": [
+        "repository .prettierignore with .pair/red-snapshots/ entry",
+        "absent and empty repository .prettierignore",
+        "root and nested cwd; paths with spaces",
+        "explicit file arguments and no-argument glob",
+        "check and fix modes",
+        "shared ignores; root and package .gitignore",
+        "excluded JSON, ordinary unformatted JSON, malformed JSON",
+        "git and non-git directories"
+      ],
+      "representations": [
+        "tools/prettier-config/bin/_ignore-args.sh",
+        "tools/prettier-config/bin/prettier-check.sh",
+        "tools/prettier-config/bin/prettier-fix.sh",
+        "scripts/format-lib/run-format.sh",
+        "package.json prettier:check/prettier:fix",
+        "sealer-generated root .prettierignore and .pair/red-snapshots/*.json"
+      ],
+      "consumers": [
+        "prettier-check",
+        "prettier-fix",
+        "root prettier:check and prettier:fix via run-format.sh",
+        "publish format gate",
+        "pre-push format gate"
+      ],
+      "classes": [
+        "root",
+        "nested",
+        "gate",
+        "glob",
+        "shared",
+        "local-gitignore",
+        "invalid",
+        "absent",
+        "empty",
+        "neighbor",
+        "gitignore",
+        "nongit",
+        "coexist-shared-check",
+        "coexist-shared-fix",
+        "coexist-root-git-check",
+        "coexist-root-git-fix",
+        "coexist-package-git-check",
+        "coexist-package-git-fix"
+      ],
+      "interactions": [
+        "repository ignore × check/fix × root/nested cwd",
+        "repository ignore × check/fix × explicit/glob input",
+        "repository ignore × root gate check/fix",
+        "repository ignore coexistence × shared/root-git/package-git exclusions × check/fix",
+        "missing/empty ignore and non-git boundaries × check/fix",
+        "non-excluded valid/invalid JSON × check/fix"
+      ],
+      "authority": "r1-g1-gap1; sealer red-snapshot.mjs writes root .prettierignore before seal; way-of-working Quality Gates requires same check/fix file set and immutable sealed bytes. Verifier rejection r1-g1-gap1-ignore-coexistence / formatter-ignore-composition: both excluded files must be supplied in the same invocation.",
+      "scopeAddition": {
+        "path": "tools/prettier-config/bin/_ignore-args.sh",
+        "finding": "r1-g1-gap1",
+        "reason": "The sealer exclusion already exists. Wrapper assembly passes explicit shared/git ignore files, omitting the repository .prettierignore. Honor that exclusion without editing the sealed manifest."
+      },
+      "transitionMatrix": "Not applicable: no persisted workflow transition, evidence identity, ledger or terminal gate changes; only formatter input selection."
+    },
+    {
+      "id": "r1-g1-rev2-gap1",
+      "producer": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts::sandbox (dependency closure for the real runGate and runFile invocations)",
+      "inputs": [
+        "unmodified scripts/dev suites",
+        "rtk-review-hook agent_type guard removed",
+        "rtk-session-path hook replaced by no-op"
+      ],
+      "representations": [
+        "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+        "scripts/dev/delivery-process-overwrite.test.mjs",
+        "scripts/dev/sealed-manifest-format.test.mjs",
+        ".claude/skills/pair-workflow-cycle/scripts/ (cycle-state.mjs and its transitive imports)",
+        ".claude/workflows/pair-implement-batch.js",
+        "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+        "tools/prettier-config/ (check/fix wrappers, ignore assembly, shared ignore, node_modules)",
+        "scripts/format-lib/ (run-format.sh and git-tracked-paths.sh)"
+      ],
+      "consumers": [
+        "runGate: package.json quality-gate node --test invocation",
+        "runFile: every scripts/dev/*.test.mjs individually",
+        "CI scripts/dev invocation discovery; unchanged parser"
+      ],
+      "classes": [
+        "complete unmodified sandbox executes all discovered suites and matches direct per-file passing counts",
+        "hook guard regression still rejected by the actual hook suite after a passing clean control",
+        "session PATH regression still rejected by the actual session suite after a passing clean control"
+      ],
+      "interactions": [
+        "sandbox closure × publish imports × installed/dataset workflow representations",
+        "sandbox closure × formatter check/fix × root/nested/git/non-git and ignore-composition cases (all 30 existing formatter tests)",
+        "gate glob invocation × per-file direct invocation count",
+        "expanded sandbox × both existing injected hook regressions"
+      ],
+      "scopeAddition": {
+        "path": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+        "finding": "r1-g1-rev2-gap1",
+        "reason": "Only sandbox construction must gain the real dependencies; preserve inherited production scope and every predecessor oracle."
+      },
+      "transitionMatrix": "Not applicable to this delta: temporary test fixture construction, no persisted cycle transition or evidence identity changes. Inherited transition matrix remains unchanged."
+    }
+  ],
+  "fixScope": {
+    "owner": "batch prepare result classification",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+      ".claude/workflows/pair-implement-batch.js",
+      "tools/prettier-config/bin/_ignore-args.sh",
+      "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-2-installed-initial-attempt1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed driver; initial/a0; real publish overwrite refusal for prior attempt 1",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-initial-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-initial-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-initial-attempt2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed driver; initial/a0; real publish overwrite refusal for prior attempt 2",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-initial-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-initial-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-remediation-attempt1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed driver; remediation/r1-g1; real publish overwrite refusal for prior attempt 1",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-remediation-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-remediation-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-remediation-attempt2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed driver; remediation/r1-g1; real publish overwrite refusal for prior attempt 2",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-remediation-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-remediation-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-repair-attempt1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed driver; repair/r1-g2; real publish overwrite refusal for prior attempt 1",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-repair-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-repair-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-repair-attempt2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed driver; repair/r1-g2; real publish overwrite refusal for prior attempt 2",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-repair-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-repair-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-revision-attempt1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed driver; revision/r1-g2-rev2; real publish overwrite refusal for prior attempt 1",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-revision-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-revision-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-revision-attempt2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed driver; revision/r1-g2-rev2; real publish overwrite refusal for prior attempt 2",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-revision-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-revision-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-hash",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed; real publish contract-hash-mismatch",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-hash scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "One reset-group; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-hash scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-installed-empty",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed; empty non-process reason",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-empty scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "No process recovery or reset; never ready-for-merge.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-empty scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-installed-null",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed; null non-process reason",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-null scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "No process recovery or reset; never ready-for-merge.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-null scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-installed-number",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed; number non-process reason",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-number scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "No process recovery or reset; never ready-for-merge.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-number scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-installed-lookalike",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed; lookalike non-process reason",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-lookalike scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "No process recovery or reset; never ready-for-merge.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-lookalike scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-installed-unknown",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed; unknown non-process reason",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-unknown scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "No process recovery or reset; never ready-for-merge.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-unknown scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-installed-budget",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "installed; real overwrite refusal; budget exhausted",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-budget scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "awaiting-human with resume token; no reset; one preparation.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-budget scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-reset-refused",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "installed; real overwrite refusal; reset identity-refused",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-reset-refused scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "awaiting-human with original refusal and resume token; one preparation.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-reset-refused scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-non-tail",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "installed; real overwrite refusal; reset-group-not-tail",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-non-tail scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "One reset request; use existing durable next, never fabricate a terminal success.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-non-tail scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-initial-attempt1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset driver; initial/a0; real publish overwrite refusal for prior attempt 1",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-initial-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-initial-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-initial-attempt2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset driver; initial/a0; real publish overwrite refusal for prior attempt 2",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-initial-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-initial-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-remediation-attempt1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset driver; remediation/r1-g1; real publish overwrite refusal for prior attempt 1",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-remediation-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-remediation-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-remediation-attempt2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset driver; remediation/r1-g1; real publish overwrite refusal for prior attempt 2",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-remediation-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-remediation-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-repair-attempt1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset driver; repair/r1-g2; real publish overwrite refusal for prior attempt 1",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-repair-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-repair-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-repair-attempt2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset driver; repair/r1-g2; real publish overwrite refusal for prior attempt 2",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-repair-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-repair-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-revision-attempt1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset driver; revision/r1-g2-rev2; real publish overwrite refusal for prior attempt 1",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-revision-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-revision-attempt1 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-revision-attempt2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset driver; revision/r1-g2-rev2; real publish overwrite refusal for prior attempt 2",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-revision-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "Budget relay precedes exactly one reset-group; run/phase/version/PR unchanged; no blind judgment retry or validator; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-revision-attempt2 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-hash",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset; real publish contract-hash-mismatch",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-hash scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "One reset-group; durable next preserved.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-hash scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-dataset-empty",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset; empty non-process reason",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-empty scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "No process recovery or reset; never ready-for-merge.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-empty scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-dataset-null",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset; null non-process reason",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-null scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "No process recovery or reset; never ready-for-merge.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-null scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-dataset-number",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset; number non-process reason",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-number scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "No process recovery or reset; never ready-for-merge.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-number scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-dataset-lookalike",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset; lookalike non-process reason",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-lookalike scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "No process recovery or reset; never ready-for-merge.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-lookalike scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-dataset-unknown",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset; unknown non-process reason",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-unknown scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "No process recovery or reset; never ready-for-merge.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-unknown scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-dataset-budget",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "dataset; real overwrite refusal; budget exhausted",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-budget scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "awaiting-human with resume token; no reset; one preparation.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-budget scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-reset-refused",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "dataset; real overwrite refusal; reset identity-refused",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-reset-refused scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "awaiting-human with original refusal and resume token; one preparation.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-reset-refused scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-dataset-non-tail",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "dataset; real overwrite refusal; reset-group-not-tail",
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-non-tail scripts/dev/delivery-process-overwrite.test.mjs",
+      "expected": "One reset request; use existing durable next, never fabricate a terminal success.",
+      "covers": [
+        "r0-2"
+      ],
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-non-tail scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1 for overwrite routing; exit 1."
+    },
+    {
+      "id": "r0-2-installed-format-hash-absent",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed: real hash refusal; prepare.next absent",
+      "expected": "Exactly one preparation and one budget relay before one reset; follow reset.next; no format retry or validation.",
+      "covers": [
+        "r0-2",
+        "r0-2-format-defect"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-format-hash-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-format-hash-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-installed-format-hash-malformed",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed: real hash refusal; prepare.next malformed",
+      "expected": "Exactly one preparation and one budget relay before one reset; follow reset.next; no format retry or validation.",
+      "covers": [
+        "r0-2",
+        "r0-2-format-defect"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-format-hash-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-format-hash-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-installed-format-overwrite-absent",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed: real overwrite refusal; prepare.next absent",
+      "expected": "Exactly one preparation and one budget relay before one reset; follow reset.next; no format retry or validation.",
+      "covers": [
+        "r0-2",
+        "r0-2-format-defect"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-format-overwrite-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-format-overwrite-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-installed-format-overwrite-malformed",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed: real overwrite refusal; prepare.next malformed",
+      "expected": "Exactly one preparation and one budget relay before one reset; follow reset.next; no format retry or validation.",
+      "covers": [
+        "r0-2",
+        "r0-2-format-defect"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-format-overwrite-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-format-overwrite-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-installed-reset-next-valid",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed: real overwrite refusal; reset.next valid; distinct prepare/reset continuations",
+      "expected": "Continue with reset.next, never prepare.next.",
+      "covers": [
+        "r0-2",
+        "r0-2-reset-continuation"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-reset-next-valid scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-reset-next-valid scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-installed-reset-next-absent",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed: real overwrite refusal; reset.next absent; distinct prepare/reset continuations",
+      "expected": "Park awaiting-human with exact resume token; no continuation.",
+      "covers": [
+        "r0-2",
+        "r0-2-reset-continuation"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-reset-next-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-reset-next-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-installed-reset-next-malformed",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed: real overwrite refusal; reset.next malformed; distinct prepare/reset continuations",
+      "expected": "Park awaiting-human with exact resume token; no continuation.",
+      "covers": [
+        "r0-2",
+        "r0-2-reset-continuation"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-reset-next-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-reset-next-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-installed-reset-next-non-tail",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed: real overwrite refusal; reset.next non-tail; distinct prepare/reset continuations",
+      "expected": "Use prepare.next despite distinct reset.next on non-tail refusal.",
+      "covers": [
+        "r0-2",
+        "r0-2-reset-continuation"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-reset-next-non-tail scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-installed-reset-next-non-tail scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-dataset-format-hash-absent",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset: real hash refusal; prepare.next absent",
+      "expected": "Exactly one preparation and one budget relay before one reset; follow reset.next; no format retry or validation.",
+      "covers": [
+        "r0-2",
+        "r0-2-format-defect"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-format-hash-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-format-hash-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-dataset-format-hash-malformed",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset: real hash refusal; prepare.next malformed",
+      "expected": "Exactly one preparation and one budget relay before one reset; follow reset.next; no format retry or validation.",
+      "covers": [
+        "r0-2",
+        "r0-2-format-defect"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-format-hash-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-format-hash-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "PASS 1/1; exit 0."
+    },
+    {
+      "id": "r0-2-dataset-format-overwrite-absent",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset: real overwrite refusal; prepare.next absent",
+      "expected": "Exactly one preparation and one budget relay before one reset; follow reset.next; no format retry or validation.",
+      "covers": [
+        "r0-2",
+        "r0-2-format-defect"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-format-overwrite-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-format-overwrite-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-dataset-format-overwrite-malformed",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset: real overwrite refusal; prepare.next malformed",
+      "expected": "Exactly one preparation and one budget relay before one reset; follow reset.next; no format retry or validation.",
+      "covers": [
+        "r0-2",
+        "r0-2-format-defect"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-format-overwrite-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-format-overwrite-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-dataset-reset-next-valid",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset: real overwrite refusal; reset.next valid; distinct prepare/reset continuations",
+      "expected": "Continue with reset.next, never prepare.next.",
+      "covers": [
+        "r0-2",
+        "r0-2-reset-continuation"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-reset-next-valid scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-reset-next-valid scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-dataset-reset-next-absent",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset: real overwrite refusal; reset.next absent; distinct prepare/reset continuations",
+      "expected": "Park awaiting-human with exact resume token; no continuation.",
+      "covers": [
+        "r0-2",
+        "r0-2-reset-continuation"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-reset-next-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-reset-next-absent scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-dataset-reset-next-malformed",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset: real overwrite refusal; reset.next malformed; distinct prepare/reset continuations",
+      "expected": "Park awaiting-human with exact resume token; no continuation.",
+      "covers": [
+        "r0-2",
+        "r0-2-reset-continuation"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-reset-next-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-reset-next-malformed scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r0-2-dataset-reset-next-non-tail",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset: real overwrite refusal; reset.next non-tail; distinct prepare/reset continuations",
+      "expected": "Use prepare.next despite distinct reset.next on non-tail refusal.",
+      "covers": [
+        "r0-2",
+        "r0-2-reset-continuation"
+      ],
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-reset-next-non-tail scripts/dev/delivery-process-overwrite.test.mjs",
+      "command": "node --test --test-timeout=10000 --test-name-pattern=r0-2-dataset-reset-next-non-tail scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 1/1; exit 1; preparation count 2, expected 1."
+    },
+    {
+      "id": "r1-g1-gap1-root-check",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "root / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-root-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL: ignored manifest is reported, exit 1 instead of 0."
+    },
+    {
+      "id": "r1-g1-gap1-nested-check",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "nested / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-nested-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL: ignored manifest is reported, exit 1 instead of 0."
+    },
+    {
+      "id": "r1-g1-gap1-gate-check",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "gate / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-gate-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL: ignored manifest is reported, exit 1 instead of 0."
+    },
+    {
+      "id": "r1-g1-gap1-glob-check",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "glob / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-glob-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL: ignored manifest is reported, exit 1 instead of 0."
+    },
+    {
+      "id": "r1-g1-gap1-shared-check",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "shared / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-shared-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-local-gitignore-check",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "local-gitignore / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-local-gitignore-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-invalid-check",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "invalid / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-invalid-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 2; malformed non-excluded JSON unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-absent-check",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "absent / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-absent-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 1; non-excluded unformatted JSON unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-empty-check",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "empty / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-empty-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 1; non-excluded unformatted JSON unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-neighbor-check",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "neighbor / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-neighbor-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 1; non-excluded unformatted JSON unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-gitignore-check",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "gitignore / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-gitignore-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-nongit-check",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "nongit / check; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-nongit-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 1; non-excluded unformatted JSON unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-root-fix",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "root / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-root-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL: ignored manifest bytes rewritten."
+    },
+    {
+      "id": "r1-g1-gap1-nested-fix",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "nested / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-nested-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL: ignored manifest bytes rewritten."
+    },
+    {
+      "id": "r1-g1-gap1-gate-fix",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "gate / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-gate-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL: ignored manifest bytes rewritten."
+    },
+    {
+      "id": "r1-g1-gap1-glob-fix",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "glob / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-glob-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL: ignored manifest bytes rewritten."
+    },
+    {
+      "id": "r1-g1-gap1-shared-fix",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "shared / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-shared-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-local-gitignore-fix",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "local-gitignore / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-local-gitignore-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-invalid-fix",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "invalid / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-invalid-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 2; malformed non-excluded JSON unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-absent-fix",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "absent / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-absent-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; non-excluded JSON formatted.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-empty-fix",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "empty / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-empty-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; non-excluded JSON formatted.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-neighbor-fix",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "neighbor / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-neighbor-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; non-excluded JSON formatted.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-gitignore-fix",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "gitignore / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-gitignore-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; excluded bytes unchanged.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-nongit-fix",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "nongit / fix; real formatter in an isolated filesystem fixture; path contains spaces.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-nongit-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; non-excluded JSON formatted.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "PASS: expected exit and bytes observed."
+    },
+    {
+      "id": "r1-g1-gap1-coexist-shared-check",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "shared exclusion and repository .prettierignore exclusion supplied together to real check wrapper; isolated git tree with spaces in its path.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-coexist-shared-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; both explicitly supplied excluded files remain byte-identical. Removing either applicable ignore source must reject this row.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL 1/1; formatter exit 1 reports excluded sealed manifest; expected exit 0."
+    },
+    {
+      "id": "r1-g1-gap1-coexist-shared-fix",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "shared exclusion and repository .prettierignore exclusion supplied together to real fix wrapper; isolated git tree with spaces in its path.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-coexist-shared-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; both explicitly supplied excluded files remain byte-identical. Removing either applicable ignore source must reject this row.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL 1/1; formatter exit 0 rewrites excluded sealed manifest; expected original bytes."
+    },
+    {
+      "id": "r1-g1-gap1-coexist-root-git-check",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "root-git exclusion and repository .prettierignore exclusion supplied together to real check wrapper; isolated git tree with spaces in its path.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-coexist-root-git-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; both explicitly supplied excluded files remain byte-identical. Removing either applicable ignore source must reject this row.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL 1/1; formatter exit 1 reports excluded sealed manifest; expected exit 0."
+    },
+    {
+      "id": "r1-g1-gap1-coexist-root-git-fix",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "root-git exclusion and repository .prettierignore exclusion supplied together to real fix wrapper; isolated git tree with spaces in its path.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-coexist-root-git-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; both explicitly supplied excluded files remain byte-identical. Removing either applicable ignore source must reject this row.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL 1/1; formatter exit 0 rewrites excluded sealed manifest; expected original bytes."
+    },
+    {
+      "id": "r1-g1-gap1-coexist-package-git-check",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "package-git exclusion and repository .prettierignore exclusion supplied together to real check wrapper; isolated git tree with spaces in its path.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-coexist-package-git-check$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; both explicitly supplied excluded files remain byte-identical. Removing either applicable ignore source must reject this row.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL 1/1; formatter exit 1 reports excluded sealed manifest; expected exit 0."
+    },
+    {
+      "id": "r1-g1-gap1-coexist-package-git-fix",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "package-git exclusion and repository .prettierignore exclusion supplied together to real fix wrapper; isolated git tree with spaces in its path.",
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "oracle": "node --test --test-timeout=10000 --test-name-pattern=r1-g1-gap1-coexist-package-git-fix$ scripts/dev/sealed-manifest-format.test.mjs",
+      "expected": "Exit 0; both explicitly supplied excluded files remain byte-identical. Removing either applicable ignore source must reject this row.",
+      "covers": [
+        "r1-g1-gap1"
+      ],
+      "observed": "FAIL 1/1; formatter exit 0 rewrites excluded sealed manifest; expected original bytes."
+    },
+    {
+      "id": "r1-g1-rev2-gap1-complete-sandbox",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Unmodified suites through the real gate sandbox and direct per-file comparison",
+      "file": "scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "oracle": "node --test --test-timeout=60000 --test-name-pattern=r1-g1-rev2-gap1-complete-sandbox scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "command": "node --test --test-timeout=60000 --test-name-pattern=r1-g1-rev2-gap1-complete-sandbox scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "expected": "r0-1-w5 passes: every dev suite loads its real dependencies; gate exit 0; gate passing count equals the sum of every direct suite.",
+      "observed": "FAIL 1/1: r0-1-w5 failed; ERR_MODULE_NOT_FOUND for sandbox cycle-state.mjs and ENOENT for prettier wrappers/format-lib.",
+      "covers": [
+        "r1-g1-rev2-gap1"
+      ]
+    },
+    {
+      "id": "r1-g1-rev2-gap1-hook-control",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "Actual hook suite clean control and injected removal of the agent_type guard",
+      "file": "scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "oracle": "node --test --test-timeout=60000 --test-name-pattern=r1-g1-rev2-gap1-hook-control scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "command": "node --test --test-timeout=60000 --test-name-pattern=r1-g1-rev2-gap1-hook-control scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "expected": "r0-1-c1 passes: clean hook suite exit 0 and guard-removal suite reports failing assertions.",
+      "observed": "PASS 1/1: r0-1-c1 passed; exit 0.",
+      "covers": [
+        "r1-g1-rev2-gap1"
+      ]
+    },
+    {
+      "id": "r1-g1-rev2-gap1-path-control",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "Actual session-path suite clean control and injected no-op SessionStart hook",
+      "file": "scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "oracle": "node --test --test-timeout=60000 --test-name-pattern=r1-g1-rev2-gap1-path-control scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "command": "node --test --test-timeout=60000 --test-name-pattern=r1-g1-rev2-gap1-path-control scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "expected": "r0-1-c2 passes: clean session-path suite exit 0 and no-op hook suite reports failing assertions.",
+      "observed": "PASS 1/1: r0-1-c2 passed; exit 0.",
+      "covers": [
+        "r1-g1-rev2-gap1"
+      ]
+    }
+  ],
+  "transitionMatrix": [
+    {
+      "name": "prepare process-fault routing",
+      "authority": "real publish produces reason; real batch classifies and delegates recover/reset-group; durable state is owned by cycle-state, not this driver",
+      "sourceState": "prepare due from durable next, status failed",
+      "eventIdentity": "due run, phase, head, PR; reason type before colon, diagnostic suffix opaque",
+      "predecessor": "real publish detects overwritten bytes of a previous preparation, preserving that handoff",
+      "nextState": "budget granted -> reset-group -> returned durable next; budget exhausted/reset refused -> awaiting-human with resume token",
+      "effects": "Only delegated recovery/reset commands; no driver filesystem writes",
+      "immutableFields": [
+        "run",
+        "phase",
+        "PR",
+        "workflowVersion",
+        "existing contract bytes and seals"
+      ],
+      "terminalPreconditions": "No ready-for-merge transition from a failed prepare",
+      "metrics": "One budget relay; no blind preparation retry before reset. Durable redRepairs/greenRetries accounting belongs to r0-3.",
+      "negativeFamilies": {
+        "direct-terminal": "No route in scope produces successful terminal evidence; all probes use a blocked durable next and assert no validator dispatch.",
+        "missing-predecessor": "reset-group remains the predecessor authority, unchanged; refused-reset and non-tail rows prove its refusal is not bypassed.",
+        "immutable-mutation": "The driver must preserve run/phase/PR/version in its reset command (route rows). It does not write contract bytes, seals, findings or scope epochs.",
+        "history-disagreement": "Persisted-history validation belongs to unchanged reset-group; refused-reset row requires the driver to park on its refusal.",
+        "wrong-identity": "Authority envelope validation is unchanged; route rows bind reset to the dispatched run, phase, PR and version, not the basename suffix.",
+        "replay-restart": "The driver owns no persisted transition here. Real publish creates distinct attempt identities; first and numbered filenames cross every mode. Idempotency of reset-group is not changed.",
+        "stale-writer": "stale-write is a separate existing process route, not the overwritten-contract reason grammar; no write authority moves into the driver.",
+        "omitted-consumer": "Applicable: both driver representations and every classification consumer execute in each route witness.",
+        "human-decision": "Applicable: exhausted budget and reset refusal must park with a token; durable blocked next is preserved.",
+        "multi-group": "Applicable to phase delegation: r1-g1, r1-g2 and r1-g2-rev2 are exercised; reset must carry the due phase.",
+        "active-obligation": "No convergence is permitted by a failed prepare result; unknown-reason controls and no-validator assertions cover that boundary.",
+        "regression-risk": "No obligation/regression ledger transition changes in this group; their persisted gates remain with resolve and later review."
+      },
+      "rows": [
+        "r0-2-installed-initial-attempt1",
+        "r0-2-installed-initial-attempt2",
+        "r0-2-installed-remediation-attempt1",
+        "r0-2-installed-remediation-attempt2",
+        "r0-2-installed-repair-attempt1",
+        "r0-2-installed-repair-attempt2",
+        "r0-2-installed-revision-attempt1",
+        "r0-2-installed-revision-attempt2",
+        "r0-2-installed-hash",
+        "r0-2-installed-empty",
+        "r0-2-installed-null",
+        "r0-2-installed-number",
+        "r0-2-installed-lookalike",
+        "r0-2-installed-unknown",
+        "r0-2-installed-budget",
+        "r0-2-installed-reset-refused",
+        "r0-2-installed-non-tail",
+        "r0-2-dataset-initial-attempt1",
+        "r0-2-dataset-initial-attempt2",
+        "r0-2-dataset-remediation-attempt1",
+        "r0-2-dataset-remediation-attempt2",
+        "r0-2-dataset-repair-attempt1",
+        "r0-2-dataset-repair-attempt2",
+        "r0-2-dataset-revision-attempt1",
+        "r0-2-dataset-revision-attempt2",
+        "r0-2-dataset-hash",
+        "r0-2-dataset-empty",
+        "r0-2-dataset-null",
+        "r0-2-dataset-number",
+        "r0-2-dataset-lookalike",
+        "r0-2-dataset-unknown",
+        "r0-2-dataset-budget",
+        "r0-2-dataset-reset-refused",
+        "r0-2-dataset-non-tail",
+        "r0-2-installed-format-hash-absent",
+        "r0-2-installed-format-hash-malformed",
+        "r0-2-installed-format-overwrite-absent",
+        "r0-2-installed-format-overwrite-malformed",
+        "r0-2-installed-reset-next-valid",
+        "r0-2-installed-reset-next-absent",
+        "r0-2-installed-reset-next-malformed",
+        "r0-2-installed-reset-next-non-tail",
+        "r0-2-dataset-format-hash-absent",
+        "r0-2-dataset-format-hash-malformed",
+        "r0-2-dataset-format-overwrite-absent",
+        "r0-2-dataset-format-overwrite-malformed",
+        "r0-2-dataset-reset-next-valid",
+        "r0-2-dataset-reset-next-absent",
+        "r0-2-dataset-reset-next-malformed",
+        "r0-2-dataset-reset-next-non-tail"
+      ],
+      "nextShapeAuthority": {
+        "prepare": "Recognized failed prepare bypasses format retry for valid, absent and malformed next.",
+        "reset": "reset:true with valid next follows reset.next; absent/malformed next parks with token.",
+        "nonTail": "reset-group-not-tail follows original prepare.next, ignoring returned reset.next."
+      }
+    }
+  ],
+  "redTests": [
+    {
+      "file": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:591b92bc6f0e1d547c80df24eaeb0601f7817b0615a3e69f2bdc5ec9a634c1a3",
+      "command": "node --test --test-timeout=10000 scripts/dev/delivery-process-overwrite.test.mjs",
+      "observed": "FAIL 34/50; PASS 16/50; exit 1 at 1590d453ff4a298145f665c7d345d4ae58a3d8fe. See /Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-646/646/r1-g1-rev3-attempt-3-proofs.json"
+    },
+    {
+      "file": "scripts/dev/sealed-manifest-format.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:417c17b28b69dd4dcd80ed30c2668abe3fff38c9196fd0af34384f9e3fecf8d4",
+      "command": "node --test --test-timeout=10000 scripts/dev/sealed-manifest-format.test.mjs",
+      "observed": "FAIL 14/30; PASS 16/30; exit 1 at 1590d453ff4a298145f665c7d345d4ae58a3d8fe. See /Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-646/646/r1-g1-rev3-attempt-3-proofs.json"
+    },
+    {
+      "file": "scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:f46cdac38ffd143b80511b6e49e52b130475d4cb13c192e6c698762ec700f5ae",
+      "command": "node --test --test-timeout=60000 scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "observed": "FAIL 1/3; PASS 2/3; exit 1 at 1590d453ff4a298145f665c7d345d4ae58a3d8fe. See /Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-646/646/r1-g1-rev3-attempt-3-proofs.json"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-2"
+        ],
+        "owner": "batch prepare result classification",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          ".claude/workflows/pair-implement-batch.js"
+        ],
+        "findingPaths": {
+          "r0-2": [
+            "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+            ".claude/workflows/pair-implement-batch.js"
+          ]
+        },
+        "oracle": "real publish refusal -> real batch workflow with stubbed agent",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-3"
+        ],
+        "owner": "cycle-state publish and stage result protocol",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          ".claude/workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md",
+          ".claude/skills/pair-workflow-red-spec/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/SKILL.md",
+          ".claude/skills/pair-workflow-red-verify/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/SKILL.md",
+          ".claude/skills/pair-workflow-implement-phase/SKILL.md"
+        ],
+        "findingPaths": {
+          "r0-3": [
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+            ".claude/workflows/pair-implement-batch.js",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md",
+            ".claude/skills/pair-workflow-red-spec/SKILL.md",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-verify/SKILL.md",
+            ".claude/skills/pair-workflow-red-verify/SKILL.md",
+            "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/SKILL.md",
+            ".claude/skills/pair-workflow-implement-phase/SKILL.md"
+          ]
+        },
+        "oracle": "real publish refusal -> actual resolve and batch budget classification",
+        "dependsOn": [
+          "r1-g1"
+        ]
+      },
+      {
+        "groupId": "r1-g3",
+        "findings": [
+          "r0-4"
+        ],
+        "owner": "cycle-state deriveNextStep external-refusal recovery bound",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+          ".claude/skills/pair-workflow-cycle/SKILL.md"
+        ],
+        "findingPaths": {
+          "r0-4": [
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+            ".claude/skills/pair-workflow-cycle/SKILL.md"
+          ]
+        },
+        "oracle": "resolve over real consecutive dirty/stale handoffs and recover ledger",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g4",
+        "findings": [
+          "r0-5"
+        ],
+        "owner": "STOP_CATALOG and emitted-status completeness guard",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs",
+          ".claude/workflows/pair-contracts/cycle-state.test.mjs"
+        ],
+        "findingPaths": {
+          "r0-5": [
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs",
+            ".claude/workflows/pair-contracts/cycle-state.test.mjs"
+          ]
+        },
+        "oracle": "actual emitters vs STOP_CATALOG; injected uncatalogued emitter in isolated test fixture",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g5",
+        "findings": [
+          "r0-6"
+        ],
+        "owner": "batch stale recovery and red-snapshot custody",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          ".claude/workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs"
+        ],
+        "findingPaths": {
+          "r0-6": [
+            "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+            ".claude/workflows/pair-implement-batch.js",
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+            ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
+            ".claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+            ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs"
+          ]
+        },
+        "oracle": "real batch recorded commands plus real git snapshot custody verification",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g6",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "delivery-cycle operator documentation and emitted run help",
+        "mode": "behavioral",
+        "allowedPaths": [
+          ".pair/adoption/tech/way-of-working.md",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          ".pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          "packages/knowledge-hub/dataset/.pair/knowledge/how-to/10-how-to-implement-a-task.md",
+          ".pair/knowledge/how-to/10-how-to-implement-a-task.md",
+          "apps/pair-cli/README.md",
+          "apps/pair-cli/src/commands/run/metadata.ts"
+        ],
+        "findingPaths": {
+          "r0-1": [
+            ".pair/adoption/tech/way-of-working.md",
+            "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+            ".pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+            "packages/knowledge-hub/dataset/.pair/knowledge/how-to/10-how-to-implement-a-task.md",
+            ".pair/knowledge/how-to/10-how-to-implement-a-task.md",
+            "apps/pair-cli/README.md",
+            "apps/pair-cli/src/commands/run/metadata.ts"
+          ]
+        },
+        "oracle": "review text against corrected producers; execute CLI help for rendered command guidance",
+        "dependsOn": [
+          "r1-g1",
+          "r1-g2",
+          "r1-g3",
+          "r1-g4",
+          "r1-g5"
+        ]
+      }
+    ],
+    "carried": [],
+    "inventory": [
+      {
+        "id": "r0-2",
+        "producer": "batch prepare result classification",
+        "inputs": [
+          "bare contract-hash-mismatch",
+          "contract-attempt-overwritten:<first-attempt basename>",
+          "contract-attempt-overwritten:<numbered-attempt basename>",
+          "empty/null/non-string reason",
+          "unknown or lookalike reason",
+          "budget granted/exhausted",
+          "reset accepted/refused/non-tail",
+          "initial/remediation/repair/revision"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          ".claude/workflows/pair-implement-batch.js"
+        ],
+        "consumers": [
+          "agentRetry",
+          "formatDefect",
+          "prepare handler",
+          "recoverProcess"
+        ],
+        "classes": [
+          "bare contract-hash-mismatch",
+          "contract-attempt-overwritten:<first-attempt basename>",
+          "contract-attempt-overwritten:<numbered-attempt basename>",
+          "empty/null/non-string reason",
+          "unknown or lookalike reason",
+          "budget granted/exhausted",
+          "reset accepted/refused/non-tail",
+          "initial/remediation/repair/revision"
+        ],
+        "interactions": [
+          "reason grammar × driver representation × mode × attempt filename",
+          "normalization × agentRetry acceptance × formatDefect × prepare handler × recoverProcess",
+          "recognized fault × recovery budget × reset result"
+        ]
+      },
+      {
+        "id": "r0-3",
+        "producer": "cycle-state publish and stage result protocol",
+        "inputs": [
+          "contract-hash-mismatch",
+          "contract-attempt-overwritten:<basename>",
+          "stale-write",
+          "seal-not-pushed",
+          "gate-flake",
+          "ordinary finding",
+          "unchanged replay",
+          "stale writer",
+          "wrong run/head/phase identity"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          ".claude/workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md",
+          ".claude/skills/pair-workflow-red-spec/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/SKILL.md",
+          ".claude/skills/pair-workflow-red-verify/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/SKILL.md",
+          ".claude/skills/pair-workflow-implement-phase/SKILL.md"
+        ],
+        "consumers": [
+          "batch driver",
+          "in-session coordinator",
+          "pair run operator"
+        ],
+        "classes": [
+          "contract-hash-mismatch",
+          "contract-attempt-overwritten:<basename>",
+          "stale-write",
+          "seal-not-pushed",
+          "gate-flake",
+          "ordinary finding",
+          "unchanged replay",
+          "stale writer",
+          "wrong run/head/phase identity"
+        ],
+        "interactions": [
+          "publisher × stage return schema × driver × resolver",
+          "process fault × redRepairs/greenRetries/spentCycles",
+          "persisted fault × restart"
+        ]
+      },
+      {
+        "id": "r0-4",
+        "producer": "cycle-state deriveNextStep external-refusal recovery bound",
+        "inputs": [
+          "dirty",
+          "stale",
+          "budget zero/below/at/above limit",
+          "new phase progress",
+          "same phase retry",
+          "restart/replay",
+          "human decision pending"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+          ".claude/skills/pair-workflow-cycle/SKILL.md"
+        ],
+        "consumers": [
+          "batch driver",
+          "in-session coordinator",
+          "pair run operator"
+        ],
+        "classes": [
+          "dirty",
+          "stale",
+          "budget zero/below/at/above limit",
+          "new phase progress",
+          "same phase retry",
+          "restart/replay",
+          "human decision pending"
+        ],
+        "interactions": [
+          "refusal history × autoRecoveryRounds × recorded recover calls",
+          "CLI coordinator × in-session coordinator"
+        ]
+      },
+      {
+        "id": "r0-5",
+        "producer": "STOP_CATALOG and emitted-status completeness guard",
+        "inputs": [
+          "halted/interrupted/abandoned",
+          "awaiting-human process park and decision park",
+          "blocked literals",
+          "result literals",
+          "public status map",
+          "process fault set",
+          "missing/duplicate catalogue entry"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs",
+          ".claude/workflows/pair-contracts/cycle-state.test.mjs"
+        ],
+        "consumers": [
+          "batch driver",
+          "in-session coordinator",
+          "pair run operator"
+        ],
+        "classes": [
+          "halted/interrupted/abandoned",
+          "awaiting-human process park and decision park",
+          "blocked literals",
+          "result literals",
+          "public status map",
+          "process fault set",
+          "missing/duplicate catalogue entry"
+        ],
+        "interactions": [
+          "new status emitter × catalogue guard",
+          "status class × actual resume command"
+        ]
+      },
+      {
+        "id": "r0-6",
+        "producer": "batch stale recovery and red-snapshot custody",
+        "inputs": [
+          "prepare without own seal but historical a0 seal",
+          "current-phase seal",
+          "no prior seal",
+          "rewritten sealed history",
+          "valid merge",
+          "parent-not-base",
+          "sync refusal",
+          "post-merge verify refusal"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          ".claude/workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs"
+        ],
+        "consumers": [
+          "batch driver",
+          "in-session coordinator",
+          "pair run operator"
+        ],
+        "classes": [
+          "prepare without own seal but historical a0 seal",
+          "current-phase seal",
+          "no prior seal",
+          "rewritten sealed history",
+          "valid merge",
+          "parent-not-base",
+          "sync refusal",
+          "post-merge verify refusal"
+        ],
+        "interactions": [
+          "stale prepare × latest prior seal × base identity",
+          "base-sync success × verify-chain --base-ref",
+          "custody breach × repair guidance"
+        ]
+      },
+      {
+        "id": "r0-1",
+        "producer": "delivery-cycle operator documentation and emitted run help",
+        "inputs": [
+          "process-recovery link/heading",
+          "dirty retry semantics",
+          "budget park/resume token",
+          "reset-group",
+          "identity check",
+          "catalogue",
+          "merge-not-rebase",
+          "how-to 10",
+          "README",
+          "rendered CLI help",
+          "canonical/installed KB mirrors"
+        ],
+        "representations": [
+          ".pair/adoption/tech/way-of-working.md",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          ".pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          "packages/knowledge-hub/dataset/.pair/knowledge/how-to/10-how-to-implement-a-task.md",
+          ".pair/knowledge/how-to/10-how-to-implement-a-task.md",
+          "apps/pair-cli/README.md",
+          "apps/pair-cli/src/commands/run/metadata.ts"
+        ],
+        "consumers": [
+          "batch driver",
+          "in-session coordinator",
+          "pair run operator"
+        ],
+        "classes": [
+          "process-recovery link/heading",
+          "dirty retry semantics",
+          "budget park/resume token",
+          "reset-group",
+          "identity check",
+          "catalogue",
+          "merge-not-rebase",
+          "how-to 10",
+          "README",
+          "rendered CLI help",
+          "canonical/installed KB mirrors"
+        ],
+        "interactions": [
+          "way-of-working link × installed heading",
+          "documented recovery × state/driver behavior",
+          "CLI metadata × rendered help"
+        ]
+      }
+    ],
+    "notes": [
+      "r0-1 is mixed: rendered run help is emitted by metadata.ts, so its prose and executable help belong together in a behavioral group. No prose-only finding is hidden in a behavioral group.",
+      "r0-2 names cycle-state as the existing reason producer; correction belongs only to the batch consumer.",
+      "No dependency is added merely because groups share files. r1-g2 consumes corrected fault routing; r1-g6 documents corrected behavior from the earlier groups."
+    ]
+  },
+  "reconciled": [
+    {
+      "file": "scripts/contract-tests/dev-scripts-sandbox.test.mjs",
+      "sha256": "sha256:f46cdac38ffd143b80511b6e49e52b130475d4cb13c192e6c698762ec700f5ae",
+      "action": "Removed owned untracked prior-attempt artifact; restored identical bytes for hash-only repair."
+    }
+  ],
+  "preserved": [],
+  "validation": {
+    "lint": "Owning package pnpm lint exit 0; shared eslint directly on new mjs exit 0.",
+    "format": "pnpm exec prettier-fix on new artifact exit 0; tests run after formatting.",
+    "baseProof": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-646/646/r1-g1-rev3-attempt-3-proofs.json",
+    "rowProof": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-646/646/r1-g1-rev3-attempt-3-rows.json",
+    "mutation": "not measured",
+    "hermetic": "Real local gate and formatter; inherited workflow uses stub agents. No engine or tracker invoked.",
+    "scope": "One new test artifact; predecessor tests and matrix rows unchanged; exact gap path added to inherited scope.",
+    "repair": "r0-2-contract-hash: new immutable attempt, all existing inventory and matrix rows unchanged; canonical hash stamped after final content."
+  },
+  "groupId": "r1-g1",
+  "remediationBatchId": "r1",
+  "findings": {
+    "received": [
+      "r1-g1-rev2-gap1"
+    ],
+    "covered": [
+      "r1-g1-rev2-gap1"
+    ]
+  },
+  "contractPath": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-646/646/r1-g1-rev3-red-contract.attempt-3.json",
+  "changedRows": [
+    "r1-g1-rev2-gap1-complete-sandbox",
+    "r1-g1-rev2-gap1-hook-control",
+    "r1-g1-rev2-gap1-path-control",
+    "r0-2-contract-hash"
+  ],
+  "revision": 3,
+  "attempt": 3,
+  "supersedes": "r1-g1-rev2",
+  "predecessorContractHash": "sha256:13aafb97b41a59e0346e02ba58e0f022e3439bb73b343539c49166bc28e0c439",
+  "contractHash": "sha256:8f5e40319fc188aac93c37060c412277a229a50b7bb8f99f1ebc0467777c78ec",
+  "reattest": {
+    "reason": "witness unchanged at head"
+  }
+}
