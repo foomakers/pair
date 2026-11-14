@@ -115,6 +115,7 @@ Process tasks **sequentially**. For each task:
 2. **Validate task completeness** — HALT if task spec is incomplete
 3. **Execute implementation** — TDD cycle (RED → GREEN → REFACTOR) for development tasks, direct implementation for non-development tasks
 4. **Verify quality** — run quality gates per [quality standards](../guidelines/quality-assurance/quality-standards/README.md). HALT on failure.
+   For a delivery-cycle process fault, use the cycle's recorded recovery action and resume with `pair-cli run --card <id>`; `cycle-state.mjs reset-group --phase <p>` restarts an unusable group without rewriting sealed attempts. Process recovery spends `autoRecoveryRounds`, never a finding budget. Sync a sealed branch by merge and verify custody with `--base-ref`; do not rebase it.
 5. **Ask developer** (commit-per-task only) — present summary, get confirmation BEFORE committing
 6. **Commit** (if per-task strategy) — per [commit template](../guidelines/collaboration/templates/commit-template.md)
 7. **Update story checkboxes** — mark task checkbox + any newly satisfied DoD items

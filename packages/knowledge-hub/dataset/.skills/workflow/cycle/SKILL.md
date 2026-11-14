@@ -240,6 +240,20 @@ The bridge makes the resume's context deterministic: the task opens by telling t
 
 **Verify.** Without the `merge` stage, you have not merged, not closed the card, not deleted a branch and not posted a review: a converged cycle is a card ready for a human. With it, every one of those was done by `cycle-merge.mjs`, and only after it had re-verified the conjunction itself.
 
+## Stop Catalogue and Base Sync
+
+`scripts/cycle-state.mjs` exports `STOP_CATALOG`; the cycle, batch driver and tests use its status, class and resume command. A process fault spends `autoRecoveryRounds`, not a card repair round. A finding enters remediation. A decision waits for the maintainer's verified comment. Re-run `pair run --card N` after a parked fault or decision; the run directory carries the resume position.
+
+| Status | Class | Resume |
+| --- | --- | --- |
+| `dirty`, `stale`, `failed-seal`, `failed-verify`, `failed-resume`, `failed-publication` | process | `pair run --card N` after the recorded recovery step |
+| `contract-attempt-overwritten`, `contract-hash-mismatch` | process | `cycle-state.mjs reset-group --phase P`, then `pair run --card N` |
+| `seal-not-pushed`, `dead-dispatch`, `idle-timeout`, `gate-flake` | process | `pair run --card N` retries within the process budget |
+| `failed-preparation`, `failed-contract`, `failed-implement`, `failed-fix`, `failed-custody` | finding | `pair run --card N` follows the card's remediation route |
+| `escalate`, `escalated`, `needs-human`, `awaiting-human`, `awaiting-scope-decision` | decision | verified maintainer comment, then `pair run --card N` |
+
+For a moved base under a sealed PR, merge the base into the story branch, then run `red-snapshot.mjs verify-chain --base-ref <base>` before dispatch. Never rebase a pushed seal: the snapshot's Git ancestry is evidence and rewriting it is refused. The error must name the base sync step.
+
 ## Maintainer Recovery
 
 Two commands replace the hand edits US-487's run needed. They are the maintainer's, never this skill's to invoke on its own judgment; both print the `next` that `resolve` then names, and this skill simply continues from it.

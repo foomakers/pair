@@ -1074,14 +1074,11 @@ const recoverDirtyFor =
     if (!round.allowed) return false
     const worktree = worktreePathOf(await worktreeFor(ctx, input, co)())
     if (worktree === undefined) return false
-    const stashed = stashStrayFiles(
-      worktree,
-      `pair-recovery: story ${input.card} ${String(next['phase'] ?? '')}`.trim(),
-    )
+    const cleaned = co.bridge.worktreeClean({ cwd: worktree, dir: co.runDir, story: input.card })
     console.log(
-      `  Recovery: dirty worktree — ${stashed ? 'stray files stashed (git stash list: pair-recovery)' : 'nothing to stash'}, retrying (round ${String(round.round)}/${String(round.budget)})`,
+      `  Recovery: dirty worktree — ${cleaned.ref ?? cleaned.detail ?? 'nothing to save'}, retrying (round ${String(round.round)}/${String(round.budget)})`,
     )
-    return stashed
+    return cleaned.cleaned
   }
 
 /** US-623 AC6: a prepare after a failed attempt starts from a clean tree — its stray files stashed, never deleted. */

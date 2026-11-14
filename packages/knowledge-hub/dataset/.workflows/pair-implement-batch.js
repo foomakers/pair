@@ -575,6 +575,7 @@ const PIPELINE_DEFAULTS = {
   reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
   // Rounds of autonomous fix<->re-review before escalating to a human.
   maxFixRounds: 3,
+  autoRecoveryRounds: 5,
   // Independent final verifiers per head — the tier's reviewer count (KB default 1 at every tier;
   // an adoption override in way-of-working's Review Tier Matrix is passed here by the caller).
   reviewers: 1,
@@ -600,7 +601,7 @@ function resolvePipeline(raw) {
       `implement-batch: \`args.pipeline\` must be an object; received ${JSON.stringify(raw).slice(0, 60)}. ` +
         `Omit it entirely to run on pair's defaults.`,
     )
-  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds', 'reviewers'], 'args.pipeline')
+  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds', 'autoRecoveryRounds', 'reviewers'], 'args.pipeline')
   // Every value below is interpolated VERBATIM into the same command text `cards[i]` values
   // are, so it is validated by the SAME predicates — `ok`/`what` are not optional. Presence is
   // not validity here either: `baseBranch` is the `<base>` argument of `git worktree add`
@@ -650,6 +651,7 @@ function resolvePipeline(raw) {
     baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch, isRef, 'a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card\'s `base`)'),
     reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
     maxFixRounds: posInt(raw.maxFixRounds, 'maxFixRounds', PIPELINE_DEFAULTS.maxFixRounds),
+    autoRecoveryRounds: posInt(raw.autoRecoveryRounds, 'autoRecoveryRounds', PIPELINE_DEFAULTS.autoRecoveryRounds),
     reviewers: posInt(raw.reviewers, 'reviewers', PIPELINE_DEFAULTS.reviewers),
   }
 }
@@ -1086,7 +1088,7 @@ const PLAN_SCHEMA = {
 const PREPARE_SCHEMA = {
   type: 'object',
   properties: {
-    status: { type: 'string', enum: ['red', 'stale', 'split-required', 'unprovable', 'dirty', 'contradiction', REDIRECT_STATUS] },
+    status: { type: 'string', enum: ['red', 'stale', 'split-required', 'unprovable', 'dirty', 'contradiction', 'failed', REDIRECT_STATUS] },
     mode: { type: 'string', enum: ['initial', 'remediation', 'repair', 'revision'] },
     inputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     sourceOfTruth: { type: 'string' },
@@ -1162,6 +1164,12 @@ const PREPARE_SCHEMA = {
   required: ['status'],
 }
 const PREPARE_REFUSALS = new Set(['stale', 'split-required', 'unprovable', 'dirty'])
+const CONTRACT_PROCESS_FAULTS = new Set(['contract-hash-mismatch', 'contract-attempt-overwritten'])
+const contractProcessFaultKind = reason => {
+  if (typeof reason !== 'string') return null
+  const kind = reason.split(':', 1)[0]
+  return CONTRACT_PROCESS_FAULTS.has(kind) && (reason === 'contract-hash-mismatch' || /^contract-attempt-overwritten:[^/:]+\.json$/.test(reason)) ? kind : null
+}
 const isPrepareRefusal = r => !!r && PREPARE_REFUSALS.has(r.status)
 // US-479 B1 (S3): a contradiction is an ANSWER — the preparation proved its obligation cannot be
 // contracted without changing rows an INDEPENDENTLY APPROVED contract already sealed. It carries
@@ -1321,7 +1329,7 @@ const VALIDATE_SCHEMA = {
     // US-479 F-RR-03: the verifier echoes the guard set it validated. A field this schema does not
     // declare is dropped by the harness, so the equality check below would be unenforceable.
     regressionGuards: { type: 'array', items: { type: 'string' } },
-    status: { type: 'string', enum: ['verified', 'rejected', REDIRECT_STATUS] },
+    status: { type: 'string', enum: ['verified', 'rejected', 'failed', REDIRECT_STATUS] },
     verified: { type: 'boolean' },
     findings: { type: 'array', items: { type: 'object' } },
     sealed: { type: 'boolean' },
@@ -1349,6 +1357,7 @@ const IMPLEMENT_SCHEMA = {
     outputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     summary: { type: 'string' },
     reason: { type: 'string' },
+    processFault: { type: 'string' },
     next: NEXT_SCHEMA,
   },
   required: ['status'],
@@ -1719,9 +1728,17 @@ async function driveStory(story) {
     return await driveStoryInner(story)
   } catch (error) {
     if (!error?.stageTimeout) throw error
-    // A stage agent that timed out is a DURABLE failure of that stage (never retried: it may still be running).
-    const status = STAGE_STATUS[error.stageTimeout.label.split(':')[0]] ?? 'failed-resume'
-    return { story, status, reason: error.message, acceptedFindings: [], metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown' }, durable: true }
+    // The runtime cannot cancel the timed-out writer. Record the round and park until a fresh
+    // `pair run --card` observes that writer has ended; never start a competing writer here.
+    const runId = RUN_ID ?? `story-${story.id}`
+    const token = `${runId}:${story.id}:${error.stageTimeout.label}:idle-timeout`
+    try {
+      await dispatch(
+        `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs recover --dir .pair/working/runs/${runId}/${story.id} --kind stage-retry --policy '${JSON.stringify({ autoRecoveryRounds: PIPELINE.autoRecoveryRounds })}'`,
+        withModel('relay', { phase: 'Recovery', label: `recover:idle:#${story.id}`, effort: 'low' }),
+      )
+    } catch {}
+    return { story, status: 'awaiting-human', reason: error.message, resumeToken: token, acceptedFindings: [], metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown' }, durable: true }
   }
 }
 // US-573: one machine-readable `PAIR_EVENT` line per stage transition — `pair run` renders and audits it.
@@ -1760,7 +1777,7 @@ async function driveStoryInner(story) {
   // gate above) — `blockingFloor` rides only when the CALLER explicitly declared `severityFloor`,
   // never the soft default, or `$policy` would never equal the budgets exactly.
   const explicitSeverityFloor = String(PARSED.severityFloor ?? '').trim() ? SEVERITY_FLOOR : undefined
-  const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}), ...(explicitSeverityFloor ? { blockingFloor: explicitSeverityFloor.name } : {}) }
+  const policy = { maxFixRounds: MAX_FIX_ROUNDS, autoRecoveryRounds: PIPELINE.autoRecoveryRounds, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}), ...(explicitSeverityFloor ? { blockingFloor: explicitSeverityFloor.name } : {}) }
   const inputs = fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, reviewers: PIPELINE.reviewers }))
   const storyMetrics = { dispatches: 0, retries: 0, redirects: 0 }
   // US-524: under `until: merged` the tier the cycle is driven under is read ONCE here (the caller's Select-time tier when given).
@@ -1814,19 +1831,56 @@ async function driveStoryInner(story) {
     const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', 'failed-verify': 'failed-verify', escalate: 'escalate', 'needs-human': 'needs-human', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned' }
     return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
   }
+  const recoverProcess = async (fault, due) => {
+    const faultKind = contractProcessFaultKind(fault) ?? fault
+    const kind = fault === 'dirty' ? 'worktree-clean' : fault === 'stale' ? 'base-sync' : 'stage-retry'
+    const token = `${runId}:${story.id}:${due.phase}:${faultKind}`
+    const park = reason => result('awaiting-human', { reason, resumeToken: token, phase: due.phase })
+    const script = '.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+    const budget = await dispatch(
+      `Run exactly this command from the main checkout and return its JSON verbatim: node ${script} recover --dir ${runDir()} --kind ${kind} --policy '${JSON.stringify(policy)}'`,
+      withModel('relay', { phase: 'Recovery', label: `recover:budget:${tag}`, effort: 'low' }),
+    )
+    if (budget?.allowed !== true) return { park: park(budget?.next?.detail ?? `${fault}: process recovery budget spent`) }
+    if (contractProcessFaultKind(fault)) {
+      const reset = await dispatch(
+        `Run exactly this command from the main checkout and return its JSON verbatim: node ${script} reset-group --dir ${runDir()} --phase ${due.phase} --reason ${faultKind} --by driver --workflowVersion ${WORKFLOW_VERSION} --policy '${JSON.stringify(policy)}' --entry ${pr ? 'pr' : 'fresh'}${pr ? ` --pr ${pr}` : ''}`,
+        withModel('relay', { phase: 'Recovery', label: `recover:${faultKind}:${tag}`, effort: 'low' }),
+      )
+      if (reset?.reset === true && nextDefect(reset.next) === null) return { next: reset.next }
+      if (reset?.reason === 'reset-group-not-tail') return { next: due.next ?? due }
+      return { park: park(reset?.reason ?? `${faultKind}: reset-group failed`) }
+    }
+    if (fault === 'dirty' || fault === 'stale') {
+      const command = fault === 'dirty'
+        ? `node ${script} worktree-clean --cwd ${worktreePath} --dir ${runDir()} --story ${story.id}`
+        : `node ${script} base-sync --cwd ${worktreePath} --base ${storyBase} --story ${story.id}${due.contract?.snapshot ? ` --snapshot ${due.contract.snapshot}` : ''}`
+      const action = await dispatch(`Run exactly this command from the main checkout and return its JSON verbatim: ${command}`,
+        withModel('relay', { phase: 'Recovery', label: `recover:${fault}:${tag}`, effort: 'low' }))
+      if (!(action?.cleaned === true || action?.synced === true || action?.reason === 'up-to-date')) return { park: park(action?.detail ?? action?.reason ?? `${fault}: recovery failed`) }
+      if (fault === 'stale' && due.contract?.snapshot && isPosInt(pr)) {
+        const verify = await dispatch(
+          `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs verify-chain --pr ${pr} --base ${due.base} --base-ref ${storyBase} --run-dir ${runDir()} --cwd ${worktreePath}`,
+          withModel('relay', { phase: 'Recovery', label: `recover:verify-chain:${tag}`, effort: 'low' }),
+        )
+        if (verify?.verified !== true) return { park: park('base-sync verify-chain failed') }
+      }
+    }
+    return { next: due.next }
+  }
 
   // ── The four stages, each a SKILL invoked by name with typed arguments ─────────────────────
   const prepare = n =>
     agentRetry(
       invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
+      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || (r?.status === 'failed' && (contractProcessFaultKind(r.reason) || r.reason === 'stale-write')) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
     )
   const validate = n =>
     agentRetry(
       invoke(SK.redVerify, `${common()} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'xhigh', schema: VALIDATE_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || hasValidation(r),
+      r => isRedirect(r) || isOtherRun(r) || hasValidation(r) || (r?.status === 'failed' && r.reason === 'seal-not-pushed'),
     )
   const implement = n =>
     agentRetry(
@@ -1899,7 +1953,7 @@ async function driveStoryInner(story) {
   // AO: the FORMAT-class defects of a stage result — shape, never judgment. Mirrors, in order, the checks below that end the card
   // `failed-*` for a malformed handoff, returning the first one's exact message (or null). Those checks stay the final authority.
   const formatDefect = (stg, n, r, { openIds }) => {
-    if (stg === 'prepare' && (isPrepareRefusal(r) || (n.rollbackRefusal ?? false))) return null
+    if (stg === 'prepare' && (isPrepareRefusal(r) || (r.status === 'failed' && (contractProcessFaultKind(r.reason) || r.reason === 'stale-write')) || (n.rollbackRefusal ?? false))) return null
     if (stg === 'implement') {
       if (r.status !== 'ok') return null
       if (!isPosInt(r.prNumber) || !SHA40.test(String(r.outputHead ?? ''))) return NO_PR_DEFECT
@@ -2013,8 +2067,12 @@ async function driveStoryInner(story) {
     storyMetrics.dispatches = METRICS.dispatches.filter(d => d.label.includes(tag)).length
     storyMetrics.retries = METRICS.dispatches.filter(d => d.label.includes(tag) && d.retry).length
     // Twice dead (null, or a shape no stage can use) is the STAGE's failure — never a clean result.
-    if (!res || typeof res !== 'object')
-      return result({ prepare: 'failed-preparation', validate: 'failed-contract', implement: 'failed-implement', green: 'failed-fix', verify: 'failed-verify' }[stage], { reason: `${stage} returned nothing usable twice (agent died or returned an invalid shape)`, phase: next.phase })
+    if (!res || typeof res !== 'object') {
+      const recovered = await recoverProcess('dead-dispatch', { ...next, next })
+      if (recovered.park) return recovered.park
+      seen.delete(key)
+      continue
+    }
     if (isOtherRun(res)) {
       // The PR already has a cycle under another run id: continue THERE. Re-dispatch the same step
       // once with the adopted run id; a second `other-run` is an ambiguity the caller resolves.
@@ -2049,11 +2107,31 @@ async function driveStoryInner(story) {
     redirectsInARow = 0
     // ── Stage-specific validation of the typed evidence ─────────────────────────────────────
     if (stage === 'prepare') {
+      if (res.status === 'failed' && res.reason === 'stale-write') {
+        const recovered = await recoverProcess('stale-write', { ...next, next })
+        if (recovered.park) return recovered.park
+        seen.delete(key)
+        continue
+      }
+      if (res.status === 'failed' && contractProcessFaultKind(res.reason)) {
+        const recovered = await recoverProcess(res.reason, { ...next, next: res.next })
+        if (recovered.park) return recovered.park
+        seen.delete(key)
+        next = recovered.next
+        continue
+      }
       // US-479 DR3-03: a rollback the state authority refused must STOP the run, before anything
       // else in this branch. It used to be computed and dropped, so a maintainer who mistyped a head
       // got an ordinary patch-forward run and never learned their directive had been discarded.
       if (next.rollbackRefusal) return result('failed-preparation', { reason: `rollback refused: ${next.rollbackRefusal}`, phase: next.phase })
-      if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
+      if (isPrepareRefusal(res)) {
+        if (res.status === 'dirty' || res.status === 'stale') {
+          const recovered = await recoverProcess(res.status, { ...next, next: res.next })
+          if (recovered.park) return recovered.park
+          if (nextDefect(recovered.next) === null) { next = recovered.next; continue }
+        }
+        return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
+      }
       if (isContradiction(res)) {
         const defect = contradictionDefect(res)
         if (defect) return result('failed-preparation', { reason: `contradiction evidence is incomplete: ${defect}`, refusal: 'contradiction', phase: next.phase, findings: next.findings })
@@ -2071,6 +2149,12 @@ async function driveStoryInner(story) {
         if (carried.length) log(`${tag} ${next.phase}: ${carried.length} finding(s) located outside the repository — they stay blocking until dispositioned by a human`)
       }
     } else if (stage === 'validate') {
+      if (res.status === 'failed' && res.reason === 'seal-not-pushed') {
+        const recovered = await recoverProcess('seal-not-pushed', { ...next, next })
+        if (recovered.park) return recovered.park
+        seen.delete(key)
+        continue
+      }
       if (!hasValidation(res)) return result('failed-contract', { reason: 'the validation stage returned no usable verdict', phase: next.phase })
       // US-479 F-RR-03 (S12/AC-30): the independent verifier must have validated EXACTLY the guard
       // set the resolver derived — one missing, one extra or one renamed and the contract is
@@ -2087,6 +2171,12 @@ async function driveStoryInner(story) {
       if (res.status !== 'ok') return result('failed-implement', { reason: res.reason ?? 'implementation reported failure', phase: next.phase })
       if (!isPosInt(res.prNumber) || !SHA40.test(String(res.outputHead ?? ''))) return result('failed-implement', { reason: 'implementation returned no PR number or head', phase: next.phase })
       pr = res.prNumber
+      if (res.gatesPassed === false && res.processFault === 'gate-flake') {
+        const recovered = await recoverProcess('gate-flake', { ...next, next: res.next })
+        if (recovered.park) return recovered.park
+        if (nextDefect(recovered.next) === null) { next = recovered.next; continue }
+        return result('failed-resume', { reason: 'gate flake has no durable retry', phase: next.phase })
+      }
       // A red gate is not a green implementation: the durable state routes it back to implement
       // on the same seal (once) or blocks it — it never reaches the verifier as `ok`.
       if (res.gatesPassed !== true) {

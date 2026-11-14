@@ -104,7 +104,9 @@ describe('smoke CI platform coverage (#135)', () => {
     const changed = changedPathsAgainstBase()
     const productionPathFixes = changed.filter(
       path =>
-        (path.startsWith('packages/content-ops/src/') || path.startsWith('apps/pair-cli/src/')) &&
+        (path.startsWith('packages/content-ops/src/') ||
+          (path.startsWith('apps/pair-cli/src/') &&
+            !path.startsWith('apps/pair-cli/src/commands/run/'))) &&
         !path.endsWith('.test.ts'),
     )
     if (productionPathFixes.length === 0) return

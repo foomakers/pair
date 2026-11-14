@@ -31,6 +31,8 @@ This installs the pair Knowledge Base into your project. Your AI assistant reads
 
 The plugin ships **one** skill: an assistant that installs `pair-cli` and runs it — so your project ends up with exactly the tree the command above produces — and then keeps helping you drive the CLI and answer questions from your own knowledge base. See [Install Channels](https://pair.foomakers.com/docs/integrations/claude-code#install-channels).
 
+For a delivery card, `pair-cli run --card <id>` starts or resumes its cycle. Process faults use a recorded recovery budget and resume token; a sealed branch sync merges the base and verifies custody. See the [delivery-cycle guide](https://pair.foomakers.com/docs/process-lifecycle/delivery-cycle).
+
 ## What You Get
 
 - **Knowledge Base** — guidelines, how-to guides, and templates for every SDLC phase
