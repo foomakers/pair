@@ -84,6 +84,19 @@ export interface TelemetryRecord {
   readonly [key: string]: unknown
 }
 
+export function parseTelemetryLine(line: string): TelemetryRecord | undefined {
+  try {
+    const value = JSON.parse(line) as unknown
+    const record = object(value)
+    return (record?.['kind'] === 'stage' || record?.['kind'] === 'card') &&
+      typeof record['id'] === 'string'
+      ? (record as unknown as TelemetryRecord)
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export interface ManualIntervention {
   readonly kind: string
   readonly who: string
@@ -210,7 +223,9 @@ export function readCycleProgress(runDir: string): {
   const findingsByRound: Record<string, Record<string, number>> = {}
   let repairs = 0
   if (!existsSync(runDir)) return { findingsByRound, repairs }
-  for (const name of readdirSync(runDir).filter(name => name.endsWith('.json')).sort()) {
+  for (const name of readdirSync(runDir)
+    .filter(name => name.endsWith('.json'))
+    .sort()) {
     let handoff: Record<string, unknown> | undefined
     try {
       handoff = object(JSON.parse(readFileSync(join(runDir, name), 'utf8')))
@@ -218,7 +233,12 @@ export function readCycleProgress(runDir: string): {
       continue
     }
     if (!handoff) continue
-    if (handoff['skill'] === 'red-spec' && count(handoff['attempt']) !== undefined && Number(handoff['attempt']) > 1) repairs++
+    if (
+      handoff['skill'] === 'red-spec' &&
+      count(handoff['attempt']) !== undefined &&
+      Number(handoff['attempt']) > 1
+    )
+      repairs++
     if (handoff['skill'] === 'green-fix') repairs++
     if (handoff['skill'] !== 'review-phase' || !Array.isArray(handoff['findings'])) continue
     const phase = handoff['phase']
@@ -237,11 +257,14 @@ export function readCycleProgress(runDir: string): {
 export function readTelemetry(root: string, run: string, card: string): TelemetryRecord[] {
   const path = join(root, '.pair', 'working', 'telemetry', 'records.jsonl')
   if (!existsSync(path)) return []
-  return readFileSync(path, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map(line => JSON.parse(line) as TelemetryRecord)
-    .filter(record => record.kind === 'stage' && record['run'] === run && record['card'] === card)
+  try {
+    return readFileSync(path, 'utf8')
+      .split('\n')
+      .flatMap(line => parseTelemetryLine(line) ?? [])
+      .filter(record => record.kind === 'stage' && record['run'] === run && record['card'] === card)
+  } catch {
+    return []
+  }
 }
 
 export interface StageTelemetryInput {
@@ -294,13 +317,15 @@ export function stageTelemetryRecord(input: StageTelemetryInput): TelemetryRecor
 export function appendTelemetry(root: string, record: TelemetryRecord): void {
   const dir = join(root, '.pair', 'working', 'telemetry')
   const path = join(dir, 'records.jsonl')
-  if (existsSync(path)) {
-    for (const line of readFileSync(path, 'utf8').split('\n')) {
-      if (!line) continue
-      const existing = JSON.parse(line) as TelemetryRecord
-      if (existing.id === record.id) return
+  try {
+    if (existsSync(path)) {
+      for (const line of readFileSync(path, 'utf8').split('\n')) {
+        if (parseTelemetryLine(line)?.id === record.id) return
+      }
     }
+    mkdirSync(dir, { recursive: true })
+    appendFileSync(path, `${JSON.stringify(record)}\n`)
+  } catch {
+    // Telemetry is best effort; a local file error cannot fail delivery.
   }
-  mkdirSync(dir, { recursive: true })
-  appendFileSync(path, `${JSON.stringify(record)}\n`)
 }

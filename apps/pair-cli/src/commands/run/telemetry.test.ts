@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
@@ -8,6 +8,7 @@ import {
   observeEngineEvent,
   readInterventions,
   readCycleProgress,
+  readTelemetry,
   stageTelemetryRecord,
 } from './telemetry'
 
@@ -248,9 +249,17 @@ it('AC-2: malformed intervention evidence does not hide the run outcome', () => 
 
 it('AC-1: a resumed card includes time before the current invocation', () => {
   const record = cardTelemetryRecord({
-    id: 'r:641', card: '641', run: 'r', pairVersion: '0.5.2', workflowVersion: '4.0.1',
-    profile: 'codex-max', engine: 'codex', outcome: 'ready-for-merge',
-    start: 100, end: 130, interventions: [],
+    id: 'r:641',
+    card: '641',
+    run: 'r',
+    pairVersion: '0.5.2',
+    workflowVersion: '4.0.1',
+    profile: 'codex-max',
+    engine: 'codex',
+    outcome: 'ready-for-merge',
+    start: 100,
+    end: 130,
+    interventions: [],
     stages: [{ kind: 'stage', id: 'old', start: 10, end: 20, durationMs: 10 }],
   })
   expect(record['start']).toBe(10)
@@ -261,15 +270,41 @@ it('AC-1: a resumed card includes time before the current invocation', () => {
 it('AC-1: card progress counts review findings by round and remediation work', () => {
   const dir = mkdtempSync(join(tmpdir(), 'pair-progress-'))
   dirs.push(dir)
-  writeFileSync(join(dir, 'r0-review-phase.json'), JSON.stringify({
-    skill: 'review-phase', phase: 'r0', findings: [
-      { id: 'r0-1', severity: 'Major' }, { id: 'r0-2', severity: 'Minor' },
-    ],
-  }))
+  writeFileSync(
+    join(dir, 'r0-review-phase.json'),
+    JSON.stringify({
+      skill: 'review-phase',
+      phase: 'r0',
+      findings: [
+        { id: 'r0-1', severity: 'Major' },
+        { id: 'r0-2', severity: 'Minor' },
+      ],
+    }),
+  )
   writeFileSync(join(dir, 'r0-g1-red-spec.json'), JSON.stringify({ skill: 'red-spec', attempt: 2 }))
   writeFileSync(join(dir, 'r0-g1-green-fix.json'), JSON.stringify({ skill: 'green-fix' }))
   expect(readCycleProgress(dir)).toEqual({
     findingsByRound: { r0: { Major: 1, Minor: 1 } },
     repairs: 2,
   })
+})
+
+it('AC-1: a malformed line does not prevent later stage records or idempotent writes', () => {
+  const root = mkdtempSync(join(tmpdir(), 'pair-telemetry-'))
+  dirs.push(root)
+  const dir = join(root, '.pair/working/telemetry')
+  const stage = { kind: 'stage' as const, id: 'run:645:implement', run: 'run', card: '645' }
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'records.jsonl'), '{bad json\nnull\n42\n[]\n')
+  expect(() => appendTelemetry(root, stage)).not.toThrow()
+  expect(readTelemetry(root, 'run', '645')).toEqual([stage])
+  appendTelemetry(root, stage)
+  expect(readTelemetry(root, 'run', '645')).toEqual([stage])
+})
+
+it('AC-1: telemetry write failure does not fail the delivery run', () => {
+  const root = mkdtempSync(join(tmpdir(), 'pair-telemetry-'))
+  dirs.push(root)
+  writeFileSync(join(root, '.pair'), 'unwritable path')
+  expect(() => appendTelemetry(root, { kind: 'card', id: 'run:645' })).not.toThrow()
 })
