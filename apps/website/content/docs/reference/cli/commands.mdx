@@ -1142,7 +1142,9 @@ the workflow still ran), or the **idle watchdog** is never `success`, even when 
 reports success: the iteration is reported with that outcome (`halted: <reason>`, `cut: …`,
 `timed out (idle) at <card>/<stage>: no engine event for <n>s`) and the run exits `1`. On expiry the engine gets `SIGTERM`, then after a 5 s grace `SIGKILL`, and its pipes are released; a terminal event arriving after expiry stays a timeout, never success. The `claude`
 engine runs with `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`, so `claude -p` does not stop a background
-workflow after its 10-minute wait ceiling.
+workflow after its 10-minute wait ceiling. It also passes `--settings '{"outputStyle":"default"}'`: a user-level
+output style (one that replaces the system prompt) no longer applies to `pair-cli run` stages. A stage that ends with no
+parseable result reports the tail of its last message after "no final result".
 
 ### Live progress and output modes
 

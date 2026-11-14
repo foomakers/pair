@@ -133,9 +133,11 @@ const must = (ok, halt, detail) => {
 }
 
 let OUT = null
+const EMITTED = Symbol('emitted')
 function emit(obj, code = 0) {
   process.stdout.write(JSON.stringify(obj) + '\n')
-  process.exit(code)
+  process.exitCode = code
+  throw EMITTED
 }
 function fail(halt, detail, extra = {}) {
   // A HALT is typed and fail-closed: a non-zero exit AND a machine-readable `halt`, so neither the
@@ -683,7 +685,9 @@ try {
     OUT = emit({ ...CONTEXT_TABLE })
   }
 } catch (e) {
-  process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
-  process.exit(2)
+  if (e !== EMITTED) {
+    process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
+    process.exitCode = 2
+  }
 }
 void OUT
