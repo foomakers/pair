@@ -134,7 +134,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
           .map(l => JSON.parse(l) as EngineCall)
       : []
 
-  const drive = (engine: EngineDefinition, pr?: number) =>
+  const drive = (engine: EngineDefinition, pr?: number, telemetryEnabled?: boolean) =>
     createDefaultCycleDriver({
       engine: { ...engine, command: join(root, 'bin', 'fake-engine') },
       cwd: main,
@@ -144,7 +144,22 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
       timeoutSeconds: 60,
       workflowVersion: CYCLE_WORKFLOW_VERSION,
       baseBranch: CYCLE_BASE_BRANCH_DEFAULT,
+      ...(telemetryEnabled !== undefined && { telemetryEnabled }),
     })({ runId: 'story-7', card: '7', ...(pr !== undefined && { pr }) })
+
+  it('AC-24: default-off writes no telemetry; enabled writes stage and terminal card records', async () => {
+    const path = join(main, '.pair/working/telemetry/records.jsonl')
+    await drive(ENGINES.claude)
+    expect(existsSync(path)).toBe(false)
+
+    await drive(ENGINES.claude, undefined, true)
+    const records = readFileSync(path, 'utf8')
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line))
+    expect(records.filter(record => record.kind === 'stage')).toHaveLength(2)
+    expect(records.filter(record => record.kind === 'card')).toHaveLength(1)
+  }, 60_000)
 
   it("a success event with a NOT-advanced handoff is a dead dispatch, retried exactly the ONCE cycle-state's own budget allows (AC4, AC5)", async () => {
     const outcome = await drive(ENGINES.claude)

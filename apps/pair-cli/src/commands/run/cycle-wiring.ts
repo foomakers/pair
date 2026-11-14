@@ -399,6 +399,7 @@ export function mainCheckoutOrCwd(cwd: string): string {
 }
 
 export interface CycleDriverContext {
+  readonly telemetryEnabled?: boolean
   readonly engine: EngineDefinition
   readonly cwd: string
   readonly fs: FileSystemService
@@ -691,6 +692,7 @@ const packetFor =
   }
 
 function recordStageTelemetry(input: {
+  enabled: boolean
   co: Coordinates
   stage: { step?: string; phase?: string }
   spawn: ReturnType<typeof stageSpawnFor>
@@ -702,6 +704,7 @@ function recordStageTelemetry(input: {
   result: CycleStageResult
 }): void {
   const { co, stage, spawn, key, start, end, previousEnd, retries, result } = input
+  if (!input.enabled) return
   appendTelemetry(
     co.main,
     stageTelemetryRecord({
@@ -759,7 +762,18 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates, progress?: Card
       }),
     })
     const end = Date.now()
-    recordStageTelemetry({ co, stage, spawn, key, start, end, previousEnd, retries, result })
+    recordStageTelemetry({
+      enabled: ctx.telemetryEnabled === true,
+      co,
+      stage,
+      spawn,
+      key,
+      start,
+      end,
+      previousEnd,
+      retries,
+      result,
+    })
     previousEnd = end
     return result as CycleStageResult
   }
@@ -1477,7 +1491,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
             finalPart(record),
         ),
     })
-    recordCardTelemetry({ ctx, input, co, outcome, startedAt })
+    if (ctx.telemetryEnabled === true) recordCardTelemetry({ ctx, input, co, outcome, startedAt })
     return outcome
   }
 }

@@ -67,6 +67,15 @@ export const runCommandMetadata = {
         'Dispatch this card: its tag selects the workflow from `## Workflows` in tech/automation.md (cannot be combined with --skill/--prompt)',
     },
     {
+      flags: '--telemetry',
+      description:
+        'Record local per-stage and per-card telemetry; overrides ## Telemetry adoption setting',
+    },
+    {
+      flags: '--no-telemetry',
+      description: 'Disable local telemetry for this run; overrides ## Telemetry adoption setting',
+    },
+    {
       flags: '--cards <list>',
       description:
         'US-614: run the listed cards (comma-separated ids) one at a time, in the given order, each through its own `--card` lifecycle and policy gates. After a pass, only the unfinished retryable cards run again, in the same order, while the previous pass made verifiable progress (a card moved to a later lifecycle state, read from durable state); a full pass with no progress stops the run and reports each remaining card with its reason. Escalated, awaiting-human and gate-red cards are never retried; a safety halt (perimeter/trust) stops at once. Passes are capped by --max-iterations (else policy max-iterations). Re-running the same list skips cards at target. Exit 0 = all at target, 1 = any card failed/escalated/stalled, 2 = invalid usage. Refused with --card, --root, --filter, --parallel > 1, --skill, --prompt, duplicate or unsafe ids',

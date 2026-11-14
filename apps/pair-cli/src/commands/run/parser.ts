@@ -68,6 +68,8 @@ export interface RunDispatchRequest {
 
 export interface RunCommandConfig {
   command: 'run'
+  /** AC-24: explicit --telemetry / --no-telemetry; absent reads the adoption. */
+  telemetry?: boolean
   /** Present only when `--engine` was passed; resolution precedence lives in T-2. */
   engine?: EngineId
   invocation: RunInvocationRequest
@@ -132,6 +134,7 @@ export const DEFAULT_WATCH_INTERVAL: RunInterval = { text: '10m', seconds: 600 }
 export const MIN_WATCH_INTERVAL_SECONDS = 60
 
 interface ParseRunOptions {
+  telemetry?: boolean
   engine?: string
   skill?: string
   prompt?: string
@@ -730,6 +733,7 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
 
   return {
     command: 'run',
+    ...telemetryOptionOf(options),
     ...(engine && { engine }),
     ...(dispatch && { dispatch }),
     ...cards,
@@ -758,4 +762,8 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
     ...stateOrder,
     ...watch,
   }
+}
+
+function telemetryOptionOf(options: ParseRunOptions): Pick<RunCommandConfig, 'telemetry'> {
+  return options.telemetry === undefined ? {} : { telemetry: options.telemetry }
 }

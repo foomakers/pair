@@ -13,6 +13,7 @@ import {
   batchExitCode,
   buildCardProcessArgs,
   outcomeOfExit,
+  optionsOfArgv,
   prefixLine,
   renderBatchAuditLine,
   resourceLockId,
@@ -226,6 +227,15 @@ describe('outcomeOfExit / batchExitCode', () => {
 })
 
 describe('buildCardProcessArgs — each card is exactly #487’s run --card (AC2)', () => {
+  it('AC-24: forwards an explicit telemetry flag to each card and parses the off form', () => {
+    const base = parseRunCommand({ root: '605', parallel: '1' })
+    expect(buildCardProcessArgs({ ...base, telemetry: true }, card('645'), '/repo')).toContain(
+      '--telemetry',
+    )
+    const off = buildCardProcessArgs({ ...base, telemetry: false }, card('645'), '/repo')
+    expect(off).toContain('--no-telemetry')
+    expect(optionsOfArgv(off)['telemetry']).toBe(false)
+  })
   it('forwards the card, its observed labels and the operator’s own opt-ins verbatim', () => {
     const config = parseRunCommand({
       root: '66',
