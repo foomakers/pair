@@ -89,6 +89,34 @@ it('AC-1: a successful reviewed stage is ok', () => {
   expect(record['outcomeClass']).toBe('ok')
 })
 
+it.each([
+  ['success', 'ok', 'ok'],
+  ['success', 'rejected', 'rejected'],
+  ['success', 'refused', 'refused'],
+  ['success', 'parked', 'parked'],
+  ['success', 'failed-verify', 'failed'],
+  ['failed', 'ok', 'failed'],
+  ['failed', 'rejected', 'rejected'],
+  ['failed', 'refused', 'refused'],
+  ['failed', 'parked', 'parked'],
+  ['failed', 'failed-verify', 'failed'],
+] as const)('AC-1: %s process and %s final map to %s', (processOutcome, finalStatus, expected) => {
+  const record = stageTelemetryRecord({
+    id: 'r:645:verify',
+    card: '645',
+    step: 'verify',
+    start: 0,
+    end: 1,
+    previousEnd: 0,
+    engine: 'codex',
+    processOutcome,
+    finalStatus,
+    retries: 0,
+    observation: {},
+  })
+  expect(record['outcomeClass']).toBe(expected)
+})
+
 it('AC-1/2: writes each stage and terminal card once, keeping interventions and failure cause', () => {
   const root = mkdtempSync(join(tmpdir(), 'pair-telemetry-'))
   dirs.push(root)
