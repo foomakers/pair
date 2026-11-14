@@ -162,6 +162,22 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
       scriptsDir: join(projectRoot, '.claude/skills/pair-workflow-cycle/scripts'),
     })
 
+  it('AC-10: worktree-clean records a ref through the installed script bridge', () => {
+    const tree = join(projectRoot, 'story')
+    mkdirSync(tree)
+    spawnSync('git', ['init', '-q', tree])
+    writeFileSync(join(tree, 'tracked.txt'), 'tracked')
+    spawnSync('git', ['add', 'tracked.txt'], { cwd: tree })
+    spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'base'], { cwd: tree })
+    writeFileSync(join(tree, 'stray.txt'), 'stray')
+    const dir = join(runsRoot, 'story-487/487')
+    mkdirSync(dir, { recursive: true })
+    const result = bridge().worktreeClean({ cwd: tree, dir, story: '487' })
+    expect(result.cleaned).toBe(true)
+    expect(result.ref).toMatch(/^refs\/pair\/recovery\/487\/[a-f0-9]{40}$/)
+    expect(existsSync(join(tree, 'stray.txt'))).toBe(false)
+  })
+
   it('resolve() on an empty run directory returns the real implement/initial/a0 next — no up-front contract (AC1, US-506)', () => {
     const dir = join(runsRoot, 'story-487/487')
     const result = bridge().resolve({

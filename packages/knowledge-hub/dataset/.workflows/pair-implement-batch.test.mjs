@@ -81,6 +81,7 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3, entry = 'legacy' } =
     const groupId = /^(r\d+-g\d+)/.exec(phase ?? '')?.[1]
     const contractPath = `/main/.pair/working/runs/${run}/${id}/${phase}-red-contract.json`
     if (opts.agentType === 'pair-fix-test-author') {
+      if (res.status === 'failed') return res
       if (['stale', 'split-required', 'unprovable', 'dirty'].includes(res.status)) return res
       // US-479 B1: a contradiction is an ANSWER with typed evidence and its own `next` — the real
       // cycle state derives that route; the fixture carries it verbatim.
@@ -112,6 +113,7 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3, entry = 'legacy' } =
       return full
     }
     if (opts.agentType === 'pair-red-contract-verifier') {
+      if (res.status === 'failed') return res
       const findings = jsonArg(prompt, 'findings') ?? []
       const scope = jsonArg(prompt, 'scope')
       const base = arg(prompt, 'head')
@@ -278,6 +280,123 @@ test('US-506 TC-11 golden trace: a FRESH story with a clean first verification i
   assert.equal(result.metrics.dispatches, 2)
 })
 
+test('AC-10: dirty preparation invokes budgeted recovery, saves work, and resumes the same card', async () => {
+  const std = stdDispatch()
+  let prepare = 0
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'legacy', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 5 }
+    if (opts.label?.startsWith('recover:dirty')) return { cleaned: true, ref: 'refs/pair/recovery/292/' + HEAD, commit: HEAD }
+    if (opts.agentType === 'pair-fix-test-author' && prepare++ === 0)
+      return { status: 'dirty', reason: 'unowned path', next: { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 2 } }
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(calls.some(c => c.opts.label?.startsWith('recover:budget') && c.prompt.includes('recover --dir')))
+  assert.ok(calls.some(c => c.opts.label?.startsWith('recover:dirty') && c.prompt.includes('worktree-clean')))
+})
+
+test('AC-10: recovery budget exhaustion parks with a token and never dispatches another prepare', async () => {
+  const std = stdDispatch()
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'legacy', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:budget')) return { allowed: false, next: { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds' } }
+    if (opts.agentType === 'pair-fix-test-author') return { status: 'dirty', reason: 'unowned path', next: { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 2 } }
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'awaiting-human')
+  assert.match(result.batch[0].resumeToken, /story-292:292:a0:dirty/)
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 1)
+})
+
+test('AC-13: stale preparation merges the base and resumes without a rebase', async () => {
+  const std = stdDispatch()
+  let prepare = 0
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'legacy', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 5 }
+    if (opts.label?.startsWith('recover:stale')) return { synced: true, head: HEAD2 }
+    if (opts.agentType === 'pair-fix-test-author' && prepare++ === 0)
+      return { status: 'stale', reason: 'base moved', next: { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 2 } }
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  const sync = calls.find(c => c.opts.label?.startsWith('recover:stale'))
+  assert.match(sync.prompt, /base-sync --cwd/)
+  assert.doesNotMatch(sync.prompt, /\brebase\b/)
+})
+
+test('AC-10: a dead stage dispatch spends process recovery and retries without a card finding', async () => {
+  const std = stdDispatch()
+  let dead = 0
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'fresh', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 5 }
+    if (opts.agentType === 'pair-implementer' && dead++ < 2) return null
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(calls.some(c => c.opts.label?.startsWith('recover:budget') && c.prompt.includes('--kind stage-retry')))
+})
+
+test('AC-10: an idle stage parks with a resume token and records a process round', async () => {
+  const std = stdDispatch()
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'fresh', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:idle')) return { allowed: true, round: 1, budget: 5 }
+    if (opts.agentType === 'pair-implementer') throw Object.assign(new Error('idle timeout'), { stageTimeout: { label: opts.label, minutes: '30' } })
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'awaiting-human')
+  assert.match(result.batch[0].resumeToken, /idle-timeout/)
+  assert.ok(calls.some(c => c.opts.label?.startsWith('recover:idle') && c.prompt.includes('--kind stage-retry')))
+})
+
+test('AC-10: seal-not-pushed retries validation under the process budget', async () => {
+  const std = stdDispatch()
+  let validation = 0
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'legacy', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 5 }
+    if (opts.agentType === 'pair-red-contract-verifier' && validation++ === 0) return { status: 'failed', reason: 'seal-not-pushed', detail: 'push unconfirmed' }
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(calls.some(c => c.opts.label?.startsWith('recover:budget') && c.prompt.includes('--kind stage-retry')))
+})
+
+test('AC-10: a declared gate flake retries under process budget', async () => {
+  const std = stdDispatch()
+  let implementation = 0
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'fresh', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 5 }
+    if (opts.agentType === 'pair-implementer' && implementation++ === 0) return { status: 'ok', gatesPassed: false, reason: 'gate-flake', processFault: 'gate-flake' }
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(calls.some(c => c.opts.label?.startsWith('recover:budget') && c.prompt.includes('--kind stage-retry')))
+})
+
+test('AC-20/22: contract identity fault resets the group and resumes without validation', async () => {
+  const std = stdDispatch()
+  let prepare = 0
+  const retry = { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'legacy', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 5 }
+    if (opts.label?.startsWith('recover:contract-hash-mismatch')) return { reset: true, next: retry }
+    if (opts.agentType === 'pair-fix-test-author' && prepare++ === 0) return { status: 'failed', reason: 'contract-hash-mismatch' }
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(calls.some(c => c.opts.label?.startsWith('recover:contract-hash-mismatch') && c.prompt.includes('reset-group')), JSON.stringify(calls.map(c => c.opts.label)))
+})
+
+test('AC-10: stale-write re-reads the stage under process recovery', async () => {
+  const std = stdDispatch()
+  let prepare = 0
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'legacy', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 5 }
+    if (opts.agentType === 'pair-fix-test-author' && prepare++ === 0) return { status: 'failed', reason: 'stale-write' }
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(calls.some(c => c.opts.label?.startsWith('recover:budget') && c.prompt.includes('--kind stage-retry')))
+})
+
 test('US-506 TC-11 golden trace: a FRESH story with one fix round keeps the test-first remediation path — prepare, validate(+seal), green, verify', async () => {
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review }), entry: 'fresh' })
@@ -323,7 +442,7 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
   for (const c of calls.slice(1)) {
     assert.match(c.prompt, /^Invoke \*\*\/pair-workflow-(red-spec|red-verify|implement-phase|green-fix|review-phase)\*\* for story #292 with \$run=run-42 \$story=292 \$branch=feat\/#292-x \$worktree=\.\.\/pair-worktrees\/292 \$base=origin\/main \$stacked=false/, c.opts.label)
     assert.ok(c.prompt.includes('$workflowVersion=4.0.1'), `${c.opts.label} was not told the workflow version`)
-    assert.ok(c.prompt.includes('$policy={"maxFixRounds":3,"redRepairs":1,"greenRetries":1,"reviewers":1}'), `${c.opts.label} was not told the policy`)
+    assert.ok(c.prompt.includes('$policy={"maxFixRounds":3,"autoRecoveryRounds":5,"redRepairs":1,"greenRetries":1,"reviewers":1}'), `${c.opts.label} was not told the policy`)
     assert.match(c.prompt, /\$inputs=[0-9a-f]{16}/, `${c.opts.label} was not told the effective-inputs digest`)
     assert.match(c.prompt, /\$entry=(fresh|pr)/)
     assert.ok(c.prompt.includes('the run directory `.pair/working/runs/run-42/292/`'), `${c.opts.label} does not name the run directory`)
@@ -347,9 +466,9 @@ test('TC-11: the workflow source dispatches ONLY skill invocations — no free-f
   // US-524: the only dispatches that are not a skill invocation are the eight SCRIPT RUNNERS of the autonomy model (an agent
   // runs one named script and relays its JSON): resolve, tier, decide, escalate, pr-state, cascade, merge check, merge — and, US-523,
   // the prepare phase (cycle-prepare.mjs). No rule lives in them.
-  const scriptRunners = all.filter(d => /^`(Run EXACTLY|Card )/.test(d))
+  const scriptRunners = all.filter(d => /^`(Run (?:EXACTLY|exactly)|Card )/.test(d))
   const dispatches = all.filter(d => !scriptRunners.includes(d))
-  assert.equal(scriptRunners.length, 10, `expected the ten script runners (nine autonomy runners + the AO gh pr list lookup), found ${scriptRunners.length}`)
+  assert.equal(scriptRunners.length, 15, `expected ten existing relays and five process recovery relays, found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
@@ -810,36 +929,36 @@ test('TC-10: a rejected contract goes back to preparation ONCE carrying the reje
   assert.equal(twice.calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 2, 'exactly one repair, never a third author')
 })
 
-test('TC-10: a typed preparation refusal (stale / split-required / unprovable / dirty) is an ANSWER — routed by status, never retried with the same prompt', async () => {
+test('AC-10: process preparation refusals park without a recovery relay; contract refusals remain findings', async () => {
   for (const status of ['stale', 'split-required', 'unprovable', 'dirty']) {
     const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' ? { status, reason: `because ${status}` } : {}) })
-    assert.equal(result.batch[0].status, 'failed-preparation', status)
-    assert.equal(result.batch[0].refusal, status)
+    assert.equal(result.batch[0].status, ['dirty', 'stale'].includes(status) ? 'awaiting-human' : 'failed-preparation', status)
+    if (!['dirty', 'stale'].includes(status)) assert.equal(result.batch[0].refusal, status)
     assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 1, `${status} was retried`)
     assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-contract-verifier').length, 0)
   }
 })
 
-test('TC-10: a dead step (null or an unusable shape) is retried ONCE with the same prompt; twice dead is the stage failure, never a clean result', async () => {
+test('AC-10: a dead step retries once locally, then parks when process recovery is unavailable', async () => {
   let n = 0
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' ? (n++ === 0 ? null : {}) : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
   assert.equal(result.batch[0].status, 'ready-for-merge')
   assert.deepEqual(stageLabels(calls).slice(1, 4), ['prepare:#292 a0', 'prepare:#292 a0 retry', 'validate:#292 a0'])
   assert.equal(result.batch[0].metrics.retries, 1)
-  for (const [type, status] of [['pair-fix-test-author', 'failed-preparation'], ['pair-red-contract-verifier', 'failed-contract'], ['pair-reviewer', 'failed-verify']]) {
+  for (const type of ['pair-fix-test-author', 'pair-red-contract-verifier', 'pair-reviewer']) {
     const dead = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === type ? null : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
-    assert.equal(dead.result.batch[0].status, status, type)
+    assert.equal(dead.result.batch[0].status, 'awaiting-human', type)
   }
   const deadImpl = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-implementer' ? null : {}) })
-  assert.equal(deadImpl.result.batch[0].status, 'failed-implement')
+  assert.equal(deadImpl.result.batch[0].status, 'awaiting-human')
 })
 
-test('AH/B1: a stage agent that NEVER returns is bounded — and NEVER re-dispatched (a timed-out agent is not cancelled: a retry would be a second writer on the same worktree); the stage is failed-<stage> with a human-check reason', async () => {
+test('AH/B1: a timed-out writer is parked without a competing dispatch', async () => {
   const never = () => new Promise(() => {})
   let implementerCalls = 0
   const hung = await runWorkflow({ args: { cards: [STORY], agentTimeoutMinutes: 0.0003 }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-implementer' ? (implementerCalls++, never()) : {}) })
   assert.equal(implementerCalls, 1, 'exactly ONE dispatch — no retry after a timeout')
-  assert.equal(hung.result.batch[0].status, 'failed-implement')
+  assert.equal(hung.result.batch[0].status, 'awaiting-human')
   assert.match(hung.result.batch[0].reason, /timed out after .*m — the agent may still be running; human check required/)
   assert.ok(hung.logs.some(l => /timeout after/.test(l)))
 })
@@ -848,7 +967,7 @@ test('AH/B6: `agentTimeoutMinutes` is read from the PARSED args — a JSON-strin
   let implementerCalls = 0
   const hung = await runWorkflow({ args: JSON.stringify({ cards: [STORY], agentTimeoutMinutes: 0.0003 }), dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-implementer' ? (implementerCalls++, new Promise(() => {})) : {}) })
   assert.equal(implementerCalls, 1)
-  assert.equal(hung.result.batch[0].status, 'failed-implement')
+  assert.equal(hung.result.batch[0].status, 'awaiting-human')
 })
 
 test('TC-10 / TC-08: a verified contract that was not sealed, or sealed under a different hash, is failed-seal — the trusted state is never blessed by a new hash', async () => {
@@ -1517,12 +1636,12 @@ test('US-219 AC6: under a cap, results keep INPUT order and a dead card is repor
   assert.deepEqual(result.batch.map(r => r.story.id), ['300', '302', '303'])
   assert.deepEqual(result.died, ['301'])
 })
-test('US-219: the note is derived from the STATUSES — an all-failed batch says NOTHING COMPLETED, a mixed one counts what advanced', async () => {
+test('US-219: the note is derived from terminal finding statuses', async () => {
   const cards = [{ id: '1', title: 'a', branch: 'b1' }, { id: '2', title: 'b', branch: 'b2' }]
-  const allFailed = await runWorkflow({ args: { cards }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : null) })
-  assert.match(allFailed.result.note, /NOTHING COMPLETED: 0\/2 cards advanced.*2 returned a failure status \(2 failed-implement\)/s)
+  const allFailed = await runWorkflow({ args: { cards }, entry: 'legacy', dispatch: (p, o) => (o.agentType === 'pair-fix-test-author' ? { status: 'unprovable', reason: 'missing oracle' } : {}) })
+  assert.match(allFailed.result.note, /NOTHING COMPLETED: 0\/2 cards advanced.*2 returned a failure status \(2 failed-preparation\)/s)
   assert.deepEqual(allFailed.result.died, [])
-  const mixed = await runWorkflow({ args: { cards }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' && /#2\b/.test(p) ? null : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
+  const mixed = await runWorkflow({ args: { cards }, entry: 'legacy', dispatch: (p, o) => (o.agentType === 'pair-fix-test-author' && /#2\b/.test(p) ? { status: 'unprovable', reason: 'missing oracle' } : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
   assert.match(mixed.result.note, /1\/2 cards advanced \(1 ready-for-merge\); 1 returned a failure status \(1 failed-preparation\)/)
 })
 test('batch note names the merge gate default as `always`, never reads "(default: never)" as the gate value', async () => {
@@ -1549,7 +1668,7 @@ test('a required (carried-in P3) finding measured on another head fails before a
 // successor-revision route instead of ending the card ──────────────────────────────────────────
 test('B1: PREPARE_SCHEMA and NEXT_SCHEMA declare every field the contradiction route travels on — an undeclared field is dropped by the harness before the coordinator sees it (3.0.5)', () => {
   const prepare = SRC.slice(SRC.indexOf('const PREPARE_SCHEMA'), SRC.indexOf('const PREPARE_REFUSALS'))
-  assert.match(prepare, /enum: \['red', 'stale', 'split-required', 'unprovable', 'dirty', 'contradiction', REDIRECT_STATUS\]/)
+  assert.match(prepare, /enum: \['red', 'stale', 'split-required', 'unprovable', 'dirty', 'contradiction', 'failed', REDIRECT_STATUS\]/)
   for (const f of ['revisionReason', 'predecessorContractHash', 'conflictingRowIds', 'counterexample', 'changedRows']) assert.ok(new RegExp(`\\b${f}:`).test(prepare), `PREPARE_SCHEMA drops ${f}`)
   const next = SRC.slice(SRC.indexOf('const NEXT_SCHEMA'), SRC.indexOf('const REDIRECT_STATUS'))
   for (const f of ['changedRows', 'contradictionFor']) assert.ok(new RegExp(`\\b${f}:`).test(next), `NEXT_SCHEMA drops ${f}`)
@@ -1733,8 +1852,8 @@ test('ADR-024 (u): a preparation that REFUSES keeps its own diagnosis, and the d
     },
   })
   assert.ok(logs.some(m => /rollback directive delivered/.test(m)), `a refusal must not swallow the report: ${JSON.stringify(logs.slice(0, 8))}`)
-  assert.equal(result.batch[0].status, 'failed-preparation', 'and the refusal keeps its own outcome')
-  assert.match(result.batch[0].reason, /stale|head moved/, 'with its own diagnosis, not the rollback`s')
+  assert.equal(result.batch[0].status, 'awaiting-human', 'an unavailable recovery relay parks the process fault')
+  assert.match(result.batch[0].reason, /stale/, 'with its own diagnosis, not the rollback`s')
 })
 
 test('V2 (F-RR-03): the verify dispatch carries $regressionGuards and VERIFY_SCHEMA declares the echo', () => {
@@ -1951,7 +2070,7 @@ import { publish as us514Publish } from '../skills/pair-workflow-review-phase/sc
 import { mkdtempSync as us514Mkdtemp, mkdirSync as us514Mkdir, writeFileSync as us514Write } from 'node:fs'
 import { tmpdir as us514Tmpdir } from 'node:os'
 import { join as us514Join } from 'node:path'
-const US514_BASE_POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
+const US514_BASE_POLICY = { maxFixRounds: 3, autoRecoveryRounds: 5, redRepairs: 1, greenRetries: 1, reviewers: 1 }
 // Publishes a first review of the given findings under `policy` (the batch's dispatched `$policy`)
 // through the REAL cycle-state `publish`, and returns the stored `blocking` per finding.
 // r1-1 round 4: a draft's OWN `severityRanks` is never a ranking source by itself — `withContract`

@@ -220,6 +220,12 @@ export interface BaseSyncResult {
   readonly conflicts?: readonly { readonly path: string; readonly side: string }[]
 }
 
+export interface WorktreeCleanResult {
+  readonly cleaned: boolean
+  readonly ref?: string
+  readonly detail?: string
+}
+
 /** US-575: `cycle-state.mjs prereq-state` — the card's prerequisites, read through the bound PM adapter. */
 export interface PrereqState {
   readonly blocked: boolean
@@ -242,7 +248,8 @@ export interface CycleScriptsBridge {
   gateRed(options: { dir: string; reviewedHead: string; gates: readonly GateRecord[] }): {
     readonly recorded: boolean
   }
-  baseSync(options: { cwd: string; base: string; story: string }): BaseSyncResult
+  baseSync(options: { cwd: string; base: string; story: string; snapshot?: string }): BaseSyncResult
+  worktreeClean(options: { cwd: string; dir: string; story: string }): WorktreeCleanResult
   prereqState(options: { story: string; dir?: string }): PrereqState
   worktree(options: CycleWorktreeOptions): CycleWorktreeResult
   /** `cycle-merge.mjs check`: conditions 1-5 re-read live; a failure PARKS the card. */
@@ -647,7 +654,7 @@ function prepareMethods(
 function stateMethods(
   runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
   cycleStatePath: string,
-): Pick<CycleScriptsBridge, 'resolve' | 'recover' | 'gateRed' | 'baseSync' | 'prereqState'> {
+): Pick<CycleScriptsBridge, 'resolve' | 'recover' | 'gateRed' | 'baseSync' | 'worktreeClean' | 'prereqState'> {
   return {
     resolve: options =>
       runScript(cycleStatePath, 'resolve', resolveArgs(options)) as CycleResolveResult,
@@ -669,7 +676,14 @@ function stateMethods(
         ['cwd', o.cwd],
         ['base', o.base],
         ['story', o.story],
+        ...optional([['snapshot', o.snapshot]]),
       ]) as BaseSyncResult,
+    worktreeClean: o =>
+      runScript(cycleStatePath, 'worktree-clean', [
+        ['cwd', o.cwd],
+        ['dir', o.dir],
+        ['story', o.story],
+      ]) as WorktreeCleanResult,
     prereqState: o =>
       runScript(cycleStatePath, 'prereq-state', [
         ['story', o.story],

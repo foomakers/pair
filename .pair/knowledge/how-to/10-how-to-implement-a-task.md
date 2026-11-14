@@ -158,7 +158,7 @@ After code review approval, re-invoke `/pair-process-implement` to merge and clo
 
 - **Story/Task Issues**: Use [08-refine-story](08-how-to-refine-a-user-story.md) or [09-create-tasks](09-how-to-create-tasks.md)
 - **Technical Blockers**: HALT, request task updates, consult relevant guidelines
-- **Process Issues**: Reset to last stable state, escalate to developer
+- **Process Issues**: Run `pair run --card N` again. The cycle catalogue routes process faults through `autoRecoveryRounds` (default 5), records saved work and reset interventions, then parks with a resume token if the budget is spent. Use `cycle-state.mjs reset-group --phase P` for an unusable unsealed group tail; sealed attempts and snapshots remain immutable. Sync a moved base by merge and verify custody with `red-snapshot.mjs verify-chain --base-ref`, never rebase a pushed seal.
 
 ## References
 
