@@ -67,15 +67,19 @@ describe('readIterationOutcome — claude stage with no parseable result (US-654
     )
   })
 
-  it.each([[''], [undefined], [42]])('AC-3: result %j → no agent message in the stream', async value => {
-    const result = await readIterationOutcome(toLines(streamWith(value)), ENGINES.claude)
+  it.each([[''], [undefined], [42]])(
+    'AC-3: result %j → no agent message in the stream',
+    async value => {
+      const result = await readIterationOutcome(toLines(streamWith(value)), ENGINES.claude)
 
-    expect(result.final).toBeUndefined()
-    expect(result.detail).toMatch(/ — no agent message in the stream$/)
-  })
+      expect(result.final).toBeUndefined()
+      expect(result.detail).toMatch(/ — no agent message in the stream$/)
+    },
+  )
 
   it('full result wins over a bare next in the same message', async () => {
-    const text = 'next: { "step": "verify" }\n```json\n{"status":"ok","next":{"step":"verify"}}\n```'
+    const text =
+      'next: { "step": "verify" }\n```json\n{"status":"ok","next":{"step":"verify"}}\n```'
     const result = await readIterationOutcome(toLines(streamWith(text)), ENGINES.claude)
 
     expect(result.final).toMatchObject({ status: 'ok' })

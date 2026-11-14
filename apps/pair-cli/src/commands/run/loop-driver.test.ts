@@ -238,7 +238,9 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
     const { out } = await drive('claude-success.jsonl', { maxIterations: '2' })
     expect(out().match(/progress degrades to start\/end lines/g)).toHaveLength(1)
     expect(out()).toMatch(/iteration 1 start\n/)
-    expect(out()).toMatch(/iteration 1 success — terminal event: success — no parseable result in the last agent message: …done\n/)
+    expect(out()).toMatch(
+      /iteration 1 success — terminal event: success — no parseable result in the last agent message: …done\n/,
+    )
   })
 })
 
