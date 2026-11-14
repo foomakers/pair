@@ -9,6 +9,7 @@
  * `resolve`'s own `next` and to whether the handoff it reads back advanced.
  */
 import type { StageFinalResult } from './stream-reader'
+import type { EngineObservation } from './telemetry'
 
 /** What `resolve()` answered — the durable cycle state's own shape, read verbatim. */
 export interface CycleResolveResult {
@@ -33,6 +34,7 @@ export interface CycleStageResult {
   readonly stalled?: true
   /** The stage's own final JSON result (`status`, `reason`, `next`), when the stream carried one. */
   readonly final?: StageFinalResult
+  readonly telemetry?: EngineObservation
 }
 
 /** One dispatched stage, as logged to `onStage`/`appendAudit` once the NEXT resolve reveals whether it advanced. */

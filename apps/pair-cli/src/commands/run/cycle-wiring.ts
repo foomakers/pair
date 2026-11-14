@@ -39,6 +39,7 @@ import { resolveBlockingSeverities } from './blocking-severities'
 import { checkWithCiWait, type CiWaitOptions } from './ci-wait'
 import { wait } from './wait'
 import { stageSettings, type ResolvedWorkflowProfile } from './workflow-profile'
+import { appendTelemetry, stageTelemetryRecord } from './telemetry'
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -479,6 +480,8 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   return {
     bridge,
     main,
+    runId: input.runId,
+    cardId: input.card,
     branch,
     title: record.title,
     runDir,
@@ -679,11 +682,17 @@ const packetFor =
     }) as never
   }
 
-const spawnStageFor =
-  (ctx: CycleDriverContext, co: Coordinates, progress?: CardProgress) =>
-  async (packet: unknown) => {
-    const spawn = stageSpawnFor(ctx, (packet as { step?: string }).step ?? '')
-    return (await runStage({
+const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates, progress?: CardProgress) => {
+  let previousEnd = Date.now()
+  const attempts = new Map<string, number>()
+  return async (packet: unknown) => {
+    const stage = packet as { step?: string; phase?: string }
+    const spawn = stageSpawnFor(ctx, stage.step ?? '')
+    const key = `${stage.step ?? 'unknown'}:${stage.phase ?? ''}`
+    const retries = attempts.get(key) ?? 0
+    attempts.set(key, retries + 1)
+    const start = Date.now()
+    const result = await runStage({
       engine: spawn.engine,
       // The stage starts in the MAIN CHECKOUT, never in the story's worktree. Every phase skill's
       // Step 0 reads `MAIN="$(pwd)"` — "the main checkout, you have not cd'd yet" — and resolves the
@@ -707,8 +716,30 @@ const spawnStageFor =
           if (task !== undefined) progress.task(task)
         },
       }),
-    })) as CycleStageResult
+    })
+    const end = Date.now()
+    appendTelemetry(
+      co.main,
+      stageTelemetryRecord({
+        id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
+        card: co.cardId,
+        step: stage.step ?? 'unknown',
+        ...(stage.phase !== undefined && { phase: stage.phase }),
+        start,
+        end,
+        previousEnd,
+        engine: spawn.engine.id,
+        ...(spawn.model !== undefined && { model: spawn.model }),
+        processOutcome: result.processOutcome,
+        ...(result.final?.status !== undefined && { finalStatus: result.final.status }),
+        retries,
+        observation: result.telemetry ?? {},
+      }),
+    )
+    previousEnd = end
+    return result as CycleStageResult
   }
+}
 
 export { stageLabel }
 
@@ -1356,7 +1387,8 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
     recordRunProfile(ctx, co)
     const hooks = loadCycleHooks(ctx, co)
     const progress = progressFor(input.card, policy, co.title, input.onRunEvent)
-    return await runCycle({
+    const startedAt = Date.now()
+    const outcome = await runCycle({
       hooks,
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),
@@ -1383,5 +1415,28 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
             finalPart(record),
         ),
     })
+    if (outcome.status !== 'rounds-bound-reached' && outcome.status !== 'other-run') {
+      appendTelemetry(co.main, {
+        kind: 'card',
+        id: `${input.runId}:${input.card}`,
+        card: input.card,
+        run: input.runId,
+        pr: input.pr ?? 'not measured',
+        workflowVersion: ctx.workflowVersion,
+        profile: ctx.profile?.name ?? 'default',
+        engine: ctx.engine.id,
+        model: ctx.model ?? 'not measured',
+        start: startedAt,
+        end: Date.now(),
+        outcome: outcome.status,
+        ...(outcome.status !== 'ready-for-merge' &&
+          outcome.status !== 'merged' && {
+            cause: outcome.reason ?? outcome.status,
+          }),
+        stages: outcome.stagesRun,
+        interventions: [],
+      })
+    }
+    return outcome
   }
 }
