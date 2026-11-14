@@ -22,7 +22,10 @@ const raw = '{"sealed":true}'
 const formatted = '{ "sealed": true }\n'
 
 function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, encoding: 'utf8', timeout: 10000 })
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')),
+  )
+  const result = spawnSync(command, args, { cwd, env, encoding: 'utf8', timeout: 10000 })
   assert.ifError(result.error)
   return result
 }
