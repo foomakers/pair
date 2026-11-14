@@ -1165,6 +1165,11 @@ const PREPARE_SCHEMA = {
 }
 const PREPARE_REFUSALS = new Set(['stale', 'split-required', 'unprovable', 'dirty'])
 const CONTRACT_PROCESS_FAULTS = new Set(['contract-hash-mismatch', 'contract-attempt-overwritten'])
+const contractProcessFaultKind = reason => {
+  if (typeof reason !== 'string') return null
+  const kind = reason.split(':', 1)[0]
+  return CONTRACT_PROCESS_FAULTS.has(kind) && (reason === 'contract-hash-mismatch' || /^contract-attempt-overwritten:[^/:]+\.json$/.test(reason)) ? kind : null
+}
 const isPrepareRefusal = r => !!r && PREPARE_REFUSALS.has(r.status)
 // US-479 B1 (S3): a contradiction is an ANSWER — the preparation proved its obligation cannot be
 // contracted without changing rows an INDEPENDENTLY APPROVED contract already sealed. It carries
@@ -1827,8 +1832,9 @@ async function driveStoryInner(story) {
     return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
   }
   const recoverProcess = async (fault, due) => {
+    const faultKind = contractProcessFaultKind(fault) ?? fault
     const kind = fault === 'dirty' ? 'worktree-clean' : fault === 'stale' ? 'base-sync' : 'stage-retry'
-    const token = `${runId}:${story.id}:${due.phase}:${fault}`
+    const token = `${runId}:${story.id}:${due.phase}:${faultKind}`
     const park = reason => result('awaiting-human', { reason, resumeToken: token, phase: due.phase })
     const script = '.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs'
     const budget = await dispatch(
@@ -1836,14 +1842,14 @@ async function driveStoryInner(story) {
       withModel('relay', { phase: 'Recovery', label: `recover:budget:${tag}`, effort: 'low' }),
     )
     if (budget?.allowed !== true) return { park: park(budget?.next?.detail ?? `${fault}: process recovery budget spent`) }
-    if (CONTRACT_PROCESS_FAULTS.has(fault)) {
+    if (contractProcessFaultKind(fault)) {
       const reset = await dispatch(
-        `Run exactly this command from the main checkout and return its JSON verbatim: node ${script} reset-group --dir ${runDir()} --phase ${due.phase} --reason ${fault} --by driver --workflowVersion ${WORKFLOW_VERSION} --policy '${JSON.stringify(policy)}' --entry ${pr ? 'pr' : 'fresh'}${pr ? ` --pr ${pr}` : ''}`,
-        withModel('relay', { phase: 'Recovery', label: `recover:${fault}:${tag}`, effort: 'low' }),
+        `Run exactly this command from the main checkout and return its JSON verbatim: node ${script} reset-group --dir ${runDir()} --phase ${due.phase} --reason ${faultKind} --by driver --workflowVersion ${WORKFLOW_VERSION} --policy '${JSON.stringify(policy)}' --entry ${pr ? 'pr' : 'fresh'}${pr ? ` --pr ${pr}` : ''}`,
+        withModel('relay', { phase: 'Recovery', label: `recover:${faultKind}:${tag}`, effort: 'low' }),
       )
       if (reset?.reset === true && nextDefect(reset.next) === null) return { next: reset.next }
       if (reset?.reason === 'reset-group-not-tail') return { next: due.next ?? due }
-      return { park: park(reset?.reason ?? `${fault}: reset-group failed`) }
+      return { park: park(reset?.reason ?? `${faultKind}: reset-group failed`) }
     }
     if (fault === 'dirty' || fault === 'stale') {
       const command = fault === 'dirty'
@@ -1868,7 +1874,7 @@ async function driveStoryInner(story) {
     agentRetry(
       invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || (r?.status === 'failed' && (CONTRACT_PROCESS_FAULTS.has(r.reason) || r.reason === 'stale-write')) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
+      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || (r?.status === 'failed' && (contractProcessFaultKind(r.reason) || r.reason === 'stale-write')) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
     )
   const validate = n =>
     agentRetry(
@@ -1947,7 +1953,7 @@ async function driveStoryInner(story) {
   // AO: the FORMAT-class defects of a stage result — shape, never judgment. Mirrors, in order, the checks below that end the card
   // `failed-*` for a malformed handoff, returning the first one's exact message (or null). Those checks stay the final authority.
   const formatDefect = (stg, n, r, { openIds }) => {
-    if (stg === 'prepare' && (isPrepareRefusal(r) || (r.status === 'failed' && (CONTRACT_PROCESS_FAULTS.has(r.reason) || r.reason === 'stale-write')) || (n.rollbackRefusal ?? false))) return null
+    if (stg === 'prepare' && (isPrepareRefusal(r) || (r.status === 'failed' && (contractProcessFaultKind(r.reason) || r.reason === 'stale-write')) || (n.rollbackRefusal ?? false))) return null
     if (stg === 'implement') {
       if (r.status !== 'ok') return null
       if (!isPosInt(r.prNumber) || !SHA40.test(String(r.outputHead ?? ''))) return NO_PR_DEFECT
@@ -2107,7 +2113,7 @@ async function driveStoryInner(story) {
         seen.delete(key)
         continue
       }
-      if (res.status === 'failed' && CONTRACT_PROCESS_FAULTS.has(res.reason)) {
+      if (res.status === 'failed' && contractProcessFaultKind(res.reason)) {
         const recovered = await recoverProcess(res.reason, { ...next, next: res.next })
         if (recovered.park) return recovered.park
         seen.delete(key)
