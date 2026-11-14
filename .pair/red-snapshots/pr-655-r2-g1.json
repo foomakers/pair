@@ -1,0 +1,1201 @@
+{
+  "$meta": {
+    "pr": "655",
+    "phase": "r2-g1",
+    "base": "f8fc1f49040add615e456d537f6e0394089e9c72",
+    "trailer": "Pair-RED-Snapshot: pr=655; phase=r2-g1; base=f8fc1f49040add615e456d537f6e0394089e9c72; manifest=.pair/red-snapshots/pr-655-r2-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts"
+    ]
+  },
+  "status": "red",
+  "run": "story-654",
+  "story": "654",
+  "branch": "feature/US-654-run-engine-claude-prepare-stage-ends",
+  "phase": "r2-g1",
+  "mode": "repair",
+  "inputHead": "f8fc1f49040add615e456d537f6e0394089e9c72",
+  "sourceOfTruth": {
+    "kind": "review-finding",
+    "id": "r1-2",
+    "reviewedHead": "f8fc1f49040add615e456d537f6e0394089e9c72",
+    "requirement": "Drain complete stdout JSON before exiting, including typed failures; preserve exit semantics; all 6 freshness cases pass."
+  },
+  "inventory": [
+    {
+      "id": "r1-2",
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs::emit, fail, top-level CLI catch",
+      "inputs": [
+        "JSON payload bytes (ASCII and escaped multibyte UTF-8)",
+        "stdout sink: child_process.spawnSync pipe or regular file descriptor",
+        "exit class: success 0, typed halt 1, CLI exception 2",
+        "CLI entry: packet, branch, realizations, context-table, worktree",
+        "packet step: prepare, validate, implement, green, verify",
+        "style: omitted, slash, instruction",
+        "freshness: unchanged, AC changed, inputs changed, remote head moved, live AC re-read, no inline Status"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
+        ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs"
+      ],
+      "consumers": [
+        "apps/pair-cli/src/commands/run/cycle-scripts.ts::runScriptArgv/parseScriptOutput/rejectIfFailed/createCycleScriptsBridge.packet",
+        "apps/pair-cli/src/commands/run/cycle-wiring.ts::createDefaultCycleDriver",
+        "Direct CLI readers via native Node spawnSync"
+      ],
+      "classes": [
+        "Success packets for all 5 dispatched steps x all 3 styles x both representations",
+        "Exact 8191/8192/8193-byte envelopes and a 65536-byte envelope x both representations",
+        "ASCII and escaped multibyte notes",
+        "Small/large typed halt and CLI exception x both representations",
+        "Large regular-file output control x both representations",
+        "Small context-table/realizations and worktree validation control x both representations",
+        "Bridge packet success (slash/instruction) and small/large typed refusal x both representations",
+        "All 6 existing freshness driver cases"
+      ],
+      "interactions": [
+        "Producer stdout lifetime x kernel pipe capacity x JSON parser",
+        "Typed refusal termination x queued stdout x bridge error propagation",
+        "Dataset regeneration x installed producer",
+        "Packet stage x style x large payload x representation",
+        "Freshness trigger x verify packet x real bridge x stub engine"
+      ],
+      "equivalenceRationale": [
+        "emit is private and the module executes its CLI on import; the actual CLI is its authoritative executable interface, not an imported twin.",
+        "Transport owns the emitted bytes and exit status; downstream workflow transition semantics stay unchanged.",
+        "Worktree validation control exercises its CLI without creating worktrees or reaching a tracker; large success bytes are independently covered at the same emitter by branch and packet."
+      ],
+      "authority": "Review finding r1-2 at f8fc1f49040add615e456d537f6e0394089e9c72; complete parseable packets required across the actual Node spawnSync boundary."
+    }
+  ],
+  "fixScope": {
+    "owner": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs emit()/fail()/CLI catch",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r2-g1-dataset-B-8191",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression dataset stdout B-8191: complete exact byte-boundary branch JSON",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t B-8191:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t B-8191:",
+      "expected": "Exit 0; exact 8191-byte branch JSON plus its included final newline, with all title bytes.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-dataset-B-8192",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression dataset stdout B-8192: complete exact byte-boundary branch JSON",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t B-8192:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t B-8192:",
+      "expected": "Exit 0; exact 8192-byte branch JSON plus its included final newline, with all title bytes.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-dataset-B-8193",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout B-8193: complete exact byte-boundary branch JSON",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; exact 8193-byte branch JSON plus its included final newline, with all title bytes.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected '{\"branch\":\"feature/US-654-xxxxxxxxxxx…' to be '{\"branch\":\"feature/US-654-xxxxxxxxxxx…' // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-B-65536",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout B-65536: complete exact byte-boundary branch JSON",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; exact 65536-byte branch JSON plus its included final newline, with all title bytes.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected '{\"branch\":\"feature/US-654-xxxxxxxxxxx…' to be '{\"branch\":\"feature/US-654-xxxxxxxxxxx…' // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-omitted-W-prepare",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style omitted W-prepare: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-omitted-W-validate",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style omitted W-validate: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-omitted-W-implement",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style omitted W-implement: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-omitted-W-green",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style omitted W-green: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-omitted-W-verify",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style omitted W-verify: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-slash-W-prepare",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style slash W-prepare: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-slash-W-validate",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style slash W-validate: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-slash-W-implement",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style slash W-implement: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-slash-W-green",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style slash W-green: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-slash-W-verify",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style slash W-verify: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-instruction-W-prepare",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style instruction W-prepare: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-instruction-W-validate",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style instruction W-validate: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-instruction-W-implement",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style instruction W-implement: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-instruction-W-green",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style instruction W-green: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-instruction-W-verify",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout style instruction W-verify: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-dataset-C-file",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression dataset stdout C-file: large JSON is complete through a regular file descriptor",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "expected": "Exit 0; complete 16000-character title JSON through a regular file descriptor.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-dataset-W-unicode",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout W-unicode: escaped multibyte notes survive the pipe intact",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: SyntaxError: Unterminated string in JSON at position 6898"
+    },
+    {
+      "id": "r2-g1-dataset-E-1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression dataset stdout E-1: typed refusal remains complete and terminates with status 1",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t E-1:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t E-1:",
+      "expected": "Exit 1; exactly one run-invalid JSON object with the complete offending run; newline; no fallthrough.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-dataset-E-12000",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout E-12000: typed refusal remains complete and terminates with status 1",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 1; exactly one run-invalid JSON object with the complete offending run; newline; no fallthrough.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: SyntaxError: Unterminated string in JSON at position 8192"
+    },
+    {
+      "id": "r2-g1-dataset-X-1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression dataset stdout X-1: CLI exception remains complete and exits 2",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t X-1:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t X-1:",
+      "expected": "Exit 2; exactly one CLI error JSON object containing the complete unknown command and newline.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-dataset-X-12000",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout X-12000: CLI exception remains complete and exits 2",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 2; exactly one CLI error JSON object containing the complete unknown command and newline.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: SyntaxError: Unterminated string in JSON at position 8192"
+    },
+    {
+      "id": "r2-g1-dataset-I-slash",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout I-slash: real bridge accepts large verify packets",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Production bridge returns the complete verify packet and prompt over real Node spawnSync.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: Error: cycle-state-unreadable: /Users/gianlucacarucci5/projects/pair-worktrees/654/packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs packet produced output that is not valid JSON: {\"step\":\"verify\",\"phase\":\"r2-g1\",\"mode\":\"remediation\",\"skill\":\"/pair-workflow-review-phase\",\"agentType\":\"pair-reviewer\",\"phaseLabel\":\"Verify\",\"context\":\"fresh\",\"label\":\"verify:#654 r2-g1\",\"worktree\":\""
+    },
+    {
+      "id": "r2-g1-dataset-I-instruction",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout I-instruction: real bridge accepts large verify packets",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Production bridge returns the complete verify packet and prompt over real Node spawnSync.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: Error: cycle-state-unreadable: /Users/gianlucacarucci5/projects/pair-worktrees/654/packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs packet produced output that is not valid JSON: {\"step\":\"verify\",\"phase\":\"r2-g1\",\"mode\":\"remediation\",\"skill\":\"/pair-workflow-review-phase\",\"agentType\":\"pair-reviewer\",\"phaseLabel\":\"Verify\",\"context\":\"fresh\",\"label\":\"verify:#654 r2-g1\",\"worktree\":\""
+    },
+    {
+      "id": "r2-g1-dataset-I-refusal-1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression dataset stdout I-refusal-1: bridge preserves the typed refusal",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t I-refusal-1:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t I-refusal-1:",
+      "expected": "Bridge throws run-invalid with full detail, never cycle-state-unreadable.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-dataset-I-refusal-12000",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression dataset stdout I-refusal-12000: bridge preserves the typed refusal",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Bridge throws run-invalid with full detail, never cycle-state-unreadable.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected [Function] to throw error including 'run-invalid: --run must be one safe p…' but got 'cycle-state-unreadable: /Users/gianlu…'"
+    },
+    {
+      "id": "r2-g1-dataset-C-worktree",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression dataset stdout C-worktree: invalid story is refused before git or filesystem changes",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "expected": "Exit 1; exactly story-invalid with its detail before git/filesystem mutation.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-dataset-C-cli",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression dataset stdout C-cli: small data commands retain JSON objects",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "expected": "context-table and realizations each exit 0 with one complete JSON object and newline.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-installed-B-8191",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression installed stdout B-8191: complete exact byte-boundary branch JSON",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t B-8191:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t B-8191:",
+      "expected": "Exit 0; exact 8191-byte branch JSON plus its included final newline, with all title bytes.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-installed-B-8192",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression installed stdout B-8192: complete exact byte-boundary branch JSON",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t B-8192:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t B-8192:",
+      "expected": "Exit 0; exact 8192-byte branch JSON plus its included final newline, with all title bytes.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-installed-B-8193",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout B-8193: complete exact byte-boundary branch JSON",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; exact 8193-byte branch JSON plus its included final newline, with all title bytes.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected '{\"branch\":\"feature/US-654-xxxxxxxxxxx…' to be '{\"branch\":\"feature/US-654-xxxxxxxxxxx…' // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-B-65536",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout B-65536: complete exact byte-boundary branch JSON",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; exact 65536-byte branch JSON plus its included final newline, with all title bytes.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected '{\"branch\":\"feature/US-654-xxxxxxxxxxx…' to be '{\"branch\":\"feature/US-654-xxxxxxxxxxx…' // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-omitted-W-prepare",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style omitted W-prepare: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-omitted-W-validate",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style omitted W-validate: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-omitted-W-implement",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style omitted W-implement: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-omitted-W-green",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style omitted W-green: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-omitted-W-verify",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style omitted W-verify: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-slash-W-prepare",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style slash W-prepare: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-slash-W-validate",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style slash W-validate: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-slash-W-implement",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style slash W-implement: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-slash-W-green",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style slash W-green: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-slash-W-verify",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style slash W-verify: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-instruction-W-prepare",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style instruction W-prepare: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-instruction-W-validate",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style instruction W-validate: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-instruction-W-implement",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style instruction W-implement: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-instruction-W-green",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style instruction W-green: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-instruction-W-verify",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout style instruction W-verify: complete large stage packet",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "id": "r2-g1-installed-C-file",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression installed stdout C-file: large JSON is complete through a regular file descriptor",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "expected": "Exit 0; complete 16000-character title JSON through a regular file descriptor.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-installed-W-unicode",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout W-unicode: escaped multibyte notes survive the pipe intact",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 0; one complete JSON packet; args and prompt preserve the entire supplied run/notes, including escaped UTF-8.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: SyntaxError: Unterminated string in JSON at position 6898"
+    },
+    {
+      "id": "r2-g1-installed-E-1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression installed stdout E-1: typed refusal remains complete and terminates with status 1",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t E-1:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t E-1:",
+      "expected": "Exit 1; exactly one run-invalid JSON object with the complete offending run; newline; no fallthrough.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-installed-E-12000",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout E-12000: typed refusal remains complete and terminates with status 1",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 1; exactly one run-invalid JSON object with the complete offending run; newline; no fallthrough.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: SyntaxError: Unterminated string in JSON at position 8192"
+    },
+    {
+      "id": "r2-g1-installed-X-1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression installed stdout X-1: CLI exception remains complete and exits 2",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t X-1:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t X-1:",
+      "expected": "Exit 2; exactly one CLI error JSON object containing the complete unknown command and newline.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-installed-X-12000",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout X-12000: CLI exception remains complete and exits 2",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Exit 2; exactly one CLI error JSON object containing the complete unknown command and newline.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: SyntaxError: Unterminated string in JSON at position 8192"
+    },
+    {
+      "id": "r2-g1-installed-I-slash",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout I-slash: real bridge accepts large verify packets",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Production bridge returns the complete verify packet and prompt over real Node spawnSync.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: Error: cycle-state-unreadable: /Users/gianlucacarucci5/projects/pair-worktrees/654/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs packet produced output that is not valid JSON: {\"step\":\"verify\",\"phase\":\"r2-g1\",\"mode\":\"remediation\",\"skill\":\"/pair-workflow-review-phase\",\"agentType\":\"pair-reviewer\",\"phaseLabel\":\"Verify\",\"context\":\"fresh\",\"label\":\"verify:#654 r2-g1\",\"worktree\":\""
+    },
+    {
+      "id": "r2-g1-installed-I-instruction",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout I-instruction: real bridge accepts large verify packets",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Production bridge returns the complete verify packet and prompt over real Node spawnSync.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: Error: cycle-state-unreadable: /Users/gianlucacarucci5/projects/pair-worktrees/654/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs packet produced output that is not valid JSON: {\"step\":\"verify\",\"phase\":\"r2-g1\",\"mode\":\"remediation\",\"skill\":\"/pair-workflow-review-phase\",\"agentType\":\"pair-reviewer\",\"phaseLabel\":\"Verify\",\"context\":\"fresh\",\"label\":\"verify:#654 r2-g1\",\"worktree\":\""
+    },
+    {
+      "id": "r2-g1-installed-I-refusal-1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression installed stdout I-refusal-1: bridge preserves the typed refusal",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t I-refusal-1:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t I-refusal-1:",
+      "expected": "Bridge throws run-invalid with full detail, never cycle-state-unreadable.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-installed-I-refusal-12000",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "#654 r1-2 regression installed stdout I-refusal-12000: bridge preserves the typed refusal",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "expected": "Bridge throws run-invalid with full detail, never cycle-state-unreadable.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: AssertionError: expected [Function] to throw error including 'run-invalid: --run must be one safe p…' but got 'cycle-state-unreadable: /Users/gianlu…'"
+    },
+    {
+      "id": "r2-g1-installed-C-worktree",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression installed stdout C-worktree: invalid story is refused before git or filesystem changes",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "expected": "Exit 1; exactly story-invalid with its detail before git/filesystem mutation.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-installed-C-cli",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "#654 r1-2 regression installed stdout C-cli: small data commands retain JSON objects",
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts -t C-",
+      "expected": "context-table and realizations each exit 0 with one complete JSON object and newline.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-freshness-R3-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "r0-3: resolve carries inputs, acHash and the remote head (production driver, real scripts) R3-C1: a converged run whose card, inputs and head are unchanged ⇒ ready-for-merge, nothing spawned",
+      "file": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts -t R3-C1:",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts -t R3-C1:",
+      "expected": "Unchanged card/inputs/head: ready-for-merge; no engine dispatch.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-freshness-R3-W1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "r0-3: resolve carries inputs, acHash and the remote head (production driver, real scripts) R3-W1: the card body (its ACs) changed after approval ⇒ a re-review is dispatched, never ready-for-merge",
+      "file": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts",
+      "expected": "Changed AC dispatches re-review through stub engine without malformed JSON.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: R3-W1 throws cycle-state-unreadable: cycle-dispatch.mjs packet produced output that is not valid JSON. Node 20.20.2; suite exit 1, 3 failed / 3 passed at inputHead; witness bytes unchanged."
+    },
+    {
+      "id": "r2-g1-freshness-R3-W4",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "r0-3: resolve carries inputs, acHash and the remote head (production driver, real scripts) R3-W4 (#573 run): the card read at driver start is stale by the time resolve runs ⇒ resolve uses the live AC hash, no re-review loop",
+      "file": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts -t R3-W4",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts -t R3-W4",
+      "expected": "Resolve uses current AC hash: ready-for-merge; no spurious re-review.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-freshness-R3-W2",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "r0-3: resolve carries inputs, acHash and the remote head (production driver, real scripts) R3-W2: the effective inputs changed after approval ⇒ a re-review is dispatched, never ready-for-merge",
+      "file": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts",
+      "expected": "Changed inputs dispatch re-review through stub engine without malformed JSON.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: R3-W2 throws cycle-state-unreadable: cycle-dispatch.mjs packet produced output that is not valid JSON. Node 20.20.2; suite exit 1, 3 failed / 3 passed at inputHead; witness bytes unchanged."
+    },
+    {
+      "id": "r2-g1-freshness-R1-I2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "r0-3: resolve carries inputs, acHash and the remote head (production driver, real scripts) R1-I2 (r0-1 × driver): a card with no `**Status**:` line (its board state read upstream from the project item) is driven, never refused card-status-unreadable",
+      "file": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts -t R1-I2",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts -t R1-I2",
+      "expected": "Board-read card without inline Status is accepted.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "PASS: selected command exit 0."
+    },
+    {
+      "id": "r2-g1-freshness-R3-W3",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "r0-3: resolve carries inputs, acHash and the remote head (production driver, real scripts) R3-W3: the remote head moved past the reviewed head ⇒ a re-review is dispatched, never ready-for-merge",
+      "file": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
+      "oracle": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts",
+      "expected": "Moved remote head dispatches re-review through stub engine without malformed JSON.",
+      "covers": [
+        "r1-2"
+      ],
+      "regression": true,
+      "observed": "FAIL: R3-W3 throws cycle-state-unreadable: cycle-dispatch.mjs packet produced output that is not valid JSON. Node 20.20.2; suite exit 1, 3 failed / 3 passed at inputHead; witness bytes unchanged."
+    },
+    {
+      "id": "r2-g1-state-transitions-na",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "Persisted workflow transitions, ledger identity, replay and terminal gates",
+      "oracle": "Inventory scope: stdout transport only",
+      "expected": "No state-machine change",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "The repair drains existing JSON before exit; it introduces no persisted state, accepted event, identity, terminal gate or metric effect. Existing freshness tests exercise downstream resolution unchanged."
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:014c0533e38517726b6624aae35af97bf328045ec501b9671757287b98a27723",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-dispatch-stdout.test.ts",
+      "observed": "FAIL: 46 failed, 16 passed; exit 1. Large pipe outputs truncate at 8192 bytes; branch byte-equality/newline assertions and JSON parsing fail; bridge reports cycle-state-unreadable.",
+      "durationMs": 4634
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:b9aaecfa9950f01121f30b6a1c6c5e34b8927a9c1dc9af48c9cc916295354597",
+      "command": "fnm exec --using v20.20.2 -- pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-resolve-freshness.test.ts",
+      "observed": "FAIL: 3 failed, 3 passed; exit 1. Changed AC, changed inputs and moved remote head each throw cycle-state-unreadable from the real dispatch packet.",
+      "durationMs": 9026
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r2-g1",
+        "owner": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs emit()/fail()/CLI catch",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs"
+        ],
+        "oracle": "Complete JSON plus correct exit status over actual Node 20.20.2 spawnSync; real bridge and existing freshness driver",
+        "findings": [
+          "r1-2"
+        ],
+        "findingPaths": {
+          "r1-2": [
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
+            ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs"
+          ]
+        },
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  },
+  "reconciled": [
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "sha256": "sha256:014c0533e38517726b6624aae35af97bf328045ec501b9671757287b98a27723",
+      "action": "Removed owned untracked prior-attempt artifact with git clean -f, then reinstated identical bytes for repair."
+    }
+  ],
+  "preserved": [],
+  "validation": {
+    "platform": "darwin",
+    "node": "20.20.2",
+    "lint": {
+      "command": "pnpm lint",
+      "cwd": "/Users/gianlucacarucci5/projects/pair-worktrees/654/apps/pair-cli",
+      "exitCode": 0
+    },
+    "format": {
+      "command": "pnpm exec prettier-fix apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
+      "exitCode": 0
+    },
+    "mutation": "not measured",
+    "postFixGate": "pnpm quality-gate",
+    "gateAtBase": "Not run: regression witnesses intentionally RED; owning-package lint passes.",
+    "testsAdded": 0,
+    "testsRemoved": 0,
+    "scopeNote": "Consumer cycle-scripts.ts identifies the observation boundary, not a repair target. Producer and regenerated mirror are the only allowed production paths.",
+    "evidence": [
+      "r2-g1-reproduction.attempt-2.json",
+      "r2-g1-controls.attempt-2.json",
+      "r2-g1-lint.attempt-2.json"
+    ]
+  },
+  "attempt": 2,
+  "changedRows": [
+    "r2-g1-freshness-R3-W1",
+    "r2-g1-freshness-R3-W2",
+    "r2-g1-freshness-R3-W3"
+  ],
+  "reattest": {
+    "reason": "Repair of r2-g1 red-verify attempt 1 artifact-not-changed rejection: apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts already exists byte-identically at inputHead f8fc1f49040add615e456d537f6e0394089e9c72 (sha256:b9aaecfa9950f01121f30b6a1c6c5e34b8927a9c1dc9af48c9cc916295354597). Its existing R3-W1, R3-W2 and R3-W3 witnesses independently reproduce r1-2 through the real driver and dispatch producer under Node 20.20.2: all three fail with cycle-state-unreadable from truncated JSON; R3-C1, R3-W4 and R1-I2 controls pass. Reattest these existing RED bytes without modifying the witnesses or weakening their oracles. Evidence: r2-g1-reproduction.attempt-2.json and r2-g1-controls.attempt-2.json; no snapshot was created by the rejected attempt."
+  }
+}
