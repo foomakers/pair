@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import type { TelemetryRecord } from './telemetry'
+import { parseTelemetryLine, type TelemetryRecord } from './telemetry'
 
 type Measure = { mean: number; median: number; sd: number } | 'not measured'
 
@@ -10,7 +10,7 @@ interface EngineSummary {
   activeMs: Measure
   idleMs: Measure
   stages: Record<string, Measure>
-  wastedTokenShare: number | 'not measured'
+  wastedTokenShare: Measure
 }
 
 const number = (value: unknown): number | undefined =>
@@ -35,9 +35,18 @@ export function summarizeTelemetry(
     records.map(record => record['engine']).filter((id): id is string => typeof id === 'string'),
   )
   const result: Record<string, EngineSummary> = {}
+  const terminalCards = records.filter(record => record.kind === 'card')
   for (const engine of engines) {
-    const cards = records.filter(record => record.kind === 'card' && record['engine'] === engine)
-    const stages = records.filter(record => record.kind === 'stage' && record['engine'] === engine)
+    const cards = terminalCards.filter(record => record['engine'] === engine)
+    const stages = records.filter(
+      record =>
+        record.kind === 'stage' &&
+        record['engine'] === engine &&
+        terminalCards.some(
+          card => card['card'] === record['card'] && card['run'] === record['run'],
+        ),
+    )
+    if (cards.length === 0 && stages.length === 0) continue
     const names = new Set(
       stages.map(stage => stage['step']).filter((step): step is string => typeof step === 'string'),
     )
@@ -47,31 +56,37 @@ export function summarizeTelemetry(
         measure(stages.filter(stage => stage['step'] === name).map(stage => stage['durationMs'])),
       ]),
     )
-    let wasted = 0
-    let total = 0
-    let usageMeasured = stages.length > 0
-    for (const stage of stages) {
-      const raw = stage['tokens']
-      const tokens =
-        typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : undefined
-      const fresh = number(tokens?.['freshIn'])
-      const cached = number(tokens?.['cachedIn'])
-      const output = number(tokens?.['out'])
-      if (fresh === undefined || cached === undefined || output === undefined) {
-        usageMeasured = false
-        break
+    const stageCards = terminalCards.filter(card =>
+      stages.some(stage => stage['card'] === card['card'] && stage['run'] === card['run']),
+    )
+    const wasteShares = stageCards.map(card => {
+      let wasted = 0
+      let total = 0
+      const cardStages = stages.filter(
+        stage => stage['card'] === card['card'] && stage['run'] === card['run'],
+      )
+      if (cardStages.length === 0) return undefined
+      for (const stage of cardStages) {
+        const raw = stage['tokens']
+        const tokens =
+          typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : undefined
+        const fresh = number(tokens?.['freshIn'])
+        const cached = number(tokens?.['cachedIn'])
+        const output = number(tokens?.['out'])
+        if (fresh === undefined || cached === undefined || output === undefined) return undefined
+        const count = fresh + cached + output
+        total += count
+        if (stage['outcomeClass'] !== 'ok') wasted += count
       }
-      const count = fresh + cached + output
-      total += count
-      if (stage['outcomeClass'] !== 'ok') wasted += count
-    }
+      return total > 0 ? wasted / total : undefined
+    })
     result[engine] = {
       rounds: measure(cards.map(card => card['rounds'])),
       wallMs: measure(cards.map(card => card['wallMs'])),
       activeMs: measure(cards.map(card => card['activeMs'])),
       idleMs: measure(cards.map(card => card['idleMs'])),
       stages: stageMeasures,
-      wastedTokenShare: usageMeasured && total > 0 ? wasted / total : 'not measured',
+      wastedTokenShare: measure(wasteShares),
     }
   }
   return result
@@ -107,10 +122,13 @@ export function renderTelemetryReport(summary: Record<string, EngineSummary>): s
 export function readTelemetryRecords(root: string): TelemetryRecord[] {
   const file = join(root, '.pair', 'working', 'telemetry', 'records.jsonl')
   if (!existsSync(file)) return []
-  return readFileSync(file, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map(line => JSON.parse(line) as TelemetryRecord)
+  try {
+    return readFileSync(file, 'utf8')
+      .split('\n')
+      .flatMap(line => parseTelemetryLine(line) ?? [])
+  } catch {
+    return []
+  }
 }
 
 if (require.main === module) {
