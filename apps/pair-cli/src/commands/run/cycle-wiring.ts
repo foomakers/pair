@@ -738,15 +738,9 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates, progress?: Card
     const start = Date.now()
     const result = await runStage({
       engine: spawn.engine,
-      // The stage starts in the MAIN CHECKOUT, never in the story's worktree. Every phase skill's
-      // Step 0 reads `MAIN="$(pwd)"` — "the main checkout, you have not cd'd yet" — and resolves the
-      // run directory from it; the packet's own `$worktree` is what tells the agent where to cd, and
-      // it is relative to that same anchor. Spawned in the worktree instead, the stage does all its
-      // work and writes its handoffs INSIDE the worktree, which the skills forbid in as many words
-      // ("never inside a story or review worktree"). The driver then finds no handoff where the
-      // contract says one must be, reads the stage as not advanced, retries, and reports
-      // `failed-<step>` — for a stage that actually succeeded. Silent, and invisible to any test
-      // whose bridge is a fake.
+      // Every phase skill anchors its run directory in the MAIN checkout. The packet's worktree
+      // still names where the agent edits; spawning there would misplace the handoff and make a
+      // successful stage appear not advanced.
       packet: { ...(packet as object), worktree: co.main } as never,
       autonomyArgs: spawn.autonomyArgs,
       ...(spawn.model !== undefined && { model: spawn.model }),
