@@ -44,6 +44,7 @@ import {
   appendTelemetry,
   cardTelemetryRecord,
   readInterventions,
+  readCycleProgress,
   readTelemetry,
   stageTelemetryRecord,
 } from './telemetry'
@@ -1445,6 +1446,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
             }),
           stages: readTelemetry(co.main, input.runId, input.card),
           interventions: readInterventions(co.runDir),
+          ...readCycleProgress(co.runDir),
         }),
       )
     }

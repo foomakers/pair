@@ -145,13 +145,16 @@ export interface CardTelemetryInput {
   readonly end: number
   readonly stages: readonly TelemetryRecord[]
   readonly interventions: readonly ManualIntervention[]
+  readonly findingsByRound?: Readonly<Record<string, Readonly<Record<string, number>>>>
+  readonly repairs?: number
 }
 
 /** The card's numbers come from observed stage records; missing usage stays missing. */
 export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord {
   const stages = input.stages
   const activeMs = stages.reduce((total, stage) => total + Number(stage['durationMs'] ?? 0), 0)
-  const wallMs = input.end - input.start
+  const start = Math.min(input.start, ...stages.map(stage => Number(stage['start'] ?? input.start)))
+  const wallMs = input.end - start
   const measured = stages.map(stage => stage['tokens'])
   const tokens =
     measured.length > 0 && measured.every(value => object(value) !== undefined)
@@ -183,7 +186,7 @@ export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord 
     model: input.model ?? 'not measured',
     outcome: input.outcome,
     ...(input.cause !== undefined && { cause: input.cause }),
-    start: input.start,
+    start,
     end: input.end,
     wallMs,
     activeMs,
@@ -192,9 +195,43 @@ export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord 
       .size,
     dispatches: stages.length,
     retries: stages.reduce((total, stage) => total + Number(stage['retries'] ?? 0), 0),
+    findingsByRound: input.findingsByRound ?? {},
+    repairs: input.repairs ?? 0,
     tokens,
     interventions: input.interventions,
   }
+}
+
+/** Count only durable handoffs, so a resumed invocation sees the full card history. */
+export function readCycleProgress(runDir: string): {
+  findingsByRound: Record<string, Record<string, number>>
+  repairs: number
+} {
+  const findingsByRound: Record<string, Record<string, number>> = {}
+  let repairs = 0
+  if (!existsSync(runDir)) return { findingsByRound, repairs }
+  for (const name of readdirSync(runDir).filter(name => name.endsWith('.json')).sort()) {
+    let handoff: Record<string, unknown> | undefined
+    try {
+      handoff = object(JSON.parse(readFileSync(join(runDir, name), 'utf8')))
+    } catch {
+      continue
+    }
+    if (!handoff) continue
+    if (handoff['skill'] === 'red-spec' && count(handoff['attempt']) !== undefined && Number(handoff['attempt']) > 1) repairs++
+    if (handoff['skill'] === 'green-fix') repairs++
+    if (handoff['skill'] !== 'review-phase' || !Array.isArray(handoff['findings'])) continue
+    const phase = handoff['phase']
+    if (typeof phase !== 'string') continue
+    const severities: Record<string, number> = {}
+    for (const raw of handoff['findings']) {
+      const finding = object(raw)
+      const severity = finding?.['severity']
+      if (typeof severity === 'string') severities[severity] = (severities[severity] ?? 0) + 1
+    }
+    findingsByRound[phase] = severities
+  }
+  return { findingsByRound, repairs }
 }
 
 export function readTelemetry(root: string, run: string, card: string): TelemetryRecord[] {
