@@ -225,7 +225,7 @@ const CLAUDE: EngineDefinition = {
   // workflow after its 10-minute background-wait ceiling.
   env: { CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' },
   verifiedAgainst:
-    'claude --help + live `claude -p --output-format stream-json` (2026-08-24); claude 2.1.325 `--help` lists `--settings <file-or-json>` (US-654; override of a user outputStyle pending live check)',
+    'claude --help + live `claude -p --output-format stream-json` (2026-08-24); claude 2.1.325 `--help` lists `--settings <file-or-json>` (US-654; override of a user outputStyle, live-checked 2026-11-14: `--settings` outputStyle=default turns the init event output_style from Codex to default)',
 }
 
 /**
