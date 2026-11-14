@@ -237,3 +237,10 @@ it('AC-2: records each durable maintainer intervention with actor and reason', (
     { kind: 'decision', who: 'rucka', reason: 'use strict' },
   ])
 })
+
+it('AC-2: malformed intervention evidence does not hide the run outcome', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pair-interventions-'))
+  dirs.push(dir)
+  writeFileSync(join(dir, 'r0-review-phase-2.json'), '{bad')
+  expect(readInterventions(dir)).toEqual([])
+})

@@ -110,7 +110,12 @@ export function readInterventions(runDir: string): ManualIntervention[] {
   for (const name of readdirSync(runDir)
     .filter(name => /review-phase-\d+\.json$/.test(name))
     .sort()) {
-    const data = object(JSON.parse(readFileSync(join(runDir, name), 'utf8')))
+    let data: Record<string, unknown> | undefined
+    try {
+      data = object(JSON.parse(readFileSync(join(runDir, name), 'utf8')))
+    } catch {
+      continue
+    }
     if (data?.['recordType'] !== 'decision' || !Array.isArray(data['humanDecisions'])) continue
     for (const raw of data['humanDecisions']) {
       const decision = object(raw)
