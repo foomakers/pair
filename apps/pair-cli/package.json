@@ -36,6 +36,7 @@
     "build": "tsc -b tsconfig.build.json",
     "postbuild": "chmod +x dist/cli.js && node scripts/postbuild.js",
     "dev": "ts-node src/cli.ts",
+    "telemetry:report": "node dist/commands/run/telemetry-report.js",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "ts:check": "tsc --noEmit",
