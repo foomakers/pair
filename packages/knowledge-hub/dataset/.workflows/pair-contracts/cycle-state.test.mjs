@@ -153,8 +153,31 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock, supersede, decide, resolveMaintainer, CAPS } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { STOP_CATALOG } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
+
+test('AC-9: every emitted blocked or failed status has one class and scripted resume', () => {
+  const sources = [
+    new URL('../../skills/pair-workflow-cycle/scripts/cycle-state.mjs', import.meta.url),
+    new URL('../pair-implement-batch.js', import.meta.url),
+  ].map(url => readFileSync(url, 'utf8'))
+  const emitted = new Set()
+  for (const source of sources) {
+    for (const match of source.matchAll(/\b(?:blocked|result)\(['"]([^'"]+)['"]/g)) {
+      if (match[1] === 'escalate' || match[1] === 'escalated' || match[1] === 'awaiting-human' || match[1] === 'needs-human' || match[1] === 'awaiting-scope-decision' || match[1].startsWith('failed-')) emitted.add(match[1])
+    }
+    for (const match of source.matchAll(/\b(?:failed-[a-z-]+|escalate)(?=['"])/g)) emitted.add(match[0])
+  }
+  const names = STOP_CATALOG.map(row => row.status)
+  assert.equal(new Set(names).size, names.length, 'catalogue status is unique')
+  for (const status of emitted) {
+    const row = STOP_CATALOG.find(row => row.status === status)
+    assert.ok(row, `missing ${status}`)
+    assert.ok(['process', 'decision', 'finding'].includes(row.class), status)
+    assert.ok(typeof row.resume === 'string' && row.resume.length > 0, status)
+  }
+})
 // `publish` defaults `repoRoot` to the cwd; run from a neutral directory so this repo's own adoption (its
 // `format-check-command`) never applies to fixture contracts — the format tests name their own repo.
 process.chdir(mkdtempSync(join(tmpdir(), 'cycle-state-cwd-')))
@@ -4986,6 +5009,31 @@ test('US-506 T-4 w3 (AC7): a repair that OVERWROTE the contract a rejection name
   const c3 = writeContract(dir, 'r1-g1-red-contract.attempt-3.json', { attempt: 3 })
   const out = publish({ dir, file: repairDraft(dir, { contractPath: c3.path, contractHash: c3.hash, changedRows: ['row-2'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 })
   assert.deepEqual([out.published, out.reason], [false, 'contract-attempt-overwritten:r1-g1-red-contract.json'])
+})
+
+test('AC-20: publish refuses saved contract bytes unlike the dispatched hash before writing a handoff', () => {
+  const { dir } = runDir()
+  const contract = writeContract(dir, 'a0-red-contract.json', { rows: ['row-1'] })
+  const draft = hash => writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: contract.path, contractHash: hash })
+  const bad = publish({ dir, file: draft(`sha256:${'0'.repeat(64)}`), phase: 'a0', skill: 'red-spec', workflowVersion: V })
+  assert.deepEqual([bad.published, bad.reason], [false, 'contract-hash-mismatch'])
+  assert.equal(existsSync(join(dir, 'a0-red-spec.json')), false)
+  assert.equal(publish({ dir, file: draft(contract.hash), phase: 'a0', skill: 'red-spec', workflowVersion: V }).published, true)
+})
+
+test('AC-20: same contract bytes and attempt republish is idempotent; changed bytes cannot replace it', () => {
+  const { dir } = runDir()
+  const contract = writeContract(dir, 'a0-red-contract.json', { rows: ['row-1'] })
+  const draft = hash => writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: contract.path, contractHash: hash })
+  assert.equal(publish({ dir, file: draft(contract.hash), phase: 'a0', skill: 'red-spec', workflowVersion: V }).published, true)
+  const before = readFileSync(join(dir, 'a0-red-spec.json'), 'utf8')
+  const again = publish({ dir, file: draft(contract.hash), phase: 'a0', skill: 'red-spec', workflowVersion: V })
+  assert.equal(again.published, true)
+  assert.equal(readFileSync(join(dir, 'a0-red-spec.json'), 'utf8'), before)
+  writeFileSync(contract.path, JSON.stringify({ ...JSON.parse(readFileSync(contract.path, 'utf8')), rows: ['other'] }))
+  const changed = publish({ dir, file: draft(contract.hash), phase: 'a0', skill: 'red-spec', workflowVersion: V })
+  assert.equal(changed.published, false)
+  assert.equal(readFileSync(join(dir, 'a0-red-spec.json'), 'utf8'), before)
 })
 
 test('US-506 T-4 w4 (AC7): each rejection points at its OWN contract file, and `resolve` hands the repair the rejected attempt\'s own path and hash; attempt 1 survives', () => {

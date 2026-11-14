@@ -114,6 +114,33 @@ export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'me
 // US-521: `escalated` is a cycle STATUS (resolve's top-level `status`, `next.reason`), never a step and never the
 // batch's own row status `escalate` (a review/fix budget exhausted) — the two names stay distinct on purpose.
 export const CYCLE_STATUSES = ['in-progress', 'completed', 'blocked', 'escalated', 'empty', 'other-run', 'incompatible', 'invalid']
+// AC-9: one shared stop vocabulary for the state authority and the batch driver. The class
+// determines which budget is charged; resume is the command or recorded intervention that
+// returns control to the same run. Specific process fault codes override a broader failed status.
+export const STOP_CATALOG = [
+  { status: 'failed-preparation', class: 'finding', resume: 'pair run --card <card>' },
+  { status: 'failed-contract', class: 'finding', resume: 'pair run --card <card>' },
+  { status: 'failed-seal', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'failed-implement', class: 'finding', resume: 'pair run --card <card>' },
+  { status: 'failed-fix', class: 'finding', resume: 'pair run --card <card>' },
+  { status: 'failed-verify', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'failed-custody', class: 'finding', resume: 'pair run --card <card>' },
+  { status: 'failed-resume', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'failed-publication', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'escalate', class: 'decision', resume: 'maintainer decision comment; pair run --card <card>' },
+  { status: 'escalated', class: 'decision', resume: 'maintainer decision comment; pair run --card <card>' },
+  { status: 'needs-human', class: 'decision', resume: 'maintainer reset comment; pair run --card <card>' },
+  { status: 'awaiting-human', class: 'decision', resume: 'maintainer reset comment; pair run --card <card>' },
+  { status: 'awaiting-scope-decision', class: 'decision', resume: 'maintainer scope decision comment; pair run --card <card>' },
+  { status: 'dirty', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'stale', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'contract-attempt-overwritten', class: 'process', resume: 'cycle-state.mjs reset-group --phase <phase>; pair run --card <card>' },
+  { status: 'contract-hash-mismatch', class: 'process', resume: 'cycle-state.mjs reset-group --phase <phase>; pair run --card <card>' },
+  { status: 'seal-not-pushed', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'dead-dispatch', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'idle-timeout', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'gate-flake', class: 'process', resume: 'pair run --card <card>' },
+]
 // ── the cycle's rules, held HERE as data (US-486 AC-12) ─────────────────────────────────────
 // Every realization of the cycle — the `pair-implement-batch` Workflow script, the
 // `pair-workflow-cycle` in-session coordinator, `pair-cli` — reads these from this file. A second
@@ -1891,6 +1918,9 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       } catch {
         return { published: false, reason: 'contract-invalid', errors: ['contract file is not valid JSON'] }
       }
+      // AC-20: the persisted bytes must be the contract this dispatch named. Do this before
+      // normalization or formatting so a rewritten attempt cannot be silently restamped.
+      if (contractHash(parsed) !== data.contractHash) return { published: false, reason: 'contract-hash-mismatch', path: cp0, dispatched: data.contractHash, actual: contractHash(parsed) }
       // US-514 T-5 (#514/AC6): a repair/revision names the predecessor it repairs by `supersedes`
       // (falling back to the `-rev<m>` phase the sealer itself derives) — the engine derives the
       // hash the sealer will check against and STAMPS it here, with no manual edit and no math
@@ -2126,7 +2156,12 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   const name = `${phase}-${skill}`
   const target = join(dir, n > 1 ? `${name}.attempt-${n}.json` : `${name}.json`)
   return withLock(dir, lockWaitMs, () => {
-    if (existsSync(target)) return { published: false, reason: 'stale-write', path: target }
+    if (existsSync(target)) {
+      const prior = JSON.parse(readFileSync(target, 'utf8'))
+      if (skill === 'red-spec' && data.status === 'red' && prior.contractPath === data.contractPath && prior.contractHash === data.contractHash && prior.inputHead === data.inputHead)
+        return { published: true, path: target, name, seq: prior.seq, attempt: n, reused: true }
+      return { published: false, reason: 'stale-write', path: target }
+    }
     const seq = readHandoffs(dir).reduce((m, h) => Math.max(m, Number.isInteger(h.data?.seq) ? h.data.seq : 0), 0) + 1
     const stamped = { ...data, schemaVersion: SCHEMA_VERSION, workflowVersion, seq, attempt: n, createdAt: new Date().toISOString(), ...(predecessor ? { predecessor } : {}), ...profileStamp(dir) }
     const tmp = join(dir, `.tmp-${process.pid}-${Date.now()}.json`)
