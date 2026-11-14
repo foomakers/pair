@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"p1","tools":["Bash","Read"]}
+{"type":"result","subtype":"success","is_error":false,"num_turns":4,"result":"Prepare ok. Ho omesso `owner` per brevità; 18 paths, invariati.\nnext: { \"step\": \"red-verify\", \"mode\": \"repair\", \"round\": 1 }","session_id":"p1"}

@@ -88,7 +88,7 @@ describe('US-522 AC13 — --root --parallel preserves US-491 output with paralle
         "code": 1,
         "stdout": [
           "pair-cli run --parallel",
-          "  Engine: claude — \`claude -p --output-format stream-json --verbose\` (from schema default)",
+          "  Engine: claude — \`claude -p --output-format stream-json --verbose --settings {"outputStyle":"default"}\` (from schema default)",
           "  Scope: pair-next --root 66 --filter risk:green (## Eligibility)",
           "  Policy: .pair/adoption/tech/automation.md · audit automation/loop-audit.md",
           "  Requested: --parallel 2 (overrides ## Max Parallelism 3)",
@@ -119,7 +119,7 @@ describe('US-522 AC13 — --root --parallel preserves US-491 output with paralle
         "code": 0,
         "stdout": [
           "pair-cli run --parallel",
-          "  Engine: claude — \`claude -p --output-format stream-json --verbose\` (from schema default)",
+          "  Engine: claude — \`claude -p --output-format stream-json --verbose --settings {"outputStyle":"default"}\` (from schema default)",
           "  Scope: pair-next --root 66 --filter risk:green (## Eligibility)",
           "  Policy: .pair/adoption/tech/automation.md · audit automation/loop-audit.md",
           "  Requested: --parallel 2 (overrides ## Max Parallelism 3)",

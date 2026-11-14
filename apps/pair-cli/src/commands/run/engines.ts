@@ -197,7 +197,16 @@ const CLAUDE: EngineDefinition = {
   // `claude --help`: `--effort <level>` (low, medium, high, xhigh, max), verified 2026-10-19.
   effortArgs: level => ['--effort', level],
   command: 'claude',
-  headlessArgs: ['-p', '--output-format', 'stream-json', '--verbose'],
+  // US-654: a user-level `outputStyle` (e.g. one with keep-coding-instructions: false) replaces the
+  // system prompt of headless stages and made `prepare` end without its JSON result.
+  headlessArgs: [
+    '-p',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--settings',
+    '{"outputStyle":"default"}',
+  ],
   skillInvocationStyle: 'slash',
   autonomy: { kind: 'flag', autonomyArgs: ['--permission-mode', 'bypassPermissions'] },
   projectTrust: {
@@ -215,7 +224,8 @@ const CLAUDE: EngineDefinition = {
   // US-573 AC7 (maintainer-observed, not re-measured here): without it `claude -p` stops a background
   // workflow after its 10-minute background-wait ceiling.
   env: { CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' },
-  verifiedAgainst: 'claude --help + live `claude -p --output-format stream-json` (2026-08-24)',
+  verifiedAgainst:
+    'claude --help + live `claude -p --output-format stream-json` (2026-08-24); claude 2.1.325 `--help` lists `--settings <file-or-json>` (US-654; override of a user outputStyle pending live check)',
 }
 
 /**
