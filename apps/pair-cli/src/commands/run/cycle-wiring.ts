@@ -35,11 +35,18 @@ import {
   type CardDocument,
 } from './card-readiness'
 import type { Config } from '#registry'
+import { version as pairVersion } from '../../index'
 import { resolveBlockingSeverities } from './blocking-severities'
 import { checkWithCiWait, type CiWaitOptions } from './ci-wait'
 import { wait } from './wait'
 import { stageSettings, type ResolvedWorkflowProfile } from './workflow-profile'
-import { appendTelemetry, stageTelemetryRecord } from './telemetry'
+import {
+  appendTelemetry,
+  cardTelemetryRecord,
+  readInterventions,
+  readTelemetry,
+  stageTelemetryRecord,
+} from './telemetry'
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -722,6 +729,7 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates, progress?: Card
       co.main,
       stageTelemetryRecord({
         id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
+        run: co.runId,
         card: co.cardId,
         step: stage.step ?? 'unknown',
         ...(stage.phase !== undefined && { phase: stage.phase }),
@@ -1416,26 +1424,29 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
         ),
     })
     if (outcome.status !== 'rounds-bound-reached' && outcome.status !== 'other-run') {
-      appendTelemetry(co.main, {
-        kind: 'card',
-        id: `${input.runId}:${input.card}`,
-        card: input.card,
-        run: input.runId,
-        pr: input.pr ?? 'not measured',
-        workflowVersion: ctx.workflowVersion,
-        profile: ctx.profile?.name ?? 'default',
-        engine: ctx.engine.id,
-        model: ctx.model ?? 'not measured',
-        start: startedAt,
-        end: Date.now(),
-        outcome: outcome.status,
-        ...(outcome.status !== 'ready-for-merge' &&
-          outcome.status !== 'merged' && {
-            cause: outcome.reason ?? outcome.status,
-          }),
-        stages: outcome.stagesRun,
-        interventions: [],
-      })
+      appendTelemetry(
+        co.main,
+        cardTelemetryRecord({
+          id: `${input.runId}:${input.card}`,
+          card: input.card,
+          run: input.runId,
+          ...(input.pr !== undefined && { pr: input.pr }),
+          pairVersion,
+          workflowVersion: ctx.workflowVersion,
+          profile: ctx.profile?.name ?? 'default',
+          engine: ctx.engine.id,
+          ...(ctx.model !== undefined && { model: ctx.model }),
+          start: startedAt,
+          end: Date.now(),
+          outcome: outcome.status,
+          ...(outcome.status !== 'ready-for-merge' &&
+            outcome.status !== 'merged' && {
+              cause: outcome.reason ?? outcome.status,
+            }),
+          stages: readTelemetry(co.main, input.runId, input.card),
+          interventions: readInterventions(co.runDir),
+        }),
+      )
     }
     return outcome
   }

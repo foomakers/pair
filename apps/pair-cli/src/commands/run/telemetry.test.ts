@@ -1,8 +1,14 @@
 import { afterEach, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { appendTelemetry, observeEngineEvent, stageTelemetryRecord } from './telemetry'
+import {
+  appendTelemetry,
+  cardTelemetryRecord,
+  observeEngineEvent,
+  readInterventions,
+  stageTelemetryRecord,
+} from './telemetry'
 
 const dirs: string[] = []
 afterEach(() => dirs.splice(0).forEach(dir => rmSync(dir, { recursive: true, force: true })))
@@ -144,4 +150,90 @@ it('AC-1: a stage record carries timing, engine, model, outcome, retries and ove
     outcomeClass: 'ok',
     retries: 1,
   })
+})
+
+it('AC-1/2: terminal card aggregates stage timing, usage, retries and interventions', () => {
+  const record = cardTelemetryRecord({
+    id: 'r:641',
+    card: '641',
+    run: 'r',
+    pairVersion: '0.5.2',
+    workflowVersion: '4.0.1',
+    profile: 'codex-max',
+    engine: 'codex',
+    outcome: 'needs-human',
+    cause: 'policy',
+    start: 0,
+    end: 100,
+    stages: [
+      {
+        kind: 'stage',
+        id: 'a',
+        card: '641',
+        step: 'implement',
+        phase: 'a0',
+        start: 10,
+        end: 30,
+        durationMs: 20,
+        driverOverheadMs: 10,
+        retries: 0,
+        engine: 'codex',
+        model: 'm',
+        outcomeClass: 'ok',
+        tokens: { freshIn: 10, cachedIn: 20, out: 2, reasoning: 1 },
+      },
+      {
+        kind: 'stage',
+        id: 'b',
+        card: '641',
+        step: 'verify',
+        phase: 'r0',
+        start: 40,
+        end: 60,
+        durationMs: 20,
+        driverOverheadMs: 10,
+        retries: 1,
+        engine: 'codex',
+        model: 'm',
+        outcomeClass: 'rejected',
+        tokens: 'not measured',
+      },
+    ],
+    interventions: [{ kind: 'decision', who: 'rucka', reason: 'policy' }],
+  })
+  expect(record).toMatchObject({
+    kind: 'card',
+    outcome: 'needs-human',
+    cause: 'policy',
+    rounds: 1,
+    dispatches: 2,
+    retries: 1,
+    wallMs: 100,
+    activeMs: 40,
+    idleMs: 60,
+    tokens: 'not measured',
+    interventions: [{ kind: 'decision', who: 'rucka', reason: 'policy' }],
+  })
+})
+
+it('AC-2: records each durable maintainer intervention with actor and reason', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pair-interventions-'))
+  dirs.push(dir)
+  writeFileSync(
+    join(dir, 'maintainer-interventions.md'),
+    '# Maintainer interventions\n\n| file | what it is | why it was set aside | set aside by | what supersedes it |\n| --- | --- | --- | --- | --- |\n| a0-red-spec.json | red-spec | invalid contract | rucka | b.json |\n',
+  )
+  writeFileSync(
+    join(dir, 'r0-review-phase-2.json'),
+    JSON.stringify({
+      recordType: 'decision',
+      humanDecisions: [
+        { findingId: 'r0-1', decision: 'use strict', by: 'rucka', at: '2026-11-14T00:00:00Z' },
+      ],
+    }),
+  )
+  expect(readInterventions(dir)).toEqual([
+    { kind: 'supersede', who: 'rucka', reason: 'invalid contract' },
+    { kind: 'decision', who: 'rucka', reason: 'use strict' },
+  ])
 })

@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 
 export type Tokens =
@@ -84,8 +84,127 @@ export interface TelemetryRecord {
   readonly [key: string]: unknown
 }
 
+export interface ManualIntervention {
+  readonly kind: string
+  readonly who: string
+  readonly reason: string
+}
+
+/** Read the cycle's own durable intervention trail, without treating card prose as authority. */
+export function readInterventions(runDir: string): ManualIntervention[] {
+  if (!existsSync(runDir)) return []
+  const entries: ManualIntervention[] = []
+  const index = join(runDir, 'maintainer-interventions.md')
+  if (existsSync(index)) {
+    for (const line of readFileSync(index, 'utf8').split('\n')) {
+      if (!line.startsWith('| ') || line.includes('| --- |') || line.includes('| file |')) continue
+      const cells = line
+        .split('|')
+        .slice(1, -1)
+        .map(cell => cell.trim())
+      if (cells.length === 5 && cells[2] && cells[3])
+        entries.push({ kind: 'supersede', reason: cells[2], who: cells[3] })
+    }
+  }
+  const seen = new Set<string>()
+  for (const name of readdirSync(runDir)
+    .filter(name => /review-phase-\d+\.json$/.test(name))
+    .sort()) {
+    const data = object(JSON.parse(readFileSync(join(runDir, name), 'utf8')))
+    if (data?.['recordType'] !== 'decision' || !Array.isArray(data['humanDecisions'])) continue
+    for (const raw of data['humanDecisions']) {
+      const decision = object(raw)
+      if (typeof decision?.['by'] !== 'string' || typeof decision['decision'] !== 'string') continue
+      const key = JSON.stringify(decision)
+      if (seen.has(key)) continue
+      seen.add(key)
+      entries.push({ kind: 'decision', who: decision['by'], reason: decision['decision'] })
+    }
+  }
+  return entries
+}
+
+export interface CardTelemetryInput {
+  readonly id: string
+  readonly card: string
+  readonly run: string
+  readonly pr?: number
+  readonly pairVersion: string
+  readonly workflowVersion: string
+  readonly profile: string
+  readonly engine: string
+  readonly model?: string
+  readonly outcome: string
+  readonly cause?: string
+  readonly start: number
+  readonly end: number
+  readonly stages: readonly TelemetryRecord[]
+  readonly interventions: readonly ManualIntervention[]
+}
+
+/** The card's numbers come from observed stage records; missing usage stays missing. */
+export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord {
+  const stages = input.stages
+  const activeMs = stages.reduce((total, stage) => total + Number(stage['durationMs'] ?? 0), 0)
+  const wallMs = input.end - input.start
+  const measured = stages.map(stage => stage['tokens'])
+  const tokens =
+    measured.length > 0 && measured.every(value => object(value) !== undefined)
+      ? {
+          freshIn: measured.reduce<number>(
+            (total, value) => total + Number(object(value)?.['freshIn'] ?? 0),
+            0,
+          ),
+          cachedIn: measured.reduce<number>(
+            (total, value) => total + Number(object(value)?.['cachedIn'] ?? 0),
+            0,
+          ),
+          out: measured.reduce<number>(
+            (total, value) => total + Number(object(value)?.['out'] ?? 0),
+            0,
+          ),
+        }
+      : 'not measured'
+  return {
+    kind: 'card',
+    id: input.id,
+    card: input.card,
+    run: input.run,
+    pr: input.pr ?? 'not measured',
+    pairVersion: input.pairVersion,
+    workflowVersion: input.workflowVersion,
+    profile: input.profile,
+    engine: input.engine,
+    model: input.model ?? 'not measured',
+    outcome: input.outcome,
+    ...(input.cause !== undefined && { cause: input.cause }),
+    start: input.start,
+    end: input.end,
+    wallMs,
+    activeMs,
+    idleMs: Math.max(0, wallMs - activeMs),
+    rounds: new Set(stages.filter(stage => stage['step'] === 'verify').map(stage => stage['phase']))
+      .size,
+    dispatches: stages.length,
+    retries: stages.reduce((total, stage) => total + Number(stage['retries'] ?? 0), 0),
+    tokens,
+    interventions: input.interventions,
+  }
+}
+
+export function readTelemetry(root: string, run: string, card: string): TelemetryRecord[] {
+  const path = join(root, '.pair', 'working', 'telemetry', 'records.jsonl')
+  if (!existsSync(path)) return []
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as TelemetryRecord)
+    .filter(record => record.kind === 'stage' && record['run'] === run && record['card'] === card)
+}
+
 export interface StageTelemetryInput {
   readonly id: string
+  readonly run?: string
   readonly card: string
   readonly step: string
   readonly phase?: string
@@ -112,6 +231,7 @@ export function stageTelemetryRecord(input: StageTelemetryInput): TelemetryRecor
   return {
     kind: 'stage',
     id: input.id,
+    ...(input.run !== undefined && { run: input.run }),
     card: input.card,
     step: input.step,
     ...(input.phase !== undefined && { phase: input.phase }),
