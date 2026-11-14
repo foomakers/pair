@@ -23,6 +23,15 @@ const object = (value: unknown): Record<string, unknown> | undefined =>
 const count = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
 
+const optionalCount = (value: unknown): number | undefined =>
+  value === undefined ? 0 : count(value)
+
+function noncachedInput(input: unknown, cacheWrite: unknown): number | undefined {
+  const fresh = count(input)
+  const write = optionalCount(cacheWrite)
+  return fresh === undefined || write === undefined ? undefined : count(fresh + write)
+}
+
 function codexTokens(usage: Record<string, unknown>): Tokens | undefined {
   const input = count(usage['input_tokens'])
   const cached = count(usage['cached_input_tokens'])
@@ -38,27 +47,34 @@ function codexTokens(usage: Record<string, unknown>): Tokens | undefined {
 }
 
 function claudeTokens(usage: Record<string, unknown>): Tokens | undefined {
-  const fresh = count(usage['input_tokens'])
+  const noncached = noncachedInput(usage['input_tokens'], usage['cache_creation_input_tokens'])
   const cached = count(usage['cache_read_input_tokens'])
   const out = count(usage['output_tokens'])
-  return fresh === undefined || cached === undefined || out === undefined
+  return noncached === undefined || cached === undefined || out === undefined
     ? undefined
-    : { freshIn: fresh, cachedIn: cached, out, reasoning: 'not measured' }
+    : { freshIn: noncached, cachedIn: cached, out, reasoning: 'not measured' }
 }
 
 function piUsage(
   event: Record<string, unknown>,
-): { fresh: number; cached: number; out: number } | undefined {
+): { fresh: number; cached: number; out: number; reasoning: number | 'not measured' } | undefined {
   if (event['type'] !== 'message_end') return undefined
   const message = object(event['message'])
   if (message?.['role'] !== 'assistant') return undefined
   const usage = object(message['usage'])
   if (usage === undefined) return undefined
-  const fresh = count(usage['input'])
+  const noncached = noncachedInput(usage['input'], usage['cacheWrite'])
   const cached = count(usage['cacheRead'])
   const out = count(usage['output'])
-  if (fresh === undefined || cached === undefined || out === undefined) return undefined
-  return { fresh, cached, out }
+  if (noncached === undefined || cached === undefined || out === undefined) return undefined
+  return { fresh: noncached, cached, out, reasoning: count(usage['reasoning']) ?? 'not measured' }
+}
+
+function sumReasoning(prior: Tokens, current: number | 'not measured'): number | 'not measured' {
+  if (typeof prior === 'string') return current
+  return typeof prior.reasoning === 'number' && typeof current === 'number'
+    ? (count(prior.reasoning + current) ?? 'not measured')
+    : 'not measured'
 }
 
 function piTokens(event: Record<string, unknown>, prior: Tokens): Tokens | undefined {
@@ -69,7 +85,7 @@ function piTokens(event: Record<string, unknown>, prior: Tokens): Tokens | undef
     freshIn: (previous?.freshIn ?? 0) + usage.fresh,
     cachedIn: (previous?.cachedIn ?? 0) + usage.cached,
     out: (previous?.out ?? 0) + usage.out,
-    reasoning: 'not measured',
+    reasoning: sumReasoning(prior, usage.reasoning),
   }
 }
 
