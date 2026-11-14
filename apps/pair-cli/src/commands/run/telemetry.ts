@@ -89,7 +89,14 @@ export function observeEngineEvent(
 ): EngineObservation {
   const event = object(payload)
   if (event === undefined) return prior
-  const sessionKey = engine === 'codex' ? 'thread_id' : engine === 'pi' ? 'sessionId' : 'session_id'
+  const sessionKey =
+    engine === 'codex'
+      ? 'thread_id'
+      : engine === 'pi'
+        ? event['type'] === 'session'
+          ? 'id'
+          : 'sessionId'
+        : 'session_id'
   const session = event[sessionKey]
   const sessionId = typeof session === 'string' ? session : prior.sessionId
   const previous = prior.tokens ?? 'not measured'
