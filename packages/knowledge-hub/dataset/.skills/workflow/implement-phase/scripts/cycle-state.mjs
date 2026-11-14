@@ -2646,6 +2646,7 @@ export function acAssessmentErrors(data) {
 const isBlocking = f => f && f.blocking === true && f.transition !== 'resolved' && f.nonActionable !== true
 // Preparation refusals whose cause lies outside the cycle: a later dispatch can succeed unchanged.
 const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
+const isProcessFault = data => STOP_CATALOG.some(row => row.status === data?.processFault && row.class === 'process')
 
 function deriveNextStep(handoffs, policy, ctx = {}) {
   // US-479 B2: a migration acknowledgment is evidence about provenance, never a cycle position.
@@ -2892,7 +2893,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
   }
   if (last.skill === 'red-verify') {
     if (d.verified !== true) {
-      const repairs = byPhase('red-verify', last.phase).filter(h => h.data.verified !== true).length
+      const repairs = byPhase('red-verify', last.phase).filter(h => h.data.verified !== true && !isProcessFault(h.data)).length
       // US-575: a spent repair budget is durable only on the heads it was spent on — once they moved, one more repair.
       if (repairs <= (policy.redRepairs ?? 1) || ctx.stale) return { ...(ctx.stale ? { stale: true } : {}), step: 'prepare', mode: 'repair', phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, rejection: d.findings ?? [], contract: contractOf(last.phase), group: groupOf(last.phase) }
       return blocked('failed-contract', { budget: 'redRepairs', phase: last.phase, findings: d.findings ?? [] })
@@ -2914,7 +2915,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     }
     // A red gate or a failed build is the implementer's to fix on the SAME seal — once. The
     // contract was approved; the implementation was not.
-    const attempts = byPhase('implement-phase', last.phase).length
+    const attempts = byPhase('implement-phase', last.phase).filter(h => !isProcessFault(h.data)).length
     if (attempts <= (policy.greenRetries ?? 1) || ctx.stale) return { step: 'implement', mode: 'retry', phase: last.phase, round: 0, attempt: attempts + 1, base: d.inputHead, contract: contractOf(last.phase), pr: Number.isInteger(d.prNumber) ? d.prNumber : undefined, detail: d.gatesPassed === false ? 'gate red' : d.reason, ...(ctx.stale ? { stale: true } : {}) }
     return blocked('failed-implement', { budget: 'greenRetries', detail: d.gatesPassed === false ? 'gate red twice' : d.reason })
   }
@@ -3223,7 +3224,7 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
   const correctiveSeal = h => h.skill === 'red-verify' && h.data.sealed === true && h.data.verified === true && !(phaseParts(h.phase)?.kind === 'initial' && (phaseParts(h.phase)?.revision ?? 1) === 1)
   let spentCycles = 0
   let lastCounted = -1
-  for (const r of reviews.filter(h => h.data.partial !== true)) {
+  for (const r of reviews.filter(h => h.data.partial !== true && !isProcessFault(h.data))) {
     const at = orderOf(r)
     if (!list.some(h => correctiveSeal(h) && orderOf(h) > lastCounted && orderOf(h) < at)) continue
     spentCycles++
@@ -3658,6 +3659,41 @@ export function migrateAcknowledge({ dir, legacyDirs = [], workflowVersion, stor
 // `needsHumanDecision` as its own handoff, so the cycle leaves `escalate` with no handoff renamed
 // and no review re-run. Both print what `resolve` then says is due.
 export const INTERVENTIONS_FILE = 'maintainer-interventions.md'
+/** Rewind only an unusable group tail. A validated seal remains the recovery boundary. */
+export function resetGroup({ dir, phase, reason, by, now = new Date(), workflowVersion, policy, entry, pr, lockWaitMs = 5000 }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { reset: false, reason: where.error }
+  if (!String(reason ?? '').trim() || !String(by ?? '').trim()) return { reset: false, reason: 'reset-reason-or-actor-missing' }
+  const group = phaseParts(phase)?.groupId
+  if (!group) return { reset: false, reason: 'reset-group-invalid-phase' }
+  return withLock(dir, lockWaitMs, () => {
+    const handoffs = readHandoffs(dir).filter(h => h.data?.recordType !== 'migration')
+    const tail = handoffs[handoffs.length - 1]
+    if (!tail || phaseParts(tail.phase)?.groupId !== group) return { reset: false, reason: 'reset-group-not-tail' }
+    const inGroup = handoffs.filter(h => phaseParts(h.phase)?.groupId === group)
+    const clean = [...inGroup].reverse().find(h =>
+      (h.skill === 'red-verify' && h.data?.verified === true && h.data.sealed === true) ||
+      (h.skill === 'red-spec' && h.data?.status === 'red' && !isProcessFault(h.data)) ||
+      (h.skill === 'green-fix' && h.data?.fixed === true && !isProcessFault(h.data)))
+    const start = clean ? handoffs.indexOf(clean) + 1 : handoffs.indexOf(inGroup[0])
+    const removed = handoffs.slice(start)
+    if (!removed.length || removed.some(h => h.skill === 'red-verify' && h.data?.sealed === true)) return { reset: false, reason: 'reset-group-sealed-or-clean' }
+    const names = []
+    for (const h of removed) {
+      const from = basename(h.file)
+      let to = `reset-${dayOf(now)}-${from}`
+      for (let n = 2; existsSync(join(dir, to)); n++) to = `reset-${dayOf(now)}-${n}-${from}`
+      renameSync(h.file, join(dir, to))
+      names.push(to)
+    }
+    const out = resolveAfter({ dir, workflowVersion, policy, entry, pr })
+    const index = appendIntervention(dir, [names.map(n => `\`${n}\``).join(', '), `${group} unusable tail`, reason, `${by}, ${dayOf(now)}`, `the step now due: ${describeNext(out.next)}`])
+    const recovery = readRecovery(dir)
+    recovery.rounds.push({ kind: 'group-reset', phase: group, detail: reason, at: (now instanceof Date ? now : new Date(now)).toISOString() })
+    writeRecovery(dir, recovery)
+    return { reset: true, group, removed: names, index, status: out.status, next: out.next }
+  })
+}
 const INTERVENTIONS_HEADER = '| file | what it is | why it was set aside | set aside by | what supersedes it |'
 const dayOf = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10)
 const cell = v => String(v ?? '').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim()
@@ -3859,6 +3895,7 @@ if (isMain()) {
       'migrate-acknowledge': ['branch', 'dir', 'head', 'legacy', 'pr', 'run', 'story', 'workflowVersion'],
       'test-identity': ['command', 'cwd', 'env-keys', 'toolchain'],
       supersede: ['attempt', 'by', 'dir', 'entry', 'phase', 'policy', 'pr', 'reason', 'skill', 'workflowVersion'],
+      'reset-group': ['by', 'dir', 'entry', 'phase', 'policy', 'pr', 'reason', 'workflowVersion'],
       decide: ['by', 'decision', 'dir', 'entry', 'finding', 'phase', 'policy', 'pr', 'workflowVersion'],
       version: [],
       recover: ['detail', 'dir', 'kind', 'policy'],
@@ -4007,6 +4044,11 @@ if (isMain()) {
       out = supersede({ dir: opts.dir, phase: opts.phase, skill: opts.skill, attempt: opts.attempt !== undefined ? Number(opts.attempt) : undefined, reason: opts.reason, by: opts.by, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.superseded ? 0 : 1)
+    } else if (cmd === 'reset-group') {
+      need('dir', 'phase', 'reason', 'by', 'workflowVersion')
+      out = resetGroup({ dir: opts.dir, phase: opts.phase, reason: opts.reason, by: opts.by, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.reset ? 0 : 1)
     } else if (cmd === 'decide') {
       // US-506 AC-8: record a maintainer's answer to a review's needsHumanDecision as its own handoff.
       need('dir', 'phase', 'finding', 'decision', 'by', 'workflowVersion')
