@@ -10,6 +10,7 @@ import {
   readCycleProgress,
   readTelemetry,
   stageTelemetryRecord,
+  telemetryFile,
 } from './telemetry'
 
 const dirs: string[] = []
@@ -336,3 +337,14 @@ it('AC-1: telemetry write failure does not fail the delivery run', () => {
   writeFileSync(join(root, '.pair'), 'unwritable path')
   expect(() => appendTelemetry(root, { kind: 'card', id: 'run:645' })).not.toThrow()
 })
+
+it.each([
+  ['darwin', '/repo', '/repo/.pair/working/telemetry/records.jsonl'],
+  ['linux', '/repo', '/repo/.pair/working/telemetry/records.jsonl'],
+  ['win32', 'C:\\repo', 'C:\\repo\\.pair\\working\\telemetry\\records.jsonl'],
+] as const)(
+  'AC-7: platform darwin/linux/win32 path style for %s keeps telemetry local',
+  (platform, root, expected) => {
+    expect(telemetryFile(root, platform)).toBe(expected)
+  },
+)

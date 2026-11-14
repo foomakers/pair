@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'fs'
-import { join } from 'path'
+import { dirname, join, posix, win32 } from 'path'
 
 export type Tokens =
   | {
@@ -103,6 +103,11 @@ export interface TelemetryRecord {
   readonly id: string
   readonly kind: 'stage' | 'card'
   readonly [key: string]: unknown
+}
+
+export function telemetryFile(root: string, platform: NodeJS.Platform = process.platform): string {
+  const paths = platform === 'win32' ? win32 : posix
+  return paths.join(root, '.pair', 'working', 'telemetry', 'records.jsonl')
 }
 
 export function parseTelemetryLine(line: string): TelemetryRecord | undefined {
@@ -287,7 +292,7 @@ export function readCycleProgress(runDir: string): {
 }
 
 export function readTelemetry(root: string, run: string, card: string): TelemetryRecord[] {
-  const path = join(root, '.pair', 'working', 'telemetry', 'records.jsonl')
+  const path = telemetryFile(root)
   if (!existsSync(path)) return []
   try {
     return readFileSync(path, 'utf8')
@@ -348,15 +353,14 @@ export function stageTelemetryRecord(input: StageTelemetryInput): TelemetryRecor
 
 /** The run directory is local and ignored; a repeated terminal write is a no-op by record id. */
 export function appendTelemetry(root: string, record: TelemetryRecord): void {
-  const dir = join(root, '.pair', 'working', 'telemetry')
-  const path = join(dir, 'records.jsonl')
+  const path = telemetryFile(root)
   try {
     if (existsSync(path)) {
       for (const line of readFileSync(path, 'utf8').split('\n')) {
         if (parseTelemetryLine(line)?.id === record.id) return
       }
     }
-    mkdirSync(dir, { recursive: true })
+    mkdirSync(dirname(path), { recursive: true })
     appendFileSync(path, `${JSON.stringify(record)}\n`)
   } catch {
     // Telemetry is best effort; a local file error cannot fail delivery.

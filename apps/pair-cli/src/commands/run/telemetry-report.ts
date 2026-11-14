@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
-import { parseTelemetryLine, type TelemetryRecord } from './telemetry'
+import { parseTelemetryLine, telemetryFile, type TelemetryRecord } from './telemetry'
 
 type Measure = { mean: number; median: number; sd: number } | 'not measured'
 
@@ -132,7 +131,7 @@ export function renderTelemetryReport(summary: Record<string, EngineSummary>): s
 }
 
 export function readTelemetryRecords(root: string): TelemetryRecord[] {
-  const file = join(root, '.pair', 'working', 'telemetry', 'records.jsonl')
+  const file = telemetryFile(root)
   if (!existsSync(file)) return []
   try {
     return readFileSync(file, 'utf8')
