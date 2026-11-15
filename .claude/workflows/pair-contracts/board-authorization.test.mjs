@@ -66,7 +66,7 @@ function setup(directory, row, event) {
 case "$1" in
   */board-transition.mjs)
     jq -cn --argjson readBefore "$([ -s "$PROBE_READS" ] && echo true || echo false)" --args '{kind:"transition",readBefore:$readBefore,args:$ARGS.positional}' -- "$@" >> "$PROBE_WRITES"
-    echo '{"confirmed":true}' ;;
+    jq -cn --argjson row "$PROBE_ROW" '$row.transitionOutput // {confirmed:true}' ;;
   -e|--eval|-p|--print) exec ${JSON.stringify(process.execPath)} "$@" ;;
   *) echo 'Unexpected node invocation' >&2; exit 97 ;;
 esac
@@ -84,7 +84,7 @@ if (args[0] !== 'api' || (method >= 0 && args[method + 1] !== 'GET') || endpoint
 appendFileSync(process.env.PROBE_READS, JSON.stringify(args) + '\\n');
 const row = JSON.parse(process.env.PROBE_ROW);
 if (row.apiError) process.exit(1);
-const payload = row.malformed ? 'not-json' : JSON.stringify(row.role === null ? {} : { permission: row.role, role_name: row.role, user: { login: row.sender ?? 'event-sender' } });
+const payload = row.malformed ? 'not-json' : row.nullPayload ? 'null' : JSON.stringify(row.role === null ? {} : { permission: row.role, role_name: row.role, user: { login: row.sender ?? 'event-sender' } });
 const filterAt = args.findIndex(a => a === '--jq' || a === '-q');
 if (filterAt >= 0) {
   const r = spawnSync(${JSON.stringify(jq)}, ['-r', args[filterAt + 1]], { input: payload, encoding: 'utf8', timeout: 1000 });
@@ -152,6 +152,7 @@ test('board authorization', { concurrency: 4 }, async suite => {
         try {
           assert.equal(result.status, 0, 'unauthorized events must be a successful no-op')
           assert.deepEqual(writes, expected, 'privileged effects must match authorization and event state')
+          assert.ok(result.writes.every(write => write.kind !== 'transition' || write.args.includes('--require-card') === Boolean(current.requireCard)), 'only a Refs association requires the card to resolve')
           if (row.bindIdentities && current.allow) assert.ok(result.reads.length > 0, 'event sender permission must be read')
           if (row.bindIdentities) assert.ok(result.reads.every(args => args.includes(`repos/${current.repo ?? 'acme/project'}/collaborators/${current.sender ?? 'event-sender'}/permission`)), 'lookup must bind event repository and sender')
           if (row.requireLookup || (row.bindIdentities && current.allow)) assert.ok(result.writes.every(write => write.readBefore === true), 'sender permission must be read server-side before writes')

@@ -20,7 +20,9 @@ test('AC-1/2: PR and issue facts select every supported board outcome', () => {
     [{ pr: 'none', issue: 'CLOSED', reason: 'COMPLETED' }, { status: 'Done', close: null }],
     [{ pr: 'none', issue: 'CLOSED', reason: 'NOT_PLANNED' }, { status: 'Not planned', close: null }],
     [{ pr: 'none', issue: 'OPEN', member: false }, { status: 'Todo', close: null }],
-    [{ pr: 'none', issue: 'OPEN', member: true }, { status: null, close: null }],
+    [{ pr: 'none', issue: 'OPEN', member: true, board: 'In Progress' }, { status: null, close: null }],
+    // r0-4: a member with an empty Status is initialized, never treated as synchronized.
+    [{ pr: 'none', issue: 'OPEN', member: true, board: null }, { status: 'Todo', close: null }],
   ]
   for (const [facts, expected] of rows) assert.deepEqual(decideBoardState(facts), expected, JSON.stringify(facts))
   assert.deepEqual(decideBoardState({ pr: 'unknown', issue: 'OPEN' }), { gap: 'pr-state-unreadable' })
@@ -31,6 +33,53 @@ test('AC-4/6: adopted State Mapping supplies actual board labels', () => {
   const text = '## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Queue | Draft |\n| Inspect | Review |\n| Shipped | Done |\n'
   assert.deepEqual(stateMapping(text), { Draft: 'Queue', Review: 'Inspect', Done: 'Shipped' })
   assert.deepEqual(stateMapping(''), { Draft: 'Draft', Ready: 'Ready', 'In Progress': 'In Progress', Review: 'Review', Done: 'Done' })
+})
+
+// r0-2: closure without completion lives in the native field unless the adoption names a board column for it.
+test('AC-1/4/6: Not planned converges on native terminal states and writes only an adopted column', () => {
+  assert.equal(stateMapping('- `not-planned-state`: `Not planned`\n')['Not planned'], 'Not planned')
+  assert.equal(stateMapping('')['Not planned'], undefined)
+  for (const native of ['Canceled', 'Removed']) {
+    let state = { issueState: 'OPEN', issueReason: null, boardState: 'Review', member: true }
+    const writes = []
+    const cards = new Map([['7', null]])
+    const pm = {
+      listCards: () => [...cards.keys()].map(id => ({ id })),
+      cardState: () => state,
+      closeCard: ({ reason }) => { writes.push(`close:${reason}`); state = { ...state, issueState: 'CLOSED', issueReason: 'NOT_PLANNED', boardState: native }; return { confirmed: true } },
+      setBoardState: ({ state: next }) => { writes.push(`status:${next}`); return { confirmed: false } },
+    }
+    assert.deepEqual(applyBoardState({ pm, id: '7', pr: 'closed-unmerged' }), { confirmed: true, expected: null, actions: ['close:unmerged'] }, native)
+    assert.deepEqual(writes, ['close:unmerged'], native)
+    assert.deepEqual(auditCards({ pm, code: { linkedPr: () => 'closed-unmerged' } }), { mismatches: [], gaps: [] }, native)
+  }
+  let state = { issueState: 'CLOSED', issueReason: 'NOT_PLANNED', boardState: 'Done', member: true }
+  const pm = {
+    listCards: () => [{ id: '8' }],
+    cardState: () => state,
+    setBoardState: ({ state: next }) => { state = { ...state, boardState: next }; return { confirmed: true } },
+  }
+  const mapping = stateMapping('- `not-planned-state`: `Not planned`\n')
+  assert.deepEqual(auditCards({ pm, code: { linkedPr: () => 'none' }, mapping }).mismatches, [{ id: '8', actual: 'Done', expected: 'Not planned' }])
+  assert.deepEqual(applyBoardState({ pm, id: '8', pr: 'none', mapping }), { confirmed: true, expected: 'Not planned', actions: ['status:Not planned'] })
+  assert.deepEqual(auditCards({ pm, code: { linkedPr: () => 'none' }, mapping }), { mismatches: [], gaps: [] })
+})
+
+// r0-4: creation and audit initialize a member whose Status is empty, once.
+test('AC-5: a member with an empty Status gets the mapped Todo, then audits clean', () => {
+  let state = { issueState: 'OPEN', issueReason: null, boardState: null, member: true }
+  const writes = []
+  const pm = {
+    listCards: () => [{ id: '9' }],
+    cardState: () => state,
+    setBoardState: ({ state: next }) => { writes.push(next); state = { ...state, boardState: next }; return { confirmed: true } },
+  }
+  const input = { pm, code: { linkedPr: () => 'none' }, mapping: { Draft: 'Todo' } }
+  assert.deepEqual(auditCards(input).mismatches, [{ id: '9', actual: null, expected: 'Todo' }])
+  assert.deepEqual(applyBoardState({ pm, id: '9', pr: 'none', mapping: { Draft: 'Todo' } }), { confirmed: true, expected: 'Todo', actions: ['status:Todo'] })
+  assert.deepEqual(applyBoardState({ pm, id: '9', pr: 'none', mapping: { Draft: 'Todo' } }), { confirmed: true, expected: null, actions: [] })
+  assert.deepEqual(auditCards(input), { mismatches: [], gaps: [] })
+  assert.deepEqual(writes, ['Todo'])
 })
 
 test('AC-1/5: apply adds membership before status, then a repeated run writes nothing', () => {

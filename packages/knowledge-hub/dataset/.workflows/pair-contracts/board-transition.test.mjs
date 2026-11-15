@@ -17,6 +17,23 @@ test('AC-1: PR open transition uses the PM adapter and adopted Review label', ()
   assert.deepEqual(calls, ['Inspect'])
 })
 
+// r0-8: a `Refs: <ID>` association writes only when the ID resolves to exactly one card of the bound PM tool.
+test('AC-1/4: --require-card skips an unresolved or foreign card without writing, and applies a resolved one', () => {
+  assert.deepEqual(parseArgs(['--story', 'ENG-42', '--pr-state', 'open', '--require-card']), { story: 'ENG-42', pr: 'open', requireCard: true })
+  let boardState = 'Todo'
+  const writes = []
+  const pm = {
+    parseCardRef: ref => ({ id: ref, inScope: ref.startsWith('ENG-') }),
+    readCard: id => { if (id !== 'ENG-42') throw new Error(`issue ${id} not found`); return { state: 'OPEN' } },
+    cardState: () => ({ issueState: 'OPEN', issueReason: null, boardState, member: true }),
+    setBoardState: ({ id, state }) => { writes.push(`${id}:${state}`); boardState = state; return { confirmed: true } },
+  }
+  for (const story of ['ENG-404', 'OPS-42']) assert.deepEqual(runTransition({ hosts: { pm }, story, pr: 'open', adoption: '', requireCard: true }), { confirmed: false, skipped: 'card-unresolved' }, story)
+  assert.deepEqual(writes, [])
+  assert.equal(runTransition({ hosts: { pm }, story: 'ENG-42', pr: 'open', adoption: '', requireCard: true }).confirmed, true)
+  assert.deepEqual(writes, ['ENG-42:Review'])
+})
+
 test('AC-1: transition args refuse implicit apply and unknown PR states', () => {
   assert.deepEqual(parseArgs(['--story', '42', '--pr-state', 'open']), { story: '42', pr: 'open' })
   assert.deepEqual(parseArgs(['--story', '42', '--pr-state', 'none']), { story: '42', pr: 'none' })

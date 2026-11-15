@@ -566,5 +566,89 @@
     "role": "write",
     "allow": false,
     "bindIdentities": true
+  },
+  {
+    "id": "r2-10-deny-null-payload",
+    "role": "admin",
+    "nullPayload": true,
+    "allow": false,
+    "allStates": true
+  },
+  {
+    "id": "r0-8-refs-linear",
+    "role": "write",
+    "body": "Refs: ENG-42",
+    "story": "ENG-42",
+    "requireCard": true,
+    "allow": true,
+    "allStates": true
+  },
+  {
+    "id": "r0-8-refs-filesystem",
+    "role": "admin",
+    "body": "Implements the story.\n\nRefs: 01-01-042",
+    "story": "01-01-042",
+    "requireCard": true,
+    "allow": true
+  },
+  {
+    "id": "r0-8-refs-numeric",
+    "role": "maintain",
+    "body": "Refs: #42",
+    "story": "42",
+    "requireCard": true,
+    "allow": true
+  },
+  {
+    "id": "r0-8-refs-azure",
+    "role": "write",
+    "body": "Refs: AB#42",
+    "story": "42",
+    "requireCard": true,
+    "allow": true
+  },
+  {
+    "id": "r0-8-refs-native-wins",
+    "role": "write",
+    "body": "Closes #42\nRefs: ENG-7",
+    "story": "42",
+    "allow": true
+  },
+  {
+    "id": "r0-8-refs-unresolved",
+    "role": "write",
+    "body": "Refs: ENG-404",
+    "story": "ENG-404",
+    "requireCard": true,
+    "transitionOutput": {
+      "confirmed": false,
+      "skipped": "card-unresolved"
+    },
+    "allow": true
+  },
+  {
+    "id": "r0-8-refs-multiple",
+    "role": "write",
+    "body": "Refs: ENG-42\nRefs: ENG-43",
+    "allow": false
+  },
+  {
+    "id": "r0-8-refs-invalid",
+    "role": "write",
+    "body": "Refs: ENG 42; rm -rf /",
+    "allow": false
+  },
+  {
+    "id": "r0-8-refs-fork",
+    "role": "admin",
+    "fork": true,
+    "body": "Refs: ENG-42",
+    "allow": false
+  },
+  {
+    "id": "r0-8-refs-read",
+    "role": "read",
+    "body": "Refs: ENG-42",
+    "allow": false
   }
 ]
