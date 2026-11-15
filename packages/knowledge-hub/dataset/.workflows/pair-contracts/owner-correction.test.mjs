@@ -189,15 +189,16 @@ test('preparation waiver r1-1: a comment already consumed, edited to name a NEWE
 // A host faithful to GitHub: a comment is looked up NUMERICALLY (`…-0555` is comment 555) and comes back with its
 // canonical id, the repo of its html_url, and its created/updated times.
 const T0 = '2026-11-15T10:00:00Z'
-const faithful = (comments, { updatedAt = T0 } = {}) => ({
+const faithful = (comments, { updatedAt = T0, createdAt = T0, repo = 'o/r' } = {}) => ({
   code: {
+    id: 'github',
     parseCommentRef: (ref, { repo }) => {
       const m = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:pull|issues)\/(\d+)#issuecomment-(\d+)$/.exec(ref)
       return m ? { pr: Number(m[3]), id: m[4], inScope: `${m[1]}/${m[2]}` === repo } : null
     },
     readComment: ({ id }) => {
       const c = comments[Number(id)]
-      return c && { ...c, id: String(Number(id)), repo: 'o/r', createdAt: T0, updatedAt }
+      return c && { ...c, id: String(Number(id)), repo, createdAt, updatedAt }
     },
   },
 })
@@ -228,16 +229,29 @@ test('preparation waiver r0-1: `-0555` after `-555` on a NEWER attempt of the sa
   assert.equal(readApprovals(dir).length, 1)
 })
 
-for (const [label, updatedAt, reason] of [
-  ['never edited', T0, undefined],
-  ['edited after it was posted', '2026-11-15T10:07:00Z', 'comment-edited'],
-  ['with no edit times to prove it', null, 'comment-edited'],
+for (const [label, times, reason] of [
+  ['never edited', {}, undefined],
+  ['edited after it was posted', { updatedAt: '2026-11-15T10:07:00Z' }, 'comment-edited'],
+  ['with no update time', { updatedAt: null }, 'comment-edited'],
+  // a host that exposes no comment times at all (today Azure DevOps): undefined === undefined proves nothing
+  ['from a host with no comment times at all', { createdAt: undefined, updatedAt: undefined }, 'comment-edited'],
 ]) {
   test(`preparation waiver: a maintainer comment ${label} ⇒ ${reason ?? 'approved'}`, () => {
     const dir = waiverRun()
-    const host = faithful({ 555: c('rucka', waiver()) }, { updatedAt })
+    const comments = { 555: { ...c('rucka', waiver()), createdAt: undefined, updatedAt: undefined } }
+    const host = { code: { ...faithful(comments).code, readComment: ({ id }) => ({ ...comments[Number(id)], id: String(Number(id)), repo: 'o/r', createdAt: T0, updatedAt: T0, ...times }) } }
     const out = approveCorrection({ dir, decisionRef: URL555, repo: 'o/r', pr: 7, host })
     assert.equal(out.reason, reason, JSON.stringify(out))
     assert.equal(readApprovals(dir).length, reason ? 0 : 1)
   })
 }
+
+test('preparation waiver r0-1: on GitHub the comment id is global — the same comment after a repo rename/transfer between runs is refused', () => {
+  const a = waiverRun()
+  const comments = { 555: c('rucka', waiver()) }
+  assert.equal(approveCorrection({ dir: a, decisionRef: URL555, repo: 'o/r', pr: 7, host: faithful(comments) }).approved, true)
+  const b = runB(a)
+  const out = approveCorrection({ dir: b, decisionRef: 'https://github.com/n/r/pull/7#issuecomment-555', repo: 'n/r', pr: 7, host: faithful(comments, { repo: 'n/r' }) })
+  assert.equal(out.reason, 'decisionRef-already-used')
+  assert.deepEqual(readApprovals(b), [])
+})

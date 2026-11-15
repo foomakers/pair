@@ -1789,10 +1789,12 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
     // Bound to the refused attempt the maintainer saw: its attempt number and the head it was refused on.
     if (c.attempt !== last.attempt || c.inputHead !== last.data.inputHead) return { approved: false, reason: 'waiver-attempt-mismatch' }
     return withLock(dir, lockWaitMs, () => {
-      // One comment, one waiver. The comment's identity is the CANONICAL one the host returns (its repo, case-folded, +
-      // its numeric id), never the ref's text (`/pull/` vs `/issues/`, `-0555` vs `-555`, a renamed repo). The same comment on the SAME target is a
-      // replay of this approval; on any other target — a newer attempt here, or any other run of this story — it is reuse.
-      const commentKey = `${String(comment.repo ?? repo ?? '').toLowerCase()}#${comment.id ?? (/^\d+$/.test(String(ref.id)) ? String(BigInt(ref.id)) : String(ref.id))}`
+      // One comment, one waiver, keyed on the comment's identity, never the ref's text (`/pull/` vs `/issues/`, `-0555`
+      // vs `-555`). A GitHub comment id is global (it survives a repo rename or transfer): `github#<id>`, no repo; any other
+      // host's id is unique per repo only, so its repo (case-folded) is part of the key. The same comment on the SAME target
+      // is a replay of this approval; on any other target — a newer attempt here, or any other run of this story — reuse.
+      const id = comment.id ?? (/^\d+$/.test(String(ref.id)) ? String(BigInt(ref.id)) : String(ref.id))
+      const commentKey = host.code.id === 'github' ? `github#${id}` : `${String(comment.repo ?? repo ?? '').toLowerCase()}#${id}`
       const target = `${last.name}.attempt-${last.attempt}`
       const all = readApprovals(dir)
       const mine = all.find(a => a.kind === PREPARATION_WAIVER && a.commentKey === commentKey)
