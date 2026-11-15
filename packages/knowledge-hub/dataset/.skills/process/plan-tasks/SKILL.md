@@ -1,11 +1,11 @@
 ---
-name: plan-tasks
-description: "Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — added to the story body; no separate task issues are created. Composes /write-issue."
+name: pair-process-plan-tasks
+description: "Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — added to the story body; no separate task issues are created. Composes /pair-capability-write-issue."
 version: 0.6.0
 author: Foomakers
 ---
 
-# /plan-tasks — Task Breakdown
+# /pair-process-plan-tasks — Task Breakdown
 
 Transform a refined user story into specific, actionable implementation tasks. Task-level idempotency: detects existing tasks in the story body and creates only missing ones. Adds an integrated Technical Analysis + Task Breakdown section to the story issue body (the skill composes the full updated body; write-issue overwrites it, it does not append). Tasks live inside the story — no separate task issues are created in the PM tool.
 
@@ -15,12 +15,14 @@ Transform a refined user story into specific, actionable implementation tasks. T
 
 Executable form of the **`plan-tasks`** step, and a composer of `define-bounded-contexts`. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
+Before in-session dispatch, check the selected `plan-tasks` stage against the detected host with the shared resolver's `gaps --host` command. Show any gap and wait; see [workflow host gaps](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/workflow-host-gaps.md).
+
 ## Composed Skills
 
 | Skill          | Type       | Required                                                   |
 | -------------- | ---------- | ---------------------------------------------------------- |
-| `/write-issue` | Capability | Yes — updates the story issue body with the Task Breakdown section |
-| `/map-contexts` | Capability | Optional — scoped context mapping for the story's touched bounded contexts. Graceful degradation if absent. |
+| `/pair-capability-write-issue` | Capability | Yes — updates the story issue body with the Task Breakdown section |
+| `/pair-capability-map-contexts` | Capability | Optional — scoped context mapping for the story's touched bounded contexts. Graceful degradation if absent. |
 
 ## Arguments
 
@@ -67,7 +69,7 @@ Step 0's selection question is asked only when `$story` is absent; an autonomous
 1. **Act**: Analyze the story requirements against adoption files:
    - Read [architecture.md](../../../.pair/adoption/tech/architecture.md) for architectural patterns.
    - Read [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) for implementation choices.
-   - Map story to [bounded contexts](../../../.pair/adoption/tech/boundedcontext/).
+   - Map story to [bounded contexts](../../../.pair/adoption/tech/boundedcontext).
 2. **Act**: Present technical context summary to developer for validation. <!-- approval-round: kind=confirm; auto=accept -->
 3. **Verify**: Developer approves. Context established. <!-- approval-round: kind=confirm; auto=accept -->
 
@@ -75,12 +77,12 @@ Step 0's selection question is asked only when `$story` is absent; an autonomous
 
 ### Step 2.5: Context Mapping (scoped)
 
-1. **Check**: Is `/map-contexts` installed, and is `define-bounded-contexts` enabled by the project's process profile?
+1. **Check**: Is `/pair-capability-map-contexts` installed, and is `define-bounded-contexts` enabled by the project's process profile?
 2. **Skip**: If not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) → skip with a note and proceed to Step 3 without context mapping. A composed disabled step never prompts.
-3. **Act**: Compose `/map-contexts` with `$scope` set to the bounded contexts/services touched by this story (from Step 2's mapping) — not `all` — full-catalog remapping stays `/bootstrap`-only.
+3. **Act**: Compose `/pair-capability-map-contexts` with `$scope` set to the bounded contexts/services touched by this story (from Step 2's mapping) — not `all` — full-catalog remapping stays `/pair-process-bootstrap`-only.
 4. **Verify**: Bounded context catalog delta (if any) approved by developer. Task breakdown always proceeds to Step 3 regardless of the context-mapping outcome. <!-- approval-round: kind=confirm; auto=accept -->
 
-   Under `$approval: auto` the delta is passed through to `/map-contexts` with `$approval: auto` and reported.
+   Under `$approval: auto` the delta is passed through to `/pair-capability-map-contexts` with `$approval: auto` and reported.
 
 ### Step 3: Task Identification
 
@@ -131,7 +133,7 @@ For each task (skipping tasks that already exist in the story body):
 
 ### Step 6: PM Tool Update
 
-1. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]`, and `$content` = the story's current full body with the Task Breakdown section merged in (`/write-issue` overwrites the body as-is, it does not append). Tasks are always documented inline in the story body.
+1. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and `$content` = the story's current full body with the Task Breakdown section merged in (`/pair-capability-write-issue` overwrites the body as-is, it does not append). Tasks are always documented inline in the story body.
 2. **Verify**: Story body updated with Task Breakdown section.
 
 ### Step 7: Already-Complete Update (optional path)
@@ -147,7 +149,7 @@ Reached only when Step 1 detects all tasks are present with full AC coverage. Un
    > 4. Full re-breakdown
 
 2. **Act**: For selected option, re-execute the corresponding steps.
-3. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]`, and updated content.
+3. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and updated content.
 4. **Verify**: Story updated.
 
 ## Output Format
@@ -167,16 +169,16 @@ The `Next:` line names only steps enabled by the project's [process profile](../
 ## HALT Conditions
 
 - **No Refined stories in backlog** (Step 0) — nothing to break down.
-- **Story not found or not Refined** (Step 0) — must be refined first (suggest `/refine-story`). Exception: a Draft card driven by the autonomous prepare phase under `$approval: auto` (US-523; refinement holds Ready back under `prepare: hold-never|hold-when`) is planned as-is, never a HALT.
+- **Story not found or not Refined** (Step 0) — must be refined first (suggest `/pair-process-refine-story`). Exception: a Draft card driven by the autonomous prepare phase under `$approval: auto` (US-523; refinement holds Ready back under `prepare: hold-never|hold-when`) is planned as-is, never a HALT.
 - **PM tool not accessible** — cannot read or update stories.
 - **Developer rejects task list** (Step 3) — must resolve before proceeding.
 - **AC coverage gap** (Step 5) — every AC must be covered by at least one task.
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/write-issue` not installed / PM tool not accessible → produce the task breakdown content, ask developer to update manually) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce the task breakdown content, ask developer to update manually) for the standard scenarios. Additional cases:
 
-- **`/map-contexts` not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md)** (Step 2.5): the task breakdown is still produced; context mapping is skipped with a note, never a HALT.
+- **`/pair-capability-map-contexts` not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md)** (Step 2.5): the task breakdown is still produced; context mapping is skipped with a note, never a HALT.
 - If adoption files (architecture, tech-stack, bounded contexts) are not found, skip technical context alignment and warn.
 
 ## Notes

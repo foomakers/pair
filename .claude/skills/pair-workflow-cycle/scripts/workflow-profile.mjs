@@ -139,6 +139,31 @@ export function stageFor({ skillText, batchMode } = {}) {
   return STAGES.includes(id) ? id : 'defaults'
 }
 
+const HOST_ENGINES = ['claude', 'codex', 'pi', 'opencode']
+const hostAcceptsModel = (host, model) => model == null || (
+  host === 'claude' ? /^(claude-|haiku$|sonnet$|opus$)/.test(model) :
+  host === 'codex' ? /^gpt-/.test(model) :
+  (host === 'pi' || host === 'opencode') ? /^[^/]+\/[^/]+$/.test(model) : false
+)
+
+/** Pre-dispatch gaps for an in-session host. Unknown hosts fail closed. */
+export function gapsForHost(resolved, host, card) {
+  const gaps = []
+  for (const stage of [...STAGES, 'defaults']) {
+    const settings = resolved.stages[stage]
+    const engine = settings.engine.value === 'default' ? host : settings.engine.value
+    const model = settings.model.resolved.id
+    const engineGap = !HOST_ENGINES.includes(host) || engine !== host
+    const modelGap = !engineGap && !hostAcceptsModel(host, model)
+    if (!engineGap && !modelGap) continue
+    const wanted = `${engine ?? 'unknown'}${model ? ` / ${model}` : ' / engine default'}`
+    const selection = resolved.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(resolved.sourceDetail)}` : resolved.source === 'argument' ? ` --profile ${JSON.stringify(resolved.name)}` : ''
+    const command = `pair run --card ${card ?? '<card-id>'}${selection}`
+    gaps.push({ stage, wanted, host, candidate: null, command, reason: engineGap ? 'engine' : 'model' })
+  }
+  return gaps
+}
+
 // ── resolution ───────────────────────────────────────────────────────────────
 // Cascade, resolved ONCE per run: --workflow-config (an external file, verbatim) > --profile (looked up
 // in `files`/`inline`) > pair.config.json's `workflowProfiles.default` > the KB default.
@@ -418,8 +443,8 @@ if (isMain()) {
       if (!rest[i].startsWith('--') || rest[i + 1] === undefined) throw new Error(`malformed arguments near ${rest[i]}`)
       opts[rest[i].slice(2)] = rest[i + 1]
     }
-    const FLAGS = { resolve: ['root', 'profile', 'workflow-config', 'tier', 'dir'], bind: ['dir', 'name', 'hash', 'source'], 'stage-for': ['skill-text', 'batch-mode'] }
-    if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected resolve | bind | stage-for)`)
+    const FLAGS = { resolve: ['root', 'profile', 'workflow-config', 'tier', 'dir', 'host', 'card'], bind: ['dir', 'name', 'hash', 'source'], 'stage-for': ['skill-text', 'batch-mode'], gaps: ['root', 'profile', 'workflow-config', 'tier', 'host', 'card'] }
+    if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected resolve | bind | stage-for | gaps)`)
     const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
     if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
     if (cmd === 'stage-for') {
@@ -435,8 +460,13 @@ if (isMain()) {
     }
     if (opts.root === undefined) throw new Error('--root is required')
     const resolved = resolveProfile({ root: opts.root, profile: opts.profile, workflowConfig: opts['workflow-config'], tier: opts.tier })
+    if (cmd === 'gaps') {
+      if (opts.host === undefined) throw new Error('--host is required')
+      out({ host: opts.host, gaps: gapsForHost(resolved, opts.host, opts.card) })
+      process.exit(0)
+    }
     const binding = opts.dir !== undefined ? bindProfile({ dir: opts.dir, resolved }) : undefined
-    out({ ...resolved, table: describeProfile(resolved), contextPolicy: profileContextPolicy(resolved), ...(binding ? { binding } : {}) })
+    out({ ...resolved, table: describeProfile(resolved), contextPolicy: profileContextPolicy(resolved), ...(opts.host ? { gaps: gapsForHost(resolved, opts.host, opts.card) } : {}), ...(binding ? { binding } : {}) })
   } catch (e) {
     if (e instanceof ProfileError) {
       out({ halt: e.code, detail: e.detail })

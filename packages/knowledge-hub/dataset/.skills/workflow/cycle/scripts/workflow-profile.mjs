@@ -12,13 +12,14 @@ import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { CONTEXT_TABLE, contextReuseAdmissibleInto } from './cycle-state.mjs'
+import { CONTEXT_TABLE } from './cycle-state.mjs'
 
 // refine-story/plan-tasks/triage/classify (#617 AC-3): declared, not yet wired — routing lands with #617.
 export const STAGES = ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge', 'refine-story', 'plan-tasks', 'triage', 'classify']
 export const FIELDS = ['engine', 'model', 'effort', 'context']
 export const EFFORTS = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
 export const CONTEXTS = ['fresh', 'reuse']
+const LEGACY_REUSE_STAGES = ['prepare', 'green']
 // The KB default (D21): the schema default for engine and model, default effort, a fresh context.
 export const MODEL_CLASSES = ['cheap', 'balanced', 'frontier']
 /** A model value meaning "the class `## Model Policy` assigns to the card's risk tier". */
@@ -57,7 +58,22 @@ function fieldErrors(where, entry) {
   if (typeof entry.model === 'string' && isModelTypo(entry.model))
     errs.push(`${where}.model: '${entry.model}' looks like a mistyped model keyword — expected default | by-tier | ${MODEL_CLASSES.join(' | ')}, or an explicit model id that is not a near-miss of them`)
   if (entry.effort !== undefined && !EFFORTS.includes(entry.effort)) errs.push(`${where}.effort: '${entry.effort}' is not one of ${EFFORTS.join(' | ')}`)
-  if (entry.context !== undefined && !CONTEXTS.includes(entry.context)) errs.push(`${where}.context: '${entry.context}' is not one of ${CONTEXTS.join(' | ')}`)
+  if (entry.context !== undefined && !CONTEXTS.includes(entry.context)) {
+    const context = entry.context
+    if (!isObject(context)) errs.push(`${where}.context: '${context}' is not one of ${CONTEXTS.join(' | ')} or a sharing rule`)
+    else {
+      for (const key of Object.keys(context)) if (!['shared-with', 'when'].includes(key)) errs.push(`${where}.context: unknown field '${key}'`)
+      const sources = Array.isArray(context['shared-with']) ? context['shared-with'] : [context['shared-with']]
+      if (!sources.length || sources.some(s => !STAGES.includes(s))) errs.push(`${where}.context.shared-with: expected a stage id (${STAGES.join(', ')})`)
+      if (!isObject(context.when) || Object.keys(context.when).some(k => k !== 'risk')) errs.push(`${where}.context.when: expected { risk: green | yellow | red }`)
+      else {
+        const risks = Array.isArray(context.when.risk) ? context.when.risk : [context.when.risk]
+        if (!risks.length || risks.some(r => !['green', 'yellow', 'red', 'risk:green', 'risk:yellow', 'risk:red'].includes(r))) errs.push(`${where}.context.when.risk: expected green | yellow | red`)
+        if (where === 'stages.validate' && risks.some(r => r === 'red' || r === 'risk:red')) errs.push(`${where}.context: risk:red validate must be fresh`)
+      }
+      if (where === 'stages.verify') errs.push(`${where}.context: verify must be fresh`)
+    }
+  }
   return errs
 }
 
@@ -87,7 +103,7 @@ export function validateProfile(profile) {
         errs.push(...fieldErrors(`stages.${stage}`, entry))
         // A stage entry's own `reuse` must be one the transition table admits — never accepted here
         // and silently overridden at dispatch time.
-        if (isObject(entry) && entry.context === 'reuse' && !contextReuseAdmissibleInto(stage))
+        if (isObject(entry) && entry.context === 'reuse' && !LEGACY_REUSE_STAGES.includes(stage))
           errs.push(`stages.${stage}.context: 'reuse' is not admissible into '${stage}' by the cycle transition table (cycle-state.mjs CONTEXT_TABLE) — the stage always runs fresh`)
       }
   }
@@ -98,7 +114,7 @@ export function validateProfile(profile) {
  * The per-field value of one stage, each with where it came from: `stage` > `defaults` > `KB default`.
  * A `defaults.context: reuse` applies only where the transition table admits it (never an error).
  */
-export function effectiveStage(profile, stage) {
+export function effectiveStage(profile, stage, tier) {
   const out = {}
   for (const f of FIELDS) {
     const own = profile?.stages?.[stage]?.[f]
@@ -107,8 +123,45 @@ export function effectiveStage(profile, stage) {
     else if (dflt !== undefined) out[f] = { value: dflt, source: 'defaults' }
     else out[f] = { value: KB_DEFAULT[f], source: 'KB default' }
   }
-  if (out.context.value === 'reuse' && out.context.source === 'defaults' && !contextReuseAdmissibleInto(stage)) out.context = { value: 'fresh', source: 'defaults' }
+  if (out.context.value === 'reuse' && out.context.source === 'defaults' && !LEGACY_REUSE_STAGES.includes(stage)) out.context = { value: 'fresh', source: 'defaults' }
+  if (isObject(out.context.value)) {
+    const rule = out.context.value
+    const risks = Array.isArray(rule.when?.risk) ? rule.when.risk : [rule.when?.risk]
+    const matches = risks.some(r => (r.startsWith('risk:') ? r : `risk:${r}`) === tier)
+    out.context = { value: matches ? 'reuse' : 'fresh', source: out.context.source, sharedWith: matches ? (Array.isArray(rule['shared-with']) ? rule['shared-with'] : [rule['shared-with']]) : [] }
+  }
+  if (stage === 'verify') out.context = { value: 'fresh', source: out.context.source }
   return out
+}
+
+export function stageFor({ skillText, batchMode } = {}) {
+  const id = batchMode ?? /<!--\s*process-step:\s*id=([a-z][a-z-]*)\s*-->/.exec(skillText ?? '')?.[1]
+  return STAGES.includes(id) ? id : 'defaults'
+}
+
+const HOST_ENGINES = ['claude', 'codex', 'pi', 'opencode']
+const hostAcceptsModel = (host, model) => model == null || (
+  host === 'claude' ? /^(claude-|haiku$|sonnet$|opus$)/.test(model) :
+  host === 'codex' ? /^gpt-/.test(model) :
+  (host === 'pi' || host === 'opencode') ? /^[^/]+\/[^/]+$/.test(model) : false
+)
+
+/** Pre-dispatch gaps for an in-session host. Unknown hosts fail closed. */
+export function gapsForHost(resolved, host, card) {
+  const gaps = []
+  for (const stage of [...STAGES, 'defaults']) {
+    const settings = resolved.stages[stage]
+    const engine = settings.engine.value === 'default' ? host : settings.engine.value
+    const model = settings.model.resolved.id
+    const engineGap = !HOST_ENGINES.includes(host) || engine !== host
+    const modelGap = !engineGap && !hostAcceptsModel(host, model)
+    if (!engineGap && !modelGap) continue
+    const wanted = `${engine ?? 'unknown'}${model ? ` / ${model}` : ' / engine default'}`
+    const selection = resolved.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(resolved.sourceDetail)}` : resolved.source === 'argument' ? ` --profile ${JSON.stringify(resolved.name)}` : ''
+    const command = `pair run --card ${card ?? '<card-id>'}${selection}`
+    gaps.push({ stage, wanted, host, candidate: null, command, reason: engineGap ? 'engine' : 'model' })
+  }
+  return gaps
 }
 
 // ── resolution ───────────────────────────────────────────────────────────────
@@ -260,12 +313,13 @@ function finish(root, profile, source, sourceDetail, notes, tier) {
   let policy
   const policyOf = () => (policy ??= readModelPolicy(root))
   const stages = Object.fromEntries(
-    STAGES.map(stage => {
-      const eff = effectiveStage(profile, stage)
+    [...STAGES, 'defaults'].map(stage => {
+      const eff = effectiveStage(profile, stage, tier)
       eff.model = { ...eff.model, resolved: resolveModel(eff.model.value, { tier, modelClasses: profile.modelClasses, policyOf }) }
       return [stage, eff]
     }),
   )
+  if (tier === 'risk:red' && stages.validate.context.value === 'reuse') throw new ProfileError('profile-invalid', `${sourceDetail}: stages.validate.context: risk:red validate must be fresh`)
   return { name: profile.name, source, sourceDetail, hash: profileHash(profile), profile, stages, notes, ...(tier ? { tier } : {}) }
 }
 
@@ -356,7 +410,10 @@ export function profileContextPolicy(resolved) {
   const policy = {}
   for (const stage of STAGES)
     if (resolved.stages[stage].context.value === 'reuse')
-      for (const transition of CONTEXT_TABLE.reuseAllowed) if (transition.split('->')[1] === stage) policy[transition] = 'reuse'
+      for (const transition of CONTEXT_TABLE.reuseAllowed) {
+        const [from, to] = transition.split('->')
+        if (to === stage && (resolved.stages[stage].context.sharedWith === undefined ? ['prepare->prepare', 'implement->green', 'green->green'].includes(transition) : resolved.stages[stage].context.sharedWith.includes(from))) policy[transition] = 'reuse'
+      }
   return policy
 }
 
@@ -386,10 +443,14 @@ if (isMain()) {
       if (!rest[i].startsWith('--') || rest[i + 1] === undefined) throw new Error(`malformed arguments near ${rest[i]}`)
       opts[rest[i].slice(2)] = rest[i + 1]
     }
-    const FLAGS = { resolve: ['root', 'profile', 'workflow-config', 'tier', 'dir'], bind: ['dir', 'name', 'hash', 'source'] }
-    if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected resolve | bind)`)
+    const FLAGS = { resolve: ['root', 'profile', 'workflow-config', 'tier', 'dir', 'host', 'card'], bind: ['dir', 'name', 'hash', 'source'], 'stage-for': ['skill-text', 'batch-mode'], gaps: ['root', 'profile', 'workflow-config', 'tier', 'host', 'card'] }
+    if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected resolve | bind | stage-for | gaps)`)
     const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
     if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
+    if (cmd === 'stage-for') {
+      out({ stage: stageFor({ skillText: opts['skill-text'], batchMode: opts['batch-mode'] }) })
+      process.exit(0)
+    }
     if (cmd === 'bind') {
       // Records an identity a coordinator ALREADY resolved (and printed) — it never re-resolves.
       for (const k of ['dir', 'name', 'hash']) if (opts[k] === undefined) throw new Error(`--${k} is required`)
@@ -399,8 +460,13 @@ if (isMain()) {
     }
     if (opts.root === undefined) throw new Error('--root is required')
     const resolved = resolveProfile({ root: opts.root, profile: opts.profile, workflowConfig: opts['workflow-config'], tier: opts.tier })
+    if (cmd === 'gaps') {
+      if (opts.host === undefined) throw new Error('--host is required')
+      out({ host: opts.host, gaps: gapsForHost(resolved, opts.host, opts.card) })
+      process.exit(0)
+    }
     const binding = opts.dir !== undefined ? bindProfile({ dir: opts.dir, resolved }) : undefined
-    out({ ...resolved, table: describeProfile(resolved), contextPolicy: profileContextPolicy(resolved), ...(binding ? { binding } : {}) })
+    out({ ...resolved, table: describeProfile(resolved), contextPolicy: profileContextPolicy(resolved), ...(opts.host ? { gaps: gapsForHost(resolved, opts.host, opts.card) } : {}), ...(binding ? { binding } : {}) })
   } catch (e) {
     if (e instanceof ProfileError) {
       out({ halt: e.code, detail: e.detail })
