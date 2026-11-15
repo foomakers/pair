@@ -159,9 +159,9 @@ function readSupersedes(runDir: string): ManualIntervention[] {
   for (const line of readFileSync(index, 'utf8').split('\n')) {
     if (!line.startsWith('| ') || line.includes('| --- |') || line.includes('| file |')) continue
     const cells = line
-      .split('|')
+      .split(/(?<!\\)\|/)
       .slice(1, -1)
-      .map(cell => cell.trim())
+      .map(cell => cell.trim().replace(/\\\|/g, '|'))
     if (cells.length === 5 && cells[2] && cells[3])
       entries.push({ kind: 'supersede', reason: cells[2], who: cells[3] })
   }
@@ -180,7 +180,7 @@ function readHumanDecisions(runDir: string): ManualIntervention[] {
   const entries: ManualIntervention[] = []
   const seen = new Set<string>()
   for (const name of readdirSync(runDir)
-    .filter(name => /review-phase-\d+\.json$/.test(name))
+    .filter(name => /review-phase(?:\.attempt-\d+)?\.json$/.test(name))
     .sort()) {
     const data = readDecisionFile(join(runDir, name))
     if (data?.['recordType'] !== 'decision' || !Array.isArray(data['humanDecisions'])) continue
@@ -198,8 +198,12 @@ function readHumanDecisions(runDir: string): ManualIntervention[] {
 
 /** Read the cycle's own durable intervention trail, without treating card prose as authority. */
 export function readInterventions(runDir: string): ManualIntervention[] {
-  if (!existsSync(runDir)) return []
-  return [...readSupersedes(runDir), ...readHumanDecisions(runDir)]
+  try {
+    if (!existsSync(runDir)) return []
+    return [...readSupersedes(runDir), ...readHumanDecisions(runDir)]
+  } catch {
+    return [] // best effort: telemetry never fails delivery
+  }
 }
 
 export interface CardTelemetryInput {
@@ -241,6 +245,16 @@ function cardTokens(
   }
 }
 
+/** Retries = dispatches of a logical stage beyond its first, from durable records (survives resume). */
+function retryCount(stages: readonly TelemetryRecord[]): number {
+  const dispatches = new Map<string, number>()
+  for (const stage of stages) {
+    const key = `${String(stage['step'])}:${String(stage['phase'] ?? '')}`
+    dispatches.set(key, (dispatches.get(key) ?? 0) + 1)
+  }
+  return [...dispatches.values()].reduce((total, n) => total + n - 1, 0)
+}
+
 /** The card's numbers come from observed stage records; missing usage stays missing. */
 export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord {
   const stages = input.stages
@@ -268,7 +282,7 @@ export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord 
     rounds: new Set(stages.filter(stage => stage['step'] === 'verify').map(stage => stage['phase']))
       .size,
     dispatches: stages.length,
-    retries: stages.reduce((total, stage) => total + Number(stage['retries'] ?? 0), 0),
+    retries: retryCount(stages),
     findingsByRound: input.findingsByRound ?? {},
     repairs: input.repairs ?? 0,
     tokens: cardTokens(stages),
@@ -300,10 +314,15 @@ export function readCycleProgress(runDir: string): {
 } {
   const findingsByRound: Record<string, Record<string, number>> = {}
   let repairs = 0
-  if (!existsSync(runDir)) return { findingsByRound, repairs }
-  for (const name of readdirSync(runDir)
-    .filter(name => name.endsWith('.json'))
-    .sort()) {
+  let names: string[] = []
+  try {
+    names = readdirSync(runDir)
+      .filter(name => name.endsWith('.json'))
+      .sort()
+  } catch {
+    // best effort: absent or unreadable run directory
+  }
+  for (const name of names) {
     const handoff = readDecisionFile(join(runDir, name))
     if (handoff === undefined) continue
     repairs += repairCount(handoff)
@@ -341,6 +360,8 @@ export interface StageTelemetryInput {
   readonly processOutcome: 'success' | 'failed'
   readonly finalStatus?: string
   readonly retries: number
+  /** Whether the handoff advanced, known only after the next resolve. */
+  readonly advanced?: boolean
   readonly observation: EngineObservation
 }
 
@@ -348,7 +369,9 @@ function stageOutcomeClass(input: StageTelemetryInput): string {
   if (input.finalStatus === 'rejected') return 'rejected'
   if (input.finalStatus === 'refused') return 'refused'
   if (input.finalStatus === 'parked') return 'parked'
-  return input.processOutcome === 'success' && !input.finalStatus?.startsWith('failed')
+  return input.processOutcome === 'success' &&
+    input.advanced !== false &&
+    !input.finalStatus?.startsWith('failed')
     ? 'ok'
     : 'failed'
 }

@@ -238,7 +238,7 @@ it('AC-1/2: terminal card aggregates stage timing, usage, retries and interventi
     cause: 'policy',
     rounds: 1,
     dispatches: 2,
-    retries: 1,
+    retries: 0,
     wallMs: 100,
     activeMs: 40,
     idleMs: 60,
@@ -255,7 +255,7 @@ it('AC-2: records each durable maintainer intervention with actor and reason', (
     '# Maintainer interventions\n\n| file | what it is | why it was set aside | set aside by | what supersedes it |\n| --- | --- | --- | --- | --- |\n| a0-red-spec.json | red-spec | invalid contract | rucka | b.json |\n',
   )
   writeFileSync(
-    join(dir, 'r0-review-phase-2.json'),
+    join(dir, 'r0-review-phase.attempt-2.json'),
     JSON.stringify({
       recordType: 'decision',
       humanDecisions: [
@@ -272,7 +272,7 @@ it('AC-2: records each durable maintainer intervention with actor and reason', (
 it('AC-2: malformed intervention evidence does not hide the run outcome', () => {
   const dir = mkdtempSync(join(tmpdir(), 'pair-interventions-'))
   dirs.push(dir)
-  writeFileSync(join(dir, 'r0-review-phase-2.json'), '{bad')
+  writeFileSync(join(dir, 'r0-review-phase.attempt-2.json'), '{bad')
   expect(readInterventions(dir)).toEqual([])
 })
 

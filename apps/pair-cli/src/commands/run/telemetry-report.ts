@@ -43,6 +43,7 @@ function wastedShare(stages: readonly TelemetryRecord[]): number | undefined {
   let wasted = 0
   let total = 0
   for (const stage of stages) {
+    if (stage['step'] === 'merge') continue // deterministic: no engine usage to waste
     const tokens = tokenCount(stage)
     if (tokens === undefined) return undefined
     total += tokens

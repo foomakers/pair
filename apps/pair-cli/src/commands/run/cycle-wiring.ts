@@ -702,10 +702,12 @@ function recordStageTelemetry(input: {
   previousEnd: number
   retries: number
   result: CycleStageResult
+  pending?: PendingStages | undefined
 }): void {
   const { co, stage, spawn, key, start, end, previousEnd, retries, result } = input
   if (!input.enabled) return
-  appendTelemetry(
+  const settle = (advanced: boolean) =>
+    appendTelemetry(
     co.main,
     stageTelemetryRecord({
       id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
@@ -721,12 +723,28 @@ function recordStageTelemetry(input: {
       processOutcome: result.processOutcome,
       ...(result.final?.status !== undefined && { finalStatus: result.final.status }),
       retries,
+      advanced,
       observation: result.telemetry ?? {},
     }),
   )
+  if (input.pending !== undefined) input.pending.push(settle)
+  else settle(result.processOutcome === 'success')
 }
 
-const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates, progress?: CardProgress) => {
+/** Stage telemetry waits for the next resolve (did the handoff advance?); `onStage` settles it in dispatch order. */
+type PendingStages = Array<(advanced: boolean) => void>
+
+const taskReporter = (progress: CardProgress) => (payload: unknown) => {
+  const task = todoInProgress(payload)
+  if (task !== undefined) progress.task(task)
+}
+
+const spawnStageFor = (
+  ctx: CycleDriverContext,
+  co: Coordinates,
+  progress?: CardProgress,
+  pending?: PendingStages,
+) => {
   let previousEnd = Date.now()
   const attempts = new Map<string, number>()
   return async (packet: unknown) => {
@@ -748,12 +766,7 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates, progress?: Card
       timeoutSeconds: ctx.timeoutSeconds,
       idleTimeoutSeconds: ctx.idleTimeoutSeconds,
       runIteration: spawnIteration,
-      ...(progress !== undefined && {
-        onEvent: (payload: unknown) => {
-          const task = todoInProgress(payload)
-          if (task !== undefined) progress.task(task)
-        },
-      }),
+      ...(progress !== undefined && { onEvent: taskReporter(progress) }),
     })
     const end = Date.now()
     recordStageTelemetry({
@@ -767,6 +780,7 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates, progress?: Card
       previousEnd,
       retries,
       result,
+      pending,
     })
     previousEnd = end
     return result as CycleStageResult
@@ -1348,7 +1362,7 @@ function adoptOtherRun(
   co.bridge.bindHosts(runDir)
   return {
     input: { ...input, runId },
-    co: { ...co, runDir },
+    co: { ...co, runId, runDir },
   }
 }
 
@@ -1401,6 +1415,14 @@ export function finalPart(record: CycleStageRecord): string {
   return ` — no final result (the stage ended without its structured JSON; the retry resumes from the commits already on the branch)${noResultWhy(record)}`
 }
 
+/** The PR the cycle's final resolve names (a fresh card is given none on entry). */
+function finalPr(outcome: CycleOutcome): number | undefined {
+  const pr = (outcome.next as { pr?: unknown } | undefined)?.pr
+  return typeof pr === 'number' ? pr : undefined
+}
+
+const SUCCESS = new Set(['ready-for-merge', 'merged'])
+
 function recordCardTelemetry({
   ctx,
   input,
@@ -1415,13 +1437,14 @@ function recordCardTelemetry({
   startedAt: number
 }): void {
   if (outcome.status === 'rounds-bound-reached' || outcome.status === 'other-run') return
+  const pr = finalPr(outcome) ?? input.pr
   appendTelemetry(
     co.main,
     cardTelemetryRecord({
       id: `${input.runId}:${input.card}`,
       card: input.card,
       run: input.runId,
-      ...(input.pr !== undefined && { pr: input.pr }),
+      ...(pr !== undefined && { pr }),
       pairVersion,
       workflowVersion: ctx.workflowVersion,
       profile: ctx.profile?.name ?? 'default',
@@ -1430,14 +1453,47 @@ function recordCardTelemetry({
       start: startedAt,
       end: Date.now(),
       outcome: outcome.status,
-      ...(outcome.status !== 'ready-for-merge' &&
-        outcome.status !== 'merged' && { cause: outcome.reason ?? outcome.status }),
+      ...(!SUCCESS.has(outcome.status) && { cause: outcome.reason ?? outcome.status }),
       stages: readTelemetry(co.main, input.runId, input.card),
       interventions: readInterventions(co.runDir),
       ...readCycleProgress(co.runDir),
     }),
   )
 }
+
+const logStage = (record: CycleStageRecord) =>
+  console.log(
+    `  Stage ${record.step}${record.phase ? `:${record.phase}` : ''} — process ` +
+      `${record.processOutcome}, handoff ${record.handoffAdvanced ? 'advanced' : 'NOT advanced'}` +
+      `${record.detail ? ` (${record.detail})` : ''}` +
+      finalPart(record),
+  )
+
+/** The deterministic merge/CI-wait stage is one measured stage; it spends no engine tokens. */
+const mergeWithTelemetry =
+  (ctx: CycleDriverContext, co: Coordinates, merge: ReturnType<typeof mergeFor>) =>
+  async (next: CycleNext, answer: CycleResolveAnswer): Promise<CycleMergeOutcome> => {
+    const start = Date.now()
+    const merged = await merge(next, answer)
+    if (ctx.telemetryEnabled === true)
+      appendTelemetry(
+        co.main,
+        stageTelemetryRecord({
+          id: `${co.runId}:${co.cardId}:merge:${start}`,
+          run: co.runId,
+          card: co.cardId,
+          step: 'merge',
+          start,
+          end: Date.now(),
+          previousEnd: start,
+          engine: ctx.engine.id,
+          processOutcome: merged.status === 'merged' ? 'success' : 'failed',
+          retries: 0,
+          observation: {},
+        }),
+      )
+    return merged
+  }
 
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
@@ -1458,13 +1514,15 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
     const hooks = loadCycleHooks(ctx, co)
     const progress = progressFor(input.card, policy, co.title, input.onRunEvent)
     const startedAt = Date.now()
+    const pending: PendingStages = []
+    const merge = mergeFor(ctx, input, co, progress)
     const outcome = await runCycle({
       hooks,
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),
       packet: packetFor(ctx, input, co) as never,
-      spawnStage: spawnStageFor(ctx, co, progress),
-      mergeStage: mergeFor(ctx, input, co, progress),
+      spawnStage: spawnStageFor(ctx, co, progress, pending),
+      mergeStage: mergeWithTelemetry(ctx, co, merge),
       escalate: escalateFor(input, co),
       recoverDirty: recoverDirtyFor(ctx, input, co),
       beforePrepare: stashBeforePrepareFor(ctx, input, co),
@@ -1477,14 +1535,12 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       // forty-dispatch unattended run prints a single terminal status and nothing else: the stage
       // that mattered is indistinguishable from the thirty-nine that did not, and a stage that
       // silently wrote its handoff in the wrong place reads exactly like one that failed.
-      onStage: record =>
-        console.log(
-          `  Stage ${record.step}${record.phase ? `:${record.phase}` : ''} — process ` +
-            `${record.processOutcome}, handoff ${record.handoffAdvanced ? 'advanced' : 'NOT advanced'}` +
-            `${record.detail ? ` (${record.detail})` : ''}` +
-            finalPart(record),
-        ),
+      onStage: record => {
+        pending.shift()?.(record.handoffAdvanced)
+        logStage(record)
+      },
     })
+    pending.splice(0).forEach(settle => settle(true))
     if (ctx.telemetryEnabled === true) recordCardTelemetry({ ctx, input, co, outcome, startedAt })
     return outcome
   }
