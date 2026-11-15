@@ -256,6 +256,8 @@ function driveIteration(
   const run = wiring.deps.runIteration ?? spawnIteration
   return run({
     engine: resolved.engine.engine,
+    ...(resolved.model !== undefined && { model: resolved.model }),
+    ...(resolved.effort !== undefined && { effort: resolved.effort }),
     promptText,
     cwd: resolved.perimeter.cwd,
     autonomyArgs: resolved.autonomy.args,

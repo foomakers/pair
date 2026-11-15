@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import {
   resolveWorkflowProfile,
+  resolveProfileStage,
   stageSettings,
   stageEngineIds,
   workflowProfileRequested,
@@ -91,6 +92,7 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
       effort: 'medium',
     })
     expect(stageSettings(p, 'verify')).toEqual({ engine: 'pi', model: 'm-front', effort: 'high' })
+    expect(stageSettings(p, 'defaults')).toEqual({ engine: 'pi', effort: 'medium' })
     const kb = resolveWorkflowProfile(SCRIPTS, {
       root: mkdtempSync(join(tmpdir(), 'pair-wfp-kb-')),
     })
@@ -136,6 +138,7 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
     expect(stageFor({ skillText: '<!-- process-step: id=refine-story -->' })).toBe('refine-story')
     expect(stageFor({ batchMode: 'triage' })).toBe('triage')
     expect(stageFor({ skillText: '# Unmapped skill' })).toBe('defaults')
+    expect(resolveProfileStage(SCRIPTS, '<!-- process-step: id=plan-tasks -->')).toBe('plan-tasks')
   })
 
   it('conditional sharing applies at the named risk tier, while verify stays fresh (AC-14)', () => {

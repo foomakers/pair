@@ -542,30 +542,13 @@ function resolveStateOrder(options: ParseRunOptions): { stateOrder?: readonly st
   return { stateOrder: parseStateOrder(options.stateOrder) }
 }
 
-/**
- * US-488: `--profile` / `--workflow-config` select the DELIVERY-CYCLE profile, so they mean something
- * only on a `--card` entry or a `--root`/`--parallel` fan-out (forwarded to each child) — anywhere else they would be accepted and silently ignored, which is the
- * one thing a profile flag must never be (a typo'd model class quietly not applying).
- */
+/** `--profile` / `--workflow-config` select a workflow profile in every run mode. */
 function resolveProfileSelection(options: ParseRunOptions): {
   profile?: string
   workflowConfig?: string
 } {
   const profile = optionalText(options.profile, '--profile')
   const workflowConfig = optionalText(options.workflowConfig, '--workflow-config')
-  if (
-    (profile !== undefined || workflowConfig !== undefined) &&
-    options.card === undefined &&
-    options.cards === undefined &&
-    options.parallel === undefined &&
-    options.root === undefined
-  ) {
-    const flag = profile !== undefined ? '--profile' : '--workflow-config'
-    throw new Error(
-      `${flag} selects the delivery-cycle workflow profile and is only meaningful with --card, --root or --parallel ` +
-        '(the cycle coordinator entry)',
-    )
-  }
   return { ...(profile && { profile }), ...(workflowConfig && { workflowConfig }) }
 }
 

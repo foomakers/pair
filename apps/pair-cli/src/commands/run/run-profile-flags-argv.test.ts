@@ -62,12 +62,11 @@ describe('pair-cli run — --profile / --workflow-config through the registered 
       )
     })
 
-    it(`run --skill s ${flag} x (no --card) is refused naming the flag and --card`, async () => {
+    it(`run --skill s ${flag} x reaches the dispatcher`, async () => {
       const output = await runArgv(['--skill', 'pair-next', flag, 'x'])
 
-      expect(output).toContain(flag)
-      expect(output).toContain('--card')
-      expect(dispatched).toHaveLength(0)
+      expect(output).not.toMatch(/unknown option|reserved/i)
+      expect(dispatched).toHaveLength(1)
     })
   }
 })

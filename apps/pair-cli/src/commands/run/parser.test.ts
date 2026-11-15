@@ -328,15 +328,11 @@ describe('parseRunCommand — cycle-coordinator flags on --card (US-487)', () =>
     expect(config).not.toHaveProperty('workflowConfig')
   })
 
-  it.each([
-    ['profile', '--profile'],
-    ['workflowConfig', '--workflow-config'],
-  ])(
-    'refuses %s without --card, naming the flag (it selects the delivery-cycle profile)',
-    (key, flag) => {
-      expect(() => parseRunCommand({ skill: 'pair-next', [key]: 'x' })).toThrow(
-        new RegExp(`${flag} .*--card`),
-      )
+  it.each(['profile', 'workflowConfig'])(
+    'accepts %s with an off-cycle skill or prompt (AC-3)',
+    key => {
+      expect(parseRunCommand({ skill: 'pair-next', [key]: 'x' })).toHaveProperty(key, 'x')
+      expect(parseRunCommand({ prompt: 'hello', [key]: 'x' })).toHaveProperty(key, 'x')
     },
   )
 

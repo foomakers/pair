@@ -34,6 +34,29 @@ export function createSkillProbe(
   }
 }
 
+/** Read the installed skill through the same registry targets as the existence probe. */
+export function readInstalledSkill(
+  fs: FileSystemService,
+  config: Config,
+  projectRoot: string,
+  name: string,
+): string | undefined {
+  const registry = extractRegistries(config)[SKILLS_REGISTRY]
+  const targets = registry?.targets?.map(target => target.path) ?? ['.claude/skills']
+  const prefix = registry?.prefix
+  const directories = prefix ? [name, `${prefix}-${name}`, stripPrefix(name, prefix)] : [name]
+  for (const target of targets)
+    for (const directory of directories) {
+      const targetRoot = resolve(projectRoot, target)
+      const candidate = resolve(targetRoot, directory)
+      const inside = relative(targetRoot, candidate)
+      if (inside.startsWith('..') || isAbsolute(inside)) continue
+      const path = join(candidate, 'SKILL.md')
+      if (fs.existsSync(path)) return fs.readFileSync(path)
+    }
+  return undefined
+}
+
 /**
  * Whether `<target>/<directory>/SKILL.md` exists AND stays inside `<target>` (round 7, Major).
  *

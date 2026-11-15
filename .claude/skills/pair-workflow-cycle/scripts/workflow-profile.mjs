@@ -288,7 +288,7 @@ function finish(root, profile, source, sourceDetail, notes, tier) {
   let policy
   const policyOf = () => (policy ??= readModelPolicy(root))
   const stages = Object.fromEntries(
-    STAGES.map(stage => {
+    [...STAGES, 'defaults'].map(stage => {
       const eff = effectiveStage(profile, stage, tier)
       eff.model = { ...eff.model, resolved: resolveModel(eff.model.value, { tier, modelClasses: profile.modelClasses, policyOf }) }
       return [stage, eff]
@@ -418,10 +418,14 @@ if (isMain()) {
       if (!rest[i].startsWith('--') || rest[i + 1] === undefined) throw new Error(`malformed arguments near ${rest[i]}`)
       opts[rest[i].slice(2)] = rest[i + 1]
     }
-    const FLAGS = { resolve: ['root', 'profile', 'workflow-config', 'tier', 'dir'], bind: ['dir', 'name', 'hash', 'source'] }
-    if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected resolve | bind)`)
+    const FLAGS = { resolve: ['root', 'profile', 'workflow-config', 'tier', 'dir'], bind: ['dir', 'name', 'hash', 'source'], 'stage-for': ['skill-text', 'batch-mode'] }
+    if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected resolve | bind | stage-for)`)
     const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
     if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
+    if (cmd === 'stage-for') {
+      out({ stage: stageFor({ skillText: opts['skill-text'], batchMode: opts['batch-mode'] }) })
+      process.exit(0)
+    }
     if (cmd === 'bind') {
       // Records an identity a coordinator ALREADY resolved (and printed) — it never re-resolves.
       for (const k of ['dir', 'name', 'hash']) if (opts[k] === undefined) throw new Error(`--${k} is required`)

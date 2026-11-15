@@ -32,7 +32,7 @@ const files = (extra: Record<string, string> = {}, configExtra: Record<string, u
         },
         ...configExtra,
       }),
-      [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '',
+      [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '# Pair Loop',
       [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
       [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
       [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
@@ -56,7 +56,7 @@ const profileOf = (engine = 'default'): ResolvedWorkflowProfile => ({
   source: 'argument',
   sourceDetail: '/project/p.json',
   hash: 'f'.repeat(64),
-  stages: { implement: stage(engine) },
+  stages: { implement: stage(engine), defaults: stage(engine), 'refine-story': stage(engine) },
   table: [
     'Profile: claude-cheap (source: argument — /project/p.json) hash ffffffffffff',
     '  implement | TABLE-ROW',
@@ -215,32 +215,97 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     expect(events).not.toContain('drive')
   })
 
-  it('a profile flag on a card the mapping routes to a workflow (not the cycle) is refused, never silently ignored', async () => {
-    capture()
+  it('a mapped workflow applies its profile defaults before dispatch (AC-3)', async () => {
+    const output = capture()
     const fs = files({
       [`${cwd}/${POLICY_PATH}`]:
         '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n',
     })
 
-    await expect(
-      run(
+    const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+    expect(
+      await run(
         { card: '12', cardTags: 'auto-dev,risk:green', profile: 'claude-cheap' },
         fs,
-        baseDeps({ resolveWorkflowProfile: () => profileOf() }),
+        baseDeps({ resolveWorkflowProfile: () => profileOf(), runIteration: iteration }),
       ),
-    ).rejects.toThrow(/--profile.*delivery cycle/)
+    ).toBe(0)
+    expect(iteration).toHaveBeenCalledOnce()
+    expect(output()).toContain('Active stage: defaults')
   })
 
-  it('a profile flag on a Draft card (preparation skill route) is refused the same way', async () => {
+  it('a mapped workflow spawns its selected engine and model (AC-8)', async () => {
     capture()
+    const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+    const configured = profileOf('pi')
+    const defaults = {
+      ...stage('pi'),
+      model: {
+        value: 'pi/provider-model',
+        source: 'defaults',
+        resolved: { id: 'pi/provider-model', line: 'pi/provider-model' },
+      },
+    }
+    const selected = { ...configured, stages: { ...configured.stages, defaults } }
+    const fs = files({
+      [`${cwd}/${POLICY_PATH}`]:
+        '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n',
+    })
 
-    await expect(
-      run(
+    expect(
+      await run(
+        {
+          card: '12',
+          cardTags: 'auto-dev,risk:green',
+          profile: 'claude-cheap',
+          autonomous: true,
+          approveProjectTrust: true,
+        },
+        fs,
+        baseDeps({ resolveWorkflowProfile: () => selected, runIteration: iteration }),
+      ),
+    ).toBe(0)
+    expect(iteration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: expect.objectContaining({ id: 'pi' }),
+        model: 'pi/provider-model',
+      }),
+    )
+  })
+
+  it('--prompt uses profile defaults before spawning (AC-3)', async () => {
+    capture()
+    const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+    const configured = profileOf('pi')
+    expect(
+      await run(
+        { prompt: 'go', cwd, profile: 'claude-cheap', autonomous: true, approveProjectTrust: true },
+        files(),
+        baseDeps({ resolveWorkflowProfile: () => configured, runIteration: iteration }),
+      ),
+    ).toBe(0)
+    expect(iteration).toHaveBeenCalledWith(
+      expect.objectContaining({ engine: expect.objectContaining({ id: 'pi' }) }),
+    )
+  })
+
+  it('a Draft card applies profile defaults when its skill has no marker (AC-3)', async () => {
+    const output = capture()
+    const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+
+    expect(
+      await run(
         { card: '12', cardTags: '', workflowConfig: '/tmp/x.json' },
         files(),
-        baseDeps({ cardReadiness: async () => 'draft', resolveWorkflowProfile: () => profileOf() }),
+        baseDeps({
+          cardReadiness: async () => 'draft',
+          resolveWorkflowProfile: () => profileOf(),
+          runIteration: iteration,
+        }),
       ),
-    ).rejects.toThrow(/--workflow-config.*delivery cycle/)
+    ).toBe(0)
+    expect(iteration).toHaveBeenCalledOnce()
+    expect(output()).toContain('Active stage: defaults')
   })
 
   // PR #517 finding: the entry wired to the REAL resolver (`workflow-profile.mjs`) refuses a mistyped

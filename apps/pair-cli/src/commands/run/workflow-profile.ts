@@ -1,6 +1,11 @@
 import { spawnSync } from 'child_process'
 import { join } from 'path'
+import type { FileSystemService } from '@pair/content-ops'
+import type { Config } from '#registry'
 import type { EngineDefinition } from './engines'
+import type { ResolvedInvocation } from './resolve-skill'
+import { readInstalledSkill } from './skill-probe'
+import { locateCycleScripts } from './cycle-scripts'
 
 /**
  * US-488 — the workflow profile, as `pair-cli run --card` consumes it.
@@ -13,6 +18,26 @@ import type { EngineDefinition } from './engines'
  */
 
 export const WORKFLOW_PROFILE_SCRIPT = 'workflow-profile.mjs'
+
+/** Ask the shared resolver to map an installed skill's process-step marker. */
+export function resolveProfileStage(scriptsDir: string, skillText?: string): string {
+  if (!skillText?.includes('process-step:')) return 'defaults'
+  const result = spawnSync(
+    'node',
+    [join(scriptsDir, WORKFLOW_PROFILE_SCRIPT), 'stage-for', '--skill-text', skillText],
+    { encoding: 'utf8' },
+  )
+  try {
+    const parsed = JSON.parse(result.stdout) as { stage?: string; error?: string }
+    if (parsed.error) throw new Error(parsed.error)
+    if (parsed.stage) return parsed.stage
+  } catch (error) {
+    throw new Error(
+      `profile-invalid: stage mapping failed: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+  throw new Error('profile-invalid: stage mapping returned no stage')
+}
 
 type Sourced<T> = { readonly value: T; readonly source: string }
 
@@ -107,6 +132,32 @@ export interface StageSettings {
   readonly model?: string
   /** Absent ⇒ the engine's default effort. */
   readonly effort?: string
+}
+
+/** Resolve the stage used by a skill, prompt or preparation route before its engine starts. */
+export function resolveOffCycleProfile(input: {
+  fs: FileSystemService
+  config: Config
+  cwd: string
+  flags: { readonly profile?: string; readonly workflowConfig?: string }
+  invocation: ResolvedInvocation
+  tier?: string | undefined
+  resolve?: typeof resolveWorkflowProfile | undefined
+}): { profile: ResolvedWorkflowProfile; stage: string; settings: StageSettings } | undefined {
+  if (!workflowProfileRequested(input.flags, input.config)) return undefined
+  const scriptsDir = locateCycleScripts(input.fs, input.config, input.cwd).scriptsDir
+  const text =
+    input.invocation.kind === 'skill'
+      ? readInstalledSkill(input.fs, input.config, input.cwd, input.invocation.name)
+      : undefined
+  const stage = resolveProfileStage(scriptsDir, text)
+  const profile = (input.resolve ?? resolveWorkflowProfile)(scriptsDir, {
+    root: input.cwd,
+    profile: input.flags.profile,
+    workflowConfig: input.flags.workflowConfig,
+    tier: input.tier,
+  })
+  return { profile, stage, settings: stageSettings(profile, stage) }
 }
 
 /** What one stage (`prepare|validate|implement|green|verify|…`) spawns with. `default` is never sent as a value. */

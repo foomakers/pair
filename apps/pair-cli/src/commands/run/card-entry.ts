@@ -18,7 +18,8 @@ import {
   type PromptExtras,
 } from './card-prepare'
 import { prepareCycleCoordinator, resolveEngineFor } from './cycle-entry'
-import { refuseProfileOffCycle } from './workflow-profile'
+import { resolveOffCycleProfile, stageEngineIds } from './workflow-profile'
+import { ENGINE_IDS, isEngineId } from './engines'
 import {
   declaredEngine,
   driveLockedCard,
@@ -456,15 +457,29 @@ function preparePrepSkill(
   deps: RunHandlerDependencies,
 ): () => Promise<number> {
   const { config, context, fs, cwd, card, skill, label, extras } = input
-  refuseProfileOffCycle(config, `the preparation skill \`${skill}\` (card is ${label})`)
-  const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
-  const engineDef = resolveEngineFor(engine, context, cwd, fs)
-
   // Not `resolveInvocation`'s cascade (no `--skill`/`--prompt` was passed) and not a `## Workflows`
   // mapping either — the DoR grammar picked this skill, so `source: 'mapping'` is reused rather
   // than adding a THIRD source label to `resolve-skill.ts` (out of this story's own fixScope); its
   // own `describeSkillResolution` line is never printed for this path, the line below is.
   const invocation: ResolvedInvocation = { kind: 'skill', name: skill, source: 'mapping' }
+  const selected = resolveOffCycleProfile({
+    fs,
+    config: context.config,
+    cwd,
+    flags: config,
+    invocation,
+    tier: config.dispatch?.tags.find(tag => tag.startsWith('risk:')),
+    resolve: deps.resolveWorkflowProfile,
+  })
+  if (selected) stageEngineIds(selected.profile, ENGINE_IDS)
+  const wanted = selected?.settings.engine
+  if (wanted !== undefined && !isEngineId(wanted))
+    throw new Error(`profile-invalid: stages.${selected?.stage}.engine: unknown engine '${wanted}'`)
+  const engine =
+    wanted === undefined
+      ? resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
+      : { ...resolveEngine({ flag: wanted }), source: 'workflow profile' as const }
+  const engineDef = resolveEngineFor(engine, context, cwd, fs)
   const perimeter = createPerimeter({
     root: card,
     filter: undefined,
@@ -479,6 +494,9 @@ function preparePrepSkill(
   const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
   const resolved: ResolvedRun = {
     engine: { ...engine, engine: engineDef },
+    ...(selected && { profile: { stage: selected.stage, table: selected.profile.table } }),
+    ...(selected?.settings.model !== undefined && { model: selected.settings.model }),
+    ...(selected?.settings.effort !== undefined && { effort: selected.settings.effort }),
     invocation,
     perimeter,
     policy: context.policy,
@@ -490,6 +508,10 @@ function preparePrepSkill(
 
   console.log(chalk.bold('pair-cli run'))
   console.log(`  ${describeEngineResolution(resolved.engine)}`)
+  if (resolved.profile) {
+    for (const line of resolved.profile.table) console.log(`  ${line}`)
+    console.log(`  Active stage: ${resolved.profile.stage}`)
+  }
   console.log(`  Fallback: card ${card} is ${label} — routing to ${skill}`)
 
   return () => driveRun(resolved, config, deps)

@@ -48,6 +48,8 @@ import {
 /** Injected so the loop can be driven in tests without spawning an engine. */
 export type IterationRunner = (input: {
   engine: EngineDefinition
+  model?: string | undefined
+  effort?: string | undefined
   promptText: string
   cwd: string
   autonomyArgs: readonly string[]
@@ -123,6 +125,9 @@ export interface RunHandlerDependencies {
 
 export interface ResolvedRun {
   engine: ReturnType<typeof resolveEngine>
+  profile?: { readonly stage: string; readonly table: readonly string[] }
+  model?: string
+  effort?: string
   invocation: ResolvedInvocation
   perimeter: Perimeter
   policy: AutomationPolicy

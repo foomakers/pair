@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
-import { createSkillProbe } from './skill-probe'
+import { createSkillProbe, readInstalledSkill } from './skill-probe'
 
 const cwd = '/project'
 
@@ -57,6 +57,26 @@ describe('createSkillProbe', () => {
     )
 
     expect(isInstalled('pair-next')).toBe(true)
+  })
+
+  it('reads a process-step marker from a redirected installed skill (AC-3)', () => {
+    const marker = '<!-- process-step: id=refine-story -->'
+    const fs = new InMemoryFileSystemService(
+      { [`${cwd}/.agents/skills/pair-process-refine-story/SKILL.md`]: marker },
+      cwd,
+      cwd,
+    )
+    expect(
+      readInstalledSkill(
+        fs,
+        skillsConfig(['.agents/skills/'], 'pair'),
+        cwd,
+        'pair-process-refine-story',
+      ),
+    ).toBe(marker)
+    expect(
+      readInstalledSkill(fs, skillsConfig(['.agents/skills/'], 'pair'), cwd, '../../../outside'),
+    ).toBeUndefined()
   })
 
   /**
