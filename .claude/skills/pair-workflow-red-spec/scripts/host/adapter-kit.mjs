@@ -15,6 +15,8 @@
 // untouched except for the GIT_* repository-pinning variables a git hook exports.
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 
 // The eight methods of the interface, named from the call sites the cycle scripts had (US-492).
 export const INTERFACE_METHODS = ['readCard', 'cardHash', 'prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'closeAndCascade']
@@ -110,16 +112,36 @@ export function assertCardId(ref, method = 'parseCardRef') {
   return id
 }
 
+// One call's output is bounded (callers page large listings); a failure names the command and its
+// stderr only — never stdout or long argv, which carry card text (no-card-text-in-logs).
+const MAX_OUTPUT = 64 * 1024 * 1024
+const MAX_ERROR = 2000
+const shortArg = a => (String(a).length > 120 ? `${String(a).slice(0, 120)}…` : String(a))
 export function runCli({ bin, args, input, label }) {
-  const r = spawnSync(bin, args, { encoding: 'utf8', input, env: cleanGitEnv(process.env) })
+  const r = spawnSync(bin, args, { encoding: 'utf8', input, env: cleanGitEnv(process.env), maxBuffer: MAX_OUTPUT })
   if (r.error || r.status !== 0) {
-    throw new HostError('failed', {
-      message: `${label ?? bin} ${args.join(' ')} failed: ${(r.stderr || r.stdout || '').trim()}`,
-      command: `${label ?? bin} ${args.join(' ')}`,
-      detail: (r.stderr || r.error?.message || '').trim(),
-    })
+    const command = `${label ?? bin} ${args.map(shortArg).join(' ')}`
+    const detail = (r.stderr || r.error?.message || '').trim().slice(0, MAX_ERROR)
+    throw new HostError('failed', { message: `${command} failed: ${detail}`, command, detail })
   }
   return r.stdout
+}
+
+// way-of-working.md text, found upward from `from`; '' when none.
+export function adoptionText(from) {
+  for (let cur = from; ; cur = dirname(cur)) {
+    const f = join(cur, '.pair', 'adoption', 'tech', 'way-of-working.md')
+    if (existsSync(f)) return readFileSync(f, 'utf8')
+    if (dirname(cur) === cur) return ''
+  }
+}
+
+// `## State Mapping` rows → { macrostate (lower-case) → board state }, first row wins.
+export function stateMapOf(text) {
+  const section = /^##\s+State Mapping\s*$([\s\S]*?)(?=^##\s|$(?![\s\S]))/m.exec(text)?.[1] ?? ''
+  const map = {}
+  for (const c of section.split('\n').map(l => l.split('|').map(x => x.trim()))) if (c.length > 3 && c[1] && !/^-+$/.test(c[1]) && !(c[2].toLowerCase() in map)) map[c[2].toLowerCase()] = c[1]
+  return map
 }
 
 export function parseJson(text, { command } = {}) {

@@ -173,6 +173,16 @@ export default defineAdapter({
           return { id: res.id, url: res.html_url }
         },
       })
+    // A listing is read one bounded page at a time (never `--paginate` into one buffer).
+    const listPages = path => {
+      const rows = []
+      for (let page = 1; ; page++) {
+        const batch = parseJson(gh(['api', `${path}&per_page=100&page=${page}`]), { command: 'gh api' })
+        if (!Array.isArray(batch)) throw new HostError('invalid-output', { message: 'gh api: listing page is not an array', command: 'gh api' })
+        rows.push(...batch)
+        if (batch.length < 100) return rows
+      }
+    }
     const BOARD_QUERY = 'query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){issue(number:$n){id projectItems(first:20){nodes{id project{id title fields(first:30){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}}}}'
     const BOARD_MUTATION = 'mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}'
 
@@ -194,24 +204,25 @@ export default defineAdapter({
             throw e
           }
         }
-        return parseJson(gh([...base, '--json', fields.join(',')]), { command: 'gh issue view' })
+        const card = parseJson(gh([...base, '--json', fields.join(',')]), { command: 'gh issue view' })
+        // Board facts come from the adopted project only; another project's item is not membership.
+        const title = fields.includes('projectItems') && projectTitle()
+        return title && Array.isArray(card?.projectItems) ? { ...card, projectItems: card.projectItems.filter(item => item?.title === title) } : card
       },
       findCards({ repo, search }) {
         const rows = parseJson(gh(['issue', 'list', '--repo', resolveRepo(repo), '--search', search, '--json', 'number,url,title,body']), { command: 'gh issue list' })
         return Array.isArray(rows) ? rows : []
       },
       listCards({ repo }) {
-        const pages = splitPages(gh(['api', '--paginate', `${apiRepo(repo)}/issues?state=all&per_page=100`]))
         const label = storyLabel()
-        return pages.flat().filter(issue => !issue.pull_request && (/^## Story Statement\s*$/m.test(String(issue.body ?? '')) || (label && issue.labels?.some(item => item.name === label)))).map(issue => ({ id: String(issue.number) }))
+        return listPages(`${apiRepo(repo)}/issues?state=all`).filter(issue => !issue.pull_request && (/^## Story Statement\s*$/m.test(String(issue.body ?? '')) || (label && issue.labels?.some(item => item.name === label)))).map(issue => ({ id: String(issue.number) }))
       },
       linkedPr({ id, repo }) {
-        const pages = splitPages(gh(['api', '--paginate', `${apiRepo(repo)}/pulls?state=all&per_page=100`]))
         const escaped = String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         const native = new RegExp(`^(?:Closes|Fixes|Resolves)\\s+#${escaped}(?!\\d)`, 'im')
         const split = new RegExp(`^Refs:\\s*#?${escaped}\\s*$`, 'im')
         const title = new RegExp(`^\\[(?:#|US-)${escaped}\\]`)
-        const hits = pages.flat().filter(pr => native.test(String(pr.body ?? '')) || split.test(String(pr.body ?? '')) || title.test(String(pr.title ?? '')))
+        const hits = listPages(`${apiRepo(repo)}/pulls?state=all`).filter(pr => native.test(String(pr.body ?? '')) || split.test(String(pr.body ?? '')) || title.test(String(pr.title ?? '')))
         if (hits.length > 1) return 'unknown'
         if (!hits.length) return 'none'
         const pr = hits[0]
@@ -308,11 +319,13 @@ export default defineAdapter({
       // item, sits on several boards, or whose board has no such option is `confirmed: false`.
       setBoardState({ id, state, repo }) {
         try {
+          const title = projectTitle()
+          if (!title) return { applied: state, confirmed: false, gap: 'board-unconfigured', error: 'no project named in way-of-working.md' }
           const nameWithOwner = repo || gh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim()
           const [owner, name] = nameWithOwner.split('/')
           const q = parseJson(gh(['api', 'graphql', '-f', `query=${BOARD_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `n=${Number(id)}`]), { command: 'gh api graphql board' })
-          const items = q?.data?.repository?.issue?.projectItems?.nodes ?? []
-          if (items.length === 0) return { applied: state, confirmed: false, error: `issue #${id} is not a project item — no board field to write` }
+          const items = (q?.data?.repository?.issue?.projectItems?.nodes ?? []).filter(item => item?.project?.title === title)
+          if (items.length === 0) return { applied: state, confirmed: false, error: `issue #${id} is not an item of ${title} — no board field to write` }
           if (items.length > 1) return { applied: state, confirmed: false, error: `issue #${id} sits on ${items.length} projects (${items.map(i => i.project?.title).join(', ')}) — the board is never guessed` }
           const [item] = items
           const field = (item.project?.fields?.nodes ?? []).find(f => f?.name === 'Status')

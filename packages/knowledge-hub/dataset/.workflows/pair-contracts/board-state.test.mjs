@@ -47,8 +47,8 @@ const file = ${JSON.stringify(state)}
 const s = JSON.parse(fs.readFileSync(file, 'utf8'))
 const a = process.argv.slice(2)
 if (a[0] === 'project' && a[1] === 'list') process.stdout.write(JSON.stringify({ projects: [{ id: 'P1', title: 'board' }] }))
-else if (a[0] === 'api' && a[1] === '--paginate' && a[2].includes('/issues?')) process.stdout.write(JSON.stringify(s.issues))
-else if (a[0] === 'api' && a[1] === '--paginate' && a[2].includes('/pulls?')) process.stdout.write(JSON.stringify(s.prs))
+else if (a[0] === 'api' && a[1].includes('/issues?')) process.stdout.write(JSON.stringify(s.issues))
+else if (a[0] === 'api' && a[1].includes('/pulls?')) process.stdout.write(JSON.stringify(s.prs))
 else if (a[0] === 'api' && a.includes('-F') && a.some(v => v.includes('content='))) { s.member = true; s.adds++; fs.writeFileSync(file, JSON.stringify(s)); process.stdout.write(JSON.stringify({ data: { addProjectV2ItemById: { item: { id: 'I1' } } } })) }
 else if (a[0] === 'api') process.stdout.write(JSON.stringify({ data: { repository: { issue: { id: 'C1', projectItems: { nodes: s.member ? [{ id: 'I1', project: { id: 'P1' } }] : [] } } } } }))
 else { process.stderr.write('unexpected command ' + a.join(' ')); process.exit(3) }
