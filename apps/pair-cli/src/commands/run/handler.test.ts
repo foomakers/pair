@@ -1324,6 +1324,25 @@ max-iterations: 20
         printed: ['escalate', 'r1-g1 needs a maintainer decision on finding F-3'],
       },
       {
+        name: 'decision-conflict (US-647 AC-23: names its block and how the maintainer resumes it)',
+        outcome: {
+          status: 'decision-conflict',
+          stagesRun: 1,
+          next: {
+            step: 'blocked',
+            reason: 'decision-conflict',
+            detail: 'finding(s) r0-1 contradict maintainer decision(s) https://x/1',
+            block: 'r0-review-phase.json@0123456789ab',
+          },
+        },
+        printed: [
+          'decision-conflict',
+          'r0-1 contradict maintainer decision',
+          'Decision block: r0-review-phase.json@0123456789ab',
+          '"kind":"maintainer-decision"',
+        ],
+      },
+      {
         name: 'incompatible (legacy run directory)',
         outcome: {
           status: 'incompatible',

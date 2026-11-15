@@ -6,7 +6,7 @@
 
 ## Status
 
-Active
+Active — point 1 (the source of an override) amended by [2026-11-15](2026-11-15-maintainer-decision-comments-resume-a-run.md): `custody-overrides.json` is now derived from the maintainer's verified `override` decision comments, never hand-written.
 
 ## Category
 
