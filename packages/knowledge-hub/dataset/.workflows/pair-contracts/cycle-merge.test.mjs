@@ -625,7 +625,7 @@ function gitFixture() {
   const wt = join(root, 'wt')
   sh(main, 'worktree', 'add', '-q', wt, 'feature/US-42-x')
   mkdirSync(join(main, '.pair', 'adoption', 'tech'), { recursive: true })
-  writeFileSync(join(main, '.pair', 'adoption', 'tech', 'way-of-working.md'), '## PM Tool\n\n- `pm-project`: `Board`\n')
+  writeFileSync(join(main, '.pair', 'adoption', 'tech', 'way-of-working.md'), '## PM Tool\n\n- `pm-project`: `pair digital development`\n')
   mkdirSync(join(main, '.pair', 'working', 'checkpoints'), { recursive: true })
   writeFileSync(join(main, '.pair', 'working', 'checkpoints', '42.md'), 'cp')
   return { main, wt, remote, sh }

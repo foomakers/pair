@@ -207,16 +207,17 @@ export default defineAdapter({
             throw e
           }
         }
-        const card = parseJson(gh([...base, '--json', fields.join(',')]), { command: 'gh issue view' })
-        if (!fields.includes('projectItems') || !Array.isArray(card?.projectItems)) return card
-        // Board facts come from the adopted project only; an unresolved board holds no item.
+        return parseJson(gh([...base, '--json', fields.join(',')]), { command: 'gh issue view' })
+      },
+      // Board facts (cardState) come from the adopted project only; an unresolved board holds no item.
+      boardItems({ items, repo }) {
         let board
         try {
           board = resolveBoard(repo)
         } catch {
-          board = {}
+          return []
         }
-        return { ...card, projectItems: board.title ? card.projectItems.filter(item => item?.title === board.title) : [] }
+        return board.title ? items.filter(item => item?.title === board.title) : []
       },
       findCards({ repo, search }) {
         const rows = parseJson(gh(['issue', 'list', '--repo', resolveRepo(repo), '--search', search, '--json', 'number,url,title,body']), { command: 'gh issue list' })

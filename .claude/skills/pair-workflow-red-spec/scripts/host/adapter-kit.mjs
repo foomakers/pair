@@ -295,7 +295,8 @@ export function defineAdapter(spec) {
         },
         cardState({ id, repo }) {
           const card = readCard(id, { repo, fields: ['state', 'stateReason', 'projectItems'] })
-          const items = card.projectItems ?? []
+          // An adapter whose card can sit on several boards scopes membership to the adopted one.
+          const items = typeof methods.boardItems === 'function' ? methods.boardItems({ items: card.projectItems ?? [], repo }) : card.projectItems ?? []
           return {
             issueState: card.state ?? null,
             issueReason: card.stateReason ?? null,
