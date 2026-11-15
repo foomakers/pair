@@ -102,6 +102,11 @@ export function auditCards({ pm, code, repo, mapping = DEFAULT, apply = false, o
     const id = String(card.id ?? card.number)
     try {
       const pr = code.linkedPr({ id, repo })
+      // An ambiguous PR link (several cards) is a reported gap: no decision, no write.
+      if (pr?.gap) {
+        gaps.push({ id, reason: pr.gap, prs: pr.prs, candidates: pr.candidates })
+        continue
+      }
       const actual = pm.cardState({ id, repo })
       const decision = decideBoardState({ pr, issue: actual.issueState, reason: actual.issueReason, member: actual.member, board: actual.boardState })
       if (decision.gap) {

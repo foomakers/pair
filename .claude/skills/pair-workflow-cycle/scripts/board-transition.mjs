@@ -37,6 +37,7 @@ function resolvesToCard(pm, story, repo) {
 export function runTransition({ hosts, story, pr, repo, adoption, requireCard = false }) {
   if (requireCard && !resolvesToCard(hosts.pm, story, repo)) return { confirmed: false, skipped: 'card-unresolved' }
   const state = pr === 'linked' ? hosts.code.linkedPr({ id: story, repo }) : pr
+  if (state?.gap) return { confirmed: false, skipped: state.gap, gaps: [state.gap], prs: state.prs, candidates: state.candidates }
   const result = applyBoardState({ pm: hosts.pm, id: story, pr: state, repo, mapping: stateMapping(adoption) })
   // AC-6: an install with no board configured is report-only for the board — a skip, not a failure.
   return !result.confirmed && result.gaps?.length === 1 && result.gaps[0] === 'board-unconfigured' ? { ...result, skipped: 'board-unconfigured' } : result

@@ -32,7 +32,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, stateMapOf, prLinks, linksCard } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, stateMapOf, prLinks, resolveLinked } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const CHECK_GENRE = 'pair'
@@ -207,12 +207,8 @@ export default defineAdapter({
         const scope = [...(project ? ['--project', project] : []), ...(repository ? ['--repository', repository] : [])]
         const rows = azJson(['repos', 'pr', 'list', '--status', 'all', ...scope], 'repos pr list')
         // Same-repository PRs only (Maintainer Decision): a PR from a fork (`forkSource`) never links a card.
-        const hits = (Array.isArray(rows) ? rows : []).filter(pr => !pr.forkSource && linksCard(prLinks({ body: pr.description, branch: pr.sourceRefName }), id))
-        // Several PRs may link one card (a superseded PR abandoned): completed wins, then active.
-        if (!hits.length) return 'none'
-        if (hits.some(pr => pr.status === 'completed')) return 'merged'
-        if (hits.some(pr => pr.status === 'active')) return 'open'
-        return hits.every(pr => pr.status === 'abandoned') ? 'closed-unmerged' : 'unknown'
+        const state = pr => (pr.status === 'completed' ? 'merged' : pr.status === 'active' ? 'open' : pr.status === 'abandoned' ? 'closed-unmerged' : 'unknown')
+        return resolveLinked((Array.isArray(rows) ? rows : []).filter(pr => !pr.forkSource).map(pr => ({ number: pr.pullRequestId, links: prLinks({ body: pr.description, branch: pr.sourceRefName }), state: state(pr) })), id)
       },
       createCard({ repo, title, body }) {
         const { project } = splitRepo(repo)

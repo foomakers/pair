@@ -140,7 +140,7 @@ export function runCli({ bin, args, input, label }) {
 }
 
 // The ONE PR→card link grammar (#642): the board workflow's selector (board-event.mjs) and every code
-// host's linkedPr read it through selectLink, so what selects a card is exactly what later counts as its PR. Native links
+// host's linkedPr read it through selectLink (resolveLinked), so what selects a card is exactly what later counts as its PR. Native links
 // (#642 Maintainer Decision): `Closes|Fixes|Resolves #N` and a branch carrying `#N` not followed by an
 // identifier character. Any other id — `AB#N` included — links only through one `Refs: <ID>` line, which
 // must resolve to exactly one card (the 2026-11-14 amendment); an invalid token is null.
@@ -163,7 +163,20 @@ export function selectLink(links) {
   const [id] = ids
   return { source: natives.has(id) ? 'native' : 'ref', id }
 }
-export const linksCard = (links, id) => selectLink(links)?.id === String(id).replace(/^#/, '')
+// linkedPr's one resolution over a host's PR rows ({ number, links, state }, same-repository only). A row whose
+// links mention the card but select no single card is a typed gap (PR numbers and candidate ids, no PR text),
+// never a silent `none`; otherwise several PRs linking the card resolve merged > open > closed-unmerged.
+export function resolveLinked(rows, id) {
+  const card = String(id).replace(/^#/, '')
+  const mentioned = links => [...links.closes, ...links.refs.filter(Boolean), ...links.branch]
+  const ambiguous = rows.filter(row => !selectLink(row.links) && mentioned(row.links).includes(card))
+  if (ambiguous.length) return { gap: 'pr-link-ambiguous', prs: ambiguous.map(row => row.number), candidates: [...new Set(ambiguous.flatMap(row => mentioned(row.links)))].sort() }
+  const hits = rows.filter(row => selectLink(row.links)?.id === card)
+  if (!hits.length) return 'none'
+  if (hits.some(row => row.state === 'merged')) return 'merged'
+  if (hits.some(row => row.state === 'open')) return 'open'
+  return hits.every(row => row.state === 'closed-unmerged') ? 'closed-unmerged' : 'unknown'
+}
 
 // way-of-working.md text, found upward from `from`; '' when none.
 export function adoptionText(from) {

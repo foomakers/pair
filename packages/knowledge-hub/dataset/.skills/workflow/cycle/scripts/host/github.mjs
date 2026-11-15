@@ -7,7 +7,7 @@
 //
 // Transport: `gh` from PATH, or `transport.ghBin` / PAIR_GH_BIN (a test's recorder). `gh`
 // authenticates itself; this file never reads a token.
-import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, prLinks, linksCard } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, prLinks, resolveLinked } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const STATE_LABELS = ['pr-state:to-be-reviewed', 'pr-state:ready-to-merge', 'pr-state:not-approved']
@@ -240,12 +240,8 @@ export default defineAdapter({
         if (!pulls.has(key)) pulls.set(key, listPages(`${key}/pulls?state=all`))
         // Same-repository PRs only (Maintainer Decision): a fork's PR never moves or closes a card.
         const sameRepo = pr => Boolean(pr.head?.repo?.full_name) && pr.head.repo.full_name === pr.base?.repo?.full_name
-        const hits = pulls.get(key).filter(pr => sameRepo(pr) && linksCard(prLinks({ body: pr.body, branch: pr.head?.ref }), id))
-        // Several PRs may link one card (a superseded PR closed unmerged): merged wins, then open.
-        if (!hits.length) return 'none'
-        if (hits.some(pr => pr.merged_at)) return 'merged'
-        if (hits.some(pr => pr.state === 'open')) return 'open'
-        return hits.every(pr => pr.state === 'closed') ? 'closed-unmerged' : 'unknown'
+        const state = pr => (pr.merged_at ? 'merged' : pr.state === 'open' ? 'open' : pr.state === 'closed' ? 'closed-unmerged' : 'unknown')
+        return resolveLinked(pulls.get(key).filter(sameRepo).map(pr => ({ number: pr.number, links: prLinks({ body: pr.body, branch: pr.head?.ref }), state: state(pr) })), id)
       },
       createCard({ repo, title, body }) {
         const out = gh(['issue', 'create', '--repo', resolveRepo(repo), '--title', title, '--body', body])
