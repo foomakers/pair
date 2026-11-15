@@ -63,6 +63,8 @@ function setup(directory, row, event) {
   symlinkSync(jq, join(bin, 'jq'))
   // The workflow runs the checked-out base's scripts (actions/checkout of the base, never PR code).
   symlinkSync(join(root, '.claude'), join(directory, '.claude'))
+  mkdirSync(join(directory, '.pair', 'adoption', 'tech'), { recursive: true })
+  writeFileSync(join(directory, '.pair', 'adoption', 'tech', 'way-of-working.md'), '- `pm-tool`: `github`\n')
   for (const command of ['cat', 'grep', 'sed', 'tr', 'cut', 'head', 'tail']) symlinkSync(`/usr/bin/${command}`, join(bin, command))
   writeFileSync(join(bin, 'node'), `#!/bin/bash
 case "$1" in

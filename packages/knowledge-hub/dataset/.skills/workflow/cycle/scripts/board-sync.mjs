@@ -68,6 +68,8 @@ export function applyBoardState({ pm, id, pr, repo, mapping = DEFAULT }) {
       if (!epic.confirmed && epic.gap !== 'parent-absent') return { confirmed: false, gaps: [epic.gap ?? 'epic-sync-failed'], error: epic.error }
       if (epic.confirmed) actions.push('epic')
     }
+    // No resolvable board: the issue-side writes above stand; membership and Status are a reported gap.
+    if (current.gap) return { confirmed: false, gaps: [current.gap], actions }
     if (!current.member) {
       const result = pm.ensureBoardMembership({ id, repo })
       if (!result.confirmed) return { confirmed: false, gaps: [result.gap ?? 'board-membership-failed'], error: result.error }
@@ -105,6 +107,10 @@ export function auditCards({ pm, code, repo, mapping = DEFAULT, apply = false, o
       if (decision.gap) {
         gaps.push({ id, reason: decision.gap })
         continue
+      }
+      if (actual.gap) {
+        gaps.push({ id, reason: actual.gap })
+        if (!decision.close) continue
       }
       const expected = targetOf(decision.status, mapping)
       if (decision.status && !expected && !optional(decision.status)) {

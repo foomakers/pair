@@ -32,7 +32,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, stateMapOf } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, stateMapOf, prLinks, linksCard } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const CHECK_GENRE = 'pair'
@@ -202,9 +202,7 @@ export default defineAdapter({
         const { project, repository } = splitRepo(repo)
         const scope = [...(project ? ['--project', project] : []), ...(repository ? ['--repository', repository] : [])]
         const rows = azJson(['repos', 'pr', 'list', '--status', 'all', ...scope], 'repos pr list')
-        const escaped = String(id).replace(/^#/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const ref = new RegExp(`^(?:Refs:\\s*(?:AB#|#)?|(?:Closes|Fixes)\\s+(?:AB#|#))${escaped}\\s*$`, 'im')
-        const hits = (Array.isArray(rows) ? rows : []).filter(pr => ref.test(String(pr.description ?? '')))
+        const hits = (Array.isArray(rows) ? rows : []).filter(pr => linksCard(prLinks({ body: pr.description, branch: pr.sourceRefName }), id))
         // Several PRs may link one card (a superseded PR abandoned): completed wins, then active.
         if (!hits.length) return 'none'
         if (hits.some(pr => pr.status === 'completed')) return 'merged'

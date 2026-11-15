@@ -7,7 +7,7 @@
 //
 // Transport: `gh` from PATH, or `transport.ghBin` / PAIR_GH_BIN (a test's recorder). `gh`
 // authenticates itself; this file never reads a token.
-import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, prLinks, linksCard } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const STATE_LABELS = ['pr-state:to-be-reviewed', 'pr-state:ready-to-merge', 'pr-state:not-approved']
@@ -210,14 +210,20 @@ export default defineAdapter({
         return parseJson(gh([...base, '--json', fields.join(',')]), { command: 'gh issue view' })
       },
       // Board facts (cardState) come from the adopted project only; an unresolved board holds no item.
-      boardItems({ items, repo }) {
-        let board
+      // The user's repository role (`admin`, `maintain`, `write`, …) as the server reports it now; null when
+      // unreadable — the board workflow's authorization (#642 Maintainer Decision) treats null as deny.
+      readPermission({ repo, user }) {
         try {
-          board = resolveBoard(repo)
+          const p = parseJson(gh(['api', `repos/${resolveRepo(repo)}/collaborators/${user}/permission`, '--method', 'GET']), { command: 'gh api permission' })
+          return p?.role_name ?? p?.permission ?? null
         } catch {
-          return []
+          return null
         }
-        return board.title ? items.filter(item => item?.title === board.title) : []
+      },
+      // A resolution error propagates (a transient failure is never "not a member").
+      boardItems({ items, repo }) {
+        const board = resolveBoard(repo)
+        return board.gap ? { gap: board.gap, error: board.error } : items.filter(item => item?.title === board.title)
       },
       findCards({ repo, search }) {
         const rows = parseJson(gh(['issue', 'list', '--repo', resolveRepo(repo), '--search', search, '--json', 'number,url,title,body']), { command: 'gh issue list' })
@@ -228,15 +234,10 @@ export default defineAdapter({
         return listPages(`${apiRepo(repo)}/issues?state=all`).filter(issue => !issue.pull_request && (/^## Story Statement\s*$/m.test(String(issue.body ?? '')) || (label && issue.labels?.some(item => item.name === label)))).map(issue => ({ id: String(issue.number) }))
       },
       linkedPr({ id, repo }) {
-        const escaped = String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const native = new RegExp(`^(?:Closes|Fixes|Resolves)\\s+#${escaped}(?!\\d)`, 'im')
-        const split = new RegExp(`^Refs:\\s*#?${escaped}\\s*$`, 'im')
-        const title = new RegExp(`^\\[(?:#|US-)${escaped}\\]`)
-        const branch = new RegExp(`#${escaped}(?![A-Za-z0-9_])`)
         // One listing per repository per adapter instance: an audit asks for every card.
         const key = apiRepo(repo)
         if (!pulls.has(key)) pulls.set(key, listPages(`${key}/pulls?state=all`))
-        const hits = pulls.get(key).filter(pr => native.test(String(pr.body ?? '')) || split.test(String(pr.body ?? '')) || title.test(String(pr.title ?? '')) || branch.test(String(pr.head?.ref ?? '')))
+        const hits = pulls.get(key).filter(pr => linksCard(prLinks({ body: pr.body, branch: pr.head?.ref }), id))
         // Several PRs may link one card (a superseded PR closed unmerged): merged wins, then open.
         if (!hits.length) return 'none'
         if (hits.some(pr => pr.merged_at)) return 'merged'

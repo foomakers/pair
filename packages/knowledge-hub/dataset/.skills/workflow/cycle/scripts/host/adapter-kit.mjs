@@ -25,10 +25,10 @@ export const REQUIRED_METHODS = INTERFACE_METHODS.filter(m => m !== 'cardHash')
 // Primitives the cycle's scope-decision and pr-state paths already used through `gh` beyond the
 // eight (card create/search/edit, one comment read, the check/label read-backs, ref parsing). An
 // adapter MAY omit them: the feature that needs one then fails typed, naming the method.
-export const SUPPORT_METHODS = ['createCard', 'findCards', 'listCards', 'linkedPr', 'syncEpic', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState', 'ensureBoardMembership', 'closeCard', 'resolveUser']
+export const SUPPORT_METHODS = ['createCard', 'findCards', 'listCards', 'linkedPr', 'syncEpic', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState', 'ensureBoardMembership', 'closeCard', 'resolveUser', 'readPermission']
 // ADR-018's split: card operations resolve `pm-tool`, pull-request operations resolve `code-host`.
 export const PM_METHODS = ['readCard', 'cardHash', 'cardState', 'closeAndCascade', 'closeCard', 'ensureBoardMembership', 'syncEpic', 'createCard', 'findCards', 'listCards', 'updateCard', 'parseCardRef', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard', 'resolveUser']
-export const CODE_METHODS = ['prHead', 'linkedPr', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'deleteBranch']
+export const CODE_METHODS = ['prHead', 'linkedPr', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'deleteBranch', 'readPermission']
 // setClassification's family/value vocabulary (the review's classification tags, pr-states.md /
 // quality-model.md §5): each family carries its own chromatic enum — never shared across families.
 export const CLASSIFICATION_FAMILIES = { risk: ['green', 'yellow', 'red'], cost: ['green', 'yellow', 'orange', 'red'] }
@@ -138,6 +138,21 @@ export function runCli({ bin, args, input, label }) {
   }
   return r.stdout
 }
+
+// The ONE PR→card link grammar (#642): the board workflow's selector (board-event.mjs) and every code
+// host's linkedPr read it, so what selects a card is exactly what later counts as its PR. A closing keyword
+// (`Closes|Fixes|Resolves #N` or `AB#N`), a `Refs: <ID>` line (opaque split-PM ids; an invalid token is
+// null), a branch carrying `#N` not followed by an identifier character.
+const LINK_ID = /^(?:AB#|#)?([A-Za-z0-9][A-Za-z0-9._-]{0,119})$/
+export function prLinks({ body, branch } = {}) {
+  const text = String(body ?? '')
+  return {
+    closes: [...text.matchAll(/^(?:Closes|Fixes|Resolves)[ \t]+(?:AB#|#)(\d+)[ \t]*$/gim)].map(m => m[1]),
+    refs: [...text.matchAll(/^Refs:[ \t]*(.*?)[ \t]*$/gim)].map(m => LINK_ID.exec(m[1])?.[1] ?? null),
+    branch: [...String(branch ?? '').matchAll(/#(\d+)(?![A-Za-z0-9_])/g)].map(m => m[1]),
+  }
+}
+export const linksCard = (links, id) => [...links.closes, ...links.refs, ...links.branch].includes(String(id).replace(/^#/, ''))
 
 // way-of-working.md text, found upward from `from`; '' when none.
 export function adoptionText(from) {
@@ -296,7 +311,10 @@ export function defineAdapter(spec) {
         cardState({ id, repo }) {
           const card = readCard(id, { repo, fields: ['state', 'stateReason', 'projectItems'] })
           // An adapter whose card can sit on several boards scopes membership to the adopted one.
-          const items = typeof methods.boardItems === 'function' ? methods.boardItems({ items: card.projectItems ?? [], repo }) : card.projectItems ?? []
+          const scoped = typeof methods.boardItems === 'function' ? methods.boardItems({ items: card.projectItems ?? [], repo }) : card.projectItems ?? []
+          // An unresolved board is a reported gap, never "not a member" (that would reset the Status).
+          if (!Array.isArray(scoped)) return { issueState: card.state ?? null, issueReason: card.stateReason ?? null, boardState: null, member: false, gap: scoped.gap }
+          const items = scoped
           return {
             issueState: card.state ?? null,
             issueReason: card.stateReason ?? null,
