@@ -394,7 +394,7 @@ test('AC3: the scope-decision path runs unchanged on Azure DevOps — the mainta
   const decision = '```json\n' + JSON.stringify({ schemaVersion: 1, scopeBaselineHash: scopeBaselineHashOf(scopeChanges), decisions: [{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-2', description: 'also this' }] } }] }) + '\n```'
   const az = fakeAz({
     workItems: { 9: { fields: { 'System.Title': 'S', 'System.Description': '- **AC-1**: base\n', 'System.TeamProject': 'Proj' } } },
-    prs: { 3: { head: SHA, threads: [{ id: 77, comments: [{ id: 1, content: decision, author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] }, { id: 78, comments: [{ id: 1, content: decision, author: { uniqueName: 'build@acme.test', descriptor: 'svc.build' } }] }] } },
+    prs: { 3: { head: SHA, threads: [{ id: 77, comments: [{ id: 1, content: decision, publishedDate: '2026-11-15T10:00:00Z', lastContentUpdatedDate: '2026-11-15T10:00:00Z', author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] }, { id: 78, comments: [{ id: 1, content: decision, author: { uniqueName: 'build@acme.test', descriptor: 'svc.build' } }] }] } },
   })
   const bySvc = applyScopeDecisions({ dir: runDir, decisionRef: 'https://dev.azure.com/acme/Proj/_git/app/pullrequest/3?discussionId=78#1', repo: 'Proj/app', pr: 3, workflowVersion: '4.0.1', azBin: az.azBin })
   assert.deepEqual([bySvc.applied, bySvc.reason], [false, 'author-not-a-user'], 'a service identity is never the maintainer')
@@ -933,7 +933,7 @@ function g3NewCard(seedWorkItems = {}, { loseCreateResponse = true, failCreate =
   const decision = '```json\n' + JSON.stringify({ schemaVersion: 1, scopeBaselineHash: scopeBaselineHashOf(scopeChanges), decisions: [{ id: 'sc-1', action: 'new-card', approvedDelta }] }) + '\n```'
   const az = g3Az(createdFirst, {
     workItems: seedWorkItems,
-    prs: { 3: { head: SHA, threads: [{ id: 77, comments: [{ id: 1, content: decision, author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] }] } },
+    prs: { 3: { head: SHA, threads: [{ id: 77, comments: [{ id: 1, content: decision, publishedDate: '2026-11-15T10:00:00Z', lastContentUpdatedDate: '2026-11-15T10:00:00Z', author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] }] } },
   })
   az.patch({ loseCreateResponse, failCreate })
   const out = applyScopeDecisions({ dir: runDir, decisionRef: G3_DECISION_REF, repo: 'Proj/app', pr: 3, workflowVersion: '4.0.1', azBin: az.azBin })

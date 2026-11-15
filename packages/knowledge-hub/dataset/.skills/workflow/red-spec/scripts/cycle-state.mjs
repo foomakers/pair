@@ -1563,6 +1563,7 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer, wo
   }
   if (!comment?.authorIsUser) return { applied: false, reason: 'author-not-a-user' }
   if (comment.authorLogin !== who.login) return { applied: false, reason: `author-not-authorized:${comment.authorLogin}` }
+  if (commentEditedReason(comment)) return { applied: false, reason: commentEditedReason(comment) }
   if (comment.pr !== ref.pr) return { applied: false, reason: 'decisionRef-pr-mismatch' }
   const parsed = parseScopeDecisionComment(comment.body)
   if (parsed.error) return { applied: false, reason: parsed.error }
@@ -1763,6 +1764,7 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
   }
   if (!comment?.authorIsUser) return { approved: false, reason: 'author-not-a-user' }
   if (comment.authorLogin !== who.login) return { approved: false, reason: `author-not-authorized:${comment.authorLogin}` }
+  if (commentEditedReason(comment)) return { approved: false, reason: commentEditedReason(comment) }
   if (comment.pr !== ref.pr) return { approved: false, reason: 'decisionRef-pr-mismatch' }
   const parsed = parseCorrectionComment(comment.body)
   if (parsed.error) return { approved: false, reason: parsed.error }
@@ -1844,6 +1846,8 @@ export function parseDecisionComment(body) {
   }
   if (p.withdraws !== undefined && !nonEmptyStrings(p.withdraws)) return { error: 'withdraws-invalid' }
   if (p.overturns !== undefined && !nonEmptyStrings(p.overturns, a => /^[A-Za-z0-9._-]+$/.test(a))) return { error: 'overturns-invalid' }
+  // review r0-4: an overturn names the preparation handoff that recorded the assumption — ids alone repeat across runs.
+  if (p.overturns !== undefined && p.block === undefined) return { error: 'block-invalid' }
   if (p.choice === 'override') {
     const ok = Array.isArray(p.overrides) && p.overrides.length > 0 && p.overrides.every(o => o && typeof o === 'object' && Object.keys(o).every(k => OVERRIDE_KEYS.has(k)) && DECISION_OVERRIDABLE_CODES.includes(o.code) && isRelPathLocal(o.path) && PHASE_RE.test(String(o.segment ?? '')) && (o.verifyAgainst === undefined || (typeof o.verifyAgainst === 'string' && o.verifyAgainst.trim())))
     if (!ok) return { error: 'overrides-invalid' }
@@ -1859,18 +1863,26 @@ export const readDecisions = dir => {
     return []
   }
 }
-const acceptedDecisions = dir => readDecisions(dir).filter(r => r?.status === 'accepted' && r.value && typeof r.value === 'object').sort(byCommentId)
-// A decision or amendment that constrains later findings (AC-23): it carries a scope and no later amendment withdrew it.
-const activeScopedDecisions = decisions => {
-  const withdrawn = new Set(decisions.flatMap(r => (r.value.choice === 'amend' ? (r.value.withdraws ?? []) : [])))
-  return decisions.filter(r => (r.value.choice === 'decide' || r.value.choice === 'amend') && r.value.scope && !withdrawn.has(r.decisionRef))
+// review r0-2: the host names a comment's CREATOR, not its last editor — anyone with write access can edit a comment. A
+// decision is therefore a comment never edited (to correct one, post a new one); a host that cannot prove it is refused.
+// The same rule guards every maintainer comment this file reads as an authorization (scope decisions, owner corrections).
+export const commentEditedReason = c => (!c?.createdAt || !c?.updatedAt ? 'comment-unverifiable' : String(c.createdAt) !== String(c.updatedAt) ? 'comment-edited' : undefined)
+// Accepted, not revoked (deleted or edited comment) and not withdrawn by a later accepted amendment — the decisions in force.
+const acceptedDecisions = dir => {
+  const accepted = readDecisions(dir).filter(r => r?.status === 'accepted' && r.value && typeof r.value === 'object').sort(byCommentId)
+  const withdrawn = new Set(accepted.flatMap(r => (r.value.choice === 'amend' ? (r.value.withdraws ?? []) : [])))
+  return accepted.filter(r => !withdrawn.has(r.decisionRef))
 }
-// The custody waivers in force: every accepted override decision, attributed to the verified author. The file custody
-// reads (`custody-overrides.json`) is DERIVED from them at every pickup, so an entry nobody decided does not survive.
-function writeCustodyOverrides(dir, decisions) {
+// A decision or amendment that constrains later findings (AC-23): it carries a scope and no later amendment withdrew it.
+const activeScopedDecisions = decisions => decisions.filter(r => (r.value.choice === 'decide' || r.value.choice === 'amend') && r.value.scope)
+// The custody waivers in force: every override decision in force whose `block` is a handoff of THIS run directory (file
+// name and content digest — review r0-1: a comment of another run waives nothing here), attributed to the verified
+// author. The file custody reads (`custody-overrides.json`) is DERIVED from them at every pickup, so an entry nobody
+// decided, a withdrawn one and one whose comment was deleted or edited do not survive.
+function writeCustodyOverrides(dir, decisions, blocks) {
   const file = join(dir, 'custody-overrides.json')
   const overrides = decisions
-    .filter(r => r.value.choice === 'override')
+    .filter(r => r.value.choice === 'override' && blocks.has(r.value.block))
     .flatMap(r => r.value.overrides.map(o => ({ code: o.code, path: o.path, segment: o.segment, ...(o.verifyAgainst !== undefined ? { verifyAgainst: o.verifyAgainst } : {}), reason: r.value.reason, authorizedBy: r.author, at: r.recordedAt, decisionRef: r.decisionRef })))
   if (overrides.length || existsSync(file)) writeFileSync(file, JSON.stringify({ overrides }, null, 2) + '\n')
 }
@@ -1904,7 +1916,19 @@ export function discoverDecisions({ dir, story, pr, repo, now = new Date(), lock
   const at = (now instanceof Date ? now : new Date(now)).toISOString()
   mkdirSync(dir, { recursive: true }) // a fresh card has no run directory yet; a standing amendment is still recorded
   return withLock(dir, lockWaitMs, () => {
-    const all = readDecisions(dir)
+    // review r0-1/r0-2: a decision whose comment is gone from (or edited on) a source read successfully is revoked —
+    // recorded, never deleted. A failed read proves nothing and revokes nothing.
+    const readOk = new Set(['card', 'pr'].filter(src => (src === 'card' ? typeof host.pm?.listCardComments === 'function' : !!prNo) && !errors.some(e => e.startsWith(`${src}:`))))
+    const byRef = new Map(comments.map(c => [String(c.url ?? `${c.source}:${c.id}`), c]))
+    let revoked = 0
+    const all = readDecisions(dir).map(r => {
+      if (r?.status !== 'accepted' || !readOk.has(r.source)) return r
+      const c = byRef.get(r.decisionRef)
+      const why = !c ? 'comment-deleted' : commentEditedReason(c)
+      if (!why) return r
+      revoked++
+      return { ...r, status: 'revoked', revokedReason: why, revokedAt: at }
+    })
     const known = new Set(all.map(r => r.decisionRef))
     const fresh = []
     for (const c of comments.sort(byCommentId)) {
@@ -1913,12 +1937,11 @@ export function discoverDecisions({ dir, story, pr, repo, now = new Date(), lock
       const decisionRef = String(c.url ?? `${c.source}:${c.id}`)
       if (known.has(decisionRef)) continue
       known.add(decisionRef)
-      const reason = c.authorIsUser !== true ? 'author-not-a-user' : c.authorLogin !== who.login ? `author-not-authorized:${c.authorLogin}` : parsed.error ? parsed.error : parsed.value.story !== String(story) ? 'story-mismatch' : undefined
+      const reason = c.authorIsUser !== true ? 'author-not-a-user' : c.authorLogin !== who.login ? `author-not-authorized:${c.authorLogin}` : (commentEditedReason(c) ?? parsed.error ?? (parsed.value.story !== String(story) ? 'story-mismatch' : undefined))
       fresh.push({ decisionRef, source: c.source, id: c.id, author: String(c.authorLogin ?? ''), status: reason ? 'ignored' : 'accepted', ...(reason ? { reason } : { value: parsed.value }), recordedAt: at })
     }
-    if (fresh.length) writeFileSync(join(dir, DECISIONS_FILE), JSON.stringify([...all, ...fresh], null, 2) + '\n')
-    const accepted = acceptedDecisions(dir)
-    writeCustodyOverrides(dir, accepted)
+    if (fresh.length || revoked) writeFileSync(join(dir, DECISIONS_FILE), JSON.stringify([...all, ...fresh], null, 2) + '\n')
+    writeCustodyOverrides(dir, acceptedDecisions(dir), new Set(handoffs.map(blockIdOf)))
     const last = handoffs[handoffs.length - 1]
     const block = last ? blockIdOf(last) : null
     for (const r of fresh.filter(x => x.status === 'accepted')) {
@@ -1930,7 +1953,7 @@ export function discoverDecisions({ dir, story, pr, repo, now = new Date(), lock
         writeRecovery(dir, { ...recovery, budgetResetAt: at, resets: [...(recovery.resets ?? []), { decisionRef: r.decisionRef, block, detail: v.reason, by: r.author, at, restarted: ['autoRecoveryRounds'], preserved: ['maxFixRounds', 'redRepairs', 'greenRetries'] }] })
       }
     }
-    return { recorded: fresh.map(r => ({ decisionRef: r.decisionRef, status: r.status, ...(r.reason ? { reason: r.reason } : { choice: r.value.choice }) })), block, errors, maintainer: who.login }
+    return { recorded: fresh.map(r => ({ decisionRef: r.decisionRef, status: r.status, ...(r.reason ? { reason: r.reason } : { choice: r.value.choice }) })), revoked: all.filter(r => r.status === 'revoked' && r.revokedAt === at).map(r => ({ decisionRef: r.decisionRef, reason: r.revokedReason })), block, errors, maintainer: who.login }
   })
 }
 
@@ -2345,14 +2368,14 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       } catch {}
     return { published: true, path: target, name, seq, attempt: n }
   })
-  if (out.published && !out.reused && data.assumptions?.length) out.assumptionComment = postAssumptions({ dir, host, transport, story: data.story, phase, assumptions: data.assumptions })
+  if (out.published && !out.reused && data.assumptions?.length) out.assumptionComment = postAssumptions({ dir, host, transport, story: data.story, phase, assumptions: data.assumptions, block: blockIdOf({ file: out.path }) })
   return out
 }
 // The Assumption comment on the card (AC-12): marker-keyed (one per preparation phase, idempotent), carrying a pair
 // marker so it can never be read back as a maintainer decision. A failed post is reported, never a refused publish.
-function postAssumptions({ dir, host, transport, story, phase, assumptions }) {
+function postAssumptions({ dir, host, transport, story, phase, assumptions, block }) {
   const rows = assumptions.map(a => `| ${cell(a.id)} | ${cell(a.policy)} | ${cell(a.reading)} |`).join('\n')
-  const body = `**Assumption** — preparing ${phase} found no policy decision for the rows below, so the contract applies the most restrictive reading and the cycle continues.\n\n| id | policy | reading applied |\n| --- | --- | --- |\n${rows}\n\nTo overturn one, the maintainer posts a comment holding one fenced json block: \`{"schemaVersion":1,"kind":"maintainer-decision","story":"${story}","choice":"amend","overturns":["${assumptions[0].id}"],"reason":"…"}\` — the next run opens a new round.`
+  const body = `**Assumption** — preparing ${phase} found no policy decision for the rows below, so the contract applies the most restrictive reading and the cycle continues.\n\n| id | policy | reading applied |\n| --- | --- | --- |\n${rows}\n\nTo overturn one, the maintainer posts a comment holding one fenced json block: \`{"schemaVersion":1,"kind":"maintainer-decision","story":"${story}","block":"${block}","choice":"amend","overturns":["${assumptions[0].id}"],"reason":"…"}\` — the next run opens a new round.`
   try {
     const h = host ?? bindHosts({ dir, transport })
     h.pm.commentOnCard({ id: String(story), marker: `<!-- pair:assumption #${story} ${phase} -->`, body })
@@ -2963,11 +2986,12 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
   // US-647 AC-12: a fail-closed assumption a contract recorded (stamped by `publish`) that a later maintainer amendment
   // overturned opens a remediation round carrying the amendment — once: a preparation that received it consumes it.
   const pendingOverturns = () => {
-    const stamped = new Set(list.filter(h => h.skill === 'red-spec').flatMap(h => (Array.isArray(h.data.assumptions) ? h.data.assumptions : []).map(a => a?.id)))
     const received = new Set(list.filter(h => h.skill === 'red-spec').flatMap(h => h.data.findings?.received ?? []))
+    // review r0-4: the overturn names the preparation handoff (block) that recorded the assumption — never an id alone.
+    const specOf = block => list.find(h => h.skill === 'red-spec' && Array.isArray(h.data.assumptions) && blockIdOf(h) === block)
     return (ctx.decisions ?? [])
-      .filter(r => r.value.choice === 'amend' && (r.value.overturns ?? []).some(id => stamped.has(id)))
-      .map(r => ({ r, id: `amend-${String(r.id).replace(/[^A-Za-z0-9]/g, '-')}`, ids: r.value.overturns.filter(id => stamped.has(id)) }))
+      .filter(r => r.value.choice === 'amend' && specOf(r.value.block) && (r.value.overturns ?? []).some(id => specOf(r.value.block).data.assumptions.some(a => a?.id === id)))
+      .map(r => ({ r, id: `amend-${String(r.id).replace(/[^A-Za-z0-9]/g, '-')}`, ids: r.value.overturns.filter(id => specOf(r.value.block).data.assumptions.some(a => a?.id === id)) }))
       .filter(x => !received.has(x.id))
       .map(({ r, id, ids }) => ({ id, severity: 'Major', location: 'card', description: `the maintainer overturned assumption ${ids.join(', ')} (${r.decisionRef}): ${r.value.reason}`, recommendation: 'apply the amended policy — VERIFY: the contract restates the overturned assumption; ORACLE: the maintainer amendment; ASSERT: the amended reading holds', blocking: true, transition: 'open', kind: 'defect', decisionRef: r.decisionRef }))
   }

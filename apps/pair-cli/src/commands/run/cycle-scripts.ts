@@ -717,6 +717,7 @@ export interface CycleDecisionsResult {
     readonly reason?: string
     readonly choice?: string
   }>
+  readonly revoked?: ReadonlyArray<{ readonly decisionRef: string; readonly reason: string }>
   readonly block?: string | null
   readonly errors?: readonly string[]
 }

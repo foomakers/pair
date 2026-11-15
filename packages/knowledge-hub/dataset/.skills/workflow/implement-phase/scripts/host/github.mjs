@@ -55,8 +55,8 @@ export default defineAdapter({
       } catch (e) {
         throw new HostError('invalid-json', { message: e.message, command: 'gh api --paginate' })
       }
-      // The author as the host reports it (US-647): a maintainer decision is authenticated from this, never from a caller.
-      return pages.flat().map(c => ({ id: c.id, body: String(c.body ?? ''), url: c.html_url, authorLogin: c.user?.login, authorIsUser: c.user?.type === 'User' }))
+      // The author as the host reports it (US-647) — the CREATOR — and the timestamps that prove the body was never edited since.
+      return pages.flat().map(c => ({ id: c.id, body: String(c.body ?? ''), url: c.html_url, authorLogin: c.user?.login, authorIsUser: c.user?.type === 'User', createdAt: c.created_at, updatedAt: c.updated_at }))
     }
     const readCheck = ({ sha, repo, context = CHECK_CONTEXT }) => {
       const combined = JSON.parse(gh(['api', `${apiRepo(repo)}/commits/${sha}/status`]))
@@ -307,7 +307,7 @@ export default defineAdapter({
       readComment({ id, repo }) {
         const c = parseJson(gh(['api', `repos/${repo}/issues/comments/${id}`]), { command: 'gh api comment' })
         const pr = /\/issues\/(\d+)$/.exec(String(c?.issue_url ?? ''))?.[1]
-        return { body: c?.body, authorLogin: c?.user?.login, authorIsUser: c?.user?.type === 'User', pr: pr === undefined ? null : Number(pr) }
+        return { body: c?.body, authorLogin: c?.user?.login, authorIsUser: c?.user?.type === 'User', createdAt: c?.created_at, updatedAt: c?.updated_at, pr: pr === undefined ? null : Number(pr) }
       },
       parseCommentRef(ref, { repo } = {}) {
         const m = COMMENT_URL_RE.exec(String(ref ?? ''))

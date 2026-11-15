@@ -31,7 +31,7 @@ if (a[0] === 'api') {
   const l = /repos\\/([^/]+\\/[^/]+)\\/issues\\/(\\d+)\\/comments$/.exec(a.find(x => /\\/comments$/.test(x)) || '')
   if (l && a.includes('--paginate')) {
     const comments = JSON.parse(process.env.FAKE_GH_COMMENTS_JSON || '{}')
-    const list = Object.entries(comments).filter(([, c]) => new RegExp('/issues/' + l[2] + '$').test(c.issue_url || '')).map(([id, c]) => ({ id: Number(id), body: c.body, user: c.user, html_url: 'https://github.com/' + l[1] + '/pull/' + l[2] + '#issuecomment-' + id }))
+    const list = Object.entries(comments).filter(([, c]) => new RegExp('/issues/' + l[2] + '$').test(c.issue_url || '')).map(([id, c]) => ({ id: Number(id), body: c.body, user: c.user, created_at: c.created_at, updated_at: c.updated_at, html_url: 'https://github.com/' + l[1] + '/pull/' + l[2] + '#issuecomment-' + id }))
     process.stdout.write(JSON.stringify(list)); process.exit(0)
   }
 }
@@ -1689,7 +1689,7 @@ const setComments = map => {
   process.env.FAKE_GH_COMMENTS_JSON = JSON.stringify(map)
 }
 const decisionBody = (decisions, hash) => '```json\n' + JSON.stringify({ schemaVersion: 1, scopeBaselineHash: hash, decisions }) + '\n```'
-const comment = (login, body, { type = 'User', issue = 7 } = {}) => ({ user: { login, type }, issue_url: `https://api.github.com/repos/foomakers/pair/issues/${issue}`, body })
+const comment = (login, body, { type = 'User', issue = 7 } = {}) => ({ user: { login, type }, created_at: '2026-11-15T10:00:00Z', updated_at: '2026-11-15T10:00:00Z', issue_url: `https://api.github.com/repos/foomakers/pair/issues/${issue}`, body })
 
 test('T-22 (DT-12/13): a technically converged review with pending scope proposals returns awaiting-scope-decision, never `done` and never a fix plan/severity count for the proposals', () => {
   const { dir } = runDir()
@@ -2163,7 +2163,10 @@ test('T-22 (DT-17): bot comments, an unauthorized login, a stale baseline, a dup
     604: comment('rucka', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'a' }, { id: 'sc-1', action: 'ignore', rationale: 'b' }], hash)),
     605: comment('rucka', decisionBody([{ id: 'sc-1', action: 'waive' }], hash)),
     606: comment('rucka', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'only this one, sc-2 stays pending' }], hash)),
+    // US-647 review r0-2: the host names the comment's creator — an edited one (anyone with write access) is refused
+    607: { ...comment('rucka', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'x' }], hash)), updated_at: '2026-11-15T11:00:00Z' },
   })
+  assert.equal(attempt(607).reason, 'comment-edited')
   assert.equal(attempt(601).applied, false)
   assert.equal(attempt(601).reason, 'author-not-a-user')
   assert.equal(attempt(602).applied, false)

@@ -291,11 +291,19 @@ it('US-647 AC-11: every maintainer decision comment is recorded in telemetry —
         status: 'ignored',
         reason: 'author-not-authorized:mallory',
       },
+      {
+        decisionRef: 'https://x/3',
+        author: 'rucka',
+        status: 'revoked',
+        revokedReason: 'comment-edited',
+        value: { choice: 'override', reason: 'x' },
+      },
     ]),
   )
   expect(readInterventions(dir)).toEqual([
     { kind: 'maintainer-reset', who: 'rucka', reason: 'seal moved' },
     { kind: 'maintainer-ignored', who: 'mallory', reason: 'author-not-authorized:mallory' },
+    { kind: 'maintainer-revoked', who: 'rucka', reason: 'comment-edited' },
   ])
 })
 

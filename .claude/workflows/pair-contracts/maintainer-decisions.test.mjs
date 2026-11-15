@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { resolve, discoverDecisions, readDecisions, parseDecisionComment, publish, recover, cycleCounters, readHandoffs, STOP_CATALOG, DECISION_OVERRIDABLE_CODES } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+import { resolve, discoverDecisions, readDecisions, parseDecisionComment, publish, recover, cycleCounters, readHandoffs, STOP_CATALOG, DECISION_OVERRIDABLE_CODES, blockIdOf } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 import { OVERRIDABLE_BREACH_CODES, verifyChain } from '../../skills/pair-workflow-review-phase/scripts/red-snapshot.mjs'
 import { chainRepo, write, git, PR } from './red-snapshot-lib.mjs'
 
@@ -40,7 +40,8 @@ const sealed = (dir, phase = 'a0') => {
 }
 const decisionBody = (over = {}) => '```json\n' + JSON.stringify({ schemaVersion: 1, kind: 'maintainer-decision', story: '42', choice: 'decide', reason: 'accept the trade-off', ...over }) + '\n```'
 let cid = 100
-const comment = (body, { login = 'rucka', user = true } = {}) => ({ id: ++cid, body, url: `https://github.com/o/r/pull/7#issuecomment-${cid}`, authorLogin: login, authorIsUser: user })
+const T0 = '2026-11-15T10:00:00Z'
+const comment = (body, { login = 'rucka', user = true, createdAt = T0, updatedAt = createdAt } = {}) => ({ id: ++cid, body, url: `https://github.com/o/r/pull/7#issuecomment-${cid}`, authorLogin: login, authorIsUser: user, createdAt, updatedAt })
 const hostOf = ({ pr = [], card = [] } = {}) => ({ code: { listComments: () => pr }, pm: { listCardComments: () => card } })
 const pick = (dir, comments, extra = {}) => discoverDecisions({ dir, story: '42', pr: 7, repo: 'o/r', host: hostOf(comments), ...extra })
 const go = (dir, extra = {}) => resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, ...extra })
@@ -100,9 +101,10 @@ test('AC-11: a stale decision (an older block) never resumes a newer refusal; th
   put(dir, 'r1-g1', 'red-spec', { status: 'unprovable', reason: 'still no policy' }, 2)
   const block = go(dir).next.block
   assert.notEqual(block, oldBlock)
-  pick(dir, { pr: [comment(decisionBody({ block: oldBlock }))] })
+  const old = comment(decisionBody({ block: oldBlock }))
+  pick(dir, { pr: [old] })
   assert.equal(go(dir).next.reason, 'failed-preparation')
-  pick(dir, { pr: [comment(decisionBody({ block, reason: 'first answer' })), comment(decisionBody({ block, reason: 'second answer' }))] })
+  pick(dir, { pr: [old, comment(decisionBody({ block, reason: 'first answer' })), comment(decisionBody({ block, reason: 'second answer' }))] })
   assert.equal(readDecisions(dir).filter(r => r.status === 'accepted').length, 3)
   const next = go(dir).next
   assert.deepEqual([next.step, next.attempt, next.maintainerDecision.reason], ['prepare', 3, 'second answer'])
@@ -296,10 +298,12 @@ test('AC-23 control: no overlap ⇒ the round proceeds as usual', () => {
 test('AC-23 edge: an amendment that withdraws the decision lets the finding proceed as a normal round', () => {
   const dir = runDir()
   fresh(dir)
-  const ref = standing(dir, { paths: ['src/a.ts'] }).recorded[0].decisionRef
+  const card = [comment(decisionBody({ choice: 'amend', reason: 'ids are opaque strings', scope: { paths: ['src/a.ts'] } }))]
+  const ref = pick(dir, { card }).recorded[0].decisionRef
   review(dir, 'r0', { findings: [finding('r0-1')] })
   const parked = go(dir).next
-  pick(dir, { pr: [comment(decisionBody({ choice: 'amend', block: parked.block, reason: 'withdrawn', withdraws: [ref] }))] })
+  assert.equal(parked.reason, 'decision-conflict')
+  pick(dir, { card, pr: [comment(decisionBody({ choice: 'amend', block: parked.block, reason: 'withdrawn', withdraws: [ref] }))] })
   const next = go(dir).next
   assert.deepEqual([next.step, next.phase], ['prepare', 'r1-g1'])
 })
@@ -307,10 +311,11 @@ test('AC-23 edge: an amendment that withdraws the decision lets the finding proc
 test('AC-23 edge: a decision upholding the recorded one sends the finding back to the reviewer with the decision', () => {
   const dir = runDir()
   fresh(dir)
-  standing(dir, { paths: ['src/a.ts'] })
+  const card = [comment(decisionBody({ choice: 'amend', reason: 'ids are opaque strings', scope: { paths: ['src/a.ts'] } }))]
+  pick(dir, { card })
   review(dir, 'r0', { findings: [finding('r0-1')] })
   const parked = go(dir).next
-  pick(dir, { pr: [comment(decisionBody({ block: parked.block, reason: 'the decision stands' }))] })
+  pick(dir, { card, pr: [comment(decisionBody({ block: parked.block, reason: 'the decision stands' }))] })
   const next = go(dir).next
   assert.deepEqual([next.step, next.mode, next.maintainerDecision.reason], ['verify', 're-review', 'the decision stands'])
 })
@@ -342,6 +347,8 @@ test('AC-12: a missing policy read restrictively is stamped from the contract an
   assert.equal(posted[0].id, '42')
   assert.match(posted[0].marker, /^<!-- pair:assumption #42 r1-g1 -->$/)
   assert.match(posted[0].body, /A-1[\s\S]*who may approve[\s\S]*only the maintainer/)
+  // r0-4: the template the card comment quotes binds the overturn to THIS preparation's handoff
+  assert.ok(posted[0].body.includes(`"block":"${blockIdOf({ file: out.path })}"`))
 })
 
 test('AC-12: a malformed assumption is refused before validation', () => {
@@ -370,7 +377,11 @@ test('AC-12: a later amendment overturning the assumption opens a new round once
   put(dir, 'r1-g1', 'green-fix', { fixed: true, outputHead: SHA('f') })
   review(dir, 'r1', { reviewedHead: SHA('f'), verdict: 'approved', readiness: { ready: true, remoteHead: SHA('f') } })
   assert.equal(go(dir).next.step, 'done')
-  const ref = standing(dir, undefined, { reason: 'any maintainer may approve', overturns: ['A-1'] }).recorded[0].decisionRef
+  // r0-4: an overturn with no block, or naming another run's preparation, opens nothing
+  assert.deepEqual(standing(dir, undefined, { reason: 'x', overturns: ['A-1'] }).recorded.map(r => r.reason), ['block-invalid'])
+  standing(dir, undefined, { block: 'r1-g1-red-spec.json@0123456789ab', reason: 'stale run', overturns: ['A-1'] })
+  assert.equal(go(dir).next.step, 'done')
+  const ref = standing(dir, undefined, { block: blockIdOf({ file: join(dir, 'r1-g1-red-spec.json') }), reason: 'any maintainer may approve', overturns: ['A-1'] }).recorded[0].decisionRef
   const next = go(dir).next
   assert.deepEqual([next.step, next.mode, next.phase], ['prepare', 'remediation', 'r2-g1'])
   assert.match(next.findings[0].description, /A-1[\s\S]*any maintainer may approve/)
@@ -418,4 +429,79 @@ for (const next of [
   test(`AC-11: the ${next.step} packet carries $maintainerDecision verbatim — and none without a decision`, () => {
     assert.match(packet({ ...next, maintainerDecision: MD }), /\$maintainerDecision=\{[^\n]*issuecomment-9[^\n]*the id rule is opaque/)
     assert.doesNotMatch(packet(next), /\$maintainerDecision/)
+  })
+
+// ── review r0-1: a custody override is bound to THIS run and revocable ───────────────────────────────────────────────
+const overrideOf = (block, extra = {}) => comment(decisionBody({ block, choice: 'override', reason: 'tracked engine fix', overrides: [{ code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }], ...extra }))
+const overridesIn = dir => (existsSync(join(dir, 'custody-overrides.json')) ? JSON.parse(readFileSync(join(dir, 'custody-overrides.json'), 'utf8')).overrides : [])
+
+test('r0-1: an override comment of another run (its block is no handoff of this run dir) waives nothing here', () => {
+  const a = runDir()
+  custodyStuck(a, [{ code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }])
+  const c = overrideOf(go(a).next.block)
+  pick(a, { pr: [c] })
+  assert.equal(overridesIn(a).length, 1)
+  const b = runDir()
+  custodyStuck(b, [{ code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }])
+  pick(b, { pr: [c] })
+  assert.deepEqual(overridesIn(b), [])
+  // a forged block that names a real file of this run with a wrong digest is no better
+  pick(b, { pr: [overrideOf(go(b).next.block.replace(/@.*/, '@000000000000'))] })
+  assert.deepEqual(overridesIn(b), [])
+})
+
+for (const [label, revoke] of [
+  ['an amendment withdrawing it', (dir, c) => pick(dir, { pr: [c, comment(decisionBody({ choice: 'amend', reason: 'revoked', withdraws: [c.url] }))] })],
+  ['the comment deleted on the host', dir => pick(dir, { pr: [] })],
+  ['the comment edited after it was accepted', (dir, c) => pick(dir, { pr: [{ ...c, updatedAt: '2026-11-15T11:00:00Z' }] })],
+])
+  test(`r0-1/r0-2: an accepted override is revoked by ${label} — the derived file drops it and the record says why`, () => {
+    const dir = runDir()
+    custodyStuck(dir, [{ code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }])
+    const c = overrideOf(go(dir).next.block)
+    pick(dir, { pr: [c] })
+    assert.equal(overridesIn(dir).length, 1)
+    revoke(dir, c)
+    assert.deepEqual(overridesIn(dir), [])
+  })
+
+test('r0-1 control: a failed host read revokes nothing (deletion is unprovable then)', () => {
+  const dir = runDir()
+  custodyStuck(dir, [{ code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }])
+  const c = overrideOf(go(dir).next.block)
+  pick(dir, { pr: [c] })
+  discoverDecisions({ dir, story: '42', pr: 7, host: { code: { listComments: () => { throw new Error('offline') } }, pm: { listCardComments: () => [] } } })
+  assert.equal(overridesIn(dir).length, 1)
+})
+
+// ── review r0-2: a decision is a comment nobody edited ───────────────────────────────────────────────────────────────
+for (const [label, extra, reason] of [
+  ['edited after posting (the host names only its creator)', { updatedAt: '2026-11-15T11:00:00Z' }, 'comment-edited'],
+  ['without the host timestamps that prove it unedited', { createdAt: null, updatedAt: null }, 'comment-unverifiable'],
+])
+  test(`r0-2: a maintainer decision comment ${label} is ignored with ${reason}`, () => {
+    const dir = runDir()
+    unprovable(dir)
+    const out = pick(dir, { pr: [comment(decisionBody({ block: go(dir).next.block }), extra)] })
+    assert.deepEqual(out.recorded.map(r => [r.status, r.reason]), [['ignored', reason]])
+    assert.equal(go(dir).next.reason, 'failed-preparation')
+  })
+
+test('r0-2: a comment skipped once (no decision block) and later edited into a decision is still refused', () => {
+  const dir = runDir()
+  unprovable(dir)
+  const c = comment('looks good')
+  assert.deepEqual(pick(dir, { pr: [c] }).recorded, [])
+  const out = pick(dir, { pr: [{ ...c, body: decisionBody({ block: go(dir).next.block, choice: 'reset' }), updatedAt: '2026-11-15T12:00:00Z' }] })
+  assert.deepEqual(out.recorded.map(r => r.reason), ['comment-edited'])
+})
+
+// ── review r0-3: every consumer of resolve picks decisions up first ──────────────────────────────────────────────────
+const SKILL_OF = name => readFileSync(new URL(`../../skills/pair-workflow-${name}/SKILL.md`, import.meta.url), 'utf8')
+for (const name of ['cycle', 'red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase'])
+  test(`r0-3: the ${name} skill runs \`cycle-state.mjs decisions\` before its first resolve`, () => {
+    const md = SKILL_OF(name)
+    const pickup = md.search(/cycle-state\.mjs"? decisions --dir/)
+    const first = md.search(/cycle-state\.mjs"? resolve --dir/)
+    assert.ok(pickup !== -1 && first !== -1 && pickup < first, `${name}: decisions ${pickup} must precede resolve ${first}`)
   })

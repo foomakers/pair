@@ -204,25 +204,24 @@ function readHumanDecisions(runDir: string): ManualIntervention[] {
   return entries
 }
 
-/** US-647: every maintainer decision comment the script recorded — accepted (by choice) or ignored, never its text as authority. */
+/** US-647: every maintainer decision comment the script recorded — accepted (by choice), revoked or ignored, never its text as authority. */
 function readMaintainerDecisions(runDir: string): ManualIntervention[] {
   const path = join(runDir, 'maintainer-decisions.json')
   if (!existsSync(path)) return []
   const list = JSON.parse(readFileSync(path, 'utf8')) as unknown
   return (Array.isArray(list) ? list : []).flatMap(raw => {
     const r = object(raw)
-    const value = object(r?.['value'])
-    if (typeof r?.['author'] !== 'string') return []
-    return r['status'] === 'accepted' && typeof value?.['choice'] === 'string'
-      ? [
-          {
-            kind: `maintainer-${value['choice']}`,
-            who: r['author'],
-            reason: String(value['reason'] ?? ''),
-          },
-        ]
-      : [{ kind: 'maintainer-ignored', who: r['author'], reason: String(r['reason'] ?? '') }]
+    return typeof r?.['author'] === 'string' ? [decisionIntervention(r, r['author'])] : []
   })
+}
+
+function decisionIntervention(r: Record<string, unknown>, who: string): ManualIntervention {
+  const value = object(r['value'])
+  if (r['status'] === 'revoked')
+    return { kind: 'maintainer-revoked', who, reason: String(r['revokedReason'] ?? '') }
+  if (r['status'] === 'accepted' && typeof value?.['choice'] === 'string')
+    return { kind: `maintainer-${value['choice']}`, who, reason: String(value['reason'] ?? '') }
+  return { kind: 'maintainer-ignored', who, reason: String(r['reason'] ?? '') }
 }
 
 /** Read the cycle's own durable intervention trail, without treating card prose as authority. */

@@ -33,7 +33,7 @@ const hostOf = comments => ({
     readComment: ({ id }) => comments[id],
   },
 })
-const c = (login, text = body(), type = 'User') => ({ authorLogin: login, authorIsUser: type === 'User', pr: 7, body: text })
+const c = (login, text = body(), type = 'User', updatedAt = 'T0') => ({ authorLogin: login, authorIsUser: type === 'User', createdAt: 'T0', updatedAt, pr: 7, body: text })
 const approve = (dir, id, comments) => approveCorrection({ dir, decisionRef: `pr7#c-${id}`, repo: 'o/r', pr: 7, host: hostOf(comments) })
 const go = dir => resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
 
@@ -63,6 +63,9 @@ test('AC-1: refused — bot, other human, stale/foreign binding, plain name; not
     [c('rucka', body({ predecessorContractHash: `sha256:${'e'.repeat(64)}` })), 'predecessor-not-sealed'],
     [c('rucka', body({ rows: [] })), 'rows-invalid'],
     [c('rucka', 'approved, go ahead'), 'no-fenced-json'],
+    // US-647 review r0-2: the host names the creator, not the editor — an edited approval is refused
+    [c('rucka', body(), 'User', 'T1'), 'comment-edited'],
+    [{ ...c('rucka'), createdAt: undefined }, 'comment-unverifiable'],
   ]
   for (const [comment, reason] of cases) assert.equal(approve(dir, 2, { 2: comment }).reason, reason)
   assert.deepEqual(readApprovals(dir), [])

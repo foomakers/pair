@@ -6,7 +6,7 @@
 
 ## Status
 
-Active
+Active — point 2 superseded by [2026-11-15](2026-11-15-maintainer-decision-comments-resume-a-run.md): `--maintainer` is refused; the adopted login is the only principal, and a comment edited after posting is never accepted.
 
 ## Category
 
@@ -28,8 +28,8 @@ claimed the author is verified against "the adopted maintainer set".
    run directory to `.pair/adoption/tech/way-of-working.md` and reads the `## Assignment` cascade
    the item writer and publish-pr already use: `code-host-assignee` (the PR side) first, else
    `default-assignee`.
-2. **`--maintainer <login>` stays the explicit override** (source `flag`) — for a host that
-   resolved the principal itself, and for tests.
+2. ~~**`--maintainer <login>` stays the explicit override** (source `flag`) — for a host that
+   resolved the principal itself, and for tests.~~ Superseded 2026-11-15: the flag is refused.
 3. **Fail closed.** No adoption file, or no assignee key, is the typed refusal
    `maintainer-unresolved:<why>` — before any PR read, with nothing written. The success result
    reports `maintainer: { login, source }` so the record says who was authorized and why.

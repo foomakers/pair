@@ -159,12 +159,14 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
   // US-647 AC-11: before resolve, the driver has the script read the card's comments through the operator's `gh` and
   // authenticate the author against the adopted maintainer — the driver passes no login; only the maintainer resumes.
   it.each([
-    ['rucka', 'User', 'prepare'],
-    ['mallory', 'User', 'blocked'],
-    ['rucka', 'Bot', 'blocked'],
+    ['rucka', 'User', '2026-11-15T10:00:00Z', 'prepare'],
+    ['mallory', 'User', '2026-11-15T10:00:00Z', 'blocked'],
+    ['rucka', 'Bot', '2026-11-15T10:00:00Z', 'blocked'],
+    // review r0-2: the host names the creator — a comment edited afterwards is not the maintainer's decision
+    ['rucka', 'User', '2026-11-15T11:00:00Z', 'blocked'],
   ])(
-    'US-647 AC-11: a decision comment by %s (%s) on the card → the next resolve answers %s',
-    async (login, type, step) => {
+    'US-647 AC-11: a decision comment by %s (%s, updated %s) on the card → the next resolve answers %s',
+    async (login, type, updatedAt, step) => {
       vi.mocked(runCycle).mockClear()
       await drive(ENGINES.claude)
       const input = vi.mocked(runCycle).mock.calls[0]?.[0]
@@ -248,6 +250,8 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
             body,
             html_url: 'https://github.com/o/r/issues/7#issuecomment-5',
             user: { login, type },
+            created_at: '2026-11-15T10:00:00Z',
+            updated_at: updatedAt,
           },
         ]),
       )

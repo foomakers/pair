@@ -260,7 +260,7 @@ export default defineAdapter({
         // A person, not a service/build identity: Azure DevOps subject descriptors of users are
         // `aad.` (Entra ID) or `msa.` (Microsoft account).
         const a = c?.author
-        return { body: c?.content, authorLogin: a?.uniqueName, authorIsUser: !!a && !a.isContainer && /^(aad|msa)\./.test(String(a.descriptor ?? '')), pr: c ? Number(pr) : null }
+        return { body: c?.content, authorLogin: a?.uniqueName, authorIsUser: !!a && !a.isContainer && /^(aad|msa)\./.test(String(a.descriptor ?? '')), createdAt: c?.publishedDate, updatedAt: c?.lastContentUpdatedDate, pr: c ? Number(pr) : null }
       },
       parseCommentRef(ref, { repo } = {}) {
         const m = COMMENT_URL_RE.exec(String(ref ?? ''))

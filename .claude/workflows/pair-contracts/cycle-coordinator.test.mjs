@@ -2546,6 +2546,8 @@ function scopeDecisionFixture() {
     comments: {
       701: {
         user: { login: 'rucka', type: 'User' },
+        created_at: '2026-11-15T10:00:00Z',
+        updated_at: '2026-11-15T10:00:00Z',
         issue_url: 'https://api.github.com/repos/foomakers/pair/issues/7',
         body,
       },

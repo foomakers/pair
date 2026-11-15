@@ -22,6 +22,7 @@ import {
   type AutonomyResolution,
   type CardReadiness,
   type BaseSyncResult,
+  type CycleDecisionsResult,
   type CycleMergeResult,
   type CycleScriptsLocation,
   type GateRecord,
@@ -604,13 +605,20 @@ function pickDecisions(input: CycleDriverRequest, co: Coordinates): void {
       story: input.card,
       ...(input.pr !== undefined && { pr: input.pr }),
     })
-    for (const r of out?.recorded ?? [])
-      console.log(
-        `  Decision: ${r.decisionRef} — ${r.status}${r.reason ? ` (${r.reason})` : r.choice ? ` (${r.choice})` : ''}`,
-      )
+    for (const line of decisionLines(out)) console.log(line)
   } catch (e) {
     console.log(`  Decision pickup failed, nothing applied: ${(e as Error).message}`)
   }
+}
+
+/** One console line per decision the pickup recorded or revoked. */
+function decisionLines(out: CycleDecisionsResult | undefined): string[] {
+  return [
+    ...(out?.recorded ?? []).map(
+      r => `  Decision: ${r.decisionRef} — ${r.status} (${r.reason ?? r.choice ?? ''})`,
+    ),
+    ...(out?.revoked ?? []).map(r => `  Decision revoked: ${r.decisionRef} — ${r.reason}`),
+  ]
 }
 
 const resolveFor =
