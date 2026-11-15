@@ -77,7 +77,7 @@ export function applyBoardState({ pm, id, pr, repo, mapping = DEFAULT }) {
     if (wanted.status === 'Review' && !target) return { confirmed: true, expected: null, actions, skipped: 'no-review-state' }
     if (target && current.boardState !== target) {
       const result = pm.setBoardState({ id, repo, state: target })
-      if (!result.confirmed) return { confirmed: false, gaps: ['board-write-failed'], error: result.error, actions }
+      if (!result.confirmed) return { confirmed: false, gaps: [result.gap ?? 'board-write-failed'], error: result.error, actions }
       actions.push(`status:${target}`)
     }
     return { confirmed: true, expected: target, actions }
@@ -107,7 +107,7 @@ export function auditCards({ pm, code, repo, mapping = DEFAULT, apply = false, o
         continue
       }
       const expected = targetOf(decision.status, mapping)
-      if (decision.status && !expected && decision.status !== 'Not planned') {
+      if (decision.status && !expected && !optional(decision.status)) {
         gaps.push({ id, reason: `state-unmapped:${decision.status}` })
         continue
       }

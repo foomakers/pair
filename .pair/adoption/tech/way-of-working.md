@@ -4,7 +4,8 @@
 - Lightweight code review and testing practices focused on speed and learning.
 - Minimal documentation: key decisions and usage documented in markdown files.
 - Collaboration and process guidelines follow the standards in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md`.
-- Github Projects is adopted for project management, using Kanban as the workflow methodology. The project is pair under the github organization foomakers. See `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` for usage. use #github MCP to access Github Projects, boards and issues.
+- Github Projects is adopted for project management, using Kanban as the workflow methodology. The project is pair under the github organization foomakers. The board is the `pair digital development` project. See `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` for usage. use #github MCP to access Github Projects, boards and issues.
+- `pm-project`: `pair digital development`
 - `story-label`: `user story` — also identifies manually created stories without the story template heading.
 - High risk tolerance: quick rollbacks and fast recovery from errors.
 - Team communication is informal and direct, with decisions validated collaboratively.
@@ -47,8 +48,7 @@ Maps this project's GitHub Projects board columns to the 5 canonical macrostates
 
 - `Refined` (legacy board column) maps to the canonical `Ready` — the column keeps its name, skills treat it as `Ready` (migration note #243). This is what lets `/pair-process-refine-story` complete its Draft→Ready transition on this board.
 - `Review` holds stories whose implementation is complete and whose PR is ready for review. PR states (`to-be-reviewed`, `not-approved`, `ready-to-merge`) remain within this macrostate; only merge produces `Done`. See [ADL](../decision-log/2026-11-06-review-board-state.md).
-- `not-planned-state`: `Not planned` — the board-sync scripts write this column when a story closes without completion; it stays outside the macrostate table.
-- `Not planned` (Status option `1d5cee95`) is a board column **deliberately left unmapped** — skills ignore it, like `Removed` ([Closure Without Completion](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md#closure-without-completion)). Whoever closes an item as not planned sets its Status to `Not planned`, never `Done`: the built-in close automation cannot tell the reasons apart ([ADL](../decision-log/2026-10-14-not-planned-board-column.md)).
+- `not-planned-state`: `Not planned` (Status option `1d5cee95`) — the closure-without-completion column. It is **not a macrostate** (outside the table above), so macrostate readers ignore it like `Removed`; the board-sync scripts write it, through this key, when a story closes without completion ([Closure Without Completion](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md#closure-without-completion)). Whoever closes an item as not planned sets its Status to `Not planned`, never `Done`: the built-in close automation cannot tell the reasons apart ([ADL](../decision-log/2026-10-14-not-planned-board-column.md)).
 
 ## Assignment
 

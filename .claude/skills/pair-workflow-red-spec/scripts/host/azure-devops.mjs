@@ -120,7 +120,7 @@ export default defineAdapter({
     }
     const asCard = wi => {
       const state = wi?.fields?.['System.State'] ?? null
-      return { number: wi?.id, url: cardUrl(wi), title: wi?.fields?.['System.Title'], body: bodyOf(wi), state: ['Done', 'Closed', 'Removed'].includes(state) ? 'CLOSED' : 'OPEN', stateReason: state === 'Removed' ? 'NOT_PLANNED' : ['Done', 'Closed'].includes(state) ? 'COMPLETED' : null, projectItems: state && inArea(wi) ? [{ status: { name: state } }] : [] }
+      return { number: wi?.id, url: cardUrl(wi), title: wi?.fields?.['System.Title'], body: bodyOf(wi), state: state === doneState || state === 'Removed' ? 'CLOSED' : 'OPEN', stateReason: state === 'Removed' ? 'NOT_PLANNED' : state === doneState ? 'COMPLETED' : null, projectItems: state && inArea(wi) ? [{ status: { name: state } }] : [] }
     }
     const relatedIds = (wi, rel) => (wi?.relations ?? []).filter(r => r.rel === rel).map(r => Number(/\/workItems\/(\d+)$/i.exec(String(r.url))?.[1])).filter(Number.isInteger)
 
@@ -205,9 +205,11 @@ export default defineAdapter({
         const escaped = String(id).replace(/^#/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         const ref = new RegExp(`^(?:Refs:\\s*(?:AB#|#)?|(?:Closes|Fixes)\\s+(?:AB#|#))${escaped}\\s*$`, 'im')
         const hits = (Array.isArray(rows) ? rows : []).filter(pr => ref.test(String(pr.description ?? '')))
-        if (hits.length > 1) return 'unknown'
+        // Several PRs may link one card (a superseded PR abandoned): completed wins, then active.
         if (!hits.length) return 'none'
-        return hits[0].status === 'completed' ? 'merged' : hits[0].status === 'abandoned' ? 'closed-unmerged' : hits[0].status === 'active' ? 'open' : 'unknown'
+        if (hits.some(pr => pr.status === 'completed')) return 'merged'
+        if (hits.some(pr => pr.status === 'active')) return 'open'
+        return hits.every(pr => pr.status === 'abandoned') ? 'closed-unmerged' : 'unknown'
       },
       createCard({ repo, title, body }) {
         const { project } = splitRepo(repo)
@@ -248,7 +250,7 @@ export default defineAdapter({
         try {
           const parent = relatedIds(showCard(id, 'relations'), 'System.LinkTypes.Hierarchy-Reverse')[0]
           if (parent === undefined) return { confirmed: false, gap: 'parent-absent', error: `work item ${id} has no parent` }
-          const children = relatedIds(showCard(parent, 'relations'), 'System.LinkTypes.Hierarchy-Forward').map(child => ({ id: String(child), closed: ['Done', 'Closed'].includes(showCard(child)?.fields?.['System.State']) }))
+          const children = relatedIds(showCard(parent, 'relations'), 'System.LinkTypes.Hierarchy-Forward').map(child => ({ id: String(child), closed: showCard(child)?.fields?.['System.State'] === doneState }))
           const before = bodyOf(showCard(parent))
           const next = updateEpicBody(before, children)
           if (next.trimEnd() !== before.trimEnd()) azJson(['boards', 'work-item', 'update', '--id', String(parent), '--description', next], 'boards work-item update')
@@ -292,8 +294,8 @@ export default defineAdapter({
       },
       // Recursive Parent Cascade Logic (azure-devops-implementation.md): the card takes the Done
       // state; a parent whose children are ALL in it takes it too, up the hierarchy.
-      closeAndCascade({ id, doneState = 'Done' }) {
-        const setDone = n => azJson(['boards', 'work-item', 'update', '--id', String(n), '--state', doneState], 'boards work-item update')
+      closeAndCascade({ id, doneState: target = doneState }) {
+        const setDone = n => azJson(['boards', 'work-item', 'update', '--id', String(n), '--state', target], 'boards work-item update')
         setDone(cardId(id))
         const closed = [Number(cardId(id))]
         let child = Number(cardId(id))
@@ -301,7 +303,7 @@ export default defineAdapter({
           const parent = relatedIds(showCard(child, 'relations'), 'System.LinkTypes.Hierarchy-Reverse')[0]
           if (parent === undefined) return { closed, stoppedAt: null }
           const children = relatedIds(showCard(parent, 'relations'), 'System.LinkTypes.Hierarchy-Forward')
-          if (children.some(c => showCard(c)?.fields?.['System.State'] !== doneState)) return { closed, stoppedAt: parent }
+          if (children.some(c => showCard(c)?.fields?.['System.State'] !== target)) return { closed, stoppedAt: parent }
           setDone(parent)
           closed.push(parent)
           child = parent

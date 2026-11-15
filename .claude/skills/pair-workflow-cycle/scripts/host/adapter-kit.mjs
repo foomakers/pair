@@ -113,14 +113,26 @@ export function assertCardId(ref, method = 'parseCardRef') {
 }
 
 // One call's output is bounded (callers page large listings); a failure names the command and its
-// stderr only — never stdout or long argv, which carry card text (no-card-text-in-logs).
+// stderr only — never stdout, a content flag's value, or any argv token that is not a short plain
+// identifier (no-card-text-in-logs).
 const MAX_OUTPUT = 64 * 1024 * 1024
 const MAX_ERROR = 2000
-const shortArg = a => (String(a).length > 120 ? `${String(a).slice(0, 120)}…` : String(a))
+const CONTENT_FLAGS = new Set(['--body', '-b', '--description', '--title', '-t', '--comment', '--message', '-m', '--fields', '--wiql'])
+const FIELD_FLAGS = new Set(['-f', '-F', '--raw-field', '--field'])
+const SAFE_ARG = /^[A-Za-z0-9._:/@#?&+%-]{1,80}$/
+export function redactArgs(args) {
+  return args.map((a, i) => {
+    const s = String(a)
+    if (CONTENT_FLAGS.has(String(args[i - 1]))) return '<redacted>'
+    const kv = /^([A-Za-z_]+)=([\s\S]*)$/.exec(s)
+    if (kv && FIELD_FLAGS.has(String(args[i - 1]))) return `${kv[1]}=${kv[1] !== 'query' && SAFE_ARG.test(kv[2]) ? kv[2] : '<redacted>'}`
+    return SAFE_ARG.test(s) ? s : '<redacted>'
+  })
+}
 export function runCli({ bin, args, input, label }) {
   const r = spawnSync(bin, args, { encoding: 'utf8', input, env: cleanGitEnv(process.env), maxBuffer: MAX_OUTPUT })
   if (r.error || r.status !== 0) {
-    const command = `${label ?? bin} ${args.map(shortArg).join(' ')}`
+    const command = `${label ?? bin} ${redactArgs(args).join(' ')}`
     const detail = (r.stderr || r.error?.message || '').trim().slice(0, MAX_ERROR)
     throw new HostError('failed', { message: `${command} failed: ${detail}`, command, detail })
   }
@@ -287,7 +299,8 @@ export function defineAdapter(spec) {
           return {
             issueState: card.state ?? null,
             issueReason: card.stateReason ?? null,
-            boardState: items.length === 1 ? items[0]?.status?.name ?? null : null,
+            // gh prints an empty Status as {"optionId":"","name":""}: uninitialized, not a state.
+            boardState: items.length === 1 ? items[0]?.status?.name || null : null,
             member: items.length > 0,
           }
         },

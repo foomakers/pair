@@ -16,7 +16,7 @@ export function parseArgs(argv) {
     opts[argv[i].slice(2)] = argv[i + 1]
   }
   if (!opts.story) throw new Error('--story is required')
-  if (!['open', 'merged', 'closed-unmerged', 'none'].includes(opts['pr-state'])) throw new Error('--pr-state must be open, merged, closed-unmerged, or none')
+  if (!['open', 'merged', 'closed-unmerged', 'none', 'linked'].includes(opts['pr-state'])) throw new Error('--pr-state must be open, merged, closed-unmerged, none, or linked')
   return { story: opts.story, pr: opts['pr-state'], ...(opts.repo ? { repo: opts.repo } : {}), ...(opts.dir ? { dir: opts.dir } : {}), ...(opts.requireCard ? { requireCard: true } : {}) }
 }
 
@@ -32,9 +32,12 @@ function resolvesToCard(pm, story, repo) {
   }
 }
 
+// `linked`: the state of every PR linking the card on the code host (a superseded PR closed unmerged
+// never decides while another is open or merged), never the triggering event's PR alone.
 export function runTransition({ hosts, story, pr, repo, adoption, requireCard = false }) {
   if (requireCard && !resolvesToCard(hosts.pm, story, repo)) return { confirmed: false, skipped: 'card-unresolved' }
-  return applyBoardState({ pm: hosts.pm, id: story, pr, repo, mapping: stateMapping(adoption) })
+  const state = pr === 'linked' ? hosts.code.linkedPr({ id: story, repo }) : pr
+  return applyBoardState({ pm: hosts.pm, id: story, pr: state, repo, mapping: stateMapping(adoption) })
 }
 
 if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {

@@ -64,7 +64,7 @@ jobs:
           read -r source story <<< "$selection"
           require=()
           if [ "$source" = ref ]; then require=(--require-card); fi
-          if [ "${{ github.event.action }}" != closed ]; then state=open; elif [ "${{ github.event.pull_request.merged }}" = true ]; then state=merged; else state=closed-unmerged; fi
-          result=$(node .claude/skills/pair-workflow-cycle/scripts/board-transition.mjs --story "$story" --pr-state "$state" --repo "$REPO" "${require[@]}")
+          # The card's state follows every PR linking it (code host), not this event's PR alone.
+          result=$(node .claude/skills/pair-workflow-cycle/scripts/board-transition.mjs --story "$story" --pr-state linked --repo "$REPO" "${require[@]}")
           echo "$result"
           echo "$result" | jq -e '.confirmed == true or .skipped == "card-unresolved"'

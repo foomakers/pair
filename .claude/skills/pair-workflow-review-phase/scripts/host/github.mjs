@@ -7,9 +7,7 @@
 //
 // Transport: `gh` from PATH, or `transport.ghBin` / PAIR_GH_BIN (a test's recorder). `gh`
 // authenticates itself; this file never reads a token.
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const STATE_LABELS = ['pr-state:to-be-reviewed', 'pr-state:ready-to-merge', 'pr-state:not-approved']
@@ -48,25 +46,30 @@ export default defineAdapter({
       if (!SLUG_RE.test(out)) throw new HostError('invalid-input', { message: 'github: repo unresolved — no --repo given and `gh repo view` could not resolve one; nothing was written (pass --repo owner/name)' })
       return out
     }
-    const projectTitle = () => {
-      if (transport.projectTitle) return transport.projectTitle
-      for (let dir = process.cwd(); ; dir = dirname(dir)) {
-        const file = join(dir, '.pair', 'adoption', 'tech', 'way-of-working.md')
-        if (existsSync(file)) {
-          const text = readFileSync(file, 'utf8')
-          return /`pm-project`\s*:\s*`([^`]+)`/.exec(text)?.[1] ?? /project is ([\w.-]+) under (?:the )?github organization/i.exec(text)?.[1] ?? null
-        }
-        if (dirname(dir) === dir) return null
+    const adoption = () => transport.wayOfWorking ?? adoptionText(process.cwd())
+    const storyLabel = () => transport.storyLabel ?? /`story-label`\s*:\s*`([^`]+)`/.exec(adoption())?.[1] ?? null
+    // The adopted board, never guessed from prose: `pm-project` (full title or number) among the owner's
+    // projects; absent, the one open project linked to the repository; otherwise a typed gap.
+    const LINKED_QUERY = 'query($owner:String!,$name:String!){repository(owner:$owner,name:$name){projectsV2(first:20){nodes{id title number closed}}}}'
+    const findBoard = slug => {
+      const [owner, name] = slug.split('/')
+      const declared = /`pm-project`\s*:\s*`([^`]+)`/.exec(adoption())?.[1]?.trim()
+      if (declared) {
+        const projects = parseJson(gh(['project', 'list', '--owner', owner, '--limit', '1000', '--format', 'json']), { command: 'gh project list' })?.projects ?? []
+        const hits = projects.filter(p => p?.title === declared || [String(p?.number), `#${p?.number}`].includes(declared))
+        return hits.length === 1 && hits[0].id ? { id: hits[0].id, title: hits[0].title } : { gap: 'board-unresolved', error: `pm-project ${JSON.stringify(declared)} matched ${hits.length} projects of ${owner}` }
       }
+      const q = parseJson(gh(['api', 'graphql', '-f', `query=${LINKED_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`]), { command: 'gh api graphql projects' })
+      const linked = (q?.data?.repository?.projectsV2?.nodes ?? []).filter(p => p?.id && !p.closed)
+      return linked.length === 1 ? { id: linked[0].id, title: linked[0].title } : { gap: 'board-unconfigured', error: `no \`pm-project\` in way-of-working.md and ${slug} links ${linked.length} open projects` }
     }
-    const storyLabel = () => {
-      if (transport.storyLabel) return transport.storyLabel
-      for (let dir = process.cwd(); ; dir = dirname(dir)) {
-        const file = join(dir, '.pair', 'adoption', 'tech', 'way-of-working.md')
-        if (existsSync(file)) return /`story-label`\s*:\s*`([^`]+)`/.exec(readFileSync(file, 'utf8'))?.[1] ?? null
-        if (dirname(dir) === dir) return null
-      }
+    const boards = new Map()
+    const resolveBoard = repo => {
+      const slug = resolveRepo(repo)
+      if (!boards.has(slug)) boards.set(slug, findBoard(slug))
+      return boards.get(slug)
     }
+    const pulls = new Map()
 
     const listComments = ({ pr, repo }) => {
       const out = gh(['api', '--paginate', `${apiRepo(repo)}/issues/${pr}/comments`])
@@ -205,9 +208,15 @@ export default defineAdapter({
           }
         }
         const card = parseJson(gh([...base, '--json', fields.join(',')]), { command: 'gh issue view' })
-        // Board facts come from the adopted project only; another project's item is not membership.
-        const title = fields.includes('projectItems') && projectTitle()
-        return title && Array.isArray(card?.projectItems) ? { ...card, projectItems: card.projectItems.filter(item => item?.title === title) } : card
+        if (!fields.includes('projectItems') || !Array.isArray(card?.projectItems)) return card
+        // Board facts come from the adopted project only; an unresolved board holds no item.
+        let board
+        try {
+          board = resolveBoard(repo)
+        } catch {
+          board = {}
+        }
+        return { ...card, projectItems: board.title ? card.projectItems.filter(item => item?.title === board.title) : [] }
       },
       findCards({ repo, search }) {
         const rows = parseJson(gh(['issue', 'list', '--repo', resolveRepo(repo), '--search', search, '--json', 'number,url,title,body']), { command: 'gh issue list' })
@@ -222,11 +231,16 @@ export default defineAdapter({
         const native = new RegExp(`^(?:Closes|Fixes|Resolves)\\s+#${escaped}(?!\\d)`, 'im')
         const split = new RegExp(`^Refs:\\s*#?${escaped}\\s*$`, 'im')
         const title = new RegExp(`^\\[(?:#|US-)${escaped}\\]`)
-        const hits = listPages(`${apiRepo(repo)}/pulls?state=all`).filter(pr => native.test(String(pr.body ?? '')) || split.test(String(pr.body ?? '')) || title.test(String(pr.title ?? '')))
-        if (hits.length > 1) return 'unknown'
+        const branch = new RegExp(`#${escaped}(?![A-Za-z0-9_])`)
+        // One listing per repository per adapter instance: an audit asks for every card.
+        const key = apiRepo(repo)
+        if (!pulls.has(key)) pulls.set(key, listPages(`${key}/pulls?state=all`))
+        const hits = pulls.get(key).filter(pr => native.test(String(pr.body ?? '')) || split.test(String(pr.body ?? '')) || title.test(String(pr.title ?? '')) || branch.test(String(pr.head?.ref ?? '')))
+        // Several PRs may link one card (a superseded PR closed unmerged): merged wins, then open.
         if (!hits.length) return 'none'
-        const pr = hits[0]
-        return pr.merged_at ? 'merged' : pr.state === 'closed' ? 'closed-unmerged' : pr.state === 'open' ? 'open' : 'unknown'
+        if (hits.some(pr => pr.merged_at)) return 'merged'
+        if (hits.some(pr => pr.state === 'open')) return 'open'
+        return hits.every(pr => pr.state === 'closed') ? 'closed-unmerged' : 'unknown'
       },
       createCard({ repo, title, body }) {
         const out = gh(['issue', 'create', '--repo', resolveRepo(repo), '--title', title, '--body', body])
@@ -292,22 +306,18 @@ export default defineAdapter({
       },
       ensureBoardMembership({ id, repo }) {
         try {
-          const title = projectTitle()
-          if (!title) return { confirmed: false, gap: 'board-unconfigured', error: 'no project named in way-of-working.md' }
-          const slug = resolveRepo(repo)
-          const [owner, name] = slug.split('/')
-          const projects = parseJson(gh(['project', 'list', '--owner', owner, '--limit', '1000', '--format', 'json']), { command: 'gh project list' })?.projects ?? []
-          const matches = projects.filter(p => p.title === title)
-          if (matches.length !== 1 || !matches[0].id) return { confirmed: false, gap: 'board-unresolved', error: `project ${JSON.stringify(title)} matched ${matches.length} boards` }
+          const board = resolveBoard(repo)
+          if (board.gap) return { confirmed: false, gap: board.gap, error: board.error }
+          const [owner, name] = resolveRepo(repo).split('/')
           const query = () => parseJson(gh(['api', 'graphql', '-f', `query=${BOARD_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `n=${Number(id)}`]), { command: 'gh api graphql board' })?.data?.repository?.issue
           const before = query()
           if (!before?.id) return { confirmed: false, gap: 'issue-unresolved', error: `issue #${id} has no node id` }
-          if (!(before.projectItems?.nodes ?? []).some(item => item.project?.id === matches[0].id)) {
+          if (!(before.projectItems?.nodes ?? []).some(item => item.project?.id === board.id)) {
             const mutation = 'mutation($project:ID!,$content:ID!){addProjectV2ItemById(input:{projectId:$project,contentId:$content}){item{id}}}'
-            gh(['api', 'graphql', '-f', `query=${mutation}`, '-F', `project=${matches[0].id}`, '-F', `content=${before.id}`])
+            gh(['api', 'graphql', '-f', `query=${mutation}`, '-F', `project=${board.id}`, '-F', `content=${before.id}`])
           }
-          const confirmed = (query()?.projectItems?.nodes ?? []).some(item => item.project?.id === matches[0].id)
-          return { confirmed, error: confirmed ? null : `read-back: issue #${id} is absent from ${title}` }
+          const confirmed = (query()?.projectItems?.nodes ?? []).some(item => item.project?.id === board.id)
+          return { confirmed, error: confirmed ? null : `read-back: issue #${id} is absent from ${board.title}` }
         } catch (e) {
           return { confirmed: false, gap: 'membership-write-failed', error: e.message }
         }
@@ -319,13 +329,12 @@ export default defineAdapter({
       // item, sits on several boards, or whose board has no such option is `confirmed: false`.
       setBoardState({ id, state, repo }) {
         try {
-          const title = projectTitle()
-          if (!title) return { applied: state, confirmed: false, gap: 'board-unconfigured', error: 'no project named in way-of-working.md' }
-          const nameWithOwner = repo || gh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim()
-          const [owner, name] = nameWithOwner.split('/')
+          const board = resolveBoard(repo)
+          if (board.gap) return { applied: state, confirmed: false, gap: board.gap, error: board.error }
+          const [owner, name] = resolveRepo(repo).split('/')
           const q = parseJson(gh(['api', 'graphql', '-f', `query=${BOARD_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `n=${Number(id)}`]), { command: 'gh api graphql board' })
-          const items = (q?.data?.repository?.issue?.projectItems?.nodes ?? []).filter(item => item?.project?.title === title)
-          if (items.length === 0) return { applied: state, confirmed: false, error: `issue #${id} is not an item of ${title} — no board field to write` }
+          const items = (q?.data?.repository?.issue?.projectItems?.nodes ?? []).filter(item => item?.project?.id === board.id)
+          if (items.length === 0) return { applied: state, confirmed: false, error: `issue #${id} is not an item of ${board.title} — no board field to write` }
           if (items.length > 1) return { applied: state, confirmed: false, error: `issue #${id} sits on ${items.length} projects (${items.map(i => i.project?.title).join(', ')}) — the board is never guessed` }
           const [item] = items
           const field = (item.project?.fields?.nodes ?? []).find(f => f?.name === 'Status')

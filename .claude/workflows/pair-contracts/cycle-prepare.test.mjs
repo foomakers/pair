@@ -447,8 +447,9 @@ const GH = (args, st, input) => {
   if (args[0] === 'api' && args.includes('graphql')) {
     const q = args.find(x => x.startsWith('query='))
     if (q.includes('mutation')) return JSON.stringify({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { fieldValueByName: { name: 'Ready' } } } } })
-    return JSON.stringify({ data: { repository: { issue: { projectItems: { nodes: [{ id: 'I', project: { id: 'P', title: 'pair', fields: { nodes: [{ id: 'F', name: 'Status', options: [{ id: 'O', name: 'Ready' }] }] } } }] } } } } })
+    return JSON.stringify({ data: { repository: { issue: { projectItems: { nodes: [{ id: 'I', project: { id: 'P', title: 'pair digital development', fields: { nodes: [{ id: 'F', name: 'Status', options: [{ id: 'O', name: 'Ready' }] }] } } }] } } } } })
   }
+  if (args[0] === 'project' && args[1] === 'list') return JSON.stringify({ projects: [{ id: 'P', number: 3, title: 'pair digital development' }] })
   if (args[0] === 'api' && args.includes('POST')) return JSON.stringify({ id: 1, html_url: 'u' })
   if (args[0] === 'api') return '[]'
   return ''
