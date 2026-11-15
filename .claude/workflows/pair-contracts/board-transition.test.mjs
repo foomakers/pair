@@ -51,6 +51,19 @@ test('AC-1: a linked transition follows the code host, so a superseded unmerged 
   assert.deepEqual(writes, [])
 })
 
+// r4-20 / AC-6: no board configured is a reported skip (exit 0 with a notice), never a failed job.
+test('AC-6: an unconfigured board is skipped, a real write failure is not', () => {
+  const pm = gap => ({
+    cardState: () => ({ issueState: 'OPEN', issueReason: null, boardState: 'Todo', member: true }),
+    setBoardState: () => ({ confirmed: false, gap, error: 'x' }),
+  })
+  const adoption = '## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Review | Review |\n'
+  assert.deepEqual(runTransition({ hosts: { pm: pm('board-unconfigured') }, story: '1', pr: 'open', adoption }), { confirmed: false, skipped: 'board-unconfigured', gaps: ['board-unconfigured'], error: 'x', actions: [] })
+  const failed = runTransition({ hosts: { pm: pm(undefined) }, story: '1', pr: 'open', adoption })
+  assert.equal(failed.skipped, undefined)
+  assert.deepEqual(failed.gaps, ['board-write-failed'])
+})
+
 test('AC-1: transition args refuse implicit apply and unknown PR states', () => {
   assert.deepEqual(parseArgs(['--story', '42', '--pr-state', 'open']), { story: '42', pr: 'open' })
   assert.deepEqual(parseArgs(['--story', '42', '--pr-state', 'none']), { story: '42', pr: 'none' })

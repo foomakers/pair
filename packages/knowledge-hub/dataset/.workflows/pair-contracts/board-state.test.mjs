@@ -84,7 +84,7 @@ test('AC-4/5: every installed PM adapter exposes membership and state writes', a
 // ── review r0-2 / r0-3 / r0-7 / r0-8 / r0-9: real adapters over stub host CLIs ──
 const { default: azure } = await import('../../skills/pair-workflow-cycle/scripts/host/azure-devops.mjs')
 const { default: linear } = await import('../../skills/pair-workflow-cycle/scripts/host/linear.mjs')
-const { applyBoardState, stateMapping } = await import('../../skills/pair-workflow-cycle/scripts/board-sync.mjs')
+const { applyBoardState, auditCards, stateMapping } = await import('../../skills/pair-workflow-cycle/scripts/board-sync.mjs')
 let repoRoot = fileURLToPath(new URL('.', import.meta.url))
 while (!existsSync(join(repoRoot, 'pnpm-workspace.yaml'))) repoRoot = dirname(repoRoot)
 const stubBin = (name, world, source) => {
@@ -317,4 +317,56 @@ test('r3-15: Azure card closure and epic children follow the adopted Done state'
     { issueState: 'OPEN', issueReason: null, boardState: 'Closed', member: true },
     { issueState: 'CLOSED', issueReason: 'NOT_PLANNED', boardState: 'Removed', member: true },
   ])
+})
+
+// r4-18: ONE link grammar for the workflow selector and every code-host linkedPr.
+const { prLinks } = await import('../../skills/pair-workflow-cycle/scripts/host/adapter-kit.mjs')
+test('r4-18: prLinks is the single PR→card grammar (closing keywords, Refs incl. AB#, branch #N)', () => {
+  const rows = [
+    [{ body: 'Closes #42' }, { closes: ['42'], refs: [], branch: [] }],
+    [{ body: 'fixes AB#42\nresolves #7' }, { closes: ['42', '7'], refs: [], branch: [] }],
+    [{ body: 'Refs: AB#123' }, { closes: [], refs: ['123'], branch: [] }],
+    [{ body: 'Refs: ENG-42\nRefs: #9' }, { closes: [], refs: ['ENG-42', '9'], branch: [] }],
+    [{ body: 'Refs: ENG 42; rm -rf /' }, { closes: [], refs: [null], branch: [] }],
+    [{ branch: 'feature/#12-work' }, { closes: [], refs: [], branch: ['12'] }],
+    [{ branch: 'feature/#12a-work' }, { closes: [], refs: [], branch: [] }],
+    [{ branch: 'refs/heads/feature/#77' }, { closes: [], refs: [], branch: ['77'] }],
+    [{ body: 'Closes #42a', title: '[#42] x' }, { closes: [], refs: [], branch: [] }],
+  ]
+  for (const [input, expected] of rows) assert.deepEqual(prLinks(input), expected, JSON.stringify(input))
+})
+test('r4-18: GitHub and Azure linkedPr accept exactly what the workflow selects', () => {
+  const pulls = [
+    { number: 1, title: 'a', body: 'Refs: AB#123', state: 'open', merged_at: null, head: { ref: 'a' } },
+    { number: 2, title: 'b', body: '', state: 'open', merged_at: null, head: { ref: 'feature/#12a-work' } },
+    { number: 3, title: '[#55] c', body: '', state: 'open', merged_at: null, head: { ref: 'c' } },
+    { number: 4, title: 'd', body: 'Fixes AB#66', state: 'closed', merged_at: '2026-01-01', head: { ref: 'd' } },
+  ]
+  const gh = stubBin('gh', {}, `process.stdout.write(JSON.stringify(${JSON.stringify(pulls)})); process.exit(0)`)
+  const code = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') })
+  assert.deepEqual(['123', '12', '55', '66'].map(id => code.linkedPr({ id, repo: 'owner/repo' })), ['open', 'none', 'none', 'merged'])
+  const prs = [{ description: '', status: 'active', sourceRefName: 'refs/heads/feature/#31-x' }, { description: 'Resolves #32', status: 'completed', sourceRefName: 'refs/heads/y' }]
+  const az = stubBin('az', { states: [], items: {}, prs }, AZ)
+  const azCode = azure.instantiate({ azBin: az.bin, wayOfWorking: '' })
+  assert.deepEqual(['31', '32'].map(id => azCode.linkedPr({ id, repo: 'Proj/app' })), ['open', 'merged'])
+})
+
+// r4-17: an unresolved GitHub board is a reported gap on audit and apply; a transient resolution error
+// propagates — it is never read as "not a member" (which would reset In Progress to Todo).
+test('r4-17: unconfigured board is a gap; a resolution error never rewrites the Status', () => {
+  const prose = '- Github Projects is adopted.\n'
+  const gh = stubBin('gh', { projects: [{ id: 'P1', title: 'One' }], linked: [], items: [{ id: 'I-P1', project: 'P1', status: 'In Progress' }] }, GH_BOARD)
+  const pm = github.instantiate({ ghBin: gh.bin, wayOfWorking: prose })
+  assert.deepEqual(auditCards({ pm: { ...pm, listCards: () => [{ id: '42' }] }, code: { linkedPr: () => 'none' }, repo: 'owner/repo' }), { mismatches: [], gaps: [{ id: '42', reason: 'board-unconfigured' }] })
+  assert.deepEqual(applyBoardState({ pm, id: '42', pr: 'open', repo: 'owner/repo' }).gaps, ['board-unconfigured'])
+  const flaky = stubBin('gh', { projects: [{ id: 'P1', title: 'One' }], items: [{ id: 'I-P1', project: 'P1', status: 'In Progress' }] }, `
+if (a[0] === 'issue' && a[1] === 'view') { process.stdout.write(JSON.stringify({ state: 'OPEN', stateReason: null, projectItems: [{ title: 'One', status: { optionId: 'o', name: 'In Progress' } }] })); process.exit(0) }
+if (a[0] === 'project') { process.stderr.write('HTTP 502'); process.exit(1) }
+w.log.push(a.join(' ')); save(); process.stdout.write('{}')`)
+  const broken = github.instantiate({ ghBin: flaky.bin, wayOfWorking: wow('One') })
+  const result = applyBoardState({ pm: broken, id: '42', pr: 'none', repo: 'owner/repo', mapping: { Draft: 'Todo' } })
+  assert.equal(result.confirmed, false)
+  assert.deepEqual(result.gaps, ['adapter-failed'])
+  assert.deepEqual(flaky.world().log, [], 'no board write on a transient error')
+  assert.equal(auditCards({ pm: { ...broken, listCards: () => [{ id: '42' }] }, code: { linkedPr: () => 'none' }, repo: 'owner/repo', mapping: { Draft: 'Todo' } }).mismatches.length, 0)
 })

@@ -432,7 +432,7 @@ const fakeBins = new Map()
 const stateOf = bin => JSON.parse(readFileSync(fakeBins.get(bin), 'utf8'))
 
 // ── review r2: the full CLI over a stubbed `gh` (PAIR_GH_BIN) — nothing here can reach a real tracker ─────────────
-// A tracker in a file: the card's labels/body, its board (titled as this repo's adopted project) and its comment thread. Self-contained (it is stringified).
+// A tracker in a file: the card's labels/body, its board (the fixture adoption's project) and its comment thread. Self-contained (it is stringified).
 const GH = (args, st, input) => {
   const a = args.join(' ')
   if (args[0] === 'issue' && args[1] === 'view') return a.includes('--json body') ? st.body : JSON.stringify({ labels: st.labels.map(name => ({ name })) })
@@ -447,22 +447,26 @@ const GH = (args, st, input) => {
   if (args[0] === 'api' && args.includes('graphql')) {
     const q = args.find(x => x.startsWith('query='))
     if (q.includes('mutation')) return JSON.stringify({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { fieldValueByName: { name: 'Ready' } } } } })
-    return JSON.stringify({ data: { repository: { issue: { projectItems: { nodes: [{ id: 'I', project: { id: 'P', title: 'pair digital development', fields: { nodes: [{ id: 'F', name: 'Status', options: [{ id: 'O', name: 'Ready' }] }] } } }] } } } } })
+    return JSON.stringify({ data: { repository: { issue: { projectItems: { nodes: [{ id: 'I', project: { id: 'P', title: 'Fixture board', fields: { nodes: [{ id: 'F', name: 'Status', options: [{ id: 'O', name: 'Ready' }] }] } } }] } } } } })
   }
-  if (args[0] === 'project' && args[1] === 'list') return JSON.stringify({ projects: [{ id: 'P', number: 3, title: 'pair digital development' }] })
+  if (args[0] === 'project' && args[1] === 'list') return JSON.stringify({ projects: [{ id: 'P', number: 3, title: 'Fixture board' }] })
   if (args[0] === 'api' && args.includes('POST')) return JSON.stringify({ id: 1, html_url: 'u' })
   if (args[0] === 'api') return '[]'
   return ''
 }
 function tracker({ labels = [], body = '' } = {}) {
   const bin = fakeBin(GH)
-  const dir = join(mkdtempSync(join(tmpdir(), 'prep-run-')), '7')
+  const root = mkdtempSync(join(tmpdir(), 'prep-run-'))
+  const dir = join(root, '7')
   mkdirSync(dir, { recursive: true })
+  // Hermetic: the CLI runs in a root with its own adoption, never the checkout's way-of-working.md.
+  mkdirSync(join(root, '.pair', 'adoption', 'tech'), { recursive: true })
+  writeFileSync(join(root, '.pair', 'adoption', 'tech', 'way-of-working.md'), '- `pm-project`: `Fixture board`\n')
   writeFileSync(join(dir, '.host-binding.json'), JSON.stringify({ schemaVersion: 1, pmTool: 'github', codeHost: 'github' }))
   const sf = fakeBins.get(bin)
   writeFileSync(sf, JSON.stringify({ calls: [], labels, body, inputs: [] }))
   const run = args => {
-    const r = spawnSync('node', [SCRIPT, ...args], { encoding: 'utf8', env: { ...process.env, PAIR_GH_BIN: bin } })
+    const r = spawnSync('node', [SCRIPT, ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, PAIR_GH_BIN: bin } })
     return { code: r.status, out: JSON.parse(r.stdout) }
   }
   return { run, dir, state: () => stateOf(bin), bin }

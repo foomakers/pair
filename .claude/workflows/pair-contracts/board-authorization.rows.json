@@ -643,5 +643,39 @@
     "role": "read",
     "body": "Refs: ENG-42",
     "allow": false
+  },
+  {
+    "id": "r4-18-branch-suffix",
+    "role": "write",
+    "body": "",
+    "branch": "feature/#42a-work",
+    "allow": false
+  },
+  {
+    "id": "r4-18-branch-exact",
+    "role": "write",
+    "body": "",
+    "branch": "feature/#42-work",
+    "story": "42",
+    "allow": true
+  },
+  {
+    "id": "r4-18-closes-azure",
+    "role": "write",
+    "body": "Fixes AB#42",
+    "story": "42",
+    "allow": true
+  },
+  {
+    "id": "r4-20-board-unconfigured",
+    "role": "write",
+    "transitionOutput": {
+      "confirmed": false,
+      "skipped": "board-unconfigured",
+      "gaps": [
+        "board-unconfigured"
+      ]
+    },
+    "allow": true
   }
 ]

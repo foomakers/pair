@@ -61,9 +61,12 @@ function setup(directory, row, event) {
   const bin = join(directory, 'bin')
   mkdirSync(bin)
   symlinkSync(jq, join(bin, 'jq'))
+  // The workflow runs the checked-out base's scripts (actions/checkout of the base, never PR code).
+  symlinkSync(join(root, '.claude'), join(directory, '.claude'))
   for (const command of ['cat', 'grep', 'sed', 'tr', 'cut', 'head', 'tail']) symlinkSync(`/usr/bin/${command}`, join(bin, command))
   writeFileSync(join(bin, 'node'), `#!/bin/bash
 case "$1" in
+  */board-event.mjs) exec ${JSON.stringify(process.execPath)} "$@" ;;
   */board-transition.mjs)
     jq -cn --argjson readBefore "$([ -s "$PROBE_READS" ] && echo true || echo false)" --args '{kind:"transition",readBefore:$readBefore,args:$ARGS.positional}' -- "$@" >> "$PROBE_WRITES"
     jq -cn --argjson row "$PROBE_ROW" '$row.transitionOutput // {confirmed:true}' ;;
