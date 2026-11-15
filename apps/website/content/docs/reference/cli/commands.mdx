@@ -899,10 +899,16 @@ Process faults use a separate recovery budget and a recorded resume token. Re-ru
    card parks `awaiting-human` with a resume token, never `failed-<step>`. A process has no session to
    resume.
 
-   When a run needs a maintainer, two commands do what used to be done by hand:
-   `cycle-state.mjs supersede` sets aside an unvalidated contract attempt and indexes it in
-   `maintainer-interventions.md`, and `cycle-state.mjs decide` records the answer to a review that
-   asked for a human decision (see [`/pair-workflow-cycle`](/docs/reference/skills-catalog)).
+   When a run needs a maintainer it parks and prints its `Decision block: <block>`. Before every
+   `resolve` the run reads the card's and the PR's comments (`cycle-state.mjs decisions`): one
+   maintainer comment holding a fenced `json` block
+   `{"schemaVersion":1,"kind":"maintainer-decision","story":"<card>","block":"<block>","choice":"decide|amend|override|reset","reason":"…"}`
+   resumes it on the next `pair-cli run --card`, with no `supersede` and no head move. The author is
+   read from the host and must be the adopted maintainer (`code-host-assignee`, else
+   `default-assignee`); `--maintainer` is not accepted, and anyone else's comment, or a comment
+   edited after posting, is ignored and recorded (to correct a decision, post a new comment). Each decision lands in `maintainer-decisions.json`, `maintainer-interventions.md` and the
+   card's telemetry. `cycle-state.mjs supersede` / `decide` remain local console commands (see
+   [`/pair-workflow-cycle`](/docs/reference/skills-catalog)).
 
 The cycle's own values (the workflow version, the base branch, the worktree root and the dispatch cap) are read from the installed `pair-workflow-cycle` scripts and printed before the first stage, with the scripts path, the run directory, the `runId` and the `--rounds` bound.
 

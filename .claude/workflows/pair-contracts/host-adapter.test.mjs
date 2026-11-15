@@ -28,7 +28,7 @@ import {
 } from '../../skills/pair-workflow-review-phase/scripts/host/index.mjs'
 import github from '../../skills/pair-workflow-review-phase/scripts/host/github.mjs'
 import azure from '../../skills/pair-workflow-review-phase/scripts/host/azure-devops.mjs'
-import { cardHash, applyScopeDecisions, publish, scopeBaselineHashOf } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
+import { cardHash, applyScopeDecisions, publish, scopeBaselineHashOf, discoverDecisions, readDecisions } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
 import { createHash } from 'node:crypto'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
@@ -406,7 +406,7 @@ test('AC3: the scope-decision path runs unchanged on Azure DevOps — the mainta
   const decision = '```json\n' + JSON.stringify({ schemaVersion: 1, scopeBaselineHash: scopeBaselineHashOf(scopeChanges), decisions: [{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-2', description: 'also this' }] } }] }) + '\n```'
   const az = fakeAz({
     workItems: { 9: { fields: { 'System.Title': 'S', 'System.Description': '- **AC-1**: base\n', 'System.TeamProject': 'Proj' } } },
-    prs: { 3: { head: SHA, threads: [{ id: 77, comments: [{ id: 1, content: decision, author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] }, { id: 78, comments: [{ id: 1, content: decision, author: { uniqueName: 'build@acme.test', descriptor: 'svc.build' } }] }] } },
+    prs: { 3: { head: SHA, threads: [{ id: 77, comments: [{ id: 1, content: decision, publishedDate: '2026-11-15T10:00:00Z', lastContentUpdatedDate: '2026-11-15T10:00:00Z', author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] }, { id: 78, comments: [{ id: 1, content: decision, author: { uniqueName: 'build@acme.test', descriptor: 'svc.build' } }] }] } },
   })
   const bySvc = applyScopeDecisions({ dir: runDir, decisionRef: 'https://dev.azure.com/acme/Proj/_git/app/pullrequest/3?discussionId=78#1', repo: 'Proj/app', pr: 3, workflowVersion: '4.0.1', azBin: az.azBin })
   assert.deepEqual([bySvc.applied, bySvc.reason], [false, 'author-not-a-user'], 'a service identity is never the maintainer')
@@ -415,6 +415,25 @@ test('AC3: the scope-decision path runs unchanged on Azure DevOps — the mainta
   assert.equal(out.applied, true, JSON.stringify(out))
   assert.match(az.state().workItems[9].fields['System.Description'], /AC-2.*also this/)
   assert.ok(az.state().workItems[9].fields['System.Description'].includes('- **AC-1**: base'), 'the card is extended, never replaced')
+})
+
+// US-647 review r1-2: on Azure DevOps the PR thread is the decision source — listComments carries the author and the
+// timestamps that prove the comment unedited, exactly as readComment does.
+test('US-647 r1-2: a maintainer decision on an Azure DevOps PR thread is accepted; a service identity and an edited comment are not', () => {
+  const { runDir } = wowDir(AZURE_WOW + '\n## Assignment\n\n- `default-assignee`: `rucka@acme.test`\n')
+  const decision = '```json\n' + JSON.stringify({ schemaVersion: 1, kind: 'maintainer-decision', story: '9', choice: 'amend', reason: 'ids are opaque', scope: { paths: ['src/a.ts'] } }) + '\n```'
+  const T = '2026-11-15T10:00:00Z'
+  const az = fakeAz({
+    workItems: { 9: { fields: { 'System.Title': 'S', 'System.Description': '', 'System.TeamProject': 'Proj' } } },
+    prs: { 3: { head: SHA, threads: [
+      { id: 77, comments: [{ id: 1, content: decision, publishedDate: T, lastContentUpdatedDate: T, author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] },
+      { id: 78, comments: [{ id: 1, content: decision, publishedDate: T, lastContentUpdatedDate: T, author: { uniqueName: 'build@acme.test', descriptor: 'svc.build' } }] },
+      { id: 79, comments: [{ id: 1, content: decision, publishedDate: T, lastContentUpdatedDate: '2026-11-15T11:00:00Z', author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] },
+    ] } },
+  })
+  const out = discoverDecisions({ dir: runDir, story: '9', pr: 3, repo: 'Proj/app', azBin: az.azBin })
+  assert.deepEqual(out.recorded.map(r => [r.status, r.reason ?? r.choice]), [['accepted', 'amend'], ['ignored', 'author-not-a-user'], ['ignored', 'comment-edited']], JSON.stringify(out))
+  assert.equal(readDecisions(runDir).length, 3)
 })
 
 // ── T-3 / AC2: resolution once, binding, split routing ─────────────────────────────────────────
@@ -945,7 +964,7 @@ function g3NewCard(seedWorkItems = {}, { loseCreateResponse = true, failCreate =
   const decision = '```json\n' + JSON.stringify({ schemaVersion: 1, scopeBaselineHash: scopeBaselineHashOf(scopeChanges), decisions: [{ id: 'sc-1', action: 'new-card', approvedDelta }] }) + '\n```'
   const az = g3Az(createdFirst, {
     workItems: seedWorkItems,
-    prs: { 3: { head: SHA, threads: [{ id: 77, comments: [{ id: 1, content: decision, author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] }] } },
+    prs: { 3: { head: SHA, threads: [{ id: 77, comments: [{ id: 1, content: decision, publishedDate: '2026-11-15T10:00:00Z', lastContentUpdatedDate: '2026-11-15T10:00:00Z', author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] }] } },
   })
   az.patch({ loseCreateResponse, failCreate })
   const out = applyScopeDecisions({ dir: runDir, decisionRef: G3_DECISION_REF, repo: 'Proj/app', pr: 3, workflowVersion: '4.0.1', azBin: az.azBin })

@@ -59,7 +59,7 @@ if (args[0] === 'api' && /issues\\/comments\\/\\d+$/.test(args[1] || '')) {
   const id = Number(args[1].split('/').pop())
   const c = list().find(x => x.id === id)
   if (!c) { process.stderr.write('404'); process.exit(1) }
-  process.stdout.write(JSON.stringify({ user: { login: 'rucka', type: 'User' }, issue_url: 'https://api.github.com/repos/foomakers/pair/issues/480', body: c.body }))
+  process.stdout.write(JSON.stringify({ user: { login: 'rucka', type: 'User' }, created_at: 'T', updated_at: 'T', issue_url: 'https://api.github.com/repos/foomakers/pair/issues/480', body: c.body }))
   process.exit(0)
 }
 process.stderr.write('unexpected gh call: ' + args.join(' ')); process.exit(1)
