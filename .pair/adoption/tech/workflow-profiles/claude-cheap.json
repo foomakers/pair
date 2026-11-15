@@ -1,19 +1,40 @@
 {
   "name": "claude-cheap",
-  "description": "PILOT, not active: GREEN on a cheap model for doc-only cards. Activate per run with --profile claude-cheap; never set as workflowProfiles.default.",
-  "defaults": { "engine": "claude", "model": "by-tier", "effort": "medium", "context": "fresh" },
+  "defaults": {
+    "engine": "claude",
+    "model": "balanced",
+    "effort": "medium",
+    "context": "fresh"
+  },
   "modelClasses": {
     "cheap": "claude-haiku-5-5",
     "balanced": "claude-sonnet-5-5",
     "frontier": "claude-opus-5-5"
   },
   "stages": {
-    "contract": { "model": "cheap" },
-    "prepare": { "model": "frontier", "context": "reuse" },
-    "validate": { "model": "frontier" },
-    "implement": { "model": "balanced" },
-    "green": { "model": "cheap", "context": "reuse" },
-    "verify": { "model": "frontier", "effort": "high" },
-    "merge": { "model": "balanced" }
+    "contract": {
+      "model": "cheap"
+    },
+    "prepare": {
+      "model": "balanced",
+      "context": "reuse"
+    },
+    "validate": {
+      "model": "balanced"
+    },
+    "implement": {
+      "model": "balanced"
+    },
+    "green": {
+      "model": "cheap",
+      "context": "reuse"
+    },
+    "verify": {
+      "model": "balanced",
+      "effort": "high"
+    },
+    "merge": {
+      "model": "cheap"
+    }
   }
 }

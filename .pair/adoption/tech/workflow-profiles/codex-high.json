@@ -1,6 +1,6 @@
 {
-  "name": "codex-max",
-  "description": "Recovery profile: Astra high for contracts and review; Sol high for implementation and fixes.",
+  "name": "codex-high",
+  "description": "Astra high for contract, validate and verify; Sol high for implement and green (same as codex-max).",
   "defaults": {
     "engine": "codex",
     "model": "gpt-6-astra",

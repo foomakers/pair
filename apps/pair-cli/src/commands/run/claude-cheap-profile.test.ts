@@ -25,10 +25,10 @@ describe('the claude-cheap sample profile (pilot, not activated)', () => {
     expect(profile.name).toBe('claude-cheap')
     expect(profile.table.join('\n')).toContain('green     | engine claude')
     expect(profile.stages['green']?.model.resolved.id).toBe('claude-haiku-5-5')
-    expect(profile.stages['verify']?.model.resolved.id).toBe('claude-opus-5-5')
+    expect(profile.stages['verify']?.model.resolved.id).toBe('claude-sonnet-5-5')
   })
 
-  it('the claude engine passes --model claude-haiku-5-5 for a cheap stage, and the frontier id for verify', () => {
+  it('the claude engine passes --model claude-haiku-5-5 for a cheap stage, and the balanced id for verify', () => {
     const argvFor = (stage: string) =>
       buildEngineArgs({
         engine: ENGINES.claude,
@@ -42,6 +42,6 @@ describe('the claude-cheap sample profile (pilot, not activated)', () => {
       '--model',
       'claude-haiku-5-5',
     ])
-    expect(argvFor('verify')).toContain('claude-opus-5-5')
+    expect(argvFor('verify')).toContain('claude-sonnet-5-5')
   })
 })

@@ -1,0 +1,34 @@
+{
+  "name": "codex-medium",
+  "defaults": {
+    "engine": "codex",
+    "model": "gpt-6-sol",
+    "effort": "medium",
+    "context": "fresh"
+  },
+  "stages": {
+    "contract": {
+      "model": "gpt-6-astra"
+    },
+    "validate": {
+      "model": "gpt-6-astra"
+    },
+    "verify": {
+      "model": "gpt-6-astra",
+      "effort": "high"
+    },
+    "prepare": {
+      "model": "gpt-6-sol"
+    },
+    "implement": {
+      "model": "gpt-6-sol"
+    },
+    "green": {
+      "model": "gpt-6-sol"
+    },
+    "merge": {
+      "model": "gpt-6-sol",
+      "effort": "low"
+    }
+  }
+}

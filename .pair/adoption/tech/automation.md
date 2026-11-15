@@ -5,13 +5,13 @@
 (D21, adoption-is-delta-only: this file records only this project's own values, never the
 complete default schema).
 
-## Eligibility
+## Autonomy
 
-risk:green
+preset: full
 
-## Auto-Advance
+## Blocking Severities
 
-(none)
+Minor
 
 ## Stop Predicate
 
