@@ -140,7 +140,7 @@ export function runCli({ bin, args, input, label }) {
 }
 
 // The ONE PR→card link grammar (#642): the board workflow's selector (board-event.mjs) and every code
-// host's linkedPr read it, so what selects a card is exactly what later counts as its PR. Native links
+// host's linkedPr read it through selectLink, so what selects a card is exactly what later counts as its PR. Native links
 // (#642 Maintainer Decision): `Closes|Fixes|Resolves #N` and a branch carrying `#N` not followed by an
 // identifier character. Any other id — `AB#N` included — links only through one `Refs: <ID>` line, which
 // must resolve to exactly one card (the 2026-11-14 amendment); an invalid token is null.
@@ -153,7 +153,17 @@ export function prLinks({ body, branch } = {}) {
     branch: [...String(branch ?? '').matchAll(/#(\d+)(?![A-Za-z0-9_])/g)].map(m => m[1]),
   }
 }
-export const linksCard = (links, id) => [...links.closes, ...links.refs, ...links.branch].includes(String(id).replace(/^#/, ''))
+// Exactly one card per PR: every link must name the same card (a native link wins the source), else none —
+// several distinct ids, or an invalid `Refs:` token, is ambiguous. The workflow selector and linkedPr both use it.
+export function selectLink(links) {
+  if (links.refs.includes(null)) return null
+  const natives = new Set([...links.closes, ...links.branch])
+  const ids = new Set([...natives, ...links.refs])
+  if (ids.size !== 1) return null
+  const [id] = ids
+  return { source: natives.has(id) ? 'native' : 'ref', id }
+}
+export const linksCard = (links, id) => selectLink(links)?.id === String(id).replace(/^#/, '')
 
 // way-of-working.md text, found upward from `from`; '' when none.
 export function adoptionText(from) {
