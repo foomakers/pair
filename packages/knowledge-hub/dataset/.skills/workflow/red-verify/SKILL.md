@@ -116,12 +116,12 @@ a matrix you could not reproduce.
 
 ## Output Format
 
-`{ status: verified | rejected, verified, findings: [{ rowId?, mechanismId?, location, severity, description, recommendation, closureAssertions?, reproducer?, applicability? }], mechanismsIdentified?, sealed, snapshot?, manifest?, contractHash, regressionGuards?, reason?, next }`.
+`{ status: verified | rejected | failed, verified, findings: [{ rowId?, mechanismId?, location, severity, description, recommendation, closureAssertions?, reproducer?, applicability? }], mechanismsIdentified?, sealed, snapshot?, manifest?, contractHash, regressionGuards?, reason?, next }`.
 
 ## Notes
 
 - Read-only on the repository except the seal commit the script makes. Never edit, format, push, publish, comment, create a card or merge; never rehash a changed artifact into approval.
 - Blind: read nothing under `.pair/working/` except `$RUN_DIR`.
-- A typed rejection is the cycle's answer: the coordinator routes it to ONE repair; a second rejection exhausts the unchanged budget. Never soften a gap's SEVERITY to let the contract through — `$policy.blockingFloor` is the only thing that ever changes whether a correctly-severed gap blocks.
+- A typed rejection is the cycle's answer: the coordinator routes it to ONE repair; a second rejection exhausts the unchanged budget. A rejection of a contract whose bytes no longer hash to what its preparation recorded is a process fault: `publish` stamps `processFault: contract-hash-mismatch` on it from the files (never set it yourself) and it spends `autoRecoveryRounds`, not `redRepairs`. Never soften a gap's SEVERITY to let the contract through — `$policy.blockingFloor` is the only thing that ever changes whether a correctly-severed gap blocks.
 - A repair naming `changedRows` that drops one of this rejection's `rowId`s (when this rejection's findings carried one) is refused by `publish` before it is written — verify every prior closure assertion holds before treating anything as newly closed.
 - Your handoff publish is observed by the host runtime (`cycle-runtime.mjs`, US-479 T-25) as a phase-level progress point, through `cycle-state.mjs` — never something you invoke yourself.

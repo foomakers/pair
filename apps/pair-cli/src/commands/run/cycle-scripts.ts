@@ -218,6 +218,15 @@ export interface BaseSyncResult {
   readonly detail?: string
   readonly head?: string
   readonly conflicts?: readonly { readonly path: string; readonly side: string }[]
+  /** AC-13: on a sealed cycle, the latest seal and the cycle base `verify-chain` checks after the merge. */
+  readonly snapshot?: string
+  readonly cycleBase?: string
+}
+
+export interface WorktreeCleanResult {
+  readonly cleaned: boolean
+  readonly ref?: string
+  readonly detail?: string
 }
 
 /** US-575: `cycle-state.mjs prereq-state` — the card's prerequisites, read through the bound PM adapter. */
@@ -235,14 +244,35 @@ export interface CycleScriptsBridge {
   resolve(options: CycleResolveOptions): CycleResolveResult
   recover(options: {
     dir: string
-    kind: 'gate-retry' | 'base-sync' | 'ci-rerun' | 'worktree-clean' | 'stage-retry'
+    kind: 'gate-retry' | 'base-sync' | 'ci-rerun' | 'worktree-clean' | 'stage-retry' | 'resume'
     detail: string
     policy: Record<string, unknown>
   }): CycleRecoveryResult
   gateRed(options: { dir: string; reviewedHead: string; gates: readonly GateRecord[] }): {
     readonly recorded: boolean
   }
-  baseSync(options: { cwd: string; base: string; story: string }): BaseSyncResult
+  baseSync(options: { cwd: string; base: string; story: string; dir?: string }): BaseSyncResult
+  worktreeClean(options: { cwd: string; dir: string; story: string }): WorktreeCleanResult
+  /** AC-22: `cycle-state.mjs reset-group` — restart a group from its last clean attempt (sealed attempts kept). */
+  resetGroup(options: {
+    dir: string
+    phase: string
+    reason: string
+    workflowVersion: string
+    policy: Record<string, unknown>
+    entry: 'fresh' | 'pr'
+    pr?: number
+  }): { readonly reset: boolean; readonly reason?: string }
+  /** AC-13: `red-snapshot.mjs verify-chain --base-ref` — custody re-checked after a base merge on a sealed cycle. */
+  verifyChain(options: {
+    pr: number
+    base: string
+    baseRef: string
+    runDir: string
+    cwd: string
+  }): {
+    readonly verified?: boolean
+  }
   prereqState(options: { story: string; dir?: string }): PrereqState
   worktree(options: CycleWorktreeOptions): CycleWorktreeResult
   /** `cycle-merge.mjs check`: conditions 1-5 re-read live; a failure PARKS the card. */
@@ -644,10 +674,46 @@ function prepareMethods(
  * repository's issue. Absent ⇒ this process's cwd (the bridge's own unit tests).
  */
 /** `cycle-state.mjs resolve`, and US-575's auto-recovery commands (budget, gate-red record, base sync, prerequisite state). */
+/** AC-22: `reset-group`, run by the driver for a contract-identity process fault. */
+function resetGroupMethod(
+  runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
+  cycleStatePath: string,
+): Pick<CycleScriptsBridge, 'resetGroup' | 'verifyChain'> {
+  // the review stage's custody script, installed beside this skill
+  const redSnapshot = join(
+    cycleStatePath,
+    '../../../pair-workflow-review-phase/scripts/red-snapshot.mjs',
+  )
+  return {
+    verifyChain: o =>
+      runScript(redSnapshot, 'verify-chain', [
+        ['pr', String(o.pr)],
+        ['base', o.base],
+        ['base-ref', o.baseRef],
+        ['run-dir', o.runDir],
+        ['cwd', o.cwd],
+      ]) as { verified?: boolean },
+    resetGroup: o =>
+      runScript(cycleStatePath, 'reset-group', [
+        ['dir', o.dir],
+        ['phase', o.phase],
+        ['reason', o.reason],
+        ['by', 'driver'],
+        ['workflowVersion', o.workflowVersion],
+        ['policy', JSON.stringify(o.policy)],
+        ['entry', o.entry],
+        ...optional([['pr', o.pr === undefined ? undefined : String(o.pr)]]),
+      ]) as { reset: boolean; reason?: string },
+  }
+}
+
 function stateMethods(
   runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
   cycleStatePath: string,
-): Pick<CycleScriptsBridge, 'resolve' | 'recover' | 'gateRed' | 'baseSync' | 'prereqState'> {
+): Pick<
+  CycleScriptsBridge,
+  'resolve' | 'recover' | 'gateRed' | 'baseSync' | 'worktreeClean' | 'prereqState'
+> {
   return {
     resolve: options =>
       runScript(cycleStatePath, 'resolve', resolveArgs(options)) as CycleResolveResult,
@@ -669,7 +735,14 @@ function stateMethods(
         ['cwd', o.cwd],
         ['base', o.base],
         ['story', o.story],
+        ...optional([['dir', o.dir]]),
       ]) as BaseSyncResult,
+    worktreeClean: o =>
+      runScript(cycleStatePath, 'worktree-clean', [
+        ['cwd', o.cwd],
+        ['dir', o.dir],
+        ['story', o.story],
+      ]) as WorktreeCleanResult,
     prereqState: o =>
       runScript(cycleStatePath, 'prereq-state', [
         ['story', o.story],
@@ -689,6 +762,7 @@ export function createCycleScriptsBridge(
 
   return {
     ...stateMethods(runScript, cycleStatePath),
+    ...resetGroupMethod(runScript, cycleStatePath),
     worktree: options =>
       runScript(cycleDispatchPath, 'worktree', [
         ['main', options.main],

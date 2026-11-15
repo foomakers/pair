@@ -281,6 +281,12 @@ function whyNoResult(message: LastMessage): string {
   return ` — no parseable result in the last agent message: …${message.text.slice(-TAIL_CHARS)}`
 }
 
+/** What the stage last said: a `resultField` rule's own text (string only), else the engine's last agent message. */
+function lastSaid(rule: TerminalEventRule, text: unknown, message: LastMessage): LastMessage {
+  if (!rule.resultField) return message
+  return typeof text === 'string' && text ? { text } : {}
+}
+
 function outcomeFor(
   rule: TerminalEventRule,
   payload: unknown,
@@ -297,7 +303,7 @@ function outcomeFor(
   return {
     ...(final !== undefined && { final }),
     outcome: success ? 'success' : 'failed',
-    detail: base + (final === undefined && !rule.resultField ? whyNoResult(message) : ''),
+    detail: base + (final === undefined ? whyNoResult(lastSaid(rule, text, message)) : ''),
   }
 }
 

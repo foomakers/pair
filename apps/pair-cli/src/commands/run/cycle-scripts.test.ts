@@ -162,6 +162,85 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
       scriptsDir: join(projectRoot, '.claude/skills/pair-workflow-cycle/scripts'),
     })
 
+  it('AC-10: worktree-clean records a ref through the installed script bridge', () => {
+    const tree = join(projectRoot, 'story')
+    mkdirSync(tree)
+    spawnSync('git', ['init', '-q', tree])
+    writeFileSync(join(tree, 'tracked.txt'), 'tracked')
+    spawnSync('git', ['add', 'tracked.txt'], { cwd: tree })
+    spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'base'], {
+      cwd: tree,
+    })
+    writeFileSync(join(tree, 'stray.txt'), 'stray')
+    const dir = join(runsRoot, 'story-487/487')
+    mkdirSync(dir, { recursive: true })
+    const result = bridge().worktreeClean({ cwd: tree, dir, story: '487' })
+    expect(result.cleaned).toBe(true)
+    expect(result.ref).toMatch(/^refs\/pair\/recovery\/487\/[a-f0-9]{40}$/)
+    expect(existsSync(join(tree, 'stray.txt'))).toBe(false)
+  })
+
+  it('AC-22 (r1-2): resetGroup sets an unusable unsealed tail aside through the installed script bridge', () => {
+    const dir = join(runsRoot, 'story-487/487')
+    mkdirSync(dir, { recursive: true })
+    // a faulted tail (a genuine rejection is a kept verdict, never set aside by an automatic reset)
+    const tail = {
+      phase: 'r1-g1',
+      skill: 'red-verify',
+      seq: 1,
+      verified: false,
+      sealed: false,
+      processFault: 'contract-hash-mismatch',
+    }
+    writeFileSync(join(dir, 'r1-g1-red-verify.json'), JSON.stringify(tail))
+    const result = bridge().resetGroup({
+      dir,
+      phase: 'r1-g1',
+      reason: 'contract-hash-mismatch',
+      workflowVersion: CYCLE_WORKFLOW_VERSION,
+      policy: {},
+      entry: 'pr',
+      pr: 7,
+    })
+    expect(result.reset).toBe(true)
+    expect(existsSync(join(dir, 'r1-g1-red-verify.json'))).toBe(false)
+    expect(readFileSync(join(dir, 'maintainer-interventions.md'), 'utf8')).toMatch(
+      /contract-hash-mismatch/,
+    )
+  })
+
+  it('AC-13: baseSync with the run dir refuses a rewritten sealed history before merging', () => {
+    const tree = join(projectRoot, 'sealed')
+    const git = (...args: string[]) =>
+      spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+        cwd: tree,
+        encoding: 'utf8',
+      }).stdout.trim()
+    mkdirSync(tree)
+    git('init', '-q', '-b', 'main')
+    writeFileSync(join(tree, 'a.txt'), 'a')
+    git('add', 'a.txt')
+    git('commit', '-q', '-m', 'base')
+    const dir = join(runsRoot, 'story-487/487')
+    mkdirSync(dir, { recursive: true })
+    const seal = 'f'.repeat(40) // not in this history: a rebase rewrote it
+    writeFileSync(
+      join(dir, 'r1-g1-red-verify.json'),
+      JSON.stringify({
+        phase: 'r1-g1',
+        skill: 'red-verify',
+        seq: 1,
+        sealed: true,
+        verified: true,
+        snapshot: seal,
+      }),
+    )
+    const result = bridge().baseSync({ cwd: tree, base: 'main', story: '487', dir })
+    expect(result.synced).toBe(false)
+    expect(result.reason).toBe('sealed-history-rewritten')
+    expect(result.detail).toMatch(/cycle-state\.mjs base-sync/)
+  })
+
   it('resolve() on an empty run directory returns the real implement/initial/a0 next — no up-front contract (AC1, US-506)', () => {
     const dir = join(runsRoot, 'story-487/487')
     const result = bridge().resolve({

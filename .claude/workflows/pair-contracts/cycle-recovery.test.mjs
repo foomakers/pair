@@ -21,6 +21,7 @@ import {
   recover,
   recordGateRed,
   baseSync,
+  worktreeClean,
   prereqState,
   supersede,
   POLICY_DEFAULTS,
@@ -736,6 +737,63 @@ test('AC5: a base that moved cleanly is merged with a Pair-Base-Sync trailer', (
   assert.equal(git(cwd, 'merge-base', '--is-ancestor', base, 'HEAD'), '')
 })
 
+test('AC-10: dirty story work is saved at a recorded ref and the branch can resume cleanly', () => {
+  const cwd = repo()
+  const dir = runDir()
+  write(cwd, 'src/own.ts', 'unfinished\n')
+  write(cwd, 'new.txt', 'untracked\n')
+  const out = worktreeClean({ cwd, dir, story: '42' })
+  assert.equal(out.cleaned, true, JSON.stringify(out))
+  assert.match(out.ref, /^refs\/pair\/recovery\/42\/[0-9a-f]{40}$/)
+  assert.equal(git(cwd, 'rev-parse', out.ref), out.commit)
+  assert.equal(git(cwd, 'status', '--porcelain'), '')
+  assert.equal(JSON.parse(readFileSync(join(dir, 'recovery.json'), 'utf8')).stashes[0].ref, out.ref)
+})
+
+test('AC-13: a missing sealed snapshot refuses base sync with the sync step named', () => {
+  const cwd = repo()
+  const original = git(cwd, 'rev-parse', 'HEAD')
+  commit(cwd, '[#42] feat: rewrite', { 'src/own.ts': 'changed\n' })
+  git(cwd, 'checkout', '-q', 'main')
+  commit(cwd, 'base moved', { 'other.txt': 'x\n' })
+  git(cwd, 'checkout', '-q', 'story')
+  const out = baseSync({ cwd, base: 'main', story: '42', snapshot: 'f'.repeat(40) })
+  assert.deepEqual([out.synced, out.reason], [false, 'sealed-history-rewritten'])
+  assert.match(out.detail, /base-sync/)
+  assert.equal(git(cwd, 'rev-parse', 'HEAD').length, original.length)
+})
+
+test('AC-13 (r0-6): base-sync derives the latest seal from the run dir — a rebased (rewritten) sealed history is refused before any merge, naming base-sync', () => {
+  const cwd = repo()
+  const cycleBase = git(cwd, 'rev-parse', 'HEAD')
+  const seal = commit(cwd, 'RED snapshot pr=7 phase=r1-g1', { 't.test.mjs': 'sealed\n' })
+  const dir = runDir()
+  put(dir, 'r1-g1', 'red-verify', { verified: true, sealed: true, snapshot: seal, inputHead: cycleBase })
+  git(cwd, 'checkout', '-q', 'main')
+  commit(cwd, 'base moved', { 'other.txt': 'x\n' })
+  git(cwd, 'checkout', '-q', 'story')
+  git(cwd, 'rebase', '-q', 'main') // a pushed rebase: the seal commit is rewritten
+  const head = git(cwd, 'rev-parse', 'HEAD')
+  const out = baseSync({ cwd, base: 'main', story: '42', dir })
+  assert.deepEqual([out.synced, out.reason], [false, 'sealed-history-rewritten'])
+  assert.match(out.detail, /base-sync/)
+  assert.equal(git(cwd, 'rev-parse', 'HEAD'), head, 'nothing merged')
+})
+
+test('AC-13 (r0-6 control): with the seal intact base-sync merges and returns the seal and cycle base for verify-chain', () => {
+  const cwd = repo()
+  const cycleBase = git(cwd, 'rev-parse', 'HEAD')
+  const seal = commit(cwd, 'RED snapshot pr=7 phase=r1-g1', { 't.test.mjs': 'sealed\n' })
+  const dir = runDir()
+  put(dir, 'r1-g1', 'red-verify', { verified: true, sealed: true, snapshot: seal, inputHead: cycleBase })
+  git(cwd, 'checkout', '-q', 'main')
+  commit(cwd, 'base moved', { 'other.txt': 'x\n' })
+  git(cwd, 'checkout', '-q', 'story')
+  const out = baseSync({ cwd, base: 'main', story: '42', dir })
+  assert.deepEqual(pick(out, 'synced', 'snapshot', 'cycleBase'), { synced: true, snapshot: seal, cycleBase })
+  assert.equal(git(cwd, 'merge-base', '--is-ancestor', seal, 'HEAD'), '')
+})
+
 test('AC5: conflicts resolve mechanically — story-owned keeps ours, a generated mirror takes theirs', () => {
   const cwd = repo()
   commit(cwd, '[#42] feat: own', { 'shared.txt': 'story\n', '.claude/mirror.md': 'story mirror\n' })
@@ -1031,7 +1089,7 @@ test('r1-g1-c3 (r0-3 control): a prerequisite closed as COMPLETED is merged — 
   })
 })
 
-test('a preparation refused twice for a dirty worktree is retried after a `worktree-clean` recovery round (the driver stashed the stray files) — not before, and never past the budget', () => {
+test('AC-10: repeated dirty preparation remains retryable; the driver records its recovery round separately', () => {
   const dir = runDir()
   approved(dir, SHA('c'), {
     verdict: 'changes-requested',
@@ -1041,10 +1099,10 @@ test('a preparation refused twice for a dirty worktree is retried after a `workt
   put(dir, 'r1-g1', 'red-spec', { status: 'dirty', mode: 'remediation', reason: 'stray file' })
   put(dir, 'r1-g1', 'red-spec', { status: 'dirty', mode: 'remediation', reason: 'stray file' }, 2)
   const heads = { head: SHA('c'), baseHead: SHA('b') }
-  assert.deepEqual(pick(go(dir, heads).next, 'step', 'reason', 'refusal'), {
-    step: 'blocked',
-    reason: 'failed-preparation',
-    refusal: 'dirty',
+  assert.deepEqual(pick(go(dir, heads).next, 'step', 'phase', 'attempt'), {
+    step: 'prepare',
+    phase: 'r1-g1',
+    attempt: 3,
   })
   assert.equal(
     recover({

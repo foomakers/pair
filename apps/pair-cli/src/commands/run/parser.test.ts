@@ -2,6 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { isParallelRun, parseRunCommand } from './parser'
 
 describe('parseRunCommand', () => {
+  it('AC-24: carries an explicit telemetry flag and leaves absence to adoption', () => {
+    expect(parseRunCommand({ card: '645' }).telemetry).toBeUndefined()
+    expect(parseRunCommand({ card: '645', telemetry: true }).telemetry).toBe(true)
+    expect(parseRunCommand({ card: '645', telemetry: false }).telemetry).toBe(false)
+  })
   it('US-611: validates --state-order as a root-run argument', () => {
     expect(
       parseRunCommand({ root: '605', stateOrder: 'Ready,Review,In Progress' }).stateOrder,

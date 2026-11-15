@@ -35,7 +35,7 @@ Anthropic-direct is the primary path (subscription or `ANTHROPIC_API_KEY`); Clau
 
 ## 7. Headless Execution — Two Distinct Layers
 
-- **`claude -p`** — one-shot, non-interactive: process a prompt and exit. Supports `--output-format json|stream-json` and `--input-format stream-json` for scripted, streaming invocations. The workspace-trust dialog is automatically skipped in non-interactive mode.
+- **`claude -p`** — one-shot, non-interactive: process a prompt and exit. Supports `--output-format json|stream-json` and `--input-format stream-json` for scripted, streaming invocations. The workspace-trust dialog is automatically skipped in non-interactive mode. `claude -p` inherits the user-level `outputStyle`; a style that sets `keep-coding-instructions: false` replaces the system prompt and can make a stage end without its structured result. Pin it per run with `--settings '{"outputStyle":"default"}'` (`pair run --engine claude` does).
 - **`Workflow`** — multi-agent orchestration available *inside* a running session, not a separate CLI invocation. Use `-p` when the need is "run once, get one answer, exit" (a scripted or CI step); use `Workflow` when the need is "fan out across many subagents inside one live session" (a comprehensive review, a multi-file migration, a research sweep). They are not interchangeable: `-p` cannot orchestrate sub-agents, and `Workflow` is not a standalone CLI entrypoint.
 
 ## 8. What Claude Code Does NOT Support

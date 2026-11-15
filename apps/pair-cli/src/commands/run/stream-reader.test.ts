@@ -52,6 +52,40 @@ describe('readIterationOutcome — per engine, from recorded streams', () => {
   })
 })
 
+describe('readIterationOutcome — claude stage with no parseable result (US-654)', () => {
+  const streamWith = (result: unknown) =>
+    (async function* () {
+      yield JSON.stringify({ type: 'result', subtype: 'success', result }) + '\n'
+    })()
+
+  it('AC-1: prose + bare next → no final, detail ends with the last-message tail', async () => {
+    const result = await readFixture('claude-prose-final.jsonl', 'claude')
+
+    expect(result.final).toBeUndefined()
+    expect(result.detail).toMatch(
+      / — no parseable result in the last agent message: …Prepare ok\..*"round": 1 \}$/s,
+    )
+  })
+
+  it.each([[''], [undefined], [42]])(
+    'AC-3: result %j → no agent message in the stream',
+    async value => {
+      const result = await readIterationOutcome(toLines(streamWith(value)), ENGINES.claude)
+
+      expect(result.final).toBeUndefined()
+      expect(result.detail).toMatch(/ — no agent message in the stream$/)
+    },
+  )
+
+  it('full result wins over a bare next in the same message', async () => {
+    const text =
+      'next: { "step": "verify" }\n```json\n{"status":"ok","next":{"step":"verify"}}\n```'
+    const result = await readIterationOutcome(toLines(streamWith(text)), ENGINES.claude)
+
+    expect(result.final).toMatchObject({ status: 'ok' })
+  })
+})
+
 describe('readIterationOutcome — fail-closed', () => {
   it('fails when the stream carries no recognisable terminal event (AC7)', async () => {
     const result = await readFixture('claude-no-terminal.jsonl', 'claude')

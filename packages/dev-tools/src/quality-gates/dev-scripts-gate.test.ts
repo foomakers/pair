@@ -78,12 +78,23 @@ const requireOne = (found: Invocation[], where: string): Invocation => {
   return found[0] as Invocation
 }
 
-// an isolated copy of what the suites read: scripts/dev + .claude/settings.json
+// an isolated copy of what the suites read, including the real workflow producers
 const sandbox = (mutate?: (root: string) => void): string => {
   const root = mkdtempSync(join(tmpdir(), 'devgate-'))
   cpSync(DEV, join(root, 'scripts/dev'), { recursive: true })
-  mkdirSync(join(root, '.claude'), { recursive: true })
-  cpSync(join(REPO_ROOT, '.claude/settings.json'), join(root, '.claude/settings.json'))
+  for (const file of [
+    '.claude/settings.json',
+    '.claude/workflows/pair-implement-batch.js',
+    'packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js',
+  ]) {
+    mkdirSync(join(root, file, '..'), { recursive: true })
+    cpSync(join(REPO_ROOT, file), join(root, file))
+  }
+  cpSync(
+    join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts'),
+    join(root, '.claude/skills/pair-workflow-cycle/scripts'),
+    { recursive: true },
+  )
   mutate?.(root)
   return root
 }

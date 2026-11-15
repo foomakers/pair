@@ -575,6 +575,7 @@ const PIPELINE_DEFAULTS = {
   reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
   // Rounds of autonomous fix<->re-review before escalating to a human.
   maxFixRounds: 3,
+  autoRecoveryRounds: 5,
   // Independent final verifiers per head — the tier's reviewer count (KB default 1 at every tier;
   // an adoption override in way-of-working's Review Tier Matrix is passed here by the caller).
   reviewers: 1,
@@ -600,7 +601,7 @@ function resolvePipeline(raw) {
       `implement-batch: \`args.pipeline\` must be an object; received ${JSON.stringify(raw).slice(0, 60)}. ` +
         `Omit it entirely to run on pair's defaults.`,
     )
-  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds', 'reviewers'], 'args.pipeline')
+  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds', 'autoRecoveryRounds', 'reviewers'], 'args.pipeline')
   // Every value below is interpolated VERBATIM into the same command text `cards[i]` values
   // are, so it is validated by the SAME predicates — `ok`/`what` are not optional. Presence is
   // not validity here either: `baseBranch` is the `<base>` argument of `git worktree add`
@@ -650,6 +651,7 @@ function resolvePipeline(raw) {
     baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch, isRef, 'a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card\'s `base`)'),
     reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
     maxFixRounds: posInt(raw.maxFixRounds, 'maxFixRounds', PIPELINE_DEFAULTS.maxFixRounds),
+    autoRecoveryRounds: posInt(raw.autoRecoveryRounds, 'autoRecoveryRounds', PIPELINE_DEFAULTS.autoRecoveryRounds),
     reviewers: posInt(raw.reviewers, 'reviewers', PIPELINE_DEFAULTS.reviewers),
   }
 }
@@ -1086,7 +1088,8 @@ const PLAN_SCHEMA = {
 const PREPARE_SCHEMA = {
   type: 'object',
   properties: {
-    status: { type: 'string', enum: ['red', 'stale', 'split-required', 'unprovable', 'dirty', 'contradiction', REDIRECT_STATUS] },
+    status: { type: 'string', enum: ['red', 'stale', 'split-required', 'unprovable', 'dirty', 'contradiction', 'failed', REDIRECT_STATUS] },
+    processFault: { type: 'string' },
     mode: { type: 'string', enum: ['initial', 'remediation', 'repair', 'revision'] },
     inputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     sourceOfTruth: { type: 'string' },
@@ -1162,6 +1165,21 @@ const PREPARE_SCHEMA = {
   required: ['status'],
 }
 const PREPARE_REFUSALS = new Set(['stale', 'split-required', 'unprovable', 'dirty'])
+const CONTRACT_PROCESS_FAULTS = new Set(['contract-hash-mismatch', 'contract-attempt-overwritten'])
+const contractProcessFaultKind = reason => {
+  const kind = typeof reason === 'string' ? reason.split(':', 1)[0] : null
+  return CONTRACT_PROCESS_FAULTS.has(kind) ? kind : null
+}
+// AC-9/AC-10: the process class of cycle-state.mjs STOP_CATALOG, mirrored (this sandbox imports nothing); a test pins the equality.
+const PROCESS_FAULTS = new Set(['failed-seal', 'failed-verify', 'failed-resume', 'failed-publication', 'interrupted', 'dirty', 'stale', 'stale-write', 'parent-not-base', 'sealed-history-rewritten', 'contract-attempt-overwritten', 'contract-hash-mismatch', 'seal-not-pushed', 'dead-dispatch', 'idle-timeout', 'gate-flake'])
+// The process fault a stage reported, whatever stage and status: typed (`processFault`), a process refusal, or a failed stage's process reason.
+const processFaultOf = r => {
+  if (!r || typeof r !== 'object') return null
+  if (PROCESS_FAULTS.has(r.processFault)) return r.processFault
+  if (r.status === 'dirty' || r.status === 'stale') return r.status
+  const kind = r.status === 'failed' && typeof r.reason === 'string' ? r.reason.split(':', 1)[0] : null
+  return PROCESS_FAULTS.has(kind) ? kind : null
+}
 const isPrepareRefusal = r => !!r && PREPARE_REFUSALS.has(r.status)
 // US-479 B1 (S3): a contradiction is an ANSWER — the preparation proved its obligation cannot be
 // contracted without changing rows an INDEPENDENTLY APPROVED contract already sealed. It carries
@@ -1321,7 +1339,8 @@ const VALIDATE_SCHEMA = {
     // US-479 F-RR-03: the verifier echoes the guard set it validated. A field this schema does not
     // declare is dropped by the harness, so the equality check below would be unenforceable.
     regressionGuards: { type: 'array', items: { type: 'string' } },
-    status: { type: 'string', enum: ['verified', 'rejected', REDIRECT_STATUS] },
+    status: { type: 'string', enum: ['verified', 'rejected', 'failed', REDIRECT_STATUS] },
+    processFault: { type: 'string' },
     verified: { type: 'boolean' },
     findings: { type: 'array', items: { type: 'object' } },
     sealed: { type: 'boolean' },
@@ -1349,6 +1368,7 @@ const IMPLEMENT_SCHEMA = {
     outputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     summary: { type: 'string' },
     reason: { type: 'string' },
+    processFault: { type: 'string' },
     next: NEXT_SCHEMA,
   },
   required: ['status'],
@@ -1366,6 +1386,7 @@ const GREEN_SCHEMA = {
       items: { type: 'object', properties: { claim: { type: 'string' }, oracle: { type: 'string' }, probe: { type: 'string' }, observed: { type: 'string' } }, required: ['claim', 'oracle', 'probe', 'observed'] },
     },
     reason: { type: 'string' },
+    processFault: { type: 'string' },
     next: NEXT_SCHEMA,
   },
   required: ['status'],
@@ -1719,9 +1740,17 @@ async function driveStory(story) {
     return await driveStoryInner(story)
   } catch (error) {
     if (!error?.stageTimeout) throw error
-    // A stage agent that timed out is a DURABLE failure of that stage (never retried: it may still be running).
-    const status = STAGE_STATUS[error.stageTimeout.label.split(':')[0]] ?? 'failed-resume'
-    return { story, status, reason: error.message, acceptedFindings: [], metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown' }, durable: true }
+    // The runtime cannot cancel the timed-out writer. Record the round and park until a fresh
+    // `pair run --card` observes that writer has ended; never start a competing writer here.
+    const runId = RUN_ID ?? `story-${story.id}`
+    const token = `${runId}:${story.id}:${error.stageTimeout.label}:idle-timeout`
+    try {
+      await dispatch(
+        `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs recover --dir .pair/working/runs/${runId}/${story.id} --kind stage-retry --policy '${JSON.stringify({ autoRecoveryRounds: PIPELINE.autoRecoveryRounds })}'`,
+        withModel('relay', { phase: 'Recovery', label: `recover:idle:#${story.id}`, effort: 'low' }),
+      )
+    } catch {}
+    return { story, status: 'awaiting-human', reason: error.message, resumeToken: token, acceptedFindings: [], metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown' }, durable: true }
   }
 }
 // US-573: one machine-readable `PAIR_EVENT` line per stage transition — `pair run` renders and audits it.
@@ -1760,7 +1789,7 @@ async function driveStoryInner(story) {
   // gate above) — `blockingFloor` rides only when the CALLER explicitly declared `severityFloor`,
   // never the soft default, or `$policy` would never equal the budgets exactly.
   const explicitSeverityFloor = String(PARSED.severityFloor ?? '').trim() ? SEVERITY_FLOOR : undefined
-  const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}), ...(explicitSeverityFloor ? { blockingFloor: explicitSeverityFloor.name } : {}) }
+  const policy = { maxFixRounds: MAX_FIX_ROUNDS, autoRecoveryRounds: PIPELINE.autoRecoveryRounds, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}), ...(explicitSeverityFloor ? { blockingFloor: explicitSeverityFloor.name } : {}) }
   const inputs = fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, reviewers: PIPELINE.reviewers }))
   const storyMetrics = { dispatches: 0, retries: 0, redirects: 0 }
   // US-524: under `until: merged` the tier the cycle is driven under is read ONCE here (the caller's Select-time tier when given).
@@ -1812,7 +1841,68 @@ async function driveStoryInner(story) {
     // through unmapped — never silently coerced to failed-resume, which would make a clean
     // technical convergence with pending scope proposals look like an engine failure.
     const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', 'failed-verify': 'failed-verify', escalate: 'escalate', 'needs-human': 'needs-human', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned' }
+    // AC-10: a process budget spent (the state authority's or `recover`'s) parks with a resume token, never a terminal status.
+    if (n.budget === 'autoRecoveryRounds') return result('awaiting-human', { reason: n.detail ?? n.reason, budget: n.budget, phase: n.phase, resumeToken: `${runId}:${story.id}:${n.phase ?? 'run'}:autoRecoveryRounds` })
     return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
+  }
+  // r0-3: an explicit re-run lifts the process-budget park `resolve` reports — once per invocation, only before this
+  // invocation spent a recovery round of its own (a park reached mid-run stays parked), within the run's resume budget.
+  let recoveredThisRun = false
+  let resumedThisRun = false
+  const resumePark = async n => {
+    if (recoveredThisRun || resumedThisRun) return false
+    resumedThisRun = true
+    const out = await dispatch(
+      `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs recover --dir ${runDir()} --kind resume --policy '${JSON.stringify(policy)}'`,
+      withModel('relay', { phase: 'Recovery', label: `recover:resume:${tag}`, effort: 'low' }),
+    )
+    if (out?.allowed === true) return true
+    if (out?.next?.detail) n.detail = out.next.detail
+    return false
+  }
+  const recoverProcess = async (fault, due) => {
+    recoveredThisRun = true
+    const faultKind = contractProcessFaultKind(fault) ?? fault
+    const kind = fault === 'dirty' ? 'worktree-clean' : fault === 'stale' ? 'base-sync' : 'stage-retry'
+    const token = `${runId}:${story.id}:${due.phase}:${faultKind}`
+    const park = reason => result('awaiting-human', { reason, resumeToken: token, phase: due.phase })
+    const script = '.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+    const budget = await dispatch(
+      `Run exactly this command from the main checkout and return its JSON verbatim: node ${script} recover --dir ${runDir()} --kind ${kind} --policy '${JSON.stringify(policy)}'`,
+      withModel('relay', { phase: 'Recovery', label: `recover:budget:${tag}`, effort: 'low' }),
+    )
+    if (budget?.allowed !== true) return { park: park(budget?.next?.detail ?? `${fault}: process recovery budget spent`) }
+    if (contractProcessFaultKind(fault)) {
+      const reset = await dispatch(
+        `Run exactly this command from the main checkout and return its JSON verbatim: node ${script} reset-group --dir ${runDir()} --phase ${due.phase} --reason ${faultKind} --by driver --workflowVersion ${WORKFLOW_VERSION} --policy '${JSON.stringify(policy)}' --entry ${pr ? 'pr' : 'fresh'}${pr ? ` --pr ${pr}` : ''}`,
+        withModel('relay', { phase: 'Recovery', label: `recover:${faultKind}:${tag}`, effort: 'low' }),
+      )
+      if (reset?.reset === true && nextDefect(reset.next) === null) return { next: reset.next }
+      // Nothing unusable to set aside (no tail of this group, or its tail is a kept verdict): the round was spent, retry the step.
+      if (reset?.reason === 'reset-group-not-tail' || reset?.reason === 'reset-group-sealed-or-clean') return { next: due.next ?? due }
+      return { park: park(reset?.reason ?? `${faultKind}: reset-group failed`) }
+    }
+    if (fault === 'dirty' || fault === 'stale') {
+      const command = fault === 'dirty'
+        ? `node ${script} worktree-clean --cwd ${worktreePath} --dir ${runDir()} --story ${story.id}`
+        : `node ${script} base-sync --cwd ${worktreePath} --base ${storyBase} --story ${story.id} --dir ${runDir()}`
+      const action = await dispatch(`Run exactly this command from the main checkout and return its JSON verbatim: ${command}`,
+        withModel('relay', { phase: 'Recovery', label: `recover:${fault}:${tag}`, effort: 'low' }))
+      if (!(action?.cleaned === true || action?.synced === true || action?.reason === 'up-to-date')) return { park: park(action?.detail ?? action?.reason ?? `${fault}: recovery failed`) }
+      // AC-13 (r0-6): base-sync derives the seal and the cycle base from the run dir, so custody is re-checked after
+      // every merge on a sealed cycle — whatever step was due.
+      if (fault === 'stale' && action?.synced === true && SHA40.test(String(action.cycleBase ?? '')) && isPosInt(pr)) {
+        const verify = await dispatch(
+          `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs verify-chain --pr ${pr} --base ${action.cycleBase} --base-ref ${storyBase} --run-dir ${runDir()} --cwd ${worktreePath}`,
+          withModel('relay', { phase: 'Recovery', label: `recover:verify-chain:${tag}`, effort: 'low' }),
+        )
+        if (verify?.verified !== true) return { park: park('base-sync verify-chain failed') }
+      }
+      // r2-3: `stale` means the worktree HEAD is not the dispatched head — the retry runs on the HEAD base-sync reports
+      // (merged or already up to date), never on the head the refusal named, which would refuse again.
+      if (fault === 'stale' && SHA40.test(String(action?.head ?? ''))) return { next: { ...due.next, base: action.head } }
+    }
+    return { next: due.next }
   }
 
   // ── The four stages, each a SKILL invoked by name with typed arguments ─────────────────────
@@ -1820,25 +1910,25 @@ async function driveStoryInner(story) {
     agentRetry(
       invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
+      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || !!processFaultOf(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
     )
   const validate = n =>
     agentRetry(
       invoke(SK.redVerify, `${common()} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'xhigh', schema: VALIDATE_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || hasValidation(r),
+      r => isRedirect(r) || isOtherRun(r) || hasValidation(r) || !!processFaultOf(r),
     )
   const implement = n =>
     agentRetry(
       invoke(SK.implementPhase, `${common()} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''} $attempt=${n.attempt ?? 1}${n.contract ? ` $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}` : ''} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
       withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `implement:${tag}${(n.attempt ?? 1) > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: IMPLEMENT_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || (!!r && (r.status === 'ok' || r.status === 'failed') && typeof r.gatesPassed === 'boolean'),
+      r => isRedirect(r) || isOtherRun(r) || (!!r && (r.status === 'ok' || r.status === 'failed') && typeof r.gatesPassed === 'boolean') || !!processFaultOf(r),
     )
   const green = n =>
     agentRetry(
       invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${notesArg()}`),
       withModel('green', { agentType: 'pair-implementer', phase: 'Implement', label: `green:${tag} ${n.phase}${n.attempt > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: GREEN_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || hasGreen(r),
+      r => isRedirect(r) || isOtherRun(r) || hasGreen(r) || !!processFaultOf(r),
     )
   const verify = (n, required) =>
     agentRetry(
@@ -1899,7 +1989,7 @@ async function driveStoryInner(story) {
   // AO: the FORMAT-class defects of a stage result — shape, never judgment. Mirrors, in order, the checks below that end the card
   // `failed-*` for a malformed handoff, returning the first one's exact message (or null). Those checks stay the final authority.
   const formatDefect = (stg, n, r, { openIds }) => {
-    if (stg === 'prepare' && (isPrepareRefusal(r) || (n.rollbackRefusal ?? false))) return null
+    if (processFaultOf(r) || (stg === 'prepare' && (isPrepareRefusal(r) || (n.rollbackRefusal ?? false)))) return null
     if (stg === 'implement') {
       if (r.status !== 'ok') return null
       if (!isPosInt(r.prNumber) || !SHA40.test(String(r.outputHead ?? ''))) return NO_PR_DEFECT
@@ -1943,6 +2033,12 @@ async function driveStoryInner(story) {
       if (!AUTONOMY.merging) return result('ready-for-merge', ready)
       showStage('merge')
       return mergeStage({ story, runDirPath: runDir(), pr, tier: story.tier ?? cardTier, ready, result })
+    }
+    if (next.step === 'blocked' && next.budget === 'autoRecoveryRounds' && (await resumePark(next))) {
+      // the park is lifted: the first guess again — its stage resolves the durable state and redirects to the step now due
+      next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
+      seen.clear()
+      continue
     }
     if (next.step === 'blocked') return blockedResult(next)
     const key = `${next.step}:${next.phase}:${next.mode ?? ''}:${next.attempt ?? 1}:${next.reviewer ?? 1}`
@@ -2013,8 +2109,12 @@ async function driveStoryInner(story) {
     storyMetrics.dispatches = METRICS.dispatches.filter(d => d.label.includes(tag)).length
     storyMetrics.retries = METRICS.dispatches.filter(d => d.label.includes(tag) && d.retry).length
     // Twice dead (null, or a shape no stage can use) is the STAGE's failure — never a clean result.
-    if (!res || typeof res !== 'object')
-      return result({ prepare: 'failed-preparation', validate: 'failed-contract', implement: 'failed-implement', green: 'failed-fix', verify: 'failed-verify' }[stage], { reason: `${stage} returned nothing usable twice (agent died or returned an invalid shape)`, phase: next.phase })
+    if (!res || typeof res !== 'object') {
+      const recovered = await recoverProcess('dead-dispatch', { ...next, next })
+      if (recovered.park) return recovered.park
+      seen.delete(key)
+      continue
+    }
     if (isOtherRun(res)) {
       // The PR already has a cycle under another run id: continue THERE. Re-dispatch the same step
       // once with the adopted run id; a second `other-run` is an ambiguity the caller resolves.
@@ -2047,6 +2147,17 @@ async function driveStoryInner(story) {
       continue
     }
     redirectsInARow = 0
+    // AC-10 (r1-1): ONE route for every process fault any stage reports, ahead of every stage's own failure check —
+    // recovered under autoRecoveryRounds or parked with a resume token; never a failed-* and never a card budget.
+    // A rollback refusal is a maintainer directive, never a process fault: it keeps its stop below.
+    const fault = !(stage === 'prepare' && next.rollbackRefusal) && processFaultOf(res)
+    if (fault) {
+      const recovered = await recoverProcess(fault, { ...next, next: usableNext(res.next) ? res.next : next })
+      if (recovered.park) return recovered.park
+      seen.delete(key)
+      next = recovered.next
+      continue
+    }
     // ── Stage-specific validation of the typed evidence ─────────────────────────────────────
     if (stage === 'prepare') {
       // US-479 DR3-03: a rollback the state authority refused must STOP the run, before anything

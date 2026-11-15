@@ -24,6 +24,8 @@ describe('buildEngineArgs', () => {
       '--output-format',
       'stream-json',
       '--verbose',
+      '--settings',
+      '{"outputStyle":"default"}',
       '/pair-loop --root 212',
     ])
     expect(args.at(-1)).toBe('/pair-loop --root 212')

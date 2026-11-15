@@ -108,7 +108,7 @@ if (a[0] === 'issue' && a[1] === 'view') {
       engine,
       `#!/usr/bin/env node
 require('fs').appendFileSync(process.env.FAKE_ENGINE_LOG, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }) + '\\n')
-process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\\n')
+process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', ...(process.env.FAKE_ENGINE_RESULT ? { result: process.env.FAKE_ENGINE_RESULT } : {}) }) + '\\n')
 process.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\\n')
 process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop' } }) + '\\n')
 `,
@@ -134,7 +134,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
           .map(l => JSON.parse(l) as EngineCall)
       : []
 
-  const drive = (engine: EngineDefinition, pr?: number) =>
+  const drive = (engine: EngineDefinition, pr?: number, telemetryEnabled?: boolean) =>
     createDefaultCycleDriver({
       engine: { ...engine, command: join(root, 'bin', 'fake-engine') },
       cwd: main,
@@ -144,14 +144,170 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
       timeoutSeconds: 60,
       workflowVersion: CYCLE_WORKFLOW_VERSION,
       baseBranch: CYCLE_BASE_BRANCH_DEFAULT,
-    })({ runId: 'story-7', card: '7', ...(pr !== undefined && { pr }) })
+      ...(telemetryEnabled !== undefined && { telemetryEnabled }),
+      // one process round keeps these spawn-heavy cases light; the KB default (5) only repeats the same window
+    })({
+      runId: 'story-7',
+      card: '7',
+      budgets: { autoRecoveryRounds: 1 },
+      ...(pr !== undefined && { pr }),
+    })
 
-  it("a success event with a NOT-advanced handoff is a dead dispatch, retried exactly the ONCE cycle-state's own budget allows (AC4, AC5)", async () => {
+  it('AC-24: default-off writes no telemetry; enabled writes stage and terminal card records', async () => {
+    const path = join(main, '.pair/working/telemetry/records.jsonl')
+    await drive(ENGINES.claude)
+    expect(existsSync(path)).toBe(false)
+
+    await drive(ENGINES.claude, undefined, true)
+    const records = readFileSync(path, 'utf8')
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line))
+    // #646: the first drive already spent this run's one process round, so the second parks after one window
+    expect(records.filter(record => record.kind === 'stage')).toHaveLength(2)
+    expect(records.filter(record => record.kind === 'card')).toHaveLength(1)
+  }, 60_000)
+
+  it("a success event with a NOT-advanced handoff is a dead dispatch: retried the ONCE cycle-state's own budget allows, then per recorded process round, then parked with a resume token (AC4, AC5, #646 AC-10)", async () => {
     const outcome = await drive(ENGINES.claude)
 
-    expect(calls()).toHaveLength(2) // the stage, plus the one retry — never a third
-    expect(outcome.status).toBe('failed-implement')
-    expect(outcome.stagesRun).toBe(2)
+    // (1 + deadDispatchRetries 1) dispatches per window, one window plus one per autoRecoveryRounds (1 here)
+    expect(calls()).toHaveLength(4)
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'implement:a0:dead-dispatch',
+    })
+    expect(outcome.stagesRun).toBe(4)
+  }, 60_000)
+
+  it('#646 r1-2: a stage stopped for a contract-identity fault is recovered through reset-group and the process budget, then parked with a resume token', async () => {
+    vi.stubEnv(
+      'FAKE_ENGINE_RESULT',
+      JSON.stringify({ status: 'failed', reason: 'contract-hash-mismatch' }),
+    )
+    const outcome = await drive(ENGINES.claude)
+
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'implement:a0:contract-hash-mismatch',
+    })
+    const said = vi.mocked(console.log).mock.calls.map(c => String(c[0]))
+    expect(said.filter(l => /contract-hash-mismatch — reset-group a0/.test(l))).toHaveLength(1)
+    const rounds = JSON.parse(
+      readFileSync(join(main, '.pair/working/runs/story-7/7/recovery.json'), 'utf8'),
+    ).rounds as { kind: string }[]
+    expect(rounds.map(r => r.kind)).toEqual(['stage-retry'])
+  }, 60_000)
+
+  // #646 round 2 — r1-2, the class: each process refusal a preparation retry follows runs ITS recovery before the
+  // dispatch, under a recorded round — dirty ⇒ worktree-clean (saved at a recorded ref), stale ⇒ base-sync (a merge).
+  it.each([
+    ['dirty', 'worktree-clean'],
+    ['stale', 'base-sync'],
+  ])(
+    '#646 r1-2: a prepare retry after a %s refusal runs %s before the dispatch',
+    async (refusal, kind) => {
+      vi.mocked(runCycle).mockClear()
+      await drive(ENGINES.claude)
+      const input = vi.mocked(runCycle).mock.calls[0]?.[0]
+      const tree = join(root, 'pair-worktrees', '7')
+      const sh = (cwd: string, ...args: string[]) =>
+        execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+          cwd,
+          encoding: 'utf8',
+        }).trim()
+      writeFileSync(join(tree, 'stray.txt'), 'x')
+      // the base moved under the branch: a commit only origin/main has
+      sh(main, 'commit', '-q', '--allow-empty', '-m', 'base moved')
+      const moved = sh(main, 'rev-parse', 'HEAD')
+      sh(main, 'update-ref', 'refs/remotes/origin/main', moved)
+      const before = sh(tree, 'rev-parse', 'HEAD')
+      // the drive above spent the run's one round on its dead dispatch: start this recovery from a fresh record
+      rmSync(join(main, '.pair/working/runs/story-7/7/recovery.json'), { force: true })
+
+      const park = await input?.beforePrepare?.({
+        step: 'prepare',
+        phase: 'a0',
+        attempt: 2,
+        refusal,
+      })
+
+      expect(park?.park).toBeUndefined()
+      const recovery = JSON.parse(
+        readFileSync(join(main, '.pair/working/runs/story-7/7/recovery.json'), 'utf8'),
+      ) as {
+        rounds: { kind: string }[]
+        stashes?: { ref: string }[]
+      }
+      expect(recovery.rounds.map(r => r.kind)).toContain(kind)
+      expect(existsSync(join(tree, 'stray.txt'))).toBe(false)
+      if (refusal === 'dirty')
+        expect(recovery.stashes?.[0]?.ref).toMatch(/^refs\/pair\/recovery\/7\//)
+      else {
+        expect(sh(tree, 'rev-parse', 'HEAD^1')).toBe(before) // merged on top of the branch, never rebased
+        expect(sh(tree, 'rev-parse', 'HEAD^2')).toBe(moved)
+        // r2-3: the retry runs on the merged HEAD, never the head the stale refusal named
+        expect(park?.head).toBe(sh(tree, 'rev-parse', 'HEAD'))
+      }
+    },
+    60_000,
+  )
+
+  it('#646 r2-4: after a stale merge on a sealed PR cycle, custody is re-checked with verify-chain on the cycle base and --base-ref the base', async () => {
+    vi.mocked(runCycle).mockClear()
+    await drive(ENGINES.claude, 42)
+    const input = vi.mocked(runCycle).mock.calls[0]?.[0]
+    const tree = join(root, 'pair-worktrees', '7')
+    const sh = (cwd: string, ...args: string[]) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+        cwd,
+        encoding: 'utf8',
+      }).trim()
+    const seal = sh(tree, 'rev-parse', 'HEAD')
+    const cycleBase = sh(main, 'rev-parse', 'refs/remotes/origin/main')
+    const dir = join(main, '.pair/working/runs/story-7/7')
+    mkdirSync(dir, { recursive: true })
+    rmSync(join(dir, 'recovery.json'), { force: true })
+    writeFileSync(
+      join(dir, 'r1-g1-red-verify.json'),
+      JSON.stringify({
+        phase: 'r1-g1',
+        skill: 'red-verify',
+        seq: 1,
+        sealed: true,
+        verified: true,
+        snapshot: seal,
+        inputHead: cycleBase,
+      }),
+    )
+    // the custody script, recording how it was called
+    const calls = join(root, 'verify-chain.log')
+    const scripts = join(main, '.claude/skills/pair-workflow-review-phase/scripts')
+    mkdirSync(scripts, { recursive: true })
+    writeFileSync(
+      join(scripts, 'red-snapshot.mjs'),
+      `import { appendFileSync } from 'node:fs'\nappendFileSync(${JSON.stringify(calls)}, JSON.stringify(process.argv.slice(2)) + '\\n')\nprocess.stdout.write('{"verified":true}\\n')\n`,
+    )
+    sh(main, 'commit', '-q', '--allow-empty', '-m', 'base moved')
+    sh(main, 'update-ref', 'refs/remotes/origin/main', sh(main, 'rev-parse', 'HEAD'))
+
+    const out = await input?.beforePrepare?.({
+      step: 'prepare',
+      phase: 'r1-g1',
+      attempt: 2,
+      refusal: 'stale',
+    })
+
+    expect(out?.park).toBeUndefined()
+    const argv = JSON.parse(readFileSync(calls, 'utf8').trim()) as string[]
+    const flag = (name: string) => argv[argv.indexOf(`--${name}`) + 1]
+    expect(argv[0]).toBe('verify-chain')
+    expect([flag('pr'), flag('base'), flag('base-ref'), flag('run-dir')]).toEqual([
+      '42',
+      cycleBase,
+      'origin/main',
+      dir,
+    ])
   }, 60_000)
 
   it("US-623 AC6/r0-2: the production driver hands runCycle a beforePrepare that stashes the failed attempt's stray files", async () => {
@@ -206,17 +362,20 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     const prompt = first!.argv[first!.argv.length - 1]!
     expect(prompt.startsWith('/pair-workflow-review-phase ')).toBe(true)
     expect(calls().some(c => c.argv.some(a => a.includes('pair-workflow-red-spec')))).toBe(false)
-    expect(outcome.status).toBe('failed-verify')
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'verify:r0:dead-dispatch',
+    })
   }, 60_000)
 
-  it('opencode, which does the file work but publishes no handoff, ends failed-<step> — never claimed complete (AC13 known limitation)', async () => {
+  it('opencode, which does the file work but publishes no handoff, parks awaiting-human — never claimed complete (AC13 known limitation)', async () => {
     // The canary's opencode leg, as the driver sees it: every stage exits with a success event and
     // no handoff. AC13 does not claim opencode completes; what the driver owes is to SAY so — a
     // bounded dead dispatch and a failed status, never a `ready-for-merge` it did not reach.
     const outcome = await drive(ENGINES.opencode)
 
-    expect(calls()).toHaveLength(2)
-    expect(outcome.status).toBe('failed-implement')
+    expect(calls()).toHaveLength(4)
+    expect(outcome.status).toBe('awaiting-human')
     expect(outcome.status).not.toBe('ready-for-merge')
   }, 60_000)
 

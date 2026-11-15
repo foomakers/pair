@@ -210,6 +210,7 @@
 - [Decision: an owner-approved correction routes a successor; it never waives custody](.pair/adoption/decision-log/2026-11-11-owner-approval-routes-a-successor-never-waives-custody.md)
 - [Decision: no affected-only pre-push; rely on turbo cache and parallel gate](.pair/adoption/decision-log/2026-11-11-prepush-affected-only-not-adopted.md)
 - [Decision: Run the quality gate serially](.pair/adoption/decision-log/2026-11-13-serial-quality-gate.md)
+- [Decision: process faults never spend card budgets; a catalogue classes every stop](.pair/adoption/decision-log/2026-11-14-process-faults-never-spend-card-budgets.md)
 
 ## How-To Guides
 
