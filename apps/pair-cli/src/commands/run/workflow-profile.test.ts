@@ -115,10 +115,18 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
     })
     const p = resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'engine-less.json' })
     expect(() => validateProfileRun(p, { commandLine: true })).toThrow(
-      /stages\.implement\.engine.*--engine/,
+      /stages\.prepare\.engine.*--engine/,
     )
     expect(() => validateProfileRun(p, { commandLine: true, engineFlag: 'claude' })).not.toThrow()
     expect(() => validateProfileRun(p, { commandLine: false })).not.toThrow()
+    write('partial-engine.json', {
+      name: 'partial-engine',
+      stages: { implement: { engine: 'claude' } },
+    })
+    const partial = resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'partial-engine.json' })
+    expect(() => validateProfileRun(partial, { commandLine: true })).toThrow(
+      /stages\.prepare\.engine.*--engine/,
+    )
   })
 
   it('AC-5: --engine contradicting a selected stage is refused with its field and remedy', () => {
@@ -134,7 +142,7 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
       stages: { implement: { engine: 'codex', model: 'claude-sonnet-4-5' } },
     })
     const p = resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'wrong-model.json' })
-    expect(() => validateProfileRun(p, { commandLine: true })).toThrow(
+    expect(() => validateProfileRun(p, { commandLine: true, engineFlag: 'codex' })).toThrow(
       /stages\.implement\.model.*claude-sonnet-4-5.*codex/,
     )
   })

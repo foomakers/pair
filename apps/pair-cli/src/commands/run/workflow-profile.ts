@@ -79,8 +79,7 @@ export function validateProfileRun(
   },
 ): void {
   if (!profile.profile) return
-  const declared = profile.profile?.stages ?? {}
-  const stages = Object.keys(declared).length ? Object.keys(declared) : ['defaults']
+  const stages = Object.keys(profile.stages).filter(stage => stage !== 'defaults')
   for (const stage of stages) {
     const selected = profile.stages[stage]
     if (!selected) continue
