@@ -211,6 +211,7 @@
 - [Decision: no affected-only pre-push; rely on turbo cache and parallel gate](.pair/adoption/decision-log/2026-11-11-prepush-affected-only-not-adopted.md)
 - [Decision: Run the quality gate serially](.pair/adoption/decision-log/2026-11-13-serial-quality-gate.md)
 - [Decision: process faults never spend card budgets; a catalogue classes every stop](.pair/adoption/decision-log/2026-11-14-process-faults-never-spend-card-budgets.md)
+- [Decision: an unprovable preparation is left by a verified waiver or a moved head, never by custody](.pair/adoption/decision-log/2026-11-15-unprovable-preparation-waiver-and-moved-head.md)
 
 ## How-To Guides
 

@@ -414,7 +414,10 @@ export default defineAdapter({
       readComment({ id, repo }) {
         const c = parseJson(gh(['api', `repos/${repo}/issues/comments/${id}`]), { command: 'gh api comment' })
         const pr = /\/issues\/(\d+)$/.exec(String(c?.issue_url ?? ''))?.[1]
-        return { body: c?.body, authorLogin: c?.user?.login, authorIsUser: c?.user?.type === 'User', pr: pr === undefined ? null : Number(pr) }
+        // The comment's canonical identity (numeric id, repo of its html_url) and its created/updated times: a
+        // decision keyed on the ref's spelling, or on a comment edited after it was posted, would not be the maintainer's.
+        const repoOf = /^https:\/\/github\.com\/([^/]+\/[^/]+)\//.exec(String(c?.html_url ?? ''))?.[1]
+        return { body: c?.body, authorLogin: c?.user?.login, authorIsUser: c?.user?.type === 'User', pr: pr === undefined ? null : Number(pr), id: c?.id === undefined ? undefined : String(c.id), repo: repoOf, createdAt: c?.created_at, updatedAt: c?.updated_at }
       },
       parseCommentRef(ref, { repo } = {}) {
         const m = COMMENT_URL_RE.exec(String(ref ?? ''))

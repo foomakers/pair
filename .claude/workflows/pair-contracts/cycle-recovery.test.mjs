@@ -179,6 +179,24 @@ test('AC3: failed-contract (the repair budget spent) re-derives one more repair 
   })
 })
 
+for (const status of ['unprovable', 'split-required']) {
+  test(`a preparation refused \`${status}\` (nothing sealed) and a PR head moved by an out-of-cycle commit: the new head is re-reviewed, never a re-preparation that refuses again`, () => {
+    const dir = runDir()
+    const finding = { id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', kind: 'defect', location: 'a', description: 'd', recommendation: 'r' }
+    put(dir, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), findings: [finding], custody: { contractBreach: false }, readiness: { ready: false } })
+    put(dir, 'r1-g1', 'red-spec', { status, mode: 'remediation', inputHead: SHA('c'), findings: { received: ['r0-1'] } })
+    assert.deepEqual(pick(go(dir, { head: SHA('c') }).next, 'step', 'reason'), { step: 'blocked', reason: 'failed-preparation' })
+    assert.deepEqual(pick(go(dir, { head: SHA('e') }).next, 'step', 'mode', 'phase', 'base', 'headMoved', 'openIds'), {
+      step: 'verify',
+      mode: 're-review',
+      phase: 'r2',
+      base: SHA('c'),
+      headMoved: true,
+      openIds: ['r0-1'],
+    })
+  })
+}
+
 test('moved PR head after an unsealed failed remediation re-reviews the new head after supersede', () => {
   const dir = runDir()
   const finding = {
