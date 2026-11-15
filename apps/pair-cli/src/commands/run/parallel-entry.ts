@@ -7,7 +7,7 @@ import chalk from 'chalk'
 import { acquireCardLock } from './card-lock'
 import { resolveEngineFor } from './cycle-entry'
 import { createCycleScriptsBridge, locateCycleScripts, type PrereqState } from './cycle-scripts'
-import { resolveWorkflowProfile } from './workflow-profile'
+import { resolveWorkflowProfile, stageEngineIds, stageSettings, validateProfileRun, workflowProfileRequested } from './workflow-profile'
 import { appendAuditLine } from './dispatch-audit'
 import {
   isInterrupted,
@@ -51,6 +51,7 @@ import {
 } from './parallel'
 import type { RunCommandConfig } from './parser'
 import { describeEngineResolution, resolveEngine } from './resolve-engine'
+import { ENGINE_IDS, isEngineId } from './engines'
 import {
   completeCandidates,
   computeRootPlan,
@@ -198,6 +199,7 @@ interface FanOut {
   readonly selection: FanOutSelection
   readonly engineDef: ReturnType<typeof resolveEngineFor>
   readonly autonomyArgs: readonly string[]
+  readonly selectionModel?: string
 }
 
 /** One fresh selection process, scoped by the resolved selection (and the loop contract, in loop mode). */
@@ -223,7 +225,7 @@ function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRoot
     status: selection.status?.value,
     cwd: input.cwd,
     autonomyArgs: fan.autonomyArgs,
-    model: declaredEngineModel(input.context.config, engineDef.id),
+    model: fan.selectionModel ?? declaredEngineModel(input.context.config, engineDef.id),
     timeoutSeconds: input.config.iterationTimeoutSeconds,
     idleTimeoutSeconds: input.context.idleTimeout.seconds,
     ...(loop !== undefined && { loop }),
@@ -357,14 +359,19 @@ export async function handleParallelRun(
   const selection = resolveSelection(config, context.policy, context.autonomySelection)
   assertScope(selection)
   const values = resolveLoopValues(config, context.policy)
-  const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
-  // US-560 AC4: an unknown profile HALTs here, once, before the selection or any child spawns.
-  if (config.profile !== undefined || config.workflowConfig !== undefined) {
-    ;(deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
+  const profile = workflowProfileRequested(config, context.config)
+    ? (deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
       locateCycleScripts(fs, context.config, cwd).scriptsDir,
-      { root: cwd, profile: config.profile, workflowConfig: config.workflowConfig },
+      { root: cwd, engine: config.engine, profile: config.profile, workflowConfig: config.workflowConfig },
     )
+    : undefined
+  if (profile) {
+    stageEngineIds(profile, ENGINE_IDS)
+    validateProfileRun(profile, { commandLine: config.profile !== undefined || config.workflowConfig !== undefined, ...(config.engine && { engineFlag: config.engine }), runEngine: config.engine ?? declaredEngine(context.config) })
   }
+  const selected = profile && stageSettings(profile, 'defaults')
+  if (selected?.engine !== undefined && !isEngineId(selected.engine)) throw new Error(`profile-invalid: defaults.engine '${selected.engine}' is unknown`)
+  const engine = resolveEngine({ flag: config.engine, declared: selected?.engine ?? declaredEngine(context.config) })
   // Refused here, before anything spawns: the selection process runs under the same posture.
   const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
   reportPreamble(input, describeEngineResolution(engine), {
@@ -372,6 +379,7 @@ export async function handleParallelRun(
     values,
     notes: autonomy.notes,
   })
+  if (profile) for (const line of profile.table) console.log(`  ${line}`)
 
   if (reportAutomationOff(context)) return 0
 
@@ -381,7 +389,7 @@ export async function handleParallelRun(
   }
 
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
-  const fan: FanOut = { input, deps, selection, engineDef, autonomyArgs: autonomy.args }
+  const fan: FanOut = { input, deps, selection, engineDef, autonomyArgs: autonomy.args, ...(selected?.model && { selectionModel: selected.model }) }
   return await withLiveCards(input, deps, onEvent => {
     const live: FanOut = { ...fan, input: { ...input, onEvent } }
     return values.loopMode ? runLoop(live, values) : runSingleBatch(live)
