@@ -37,7 +37,7 @@ const hostOf = comments => ({
     readComment: ({ id }) => comments[id],
   },
 })
-const c = (login, text = body(), type = 'User') => ({ authorLogin: login, authorIsUser: type === 'User', pr: 7, body: text })
+const c = (login, text = body(), type = 'User') => ({ authorLogin: login, authorIsUser: type === 'User', pr: 7, body: text, createdAt: '2026-11-15T10:00:00Z', updatedAt: '2026-11-15T10:00:00Z' })
 const approve = (dir, id, comments) => approveCorrection({ dir, decisionRef: `pr7#c-${id}`, repo: 'o/r', pr: 7, host: hostOf(comments) })
 const go = dir => resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
 
@@ -185,3 +185,59 @@ test('preparation waiver r1-1: a comment already consumed, edited to name a NEWE
   assert.deepEqual([out.approved, out.reason], [false, 'decisionRef-already-used'])
   assert.equal(readApprovals(dir).length, 1)
 })
+
+// A host faithful to GitHub: a comment is looked up NUMERICALLY (`…-0555` is comment 555) and comes back with its
+// canonical id, the repo of its html_url, and its created/updated times.
+const T0 = '2026-11-15T10:00:00Z'
+const faithful = (comments, { updatedAt = T0 } = {}) => ({
+  code: {
+    parseCommentRef: (ref, { repo }) => {
+      const m = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:pull|issues)\/(\d+)#issuecomment-(\d+)$/.exec(ref)
+      return m ? { pr: Number(m[3]), id: m[4], inScope: `${m[1]}/${m[2]}` === repo } : null
+    },
+    readComment: ({ id }) => {
+      const c = comments[Number(id)]
+      return c && { ...c, id: String(Number(id)), repo: 'o/r', createdAt: T0, updatedAt }
+    },
+  },
+})
+const runB = a => {
+  const b = join(a, '..', '..', 'run-2', '42')
+  mkdirSync(b, { recursive: true })
+  put(b, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ id: 'r0-1', severity: 'Critical', blocking: true, transition: 'open', kind: 'defect', location: 'b', description: 'x', recommendation: 'r' }], custody: { contractBreach: false }, readiness: { ready: false } })
+  put(b, 'r1-g1', 'red-spec', { status: 'unprovable', mode: 'remediation', inputHead: SHA('c'), findings: { received: ['r0-1'] } })
+  return b
+}
+const URL555 = 'https://github.com/o/r/pull/7#issuecomment-555'
+const URL0555 = 'https://github.com/o/r/pull/7#issuecomment-0555'
+
+test('preparation waiver r0-1: the key is the comment`s canonical identity from the host — `-0555` after `-555` is refused in another run', () => {
+  const a = waiverRun()
+  const comments = { 555: c('rucka', waiver()) }
+  assert.equal(approveCorrection({ dir: a, decisionRef: URL555, repo: 'o/r', pr: 7, host: faithful(comments) }).approved, true)
+  const b = runB(a)
+  assert.equal(approveCorrection({ dir: b, decisionRef: URL0555, repo: 'o/r', pr: 7, host: faithful(comments) }).reason, 'decisionRef-already-used')
+  assert.deepEqual(readApprovals(b), [])
+})
+
+test('preparation waiver r0-1: `-0555` after `-555` on a NEWER attempt of the same run is refused too', () => {
+  const dir = waiverRun()
+  assert.equal(approveCorrection({ dir, decisionRef: URL555, repo: 'o/r', pr: 7, host: faithful({ 555: c('rucka', waiver()) }) }).approved, true)
+  writeFileSync(join(dir, 'r1-g1-red-spec.attempt-2.json'), JSON.stringify({ schemaVersion: 3, workflowVersion: V, run: 'run-1', story: '42', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('c'), seq: ++seq, attempt: 2, status: 'unprovable', mode: 'repair', findings: { received: ['r0-1'] } }))
+  assert.equal(approveCorrection({ dir, decisionRef: URL0555, repo: 'o/r', pr: 7, host: faithful({ 555: c('rucka', waiver({ attempt: 2 })) }) }).reason, 'decisionRef-already-used')
+  assert.equal(readApprovals(dir).length, 1)
+})
+
+for (const [label, updatedAt, reason] of [
+  ['never edited', T0, undefined],
+  ['edited after it was posted', '2026-11-15T10:07:00Z', 'comment-edited'],
+  ['with no edit times to prove it', null, 'comment-edited'],
+]) {
+  test(`preparation waiver: a maintainer comment ${label} ⇒ ${reason ?? 'approved'}`, () => {
+    const dir = waiverRun()
+    const host = faithful({ 555: c('rucka', waiver()) }, { updatedAt })
+    const out = approveCorrection({ dir, decisionRef: URL555, repo: 'o/r', pr: 7, host })
+    assert.equal(out.reason, reason, JSON.stringify(out))
+    assert.equal(readApprovals(dir).length, reason ? 0 : 1)
+  })
+}

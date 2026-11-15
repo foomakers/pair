@@ -1778,6 +1778,9 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
     const adopted = resolveMaintainer({ dir })
     if (adopted.error) return { approved: false, reason: adopted.error }
     if (comment.authorLogin !== adopted.login) return { approved: false, reason: `author-not-authorized:${comment.authorLogin}` }
+    // The author is who CREATED the comment; anyone with write access can edit it. A decision is a comment never
+    // edited (to change it, post a new one) — and a host that cannot prove that gets no waiver (fail closed).
+    if (!comment.createdAt || comment.createdAt !== comment.updatedAt) return { approved: false, reason: 'comment-edited' }
     const last = list[list.length - 1]
     const review = list.filter(h => h.skill === 'review-phase').pop()
     if (last.skill !== 'red-spec' || last.phase !== c.phase || last.data.status !== 'unprovable' || !review) return { approved: false, reason: 'waiver-not-owed' }
@@ -1786,10 +1789,10 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
     // Bound to the refused attempt the maintainer saw: its attempt number and the head it was refused on.
     if (c.attempt !== last.attempt || c.inputHead !== last.data.inputHead) return { approved: false, reason: 'waiver-attempt-mismatch' }
     return withLock(dir, lockWaitMs, () => {
-      // One comment, one waiver. The comment's identity is the host's (repo, case-folded, + comment id), never the URL
-      // spelling (`/pull/` and `/issues/` name the same GitHub comment). The same comment on the SAME target is a
+      // One comment, one waiver. The comment's identity is the CANONICAL one the host returns (its repo, case-folded, +
+      // its numeric id), never the ref's text (`/pull/` vs `/issues/`, `-0555` vs `-555`, a renamed repo). The same comment on the SAME target is a
       // replay of this approval; on any other target — a newer attempt here, or any other run of this story — it is reuse.
-      const commentKey = `${String(repo ?? '').toLowerCase()}#${ref.id}`
+      const commentKey = `${String(comment.repo ?? repo ?? '').toLowerCase()}#${comment.id ?? (/^\d+$/.test(String(ref.id)) ? String(BigInt(ref.id)) : String(ref.id))}`
       const target = `${last.name}.attempt-${last.attempt}`
       const all = readApprovals(dir)
       const mine = all.find(a => a.kind === PREPARATION_WAIVER && a.commentKey === commentKey)
