@@ -130,4 +130,46 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
     expect(workflowProfileRequested({ workflowConfig: 'x' }, {})).toBe(true)
     expect(workflowProfileRequested({}, { workflowProfiles: { default: 'x' } })).toBe(true)
   })
+
+  it('maps a process-step marker and batch mode to the selected stage (AC-3)', async () => {
+    const { stageFor } = await import(join(SCRIPTS, 'workflow-profile.mjs'))
+    expect(stageFor({ skillText: '<!-- process-step: id=refine-story -->' })).toBe('refine-story')
+    expect(stageFor({ batchMode: 'triage' })).toBe('triage')
+    expect(stageFor({ skillText: '# Unmapped skill' })).toBe('defaults')
+  })
+
+  it('conditional sharing applies at the named risk tier, while verify stays fresh (AC-14)', () => {
+    write('conditional.json', {
+      name: 'conditional',
+      stages: {
+        implement: { context: { 'shared-with': 'prepare', when: { risk: 'yellow' } } },
+        verify: { context: 'fresh' },
+      },
+    })
+    const yellow = resolveWorkflowProfile(SCRIPTS, {
+      root,
+      workflowConfig: 'conditional.json',
+      tier: 'risk:yellow',
+    })
+    const red = resolveWorkflowProfile(SCRIPTS, {
+      root,
+      workflowConfig: 'conditional.json',
+      tier: 'risk:red',
+    })
+    expect(yellow.contextPolicy['prepare->implement']).toBe('reuse')
+    expect(red.contextPolicy['prepare->implement']).toBeUndefined()
+    expect(yellow.stages['verify']?.context.value).toBe('fresh')
+  })
+
+  it('rejects a validate sharing rule that includes red risk (AC-14)', () => {
+    write('unsafe.json', {
+      name: 'unsafe',
+      stages: {
+        validate: { context: { 'shared-with': 'prepare', when: { risk: ['yellow', 'red'] } } },
+      },
+    })
+    expect(() => resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'unsafe.json' })).toThrow(
+      /stages\.validate\.context.*risk:red.*fresh/,
+    )
+  })
 })

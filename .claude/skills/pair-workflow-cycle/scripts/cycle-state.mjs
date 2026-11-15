@@ -258,7 +258,11 @@ function loadResolvedContractSeverityRanks(repoRoot) {
 // subagent of the same role. The KB default is `fresh` on every transition (ADR-024: freeze the
 // baseline before optimizing). `reuse` is admissible only WITHIN one role — never into `validate`
 // or `verify`, whose whole value is an independent, blind verifier (ADR-017 §3, ADL 2026-07-11).
-export const CONTEXT_TABLE = { default: 'fresh', reuseAllowed: ['prepare->prepare', 'implement->green', 'green->green'] }
+const CONTEXT_STAGES = ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge', 'refine-story', 'plan-tasks', 'triage', 'classify']
+export const CONTEXT_TABLE = {
+  default: 'fresh',
+  reuseAllowed: CONTEXT_STAGES.flatMap(from => CONTEXT_STAGES.filter(to => to !== 'verify' && !(from === 'validate' && to === 'validate')).map(to => `${from}->${to}`)),
+}
 // Which cycle STEP a published handoff's skill played, so a transition can be named `from->to`.
 export const STEP_OF_SKILL = { 'red-spec': 'prepare', 'red-verify': 'validate', 'implement-phase': 'implement', 'green-fix': 'green', 'review-phase': 'verify' }
 // The agent ROLE each step runs as (ADR-024 §7: no new agent type, ever). `reuse` resumes the
