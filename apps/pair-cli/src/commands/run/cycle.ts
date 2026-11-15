@@ -77,6 +77,10 @@ export interface CycleOutcome {
   readonly escalation?: unknown
   /** The stage's own reason when it deliberately stopped the card (`failed`/`blocked` final result). */
   readonly reason?: string
+  /** AC-10: a process park (`awaiting-human`) names the parked step and fault; `pair run --card N` resumes it. */
+  readonly resumeToken?: string
+  /** r0-3: the park outlived every re-run resume — a re-run alone no longer resumes it. */
+  readonly resumesSpent?: true
 }
 
 export interface CyclePolicy {
@@ -125,15 +129,21 @@ export interface RunCycleInput {
    */
   readonly escalate?: (next: CycleNext) => Promise<unknown>
   /**
-   * A preparation refused for a dirty story worktree: stash the stray files and spend a recovery round. `true` ⇒
-   * the cause is cleared and `resolve` re-derives the step; `false` (budget spent, no worktree) ⇒ the card stays blocked.
+   * US-623 AC6: runs before a `prepare` dispatch beyond attempt 1 — stashes the files a failed attempt left, so they never
+   * block it; after a `dirty` / `stale` refusal (`next.refusal`) it runs that process recovery (worktree-clean / base-sync,
+   * merge only). `park`: the reason the card parks with, no dispatch (recovery spent, or the sync refused). `head`: the
+   * worktree HEAD the retry is dispatched on (a `stale` refusal means the HEAD is not the dispatched one — r2-3).
    */
-  readonly recoverDirty?: (next: CycleNext) => Promise<boolean>
-  /** US-623 AC6: runs before a `prepare` dispatch beyond attempt 1 — stashes the files a failed attempt left, so they never block it. */
-  readonly beforePrepare?: (next: CycleNext) => Promise<void>
+  readonly beforePrepare?: (next: CycleNext) => Promise<{ park?: string; head?: string } | void>
   /**
-   * A stage stopped for a transient cause (`RETRYABLE_STOPS`): spend a recovery round and re-dispatch it. `false`
-   * (budget spent) ⇒ the stop stands.
+   * r0-3: an explicit re-run whose first `resolve` is a spent process budget lifts it once (`recover --kind resume`).
+   * `resumed: false` ⇒ the park stands, carrying `detail` (the resumes are spent too).
+   */
+  readonly resumePark?: (next: CycleNext) => Promise<{ resumed: boolean; detail?: string }>
+  /**
+   * A process fault (`PROCESS_STOPS`: a stage's process reason, or a dispatch dead or stalled past its budget): spend a
+   * recovery round (and reset the group for a contract-identity fault), then re-dispatch. `false` (budget spent) ⇒ the
+   * card parks `awaiting-human` with a resume token — never `failed-<step>`.
    */
   readonly recoverStop?: (next: CycleNext, reason: string) => Promise<boolean>
   /** `--rounds` bound: a positive integer, `'max'` (unbounded) or omitted (policy default decides). */
@@ -177,6 +187,8 @@ interface LoopState {
   worktreePath: string | undefined
   /** US-575: the `next` a recovered merge stage last resumed from. */
   resumedFrom?: CycleNext
+  /** r0-3: this invocation already tried its one re-run resume. */
+  resumeTried?: boolean
 }
 
 function buildStageRecord(
@@ -281,6 +293,7 @@ function deliberateOutcome(
 ): CycleOutcome | null {
   const reason = deliberateStop(record.final)
   if (reason === undefined) return null
+  if (processKind(reason) !== undefined) return processPark(state, next, reason)
   observers.onNotice?.(
     `Stage ${record.step}${record.phase ? `:${record.phase}` : ''} stopped the card: ${reason} — not retried.`,
   )
@@ -338,7 +351,8 @@ function settlePreviousDispatch(
   const deliberate = deliberateOutcome(state, next, record, observers)
   if (deliberate !== null) return deliberate
   if (state.retryCount >= deadDispatchRetries) {
-    return { status: `failed-${state.dispatchedNext.step}`, stagesRun: state.stagesRun, next }
+    const fault = record.stalled === true ? 'idle-timeout' : 'dead-dispatch'
+    return processPark(state, next, fault)
   }
   state.retryCount += 1
   // US-506 T-8 (AC12): a stall is resumed within the SAME budget as a dead dispatch. A process
@@ -357,8 +371,63 @@ function roundsBoundReached(rounds: RunCycleInput['rounds'], next: CycleNext): b
   )
 }
 
+/**
+ * AC-9/AC-10: the `process` class of `cycle-state.mjs` `STOP_CATALOG` (a test pins the equality). A stage that stops
+ * for one of these is recovered within `autoRecoveryRounds` or parked — never `failed-<step>`.
+ */
+export const PROCESS_STOPS: ReadonlySet<string> = new Set([
+  'failed-seal',
+  'failed-verify',
+  'failed-resume',
+  'failed-publication',
+  'interrupted',
+  'dirty',
+  'stale',
+  'stale-write',
+  'parent-not-base',
+  'sealed-history-rewritten',
+  'contract-attempt-overwritten',
+  'contract-hash-mismatch',
+  'seal-not-pushed',
+  'dead-dispatch',
+  'idle-timeout',
+  'gate-flake',
+])
+
+/** The catalogued process fault a stop reason names (`contract-attempt-overwritten:<file>` ⇒ its kind), if any. */
+const processKind = (reason: string): string | undefined => {
+  const kind = reason.split(':', 1)[0] ?? ''
+  return PROCESS_STOPS.has(kind) ? kind : undefined
+}
+
+/** AC-10: a process fault's park — `awaiting-human` with the token naming the step and fault; recovery may lift it. */
+function processPark(
+  state: LoopState,
+  next: CycleNext,
+  fault: string,
+  detail: string = fault,
+): CycleOutcome {
+  // `next` is the step that did not advance (or is about to run): the parked step
+  const token = `${next.step}:${String(next.phase ?? 'run')}:${processKind(fault) ?? fault}`
+  return {
+    status: 'awaiting-human',
+    stagesRun: state.stagesRun,
+    next,
+    reason: detail,
+    resumeToken: token,
+  }
+}
+
 /** A terminal `next` (not one of the dispatchable steps), as the outcome it reports. */
 function terminalOutcome(next: CycleNext, stagesRun: number): CycleOutcome {
+  // AC-10: a process budget `resolve` itself found spent is a resumable park, never a terminal failure.
+  if (next.step === 'blocked' && next['budget'] === 'autoRecoveryRounds')
+    return {
+      status: 'awaiting-human',
+      stagesRun,
+      next,
+      resumeToken: `${String(next.phase ?? 'run')}:autoRecoveryRounds`,
+    }
   return {
     // US-521: `done` with a `target` is an `until: ready` stop, not a review-approved PR.
     status:
@@ -468,7 +537,10 @@ async function terminalOrResume(
   next: CycleNext,
   answer: CycleResolveAnswer,
 ): Promise<CycleOutcome | null> {
-  if (await recoveredDirty(input, state, next)) return null
+  const resumed = await resumedPark(input, state, next)
+  if (resumed === true) return null
+  if (resumed !== false)
+    return { ...terminalOutcome(next, state.stagesRun), reason: resumed, resumesSpent: true }
   const outcome = await terminalStep(input, state, next, answer)
   if (outcome.resume !== true || sameNext(state.resumedFrom, next)) return outcome
   state.resumedFrom = next
@@ -477,33 +549,34 @@ async function terminalOrResume(
   return null
 }
 
-/** Once per distinct `next` (never a spin): a dirty-worktree refusal the driver could clear. */
-async function recoveredDirty(
+/**
+ * r0-3: the first answer of an explicit re-run is a spent process budget — lift it once. `true` resumed, `false` not
+ * applicable, a string: the resumes are spent too (the park's true reason).
+ */
+async function resumedPark(
   input: RunCycleInput,
   state: LoopState,
   next: CycleNext,
-): Promise<boolean> {
-  if (next.step !== 'blocked' || next['refusal'] !== 'dirty' || input.recoverDirty === undefined)
+): Promise<boolean | string> {
+  if (next.step !== 'blocked' || next['budget'] !== 'autoRecoveryRounds') return false
+  if (state.stagesRun > 0 || state.resumeTried === true || input.resumePark === undefined)
     return false
-  if (sameNext(state.resumedFrom, next) || !(await input.recoverDirty(next))) return false
-  state.resumedFrom = next
-  state.dispatchedNext = null
-  return true
+  state.resumeTried = true
+  const out = await input.resumePark(next)
+  return out.resumed ? true : (out.detail ?? 'autoRecoveryRounds re-run resumes spent')
 }
 
-/** Stops whose cause is outside the stage's judgment and idempotent to redo (the seal push: a hook or the network failed). */
-const RETRYABLE_STOPS = new Set(['seal-not-pushed'])
-
-/** A deliberate stop for a transient cause, recovered: the next resolve re-dispatches the same step. */
+/** A process park, recovered: the next resolve re-dispatches the step, with a fresh dead-dispatch budget. */
 async function recoveredStop(
   input: RunCycleInput,
   state: LoopState,
   settled: CycleOutcome,
 ): Promise<boolean> {
   const { reason, next } = settled
-  if (reason === undefined || next === undefined || !RETRYABLE_STOPS.has(reason)) return false
+  if (settled.resumeToken === undefined || reason === undefined || next === undefined) return false
   if (input.recoverStop === undefined || !(await input.recoverStop(next, reason))) return false
   state.dispatchedNext = null
+  state.retryCount = 0
   return true
 }
 
@@ -516,9 +589,17 @@ const MERGE_RAN = new Set(['merged', 'merged-closure-unfinished'])
  * collaborator's (US-490: `cycle-merge.mjs` re-verifies its own conjunction) — never this loop.
  */
 /** US-623 AC6: a `prepare` beyond attempt 1 starts from a clean tree — except a `repair`, which works on its predecessor's untracked contract files. */
-async function cleanBeforePrepare(input: RunCycleInput, next: CycleNext): Promise<void> {
-  if (next.step === 'prepare' && next['mode'] !== 'repair' && Number(next['attempt']) > 1)
-    await input.beforePrepare?.(next)
+async function cleanBeforePrepare(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+): Promise<{ parked: CycleOutcome } | { dispatch: CycleNext }> {
+  if (next.step !== 'prepare' || next['mode'] === 'repair' || Number(next['attempt']) <= 1)
+    return { dispatch: next }
+  const out = await input.beforePrepare?.(next)
+  if (out?.park !== undefined)
+    return { parked: processPark(state, next, String(next['refusal'] ?? 'stale'), out.park) }
+  return { dispatch: out?.head !== undefined ? { ...next, base: out.head } : next }
 }
 
 /** US-573: tells the live-progress observer, if any, which stage is about to run. */
@@ -567,9 +648,10 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
 
-    await cleanBeforePrepare(input, next)
+    const prepared = await cleanBeforePrepare(input, state, next)
+    if ('parked' in prepared) return prepared.parked
     announce(input, next)
-    const stagePacket = await packet(next)
+    const stagePacket = await packet(prepared.dispatch)
     state.dispatchedResult = await spawnStage(withFormatCorrection(stagePacket, state))
     state.stagesRun += 1
     state.dispatchedNext = next

@@ -4,7 +4,8 @@
 #
 # Same harness as run-card.sh: only the two EXTERNAL processes are stood in for — the operator's
 # `gh` (the card) and the engine (`claude` on PATH: records how it was started, emits a success
-# terminal event and publishes NO handoff, a dead dispatch, so the cycle stops `failed-implement`).
+# terminal event and publishes NO handoff, a dead dispatch: a process fault, so after its recovery rounds the cycle
+# parks `awaiting-human` with a resume token — #646).
 # The hooks themselves are real shell commands: stage hooks (`pre-/post-<stage>`) run in the story
 # worktree `<worktreeRoot>/<story>`; cycle-level hooks (`pre-cycle`, `post-cycle`, `on-halt`) in the
 # main checkout.
@@ -89,9 +90,9 @@ reset_run() { rm -rf "$MAIN/.pair/working/runs" "$MAIN"/*.ran "$story_wt"/*.ran;
 ran_in_main() { [ -f "$1" ] && [ "$(wc -l <"$1" | tr -d ' ')" = "$2" ] && ! grep -vxF "$main_real" "$1" >/dev/null; }
 
 # ── 1. AC1/AC4/AC5: a passing pre-implement hook runs in the story worktree before the stage; the
-#    dead dispatch ends failed-implement, so on-halt (a failure path) and post-cycle run, once each,
-#    in the main checkout ─────
-log_info "Test 1: pre-cycle + pre-implement run, stage dispatched, failed-implement ⇒ on-halt + post-cycle"
+#    dead dispatch parks awaiting-human (#646: a process park is not a halt), so on-halt does NOT run and
+#    post-cycle runs once, in the main checkout ─────
+log_info "Test 1: pre-cycle + pre-implement run, stage dispatched, dead dispatch parks ⇒ post-cycle, no on-halt"
 policy '## Cycle Hooks
 
 - `pre-cycle`: `pwd -P >> pre-cycle.ran`
@@ -101,14 +102,14 @@ policy '## Cycle Hooks
 - `post-cycle`: `pwd -P >> post-cycle.ran`'
 reset_run
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
-assert_output_contains "Cycle status: failed-implement" || FAILED=1
+assert_output_contains "Cycle status: awaiting-human" || FAILED=1
 grep -q "/pair-workflow-implement-phase" "$ENGINE_LOG" || fail "the implement stage was never dispatched"
 [ -d "$story_wt" ] || fail "the story worktree was not created at $story_wt"
 [ "$(cat "$story_wt/pre-implement.ran" 2>/dev/null)" = "$(cd "$story_wt" 2>/dev/null && pwd -P)" ] || fail "pre-implement did not run in the story worktree ($story_wt)"
 [ ! -f pre-implement.ran ] || fail "pre-implement ran in the main checkout, not the story worktree"
 ran_in_main pre-cycle.ran 1 || fail "pre-cycle did not run exactly once in the main checkout"
 [ ! -f post-implement.ran ] && [ ! -f "$story_wt/post-implement.ran" ] || fail "post-implement ran although the stage's handoff never advanced"
-ran_in_main on-halt.ran 1 || fail "on-halt did not run exactly once in the main checkout on a failed-* stop"
+[ ! -f on-halt.ran ] || fail "on-halt ran on an awaiting-human process park (it runs only on a failed-*/escalate halt)"
 ran_in_main post-cycle.ran 1 || fail "post-cycle did not run exactly once in the main checkout"
 
 # ── 2. AC1: a failing pre-* HALTs the cycle before the stage dispatches, output verbatim ─────────
@@ -131,7 +132,7 @@ policy '## Max Parallelism
 3'
 reset_run
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
-assert_output_contains "Cycle status: failed-implement" || FAILED=1
+assert_output_contains "Cycle status: awaiting-human" || FAILED=1
 if grep -Eqi "## Cycle Hooks|hook key|hook " "$TMP_DIR/last_cmd_output.log"; then fail "output mentions hooks though none are declared"; fi
 
 log_info "Test 3b: typo'd hook key ⇒ unrecognized-key warning, the cycle still runs"
@@ -141,7 +142,7 @@ policy '## Cycle Hooks
 reset_run
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
 assert_output_contains "unrecognized hook key" || FAILED=1
-assert_output_contains "Cycle status: failed-implement" || FAILED=1
+assert_output_contains "Cycle status: awaiting-human" || FAILED=1
 
 if [ "$FAILED" -ne 0 ]; then
   echo "=== $TEST_NAME FAILED ==="

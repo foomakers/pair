@@ -30,6 +30,8 @@ test('verify breach: a snapshot whose parent is not the declared base, or which 
   git(cwd, 'commit', '-q', '--no-verify', '-m', `bad\n\n${trailerFor({ pr: PR, phase: PHASE, base, manifest })}`)
   const v = verify({ pr: PR, phase: PHASE, base, cwd })
   assert.deepEqual(v.breaches.map(b => b.code).sort(), ['parent-not-base', 'snapshot-carries-unlisted-file'])
+  // AC-13 (r0-6): the refusal names the sync step, so a rebased seal is never diagnosed by reading source
+  assert.match(v.breaches.find(b => b.code === 'parent-not-base').detail, /cycle-state\.mjs base-sync/)
   rmSync(cwd, { recursive: true, force: true })
 })
 
@@ -175,7 +177,7 @@ test('verify-chain: only an allow-listed breach code accepts a human override â€
   const r = verifyChain({ pr: PR, base, cwd, runDir })
   assert.equal(r.verified, false)
   assert.ok(
-    r.breaches.some(b => b.code === 'parent-not-base'),
+    r.breaches.some(b => b.code === 'parent-not-base' && /cycle-state\.mjs base-sync/.test(b.detail)),
     JSON.stringify(r.breaches),
   )
   assert.equal(r.overriddenBreaches, undefined)

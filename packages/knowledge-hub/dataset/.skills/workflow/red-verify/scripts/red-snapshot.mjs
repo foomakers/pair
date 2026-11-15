@@ -700,6 +700,8 @@ export function pushSnapshot({ snapshot, branch, cwd, remote = 'origin' }) {
   return remoteHead === outputHead ? { pushed: true, snapshot, outputHead, remoteHead, removedManifest } : { pushed: false, reason: 'push-not-confirmed', snapshot, outputHead, remoteHead, removedManifest }
 }
 
+// AC-13 (r0-6): a snapshot off its declared base is what a rebase of pushed sealed history leaves — name the sync step.
+const PARENT_NOT_BASE = 'the seal no longer sits on its declared base (rebased sealed history?): sync the base only by merge with `cycle-state.mjs base-sync`, never rebase; restore the history or post a maintainer reset comment'
 export function verify({ pr, phase, base, cwd }) {
   const breaches = []
   const breach = (code, extra = {}) => breaches.push({ code, ...extra })
@@ -709,7 +711,7 @@ export function verify({ pr, phase, base, cwd }) {
   if (matches.length > 1) return { verified: false, contractBreach: true, breaches: [{ code: 'snapshot-ambiguous', snapshots: matches }] }
   const snapshot = matches[0]
   const parent = git(['rev-parse', `${snapshot}^`], cwd)
-  if (parent !== base) breach('parent-not-base', { parent })
+  if (parent !== base) breach('parent-not-base', { parent, detail: PARENT_NOT_BASE })
 
   const manifestRaw = git(['show', `${snapshot}:${manifest}`], cwd, { allowFail: true })
   let contract = null
@@ -1127,7 +1129,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
   const contracts = []
   for (const [i, s] of snaps.entries()) {
     const parent = git(['rev-parse', `${s.sha}^`], cwd)
-    if (parent !== s.base) breach('parent-not-base', { phase: s.phase, parent })
+    if (parent !== s.base) breach('parent-not-base', { phase: s.phase, parent, detail: PARENT_NOT_BASE })
     if (i > 0 && git(['merge-base', '--is-ancestor', snaps[i - 1].sha, s.base], cwd, { allowFail: true }) === null) breach('successor-not-above-predecessor', { phase: s.phase })
     const raw = git(['show', `${s.sha}:${s.manifest}`], cwd, { allowFail: true })
     let contract = null

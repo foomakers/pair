@@ -83,6 +83,8 @@ async function drive(options: {
     worktree: { path: root, reused: true, created: false, branch: 'fixture' },
     packet: { step: 'implement', phase: 'a0', worktree: root, prompt: 'probe' },
     check: { mergeAllowed: false, reason: 'parked' },
+    // #646: a dead dispatch past its budget asks for a process round; spent ⇒ the card parks
+    recover: { allowed: false, round: 0, budget: 0 },
   }
   vi.spyOn(childProcess, 'spawnSync').mockImplementation((command, args) => {
     const argv = args as readonly string[]
@@ -152,7 +154,7 @@ it('AC-1 r0-3: dispatches rejected by resolve are failed and fully wasted', asyn
       next: implement,
     }),
   })
-  expect(outcome.status).toBe('failed-implement')
+  expect(outcome.status).toBe('awaiting-human')
   expect(readTelemetry(root, 'requested', '645').map(s => s['outcomeClass'])).toEqual([
     'failed',
     'failed',

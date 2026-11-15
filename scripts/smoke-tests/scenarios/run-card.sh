@@ -150,13 +150,14 @@ assert_output_contains "Known profiles: deep, fast" || FAILED=1
 rm -rf "$MAIN/profiles" "$MAIN/pair.config.json"
 
 # ── 4. AC1/AC10: a Ready card enters the real cycle at implement (US-506: no up-front contract);
-#    a dead dispatch ends failed-implement ─────────────────────────────────────────────────────
-log_info "Test 4: Ready card, --autonomous ⇒ transparency block, real scripts, failed-implement"
+#    a dead dispatch is a process fault: recovered under autoRecoveryRounds, then parked awaiting-human (#646) ─────────────────────────────────────────────────────
+log_info "Test 4: Ready card, --autonomous ⇒ transparency block, real scripts, dead dispatch parks awaiting-human"
 : >"$ENGINE_LOG"
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
 assert_output_contains "Worktree root: ../pair-worktrees" || FAILED=1
 assert_output_contains "Dispatch ceiling: none" || FAILED=1
-assert_output_contains "Cycle status: failed-implement" || FAILED=1
+assert_output_contains "Cycle status: awaiting-human" || FAILED=1
+assert_output_contains "resume token implement:a0:dead-dispatch" || FAILED=1
 grep -q "/pair-workflow-implement-phase" "$ENGINE_LOG" || fail "the implement stage was never dispatched"
 if grep -q "/pair-workflow-red-spec" "$ENGINE_LOG"; then fail "a fresh card dispatched a preparation before any code"; fi
 [ -d "$WORK/pair-worktrees/12" ] || fail "the story worktree was not created under the script's root"
