@@ -321,7 +321,7 @@ test('r3-15: Azure card closure and epic children follow the adopted Done state'
 
 // r4-18: ONE link grammar for the workflow selector and every code-host linkedPr.
 // r5-21: native links are `Closes/Fixes/Resolves #N` only (Maintainer Decision); `AB#N` links only through `Refs:`.
-const { prLinks } = await import('../../skills/pair-workflow-cycle/scripts/host/adapter-kit.mjs')
+const { prLinks, selectLink } = await import('../../skills/pair-workflow-cycle/scripts/host/adapter-kit.mjs')
 test('r4-18: prLinks is the single PR→card grammar (closing keywords, Refs incl. AB#, branch #N)', () => {
   const rows = [
     [{ body: 'Closes #42' }, { closes: ['42'], refs: [], branch: [] }],
@@ -395,4 +395,30 @@ test('r5-22: GitHub and Azure linkedPr ignore fork PRs', () => {
   const az = stubBin('az', { states: [], items: {}, prs }, AZ)
   const azCode = azure.instantiate({ azBin: az.bin, wayOfWorking: '' })
   assert.deepEqual(['50', '51'].map(id => azCode.linkedPr({ id, repo: 'Proj/app' })), ['none', 'open'])
+})
+
+// r6-23: exactly one card per PR, through the SAME selection the workflow uses; several distinct links
+// (two Refs, two closing keywords, native + Refs, branch + Closes) are ambiguous — no card at all.
+test('r6-23: selectLink picks exactly one card; linkedPr counts a PR only for that card', () => {
+  const cases = [
+    [{ body: 'Refs: ENG-1\nRefs: ENG-2' }, null],
+    [{ body: 'Closes #5\nRefs: 7' }, null],
+    [{ body: 'Closes #5\nFixes #6' }, null],
+    [{ body: 'Closes #5', branch: 'feature/#9-x' }, null],
+    [{ body: 'Refs: ENG 1; x' }, null],
+    [{ body: 'Closes #5\nRefs: #5', branch: 'feature/#5-x' }, { source: 'native', id: '5' }],
+    [{ body: 'Refs: ENG-1' }, { source: 'ref', id: 'ENG-1' }],
+    [{ branch: 'feature/#9-x' }, { source: 'native', id: '9' }],
+    [{ body: '' }, null],
+  ]
+  for (const [input, expected] of cases) assert.deepEqual(selectLink(prLinks(input)), expected, JSON.stringify(input))
+  const same = { repo: { full_name: 'owner/repo' } }
+  const pulls = cases.map(([input], n) => ({ number: n + 1, body: input.body ?? '', state: 'closed', merged_at: '2026-01-01', head: { ref: input.branch ?? 'x', ...same }, base: same }))
+  const gh = stubBin('gh', {}, `process.stdout.write(JSON.stringify(${JSON.stringify(pulls)})); process.exit(0)`)
+  const code = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') })
+  assert.deepEqual(['ENG-1', 'ENG-2', '5', '6', '7', '9'].map(id => code.linkedPr({ id, repo: 'owner/repo' })), ['merged', 'none', 'merged', 'none', 'none', 'merged'])
+  const prs = cases.map(([input]) => ({ description: input.body ?? '', status: 'completed', sourceRefName: `refs/heads/${input.branch ?? 'x'}` }))
+  const az = stubBin('az', { states: [], items: {}, prs }, AZ)
+  const azCode = azure.instantiate({ azBin: az.bin, wayOfWorking: '' })
+  assert.deepEqual(['ENG-1', 'ENG-2', '5', '6', '7', '9'].map(id => azCode.linkedPr({ id, repo: 'Proj/app' })), ['merged', 'none', 'merged', 'none', 'none', 'merged'])
 })

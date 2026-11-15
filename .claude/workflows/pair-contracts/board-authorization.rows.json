@@ -532,14 +532,12 @@
     "bindIdentities": true
   },
   {
-    "id": "r1-g2-reference-refs-branch-trusted",
+    "id": "r6-23-refs-branch-ambiguous",
     "body": "Refs: #73",
     "branch": "feature/#91-work",
-    "story": 91,
     "role": "write",
     "fork": false,
-    "allow": true,
-    "bindIdentities": true
+    "allow": false
   },
   {
     "id": "r1-g2-reference-refs-branch-denied",
@@ -601,11 +599,10 @@
     "allow": true
   },
   {
-    "id": "r0-8-refs-native-wins",
+    "id": "r6-23-native-plus-refs-ambiguous",
     "role": "write",
     "body": "Closes #42\nRefs: ENG-7",
-    "story": "42",
-    "allow": true
+    "allow": false
   },
   {
     "id": "r0-8-refs-unresolved",
@@ -675,6 +672,27 @@
         "board-unconfigured"
       ]
     },
+    "allow": true
+  },
+  {
+    "id": "r6-23-two-closes-ambiguous",
+    "role": "write",
+    "body": "Closes #42\nFixes #43",
+    "allow": false
+  },
+  {
+    "id": "r6-23-branch-closes-ambiguous",
+    "role": "write",
+    "body": "Closes #42",
+    "branch": "feature/#43-work",
+    "allow": false
+  },
+  {
+    "id": "r6-23-same-card-twice",
+    "role": "write",
+    "body": "Closes #42\nRefs: #42",
+    "branch": "feature/#42-work",
+    "story": "42",
     "allow": true
   }
 ]
