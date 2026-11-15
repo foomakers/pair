@@ -579,6 +579,7 @@
 - [Template Resolution](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)
 - [To-Issues Triage (Extend vs Create)](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)
 - [Way-of-Working / PM-Tool + Code-Host Resolution](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)
+- [Workflow profile host gaps](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/workflow-host-gaps.md)
 - [Process Step Catalogue](.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md)
 - [Coding Standards](.pair/knowledge/guidelines/technical-standards/coding-standards/README.md)
 - [Error Handling Standards](.pair/knowledge/guidelines/technical-standards/coding-standards/error-handling.md)

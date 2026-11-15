@@ -9,10 +9,28 @@ import { fileURLToPath } from 'node:url'
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
-import { validateProfile, effectiveStage, resolveProfile, bindProfile, describeProfile, profileContextPolicy, ProfileError, STAGES, KB_DEFAULT } from '../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs'
+import { validateProfile, effectiveStage, resolveProfile, bindProfile, describeProfile, profileContextPolicy, gapsForHost, ProfileError, STAGES, KB_DEFAULT } from '../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs'
 import { CONTEXT_TABLE, publish, resolve, effectiveInputs } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 const errorsOf = p => validateProfile(p).errors
+
+test('#617 AC-10: host gaps name each conflicting stage, model and executable remedy', () => {
+  const root = project({ files: { 'p.json': { name: 'p', modelClasses: { cheap: 'claude-haiku-4-5' }, stages: { prepare: { engine: 'claude', model: 'cheap' }, verify: { engine: 'codex', model: 'gpt-6-luna' } } } } })
+  const resolved = resolveProfile({ root, workflowConfig: 'p.json' })
+  const gaps = gapsForHost(resolved, 'claude', '617')
+  assert.deepEqual(gaps.map(g => g.stage), ['verify'])
+  assert.match(gaps[0].wanted, /codex.*gpt-6-luna/)
+  assert.match(gaps[0].command, /pair run --card 617 --workflow-config/)
+  assert.deepEqual(gapsForHost(resolved, 'unknown').map(g => g.stage), [...STAGES, 'defaults'])
+})
+
+test('#617 AC-10: in-session entry skills require a host-gap check before dispatch', () => {
+  for (const skill of ['pair-workflow-cycle', 'pair-process-refine-story', 'pair-process-plan-tasks']) {
+    const body = readFileSync(new URL(`../../skills/${skill}/SKILL.md`, import.meta.url), 'utf8')
+    assert.match(body, /workflow-host-gaps\.md/)
+    assert.match(body, /before (?:any |in-session )?dispatch/i)
+  }
+})
 
 // ── T-1: shape + validator (AC1, AC5) ────────────────────────────────────────────────────────
 test('T-1/AC1: a minimal {name, defaults} profile is valid and needs no stages', () => {
