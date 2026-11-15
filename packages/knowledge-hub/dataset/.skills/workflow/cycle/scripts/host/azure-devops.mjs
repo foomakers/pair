@@ -12,9 +12,12 @@
 //              whose source commit is the verified head — the exact-head rule of pr-states.md.
 //   labels     PR labels (tags), the same `pr-state:*` vocabulary pr-states.md defines.
 // Limitations, stated rather than hidden: `merge` supports `squash` and `merge` (no `rebase` flag on
-// `az repos pr update`); `createCard` creates a `User Story` (the Agile process type — a Scrum
-// project's `Product Backlog Item` is not selected automatically); `closeAndCascade` writes the
-// caller's Done-mapped state literal (default `Done`), per canonical-states.md.
+// `az repos pr update`); `createCard` creates the adopted `## Work Item Type Mapping` User Story type,
+// else `User Story`; `listCards` enumerates that type, else both default story types (Scrum `Product
+// Backlog Item`, Agile `User Story`); `closeAndCascade` writes the caller's Done-mapped state literal
+// (default `Done`), per canonical-states.md, and `closeCard` the `## State Mapping` Done state (else
+// `Done`) or the native `Removed`. Board membership is the adopted `Area path:` (a work item outside it is
+// absent from the team's board; membership writes `--area`), else implicit.
 // Scope-decision marker: System.Description is an HTML long-text field — WIQL allows only Contains
 // Words / Not Contains Words / Is Empty / Is Not Empty on it, and the hidden `<!-- pair:scope-decision:<hex> -->`
 // comment is not guaranteed to survive the service's HTML save. So `createCard` also writes the
@@ -29,7 +32,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, stateMapOf, prLinks, resolveLinked } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const CHECK_GENRE = 'pair'
@@ -50,6 +53,14 @@ const STATE_FROM_AZ = { succeeded: 'success', failed: 'failure', pending: 'pendi
 // REST api-versions per resource (Azure DevOps REST 7.1 reference).
 const API = { pullRequestThreads: '7.1', pullRequestThreadComments: '7.1', pullRequestIterations: '7.1', pullRequestStatuses: '7.1-preview.1', pullRequestLabels: '7.1-preview.1', pullRequests: '7.1' }
 
+const DEFAULT_STORY_TYPES = ['Product Backlog Item', 'User Story']
+const areaOf = text => /`azure-area-path`\s*:\s*`([^`]+)`/.exec(text)?.[1] ?? /\bArea path:\s*(.+?)\.?[ \t]*$/m.exec(text)?.[1] ?? null
+const storyTypeOf = text => {
+  const section = /^##\s+Work Item Type Mapping\s*$([\s\S]*?)(?=^##\s|$(?![\s\S]))/m.exec(text)?.[1] ?? ''
+  return section.split('\n').map(l => l.split('|').map(x => x.trim())).find(c => c.length > 3 && c[1] === 'User Story' && c[2])?.[2] ?? null
+}
+const wiqlString = s => `'${String(s).replace(/'/g, "''")}'`
+
 const splitRepo = repo => {
   const [project, repository] = String(repo ?? '').split('/')
   return { project: project || undefined, repository: repository || undefined }
@@ -64,6 +75,14 @@ export default defineAdapter({
     const bin = transport.azBin || process.env.PAIR_AZ_BIN || 'az'
     const az = args => runCli({ bin, args, label: 'az' })
     const azJson = (args, what) => parseJson(az([...args, '--output', 'json']), { command: `az ${what}` })
+    const adoption = transport.wayOfWorking ?? adoptionText(process.cwd())
+    const area = areaOf(adoption)
+    const storyType = storyTypeOf(adoption)
+    const doneState = stateMapOf(adoption).done ?? 'Done'
+    const inArea = wi => {
+      const path = String(wi?.fields?.['System.AreaPath'] ?? '')
+      return !area || path === area || path.startsWith(`${area}\\`)
+    }
 
     // `az devops invoke` — a body travels through a private temp file (`--in-file`), never argv.
     const invoke = ({ resource, repo, route = {}, method = 'GET', body }) => {
@@ -99,7 +118,10 @@ export default defineAdapter({
       const hex = String(wi?.fields?.['System.Tags'] ?? '').split(';').map(t => TAG_RE.exec(t.trim())?.[1]).find(Boolean)
       return hex ? `<!-- pair:scope-decision:${hex.toLowerCase()} -->${body}` : body
     }
-    const asCard = wi => ({ number: wi?.id, url: cardUrl(wi), title: wi?.fields?.['System.Title'], body: bodyOf(wi) })
+    const asCard = wi => {
+      const state = wi?.fields?.['System.State'] ?? null
+      return { number: wi?.id, url: cardUrl(wi), title: wi?.fields?.['System.Title'], body: bodyOf(wi), state: state === doneState || state === 'Removed' ? 'CLOSED' : 'OPEN', stateReason: state === 'Removed' ? 'NOT_PLANNED' : state === doneState ? 'COMPLETED' : null, projectItems: state && inArea(wi) ? [{ status: { name: state } }] : [] }
+    }
     const relatedIds = (wi, rel) => (wi?.relations ?? []).filter(r => r.rel === rel).map(r => Number(/\/workItems\/(\d+)$/i.exec(String(r.url))?.[1])).filter(Number.isInteger)
 
     const prShow = pr => azJson(['repos', 'pr', 'show', '--id', String(pr)], 'repos pr show')
@@ -173,15 +195,70 @@ export default defineAdapter({
         const rows = azJson(['boards', 'query', '--wiql', wiql], 'boards query')
         return (Array.isArray(rows) ? rows : []).map(asCard)
       },
+      listCards({ repo }) {
+        const { project } = splitRepo(repo)
+        const types = storyType ? [storyType] : DEFAULT_STORY_TYPES
+        const where = `[System.WorkItemType] IN (${types.map(wiqlString).join(', ')})${project ? ` AND [System.TeamProject] = ${wiqlString(project)}` : ''}`
+        const rows = azJson(['boards', 'query', '--wiql', `SELECT [System.Id] FROM WorkItems WHERE ${where}`], 'boards query')
+        return (Array.isArray(rows) ? rows : []).map(row => ({ id: String(row.id) }))
+      },
+      linkedPr({ id, repo }) {
+        const { project, repository } = splitRepo(repo)
+        const scope = [...(project ? ['--project', project] : []), ...(repository ? ['--repository', repository] : [])]
+        const rows = azJson(['repos', 'pr', 'list', '--status', 'all', ...scope], 'repos pr list')
+        // Same-repository PRs only (Maintainer Decision): a PR from a fork (`forkSource`) never links a card.
+        const state = pr => (pr.status === 'completed' ? 'merged' : pr.status === 'active' ? 'open' : pr.status === 'abandoned' ? 'closed-unmerged' : 'unknown')
+        return resolveLinked((Array.isArray(rows) ? rows : []).filter(pr => !pr.forkSource).map(pr => ({ number: pr.pullRequestId, links: prLinks({ body: pr.description, branch: pr.sourceRefName }), state: state(pr) })), id)
+      },
       createCard({ repo, title, body }) {
         const { project } = splitRepo(repo)
         const hex = MARKER_RE.exec(String(body ?? ''))?.[1]
-        const wi = azJson(['boards', 'work-item', 'create', '--type', CARD_TYPE, '--title', title, '--description', body, ...(project ? ['--project', project] : []), ...(hex ? ['--fields', `System.Tags=${markerTag(hex)}`] : [])], 'boards work-item create')
+        const wi = azJson(['boards', 'work-item', 'create', '--type', storyType ?? CARD_TYPE, '--title', title, '--description', body, ...(project ? ['--project', project] : []), ...(hex ? ['--fields', `System.Tags=${markerTag(hex)}`] : [])], 'boards work-item create')
         return { url: cardUrl(wi) }
       },
       updateCard({ id, body }) {
         azJson(['boards', 'work-item', 'update', '--id', cardId(id), '--description', body], 'boards work-item update')
         return { id }
+      },
+      ensureBoardMembership({ id }) {
+        try {
+          const wi = showCard(id)
+          if (!area) return { confirmed: true, implicit: true }
+          if (!inArea(wi)) azJson(['boards', 'work-item', 'update', '--id', cardId(id), '--area', area], 'boards work-item update')
+          const confirmed = inArea(showCard(id))
+          return { confirmed, error: confirmed ? null : `read-back: work item ${id} is outside area ${area}` }
+        } catch (e) {
+          return { confirmed: false, error: e.message }
+        }
+      },
+      setBoardState({ id, state }) {
+        try {
+          const before = showCard(id)?.fields?.['System.State']
+          if (before !== state) azJson(['boards', 'work-item', 'update', '--id', cardId(id), '--state', state], 'boards work-item update')
+          const now = showCard(id)?.fields?.['System.State']
+          return { applied: state, confirmed: now === state, error: now === state ? null : `read-back: state is ${JSON.stringify(now)}` }
+        } catch (e) {
+          return { applied: state, confirmed: false, error: e.message }
+        }
+      },
+      closeCard({ id, reason }) {
+        const state = reason === 'merged' ? doneState : reason === 'unmerged' ? 'Removed' : null
+        return state ? this.setBoardState({ id, state }) : { confirmed: false, error: `unknown close reason ${JSON.stringify(reason)}` }
+      },
+      syncEpic({ id }) {
+        try {
+          const parent = relatedIds(showCard(id, 'relations'), 'System.LinkTypes.Hierarchy-Reverse')[0]
+          if (parent === undefined) return { confirmed: false, gap: 'parent-absent', error: `work item ${id} has no parent` }
+          const children = relatedIds(showCard(parent, 'relations'), 'System.LinkTypes.Hierarchy-Forward').map(child => ({ id: String(child), closed: showCard(child)?.fields?.['System.State'] === doneState }))
+          const before = bodyOf(showCard(parent))
+          const next = updateEpicBody(before, children)
+          if (next.trimEnd() !== before.trimEnd()) azJson(['boards', 'work-item', 'update', '--id', String(parent), '--description', next], 'boards work-item update')
+          const after = bodyOf(showCard(parent))
+          const confirmed = updateEpicBody(after, children).trimEnd() === after.trimEnd()
+          return { confirmed, parent, changed: next.trimEnd() !== before.trimEnd(), error: confirmed ? null : `read-back: epic ${parent} checklist differs` }
+        } catch (e) {
+          return { confirmed: false, gap: 'epic-sync-failed', error: e.message }
+        }
       },
       // US-523: Azure Boards labels are work-item tags (`System.Tags`, `;`-separated) — added once, READ BACK.
       // Reported, never thrown, like the board write.
@@ -216,8 +293,8 @@ export default defineAdapter({
       },
       // Recursive Parent Cascade Logic (azure-devops-implementation.md): the card takes the Done
       // state; a parent whose children are ALL in it takes it too, up the hierarchy.
-      closeAndCascade({ id, doneState = 'Done' }) {
-        const setDone = n => azJson(['boards', 'work-item', 'update', '--id', String(n), '--state', doneState], 'boards work-item update')
+      closeAndCascade({ id, doneState: target = doneState }) {
+        const setDone = n => azJson(['boards', 'work-item', 'update', '--id', String(n), '--state', target], 'boards work-item update')
         setDone(cardId(id))
         const closed = [Number(cardId(id))]
         let child = Number(cardId(id))
@@ -225,7 +302,7 @@ export default defineAdapter({
           const parent = relatedIds(showCard(child, 'relations'), 'System.LinkTypes.Hierarchy-Reverse')[0]
           if (parent === undefined) return { closed, stoppedAt: null }
           const children = relatedIds(showCard(parent, 'relations'), 'System.LinkTypes.Hierarchy-Forward')
-          if (children.some(c => showCard(c)?.fields?.['System.State'] !== doneState)) return { closed, stoppedAt: parent }
+          if (children.some(c => showCard(c)?.fields?.['System.State'] !== target)) return { closed, stoppedAt: parent }
           setDone(parent)
           closed.push(parent)
           child = parent

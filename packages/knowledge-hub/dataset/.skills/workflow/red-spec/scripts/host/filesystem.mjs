@@ -16,11 +16,11 @@
 // the kit's runCli (ADR-026 amendment 2026-10-24); no credential exists.
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
-import { defineAdapter, assertCardId, runCli, upsertByMarker, HostError } from './adapter-kit.mjs'
+import { defineAdapter, assertCardId, runCli, upsertByMarker, HostError, updateEpicBody } from './adapter-kit.mjs'
 
 export const BACKLOG_REL = join('.pair', 'adoption', 'product', 'backlog')
-export const STATE_FOLDERS = ['not-started', 'in-progress', 'under-review', 'completed']
-const FOLDER_OF = { todo: 'not-started', backlog: 'not-started', refined: 'not-started', ready: 'not-started', 'not-started': 'not-started', 'in-progress': 'in-progress', 'in-review': 'under-review', 'under-review': 'under-review', review: 'under-review', done: 'completed', completed: 'completed' }
+export const STATE_FOLDERS = ['not-started', 'in-progress', 'under-review', 'completed', 'not-planned']
+const FOLDER_OF = { todo: 'not-started', backlog: 'not-started', refined: 'not-started', ready: 'not-started', 'not-started': 'not-started', 'in-progress': 'in-progress', 'in-review': 'under-review', 'under-review': 'under-review', review: 'under-review', done: 'completed', completed: 'completed', 'not-planned': 'not-planned' }
 const COMMENTS = '<!-- pair-comments -->'
 const STATUS_RE = /^\*\*Status\*\*:[^\n]*$/m
 const LABELS_RE = /^\*\*Labels\*\*:([^\n]*)$/m
@@ -119,7 +119,7 @@ export default defineAdapter({
       writeFileSync(file, head.replace(/\n*$/, '\n') + renderComments(comments))
     }
     const bodyOf = head => `${head.replace(STATUS_RE, '').replace(LABELS_RE, '').replace(/\n{3,}/g, '\n\n').trimEnd()}\n`
-    const closed = c => basename(dirname(c.file)) === 'completed' || norm(statusOf(c.head)) === 'done'
+    const closed = c => ['completed', 'not-planned'].includes(basename(dirname(c.file))) || ['done', 'not-planned'].includes(norm(statusOf(c.head)))
     const view = c => ({
       id: c.id,
       number: c.id,
@@ -128,7 +128,7 @@ export default defineAdapter({
       body: bodyOf(c.head),
       labels: labelsOf(c.head).map(name => ({ name })),
       state: closed(c) ? 'CLOSED' : 'OPEN',
-      stateReason: closed(c) ? 'COMPLETED' : null,
+      stateReason: closed(c) ? (norm(statusOf(c.head)) === 'not-planned' ? 'NOT_PLANNED' : 'COMPLETED') : null,
       closedAt: closed(c) ? statSync(c.file).mtime.toISOString() : null,
       // the board item, in the code-host --json dialect every consumer already reads
       projectItems: statusOf(c.head) ? [{ status: { name: statusOf(c.head) } }] : [],
@@ -178,6 +178,9 @@ export default defineAdapter({
           .map(f => view(load(idOf(f))))
           .map(({ number, url, title, body }) => ({ number, url, title, body }))
       },
+      listCards() {
+        return files().filter(f => relative(backlog, f).split(/[\\/]/).includes('03-user-stories')).map(f => ({ id: /^(?:\d+(?:-\d+){2}|[A-Za-z]+-\d+)/.exec(idOf(f))?.[0] ?? idOf(f) }))
+      },
       updateCard({ id, body }) {
         const c = load(id)
         let head = String(body ?? '')
@@ -213,6 +216,34 @@ export default defineAdapter({
           return writeState(load(id), state)
         } catch (e) {
           return { applied: state, confirmed: false, error: e.message }
+        }
+      },
+      ensureBoardMembership({ id }) {
+        try {
+          load(id)
+          return { confirmed: true, implicit: true }
+        } catch (e) {
+          return { confirmed: false, error: e.message }
+        }
+      },
+      closeCard({ id, reason }) {
+        const state = reason === 'merged' ? 'Done' : reason === 'unmerged' ? 'Not planned' : null
+        return state ? this.setBoardState({ id, state }) : { confirmed: false, error: `unknown close reason ${JSON.stringify(reason)}` }
+      },
+      syncEpic({ id }) {
+        try {
+          const child = cardId(id)
+          const parent = child.includes('-') ? child.slice(0, child.lastIndexOf('-')) : null
+          if (!parent || !locate(parent, { optional: true })) return { confirmed: false, gap: 'parent-absent', error: `card ${id} has no parent` }
+          const children = this.listCards().filter(card => card.id.startsWith(`${parent}-`)).map(card => ({ id: card.id, closed: this.readCard(card.id, { fields: ['state'] }).state === 'CLOSED' }))
+          const before = this.readCard(parent, { fields: ['body'] }).body
+          const next = updateEpicBody(before, children)
+          if (next.trimEnd() !== before.trimEnd()) this.updateCard({ id: parent, body: next })
+          const after = this.readCard(parent, { fields: ['body'] }).body
+          const confirmed = updateEpicBody(after, children).trimEnd() === after.trimEnd()
+          return { confirmed, parent, changed: next.trimEnd() !== before.trimEnd(), error: confirmed ? null : `read-back: epic ${parent} checklist differs` }
+        } catch (e) {
+          return { confirmed: false, gap: 'epic-sync-failed', error: e.message }
         }
       },
       commentOnCard({ id, marker, body }) {
@@ -260,6 +291,7 @@ export default defineAdapter({
 
       // ── code side: never this adapter's (hostsCode: false) ──
       prHead: codeSide('prHead'),
+      linkedPr: codeSide('linkedPr'),
       upsertComment: codeSide('upsertComment'),
       concludeCheck: codeSide('concludeCheck'),
       setPrState: codeSide('setPrState'),

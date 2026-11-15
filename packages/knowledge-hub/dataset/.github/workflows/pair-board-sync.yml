@@ -1,0 +1,54 @@
+name: Pair board sync
+
+on:
+  issues:
+    types: [opened, labeled]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, closed]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  created:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add story to board
+        env:
+          GH_TOKEN: ${{ secrets.PAIR_PROJECT_TOKEN || github.token }}
+          STORY: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          is_story=$(node -e 'const fs=require("fs"); const e=require(process.env.GITHUB_EVENT_PATH); const w=fs.readFileSync(".pair/adoption/tech/way-of-working.md","utf8"); const label=/`story-label`\s*:\s*`([^`]+)`/.exec(w)?.[1]; const labels=e.issue.labels.map(x=>x.name); process.stdout.write(String(/^## Story Statement\s*$/m.test(e.issue.body??"") || Boolean(label && labels.includes(label))))')
+          if [ "$is_story" != true ]; then echo 'Issue is not a configured story'; exit 0; fi
+          result=$(node .claude/skills/pair-workflow-cycle/scripts/board-transition.mjs --story "$STORY" --pr-state none --repo "$REPO")
+          echo "$result"
+          skipped=$(echo "$result" | jq -r 'select(.confirmed != true) | .skipped // empty')
+          if [ -n "$skipped" ]; then echo "::notice::Board sync skipped: $skipped"; exit 0; fi
+          echo "$result" | jq -e '.confirmed == true'
+
+  pr-state:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Align story after PR change
+        env:
+          GH_TOKEN: ${{ secrets.PAIR_PROJECT_TOKEN || github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          selection=$(node .claude/skills/pair-workflow-cycle/scripts/board-event.mjs)
+          if [ -z "$selection" ]; then echo 'No linked story; nothing to sync'; exit 0; fi
+          read -r source story <<< "$selection"
+          require=()
+          if [ "$source" = ref ]; then require=(--require-card); fi
+          # The card's state follows every PR linking it (code host), not this event's PR alone.
+          result=$(node .claude/skills/pair-workflow-cycle/scripts/board-transition.mjs --story "$story" --pr-state linked --repo "$REPO" "${require[@]}")
+          echo "$result"
+          skipped=$(echo "$result" | jq -r 'select(.confirmed != true) | .skipped // empty')
+          if [ -n "$skipped" ]; then echo "::notice::Board sync skipped: $skipped"; exit 0; fi
+          echo "$result" | jq -e '.confirmed == true'
