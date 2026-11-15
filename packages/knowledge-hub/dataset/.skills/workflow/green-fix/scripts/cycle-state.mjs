@@ -118,7 +118,7 @@ export const CYCLE_STATUSES = ['in-progress', 'completed', 'blocked', 'escalated
 // determines which budget is charged; resume is the command or recorded intervention that
 // returns control to the same run. Specific process fault codes override a broader failed status.
 export const STOP_CATALOG = [
-  { status: 'failed-preparation', class: 'finding', resume: 'pair run --card <card>' },
+  { status: 'failed-preparation', class: 'finding', resume: 'pair run --card <card>; an `unprovable` refusal: a maintainer preparation-waiver comment + approve-correction, or a hand fix that moves the PR head' },
   // pair run's own stage stops (`failed-<step>`): a stage that refused on purpose for a non-process reason.
   { status: 'failed-prepare', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-validate', class: 'finding', resume: 'pair run --card <card>' },
@@ -1691,6 +1691,10 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer, workflowVers
 // on the bytes. Persisted idempotently (keyed by decisionRef) in `owner-approvals.json`; `resolve` routes
 // the successor preparation once, and the revision line advancing is what consumes it.
 export const APPROVALS_FILE = 'owner-approvals.json'
+// The same verified channel, one more bounded act: waive the findings a remediation preparation refused as
+// `unprovable` (no RED witness exists — e.g. a non-causal flake). It binds to that exact refused attempt
+// (`target`), routes one re-review that carries the waiver, and touches no seal, no custody, no merge gate.
+export const PREPARATION_WAIVER = 'preparation-waiver'
 export const readApprovals = dir => {
   try {
     const a = JSON.parse(readFileSync(join(dir, APPROVALS_FILE), 'utf8'))
@@ -1708,6 +1712,12 @@ export function parseCorrectionComment(body) {
   } catch {
     return { error: 'invalid-json' }
   }
+  if (p && typeof p === 'object' && p.schemaVersion === 1 && p.kind === PREPARATION_WAIVER) {
+    if (typeof p.phase !== 'string' || !phaseParts(p.phase.trim())?.groupId) return { error: 'phase-invalid' }
+    if (!Array.isArray(p.findings) || !p.findings.length || p.findings.some(f => typeof f !== 'string' || !f.trim())) return { error: 'findings-invalid' }
+    for (const k of ['story', 'reason']) if (typeof p[k] !== 'string' || !p[k].trim()) return { error: `${k}-missing` }
+    return { value: { kind: PREPARATION_WAIVER, story: p.story.trim(), pr: Number(p.pr), phase: p.phase.trim(), findings: [...new Set(p.findings)].sort(), reason: p.reason.trim() } }
+  }
   if (!p || typeof p !== 'object' || p.schemaVersion !== 1 || p.kind !== 'contract-correction') return { error: 'not-a-contract-correction' }
   if (!/^sha256:[0-9a-f]{64}$/.test(String(p.predecessorContractHash ?? ''))) return { error: 'predecessorContractHash-invalid' }
   if (!Array.isArray(p.rows) || !p.rows.length || p.rows.some(r => typeof r !== 'string' || !r.trim())) return { error: 'rows-invalid' }
@@ -1718,7 +1728,7 @@ export function parseCorrectionComment(body) {
 // contract of its succession line (a stale approval, the line moved on, never routes anything).
 function pendingCorrection(list, approvals, predecessors = []) {
   for (const a of approvals) {
-    if (a.status !== 'approved') continue
+    if (a.status !== 'approved' || a.kind === PREPARATION_WAIVER) continue
     const target = resolveSealedContract({ handoffs: list, predecessors, contractHash: a.predecessorContractHash })
     const line = target && !target.error ? successionLineOf(target.phase) : null
     if (!line) continue
@@ -1761,6 +1771,20 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
   const story = String(list[list.length - 1].data.story ?? '')
   if (c.story !== story) return { approved: false, reason: 'story-mismatch' }
   if (c.pr !== Number(pr)) return { approved: false, reason: 'pr-mismatch' }
+  if (c.kind === PREPARATION_WAIVER) {
+    const last = list[list.length - 1]
+    const review = list.filter(h => h.skill === 'review-phase').pop()
+    if (last.skill !== 'red-spec' || last.phase !== c.phase || last.data.status !== 'unprovable' || !review) return { approved: false, reason: 'waiver-not-owed' }
+    const held = new Set(last.data.findings?.received ?? [])
+    if (c.findings.some(id => !held.has(id))) return { approved: false, reason: 'waiver-findings-unknown' }
+    return withLock(dir, lockWaitMs, () => {
+      const all = readApprovals(dir)
+      if (all.some(a => a.decisionRef === decisionRef)) return { approved: true, reason: 'already-applied' }
+      const record = { decisionRef, status: 'approved', actor: comment.authorLogin, at: (now instanceof Date ? now : new Date(now)).toISOString(), ...c, target: `${last.name}.attempt-${last.attempt}` }
+      writeFileSync(join(dir, APPROVALS_FILE), JSON.stringify([...all, record], null, 2))
+      return { approved: true, record }
+    })
+  }
   const predecessors = predecessorEvidence(dir)
   const target = resolveSealedContract({ handoffs: list, predecessors, contractHash: c.predecessorContractHash })
   if (!target || target.error) return { approved: false, reason: 'predecessor-not-sealed', detail: target?.error }
@@ -2713,6 +2737,7 @@ export function acAssessmentErrors(data) {
 const isBlocking = f => f && f.blocking === true && f.transition !== 'resolved' && f.nonActionable !== true
 // Preparation refusals whose cause lies outside the cycle: a later dispatch can succeed unchanged.
 const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
+const CONTRACT_REFUSALS = new Set(PREPARE_REFUSALS.filter(r => !EXTERNAL_REFUSALS.has(r)))
 // A contract file that exists but no longer hashes to what its preparation recorded (an absent file proves nothing).
 const contractBytesChanged = (cp, hash) => {
   if (!cp || !existsSync(cp)) return false
@@ -3564,7 +3589,9 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // Persist the observed head so a stage-local resolve (without --head) gets the same dispatch.
   const movedReview = recovery.movedReviews?.[failureId]
   const priorReview = handoffs.filter(h => h.skill === 'review-phase').pop()
-  const unsealedFailure = last.skill === 'red-verify' && last.data.verified !== true && last.data.sealed !== true
+  // A preparation the author refused on the contract itself (`unprovable`, `split-required`) sealed nothing either: an
+  // out-of-cycle commit (a human's hand fix) moves the head past it the same way — re-review, never re-prepare.
+  const unsealedFailure = (last.skill === 'red-verify' && last.data.verified !== true && last.data.sealed !== true) || (last.skill === 'red-spec' && CONTRACT_REFUSALS.has(last.data.status))
   const priorBlocking = (priorReview?.data.findings ?? []).filter(isBlocking)
   const humanHeld = priorReview?.data.needsHumanDecision === true || (priorBlocking.length > 0 && priorBlocking.every(f => f.external === true))
   if (unsealedFailure && priorReview && !humanHeld && !ledger.some(r => r.state === 'active') && cycleCounters(handoffs).spentCycles < (policy.maxFixRounds ?? POLICY_DEFAULTS.maxFixRounds)) {
@@ -3589,6 +3616,13 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
       cycleCounters(handoffs).spentCycles >= maxFix
         ? blocked('escalate', { budget: 'maxFixRounds', needsHuman: `maxFixRounds (${maxFix}) spent — the merge gate is still red: a human decides`, findings })
         : { step: 'prepare', mode: 'remediation', phase: `r${round}-g1`, round, attempt: 1, base: gateRed.reviewedHead, findings }
+  }
+  // A maintainer's verified waiver of THIS unprovable preparation: re-review with the waived findings closed by the human.
+  const waiver = last.skill === 'red-spec' && last.data.status === 'unprovable' && priorReview && readApprovals(dir).find(a => a.kind === PREPARATION_WAIVER && a.status === 'approved' && a.target === failureId)
+  if (waiver) {
+    const round = Math.max(phaseParts(last.phase)?.round ?? 0, phaseParts(priorReview.phase)?.round ?? 0) + 1
+    const waived = new Set(waiver.findings)
+    next = withActiveGuards({ step: 'verify', mode: 're-review', phase: `r${round}`, round, attempt: 1, base: priorReview.data.reviewedHead, prior: priorReview.name, openIds: priorBlocking.map(f => f.id).filter(id => !waived.has(id)), priorFindings: [...new Map(handoffs.filter(h => h.skill === 'review-phase').flatMap(r => (r.data.findings ?? []).filter(f => f?.id).map(f => [f.id, { id: f.id, severity: f.severity }]))).values()], waived: waiver.findings.map(id => ({ id, decisionRef: waiver.decisionRef, actor: waiver.actor, reason: waiver.reason })), ...(next.headMoved ? { headMoved: true } : {}) }, ledger.filter(r => r.state === 'active'))
   }
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated

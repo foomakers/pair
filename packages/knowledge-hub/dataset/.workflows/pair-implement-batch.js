@@ -964,6 +964,8 @@ const NEXT_SCHEMA = {
     verdict: { type: 'string' },
     prior: { type: 'string' },
     openIds: { type: 'array', items: { type: 'string' } },
+    // a maintainer's verified preparation-waiver: findings the re-review records as human-dispositioned
+    waived: { type: 'array', items: { type: 'object' } },
     headMoved: { type: 'boolean' },
     inputsChanged: { type: 'boolean' },
     invalidated: { type: 'array', items: { type: 'string' } },
@@ -1934,7 +1936,7 @@ async function driveStoryInner(story) {
     agentRetry(
       invoke(
         SK.reviewPhase,
-        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${CONTRACT.status === 'unresolved' ? ` $contractSpec=${JSON.stringify(contractSpecArg())}` : ''}`,
+        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.waived?.length ? ` $waived=${JSON.stringify(n.waived)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${CONTRACT.status === 'unresolved' ? ` $contractSpec=${JSON.stringify(contractSpecArg())}` : ''}`,
       ),
       withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Verify', label: `verify:${tag} ${n.phase}${n.reviewer > 1 ? ` reviewer ${n.reviewer}` : ''}`, effort: 'xhigh', schema: VERIFY_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasReviewEvidence(r),

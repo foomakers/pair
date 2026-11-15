@@ -6,7 +6,11 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { resolve, approveCorrection, readApprovals } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+
+const DISPATCH = fileURLToPath(new URL('../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs', import.meta.url))
 
 const V = '4.0.1'
 const SHA = c => c.repeat(40)
@@ -75,4 +79,46 @@ test('AC-4: a second approval while one is pending is a conflict; one for a pred
   assert.equal(approve(dir, 3, { 3: c('rucka', body({ delta: 'other' })) }).reason, 'conflicting-approval')
   put(dir, 'a0-rev2', 'red-spec', { status: 'red', contractPath: join(dir, 'x.json'), contractHash: `sha256:${'d'.repeat(64)}` })
   assert.equal(approve(dir, 4, { 4: c('rucka', body({ delta: 'late' })) }).reason, 'stale-predecessor')
+})
+
+// A preparation refused `unprovable` on a non-causal flake (e.g. Vitest's onTaskUpdate RPC timeout) has no
+// RED witness to write and no commit to make: the maintainer's verified waiver is the only way on.
+const waiverRun = () => {
+  const dir = runDir()
+  const f = id => ({ id, severity: 'Major', blocking: true, transition: 'open', kind: 'defect', location: 'a', description: 'd', recommendation: 'r' })
+  put(dir, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [f('r0-1'), f('r0-2')], custody: { contractBreach: false }, readiness: { ready: false } })
+  put(dir, 'r1-g1', 'red-spec', { status: 'unprovable', mode: 'remediation', inputHead: SHA('c'), findings: { received: ['r0-1'] }, reason: 'vitest onTaskUpdate timeout, not caused by the code' })
+  return dir
+}
+const waiver = (over = {}) => '```json\n' + JSON.stringify({ schemaVersion: 1, kind: 'preparation-waiver', story: '42', pr: 7, phase: 'r1-g1', findings: ['r0-1'], reason: 'flake, not causal', ...over }) + '\n```'
+
+test('preparation waiver: a verified maintainer waiver of an `unprovable` preparation routes a re-review carrying the waived findings, once', () => {
+  const dir = waiverRun()
+  assert.deepEqual([go(dir).next.step, go(dir).next.reason], ['blocked', 'failed-preparation'])
+  const out = approve(dir, 5, { 5: c('rucka', waiver()) })
+  assert.equal(out.approved, true, JSON.stringify(out))
+  const next = go(dir).next
+  assert.deepEqual([next.step, next.mode, next.phase, next.openIds], ['verify', 're-review', 'r2', ['r0-2']])
+  assert.deepEqual(next.waived, [{ id: 'r0-1', decisionRef: 'pr7#c-5', actor: 'rucka', reason: 'flake, not causal' }])
+  // the reviewer is handed the waiver, never left to re-raise what the human closed
+  const packet = spawnSync(process.execPath, [DISPATCH, 'packet', '--next', JSON.stringify(next), '--card', JSON.stringify({ id: '42', branch: 'feature/US-42-x', title: 't', prNumber: 7 }), '--run', 'story-42', '--workflow-version', V], { encoding: 'utf8' })
+  assert.equal(packet.status, 0, packet.stdout + packet.stderr)
+  assert.match(JSON.parse(packet.stdout).prompt, /\$waived=\[\{"id":"r0-1","decisionRef":"pr7#c-5"/)
+  assert.equal(approve(dir, 5, { 5: c('rucka', waiver()) }).reason, 'already-applied')
+})
+
+test('preparation waiver: refused — not the maintainer, a finding the refusal did not hold, no unprovable tail; nothing recorded, nothing routed', () => {
+  const dir = waiverRun()
+  const cases = [
+    [c('mallory', waiver()), 'author-not-authorized:mallory'],
+    [c('rucka', waiver(), 'Bot'), 'author-not-a-user'],
+    [c('rucka', waiver({ findings: ['r0-2'] })), 'waiver-findings-unknown'],
+    [c('rucka', waiver({ phase: 'r1-g2' })), 'waiver-not-owed'],
+    [c('rucka', waiver({ findings: [] })), 'findings-invalid'],
+  ]
+  for (const [comment, reason] of cases) assert.equal(approve(dir, 6, { 6: comment }).reason, reason)
+  assert.deepEqual(readApprovals(dir), [])
+  assert.equal(go(dir).next.reason, 'failed-preparation')
+  // a run whose tail is not an unprovable preparation owes no waiver
+  assert.equal(approve(runDir(), 7, { 7: c('rucka', waiver()) }).reason, 'waiver-not-owed')
 })
