@@ -250,11 +250,16 @@ export function buildCardProcessArgs(
     ...(config.autonomous ? ['--autonomous'] : []),
     ...(config.approveProjectTrust ? ['--approve-project-trust'] : []),
     ...(config.approveIneligible ? ['--approve-ineligible'] : []),
+    ...telemetryArgv(config),
     ...autonomyArgv(config),
     ...(config.profile !== undefined ? ['--profile', config.profile] : []),
     ...(config.workflowConfig !== undefined ? ['--workflow-config', config.workflowConfig] : []),
     ...timeoutArgv(config),
   ]
+}
+
+function telemetryArgv(config: RunCommandConfig): string[] {
+  return config.telemetry === undefined ? [] : [config.telemetry ? '--telemetry' : '--no-telemetry']
 }
 
 /** US-573: the timeouts travel to each child only when the operator passed them (the child resolves the rest). */
@@ -338,6 +343,10 @@ export function optionsOfArgv(args: readonly string[]): Record<string, string | 
   for (let i = 0; i < args.length; i++) {
     const flag = args[i]!
     if (!flag.startsWith('--')) continue
+    if (flag === '--no-telemetry') {
+      options['telemetry'] = false
+      continue
+    }
     const key = flag.slice(2).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
     const value = args[i + 1]
     if (value !== undefined && !value.startsWith('--')) {

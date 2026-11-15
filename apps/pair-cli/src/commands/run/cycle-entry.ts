@@ -17,6 +17,7 @@ import {
   type CycleScriptsLocation,
 } from './cycle-scripts'
 import { createDefaultCycleDriver, mainCheckout, mainCheckoutOrCwd } from './cycle-wiring'
+import { telemetryEnabled } from './telemetry-policy'
 import { createConsoleSink, routeConsoleTo } from './run-renderer'
 import type { RunEvent } from './run-events'
 import {
@@ -239,6 +240,7 @@ function productionCycleDriver(
     idleTimeoutSeconds: context.idleTimeout.seconds,
     workflowVersion: defaults.workflowVersion,
     baseBranch: defaults.baseBranch,
+    telemetryEnabled: telemetryEnabled(mainCheckout(cwd), config.telemetry),
     model: declaredEngineModel(context.config, driver.engineDef.id),
     ...(driver.profile !== undefined && {
       profile: driver.profile,

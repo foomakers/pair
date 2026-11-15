@@ -11,6 +11,7 @@ import type { EngineDefinition, SkillInvocationStyle } from './engines'
 import { buildEngineArgs, type SpawnIterationInput } from './spawn'
 import type { IterationResult } from './stream-reader'
 import type { CycleStageResult } from './cycle'
+import { observeEngineEvent, type EngineObservation } from './telemetry'
 
 /** One rendered stage packet — `cycle-dispatch.mjs packet`'s own output shape. */
 export interface StagePacket {
@@ -61,6 +62,8 @@ export interface RunStageInput {
 
 /** Wiring only: spawns the packet's own prompt, returns the stream's outcome (never a rebuilt prompt). */
 export async function runStage(input: RunStageInput): Promise<CycleStageResult> {
+  let telemetry: EngineObservation = {}
+  let sawEvent = false
   const result = await input.runIteration({
     engine: input.engine,
     promptText: input.packet.prompt,
@@ -70,12 +73,19 @@ export async function runStage(input: RunStageInput): Promise<CycleStageResult> 
     ...(input.effort !== undefined && { effort: input.effort }),
     timeoutSeconds: input.timeoutSeconds,
     idleTimeoutSeconds: input.idleTimeoutSeconds,
-    ...(input.onEvent !== undefined && { onEvent: input.onEvent }),
+    onEvent: payload => {
+      sawEvent = true
+      telemetry = observeEngineEvent(telemetry, input.engine.id, payload)
+      input.onEvent?.(payload)
+    },
   })
   return {
     processOutcome: result.outcome,
     ...(result.detail !== undefined && { detail: result.detail }),
     ...(result.stalled === true && { stalled: true as const }),
     ...(result.final !== undefined && { final: result.final }),
+    ...(sawEvent
+      ? { telemetry: { ...telemetry, tokens: telemetry.tokens ?? 'not measured' } }
+      : {}),
   }
 }
