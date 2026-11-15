@@ -39,7 +39,7 @@
     "test-audit:prepush": "pnpm --filter @pair/dev-tools test-audit:prepush",
     "test-audit:mutation": "pnpm --filter @pair/dev-tools test-audit:mutation",
     "test-audit:redundancy": "pnpm --filter @pair/dev-tools test-audit:redundancy",
-    "quality-gate": "node scripts/dev/parallel.mjs \"turbo ts:check test lint\" \"pnpm workflows:test\" \"pnpm format:check\" && pnpm dev-scripts:test && pnpm gate:composition && pnpm hygiene:check && pnpm smoke-modes:check && pnpm docs:staleness && pnpm skills:conformance && pnpm llms-index:check && pnpm dup:check",
+    "quality-gate": "turbo ts:check test lint --concurrency=1 && pnpm workflows:test && pnpm format:check && pnpm dev-scripts:test && pnpm gate:composition && pnpm hygiene:check && pnpm smoke-modes:check && pnpm docs:staleness && pnpm skills:conformance && pnpm llms-index:check && pnpm dup:check",
     "e2e": "pnpm --filter @pair/website e2e",
     "smoke-tests": "./scripts/smoke-tests/run-all.sh --cleanup",
     "format": "pnpm prettier:fix && pnpm mdlint:fix",
