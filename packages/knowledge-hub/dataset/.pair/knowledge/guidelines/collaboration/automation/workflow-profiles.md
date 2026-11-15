@@ -1,6 +1,6 @@
 # Workflow Profiles — engine, model, effort and context per delivery-cycle stage
 
-A **workflow profile** declares which engine, model, effort level and context policy each stage of the delivery cycle (`prepare`, `validate`, `implement`, `green`, `verify`, `contract`, `merge`) uses — so `prepare`/`green` can run on a cheap model with a resumed session while `validate`/`verify` run on a frontier one with a fresh session, without touching any skill or script.
+A **workflow profile** declares which engine, model, effort level and context policy each stage of the delivery cycle (`prepare`, `validate`, `implement`, `green`, `verify`, `contract`, `merge`, plus the routing stages `refine-story`, `plan-tasks`, `triage`, `classify`) uses — so `contract`/`classify` can run on a cheap model while `verify` runs on a stronger one with a fresh session, without touching any skill or script.
 
 It is consumed by both realizations of the cycle through **one** resolver, `workflow-profile.mjs` (shipped beside `pair-workflow-cycle`'s scripts): the in-session coordinator runs it, and `pair-cli run --card` spawns it. Neither reimplements the cascade, the validation or the model-class lookup.
 
@@ -93,22 +93,29 @@ The resolved profile's **name and content hash** are recorded in every handoff (
 | `effort` | passed through the engine adapter: Codex `-c model_reasoning_effort=<level>`, Claude `--effort <level>`; recorded only when no effort flag is declared | the packet's `--profile` effort: enforced for Codex, a prompt request for Claude |
 | `context` | `reuse` is reported and run fresh (the driver spawns a new process per stage) | honoured as `next.context` |
 
+## Stages
+
+| Stage | Role | Wired |
+| --- | --- | --- |
+| `prepare`, `validate`, `implement`, `green`, `verify`, `contract`, `merge` | the delivery cycle | yes |
+| `refine-story`, `plan-tasks`, `triage`, `classify` | the routing stages of #617 (AC-3) | **declared, not wired** — accepted and resolved, but nothing dispatches on them until #617 implements the routing |
+
+The four routing ids are valid in a profile today so profiles need no migration when #617 lands. `reuse` is never admissible into them (`CONTEXT_TABLE` lists no transition into them): they always run fresh. Shipped profiles set them from the affine cycle stage of the same profile: `refine-story` ≈ `prepare` (at least `balanced`), `plan-tasks` ≈ `prepare`, `classify` and `triage` ≈ `contract` (the profile's cheapest model). A profile with no override (`claude-high`, `codex-high`, `codex-cheap` for `classify`/`triage`) inherits `defaults`.
+
 ## Example
 
-The `claude-cheap` profile above is the shipped example, a **pilot** and never active by default. A sample sits at `.pair/adoption/tech/workflow-profiles/claude-cheap.json`; to use it, pass `--profile claude-cheap` and register the glob `"workflowProfiles": { "files": ".pair/adoption/tech/workflow-profiles/*.json" }` in `pair.config.json` — do **not** set it as `default`.
+Six profiles ship under `.pair/adoption/tech/workflow-profiles/` as samples; register the glob `"workflowProfiles": { "files": ".pair/adoption/tech/workflow-profiles/*.json" }` in `pair.config.json` and pass `--profile <name>`, or set `default`. This project's default is `codex-medium`; `medium` is the reference level.
 
-### Recommended stage → model mapping (pilot)
+| Profile | Defaults | Notable overrides |
+| --- | --- | --- |
+| `claude-cheap` | balanced, medium | `contract`, `green`, `merge`, `classify`, `triage` cheap; `verify` balanced/high; `prepare`, `green` `reuse` |
+| `claude-medium` | balanced, medium | `contract`, `merge`, `classify`, `triage` cheap; `verify` frontier/high |
+| `claude-high` | frontier, high | none |
+| `codex-cheap` | engine default, low | `verify` high; `prepare`, `implement`, `refine-story`, `plan-tasks` medium |
+| `codex-medium` | `gpt-6-sol`, medium | `contract`, `validate`, `verify`, `classify`, `triage` `gpt-6-astra` (`verify` high); `merge` low |
+| `codex-high` | `gpt-6-astra`, high | `implement`, `green` `gpt-6-sol` |
 
-| Stage / role | Model class | Id (`*-5-5`) | Note |
-| --- | --- | --- | --- |
-| contract | cheap | `claude-haiku-5-5` | contract-derivation phase |
-| relay (batch/loop `models.relay`) | cheap | `claude-haiku-5-5` | pure script relays only (never the merge run, which judges gates, nor per-card state classification); the batch default |
-| green on `doc` groups | cheap | `claude-haiku-5-5` | PILOT — measure custody/review pass rate against sonnet |
-| selection, implement, green on behavioral groups | balanced | `claude-sonnet-5-5` | |
-| prepare, validate, verify | frontier | `claude-opus-5-5` | independent judgment stages |
-| post-merge closure (`merge`) | balanced | `claude-sonnet-5-5` | |
-
-**Pilot status.** A profile cannot tell a `doc` group from a behavioral one, so `claude-cheap` puts the whole `green` stage on the cheap class: use it only for doc-only cards, and run behavioral cards on a profile with `green: balanced`. **Success criterion:** doc-group GREEN by Haiku passes review on the first round in at least 2 of 3 cards; otherwise return to `balanced`.
+`claude-cheap` is a cost pilot: it puts the whole `green` stage on the cheap class, so use it for doc-only cards and run behavioral cards on `claude-medium` or above. Success criterion: doc-group GREEN by Haiku passes review on the first round in at least 2 of 3 cards; otherwise return to `balanced`.
 
 ## Refusals
 
