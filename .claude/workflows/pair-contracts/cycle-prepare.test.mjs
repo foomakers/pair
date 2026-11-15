@@ -432,7 +432,7 @@ const fakeBins = new Map()
 const stateOf = bin => JSON.parse(readFileSync(fakeBins.get(bin), 'utf8'))
 
 // ── review r2: the full CLI over a stubbed `gh` (PAIR_GH_BIN) — nothing here can reach a real tracker ─────────────
-// A tracker in a file: the card's labels/body, its board and its comment thread. Self-contained (it is stringified).
+// A tracker in a file: the card's labels/body, its board (titled as this repo's adopted project) and its comment thread. Self-contained (it is stringified).
 const GH = (args, st, input) => {
   const a = args.join(' ')
   if (args[0] === 'issue' && args[1] === 'view') return a.includes('--json body') ? st.body : JSON.stringify({ labels: st.labels.map(name => ({ name })) })
@@ -447,7 +447,7 @@ const GH = (args, st, input) => {
   if (args[0] === 'api' && args.includes('graphql')) {
     const q = args.find(x => x.startsWith('query='))
     if (q.includes('mutation')) return JSON.stringify({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { fieldValueByName: { name: 'Ready' } } } } })
-    return JSON.stringify({ data: { repository: { issue: { projectItems: { nodes: [{ id: 'I', project: { id: 'P', title: 'B', fields: { nodes: [{ id: 'F', name: 'Status', options: [{ id: 'O', name: 'Ready' }] }] } } }] } } } } })
+    return JSON.stringify({ data: { repository: { issue: { projectItems: { nodes: [{ id: 'I', project: { id: 'P', title: 'pair', fields: { nodes: [{ id: 'F', name: 'Status', options: [{ id: 'O', name: 'Ready' }] }] } } }] } } } } })
   }
   if (args[0] === 'api' && args.includes('POST')) return JSON.stringify({ id: 1, html_url: 'u' })
   if (args[0] === 'api') return '[]'

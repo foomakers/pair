@@ -382,7 +382,7 @@ function epicCliWorld(t, form) {
   writeFileSync(stub, `import { appendFileSync } from 'node:fs'
 const a = process.argv.slice(2)
 appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
-if (a[0] === 'api' && a.includes('--paginate') && a.some(s => s.includes('/pulls?'))) process.stdout.write(JSON.stringify([{ title: 'Fixture', body: 'Refs: ${entry.id}', state: 'closed', merged_at: '2026-01-01' }]))
+if (a[0] === 'api' && a.some(s => s.includes('/pulls?'))) process.stdout.write(JSON.stringify([{ title: 'Fixture', body: 'Refs: ${entry.id}', state: 'closed', merged_at: '2026-01-01' }]))
 else if (a[0] === 'api' && a.some(s => s.endsWith('/labels'))) process.stdout.write('[]')
 else if (a[0] === 'pr' && a[1] === 'view' && a.includes('mergedAt')) process.stdout.write(JSON.stringify({ mergedAt: '2026-01-01' }))
 else { process.stderr.write('fixture refuses unsupported gh request'); process.exitCode = 1 }
@@ -505,7 +505,7 @@ async function repairCliWire(statePath, tool) {
     if (a[0] === 'api' && a.some(s => s.includes('/issues?'))) return out([{ number: Number(state.id), body: storyBody }])
     if (a[0] === 'issue' && a[1] === 'view') {
       if (a.includes('-q')) return out(a[2] === state.parent ? state.body : storyBody)
-      return out({ state: 'CLOSED', stateReason: 'COMPLETED', projectItems: [{ status: { name: state.board } }], labels: [], body: storyBody })
+      return out({ state: 'CLOSED', stateReason: 'COMPLETED', projectItems: [{ title: 'Fixture', status: { name: state.board } }], labels: [], body: storyBody })
     }
     if (a[0] === 'issue' && a[1] === 'edit' && a.includes('--body')) return updateBody(a[2], opt('--body'))
     if (a[0] === 'issue' && a[1] === 'close') { if (a[2] !== state.id) throw Error('unrelated close'); return }

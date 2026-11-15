@@ -970,7 +970,7 @@ test('CLI: a usage error is exit 2 with a JSON error, before any host call', () 
 // ── the two new PM-side adapter methods ────────────────────────────────────────────────────────
 test('github.setBoardState: variables never interpolated; read back from the mutation payload; every refusal typed in the result', () => {
   const gh = fakeGh()
-  const a = github.instantiate({ ghBin: gh.bin })
+  const a = github.instantiate({ ghBin: gh.bin, projectTitle: 'Board' })
   const ok = a.setBoardState({ id: 42, state: 'Done', repo: 'o/r' })
   assert.deepEqual(ok, { applied: 'Done', confirmed: true, error: null })
   const mutation = gh.calls().find(c => c.some(x => x.startsWith('query=mutation')))
@@ -987,7 +987,7 @@ test('github.setBoardState: variables never interpolated; read back from the mut
 
 test('github.commentOnCard: a marker-keyed create on the card thread; a re-run edits in place', () => {
   const gh = fakeGh()
-  const a = github.instantiate({ ghBin: gh.bin })
+  const a = github.instantiate({ ghBin: gh.bin, projectTitle: 'Board' })
   const r = a.commentOnCard({ id: 42, marker: '<!-- m -->', body: 'hello', repo: 'o/r' })
   assert.equal(r.action, 'created')
   assert.ok(
@@ -1003,7 +1003,7 @@ test('github.readCheckRun: the most recent run of the name; in-flight is pending
     `#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ check_runs: [{ name: 'pair-explicit-approval', status: 'completed', conclusion: 'failure', started_at: '2026-01-01' }, { name: 'pair-explicit-approval', status: 'completed', conclusion: 'success', started_at: '2026-01-02' }, { name: 'other', status: 'completed', conclusion: 'failure', started_at: '2026-01-03' }] }))\n`,
   )
   chmodSync(bin, 0o755)
-  const a = github.instantiate({ ghBin: bin })
+  const a = github.instantiate({ ghBin: bin, projectTitle: 'Board' })
   assert.equal(
     a.readCheckRun({ sha: SHA('a'), repo: 'o/r', context: 'pair-explicit-approval' }),
     'success',
@@ -1025,7 +1025,7 @@ test('r1-g1-w1: runMerge hands the adapter merge the reviewed head as headSha', 
 
 test('r1-g1-w2: github.merge with headSha pins the merge: --match-head-commit <headSha>', () => {
   const gh = fakeGh()
-  const a = github.instantiate({ ghBin: gh.bin })
+  const a = github.instantiate({ ghBin: gh.bin, projectTitle: 'Board' })
   assert.deepEqual(
     a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm', headSha: SHA('a') }),
     { merged: true, pr: 7, strategy: 'squash' },
@@ -1035,7 +1035,7 @@ test('r1-g1-w2: github.merge with headSha pins the merge: --match-head-commit <h
 
 test('r1-g1-w3: github.merge refuses a malformed headSha before any gh call', () => {
   const gh = fakeGh()
-  const a = github.instantiate({ ghBin: gh.bin })
+  const a = github.instantiate({ ghBin: gh.bin, projectTitle: 'Board' })
   for (const headSha of ['', 'abc', SHA('A'), `${SHA('a')} --admin`, 42])
     assert.throws(
       () => a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm', headSha }),
@@ -1047,7 +1047,7 @@ test('r1-g1-w3: github.merge refuses a malformed headSha before any gh call', ()
 
 test('r1-g1-c1: github.merge without headSha keeps the unpinned argv (the adapter interface stays backward compatible)', () => {
   const gh = fakeGh()
-  const a = github.instantiate({ ghBin: gh.bin })
+  const a = github.instantiate({ ghBin: gh.bin, projectTitle: 'Board' })
   a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm' })
   assert.deepEqual(mergeCall(gh), [
     'pr',
@@ -1289,7 +1289,7 @@ process.stdout.write(''); process.exit(0)
 
 test('D6: updateCard without --repo resolves the slug (gh repo view) and never passes an empty/undefined --repo', () => {
   const gh = recGh()
-  const h = github.instantiate({ ghBin: gh.bin })
+  const h = github.instantiate({ ghBin: gh.bin, projectTitle: 'Board' })
   h.updateCard({ repo: undefined, id: 493, body: 'b' })
   const edit = gh.calls().find(c => c[0] === 'issue' && c[1] === 'edit')
   assert.equal(edit[edit.indexOf('--repo') + 1], 'o/r', JSON.stringify(gh.calls()))
@@ -1297,7 +1297,7 @@ test('D6: updateCard without --repo resolves the slug (gh repo view) and never p
 
 test('D6: updateCard with an explicit repo uses it and does not look it up', () => {
   const gh = recGh()
-  github.instantiate({ ghBin: gh.bin }).updateCard({ repo: 'x/y', id: 1, body: 'b' })
+  github.instantiate({ ghBin: gh.bin, projectTitle: 'Board' }).updateCard({ repo: 'x/y', id: 1, body: 'b' })
   assert.deepEqual(
     gh.calls().map(c => c.slice(0, 2).join(' ')),
     ['issue edit'],
@@ -1307,7 +1307,7 @@ test('D6: updateCard with an explicit repo uses it and does not look it up', () 
 
 test('D6: an unresolvable repo fails closed with a clear message BEFORE any write', () => {
   const gh = recGh({ viewFails: true })
-  const h = github.instantiate({ ghBin: gh.bin })
+  const h = github.instantiate({ ghBin: gh.bin, projectTitle: 'Board' })
   assert.throws(
     () => h.updateCard({ repo: undefined, id: 1, body: 'b' }),
     /repo.*(resolve|--repo)/i,
@@ -1320,7 +1320,7 @@ test('D6: an unresolvable repo fails closed with a clear message BEFORE any writ
 
 test('D7: github deleteBranch deletes the ref through the API (no git push), a missing ref is "gone"', () => {
   const gh = recGh()
-  const h = github.instantiate({ ghBin: gh.bin })
+  const h = github.instantiate({ ghBin: gh.bin, projectTitle: 'Board' })
   assert.deepEqual(h.deleteBranch({ branch: 'feature/US-42-x', repo: 'o/r' }), { deleted: true })
   assert.deepEqual(gh.calls()[0], [
     'api',
