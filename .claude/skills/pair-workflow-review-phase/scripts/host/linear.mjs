@@ -5,6 +5,8 @@
 //   id        the issue identifier `<TEAM>-<n>` (`ENG-123`), or its `linear.app/<ws>/issue/ENG-123/…` URL
 //   team      `- \`linear-team\`: \`ENG\`` (or `Team: ENG.`) in way-of-working.md; an issue of another
 //             team is refused naming both. No team declared ⇒ no team check, and createCard is refused.
+//   board     the team view, or the project named by `- \`linear-project\`: \`<name>\`` (or `Project: <name>.`):
+//             then an issue outside that project is not a board member, and membership sets its `projectId`.
 //   state     a Linear workflow state of the issue's team; `setBoardState` accepts a board state or a
 //             macrostate, translated through `## State Mapping` (first row whose Macrostate matches).
 //   labels    issue labels; comments: issue comments, marker-keyed (upsertByMarker).
@@ -13,9 +15,7 @@
 // The API key (ADR-026 amendment 2026-10-25): `$LINEAR_API_KEY` is expanded by the child shell into
 // the request header on fd 3 — this file never reads, stores, prints or passes it as argv; absent ⇒ the child
 // exits 64 and the call fails `host-unconfigured`, naming the variable.
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { defineAdapter, runCli, parseJson, upsertByMarker, HostError } from './adapter-kit.mjs'
+import { defineAdapter, runCli, parseJson, upsertByMarker, HostError, updateEpicBody, adoptionText, stateMapOf } from './adapter-kit.mjs'
 
 export const API_URL = 'https://api.linear.app/graphql'
 export const TOKEN_VAR = 'LINEAR_API_KEY'
@@ -31,24 +31,10 @@ const URL_RE = /^https:\/\/linear\.app\/[^/]+\/issue\/([A-Za-z][A-Za-z0-9_]*-\d+
 const MAX_COMMENT_CHARS = 65536
 const fail = (kind, message, method) => new HostError(kind, { message: `linear: ${message}`, ...(method ? { method } : {}) })
 
-const ISSUE = 'id identifier url title description completedAt state { name type } team { id key } labels { nodes { id name } }'
+const ISSUE = 'id identifier url title description completedAt state { name type } team { id key } labels { nodes { id name } } project { id name }'
 
-// way-of-working.md, found upward from `from` (the adapter is self-contained: no import of index.mjs).
-const adoptionText = from => {
-  for (let cur = from; ; cur = dirname(cur)) {
-    const f = join(cur, '.pair', 'adoption', 'tech', 'way-of-working.md')
-    if (existsSync(f)) return readFileSync(f, 'utf8')
-    if (dirname(cur) === cur) return ''
-  }
-}
 const teamOf = text => (/`linear-team`\s*:\s*`([^`]+)`/.exec(text)?.[1] ?? /\bTeam:\s*([A-Za-z][A-Za-z0-9_]*)\b/.exec(text)?.[1])?.toUpperCase() ?? null
-// `## State Mapping` rows → { macrostate (lower-case) → board state }, first row wins.
-const stateMapOf = text => {
-  const section = /^##\s+State Mapping\s*$([\s\S]*?)(?=^##\s|$(?![\s\S]))/m.exec(text)?.[1] ?? ''
-  const map = {}
-  for (const c of section.split('\n').map(l => l.split('|').map(x => x.trim()))) if (c.length > 3 && c[1] && !/^-+$/.test(c[1]) && !(c[2].toLowerCase() in map)) map[c[2].toLowerCase()] = c[1]
-  return map
-}
+const projectOf = text => /`linear-project`\s*:\s*`([^`]+)`/.exec(text)?.[1] ?? /\bTeam:[^\n]*?\bProject:\s*([^.\n]+?)\s*(?:\.|$)/m.exec(text)?.[1] ?? null
 const sleep = ms => ms > 0 && Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 
 export default defineAdapter({
@@ -61,6 +47,8 @@ export default defineAdapter({
     const retryDelayMs = transport.retryDelayMs ?? 2000
     const adoption = transport.wayOfWorking ?? adoptionText(process.cwd())
     const team = transport.team ?? teamOf(adoption)
+    const project = transport.project ?? projectOf(adoption)
+    const inView = i => !project || i?.project?.name === project
     const stateMap = stateMapOf(adoption)
 
     const send = (query, variables) => {
@@ -120,7 +108,7 @@ export default defineAdapter({
       stateReason: i.state?.type === 'completed' ? 'COMPLETED' : i.state?.type === 'canceled' ? 'NOT_PLANNED' : null,
       closedAt: i.completedAt ?? null,
       // the board item, in the code-host --json dialect every consumer reads; an unmapped state is just a name
-      projectItems: i.state?.name ? [{ status: { name: i.state.name } }] : [],
+      projectItems: i.state?.name && inView(i) ? [{ status: { name: i.state.name } }] : [],
     })
     const teamId = () => {
       if (!team) throw fail('unsupported', 'no team declared — add `- `linear-team`: `<KEY>`` to way-of-working.md', 'createCard')
@@ -160,6 +148,18 @@ export default defineAdapter({
         const filter = { description: { contains: String(search ?? '') }, ...(team ? { team: { key: { eq: team } } } : {}) }
         const rows = gql(`query PairFind($filter: IssueFilter) { issues(filter: $filter, first: 50) { nodes { ${ISSUE} } } }`, { filter })?.issues?.nodes ?? []
         return rows.map(view).map(({ number, url, title, body }) => ({ number, url, title, body }))
+      },
+      listCards() {
+        const cards = []
+        let after = null
+        for (;;) {
+          const filter = team ? { team: { key: { eq: team } } } : undefined
+          const page = gql(`query PairStories($filter: IssueFilter, $after: String) { issues(filter: $filter, first: 100, after: $after) { nodes { identifier description } pageInfo { hasNextPage endCursor } } }`, { filter, after })?.issues
+          for (const issue of page?.nodes ?? []) if (/^## Story Statement\s*$/m.test(String(issue.description ?? ''))) cards.push({ id: issue.identifier })
+          if (!page?.pageInfo?.hasNextPage) return cards
+          if (!page.pageInfo.endCursor || page.pageInfo.endCursor === after) throw fail('invalid-output', 'issues pagination did not advance', 'listCards')
+          after = page.pageInfo.endCursor
+        }
       },
       createCard({ title, body }) {
         const r = gql('mutation PairCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { identifier url } } }', { input: { teamId: teamId(), title, description: body } })?.issueCreate
@@ -207,6 +207,53 @@ export default defineAdapter({
           return { applied: state, confirmed: false, error: e.message }
         }
       },
+      ensureBoardMembership({ id }) {
+        try {
+          const i = issue(id, 'ensureBoardMembership')
+          if (!project) return { confirmed: true, implicit: true }
+          if (!inView(i)) {
+            const hits = gql('query PairProject($name: String!) { projects(filter: { name: { eq: $name } }) { nodes { id name } } }', { name: project })?.projects?.nodes ?? []
+            if (hits.length !== 1) return { confirmed: false, gap: 'board-unresolved', error: `project ${JSON.stringify(project)} matched ${hits.length} projects` }
+            gql('mutation PairSetProject($id: String!, $projectId: String!) { issueUpdate(id: $id, input: { projectId: $projectId }) { success } }', { id: i.identifier, projectId: hits[0].id })
+          }
+          const confirmed = inView(issue(i.identifier, 'ensureBoardMembership'))
+          return { confirmed, error: confirmed ? null : `read-back: ${i.identifier} is outside project ${project}` }
+        } catch (e) {
+          return { confirmed: false, error: e.message }
+        }
+      },
+      closeCard({ id, reason }) {
+        try {
+          if (reason === 'merged') {
+            const r = writeState(id, 'Done', 'closeCard')
+            return { confirmed: r.confirmed, error: r.error }
+          }
+          if (reason !== 'unmerged') return { confirmed: false, error: `unknown close reason ${JSON.stringify(reason)}` }
+          const i = issue(id, 'closeCard', 'team { id key states { nodes { id name type } } }')
+          const canceled = (i.team?.states?.nodes ?? []).find(s => s.type === 'canceled')
+          if (!canceled) return { confirmed: false, gap: 'canceled-state-unavailable', error: `team ${i.team?.key} has no canceled state` }
+          if (i.state?.name !== canceled.name) gql('mutation PairCancel($id: String!, $stateId: String!) { issueUpdate(id: $id, input: { stateId: $stateId }) { success } }', { id: i.identifier, stateId: canceled.id })
+          const now = issue(i.identifier, 'closeCard').state?.type
+          return { confirmed: now === 'canceled', error: now === 'canceled' ? null : `read-back: ${i.identifier} state type is ${JSON.stringify(now)}` }
+        } catch (e) {
+          return { confirmed: false, error: e.message }
+        }
+      },
+      syncEpic({ id }) {
+        try {
+          const parent = issue(id, 'syncEpic', 'parent { identifier children { nodes { identifier state { type } } } }').parent
+          if (!parent) return { confirmed: false, gap: 'parent-absent', error: `issue ${id} has no parent` }
+          const children = (parent.children?.nodes ?? []).map(child => ({ id: child.identifier, closed: child.state?.type === 'completed' }))
+          const before = issue(parent.identifier, 'syncEpic').description ?? ''
+          const next = updateEpicBody(before, children)
+          if (next.trimEnd() !== before.trimEnd()) gql('mutation PairEpic($id: String!, $body: String!) { issueUpdate(id: $id, input: { description: $body }) { success } }', { id: parent.identifier, body: next })
+          const after = issue(parent.identifier, 'syncEpic').description ?? ''
+          const confirmed = updateEpicBody(after, children).trimEnd() === after.trimEnd()
+          return { confirmed, parent: parent.identifier, changed: next.trimEnd() !== before.trimEnd(), error: confirmed ? null : `read-back: epic ${parent.identifier} checklist differs` }
+        } catch (e) {
+          return { confirmed: false, gap: 'epic-sync-failed', error: e.message }
+        }
+      },
       commentOnCard({ id, marker, body }) {
         const key = keyOf(id, 'commentOnCard')
         return upsertByMarker({
@@ -242,6 +289,7 @@ export default defineAdapter({
 
       // ── code side: never this adapter's (hostsCode: false) ──
       prHead: codeSide('prHead'),
+      linkedPr: codeSide('linkedPr'),
       upsertComment: codeSide('upsertComment'),
       concludeCheck: codeSide('concludeCheck'),
       setPrState: codeSide('setPrState'),
