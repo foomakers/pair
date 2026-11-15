@@ -1867,11 +1867,13 @@ export const readDecisions = dir => {
 // decision is therefore a comment never edited (to correct one, post a new one); a host that cannot prove it is refused.
 // The same rule guards every maintainer comment this file reads as an authorization (scope decisions, owner corrections).
 export const commentEditedReason = c => (!c?.createdAt || !c?.updatedAt ? 'comment-unverifiable' : String(c.createdAt) !== String(c.updatedAt) ? 'comment-edited' : undefined)
-// Accepted, not revoked (deleted or edited comment) and not withdrawn by a later accepted amendment — the decisions in force.
+// Accepted, not revoked (deleted or edited comment) and not withdrawn — the decisions in force. Review r1-1: revocation only
+// REMOVES authority. A withdrawal, once accepted, is permanent: an amendment revoked later (its comment edited or deleted
+// by anyone with write access) loses its own effect, but the decisions it withdrew never come back into force.
 const acceptedDecisions = dir => {
-  const accepted = readDecisions(dir).filter(r => r?.status === 'accepted' && r.value && typeof r.value === 'object').sort(byCommentId)
-  const withdrawn = new Set(accepted.flatMap(r => (r.value.choice === 'amend' ? (r.value.withdraws ?? []) : [])))
-  return accepted.filter(r => !withdrawn.has(r.decisionRef))
+  const all = readDecisions(dir).filter(r => r?.value && typeof r.value === 'object')
+  const withdrawn = new Set(all.filter(r => (r.status === 'accepted' || r.status === 'revoked') && r.value.choice === 'amend').flatMap(r => r.value.withdraws ?? []))
+  return all.filter(r => r.status === 'accepted' && !withdrawn.has(r.decisionRef)).sort(byCommentId)
 }
 // A decision or amendment that constrains later findings (AC-23): it carries a scope and no later amendment withdrew it.
 const activeScopedDecisions = decisions => decisions.filter(r => (r.value.choice === 'decide' || r.value.choice === 'amend') && r.value.scope)

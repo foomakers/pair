@@ -217,8 +217,14 @@ function readMaintainerDecisions(runDir: string): ManualIntervention[] {
 
 function decisionIntervention(r: Record<string, unknown>, who: string): ManualIntervention {
   const value = object(r['value'])
+  // review r1-1: a revocation is the host's observation (a comment edited or deleted, by anyone with write access) —
+  // never attributed to the maintainer who authored the decision.
   if (r['status'] === 'revoked')
-    return { kind: 'maintainer-revoked', who, reason: String(r['revokedReason'] ?? '') }
+    return {
+      kind: 'maintainer-revoked',
+      who: 'host',
+      reason: `${String(r['revokedReason'] ?? '')} (decision by ${who})`,
+    }
   if (r['status'] === 'accepted' && typeof value?.['choice'] === 'string')
     return { kind: `maintainer-${value['choice']}`, who, reason: String(value['reason'] ?? '') }
   return { kind: 'maintainer-ignored', who, reason: String(r['reason'] ?? '') }

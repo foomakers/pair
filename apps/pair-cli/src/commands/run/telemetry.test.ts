@@ -303,7 +303,7 @@ it('US-647 AC-11: every maintainer decision comment is recorded in telemetry —
   expect(readInterventions(dir)).toEqual([
     { kind: 'maintainer-reset', who: 'rucka', reason: 'seal moved' },
     { kind: 'maintainer-ignored', who: 'mallory', reason: 'author-not-authorized:mallory' },
-    { kind: 'maintainer-revoked', who: 'rucka', reason: 'comment-edited' },
+    { kind: 'maintainer-revoked', who: 'host', reason: 'comment-edited (decision by rucka)' },
   ])
 })
 

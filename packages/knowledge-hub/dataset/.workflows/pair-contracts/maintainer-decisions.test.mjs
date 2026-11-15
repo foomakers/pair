@@ -505,3 +505,31 @@ for (const name of ['cycle', 'red-spec', 'red-verify', 'implement-phase', 'green
     const first = md.search(/cycle-state\.mjs"? resolve --dir/)
     assert.ok(pickup !== -1 && first !== -1 && pickup < first, `${name}: decisions ${pickup} must precede resolve ${first}`)
   })
+
+// ── review r1-1: revocation only removes authority — a withdrawal, once accepted, is permanent ───────────────────────
+for (const [label, mutate] of [
+  ['edited', w => [{ ...w, updatedAt: '2026-11-15T11:00:00Z' }]],
+  ['deleted', () => []],
+])
+  test(`r1-1: the withdrawal comment ${label} afterwards never resurrects the withdrawn override`, () => {
+    const dir = runDir()
+    custodyStuck(dir, [{ code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }])
+    const o = overrideOf(go(dir).next.block)
+    pick(dir, { pr: [o] })
+    const w = comment(decisionBody({ choice: 'amend', reason: 'withdrawn', withdraws: [o.url] }))
+    pick(dir, { pr: [o, w] })
+    assert.deepEqual(overridesIn(dir), [])
+    pick(dir, { pr: [o, ...mutate(w)] })
+    assert.deepEqual(overridesIn(dir), [], 'a withdrawn override stays withdrawn')
+  })
+
+test('r1-1: a withdrawn decide stays withdrawn when the withdrawal comment is deleted — the block stays parked', () => {
+  const dir = runDir()
+  unprovable(dir)
+  const d = comment(decisionBody({ block: go(dir).next.block }))
+  const w = comment(decisionBody({ choice: 'amend', reason: 'not that', withdraws: [d.url] }))
+  pick(dir, { pr: [d, w] })
+  assert.equal(go(dir).next.reason, 'failed-preparation')
+  pick(dir, { pr: [d] })
+  assert.equal(go(dir).next.reason, 'failed-preparation')
+})

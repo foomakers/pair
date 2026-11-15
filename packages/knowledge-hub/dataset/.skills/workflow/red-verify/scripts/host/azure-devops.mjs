@@ -110,6 +110,10 @@ export default defineAdapter({
     }
     const threadUrl = (pr, threadId, commentId) => `${prWebUrl(pr)}/pullrequest/${pr}?discussionId=${threadId}#${commentId}`
 
+    // The comment's author and the timestamps that prove it unedited (US-647): a person, not a service/build identity —
+    // Azure DevOps subject descriptors of users are `aad.` (Entra ID) or `msa.` (Microsoft account). Never edited ⇔ the
+    // content-update stamp equals the publication stamp (`lastContentUpdatedDate`, which a reaction or a status change does not move).
+    const authorOf = c => ({ authorLogin: c?.author?.uniqueName, authorIsUser: !!c?.author && !c.author.isContainer && /^(aad|msa)\./.test(String(c.author.descriptor ?? '')), createdAt: c?.publishedDate, updatedAt: c?.lastContentUpdatedDate })
     const listComments = ({ pr, repo }) => {
       const threads = invoke({ resource: 'pullRequestThreads', repo, route: { pullRequestId: pr } })?.value ?? []
       const out = []
@@ -117,7 +121,7 @@ export default defineAdapter({
         if (t.isDeleted) continue
         for (const c of t.comments ?? []) {
           if (c.isDeleted || c.commentType === 'system') continue
-          out.push({ id: `${t.id}:${c.id}`, body: String(c.content ?? ''), url: threadUrl(pr, t.id, c.id) })
+          out.push({ id: `${t.id}:${c.id}`, body: String(c.content ?? ''), url: threadUrl(pr, t.id, c.id), ...authorOf(c) })
         }
       }
       return out
@@ -257,10 +261,7 @@ export default defineAdapter({
         const [threadId, commentId] = String(id).split(':')
         const t = invoke({ resource: 'pullRequestThreads', repo, route: { pullRequestId: pr, threadId } })
         const c = (t?.comments ?? []).find(x => String(x.id) === String(commentId))
-        // A person, not a service/build identity: Azure DevOps subject descriptors of users are
-        // `aad.` (Entra ID) or `msa.` (Microsoft account).
-        const a = c?.author
-        return { body: c?.content, authorLogin: a?.uniqueName, authorIsUser: !!a && !a.isContainer && /^(aad|msa)\./.test(String(a.descriptor ?? '')), createdAt: c?.publishedDate, updatedAt: c?.lastContentUpdatedDate, pr: c ? Number(pr) : null }
+        return { body: c?.content, ...authorOf(c), pr: c ? Number(pr) : null }
       },
       parseCommentRef(ref, { repo } = {}) {
         const m = COMMENT_URL_RE.exec(String(ref ?? ''))
