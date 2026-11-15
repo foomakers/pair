@@ -355,12 +355,12 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     capture()
     const { dir, resolver } = withRealResolver({
       name: 'p',
-      modelClasses: { frontier: 'm-frontier' },
+      modelClasses: { frontier: 'claude-opus-4-1' },
       stages: { verify: { model: 'frontier' }, green: { model: 'claude-sonnet-4-5' } },
     })
     try {
       const code = await run(
-        { card: '12', cardTags: '', workflowConfig: '/tmp/p.json' },
+        { card: '12', cardTags: '', workflowConfig: '/tmp/p.json', engine: 'claude' },
         files(),
         baseDeps({ resolveWorkflowProfile: resolver }),
       )

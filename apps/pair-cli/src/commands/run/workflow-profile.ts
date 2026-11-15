@@ -3,6 +3,7 @@ import { join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
 import type { EngineDefinition } from './engines'
+import { isEngineId, type EngineId } from './engines'
 import type { ResolvedInvocation } from './resolve-skill'
 import { readInstalledSkill } from './skill-probe'
 import { locateCycleScripts } from './cycle-scripts'
@@ -62,6 +63,50 @@ export interface ResolvedWorkflowProfile {
   /** `cycle-state.mjs`'s own `contextPolicy` for this profile — admissible transitions only. */
   readonly contextPolicy: Readonly<Record<string, string>>
   readonly notes: readonly string[]
+  readonly profile?: {
+    readonly defaults?: Readonly<Record<string, unknown>>
+    readonly stages?: Readonly<Record<string, Readonly<Record<string, unknown>>>>
+  }
+}
+
+/** Validate the resolved run before any stage can dispatch. */
+export function validateProfileRun(
+  profile: ResolvedWorkflowProfile,
+  input: {
+    readonly commandLine: boolean
+    readonly engineFlag?: EngineId
+    readonly runEngine?: EngineId | undefined
+  },
+): void {
+  if (!profile.profile) return
+  const declared = profile.profile?.stages ?? {}
+  const stages = Object.keys(declared).length ? Object.keys(declared) : ['defaults']
+  for (const stage of stages) {
+    const selected = profile.stages[stage]
+    if (!selected) continue
+    const wanted = selected.engine.value
+    if (input.engineFlag && wanted !== 'default' && wanted !== input.engineFlag)
+      throw new Error(
+        `profile-invalid: stages.${stage}.engine '${wanted}' contradicts --engine '${input.engineFlag}'; remove --engine or set it to '${wanted}'`,
+      )
+    if (input.commandLine && !input.engineFlag && wanted === 'default')
+      throw new Error(
+        `profile-invalid: stages.${stage}.engine 'default' has no engine for a command-line profile; set stages.${stage}.engine or pass --engine`,
+      )
+    const engine = wanted === 'default' ? (input.engineFlag ?? input.runEngine) : wanted
+    if (!isEngineId(engine)) continue
+    const model = selected.model.resolved.id
+    if (model !== null && !modelFitsEngine(engine, model))
+      throw new Error(
+        `profile-invalid: stages.${stage}.model '${model}' cannot run on engine '${engine}'; choose a model for ${engine} or change stages.${stage}.engine`,
+      )
+  }
+}
+
+function modelFitsEngine(engine: EngineId, model: string): boolean {
+  if (engine === 'claude') return /^(claude-|sonnet$|opus$|haiku$)/.test(model)
+  if (engine === 'codex') return model.startsWith('gpt-')
+  return model.includes('/')
 }
 
 export interface ProfileRequest {

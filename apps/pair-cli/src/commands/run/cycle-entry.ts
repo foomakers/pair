@@ -33,6 +33,7 @@ import {
   resolveWorkflowProfile,
   stageEngineIds,
   stageSettings,
+  validateProfileRun,
   workflowProfileRequested,
   type ResolvedWorkflowProfile,
 } from './workflow-profile'
@@ -359,6 +360,12 @@ function resolveProfileSetup(
   engineDef: EngineDefinition,
 ) {
   const resolved = resolveRunProfile(input, deps, location)
+  if (resolved)
+    validateProfileRun(resolved, {
+      commandLine: input.config.profile !== undefined || input.config.workflowConfig !== undefined,
+      ...(input.config.engine && { engineFlag: input.config.engine }),
+      runEngine: engineDef.id,
+    })
   const stageEngineDefs = stageEnginesOf(resolved, engineDef, input)
   if (resolved === undefined)
     return { profile: resolved, stageEngineDefs, effortWarning: undefined }

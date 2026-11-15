@@ -25,7 +25,12 @@ import { whileInterruptible } from './interrupt'
 import { effectiveSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
 import { locateCycleScripts } from './cycle-scripts'
-import { resolveOffCycleProfile, resolveWorkflowProfile, stageEngineIds } from './workflow-profile'
+import {
+  resolveOffCycleProfile,
+  resolveWorkflowProfile,
+  stageEngineIds,
+  validateProfileRun,
+} from './workflow-profile'
 import { ENGINE_IDS, isEngineId } from './engines'
 import { handleParallelRun } from './parallel-entry'
 import {
@@ -150,6 +155,12 @@ function resolveRun(
     resolve: deps.resolveWorkflowProfile,
   })
   if (selected) stageEngineIds(selected.profile, ENGINE_IDS)
+  if (selected)
+    validateProfileRun(selected.profile, {
+      commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
+      ...(config.engine && { engineFlag: config.engine }),
+      runEngine: config.engine ?? declaredEngine(context.config),
+    })
   const wanted = selected?.settings.engine
   if (wanted !== undefined && !isEngineId(wanted))
     throw new Error(`profile-invalid: stages.${selected?.stage}.engine: unknown engine '${wanted}'`)

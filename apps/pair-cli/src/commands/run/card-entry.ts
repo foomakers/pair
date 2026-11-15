@@ -18,7 +18,7 @@ import {
   type PromptExtras,
 } from './card-prepare'
 import { prepareCycleCoordinator, resolveEngineFor } from './cycle-entry'
-import { resolveOffCycleProfile, stageEngineIds } from './workflow-profile'
+import { resolveOffCycleProfile, stageEngineIds, validateProfileRun } from './workflow-profile'
 import { ENGINE_IDS, isEngineId } from './engines'
 import {
   declaredEngine,
@@ -472,6 +472,12 @@ function preparePrepSkill(
     resolve: deps.resolveWorkflowProfile,
   })
   if (selected) stageEngineIds(selected.profile, ENGINE_IDS)
+  if (selected)
+    validateProfileRun(selected.profile, {
+      commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
+      ...(config.engine && { engineFlag: config.engine }),
+      runEngine: config.engine ?? declaredEngine(context.config),
+    })
   const wanted = selected?.settings.engine
   if (wanted !== undefined && !isEngineId(wanted))
     throw new Error(`profile-invalid: stages.${selected?.stage}.engine: unknown engine '${wanted}'`)

@@ -8,6 +8,7 @@ import {
   stageSettings,
   stageEngineIds,
   workflowProfileRequested,
+  validateProfileRun,
 } from './workflow-profile'
 
 /**
@@ -104,6 +105,37 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
     expect(stageEngineIds(p, ['pi', 'claude'])).toEqual(['pi', 'claude'])
     expect(() => stageEngineIds(p, ['pi'])).toThrow(
       /profile-invalid: stages\.validate\.engine: unknown engine 'claude' \(supported: pi\)/,
+    )
+  })
+
+  it('AC-5: a command-line profile needs an engine when every stage leaves it open', () => {
+    write('engine-less.json', {
+      name: 'engine-less',
+      stages: { implement: { model: 'claude-sonnet-4-5' } },
+    })
+    const p = resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'engine-less.json' })
+    expect(() => validateProfileRun(p, { commandLine: true })).toThrow(
+      /stages\.implement\.engine.*--engine/,
+    )
+    expect(() => validateProfileRun(p, { commandLine: true, engineFlag: 'claude' })).not.toThrow()
+    expect(() => validateProfileRun(p, { commandLine: false })).not.toThrow()
+  })
+
+  it('AC-5: --engine contradicting a selected stage is refused with its field and remedy', () => {
+    const p = resolveWorkflowProfile(SCRIPTS, { root })
+    expect(() => validateProfileRun(p, { commandLine: true, engineFlag: 'claude' })).toThrow(
+      /stages\.prepare\.engine.*pi.*--engine.*claude/,
+    )
+  })
+
+  it('AC-8: a model cannot be sent to an engine that cannot run it', () => {
+    write('wrong-model.json', {
+      name: 'wrong-model',
+      stages: { implement: { engine: 'codex', model: 'claude-sonnet-4-5' } },
+    })
+    const p = resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'wrong-model.json' })
+    expect(() => validateProfileRun(p, { commandLine: true })).toThrow(
+      /stages\.implement\.model.*claude-sonnet-4-5.*codex/,
     )
   })
 
