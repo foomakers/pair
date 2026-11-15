@@ -99,7 +99,7 @@ const approve = (dir, rows) =>
     host: {
       code: {
         parseCommentRef: () => ({ id: 1, pr: 7, inScope: true }),
-        readComment: () => ({ authorLogin: 'rucka', authorIsUser: true, pr: 7, body: body(rows) }),
+        readComment: () => ({ authorLogin: 'rucka', authorIsUser: true, createdAt: 'T', updatedAt: 'T', pr: 7, body: body(rows) }),
       },
     },
   })

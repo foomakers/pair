@@ -53,16 +53,23 @@
 //   node … migrate-inspect --dir <run/story dir>   → { compatibleEvidenceRefs, missingDimensions, ambiguity, next }
 //     Read-only (US-479 T-19, S10): never rewrites schema-2 evidence, never fabricates a counter.
 //
-//   node … apply-scope-decisions --dir <dir> --decision-ref <PR comment URL> --repo <owner/name> --pr <n> [--maintainer <login>]
-//   node … apply-scope-decisions --dir <dir> --repo <owner/name> --pr <n> [--maintainer <login>]   (no --decision-ref: DISCOVER)
+//   node … apply-scope-decisions --dir <dir> --decision-ref <PR comment URL> --repo <owner/name> --pr <n>
+//   node … apply-scope-decisions --dir <dir> --repo <owner/name> --pr <n>   (no --decision-ref: DISCOVER)
 //     → reads the PR's comments back and applies every decision-shaped one, oldest first — how a
 //       cycle honours a decision the maintainer already posted before asking again (canary v9, B).
 //     → { applied, reason?, results?, path? }   (US-479 T-22, S5)
 //     Reads the ACTUAL PR comment through the bound code host; verifies author type=User and login == the adopted
 //     maintainer (`code-host-assignee`, else `default-assignee`, in .pair/adoption/tech/way-of-working.md
-//     found above --dir; `--maintainer` overrides; unresolvable ⇒ `maintainer-unresolved:*`, fail closed —
+//     found above --dir; no caller flag overrides it (US-647 AC-11); unresolvable ⇒ `maintainer-unresolved:*`, fail closed —
 //     t9d-17); applies ignore | new-card | extend-current-card mechanically and persists a
 //     `recordType: decision` review-phase handoff. Idempotent on the same decisionRef.
+//
+//   node … decisions --dir <run/story dir> --story <id> [--pr <n>] [--repo <owner/name>]
+//     → { recorded: [{ decisionRef, status: accepted | ignored, reason?, choice? }], block, errors, maintainer }   (US-647)
+//     Reads the card's and the PR's comments through the bound hosts and records every maintainer-decision comment
+//     (one fenced ```json block, parsed rigidly) in maintainer-decisions.json — accepted only from a `User` whose login is
+//     the adopted maintainer, ignored-and-recorded otherwise. `resolve` then consumes the newest accepted decision whose
+//     `block` names the current block: a decide | amend | override | reset resumes it, no supersede, no head move.
 //
 //   node … supersede --dir <dir> --phase <p> --reason <text> --by <who> --workflowVersion <v> [--attempt <n>] [--entry fresh|pr] [--policy <json>] [--pr <n>]
 //     → { superseded, from, to, contract?, index, next }   (US-506 T-5) sets an UNVALIDATED red-spec attempt
@@ -118,7 +125,7 @@ export const CYCLE_STATUSES = ['in-progress', 'completed', 'blocked', 'escalated
 // determines which budget is charged; resume is the command or recorded intervention that
 // returns control to the same run. Specific process fault codes override a broader failed status.
 export const STOP_CATALOG = [
-  { status: 'failed-preparation', class: 'finding', resume: 'pair run --card <card>; an `unprovable` refusal: a maintainer preparation-waiver comment + approve-correction, or a hand fix that moves the PR head' },
+  { status: 'failed-preparation', class: 'finding', resume: 'pair run --card <card>; an unprovable, split-required or contradiction refusal: a maintainer decision comment on its block (an unprovable one also: a preparation-waiver comment + approve-correction, or a hand fix that moves the PR head)' },
   // pair run's own stage stops (`failed-<step>`): a stage that refused on purpose for a non-process reason.
   { status: 'failed-prepare', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-validate', class: 'finding', resume: 'pair run --card <card>' },
@@ -129,7 +136,7 @@ export const STOP_CATALOG = [
   { status: 'failed-implement', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-fix', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-verify', class: 'process', resume: 'pair run --card <card>' },
-  { status: 'failed-custody', class: 'finding', resume: 'pair run --card <card>' },
+  { status: 'failed-custody', class: 'finding', resume: 'pair run --card <card>; a breach a human must waive: a maintainer override comment, a seal misalignment: a maintainer reset comment' },
   { status: 'failed-resume', class: 'process', resume: 'pair run --card <card>' },
   { status: 'failed-publication', class: 'process', resume: 'pair run --card <card>' },
   { status: 'escalate', class: 'decision', resume: 'maintainer decision comment; pair run --card <card>' },
@@ -141,6 +148,8 @@ export const STOP_CATALOG = [
   { status: 'abandoned', class: 'decision', resume: 'maintainer reset comment; pair run --card <card>' },
   { status: 'max-dispatches', class: 'decision', resume: 'cycle-state.mjs migrate-acknowledge --dir <new run dir> --legacy <run dir>; pair run --card <card>' },
   { status: 'awaiting-scope-decision', class: 'decision', resume: 'maintainer scope decision comment; pair run --card <card>' },
+  // US-647 AC-23: a finding that contradicts a recorded maintainer decision parks before any prepare is dispatched.
+  { status: 'decision-conflict', class: 'decision', resume: 'maintainer decision (upholds) or amendment (withdraws) comment on its block; pair run --card <card>' },
   { status: 'dirty', class: 'process', resume: 'pair run --card <card>' },
   { status: 'stale', class: 'process', resume: 'pair run --card <card>' },
   { status: 'stale-write', class: 'process', resume: 'pair run --card <card>' },
@@ -1446,8 +1455,8 @@ function extendCard({ host, repo, story, ac }) {
 // ordinary `publish`. Idempotent: a decisionRef already applied is a no-op, not a duplicate write.
 // t9d-17: the authorized scope-decision principal is read from ADOPTION, never a login literal in
 // shipped code. `code-host-assignee` (the PR side) wins over `default-assignee` in
-// `.pair/adoption/tech/way-of-working.md` (found by walking up from the run directory); an explicit
-// `--maintainer` overrides; nothing resolvable is a typed refusal — fail closed, no PR read, no write.
+// `.pair/adoption/tech/way-of-working.md` (found by walking up from the run directory); no CLI flag overrides it
+// (US-647 AC-11: a caller never chooses whose comments count); nothing resolvable is a typed refusal — fail closed.
 const ASSIGNEE_KEYS = ['code-host-assignee', 'default-assignee']
 export function findAdoptionFile(from, rel = join('.pair', 'adoption', 'tech', 'way-of-working.md')) {
   let cur
@@ -1554,6 +1563,7 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer, wo
   }
   if (!comment?.authorIsUser) return { applied: false, reason: 'author-not-a-user' }
   if (comment.authorLogin !== who.login) return { applied: false, reason: `author-not-authorized:${comment.authorLogin}` }
+  if (commentEditedReason(comment)) return { applied: false, reason: commentEditedReason(comment) }
   if (comment.pr !== ref.pr) return { applied: false, reason: 'decisionRef-pr-mismatch' }
   const parsed = parseScopeDecisionComment(comment.body)
   if (parsed.error) return { applied: false, reason: parsed.error }
@@ -1766,6 +1776,7 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
   }
   if (!comment?.authorIsUser) return { approved: false, reason: 'author-not-a-user' }
   if (comment.authorLogin !== who.login) return { approved: false, reason: `author-not-authorized:${comment.authorLogin}` }
+  if (commentEditedReason(comment)) return { approved: false, reason: commentEditedReason(comment) }
   if (comment.pr !== ref.pr) return { approved: false, reason: 'decisionRef-pr-mismatch' }
   const parsed = parseCorrectionComment(comment.body)
   if (parsed.error) return { approved: false, reason: parsed.error }
@@ -1780,7 +1791,7 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
     if (comment.authorLogin !== adopted.login) return { approved: false, reason: `author-not-authorized:${comment.authorLogin}` }
     // The author is who CREATED the comment; anyone with write access can edit it. A decision is a comment never
     // edited (to change it, post a new one) — and a host that cannot prove that gets no waiver (fail closed).
-    if (!comment.createdAt || comment.createdAt !== comment.updatedAt) return { approved: false, reason: 'comment-edited' }
+    if (commentEditedReason(comment)) return { approved: false, reason: commentEditedReason(comment) }
     const last = list[list.length - 1]
     const review = list.filter(h => h.skill === 'review-phase').pop()
     if (last.skill !== 'red-spec' || last.phase !== c.phase || last.data.status !== 'unprovable' || !review) return { approved: false, reason: 'waiver-not-owed' }
@@ -1827,6 +1838,172 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
     const record = { decisionRef, status: 'approved', actor: comment.authorLogin, at: (now instanceof Date ? now : new Date(now)).toISOString(), ...c }
     writeFileSync(join(dir, APPROVALS_FILE), JSON.stringify([...all, record], null, 2))
     return { approved: true, record }
+  })
+}
+
+// ── maintainer decisions (US-647) ────────────────────────────────────────────────────────────
+// Any decision stop resumes from ONE fenced comment on the card or the PR, picked up by the next run. The comment is
+// read through the bound host, never from a caller: accepted only when its author is a `User` whose login is the
+// adopted maintainer (`resolveMaintainer`, no flag); anything else is recorded as ignored with its reason. A body that
+// carries a pair marker is an agent's comment (an escalation quoting the template), never a decision. The JSON is
+// parsed rigidly: a closed key set, one fence, typed fields. `resolve` consumes the newest accepted decision whose
+// `block` names the CURRENT block (the last handoff, by file name and content digest) — a newer refusal is a new block,
+// so a decision never outlives the stop it answered, and a newer decision wins over an older one: no supersede chain.
+export const DECISIONS_FILE = 'maintainer-decisions.json'
+export const DECISION_CHOICES = ['decide', 'amend', 'override', 'reset']
+// A deliberate copy of `red-snapshot.mjs` OVERRIDABLE_BREACH_CODES (pinned equal by a test): an override comment may
+// name only a code custody already lets a human waive (decision-log 2026-09-18).
+export const DECISION_OVERRIDABLE_CODES = ['out-of-scope', 'unlisted-test-changed', 'test-mode-production-change', 'behavioral-adds-or-moves-module', 'test-blob-changed']
+const DECISION_KEYS = new Set(['schemaVersion', 'kind', 'story', 'block', 'choice', 'reason', 'scope', 'withdraws', 'overturns', 'overrides'])
+const OVERRIDE_KEYS = new Set(['code', 'path', 'segment', 'verifyAgainst'])
+const BLOCK_RE = /^[a-z0-9][a-z0-9.-]*\.json@[0-9a-f]{12}$/
+const FENCE_RE = /```json[ \t]*\r?\n([\s\S]*?)```/g
+const NOT_A_CANDIDATE = new Set(['machine-comment', 'no-fenced-json', 'not-a-decision'])
+const nonEmptyStrings = (v, ok = () => true) => Array.isArray(v) && v.length > 0 && v.every(x => typeof x === 'string' && x.trim() && ok(x))
+export const blockIdOf = h => `${basename(h.file)}@${sha256(readFileSync(h.file)).slice(7, 19)}`
+export function parseDecisionComment(body) {
+  const text = String(body ?? '')
+  if (text.includes('<!-- pair')) return { error: 'machine-comment' }
+  const fences = [...text.matchAll(FENCE_RE)].map(m => {
+    try {
+      return JSON.parse(m[1])
+    } catch {
+      return undefined
+    }
+  })
+  if (!fences.length) return { error: 'no-fenced-json' }
+  const decisions = fences.filter(p => p && typeof p === 'object' && p.kind === 'maintainer-decision')
+  if (!decisions.length) return { error: 'not-a-decision' }
+  if (fences.length > 1) return { error: 'ambiguous-fences' }
+  const p = decisions[0]
+  const unknown = Object.keys(p).find(k => !DECISION_KEYS.has(k))
+  if (unknown) return { error: `unknown-key:${unknown}` }
+  if (p.schemaVersion !== 1) return { error: 'schemaVersion-invalid' }
+  if (!['string', 'number'].includes(typeof p.story) || !String(p.story).trim()) return { error: 'story-missing' }
+  if (!DECISION_CHOICES.includes(p.choice)) return { error: 'choice-invalid' }
+  if (typeof p.reason !== 'string' || !p.reason.trim() || p.reason.length > 2000) return { error: 'reason-missing' }
+  if (p.block !== undefined ? typeof p.block !== 'string' || !BLOCK_RE.test(p.block) : p.choice !== 'amend') return { error: 'block-invalid' }
+  for (const [k, allowed] of [['scope', ['decide', 'amend']], ['withdraws', ['amend']], ['overturns', ['amend']], ['overrides', ['override']]])
+    if (p[k] !== undefined && !allowed.includes(p.choice)) return { error: `${k}-not-allowed` }
+  if (p.scope !== undefined) {
+    const s = p.scope
+    const ok = s && typeof s === 'object' && !Array.isArray(s) && Object.keys(s).length > 0 && Object.keys(s).every(k => k === 'paths' || k === 'acs')
+    if (!ok || (s.paths !== undefined && !nonEmptyStrings(s.paths, isRelPathLocal)) || (s.acs !== undefined && !nonEmptyStrings(s.acs, a => /^AC-[\w.-]+$/.test(a)))) return { error: 'scope-invalid' }
+  }
+  if (p.withdraws !== undefined && !nonEmptyStrings(p.withdraws)) return { error: 'withdraws-invalid' }
+  if (p.overturns !== undefined && !nonEmptyStrings(p.overturns, a => /^[A-Za-z0-9._-]+$/.test(a))) return { error: 'overturns-invalid' }
+  // review r0-4: an overturn names the preparation handoff that recorded the assumption — ids alone repeat across runs.
+  if (p.overturns !== undefined && p.block === undefined) return { error: 'block-invalid' }
+  if (p.choice === 'override') {
+    const ok = Array.isArray(p.overrides) && p.overrides.length > 0 && p.overrides.every(o => o && typeof o === 'object' && Object.keys(o).every(k => OVERRIDE_KEYS.has(k)) && DECISION_OVERRIDABLE_CODES.includes(o.code) && isRelPathLocal(o.path) && PHASE_RE.test(String(o.segment ?? '')) && (o.verifyAgainst === undefined || (typeof o.verifyAgainst === 'string' && o.verifyAgainst.trim())))
+    if (!ok) return { error: 'overrides-invalid' }
+  }
+  if (p.choice === 'amend' && p.block === undefined && !p.scope && !p.withdraws && !p.overturns) return { error: 'amend-empty' }
+  return { value: { ...p, story: String(p.story).trim(), reason: p.reason.trim() } }
+}
+export const readDecisions = dir => {
+  try {
+    const a = JSON.parse(readFileSync(join(dir, DECISIONS_FILE), 'utf8'))
+    return Array.isArray(a) ? a : []
+  } catch {
+    return []
+  }
+}
+// review r0-2: the host names a comment's CREATOR, not its last editor — anyone with write access can edit a comment. A
+// decision is therefore a comment never edited (to correct one, post a new one); a host that cannot prove it is refused.
+// The same rule guards every maintainer comment this file reads as an authorization (scope decisions, owner corrections).
+// One code, `comment-edited`, for an edited comment AND for a host that cannot prove it unedited (no timestamps): fail
+// closed, the same refusal the preparation waiver (#657) gives — a caller never has to tell the two apart to stay safe.
+export const commentEditedReason = c => (!c?.createdAt || !c?.updatedAt || String(c.createdAt) !== String(c.updatedAt) ? 'comment-edited' : undefined)
+// Accepted, not revoked (deleted or edited comment) and not withdrawn — the decisions in force. Review r1-1: revocation only
+// REMOVES authority. A withdrawal, once accepted, is permanent: an amendment revoked later (its comment edited or deleted
+// by anyone with write access) loses its own effect, but the decisions it withdrew never come back into force.
+const acceptedDecisions = dir => {
+  const all = readDecisions(dir).filter(r => r?.value && typeof r.value === 'object')
+  const withdrawn = new Set(all.filter(r => (r.status === 'accepted' || r.status === 'revoked') && r.value.choice === 'amend').flatMap(r => r.value.withdraws ?? []))
+  return all.filter(r => r.status === 'accepted' && !withdrawn.has(r.decisionRef)).sort(byCommentId)
+}
+// A decision or amendment that constrains later findings (AC-23): it carries a scope and no later amendment withdrew it.
+const activeScopedDecisions = decisions => decisions.filter(r => (r.value.choice === 'decide' || r.value.choice === 'amend') && r.value.scope)
+// The custody waivers in force: every override decision in force whose `block` is a handoff of THIS run directory (file
+// name and content digest — review r0-1: a comment of another run waives nothing here), attributed to the verified
+// author. The file custody reads (`custody-overrides.json`) is DERIVED from them at every pickup, so an entry nobody
+// decided, a withdrawn one and one whose comment was deleted or edited do not survive.
+function writeCustodyOverrides(dir, decisions, blocks) {
+  const file = join(dir, 'custody-overrides.json')
+  const overrides = decisions
+    .filter(r => r.value.choice === 'override' && blocks.has(r.value.block))
+    .flatMap(r => r.value.overrides.map(o => ({ code: o.code, path: o.path, segment: o.segment, ...(o.verifyAgainst !== undefined ? { verifyAgainst: o.verifyAgainst } : {}), reason: r.value.reason, authorizedBy: r.author, at: r.recordedAt, decisionRef: r.decisionRef })))
+  if (overrides.length || existsSync(file)) writeFileSync(file, JSON.stringify({ overrides }, null, 2) + '\n')
+}
+export function discoverDecisions({ dir, story, pr, repo, now = new Date(), lockWaitMs = 5000, host: bound, ...transport }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { error: where.error }
+  if (!String(story ?? '').trim()) return { error: 'story-missing' }
+  // AC-11: the adopted maintainer, read from adoption — never a caller-supplied login.
+  const who = resolveMaintainer({ dir })
+  if (who.error) return { error: who.error }
+  let host
+  try {
+    host = bound ?? bindHosts({ dir, transport })
+  } catch (e) {
+    return { error: e.kind === 'host-unsupported' ? 'host-unsupported' : `host-error:${e.message}` }
+  }
+  const handoffs = readHandoffs(dir).filter(h => h.data && h.data.recordType !== 'migration')
+  const prNo = Number.isInteger(Number(pr)) && Number(pr) > 0 ? Number(pr) : handoffs.map(h => h.data.pr ?? h.data.prNumber).find(x => Number.isInteger(x) && x > 0)
+  const errors = []
+  const comments = []
+  const read = (source, fn) => {
+    try {
+      for (const c of fn() ?? []) if (c && c.id !== undefined && c.id !== null && typeof c.body === 'string') comments.push({ ...c, source })
+    } catch (e) {
+      errors.push(`${source}:${e.kind ?? 'error'}:${e.message}`)
+    }
+  }
+  if (typeof host.pm?.listCardComments === 'function') read('card', () => host.pm.listCardComments({ id: String(story), repo }))
+  else errors.push('card:unsupported:the PM adapter has no listCardComments')
+  if (prNo) read('pr', () => host.code.listComments({ pr: prNo, repo }))
+  const at = (now instanceof Date ? now : new Date(now)).toISOString()
+  mkdirSync(dir, { recursive: true }) // a fresh card has no run directory yet; a standing amendment is still recorded
+  return withLock(dir, lockWaitMs, () => {
+    // review r0-1/r0-2: a decision whose comment is gone from (or edited on) a source read successfully is revoked —
+    // recorded, never deleted. A failed read proves nothing and revokes nothing.
+    const readOk = new Set(['card', 'pr'].filter(src => (src === 'card' ? typeof host.pm?.listCardComments === 'function' : !!prNo) && !errors.some(e => e.startsWith(`${src}:`))))
+    const byRef = new Map(comments.map(c => [String(c.url ?? `${c.source}:${c.id}`), c]))
+    let revoked = 0
+    const all = readDecisions(dir).map(r => {
+      if (r?.status !== 'accepted' || !readOk.has(r.source)) return r
+      const c = byRef.get(r.decisionRef)
+      const why = !c ? 'comment-deleted' : commentEditedReason(c)
+      if (!why) return r
+      revoked++
+      return { ...r, status: 'revoked', revokedReason: why, revokedAt: at }
+    })
+    const known = new Set(all.map(r => r.decisionRef))
+    const fresh = []
+    for (const c of comments.sort(byCommentId)) {
+      const parsed = parseDecisionComment(c.body)
+      if (NOT_A_CANDIDATE.has(parsed.error)) continue
+      const decisionRef = String(c.url ?? `${c.source}:${c.id}`)
+      if (known.has(decisionRef)) continue
+      known.add(decisionRef)
+      const reason = c.authorIsUser !== true ? 'author-not-a-user' : c.authorLogin !== who.login ? `author-not-authorized:${c.authorLogin}` : (commentEditedReason(c) ?? parsed.error ?? (parsed.value.story !== String(story) ? 'story-mismatch' : undefined))
+      fresh.push({ decisionRef, source: c.source, id: c.id, author: String(c.authorLogin ?? ''), status: reason ? 'ignored' : 'accepted', ...(reason ? { reason } : { value: parsed.value }), recordedAt: at })
+    }
+    if (fresh.length || revoked) writeFileSync(join(dir, DECISIONS_FILE), JSON.stringify([...all, ...fresh], null, 2) + '\n')
+    writeCustodyOverrides(dir, acceptedDecisions(dir), new Set(handoffs.map(blockIdOf)))
+    const last = handoffs[handoffs.length - 1]
+    const block = last ? blockIdOf(last) : null
+    for (const r of fresh.filter(x => x.status === 'accepted')) {
+      const v = r.value
+      appendIntervention(dir, [r.decisionRef, `maintainer decision: ${v.choice}`, v.reason, `${r.author}, ${dayOf(now)}`, v.block ? `answers ${v.block}${v.block === block ? '' : ' (no longer the current block)'}` : 'standing amendment'])
+      // AC-6: a reset is bounded and auditable — the process budget restarts explicitly, every corrective budget is kept.
+      if (v.choice === 'reset' && v.block === block) {
+        const recovery = readRecovery(dir)
+        writeRecovery(dir, { ...recovery, budgetResetAt: at, resets: [...(recovery.resets ?? []), { decisionRef: r.decisionRef, block, detail: v.reason, by: r.author, at, restarted: ['autoRecoveryRounds'], preserved: ['maxFixRounds', 'redRepairs', 'greenRetries'] }] })
+      }
+    }
+    return { recorded: fresh.map(r => ({ decisionRef: r.decisionRef, status: r.status, ...(r.reason ? { reason: r.reason } : { choice: r.value.choice }) })), revoked: all.filter(r => r.status === 'revoked' && r.revokedAt === at).map(r => ({ decisionRef: r.decisionRef, reason: r.revokedReason })), block, errors, maintainer: who.login }
   })
 }
 
@@ -1994,6 +2171,13 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       }
       const shapeErrs = contractErrors(parsed)
       if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
+      // US-647 AC-12: a missing policy decision is read fail-closed and RECORDED — `assumptions: [{ id, policy, reading }]`
+      // in the contract, stamped on the handoff (an overturning amendment is matched against it) and posted on the card.
+      if (parsed.assumptions !== undefined) {
+        const bad = !Array.isArray(parsed.assumptions) || parsed.assumptions.some(a => !a || typeof a !== 'object' || !/^[A-Za-z0-9._-]+$/.test(String(a.id ?? '')) || !String(a.policy ?? '').trim() || !String(a.reading ?? '').trim())
+        if (bad) return { published: false, reason: 'contract-assumptions-invalid', errors: ['assumptions must be [{ id, policy, reading }] with a token id and non-empty policy and reading'] }
+        if (parsed.assumptions.length) data = { ...data, assumptions: parsed.assumptions.map(({ id, policy, reading }) => ({ id, policy, reading })) }
+      }
       // US-591 r0-1: the owner-approval bound is read from owner-approvals.json, never left to the agent. A repair attempt of the same phase must not hide its own approval: ignore the phase's prior handoffs.
       const pending = pendingCorrection(readHandoffs(dir).filter(h => h.data && h.data.recordType !== 'migration' && h.phase !== phase), readApprovals(dir), predecessorEvidence(dir))
       if (pending && phase === `${pending.line}-rev${pending.revision}`) {
@@ -2216,7 +2400,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   if (predecessor && !existsSync(join(dir, `${predecessor}.json`))) return { published: false, reason: 'predecessor-missing', predecessor }
   const name = `${phase}-${skill}`
   const target = join(dir, n > 1 ? `${name}.attempt-${n}.json` : `${name}.json`)
-  return withLock(dir, lockWaitMs, () => {
+  const out = withLock(dir, lockWaitMs, () => {
     if (existsSync(target)) {
       const prior = JSON.parse(readFileSync(target, 'utf8'))
       if (skill === 'red-spec' && data.status === 'red' && prior.contractPath === data.contractPath && prior.contractHash === data.contractHash && prior.inputHead === data.inputHead)
@@ -2234,6 +2418,21 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       } catch {}
     return { published: true, path: target, name, seq, attempt: n }
   })
+  if (out.published && !out.reused && data.assumptions?.length) out.assumptionComment = postAssumptions({ dir, host, transport, story: data.story, phase, assumptions: data.assumptions, block: blockIdOf({ file: out.path }) })
+  return out
+}
+// The Assumption comment on the card (AC-12): marker-keyed (one per preparation phase, idempotent), carrying a pair
+// marker so it can never be read back as a maintainer decision. A failed post is reported, never a refused publish.
+function postAssumptions({ dir, host, transport, story, phase, assumptions, block }) {
+  const rows = assumptions.map(a => `| ${cell(a.id)} | ${cell(a.policy)} | ${cell(a.reading)} |`).join('\n')
+  const body = `**Assumption** — preparing ${phase} found no policy decision for the rows below, so the contract applies the most restrictive reading and the cycle continues.\n\n| id | policy | reading applied |\n| --- | --- | --- |\n${rows}\n\nTo overturn one, the maintainer posts a comment holding one fenced json block: \`{"schemaVersion":1,"kind":"maintainer-decision","story":"${story}","block":"${block}","choice":"amend","overturns":["${assumptions[0].id}"],"reason":"…"}\` — the next run opens a new round.`
+  try {
+    const h = host ?? bindHosts({ dir, transport })
+    h.pm.commentOnCard({ id: String(story), marker: `<!-- pair:assumption #${story} ${phase} -->`, body })
+    return { posted: true }
+  } catch (e) {
+    return { posted: false, error: e.message }
+  }
 }
 
 // ── regression-risk ledger view (US-479 T-29, S11) ─────────────────────────────────────────
@@ -2460,6 +2659,8 @@ function spentRounds(dir, rounds) {
     const reset = new Set(files.map(f => RESET_ASIDE.exec(f)?.[1]).filter(Boolean))
     for (const f of files) if (STEP_HANDOFF.test(f) && !(reset.has(f) && faultedFile(join(dir, f)))) since = Math.max(since, statSync(join(dir, f)).mtimeMs)
   } catch {}
+  // US-647 AC-6: a maintainer reset restarts the process budget explicitly (recovery.json `budgetResetAt`).
+  since = Math.max(since, Date.parse(readRecovery(dir).budgetResetAt ?? '') || 0)
   return rounds.filter(r => Date.parse(r.at) > since)
 }
 const recoveryBudget = policy => (Number.isInteger(policy?.autoRecoveryRounds) && policy.autoRecoveryRounds >= 0 ? policy.autoRecoveryRounds : POLICY_DEFAULTS.autoRecoveryRounds)
@@ -2475,10 +2676,10 @@ export function recover({ dir, kind, detail = '', policy = {}, lockWaitMs = 5000
     const state = readRecovery(dir)
     // r0-3: an explicit re-run lifts a process-budget park once (`resume`), apart from the rounds; the run's total is the budget.
     if (kind === 'resume') {
-      const resumes = state.resumes ?? []
+      const resumes = (state.resumes ?? []).filter(r => !state.budgetResetAt || Date.parse(r.at) > Date.parse(state.budgetResetAt))
       if (resumes.length >= budget)
         return { allowed: false, round: resumes.length, budget, next: blocked('needs-human', { budget: 'autoRecoveryRounds', resumesSpent: true, detail: `autoRecoveryRounds (${budget}) re-run resumes spent — clear the cause, then a maintainer reset comment (reset-group) or a moved PR/base head resumes the run`.trim() }) }
-      writeRecovery(dir, { ...state, resumes: [...resumes, { detail, at: now.toISOString() }] })
+      writeRecovery(dir, { ...state, resumes: [...(state.resumes ?? []), { detail, at: now.toISOString() }] })
       return { allowed: true, round: resumes.length + 1, budget }
     }
     const spent = spentRounds(dir, state.rounds)
@@ -2833,6 +3034,18 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     return [...seen.values()]
   }
   const pendingScopeChanges = () => scopeChangesSeen().filter(c => (c.status ?? 'pending') === 'pending')
+  // US-647 AC-12: a fail-closed assumption a contract recorded (stamped by `publish`) that a later maintainer amendment
+  // overturned opens a remediation round carrying the amendment — once: a preparation that received it consumes it.
+  const pendingOverturns = () => {
+    const received = new Set(list.filter(h => h.skill === 'red-spec').flatMap(h => h.data.findings?.received ?? []))
+    // review r0-4: the overturn names the preparation handoff (block) that recorded the assumption — never an id alone.
+    const specOf = block => list.find(h => h.skill === 'red-spec' && Array.isArray(h.data.assumptions) && blockIdOf(h) === block)
+    return (ctx.decisions ?? [])
+      .filter(r => r.value.choice === 'amend' && specOf(r.value.block) && (r.value.overturns ?? []).some(id => specOf(r.value.block).data.assumptions.some(a => a?.id === id)))
+      .map(r => ({ r, id: `amend-${String(r.id).replace(/[^A-Za-z0-9]/g, '-')}`, ids: r.value.overturns.filter(id => specOf(r.value.block).data.assumptions.some(a => a?.id === id)) }))
+      .filter(x => !received.has(x.id))
+      .map(({ r, id, ids }) => ({ id, severity: 'Major', location: 'card', description: `the maintainer overturned assumption ${ids.join(', ')} (${r.decisionRef}): ${r.value.reason}`, recommendation: 'apply the amended policy — VERIFY: the contract restates the overturned assumption; ORACLE: the maintainer amendment; ASSERT: the amended reading holds', blocking: true, transition: 'open', kind: 'defect', decisionRef: r.decisionRef }))
+  }
   // US-479 AC-32 / t9d-26: the maintainer's rollback directive is computed ONCE per rewind batch and
   // delivered to EVERY dispatch of the phase that repairs it — the preparation AND the green fixer,
   // the actor that actually restores content at `fromHead` (green-fix SKILL, S13). A head is taken
@@ -2941,6 +3154,10 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     }
   }
 
+  // US-647 AC-11: a maintainer decision recorded for THIS block (the last handoff) answers it — `override` answers only
+  // custody; decide | amend | reset answer every other decision stop. The resumed dispatch carries the decision.
+  const answered = !!ctx.decision && ctx.decision.value.choice !== 'override'
+  const rePrepare = () => ({ step: 'prepare', mode: d.mode ?? (parts.kind === 'initial' ? 'initial' : 'remediation'), phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, detail: 're-prepared on the maintainer decision' })
   if (last.skill === 'red-spec') {
     // US-479 B1 (S3, AC-08, DT-04): a CONTRADICTION with sealed rows is not a dead end — it routes
     // the minimal successor revision of the contract it names, in the same canonical cycle. The
@@ -2964,7 +3181,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
           : !targetPhase || !line
             ? `no sealed contract identifies ${d.predecessorContractHash ?? 'the named predecessor'}`
             : 'contradiction-key-unstamped: this handoff predates the key `publish` now stamps — re-answer the same phase under this engine'
-        return blocked('failed-preparation', { refusal: 'contradiction-unresolvable', detail, phase: last.phase, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
+        return answered ? rePrepare() : blocked('failed-preparation', { refusal: 'contradiction-unresolvable', detail, phase: last.phase, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
       }
       // ONE revision per contradiction per obligation and succession line (US-479 B1 decision 2).
       // Counted over this cycle AND every sibling run of the same PR, so a new runId cannot buy a
@@ -2972,7 +3189,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       const priorSame = list.filter(h => h !== last && h.skill === 'red-spec' && h.data.status === 'contradiction' && h.data.contradictionKey === d.contradictionKey).length
       const siblingSame = (ctx.siblingContradictionKeys ?? []).filter(k => k === d.contradictionKey).length
       if (priorSame + siblingSame >= 1)
-        return blocked('escalate', { budget: 'contradictionRevisions', detail: `the same contractual obligation on line ${line} already spent its one successor revision — a human decides the next step`, phase: last.phase, conflictingRowIds: d.conflictingRowIds, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
+        return answered ? rePrepare() : blocked('escalate', { budget: 'contradictionRevisions', detail: `the same contractual obligation on line ${line} already spent its one successor revision — a human decides the next step`, phase: last.phase, conflictingRowIds: d.conflictingRowIds, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
       // The successor continues the HISTORICAL line: the revision number counts the phases of that
       // line wherever they were proven, so a legacy `a0-rev3` is followed by `a0-rev4` and never by
       // a fresh `a0-rev2` that would pretend the history did not happen.
@@ -3016,7 +3233,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       if (gapGreen) return { ...gapRevision(gapGreen, gapGreen.data), ...retry }
       return { ...(ctx.stale ? { stale: true } : {}), ...(EXTERNAL_REFUSALS.has(d.status) ? { refusal: d.status } : {}), step: 'prepare', mode: d.mode ?? (parts.kind === 'initial' ? 'initial' : 'remediation'), phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, detail: `retry after the ${d.status} refusal: ${d.reason ?? ''}`.trim() }
     }
-    return blocked('failed-preparation', { refusal: d.status, detail: d.reason ?? d.splitReason, phase: last.phase })
+    return answered ? rePrepare() : blocked('failed-preparation', { refusal: d.status, detail: d.reason ?? d.splitReason, phase: last.phase })
   }
   if (last.skill === 'red-verify') {
     if (d.verified !== true) {
@@ -3052,7 +3269,10 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     return blocked('failed-implement', { budget: 'greenRetries', detail: d.gatesPassed === false ? 'gate red twice' : d.reason })
   }
   if (last.skill === 'green-fix') {
-    if (d.needsHumanDecision === true) return blocked('escalate', { detail: 'green-fix asked for a human decision', phase: last.phase })
+    if (d.needsHumanDecision === true)
+      return answered
+        ? { step: 'green', mode: 'retry', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: latestOf('red-verify', last.phase, x => x.sealed)?.data.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupFindingIds(groupOf(last.phase))), detail: 'green retried on the maintainer decision', ...greenDirective(last.phase) }
+        : blocked('escalate', { detail: 'green-fix asked for a human decision', phase: last.phase })
     if (d.fixed !== true && Array.isArray(d.contractGaps) && d.contractGaps.length) return gapRevision(last, d)
     // AC-10/AC-21 (r1-1): a process fault (a gate flake) retries GREEN on the SAME seal under autoRecoveryRounds, never greenRetries.
     if (d.fixed !== true && (isProcessFault(d) || ctx.stale)) {
@@ -3066,6 +3286,21 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
   }
   if (last.skill === 'review-phase') {
     // US-575 (#575/AC3): a custody failure recorded on heads that have since moved is stale — re-verify the new head.
+    const reReview = extra => ({ step: 'verify', mode: 're-review', phase: `r${(parts.round ?? 0) + 1}`, round: (parts.round ?? 0) + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: (Array.isArray(d.findings) ? d.findings : []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings(), ...extra })
+    // US-647: a custody breach a human may waive resumes on an override comment (custody re-runs with the attributed
+    // waiver); a seal misalignment on a reset comment (AC-5/AC-6) — re-sealed ONLY through the independent seal path: a
+    // successor revision of the sealed line on the current head (red-verify seals it, a reattest when the bytes are already
+    // there). A cycle with no seal re-verifies the current head. Budgets are kept; nothing is waived silently.
+    if (d.custody?.contractBreach === true && ctx.decision?.value.choice === 'override') return reReview()
+    if (d.custody?.contractBreach === true && ctx.decision?.value.choice === 'reset') {
+      const sealedPhases = list.filter(h => h.skill === 'red-verify' && h.data.sealed === true).map(h => h.phase)
+      if (!sealedPhases.length) return reReview()
+      const named = (d.custody.breaches ?? []).map(b => b?.sealedBy ?? b?.segment ?? b?.phase).filter(p => sealedPhases.includes(p))
+      const line = successionLineOf(named.length ? sealedPhases.filter(p => named.includes(p)).pop() : sealedPhases[sealedPhases.length - 1])
+      const current = latestGroupPhase(line)
+      const revision = (phaseParts(current)?.revision ?? 1) + 1
+      return { step: 'prepare', mode: 'revision', phase: `${line}-rev${revision}`, revision, round: phaseParts(current)?.round ?? 0, attempt: 1, base: SHA_RE.test(String(ctx.head ?? '')) ? ctx.head : d.reviewedHead, contract: contractOf(current), group: groupOf(line), breaches: d.custody.breaches ?? [], detail: `re-seal of ${line} on the current head after a maintainer reset` }
+    }
     if (d.custody?.contractBreach === true)
       return ctx.stale ? { step: 'verify', mode: 're-review', phase: `r${(parts.round ?? 0) + 1}`, round: (parts.round ?? 0) + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), stale: true } : blocked('failed-custody', { phase: last.phase, breaches: d.custody.breaches })
     const maxFix = policy.maxFixRounds ?? POLICY_DEFAULTS.maxFixRounds
@@ -3097,9 +3332,9 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // US-479 DR-06: ANY mandatory human decision comes before the automatic rewind. Keying on one
     // `humanDecisionKind` let a review that asked for a human without naming a kind be overridden by
     // the very transition the request was meant to hold. The kind, when given, only says WHY.
-    if (d.needsHumanDecision === true) return blocked('escalate', { detail: `${d.humanDecisionKind ?? 'human'} decision requested by the review — a human decides before any automatic rewind`, findings: blocking, regressionRisks: activeRisks })
+    if (d.needsHumanDecision === true && !answered) return blocked('escalate', { detail: `${d.humanDecisionKind ?? 'human'} decision requested by the review — a human decides before any automatic rewind`, findings: blocking, regressionRisks: activeRisks })
     if (activeRisks.length) {
-      if (cycleCounters(list).spentCycles >= maxFix) return blocked('escalate', { budget: 'maxFixRounds', needsHuman: fixBudgetSpent, detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
+      if (!answered && cycleCounters(list).spentCycles >= maxFix) return blocked('escalate', { budget: 'maxFixRounds', needsHuman: fixBudgetSpent, detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
       // The earliest introducing batch is repaired first; every active risk travels with it.
       const roundOf = b => phaseParts(`${b}-g1`)?.round ?? 0
       const batch = [...new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))].sort((a, b) => roundOf(a) - roundOf(b))[0]
@@ -3183,6 +3418,8 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         }
         // Quality is converged, but pending scope proposals still need the maintainer's explicit
         // ignore/extend-current-card/new-card decision (S2/S5) — never auto-absorbed, never `done`.
+        const overturned = pendingOverturns()
+        if (overturned.length) return { step: 'prepare', mode: 'remediation', phase: `r${round + 1}-g1`, round: round + 1, attempt: 1, base: d.reviewedHead, findings: overturned }
         const pending = pendingScopeChanges()
         // t9d-8: the hash the packet must quote travels WITH the proposals it is computed over —
         // the reviewer never recomputes (or invents) the value `apply-scope-decisions` will check.
@@ -3191,6 +3428,8 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       }
       return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true, detail: SHA_RE.test(remote) ? 'readiness not confirmed on the remote head' : 'readiness not bound to a 40-hex remote head' }
     }
+    // US-647 AC-11: the maintainer's decision alone re-verifies an external blocker — no forced head move.
+    if (blocking.every(f => f.external === true) && answered) return reReview()
     if (blocking.every(f => f.external === true)) {
       // A human decided every external blocker and the head has moved since the review: the
       // correction is on the remote — re-verify it (custody judges the new commits), never wait.
@@ -3202,7 +3441,8 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // US-479 T-21 (S4): the budget bounds COMPLETED corrective cycles, never the raw round
     // counter — a metadata-only re-review (inputsChanged, a moved head) bumps `round` without any
     // actual fix and must not spend the budget a real remediation earns.
-    if (cycleCounters(list).spentCycles >= maxFix) return blocked('escalate', { budget: 'maxFixRounds', needsHuman: fixBudgetSpent, findings: blocking })
+    // US-647: a maintainer decision on a spent-budget stop extends it by exactly this one round (the next block asks again).
+    if (!answered && cycleCounters(list).spentCycles >= maxFix) return blocked('escalate', { budget: 'maxFixRounds', needsHuman: fixBudgetSpent, findings: blocking })
     // US-506: `approved-test-failing` and `contract-gap` presuppose a SEALED contract of their group.
     // On a fresh run `a0` never sealed one, so such a finding has nothing to retry or revise: it is an
     // ordinary finding and routes the test-first remediation below (AC-3 — no new finding class).
@@ -3223,7 +3463,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       const revision = (phaseParts(current)?.revision ?? 1) + 1
       return { step: 'prepare', mode: 'revision', phase: `${groupId}-rev${revision}`, revision, round, attempt: 1, base: d.reviewedHead, findings: gaps.filter(f => f.groupId === groupId), contract: contractOf(current), group: groupOf(groupId) }
     }
-    return { step: 'prepare', mode: 'remediation', phase: `r${round + 1}-g1`, round: round + 1, attempt: 1, base: d.reviewedHead, findings: blocking }
+    return { step: 'prepare', mode: 'remediation', phase: `r${round + 1}-g1`, round: round + 1, attempt: 1, base: d.reviewedHead, findings: [...blocking, ...pendingOverturns()] }
   }
   return blocked('failed-resume', { detail: `unknown last skill ${last.skill}` })
 }
@@ -3262,9 +3502,39 @@ export function voidedGreenHandoffs(handoffs) {
   return handoffs.filter(h => h.skill === 'green-fix' && h.data && isTestModeGroup(handoffs, h.phase) && handoffs.some(v => v.skill === 'red-verify' && v.phase === h.phase && v.data?.sealed === true))
 }
 
+// US-647 AC-23 (T-16): before a review's findings are sent to a preparation, each finding's obligation is matched
+// against the maintainer decisions and amendments recorded as fenced JSON — by the paths its location names and the AC
+// its review assessed it under, never by free text. A match parks as a decision block naming both sides; the finding
+// stays (review independence), only the dispatch waits. An amendment withdrawing the decision lets the round proceed;
+// a decision on the block upholding it sends the findings back to the reviewer with the decision.
+function authorityConflict(next, list, ctx) {
+  const last = list[list.length - 1]
+  if (next?.step !== 'prepare' || !Array.isArray(next.findings) || !next.findings.length || last?.skill !== 'review-phase') return next
+  const active = activeScopedDecisions(ctx.decisions ?? [])
+  if (!active.length) return next
+  const acsOf = id => (Array.isArray(last.data.acAssessment) ? last.data.acAssessment : []).filter(r => r?.findingId === id).map(r => r.ac)
+  const covers = (scopePath, path) => path === scopePath || path.startsWith(scopePath.endsWith('/') ? scopePath : `${scopePath}/`)
+  const conflicts = next.findings
+    .filter(f => !f.decisionRef)
+    .map(f => ({ f, hit: active.filter(r => (r.value.scope.paths ?? []).some(sp => pathsIn(f.location).some(p => covers(sp, p))) || (r.value.scope.acs ?? []).some(a => acsOf(f.id).includes(a))) }))
+    .filter(c => c.hit.length)
+  if (!conflicts.length) return next
+  const ids = conflicts.map(c => c.f.id)
+  const round = (phaseParts(last.phase)?.round ?? 0) + 1
+  const priorFindings = [...new Map(list.filter(h => h.skill === 'review-phase').flatMap(r => (r.data.findings ?? []).filter(f => f?.id).map(f => [f.id, { id: f.id, severity: f.severity }]))).values()]
+  if (ctx.decision) return { step: 'verify', mode: 're-review', phase: `r${round}`, round, attempt: 1, base: last.data.reviewedHead, prior: last.name, openIds: ids, priorFindings, detail: 'the maintainer upheld the recorded decision — the reviewer re-judges the conflicting findings with it' }
+  const decisions = [...new Map(conflicts.flatMap(c => c.hit).map(r => [r.decisionRef, { decisionRef: r.decisionRef, choice: r.value.choice, reason: r.value.reason, scope: r.value.scope, by: r.author }])).values()]
+  return blocked('decision-conflict', { findings: conflicts.map(c => c.f), decisions, detail: `finding(s) ${ids.join(', ')} contradict maintainer decision(s) ${decisions.map(x => x.decisionRef).join(', ')} — a decision upholding them or an amendment withdrawing them resumes the run` })
+}
+const DISPATCHES = new Set(['prepare', 'validate', 'implement', 'green', 'verify'])
 export function deriveNext(handoffs, policy, ctx = {}) {
   const voided = new Set(voidedGreenHandoffs(handoffs))
-  const next = deriveNextStep(voided.size ? handoffs.filter(h => !voided.has(h)) : handoffs, policy, ctx)
+  const kept = voided.size ? handoffs.filter(h => !voided.has(h)) : handoffs
+  let next = authorityConflict(deriveNextStep(kept, policy, ctx), kept.filter(h => h.data && h.data.recordType !== 'migration'), ctx)
+  if (ctx.decision) {
+    const md = { decisionRef: ctx.decision.decisionRef, choice: ctx.decision.value.choice, reason: ctx.decision.value.reason, by: ctx.decision.author }
+    next = DISPATCHES.has(next.step) ? { ...next, maintainerDecision: md } : next.step === 'blocked' ? { ...next, decisionNotApplicable: md.decisionRef } : next
+  }
   const active = ctx.ledger ? ctx.ledger.filter(r => r.state === 'active') : activeRegressionRisks(handoffs.filter(h => h.data && h.data.recordType !== 'migration'))
   return withActiveGuards(next, active)
 }
@@ -3592,10 +3862,14 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // A `worktree-clean` round (the driver stashed what made the worktree dirty) after the failure was seen clears its cause too;
   // a spent process budget (AC-10, r1-3) is cleared by ANY recorded recovery round after it — the round is the act on its cause.
   const cleaned = !!recorded && [...recovery.rounds, ...(recorded.budget === 'autoRecoveryRounds' ? recovery.resumes ?? [] : [])].some(r => r.at >= recorded.at && (recorded.budget === 'autoRecoveryRounds' || (recorded.reason === 'failed-preparation' && r.kind === 'worktree-clean')))
-  const stale = !!recorded && (recorded.stale !== undefined || moved || cleaned)
-  let next = deriveNext(handoffs, policy, { entry, head, stale, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger, approvals: readApprovals(dir) })
+  // US-647: the newest accepted maintainer decision naming THIS block answers it; a reset also makes the stop stale.
+  const decisions = acceptedDecisions(dir)
+  const block = blockIdOf(last)
+  const decision = decisions.filter(r => r.value.block === block).pop()
+  const stale = (!!recorded && (recorded.stale !== undefined || moved || cleaned)) || decision?.value.choice === 'reset'
+  let next = deriveNext(handoffs, policy, { entry, head, stale, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger, approvals: readApprovals(dir), decisions, decision })
   if (stale && next.step !== 'blocked') {
-    if (recorded.stale === undefined) writeRecovery(dir, { ...recovery, failures: { ...recovery.failures, [failureId]: { ...recorded, stale: heads } } })
+    if (recorded && recorded.stale === undefined) writeRecovery(dir, { ...recovery, failures: { ...recovery.failures, [failureId]: { ...recorded, stale: heads } } })
   } else if (next.step === 'blocked' && (DURABLE_FAILURES.has(next.reason) || next.budget === 'autoRecoveryRounds')) {
     const key = recorded ? Object.fromEntries(['prHead', 'baseHead'].filter(k => recorded[k] !== undefined).map(k => [k, recorded[k]])) : heads
     // A process-budget park is recorded even without heads: a later recovery round must be able to clear it (r1-3).
@@ -3626,7 +3900,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   }
   // US-575 (#575/AC4): a review's terminal verdict holds for the head it reviewed. The PR head moved since ⇒ re-verify
   // the new head (custody judges the new commits). A request for a HUMAN decision keeps waiting for it.
-  if (last.skill === 'review-phase' && heads.prHead && heads.prHead !== last.data.reviewedHead && next.step === 'blocked' && next.reason !== 'awaiting-scope-decision' && !(next.reason === 'escalate' && !next.budget)) next = reReviewOf({ headMoved: true })
+  if (last.skill === 'review-phase' && heads.prHead && heads.prHead !== last.data.reviewedHead && next.step === 'blocked' && next.reason !== 'awaiting-scope-decision' && next.reason !== 'decision-conflict' && !(next.reason === 'escalate' && !next.budget)) next = reReviewOf({ headMoved: true })
   // US-575 (#575/AC2): the merge-time tier gate stayed red after its recovery budget — a real failure. The approved
   // card goes back to the fix stage with the failing gates as its findings, on the head the review approved.
   const gateRed = recovery.gateRed
@@ -3694,9 +3968,11 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
       next = { step: 'blocked', reason: 'failed-resume', cap: 'consecutiveRedirects', detail: `${CAPS.consecutiveRedirects} consecutive redirects — the durable state and the dispatched step disagree` }
   }
   next = withContext(next, handoffs, contextPolicy)
+  // US-647: a blocked answer names its block — the value a maintainer decision comment quotes to resume it.
+  if (next.step === 'blocked') next = { ...next, block }
   const status = next.step === 'done' ? 'completed' : next.reason === 'escalated' && next.step === 'blocked' ? 'escalated' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
-  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, recovery: { spent: spentRounds(dir, recovery.rounds).length, budget: recoveryBudget(policy) }, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger), ...(warnings.length ? { warnings } : {}) }
+  return { status, next, handoffs: names, last: last.name, block, pr: knownPr ?? pr, nextFindingSeq, recovery: { spent: spentRounds(dir, recovery.rounds).length, budget: recoveryBudget(policy) }, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger), ...(warnings.length ? { warnings } : {}) }
 }
 
 // ── migration (US-479 T-19, S10) ───────────────────────────────────────────────────────────
@@ -4061,8 +4337,9 @@ if (isMain()) {
       'bind-hosts': ['dir', 'from'],
       'activate-card': ['dir', 'story', 'worktree'],
       inputs: ['json', 'story', 'workflowVersion'],
-      'apply-scope-decisions': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo', 'workflowVersion'],
-      'approve-correction': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo'],
+      'apply-scope-decisions': ['decision-ref', 'dir', 'pr', 'repo', 'workflowVersion'],
+      'approve-correction': ['decision-ref', 'dir', 'pr', 'repo'],
+      decisions: ['dir', 'pr', 'repo', 'story'],
       'scope-baseline': ['dir'],
       'migrate-inspect': ['dir'],
       'migrate-acknowledge': ['branch', 'dir', 'head', 'legacy', 'pr', 'run', 'story', 'workflowVersion'],
@@ -4180,16 +4457,22 @@ if (isMain()) {
       need('dir', 'repo', 'pr')
       // No --decision-ref: discover the maintainer's decision on the PR itself (canary v9, B).
       out = opts['decision-ref']
-        ? applyScopeDecisions({ dir: opts.dir, decisionRef: opts['decision-ref'], repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer, workflowVersion: opts.workflowVersion })
-        : discoverScopeDecisions({ dir: opts.dir, repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer, workflowVersion: opts.workflowVersion })
+        ? applyScopeDecisions({ dir: opts.dir, decisionRef: opts['decision-ref'], repo: opts.repo, pr: Number(opts.pr), workflowVersion: opts.workflowVersion })
+        : discoverScopeDecisions({ dir: opts.dir, repo: opts.repo, pr: Number(opts.pr), workflowVersion: opts.workflowVersion })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.applied ? 0 : 1)
     } else if (cmd === 'approve-correction') {
       // US-591: record the owner's bounded approval to correct a wrong sealed oracle; `resolve` then routes the successor.
       need('dir', 'decision-ref', 'repo', 'pr')
-      out = approveCorrection({ dir: opts.dir, decisionRef: opts['decision-ref'], repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer })
+      out = approveCorrection({ dir: opts.dir, decisionRef: opts['decision-ref'], repo: opts.repo, pr: Number(opts.pr) })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.approved ? 0 : 1)
+    } else if (cmd === 'decisions') {
+      // US-647: pick up the maintainer's decision comments (card + PR) before `resolve`; never a caller-chosen author.
+      need('dir', 'story')
+      out = discoverDecisions({ dir: opts.dir, story: opts.story, pr: opts.pr !== undefined ? Number(opts.pr) : undefined, repo: opts.repo })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.error ? 1 : 0)
     } else if (cmd === 'scope-baseline') {
       // t9d-8: the value the reviewer prints into the scope-decision packet and the maintainer
       // echoes back verbatim — the producer for the one field `apply-scope-decisions` refuses the
@@ -4276,7 +4559,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | approve-correction | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | card | whoami | test-identity | version)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | approve-correction | decisions | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | card | whoami | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

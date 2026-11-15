@@ -274,6 +274,8 @@ export interface CycleScriptsBridge {
     readonly verified?: boolean
   }
   prereqState(options: { story: string; dir?: string }): PrereqState
+  /** US-647 AC-11: `cycle-state.mjs decisions` — the maintainer's decision comments, authenticated by the script (no login passed). */
+  decisions?(options: { dir: string; story: string; pr?: number }): CycleDecisionsResult
   worktree(options: CycleWorktreeOptions): CycleWorktreeResult
   /** `cycle-merge.mjs check`: conditions 1-5 re-read live; a failure PARKS the card. */
   mergeCheck(options: CycleMergeOptions): CycleMergeResult
@@ -707,14 +709,33 @@ function resetGroupMethod(
   }
 }
 
+/** US-647: what `cycle-state.mjs decisions` recorded this pass (accepted or ignored, with the reason). */
+export interface CycleDecisionsResult {
+  readonly recorded?: ReadonlyArray<{
+    readonly decisionRef: string
+    readonly status: 'accepted' | 'ignored'
+    readonly reason?: string
+    readonly choice?: string
+  }>
+  readonly revoked?: ReadonlyArray<{ readonly decisionRef: string; readonly reason: string }>
+  readonly block?: string | null
+  readonly errors?: readonly string[]
+}
+
 function stateMethods(
   runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
   cycleStatePath: string,
 ): Pick<
   CycleScriptsBridge,
-  'resolve' | 'recover' | 'gateRed' | 'baseSync' | 'worktreeClean' | 'prereqState'
+  'resolve' | 'recover' | 'gateRed' | 'baseSync' | 'worktreeClean' | 'prereqState' | 'decisions'
 > {
   return {
+    decisions: o =>
+      runScript(cycleStatePath, 'decisions', [
+        ['dir', o.dir],
+        ['story', o.story],
+        ...optional([['pr', o.pr === undefined ? undefined : String(o.pr)]]),
+      ]) as CycleDecisionsResult,
     resolve: options =>
       runScript(cycleStatePath, 'resolve', resolveArgs(options)) as CycleResolveResult,
     recover: o =>

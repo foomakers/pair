@@ -40,7 +40,7 @@ Every `.mjs` file in `scripts/host/` is loaded by `loadAdapters` as a candidate 
 
 On a **local** host (no repository at all, `hostsCode: false`), `repo` is simply ignored by every method — there is nothing to scope to, so adapters accept and drop it (see the `filesystem` worked example below, whose methods never read `repo`).
 
-Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-decision and `pr-state find` paths:
+Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-decision, maintainer-decision and `pr-state find` paths:
 
 | Method            | Side (ADR-018) | Contract                                                                                                       |
 | ----------------- | -------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -48,7 +48,8 @@ Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-d
 | `findCards`       | pm-tool        | `findCards({ repo, search })` → an array of matching cards                                                       |
 | `updateCard`      | pm-tool        | `updateCard({ repo, id, body })` → `{ id }`                                                                       |
 | `parseCardRef`    | pm-tool        | `parseCardRef(ref, { repo })` → `{ id, number, inScope }` or `null` when `ref` is not a card reference; a bare id (`572`, `#572`, `IN-01`) is the bound tracker's own card (`inScope: true`). The ONE validator of a card id (`--root`, `--story`) — an unsafe id throws `HostError('invalid-input')` |
-| `listComments`    | code-host      | `listComments({ pr, repo })` → an array of `{ id, body, url }`                                                    |
+| `listCardComments` | pm-tool      | `listCardComments({ id, repo })` → an array of `{ id, body, url, authorLogin, authorIsUser }` on the CARD's thread. Maintainer decisions (`cycle-state.mjs decisions`); absent ⇒ the card is not a decision source |
+| `listComments`    | code-host      | `listComments({ pr, repo })` → an array of `{ id, body, url, authorLogin?, authorIsUser? }` — the author as the host reports it; a maintainer decision is accepted only with both |
 | `readComment`     | code-host      | `readComment({ id, repo })` → `{ body, authorLogin, authorIsUser, pr }`                                           |
 | `parseCommentRef` | code-host      | `parseCommentRef(ref, { repo })` → `{ pr, id, inScope }` or `null`                                                |
 | `commentRef`      | code-host      | `commentRef({ repo, pr, id })` → the comment's URL string                                                         |
