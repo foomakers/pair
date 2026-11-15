@@ -494,7 +494,7 @@ A declared policy still carrying the retired severity-LIST key (the pre-revision
 
 ### Recovery — a maintainer's own commands, generalized (US-514 T-4)
 
-`pair-workflow-cycle`'s `supersede` command sets the run's own LAST handoff aside (any stage, not only the original preparation attempt) — see that skill's Maintainer Recovery section. This key changes only what BLOCKS; the recovery commands are unchanged in shape.
+A blocked run resumes from the maintainer's verified decision comment (`cycle-state.mjs decisions`, US-647) — see `pair-workflow-cycle`'s Maintainer Recovery section; `supersede` stays a local console command that sets the run's own LAST handoff aside. This key changes only what BLOCKS; the recovery commands are unchanged in shape.
 
 ## Cycle Hooks — deterministic commands around the delivery cycle
 

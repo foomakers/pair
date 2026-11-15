@@ -471,6 +471,33 @@ test('AC-10 (r0-3): a park reached after this run spent its own recovery is not 
   assert.equal(result.batch[0].status, 'awaiting-human')
   assert.equal(calls.some(c => c.opts.label?.startsWith('recover:resume')), false)
 })
+// US-647 AC-11: a blocked answer first picks up the maintainer's decision comments; an accepted one re-resolves once,
+// an ignored one (a non-maintainer) keeps the card parked. The relay runs the script — the batch decides nothing.
+const decided = recorded => {
+  const std = stdDispatch()
+  let asked = 0
+  return runWorkflow({ args: { cards: [STORY] }, entry: 'fresh', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('decisions:')) {
+      if (recorded === 'throws') throw new Error('relay died')
+      return { recorded, block: 'a0-implement-phase.json@0123456789ab', errors: [] }
+    }
+    if (opts.agentType === 'pair-implementer' && asked++ === 0) return { status: 'redirect', next: { step: 'blocked', reason: 'escalate', detail: 'a human decides' } }
+    return std(prompt, opts)
+  } })
+}
+test('US-647 AC-11: an accepted maintainer decision picked up on a blocked answer resumes the card in the same run', async () => {
+  const { result, calls } = await decided([{ decisionRef: 'u', status: 'accepted', choice: 'decide' }])
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  const relay = calls.filter(c => c.opts.label?.startsWith('decisions:'))
+  assert.equal(relay.length, 1)
+  assert.match(relay[0].prompt, /cycle-state\.mjs decisions --dir \S+ --story 292/)
+  assert.doesNotMatch(relay[0].prompt, /--maintainer/)
+})
+for (const [label, recorded] of [['a decision by a non-maintainer (ignored)', [{ decisionRef: 'u', status: 'ignored', reason: 'author-not-authorized:mallory' }]], ['a failed pickup', 'throws']])
+  test(`US-647 AC-11 edge: ${label} applies nothing — the card keeps its blocked answer`, async () => {
+    const { result } = await decided(recorded)
+    assert.equal(result.batch[0].status, 'escalate')
+  })
 // #646 round 2 — r1-1: a contract fault whose group has nothing unusable to set aside (a kept verdict, or no tail) retries
 // under the round it spent — never a park on the first fault.
 for (const reason of ['reset-group-not-tail', 'reset-group-sealed-or-clean'])
@@ -613,7 +640,7 @@ test('TC-11: the workflow source dispatches ONLY skill invocations — no free-f
   // the prepare phase (cycle-prepare.mjs). No rule lives in them.
   const scriptRunners = all.filter(d => /^`(Run (?:EXACTLY|exactly)|Card )/.test(d))
   const dispatches = all.filter(d => !scriptRunners.includes(d))
-  assert.equal(scriptRunners.length, 16, `expected ten existing relays and six process recovery relays (incl. the re-run resume), found ${scriptRunners.length}`)
+  assert.equal(scriptRunners.length, 17, `expected ten existing relays, six process recovery relays (incl. the re-run resume) and the maintainer-decision pickup (US-647), found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)

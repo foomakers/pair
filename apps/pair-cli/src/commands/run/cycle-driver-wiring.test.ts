@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { execFileSync } from 'child_process'
+import { createHash } from 'crypto'
 import {
   chmodSync,
   cpSync,
@@ -96,6 +97,8 @@ if (a[0] === 'issue' && a[1] === 'view') {
   process.stdout.write(JSON.stringify({ title: 'A story', body: '**Status**: Refined\\n\\n## Task Breakdown\\n\\n- [ ] T-1\\n' }))
 } else if (a[0] === 'pr' && a[1] === 'view') {
   process.stdout.write('feature/US-7-a-story\\n')
+} else if (a[0] === 'api' && process.env.FAKE_GH_COMMENTS && /issues\\/7\\/comments$/.test(a[a.length - 1])) {
+  process.stdout.write(process.env.FAKE_GH_COMMENTS)
 } else process.exit(1)
 `,
     )
@@ -152,6 +155,120 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
       budgets: { autoRecoveryRounds: 1 },
       ...(pr !== undefined && { pr }),
     })
+
+  // US-647 AC-11: before resolve, the driver has the script read the card's comments through the operator's `gh` and
+  // authenticate the author against the adopted maintainer — the driver passes no login; only the maintainer resumes.
+  it.each([
+    ['rucka', 'User', '2026-11-15T10:00:00Z', 'prepare'],
+    ['mallory', 'User', '2026-11-15T10:00:00Z', 'blocked'],
+    ['rucka', 'Bot', '2026-11-15T10:00:00Z', 'blocked'],
+    // review r0-2: the host names the creator — a comment edited afterwards is not the maintainer's decision
+    ['rucka', 'User', '2026-11-15T11:00:00Z', 'blocked'],
+  ])(
+    'US-647 AC-11: a decision comment by %s (%s, updated %s) on the card → the next resolve answers %s',
+    async (login, type, updatedAt, step) => {
+      vi.mocked(runCycle).mockClear()
+      await drive(ENGINES.claude)
+      const input = vi.mocked(runCycle).mock.calls[0]?.[0]
+      mkdirSync(join(main, '.pair/adoption/tech'), { recursive: true })
+      writeFileSync(
+        join(main, '.pair/adoption/tech/way-of-working.md'),
+        '- `default-assignee`: `rucka`\n',
+      )
+      const dir = join(main, '.pair/working/runs/story-7/7')
+      rmSync(join(dir, 'recovery.json'), { force: true })
+      const put = (name: string, data: object) =>
+        writeFileSync(
+          join(dir, name),
+          JSON.stringify({
+            schemaVersion: 3,
+            workflowVersion: CYCLE_WORKFLOW_VERSION,
+            run: 'story-7',
+            story: '7',
+            inputHead: 'a'.repeat(40),
+            attempt: 1,
+            ...data,
+          }),
+        )
+      put('a0-implement-phase.json', {
+        phase: 'a0',
+        skill: 'implement-phase',
+        seq: 1,
+        status: 'ok',
+        gatesPassed: true,
+        prNumber: 9,
+        outputHead: 'b'.repeat(40),
+      })
+      put('r0-review-phase.json', {
+        phase: 'r0',
+        skill: 'review-phase',
+        seq: 2,
+        reviewedHead: 'b'.repeat(40),
+        verdict: 'changes-requested',
+        custody: { contractBreach: false },
+        readiness: { ready: false },
+        findings: [
+          {
+            id: 'r0-1',
+            severity: 'Major',
+            location: 'src/a.ts:1',
+            description: 'wrong',
+            recommendation: 'fix',
+            kind: 'defect',
+            transition: 'open',
+            blocking: true,
+          },
+        ],
+      })
+      put('r1-g1-red-spec.json', {
+        phase: 'r1-g1',
+        skill: 'red-spec',
+        seq: 3,
+        status: 'unprovable',
+        reason: 'no policy',
+      })
+      const block = `r1-g1-red-spec.json@${createHash('sha256')
+        .update(readFileSync(join(dir, 'r1-g1-red-spec.json')))
+        .digest('hex')
+        .slice(0, 12)}`
+      const body =
+        '```json\n' +
+        JSON.stringify({
+          schemaVersion: 1,
+          kind: 'maintainer-decision',
+          story: '7',
+          block,
+          choice: 'decide',
+          reason: 'restrictive reading is fine',
+        }) +
+        '\n```'
+      vi.stubEnv(
+        'FAKE_GH_COMMENTS',
+        JSON.stringify([
+          {
+            id: 5,
+            body,
+            html_url: 'https://github.com/o/r/issues/7#issuecomment-5',
+            user: { login, type },
+            created_at: '2026-11-15T10:00:00Z',
+            updated_at: updatedAt,
+          },
+        ]),
+      )
+
+      const answer = (await input?.resolve()) as {
+        next?: { step?: string; maintainerDecision?: { by?: string } }
+      }
+
+      expect(answer.next?.step).toBe(step)
+      if (step === 'prepare') expect(answer.next?.maintainerDecision?.by).toBe('rucka')
+      const said = vi.mocked(console.log).mock.calls.map(c => String(c[0]))
+      expect(
+        said.some(l => l.includes('Decision: https://github.com/o/r/issues/7#issuecomment-5')),
+      ).toBe(true)
+    },
+    60_000,
+  )
 
   it('AC-24: default-off writes no telemetry; enabled writes stage and terminal card records', async () => {
     const path = join(main, '.pair/working/telemetry/records.jsonl')

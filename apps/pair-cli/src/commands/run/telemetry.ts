@@ -157,15 +157,23 @@ function readSupersedes(runDir: string): ManualIntervention[] {
   const index = join(runDir, 'maintainer-interventions.md')
   if (!existsSync(index)) return entries
   for (const line of readFileSync(index, 'utf8').split('\n')) {
-    if (!line.startsWith('| ') || line.includes('| --- |') || line.includes('| file |')) continue
-    const cells = line
-      .split(/(?<!\\)\|/)
-      .slice(1, -1)
-      .map(cell => cell.trim().replace(/\\\|/g, '|'))
-    if (cells.length === 5 && cells[2] && cells[3])
+    const cells = interventionRow(line)
+    // US-647: a maintainer-decision row is counted from maintainer-decisions.json (with its choice), not twice here.
+    if (cells?.[2] && cells[3] && !cells[1]?.startsWith('maintainer decision:'))
       entries.push({ kind: 'supersede', reason: cells[2], who: cells[3] })
   }
   return entries
+}
+
+/** The five cells of one `maintainer-interventions.md` table row, or undefined for a header/separator/prose line. */
+function interventionRow(line: string): string[] | undefined {
+  if (!line.startsWith('| ') || line.includes('| --- |') || line.includes('| file |'))
+    return undefined
+  const cells = line
+    .split(/(?<!\\)\|/)
+    .slice(1, -1)
+    .map(cell => cell.trim().replace(/\\\|/g, '|'))
+  return cells.length === 5 ? cells : undefined
 }
 
 function readDecisionFile(path: string): Record<string, unknown> | undefined {
@@ -217,11 +225,42 @@ function readManualUnblocks(runDir: string): ManualIntervention[] {
   return entries
 }
 
+/** US-647: every maintainer decision comment the script recorded — accepted (by choice), revoked or ignored, never its text as authority. */
+function readMaintainerDecisions(runDir: string): ManualIntervention[] {
+  const path = join(runDir, 'maintainer-decisions.json')
+  if (!existsSync(path)) return []
+  const list = JSON.parse(readFileSync(path, 'utf8')) as unknown
+  return (Array.isArray(list) ? list : []).flatMap(raw => {
+    const r = object(raw)
+    return typeof r?.['author'] === 'string' ? [decisionIntervention(r, r['author'])] : []
+  })
+}
+
+function decisionIntervention(r: Record<string, unknown>, who: string): ManualIntervention {
+  const value = object(r['value'])
+  // review r1-1: a revocation is the host's observation (a comment edited or deleted, by anyone with write access) —
+  // never attributed to the maintainer who authored the decision.
+  if (r['status'] === 'revoked')
+    return {
+      kind: 'maintainer-revoked',
+      who: 'host',
+      reason: `${String(r['revokedReason'] ?? '')} (decision by ${who})`,
+    }
+  if (r['status'] === 'accepted' && typeof value?.['choice'] === 'string')
+    return { kind: `maintainer-${value['choice']}`, who, reason: String(value['reason'] ?? '') }
+  return { kind: 'maintainer-ignored', who, reason: String(r['reason'] ?? '') }
+}
+
 /** Read the cycle's own durable intervention trail, without treating card prose as authority. */
 export function readInterventions(runDir: string): ManualIntervention[] {
   try {
     if (!existsSync(runDir)) return []
-    return [...readSupersedes(runDir), ...readHumanDecisions(runDir), ...readManualUnblocks(runDir)]
+    return [
+      ...readSupersedes(runDir),
+      ...readHumanDecisions(runDir),
+      ...readMaintainerDecisions(runDir),
+      ...readManualUnblocks(runDir),
+    ]
   } catch {
     return [] // best effort: telemetry never fails delivery
   }

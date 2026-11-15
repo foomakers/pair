@@ -275,6 +275,44 @@ it('AC-2: records each durable maintainer intervention with actor and reason', (
   ])
 })
 
+it('US-647 AC-11: every maintainer decision comment is recorded in telemetry — accepted by choice, ignored with its reason, never counted twice', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pair-interventions-'))
+  dirs.push(dir)
+  writeFileSync(
+    join(dir, 'maintainer-interventions.md'),
+    '# Maintainer interventions\n\n| file | what it is | why it was set aside | set aside by | what supersedes it |\n| --- | --- | --- | --- | --- |\n| https://x/1 | maintainer decision: reset | seal moved | rucka, 2026-11-15 | answers b |\n',
+  )
+  writeFileSync(
+    join(dir, 'maintainer-decisions.json'),
+    JSON.stringify([
+      {
+        decisionRef: 'https://x/1',
+        author: 'rucka',
+        status: 'accepted',
+        value: { choice: 'reset', reason: 'seal moved' },
+      },
+      {
+        decisionRef: 'https://x/2',
+        author: 'mallory',
+        status: 'ignored',
+        reason: 'author-not-authorized:mallory',
+      },
+      {
+        decisionRef: 'https://x/3',
+        author: 'rucka',
+        status: 'revoked',
+        revokedReason: 'comment-edited',
+        value: { choice: 'override', reason: 'x' },
+      },
+    ]),
+  )
+  expect(readInterventions(dir)).toEqual([
+    { kind: 'maintainer-reset', who: 'rucka', reason: 'seal moved' },
+    { kind: 'maintainer-ignored', who: 'mallory', reason: 'author-not-authorized:mallory' },
+    { kind: 'maintainer-revoked', who: 'host', reason: 'comment-edited (decision by rucka)' },
+  ])
+})
+
 it('AC-2: malformed intervention evidence does not hide the run outcome', () => {
   const dir = mkdtempSync(join(tmpdir(), 'pair-interventions-'))
   dirs.push(dir)
