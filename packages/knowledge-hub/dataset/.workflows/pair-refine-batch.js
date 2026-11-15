@@ -267,6 +267,28 @@ function parseArgs(raw) {
 // changes what counts as verified. Omit both and every agent inherits the session model.
 const { items: ITEMS, batchModel: BATCH_MODEL, prepareArg: PREPARE_ARG, agentTimeoutMinutes: AGENT_TIMEOUT_ARG } = parseArgs(args)
 
+// The Workflow sandbox has no filesystem API. Resolve once in the repository through a
+// bounded command relay, then use the returned stage settings for every child.
+const PROFILE_SCHEMA = { type: 'object', properties: { source: { type: 'string' }, stages: { type: 'object' } }, required: ['source', 'stages'] }
+const PROFILE = await agent(
+  'Run `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --host claude` in the project root. Return its JSON unchanged. If it fails, report the error; do not start any card. You are running CONCURRENTLY in sibling worktrees: do NOT create, edit or delete ANY file; no add/commit/checkout/branch/worktree/stash.',
+  { agentType: 'general-purpose', phase: 'Contracts', label: 'profile:resolve', model: 'haiku', effort: 'low', schema: PROFILE_SCHEMA },
+)
+if (!PROFILE || typeof PROFILE !== 'object' || !PROFILE.stages || typeof PROFILE.stages !== 'object')
+  throw new Error('refine-batch: profile:resolve returned no stage map; no card dispatched')
+for (const item of ITEMS) {
+  const stage = item.mode === 'refine' ? 'refine-story' : item.mode
+  const settings = PROFILE.stages[stage]
+  if (!settings || typeof settings !== 'object') throw new Error(`refine-batch: profile lacks ${stage}; no card dispatched`)
+  const engine = settings.engine?.value
+  if (!['default', 'claude'].includes(engine))
+    throw new Error(`refine-batch: ${stage} wants engine ${JSON.stringify(engine)}; this host runs claude. Run pair run --engine ${engine} for this stage; no card dispatched.`)
+  const model = settings.model?.resolved?.id
+  if (model && !['fable', 'haiku', 'sonnet', 'opus'].includes(model))
+    throw new Error(`refine-batch: ${stage} wants model ${JSON.stringify(model)}; this host cannot run it. Use a same-class Claude model or pair run; no card dispatched.`)
+}
+const stageSettings = item => PROFILE.stages[item.mode === 'refine' ? 'refine-story' : item.mode]
+
 // Every agent() call is time-bounded (same pattern as pair-loop / pair-implement-batch): the runtime has no per-agent
 // timeout, so each call races a timer (feature-detected `setTimeout`; without it the call is unbounded). A timeout
 // throws an error carrying `.timeout` and `.stage`; a timed-out agent is NEVER re-dispatched (it cannot be cancelled —
@@ -508,10 +530,10 @@ const results = await pipeline(
       agentType: 'general-purpose',
       phase: 'Work',
       label: `${item.mode}:#${item.id}`,
-      effort: EFFORT[item.mode],
+      effort: stageSettings(item).effort?.value !== 'default' ? stageSettings(item).effort.value : EFFORT[item.mode],
       schema: RESULT_SCHEMA,
       // Per-card model wins over the batch default; both absent → inherit the session model.
-      ...(item.model || BATCH_MODEL ? { model: item.model || BATCH_MODEL } : {}),
+      ...(item.model || BATCH_MODEL || stageSettings(item).model?.resolved?.id ? { model: item.model || BATCH_MODEL || stageSettings(item).model.resolved.id } : {}),
     }),
   // `triage` writes NOTHING by contract, so there is no tracker state for a second agent to
   // read back — its verify would only confirm that an issue nobody touched is unchanged.

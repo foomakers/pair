@@ -204,11 +204,16 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3, entry = 'legacy' } =
 // string) gets the default-off resolve answer, unrecorded, so dispatch-shape tests keep counting stages only.
 const withPolicyText = a => (a && typeof a === 'object' && !Array.isArray(a) && !Object.hasOwn(a, 'policyText') ? { ...a, policyText: '' } : a)
 const OFF_POLICY = { ok: true, active: false, policy: { until: 'pr', merge: { mode: 'always', has: [], lacks: [] }, prepare: { mode: 'always', has: [], lacks: [] } }, lines: [], warnings: [], errors: [] }
+const DEFAULT_PROFILE = { source: 'KB default', stages: Object.fromEntries(['prepare', 'validate', 'implement', 'green', 'verify'].map(stage => [stage, { engine: { value: 'default' }, model: { resolved: { id: null } }, effort: { value: 'default' } }])) }
 
 async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry, autonomy }) {
   const calls = []
   const simulate = makeSimulator({ entry, floor: floor ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.severityFloor ?? 'Minor' : 'Minor'), maxFixRounds: maxFixRounds ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.pipeline?.maxFixRounds ?? 3 : 3) })
   const agent = async (prompt, opts) => {
+    if (opts.label === 'profile:resolve') {
+      const explicit = await dispatch(prompt, opts)
+      return explicit?.stages ? explicit : DEFAULT_PROFILE
+    }
     if (!autonomy && opts.label === 'autonomy:resolve') return OFF_POLICY
     // US-523 r1-g1: the harness card (STORY) is Ready — a launch with no scripted policy answers its prepare phase so, unrecorded.
     if (!autonomy && String(opts.label ?? '').startsWith('prepare:phase')) return { outcome: 'nothing-to-prepare' }
@@ -640,7 +645,7 @@ test('TC-11: the workflow source dispatches ONLY skill invocations — no free-f
   // the prepare phase (cycle-prepare.mjs). No rule lives in them.
   const scriptRunners = all.filter(d => /^`(Run (?:EXACTLY|exactly)|Card )/.test(d))
   const dispatches = all.filter(d => !scriptRunners.includes(d))
-  assert.equal(scriptRunners.length, 17, `expected ten existing relays, six process recovery relays (incl. the re-run resume) and the maintainer-decision pickup (US-647), found ${scriptRunners.length}`)
+  assert.equal(scriptRunners.length, 18, `expected existing relays plus the workflow profile resolver, found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
@@ -797,7 +802,7 @@ test('TC-14: the effective-inputs digest is keyed by the engine MAJOR — a patc
   const src = SRC.replace(/const WORKFLOW_VERSION = '4\.0\.\d+'/, "const WORKFLOW_VERSION = '4.9.9'")
   const digestOf = async code => {
     const calls = []
-    const agent = async (prompt, opts) => { calls.push(prompt); return opts.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'stale', reason: 'x' } }
+    const agent = async (prompt, opts) => { if (opts.label === 'profile:resolve') return DEFAULT_PROFILE; calls.push(prompt); return opts.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'stale', reason: 'x' } }
     await new AsyncFunction('args', 'agent', 'parallel', 'log', code)({ cards: [STORY], policyText: '' }, agent, fns => Promise.all(fns.map(f => f())), () => {})
     return /\$inputs=([0-9a-f]{16})/.exec(calls[0])[1]
   }
@@ -1283,6 +1288,16 @@ test('TC-14: `models` routes the five live roles independently; `model` stays th
   assert.equal(model('validate:#292 r1-g1'), undefined)
   assert.match(await expectThrow({ args: { cards: [STORY], model: 'sonet' } }), /unknown model "sonet"/)
   assert.match(await expectThrow({ args: { cards: [STORY], models: { greeen: 'opus' } } }), /models\.greeen/)
+})
+
+test('#617 AC-3/10: implement batch resolves stage model before dispatch and refuses a foreign engine', async () => {
+  const stages = Object.fromEntries(['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge'].map(stage => [stage, { engine: { value: 'claude' }, model: { resolved: { id: stage === 'implement' ? 'opus' : null } }, effort: { value: stage === 'implement' ? 'medium' : 'default' } }]))
+  const dispatch = (prompt, opts) => opts.label === 'profile:resolve' ? { source: 'pair.config.json', stages } : stdDispatch()(prompt, opts)
+  const { calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'fresh', dispatch })
+  assert.equal(calls.find(c => c.opts.label === 'implement:#292').opts.model, 'opus')
+  assert.equal(calls.find(c => c.opts.label === 'implement:#292').opts.effort, 'medium')
+  stages.implement.engine.value = 'codex'
+  await assert.rejects(runWorkflow({ args: { cards: [STORY] }, entry: 'fresh', dispatch }), /implement.*codex.*pair run/i)
 })
 
 test('US-486 canary follow-up: retired `efforts` roles are REJECTED with the same migration message as `models` — never mapped, never dropped', async () => {

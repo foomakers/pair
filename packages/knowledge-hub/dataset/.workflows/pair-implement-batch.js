@@ -900,11 +900,33 @@ const ROLE_EFFORTS = Object.fromEntries(
 // `relay` = the pure script-relay dispatches (autonomy resolve / tier / decide / escalate / pr-state / cascade / merge-check;
 // NOT `merge:` — that dispatch runs verify-quality, judges the gate colour and writes the squash message): an agent only runs one command and returns its JSON, so it defaults to `haiku` and is NOT moved by the batch-wide
 // `model` / `effort` — only by `models.relay` / `efforts.relay`. A non-schema answer stays fail-closed (HALT), never retried silently.
+// A Workflow sandbox cannot read project files. Ask one bounded relay for the shared
+// resolver's result before any story agent starts, then retain that result for this batch.
+const PROFILE_SCHEMA = { type: 'object', properties: { source: { type: 'string' }, stages: { type: 'object' } }, required: ['source', 'stages'] }
+const PROFILE = PARSED.stories.length ? await agent(
+  `Run exactly this read-only command in the project root: node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --host claude. Return its JSON unchanged. Do not dispatch a story or modify files.`,
+  { agentType: 'general-purpose', phase: 'Contracts', label: 'profile:resolve', model: 'haiku', effort: 'low', schema: PROFILE_SCHEMA },
+) : { source: 'KB default', stages: {} }
+if (!PROFILE || typeof PROFILE !== 'object' || !PROFILE.stages || typeof PROFILE.stages !== 'object')
+  throw new Error('implement-batch: profile:resolve returned no stage map; no story dispatched')
+for (const stage of ['prepare', 'validate', 'implement', 'green', 'verify']) {
+  const settings = PROFILE.stages[stage]
+  if (PARSED.stories.length && (!settings || typeof settings !== 'object')) throw new Error(`implement-batch: profile lacks ${stage}; no story dispatched`)
+  const engine = settings?.engine?.value
+  if (engine && !['default', 'claude'].includes(engine))
+    throw new Error(`implement-batch: ${stage} wants engine ${JSON.stringify(engine)}; this host runs claude. Run pair run --engine ${engine}; no story dispatched.`)
+  const model = settings?.model?.resolved?.id
+  if (model && !['fable', 'haiku', 'sonnet', 'opus'].includes(model))
+    throw new Error(`implement-batch: ${stage} wants model ${JSON.stringify(model)}; this host cannot run it. Use a same-class Claude model or pair run; no story dispatched.`)
+}
+if (PROFILE.table) for (const line of PROFILE.table) log(line)
 const RELAY_DEFAULT_MODEL = 'haiku'
 const withModel = (role, opts) => {
   const relay = role === 'relay'
-  const model = relay ? (ROLE_MODELS.relay ?? RELAY_DEFAULT_MODEL) : (ROLE_MODELS[role] ?? BATCH_MODEL)
-  const effort = relay ? (ROLE_EFFORTS.relay ?? opts.effort) : (ROLE_EFFORTS[role] ?? BATCH_EFFORT ?? opts.effort)
+  const stage = { red: 'prepare', redVerifier: 'validate', implementation: 'implement', green: 'green', reviewer: 'verify' }[role]
+  const profile = stage ? PROFILE.stages[stage] : undefined
+  const model = relay ? (ROLE_MODELS.relay ?? RELAY_DEFAULT_MODEL) : (ROLE_MODELS[role] ?? BATCH_MODEL ?? profile?.model?.resolved?.id)
+  const effort = relay ? (ROLE_EFFORTS.relay ?? opts.effort) : (ROLE_EFFORTS[role] ?? BATCH_EFFORT ?? (profile?.effort?.value !== 'default' ? profile?.effort?.value : undefined) ?? opts.effort)
   return { ...opts, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
 }
 // Rounds of autonomous fix<->re-review before escalating to a human. Beyond 3 the loop is
