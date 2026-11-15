@@ -202,6 +202,8 @@ if (a[0] === 'issue' && a[1] === 'close') { S.issues[a[2]].state = 'closed'; sav
 if (a[0] === 'pr' && a[1] === 'view') { process.stdout.write(S.prs[a[2]].head + '\\n'); process.exit(0) }
 if (a[0] === 'pr' && a[1] === 'merge') { S.prs[a[2]].merged = a.slice(3); save(); process.exit(0) }
 if (a[0] === 'api') {
+  const cm = /^repos\\/[^/]+\\/[^/]+\\/issues\\/comments\\/(\\d+)$/.exec(a[1])
+  if (cm) { const c = (S.comments || {})[Number(cm[1])]; if (!c) { process.stderr.write('gh: Not Found (HTTP 404)'); process.exit(1) } process.stdout.write(JSON.stringify(c)); process.exit(0) }
   const m = /issues\\/(\\d+)\\/(parent|sub_issues)$/.exec(a[1])
   if (m && m[2] === 'parent') { const p = S.issues[m[1]].parent; if (!p) { process.stderr.write('gh: Not Found (HTTP 404)'); process.exit(1) } process.stdout.write(JSON.stringify({ number: p })); process.exit(0) }
   if (m && m[2] === 'sub_issues') { process.stdout.write(JSON.stringify(Object.entries(S.issues).filter(([, i]) => i.parent === Number(m[1])).map(([n, i]) => ({ number: Number(n), state: i.state || 'open' })))); process.exit(0) }
@@ -212,6 +214,16 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(3)
   chmodSync(join(dir, 'gh'), 0o755)
   return { dir, ghBin: join(dir, 'gh'), state: () => JSON.parse(readFileSync(state, 'utf8')), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
 }
+
+test('github readComment returns the comment`s CANONICAL identity (numeric id, repo from html_url) and its created/updated times — whatever spelling the ref used', () => {
+  const comment = { id: 555, html_url: 'https://github.com/Acme/App/pull/7#issuecomment-555', issue_url: 'https://api.github.com/repos/Acme/App/issues/7', body: 'b', user: { login: 'rucka', type: 'User' }, created_at: '2026-11-15T10:00:00Z', updated_at: '2026-11-15T10:05:00Z' }
+  const gh = fakeGh({ comments: { 555: comment } })
+  const out = github.instantiate({ ghBin: gh.ghBin }).readComment({ id: '0555', pr: 7, repo: 'acme/app' })
+  assert.deepEqual(
+    { id: out.id, repo: out.repo, createdAt: out.createdAt, updatedAt: out.updatedAt, pr: out.pr },
+    { id: '555', repo: 'Acme/App', createdAt: '2026-11-15T10:00:00Z', updatedAt: '2026-11-15T10:05:00Z', pr: 7 },
+  )
+})
 
 const wowDir = text => {
   const root = mkdtempSync(join(tmpdir(), 'wow-'))

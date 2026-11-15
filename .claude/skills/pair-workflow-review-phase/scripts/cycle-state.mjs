@@ -125,7 +125,7 @@ export const CYCLE_STATUSES = ['in-progress', 'completed', 'blocked', 'escalated
 // determines which budget is charged; resume is the command or recorded intervention that
 // returns control to the same run. Specific process fault codes override a broader failed status.
 export const STOP_CATALOG = [
-  { status: 'failed-preparation', class: 'finding', resume: 'pair run --card <card>; an unprovable, split-required or contradiction refusal: a maintainer decision comment on its block' },
+  { status: 'failed-preparation', class: 'finding', resume: 'pair run --card <card>; an unprovable, split-required or contradiction refusal: a maintainer decision comment on its block (an unprovable one also: a preparation-waiver comment + approve-correction, or a hand fix that moves the PR head)' },
   // pair run's own stage stops (`failed-<step>`): a stage that refused on purpose for a non-process reason.
   { status: 'failed-prepare', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-validate', class: 'finding', resume: 'pair run --card <card>' },
@@ -1701,6 +1701,10 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer, workflowVers
 // on the bytes. Persisted idempotently (keyed by decisionRef) in `owner-approvals.json`; `resolve` routes
 // the successor preparation once, and the revision line advancing is what consumes it.
 export const APPROVALS_FILE = 'owner-approvals.json'
+// The same verified channel, one more bounded act: waive the findings a remediation preparation refused as
+// `unprovable` (no RED witness exists — e.g. a non-causal flake). It binds to that exact refused attempt
+// (`target`), routes one re-review that carries the waiver, and touches no seal, no custody, no merge gate.
+export const PREPARATION_WAIVER = 'preparation-waiver'
 export const readApprovals = dir => {
   try {
     const a = JSON.parse(readFileSync(join(dir, APPROVALS_FILE), 'utf8'))
@@ -1718,6 +1722,14 @@ export function parseCorrectionComment(body) {
   } catch {
     return { error: 'invalid-json' }
   }
+  if (p && typeof p === 'object' && p.schemaVersion === 1 && p.kind === PREPARATION_WAIVER) {
+    if (typeof p.phase !== 'string' || !phaseParts(p.phase.trim())?.groupId) return { error: 'phase-invalid' }
+    if (!Array.isArray(p.findings) || !p.findings.length || p.findings.some(f => typeof f !== 'string' || !f.trim())) return { error: 'findings-invalid' }
+    for (const k of ['story', 'reason']) if (typeof p[k] !== 'string' || !p[k].trim()) return { error: `${k}-missing` }
+    if (!SHA_RE.test(String(p.inputHead ?? ''))) return { error: 'inputHead-invalid' }
+    if (!Number.isInteger(p.attempt) || p.attempt < 1) return { error: 'attempt-invalid' }
+    return { value: { kind: PREPARATION_WAIVER, story: p.story.trim(), pr: Number(p.pr), phase: p.phase.trim(), attempt: p.attempt, inputHead: p.inputHead, findings: [...new Set(p.findings)].sort(), reason: p.reason.trim() } }
+  }
   if (!p || typeof p !== 'object' || p.schemaVersion !== 1 || p.kind !== 'contract-correction') return { error: 'not-a-contract-correction' }
   if (!/^sha256:[0-9a-f]{64}$/.test(String(p.predecessorContractHash ?? ''))) return { error: 'predecessorContractHash-invalid' }
   if (!Array.isArray(p.rows) || !p.rows.length || p.rows.some(r => typeof r !== 'string' || !r.trim())) return { error: 'rows-invalid' }
@@ -1728,7 +1740,7 @@ export function parseCorrectionComment(body) {
 // contract of its succession line (a stale approval, the line moved on, never routes anything).
 function pendingCorrection(list, approvals, predecessors = []) {
   for (const a of approvals) {
-    if (a.status !== 'approved') continue
+    if (a.status !== 'approved' || a.kind === PREPARATION_WAIVER) continue
     const target = resolveSealedContract({ handoffs: list, predecessors, contractHash: a.predecessorContractHash })
     const line = target && !target.error ? successionLineOf(target.phase) : null
     if (!line) continue
@@ -1772,6 +1784,40 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
   const story = String(list[list.length - 1].data.story ?? '')
   if (c.story !== story) return { approved: false, reason: 'story-mismatch' }
   if (c.pr !== Number(pr)) return { approved: false, reason: 'pr-mismatch' }
+  if (c.kind === PREPARATION_WAIVER) {
+    // Only the ADOPTED maintainer: a `--maintainer` argument is the caller's word, never authority for a waiver.
+    const adopted = resolveMaintainer({ dir })
+    if (adopted.error) return { approved: false, reason: adopted.error }
+    if (comment.authorLogin !== adopted.login) return { approved: false, reason: `author-not-authorized:${comment.authorLogin}` }
+    // The author is who CREATED the comment; anyone with write access can edit it. A decision is a comment never
+    // edited (to change it, post a new one) — and a host that cannot prove that gets no waiver (fail closed).
+    if (commentEditedReason(comment)) return { approved: false, reason: commentEditedReason(comment) }
+    const last = list[list.length - 1]
+    const review = list.filter(h => h.skill === 'review-phase').pop()
+    if (last.skill !== 'red-spec' || last.phase !== c.phase || last.data.status !== 'unprovable' || !review) return { approved: false, reason: 'waiver-not-owed' }
+    const held = new Set(last.data.findings?.received ?? [])
+    if (c.findings.some(id => !held.has(id))) return { approved: false, reason: 'waiver-findings-unknown' }
+    // Bound to the refused attempt the maintainer saw: its attempt number and the head it was refused on.
+    if (c.attempt !== last.attempt || c.inputHead !== last.data.inputHead) return { approved: false, reason: 'waiver-attempt-mismatch' }
+    return withLock(dir, lockWaitMs, () => {
+      // One comment, one waiver, keyed on the comment's identity, never the ref's text (`/pull/` vs `/issues/`, `-0555`
+      // vs `-555`). A GitHub comment id is global (it survives a repo rename or transfer): `github#<id>`, no repo; any other
+      // host's id is unique per repo only, so its repo (case-folded) is part of the key. The same comment on the SAME target
+      // is a replay of this approval; on any other target — a newer attempt here, or any other run of this story — reuse.
+      const id = comment.id ?? (/^\d+$/.test(String(ref.id)) ? String(BigInt(ref.id)) : String(ref.id))
+      const commentKey = host.code.id === 'github' ? `github#${id}` : `${String(comment.repo ?? repo ?? '').toLowerCase()}#${id}`
+      const target = `${last.name}.attempt-${last.attempt}`
+      const all = readApprovals(dir)
+      const mine = all.find(a => a.kind === PREPARATION_WAIVER && a.commentKey === commentKey)
+      if (mine) return mine.target === target ? { approved: true, reason: 'already-applied' } : { approved: false, reason: 'decisionRef-already-used' }
+      const runs = dirname(dirname(resolvePath(dir)))
+      const story = basename(resolvePath(dir))
+      if (readdirSync(runs).some(r => join(runs, r, story) !== resolvePath(dir) && readApprovals(join(runs, r, story)).some(a => a.kind === PREPARATION_WAIVER && a.commentKey === commentKey))) return { approved: false, reason: 'decisionRef-already-used' }
+      const record = { decisionRef, commentKey, status: 'approved', actor: comment.authorLogin, at: (now instanceof Date ? now : new Date(now)).toISOString(), ...c, target }
+      writeFileSync(join(dir, APPROVALS_FILE), JSON.stringify([...all, record], null, 2))
+      return { approved: true, record }
+    })
+  }
   const predecessors = predecessorEvidence(dir)
   const target = resolveSealedContract({ handoffs: list, predecessors, contractHash: c.predecessorContractHash })
   if (!target || target.error) return { approved: false, reason: 'predecessor-not-sealed', detail: target?.error }
@@ -1866,7 +1912,9 @@ export const readDecisions = dir => {
 // review r0-2: the host names a comment's CREATOR, not its last editor — anyone with write access can edit a comment. A
 // decision is therefore a comment never edited (to correct one, post a new one); a host that cannot prove it is refused.
 // The same rule guards every maintainer comment this file reads as an authorization (scope decisions, owner corrections).
-export const commentEditedReason = c => (!c?.createdAt || !c?.updatedAt ? 'comment-unverifiable' : String(c.createdAt) !== String(c.updatedAt) ? 'comment-edited' : undefined)
+// One code, `comment-edited`, for an edited comment AND for a host that cannot prove it unedited (no timestamps): fail
+// closed, the same refusal the preparation waiver (#657) gives — a caller never has to tell the two apart to stay safe.
+export const commentEditedReason = c => (!c?.createdAt || !c?.updatedAt || String(c.createdAt) !== String(c.updatedAt) ? 'comment-edited' : undefined)
 // Accepted, not revoked (deleted or edited comment) and not withdrawn — the decisions in force. Review r1-1: revocation only
 // REMOVES authority. A withdrawal, once accepted, is permanent: an amendment revoked later (its comment edited or deleted
 // by anyone with write access) loses its own effect, but the decisions it withdrew never come back into force.
@@ -2912,6 +2960,7 @@ export function acAssessmentErrors(data) {
 const isBlocking = f => f && f.blocking === true && f.transition !== 'resolved' && f.nonActionable !== true
 // Preparation refusals whose cause lies outside the cycle: a later dispatch can succeed unchanged.
 const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
+const CONTRACT_REFUSALS = new Set(PREPARE_REFUSALS.filter(r => !EXTERNAL_REFUSALS.has(r)))
 // A contract file that exists but no longer hashes to what its preparation recorded (an absent file proves nothing).
 const contractBytesChanged = (cp, hash) => {
   if (!cp || !existsSync(cp)) return false
@@ -3836,7 +3885,9 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // Persist the observed head so a stage-local resolve (without --head) gets the same dispatch.
   const movedReview = recovery.movedReviews?.[failureId]
   const priorReview = handoffs.filter(h => h.skill === 'review-phase').pop()
-  const unsealedFailure = last.skill === 'red-verify' && last.data.verified !== true && last.data.sealed !== true
+  // A preparation the author refused on the contract itself (`unprovable`, `split-required`) sealed nothing either: an
+  // out-of-cycle commit (a human's hand fix) moves the head past it the same way — re-review, never re-prepare.
+  const unsealedFailure = (last.skill === 'red-verify' && last.data.verified !== true && last.data.sealed !== true) || (last.skill === 'red-spec' && CONTRACT_REFUSALS.has(last.data.status))
   const priorBlocking = (priorReview?.data.findings ?? []).filter(isBlocking)
   const humanHeld = priorReview?.data.needsHumanDecision === true || (priorBlocking.length > 0 && priorBlocking.every(f => f.external === true))
   if (unsealedFailure && priorReview && !humanHeld && !ledger.some(r => r.state === 'active') && cycleCounters(handoffs).spentCycles < (policy.maxFixRounds ?? POLICY_DEFAULTS.maxFixRounds)) {
@@ -3861,6 +3912,13 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
       cycleCounters(handoffs).spentCycles >= maxFix
         ? blocked('escalate', { budget: 'maxFixRounds', needsHuman: `maxFixRounds (${maxFix}) spent — the merge gate is still red: a human decides`, findings })
         : { step: 'prepare', mode: 'remediation', phase: `r${round}-g1`, round, attempt: 1, base: gateRed.reviewedHead, findings }
+  }
+  // A maintainer's verified waiver of THIS unprovable preparation: re-review with the waived findings closed by the human.
+  const waiver = last.skill === 'red-spec' && last.data.status === 'unprovable' && priorReview && readApprovals(dir).find(a => a.kind === PREPARATION_WAIVER && a.status === 'approved' && a.target === failureId && a.inputHead === last.data.inputHead)
+  if (waiver) {
+    const round = Math.max(phaseParts(last.phase)?.round ?? 0, phaseParts(priorReview.phase)?.round ?? 0) + 1
+    const waived = new Set(waiver.findings)
+    next = withActiveGuards({ step: 'verify', mode: 're-review', phase: `r${round}`, round, attempt: 1, base: priorReview.data.reviewedHead, prior: priorReview.name, openIds: priorBlocking.map(f => f.id).filter(id => !waived.has(id)), priorFindings: [...new Map(handoffs.filter(h => h.skill === 'review-phase').flatMap(r => (r.data.findings ?? []).filter(f => f?.id).map(f => [f.id, { id: f.id, severity: f.severity }]))).values()], waived: waiver.findings.map(id => ({ id, decisionRef: waiver.decisionRef, actor: waiver.actor, reason: waiver.reason })), ...(next.headMoved ? { headMoved: true } : {}) }, ledger.filter(r => r.state === 'active'))
   }
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated
@@ -4094,7 +4152,12 @@ function appendIntervention(dir, row) {
   writeFileSync(file, `${prior}${prior && !head && !prior.endsWith('\n') ? '\n' : ''}${head}${line}\n`)
   return file
 }
-const resolveAfter = ({ dir, workflowVersion, policy, entry, pr }) => resolve({ dir, workflowVersion, policy: policy ?? {}, entry: entry ?? (pr !== undefined ? 'pr' : 'fresh'), ...(pr !== undefined ? { pr } : {}) })
+// A maintainer command run as documented (no --pr/--entry) still resolves the run it acted on: the PR comes from the
+// run's own handoffs (plus a just-renamed one), or a PR-entry run emptied by supersede restarted at `implement a0`.
+const resolveAfter = ({ dir, workflowVersion, policy, entry, pr: given, also = [] }) => {
+  const pr = given ?? [...also, ...readHandoffs(dir)].map(h => Number(h.data?.pr ?? h.data?.prNumber)).find(n => Number.isInteger(n) && n > 0)
+  return resolve({ dir, workflowVersion, policy: policy ?? {}, entry: entry ?? (pr !== undefined ? 'pr' : 'fresh'), ...(pr !== undefined ? { pr } : {}) })
+}
 
 export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by, now = new Date(), workflowVersion, policy, entry, pr, lockWaitMs = 5000 }) {
   const where = safeRunDir(dir)
@@ -4144,7 +4207,7 @@ export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by,
         contract = { from: basename(cp), to: cto }
       }
     }
-    const out = resolveAfter({ dir, workflowVersion, policy, entry, pr })
+    const out = resolveAfter({ dir, workflowVersion, policy, entry, pr, also: [target] })
     const hash = String(target.data.contractHash ?? '')
     const what = `${phase} ${skill} attempt ${target.attempt}${hash ? ` (contract \`${hash.slice(0, 15)}…\`)` : ''}, never validated`
     const index = appendIntervention(dir, [`\`${to}\``, what, reason, `${by}, ${dayOf(now)}`, `the step now due: ${describeNext(out.next)}`])

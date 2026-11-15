@@ -477,7 +477,7 @@ test('r0-1 control: a failed host read revokes nothing (deletion is unprovable t
 // ── review r0-2: a decision is a comment nobody edited ───────────────────────────────────────────────────────────────
 for (const [label, extra, reason] of [
   ['edited after posting (the host names only its creator)', { updatedAt: '2026-11-15T11:00:00Z' }, 'comment-edited'],
-  ['without the host timestamps that prove it unedited', { createdAt: null, updatedAt: null }, 'comment-unverifiable'],
+  ['without the host timestamps that prove it unedited', { createdAt: null, updatedAt: null }, 'comment-edited'],
 ])
   test(`r0-2: a maintainer decision comment ${label} is ignored with ${reason}`, () => {
     const dir = runDir()
