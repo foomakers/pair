@@ -110,6 +110,7 @@ function modelFitsEngine(engine: EngineId, model: string): boolean {
 
 export interface ProfileRequest {
   readonly root: string
+  readonly engine?: string | undefined
   readonly profile?: string | undefined
   readonly workflowConfig?: string | undefined
   /** The card's `risk:*` tag, when it carries one (resolves a model class). */
@@ -124,6 +125,7 @@ export function resolveWorkflowProfile(
   const script = join(scriptsDir, WORKFLOW_PROFILE_SCRIPT)
   const args = [
     ['root', request.root],
+    ['engine', request.engine],
     ['profile', request.profile],
     ['workflow-config', request.workflowConfig],
     ['tier', request.tier],
@@ -183,7 +185,7 @@ export function resolveOffCycleProfile(input: {
   fs: FileSystemService
   config: Config
   cwd: string
-  flags: { readonly profile?: string; readonly workflowConfig?: string }
+  flags: { readonly profile?: string; readonly workflowConfig?: string; readonly engine?: string }
   invocation: ResolvedInvocation
   tier?: string | undefined
   resolve?: typeof resolveWorkflowProfile | undefined
@@ -197,6 +199,7 @@ export function resolveOffCycleProfile(input: {
   const stage = resolveProfileStage(scriptsDir, text)
   const profile = (input.resolve ?? resolveWorkflowProfile)(scriptsDir, {
     root: input.cwd,
+    engine: input.flags.engine,
     profile: input.flags.profile,
     workflowConfig: input.flags.workflowConfig,
     tier: input.tier,
@@ -249,7 +252,8 @@ export function workflowProfileRequested(
   return (
     flags.profile !== undefined ||
     flags.workflowConfig !== undefined ||
-    config['workflowProfiles'] !== undefined
+    config['workflowProfiles'] !== undefined ||
+    config['run'] !== undefined
   )
 }
 

@@ -3,11 +3,11 @@ import type { PrepareDependencies, PromptExtras } from './card-prepare'
 import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
-import { loadConfigWithOverrides, readEngineDeclaration } from '#config'
+import { loadConfigWithOverrides, readEngineDeclaration, readRunDeclaration } from '#config'
 import { resolveWorkingPathOverride, type Config } from '#registry'
 import type { RunCommandConfig } from './parser'
 import type { resolveEngine } from './resolve-engine'
-import { ENGINE_IDS, isEngineId, type EngineDefinition, type EngineId } from './engines'
+import { DEFAULT_ENGINE_ID, ENGINE_IDS, isEngineId, type EngineDefinition, type EngineId } from './engines'
 import type { ResolvedInvocation, SkillProbe } from './resolve-skill'
 import { createSkillProbe } from './skill-probe'
 import type { Perimeter } from './perimeter'
@@ -215,7 +215,7 @@ export function resolveContext(
     idleTimeout: resolveIdleTimeout({
       flag: config.idleTimeoutSeconds,
       policy: policy.idleTimeoutSeconds,
-      declared: readEngineDeclaration(loaded.config, ENGINE_IDS).idleTimeout,
+      declared: declaredRunIdleTimeout(loaded.config, config.engine ?? declaredEngine(loaded.config) ?? DEFAULT_ENGINE_ID),
     }),
   }
 }
@@ -255,7 +255,15 @@ export function declaredEngineBin(config: Config): Readonly<Record<string, strin
 
 /** `engine.model`: the model this project pins for each engine, run-wide (per-stage is #488's). */
 export function declaredEngineModel(config: Config, id: string): string | undefined {
-  return readEngineDeclaration(config, ENGINE_IDS).model?.[id]
+  const run = readRunDeclaration(config, ENGINE_IDS)
+  if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  return run.agents?.[id]?.model ?? run.defaults?.model ?? readEngineDeclaration(config, ENGINE_IDS).model?.[id]
+}
+
+export function declaredRunIdleTimeout(config: Config, id: string): number | undefined {
+  const run = readRunDeclaration(config, ENGINE_IDS)
+  if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  return run.agents?.[id]?.idleTimeout ?? run.defaults?.idleTimeout ?? readEngineDeclaration(config, ENGINE_IDS).idleTimeout
 }
 
 /**
@@ -265,11 +273,13 @@ export function declaredEngineModel(config: Config, id: string): string | undefi
  * silently ignored would have no way to tell a working configuration from a broken one.
  */
 export function declaredEngine(config: Config): EngineId | undefined {
+  const run = readRunDeclaration(config, ENGINE_IDS)
+  if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
   const outcome = readEngineDeclaration(config, ENGINE_IDS)
   if (outcome.errors.length > 0) {
     throw new Error(`pair.config.json is invalid:\n  - ${outcome.errors.join('\n  - ')}`)
   }
-  return isEngineId(outcome.engine) ? outcome.engine : undefined
+  return isEngineId(run.defaults?.engine) ? run.defaults.engine : isEngineId(outcome.engine) ? outcome.engine : undefined
 }
 
 /** The autonomy/trust posture for one resolved engine — shared by every entry that spawns one. */

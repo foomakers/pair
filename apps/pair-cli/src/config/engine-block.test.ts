@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readEngineDeclaration } from './engine-block'
+import { readEngineDeclaration, readRunDeclaration } from './engine-block'
 
 const KNOWN = ['pi', 'opencode', 'claude'] as const
 
@@ -107,5 +107,26 @@ describe('US-573 AC5: engine.idleTimeout', () => {
       expect(
         readEngineDeclaration({ engine: { id: 'pi', idleTimeout: bad } }, KNOWN).errors,
       ).toEqual(['engine.idleTimeout: must be a positive integer of seconds'])
+  })
+})
+
+describe('#617 AC-2/5: run defaults and per-agent declarations', () => {
+  it('reads sparse defaults and agent settings without selecting an engine from an agent', () => {
+    expect(readRunDeclaration({ run: { defaults: { engine: 'pi', model: 'base', idleTimeout: 30 }, agents: { pi: { command: '/opt/pi', args: ['--literal', '$(touch x)'], model: 'agent' } } } }, KNOWN)).toEqual({
+      defaults: { engine: 'pi', model: 'base', idleTimeout: 30 },
+      agents: { pi: { command: '/opt/pi', args: ['--literal', '$(touch x)'], model: 'agent' } },
+      errors: [],
+    })
+  })
+
+  it.each([
+    [{ agents: { wrong: { model: 'x' } } }, /run\.agents\.wrong.*unknown engine/],
+    [{ agents: { pi: { effort: 'high' } } }, /run\.agents\.pi\.effort.*unknown field/],
+    [{ agents: { pi: { engine: 'claude' } } }, /run\.agents\.pi\.engine.*unknown field/],
+    [{ agents: { pi: { args: 'bad' } } }, /run\.agents\.pi\.args.*array/],
+    [{ defaults: { engine: 'wrong' } }, /run\.defaults\.engine.*unknown engine/],
+    [{ defaults: { effort: 'low' } }, /run\.defaults\.effort.*unknown field/],
+  ])('rejects malformed unused entries before dispatch', (run, message) => {
+    expect(readRunDeclaration({ run }, KNOWN).errors.join('; ')).toMatch(message)
   })
 })

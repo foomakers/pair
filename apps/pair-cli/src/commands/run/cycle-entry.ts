@@ -342,6 +342,7 @@ function resolveRunProfile(
   const tier = config.dispatch?.tags.find(tag => tag.startsWith('risk:'))
   return (deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(location.scriptsDir, {
     root: cwd,
+    engine: config.engine,
     profile: config.profile,
     workflowConfig: config.workflowConfig,
     tier,

@@ -3,6 +3,7 @@ import { InMemoryFileSystemService } from '@pair/content-ops'
 import { parseRunCommand } from './parser'
 import { readAutomationPolicy, POLICY_PATH } from './automation-policy'
 import { readEngineDeclaration } from '../../config/engine-block'
+import { declaredRunIdleTimeout } from './run-context'
 
 /** setTimeout's delay is a signed 32-bit ms count: 2147483 s is the largest whole-second bound. */
 const MAX_SECONDS = 2147483
@@ -18,6 +19,11 @@ const engineBlock = (idleTimeout: number) =>
   readEngineDeclaration({ engine: { id: 'claude', idleTimeout } }, ['claude'])
 
 describe('r0-4: idle and total timeouts are bounded to what setTimeout can hold', () => {
+  it('#617 AC-2: agent idle timeout precedes run default and legacy', () => {
+    const config = { engine: { id: 'pi', idleTimeout: 10 }, run: { defaults: { idleTimeout: 20 }, agents: { pi: { idleTimeout: 30 } } } }
+    expect(declaredRunIdleTimeout(config as never, 'pi')).toBe(30)
+    expect(declaredRunIdleTimeout({ ...config, run: { defaults: { idleTimeout: 20 } } } as never, 'pi')).toBe(20)
+  })
   it('W-r0-4a: --idle-timeout above 2147483 s is refused', () => {
     expect(() => parseRunCommand({ idleTimeout: OVER })).toThrow(/--idle-timeout/)
   })

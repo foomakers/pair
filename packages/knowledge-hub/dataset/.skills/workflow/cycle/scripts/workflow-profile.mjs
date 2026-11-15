@@ -19,7 +19,7 @@ export const STAGES = ['prepare', 'validate', 'implement', 'green', 'verify', 'c
 export const FIELDS = ['engine', 'model', 'effort', 'context']
 export const EFFORTS = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
 export const CONTEXTS = ['fresh', 'reuse']
-const LEGACY_REUSE_STAGES = ['prepare', 'green']
+const LEGACY_REUSE_STAGES = [...new Set(CONTEXT_TABLE.reuseAllowed.map(t => t.split('->')[1]))]
 // The KB default (D21): the schema default for engine and model, default effort, a fresh context.
 export const MODEL_CLASSES = ['cheap', 'balanced', 'frontier']
 /** A model value meaning "the class `## Model Policy` assigns to the card's risk tier". */
@@ -184,6 +184,46 @@ export const profileHash = profile => createHash('sha256').update(canonical(prof
 
 const CONFIG_KEYS = ['default', 'files', 'inline']
 
+function readRunLayer(root) {
+  const path = join(root, 'pair.config.json')
+  if (!existsSync(path)) return {}
+  let config
+  try { config = JSON.parse(readFileSync(path, 'utf8')) }
+  catch (e) { throw new ProfileError('profile-invalid', `${path} is not valid JSON: ${e.message}`) }
+  const run = config?.run
+  if (run === undefined) return { legacy: config?.engine }
+  const errors = []
+  if (!isObject(run)) errors.push(`run: ${JSON.stringify(run)} must be an object`)
+  else {
+    for (const key of Object.keys(run)) if (!['defaults', 'agents'].includes(key)) errors.push(`run.${key}: unknown field; remove it`)
+    const defaults = run.defaults
+    if (defaults !== undefined && !isObject(defaults)) errors.push(`run.defaults: ${JSON.stringify(defaults)} must be an object`)
+    else for (const [key, value] of Object.entries(defaults ?? {})) {
+      const field = `run.defaults.${key}`
+      if (!['engine', 'model', 'idleTimeout'].includes(key)) errors.push(`${field}: unknown field; remove it`)
+      else if (key === 'engine' && !HOST_ENGINES.includes(value)) errors.push(`${field}: ${JSON.stringify(value)} unknown engine; choose ${HOST_ENGINES.join(' | ')}`)
+      else if (key === 'model' && (typeof value !== 'string' || !value.trim())) errors.push(`${field}: ${JSON.stringify(value)} must be a non-empty model id`)
+      else if (key === 'idleTimeout' && (!Number.isInteger(value) || value <= 0 || value > 2147483)) errors.push(`${field}: ${JSON.stringify(value)} must be a positive integer of seconds at most 2147483`)
+    }
+    const agents = run.agents
+    if (agents !== undefined && !isObject(agents)) errors.push(`run.agents: ${JSON.stringify(agents)} must be an object`)
+    else for (const [engine, entry] of Object.entries(agents ?? {})) {
+      const field = `run.agents.${engine}`
+      if (!HOST_ENGINES.includes(engine)) errors.push(`${field}: unknown engine; choose ${HOST_ENGINES.join(' | ')}`)
+      if (!isObject(entry)) { errors.push(`${field}: ${JSON.stringify(entry)} must be an object`); continue }
+      for (const [key, value] of Object.entries(entry)) {
+        const name = `${field}.${key}`
+        if (!['command', 'args', 'model', 'idleTimeout'].includes(key)) errors.push(`${name}: unknown field; remove it`)
+        else if (key === 'args' && (!Array.isArray(value) || value.some(arg => typeof arg !== 'string'))) errors.push(`${name}: ${JSON.stringify(value)} must be an array of strings`)
+        else if (['command', 'model'].includes(key) && (typeof value !== 'string' || !value.trim())) errors.push(`${name}: ${JSON.stringify(value)} must be a non-empty string`)
+        else if (key === 'idleTimeout' && (!Number.isInteger(value) || value <= 0 || value > 2147483)) errors.push(`${name}: ${JSON.stringify(value)} must be a positive integer of seconds at most 2147483`)
+      }
+    }
+  }
+  if (errors.length) throw new ProfileError('profile-invalid', errors.join('; '))
+  return { ...run, legacy: config?.engine }
+}
+
 function readBlock(root) {
   const path = join(root, 'pair.config.json')
   if (!existsSync(path)) return {}
@@ -307,14 +347,26 @@ function resolveModel(value, { tier, modelClasses = {}, policyOf }) {
   return { class: named, id, ...(tier ? { tier } : {}), line: id === null ? `${via} → engine default (no modelClasses.${named} declared)` : `${via} → ${id}` }
 }
 
-function finish(root, profile, source, sourceDetail, notes, tier) {
+function finish(root, profile, source, sourceDetail, notes, tier, engineFlag) {
   const { errors } = validateProfile(profile)
   if (errors.length) throw new ProfileError('profile-invalid', `${sourceDetail}: ${errors.join('; ')}`)
   let policy
   const policyOf = () => (policy ??= readModelPolicy(root))
+  const run = readRunLayer(root)
   const stages = Object.fromEntries(
     [...STAGES, 'defaults'].map(stage => {
       const eff = effectiveStage(profile, stage, tier)
+      if (eff.engine.source === 'KB default') {
+        if (engineFlag) eff.engine = { value: engineFlag, source: '--engine' }
+        else if (run.defaults?.engine) eff.engine = { value: run.defaults.engine, source: 'run.defaults.engine' }
+        else if (run.legacy?.id) eff.engine = { value: run.legacy.id, source: 'engine.id' }
+      }
+      if (eff.model.source === 'KB default') {
+        const engine = eff.engine.value
+        if (run.agents?.[engine]?.model) eff.model = { value: run.agents[engine].model, source: `run.agents.${engine}.model` }
+        else if (run.defaults?.model) eff.model = { value: run.defaults.model, source: 'run.defaults.model' }
+        else if (run.legacy?.model?.[engine]) eff.model = { value: run.legacy.model[engine], source: `engine.model.${engine}` }
+      }
       eff.model = { ...eff.model, resolved: resolveModel(eff.model.value, { tier, modelClasses: profile.modelClasses, policyOf }) }
       return [stage, eff]
     }),
@@ -323,7 +375,7 @@ function finish(root, profile, source, sourceDetail, notes, tier) {
   return { name: profile.name, source, sourceDetail, hash: profileHash(profile), profile, stages, notes, ...(tier ? { tier } : {}) }
 }
 
-function lookup(root, block, name, source, tier) {
+function lookup(root, block, name, source, tier, engineFlag) {
   const { byName, unparsable, notes } = loadIndex(root, block)
   const hit = byName.get(name)
   if (!hit) {
@@ -334,7 +386,7 @@ function lookup(root, block, name, source, tier) {
         `Known profiles: ${[...byName.keys()].join(', ') || 'none'}.${unparsable.length ? ` Unreadable profile files: ${unparsable.join(', ')}.` : ''}`,
     )
   }
-  return finish(root, hit.profile, source, hit.path, notes, tier)
+  return finish(root, hit.profile, source, hit.path, notes, tier, engineFlag)
 }
 
 /**
@@ -342,7 +394,7 @@ function lookup(root, block, name, source, tier) {
  * Throws a `ProfileError` — never falls back to the KB default on an error (a typo must not quietly
  * run the whole cycle on the wrong model).
  */
-export function resolveProfile({ root, profile, workflowConfig, tier }) {
+export function resolveProfile({ root, profile, workflowConfig, tier, engine }) {
   if (workflowConfig !== undefined) {
     const path = resolvePath(root, workflowConfig)
     if (!existsSync(path)) throw new ProfileError('profile-unresolved', `--workflow-config ${path} does not exist`)
@@ -353,12 +405,12 @@ export function resolveProfile({ root, profile, workflowConfig, tier }) {
       throw new ProfileError('profile-invalid', `${path} is not valid JSON: ${e.message}`)
     }
     const notes = profile !== undefined ? [`--profile '${profile}' ignored: --workflow-config wins`] : []
-    return finish(root, body, '--workflow-config', path, notes, tier)
+    return finish(root, body, '--workflow-config', path, notes, tier, engine)
   }
   const block = readBlock(root)
-  if (profile !== undefined) return lookup(root, block, profile, 'argument', tier)
-  if (block.default !== undefined) return lookup(root, block, block.default, 'pair.config.json', tier)
-  return finish(root, { name: 'KB default' }, 'KB default', 'KB default', [], tier)
+  if (profile !== undefined) return lookup(root, block, profile, 'argument', tier, engine)
+  if (block.default !== undefined) return lookup(root, block, block.default, 'pair.config.json', tier, engine)
+  return finish(root, { name: 'KB default' }, 'KB default', 'KB default', [], tier, engine)
 }
 
 // ── the run's binding ──────────────────────────────────────────────────────────────────
@@ -443,7 +495,7 @@ if (isMain()) {
       if (!rest[i].startsWith('--') || rest[i + 1] === undefined) throw new Error(`malformed arguments near ${rest[i]}`)
       opts[rest[i].slice(2)] = rest[i + 1]
     }
-    const FLAGS = { resolve: ['root', 'profile', 'workflow-config', 'tier', 'dir', 'host', 'card'], bind: ['dir', 'name', 'hash', 'source'], 'stage-for': ['skill-text', 'batch-mode'], gaps: ['root', 'profile', 'workflow-config', 'tier', 'host', 'card'] }
+    const FLAGS = { resolve: ['root', 'profile', 'workflow-config', 'tier', 'dir', 'host', 'card', 'engine'], bind: ['dir', 'name', 'hash', 'source'], 'stage-for': ['skill-text', 'batch-mode'], gaps: ['root', 'profile', 'workflow-config', 'tier', 'host', 'card', 'engine'] }
     if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected resolve | bind | stage-for | gaps)`)
     const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
     if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
@@ -459,7 +511,7 @@ if (isMain()) {
       process.exit(0)
     }
     if (opts.root === undefined) throw new Error('--root is required')
-    const resolved = resolveProfile({ root: opts.root, profile: opts.profile, workflowConfig: opts['workflow-config'], tier: opts.tier })
+    const resolved = resolveProfile({ root: opts.root, profile: opts.profile, workflowConfig: opts['workflow-config'], tier: opts.tier, engine: opts.engine })
     if (cmd === 'gaps') {
       if (opts.host === undefined) throw new Error('--host is required')
       out({ host: opts.host, gaps: gapsForHost(resolved, opts.host, opts.card) })

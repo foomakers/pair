@@ -1,7 +1,7 @@
 import type { ValidateConfigCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
-import { loadConfigWithOverrides, readEngineDeclaration } from '#config'
+import { loadConfigWithOverrides, readEngineDeclaration, readRunDeclaration } from '#config'
 import { ENGINE_IDS } from '../run/engines'
 import {
   extractRegistries,
@@ -55,7 +55,8 @@ export async function handleValidateConfigCommand(
   // its errors are reported the same way: a malformed block must be a validation failure here
   // rather than a surprise at `pair-cli run` time. An ABSENT block adds nothing — delta-only.
   const engineBlock = readEngineDeclaration(workingPathSource, ENGINE_IDS)
-  const errors = [...validation.errors, ...engineBlock.errors]
+  const runBlock = readRunDeclaration(workingPathSource, ENGINE_IDS)
+  const errors = [...validation.errors, ...engineBlock.errors, ...runBlock.errors]
 
   if (errors.length > 0) {
     const errorMessages = errors.join('\n  - ')

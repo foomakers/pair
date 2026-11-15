@@ -32,6 +32,30 @@ test('#617 AC-10: in-session entry skills require a host-gap check before dispat
   }
 })
 
+test('#617 AC-2: a stage inherits model and engine through profile, agent, run and legacy layers', () => {
+  const config = {
+    engine: { id: 'claude', model: { claude: 'claude-legacy' } },
+    run: { defaults: { engine: 'claude', model: 'claude-run' }, agents: { claude: { model: 'claude-agent' } } },
+    workflowProfiles: { inline: { p: { name: 'p', defaults: { model: 'claude-profile' }, stages: { implement: { model: 'claude-stage' } } } }, default: 'p' },
+  }
+  const root = project({ config })
+  const first = resolveProfile({ root })
+  assert.equal(first.stages.implement.model.resolved.id, 'claude-stage')
+  assert.equal(first.stages.verify.model.resolved.id, 'claude-profile')
+  assert.equal(first.stages.verify.engine.value, 'claude')
+  delete config.workflowProfiles
+  assert.equal(resolveProfile({ root: project({ config }) }).stages.implement.model.resolved.id, 'claude-agent')
+  delete config.run.agents
+  assert.equal(resolveProfile({ root: project({ config }) }).stages.implement.model.resolved.id, 'claude-run')
+  delete config.run.defaults.model
+  assert.equal(resolveProfile({ root: project({ config }) }).stages.implement.model.resolved.id, 'claude-legacy')
+})
+
+test('#617 AC-5: even an unused malformed run agent blocks profile resolution', () => {
+  const root = project({ config: { run: { agents: { unknown: { model: 'x' } } } } })
+  assert.throws(() => resolveProfile({ root }), /run\.agents\.unknown.*unknown engine/)
+})
+
 // ── T-1: shape + validator (AC1, AC5) ────────────────────────────────────────────────────────
 test('T-1/AC1: a minimal {name, defaults} profile is valid and needs no stages', () => {
   assert.deepEqual(errorsOf({ name: 'min', defaults: { engine: 'pi', model: 'x', effort: 'low', context: 'fresh' } }), [])
@@ -59,11 +83,12 @@ test('T-1: every stage id of the story shape is known', () => {
   assert.deepEqual(STAGES, ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge', 'refine-story', 'plan-tasks', 'triage', 'classify'])
 })
 
-test('#617 AC-3: refine-story, plan-tasks, triage, classify are accepted; an unknown stage stays unknown; reuse into them is refused', () => {
+test('#617 AC-3/14: refinement stages are accepted and use the transition table', () => {
   const stages = Object.fromEntries(['refine-story', 'plan-tasks', 'triage', 'classify'].map(s => [s, { model: 'x', effort: 'low' }]))
   assert.deepEqual(errorsOf({ name: 'p', stages }), [])
   assert.match(errorsOf({ name: 'p', stages: { 'refine-storey': {} } })[0], /unknown stage 'refine-storey'/)
-  for (const s of ['refine-story', 'plan-tasks', 'triage', 'classify']) assert.match(errorsOf({ name: 'p', stages: { [s]: { context: 'reuse' } } })[0], /not admissible/)
+  for (const s of ['refine-story', 'plan-tasks', 'triage', 'classify'])
+    assert.equal(errorsOf({ name: 'p', stages: { [s]: { context: 'reuse' } } }).length === 0, CONTEXT_TABLE.reuseAllowed.some(t => t.endsWith(`->${s}`)))
 })
 
 test('T-1: an unknown stage id is profile-invalid and names the stage', () => {
@@ -81,12 +106,9 @@ test('T-1: an unknown top-level key, unknown stage field, bad effort/context val
   assert.match(errorsOf('nope')[0], /object/)
 })
 
-test('T-1/AC5: reuse into validate or verify is rejected, naming the stage, before any dispatch', () => {
-  for (const stage of ['validate', 'verify']) {
-    const errs = errorsOf({ name: 'p', stages: { [stage]: { context: 'reuse' } } })
-    assert.equal(errs.length, 1, stage)
-    assert.match(errs[0], new RegExp(`stages\\.${stage}\\.context: 'reuse' is not admissible`))
-  }
+test('#617 AC-14: verify remains fresh; validate may share below red', () => {
+  assert.match(errorsOf({ name: 'p', stages: { verify: { context: 'reuse' } } })[0], /stages\.verify\.context.*not admissible/)
+  assert.deepEqual(errorsOf({ name: 'p', stages: { validate: { context: 'reuse' } } }), [])
 })
 
 test('T-1/AC5: admissibility IS the real cycle-state.mjs table — every transition it allows makes its target stage legal, every other stage is refused', () => {

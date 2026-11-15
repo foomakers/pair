@@ -3,8 +3,14 @@ import { resolveEngine, describeEngineResolution, assertEngineAvailable } from '
 import { DEFAULT_ENGINE_ID, ENGINE_IDS, ENGINES } from './engines'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { createExecutableProbe } from './path-probe'
+import { declaredEngine, declaredEngineModel } from './run-context'
 
 describe('resolveEngine', () => {
+  it('#617 AC-2: run defaults select engine and model above legacy declarations', () => {
+    const config = { engine: { id: 'claude', model: { claude: 'claude-legacy', pi: 'provider/legacy' } }, run: { defaults: { engine: 'pi', model: 'provider/run' }, agents: { pi: { model: 'provider/agent' } } } }
+    expect(declaredEngine(config as never)).toBe('pi')
+    expect(declaredEngineModel(config as never, 'pi')).toBe('provider/agent')
+  })
   it('falls back to the schema default when nothing names an engine (AC12)', () => {
     const resolved = resolveEngine({})
 
