@@ -197,7 +197,14 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     const seal = 'f'.repeat(40) // not in this history: a rebase rewrote it
     writeFileSync(
       join(dir, 'r1-g1-red-verify.json'),
-      JSON.stringify({ phase: 'r1-g1', skill: 'red-verify', seq: 1, sealed: true, verified: true, snapshot: seal }),
+      JSON.stringify({
+        phase: 'r1-g1',
+        skill: 'red-verify',
+        seq: 1,
+        sealed: true,
+        verified: true,
+        snapshot: seal,
+      }),
     )
     const result = bridge().baseSync({ cwd: tree, base: 'main', story: '487', dir })
     expect(result.synced).toBe(false)

@@ -242,17 +242,19 @@ The bridge makes the resume's context deterministic: the task opens by telling t
 
 ## Stop Catalogue and Base Sync
 
-`scripts/cycle-state.mjs` exports `STOP_CATALOG`; the cycle, batch driver and tests use its status, class and resume command. A process fault spends `autoRecoveryRounds`, not a card repair round. A finding enters remediation. A decision waits for the maintainer's verified comment. Re-run `pair run --card N` after a parked fault or decision; the run directory carries the resume position.
+`scripts/cycle-state.mjs` exports `STOP_CATALOG`; the cycle, batch driver and tests use its status, class and resume command. A process fault spends `autoRecoveryRounds`, not a card repair round. A finding enters remediation. A decision waits for the maintainer's verified comment. Re-run `pair run --card N` after a parked fault or decision; the run directory carries the resume position. `resolve` bounds process retries itself: once a phase saw more process faults than `autoRecoveryRounds` it answers `blocked` / `needs-human` with `budget: autoRecoveryRounds` — clear the named cause, then re-run; this coordinator needs no `recover` call to stay bounded.
 
 | Status | Class | Resume |
 | --- | --- | --- |
-| `dirty`, `stale`, `failed-seal`, `failed-verify`, `failed-resume`, `failed-publication` | process | `pair run --card N` after the recorded recovery step |
+| `dirty`, `stale`, `stale-write`, `failed-seal`, `failed-verify`, `failed-resume`, `failed-publication`, `interrupted` | process | `pair run --card N` after the recorded recovery step |
 | `contract-attempt-overwritten`, `contract-hash-mismatch` | process | `cycle-state.mjs reset-group --phase P`, then `pair run --card N` |
 | `seal-not-pushed`, `dead-dispatch`, `idle-timeout`, `gate-flake` | process | `pair run --card N` retries within the process budget |
 | `failed-preparation`, `failed-contract`, `failed-implement`, `failed-fix`, `failed-custody` | finding | `pair run --card N` follows the card's remediation route |
-| `escalate`, `escalated`, `needs-human`, `awaiting-human`, `awaiting-scope-decision` | decision | verified maintainer comment, then `pair run --card N` |
+| `needs-human`, `awaiting-human` | decision | clear the recorded cause (a spent process budget names it; `resumeToken` names the parked step) or a maintainer reset comment, then `pair run --card N` |
+| `escalate`, `escalated`, `awaiting-scope-decision`, `halted`, `abandoned` | decision | verified maintainer comment, then `pair run --card N` |
+| `max-dispatches` | decision | `cycle-state.mjs migrate-acknowledge --dir <new run dir> --legacy <run dir>`, then `pair run --card N` |
 
-For a moved base under a sealed PR, merge the base into the story branch, then run `red-snapshot.mjs verify-chain --base-ref <base>` before dispatch. Never rebase a pushed seal: the snapshot's Git ancestry is evidence and rewriting it is refused. The error must name the base sync step.
+For a moved base under a sealed PR, merge the base into the story branch with `cycle-state.mjs base-sync --cwd <worktree> --base <base> --story <id> --dir "$RUN_DIR"` (it reads the latest seal from the run directory and refuses `sealed-history-rewritten` when that seal is no longer an ancestor of HEAD), then run `red-snapshot.mjs verify-chain --base-ref <base>` before dispatch. Never rebase a pushed seal: the snapshot's Git ancestry is evidence and rewriting it is refused, naming `base-sync` — custody's `parent-not-base` names it too.
 
 ## Maintainer Recovery
 
