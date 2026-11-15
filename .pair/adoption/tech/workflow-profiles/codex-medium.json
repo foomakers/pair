@@ -29,6 +29,18 @@
     "merge": {
       "model": "gpt-6-sol",
       "effort": "low"
+    },
+    "refine-story": {
+      "model": "gpt-6-sol"
+    },
+    "plan-tasks": {
+      "model": "gpt-6-sol"
+    },
+    "triage": {
+      "model": "gpt-6-astra"
+    },
+    "classify": {
+      "model": "gpt-6-astra"
     }
   }
 }

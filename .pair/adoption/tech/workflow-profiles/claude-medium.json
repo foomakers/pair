@@ -33,6 +33,18 @@
     },
     "merge": {
       "model": "cheap"
+    },
+    "refine-story": {
+      "model": "balanced"
+    },
+    "plan-tasks": {
+      "model": "balanced"
+    },
+    "triage": {
+      "model": "cheap"
+    },
+    "classify": {
+      "model": "cheap"
     }
   }
 }

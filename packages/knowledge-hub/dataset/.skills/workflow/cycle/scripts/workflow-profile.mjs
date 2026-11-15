@@ -14,7 +14,8 @@ import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CONTEXT_TABLE, contextReuseAdmissibleInto } from './cycle-state.mjs'
 
-export const STAGES = ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge']
+// refine-story/plan-tasks/triage/classify (#617 AC-3): declared, not yet wired — routing lands with #617.
+export const STAGES = ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge', 'refine-story', 'plan-tasks', 'triage', 'classify']
 export const FIELDS = ['engine', 'model', 'effort', 'context']
 export const EFFORTS = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
 export const CONTEXTS = ['fresh', 'reuse']

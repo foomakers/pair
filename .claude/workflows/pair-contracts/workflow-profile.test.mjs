@@ -38,7 +38,14 @@ test('T-1/AC1: a field neither stage nor defaults declares falls back to the KB 
 })
 
 test('T-1: every stage id of the story shape is known', () => {
-  assert.deepEqual(STAGES, ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge'])
+  assert.deepEqual(STAGES, ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge', 'refine-story', 'plan-tasks', 'triage', 'classify'])
+})
+
+test('#617 AC-3: refine-story, plan-tasks, triage, classify are accepted; an unknown stage stays unknown; reuse into them is refused', () => {
+  const stages = Object.fromEntries(['refine-story', 'plan-tasks', 'triage', 'classify'].map(s => [s, { model: 'x', effort: 'low' }]))
+  assert.deepEqual(errorsOf({ name: 'p', stages }), [])
+  assert.match(errorsOf({ name: 'p', stages: { 'refine-storey': {} } })[0], /unknown stage 'refine-storey'/)
+  for (const s of ['refine-story', 'plan-tasks', 'triage', 'classify']) assert.match(errorsOf({ name: 'p', stages: { [s]: { context: 'reuse' } } })[0], /not admissible/)
 })
 
 test('T-1: an unknown stage id is profile-invalid and names the stage', () => {
