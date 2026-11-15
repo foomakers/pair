@@ -38,7 +38,14 @@ test('T-1/AC1: a field neither stage nor defaults declares falls back to the KB 
 })
 
 test('T-1: every stage id of the story shape is known', () => {
-  assert.deepEqual(STAGES, ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge'])
+  assert.deepEqual(STAGES, ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge', 'refine-story', 'plan-tasks', 'triage', 'classify'])
+})
+
+test('#617 AC-3: refine-story, plan-tasks, triage, classify are accepted; an unknown stage stays unknown; reuse into them is refused', () => {
+  const stages = Object.fromEntries(['refine-story', 'plan-tasks', 'triage', 'classify'].map(s => [s, { model: 'x', effort: 'low' }]))
+  assert.deepEqual(errorsOf({ name: 'p', stages }), [])
+  assert.match(errorsOf({ name: 'p', stages: { 'refine-storey': {} } })[0], /unknown stage 'refine-storey'/)
+  for (const s of ['refine-story', 'plan-tasks', 'triage', 'classify']) assert.match(errorsOf({ name: 'p', stages: { [s]: { context: 'reuse' } } })[0], /not admissible/)
 })
 
 test('T-1: an unknown stage id is profile-invalid and names the stage', () => {
@@ -513,15 +520,14 @@ test('PR517-C3: the CLI still resolves a class and an explicit id side by side (
 })
 
 // ── claude-cheap pilot: the KB table + adoption sample (conformance) ────────────────────────────
-test('claude-cheap: the KB documents the stage->model table with *-5-5 ids; the adoption sample is valid, resolves and is NOT activated', () => {
+test('claude-cheap: the KB documents every stage and the six shipped profiles; the adoption sample is valid, resolves and is NOT activated', () => {
   const repo = fileURLToPath(new URL('../../../', import.meta.url))
   const kb = readFileSync(join(repo, '.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md'), 'utf8')
-  assert.match(kb, /### Recommended stage → model mapping \(pilot\)/)
-  for (const row of ['contract', 'relay', 'green on `doc` groups', 'selection, implement, green on behavioral groups', 'prepare, validate, verify', 'post-merge closure']) assert.ok(kb.includes(`| ${row}`), row)
+  assert.match(kb, /^## Stages$/m)
+  for (const stage of STAGES) assert.ok(kb.includes(`\`${stage}\``), stage)
+  for (const name of ['claude-cheap', 'claude-medium', 'claude-high', 'codex-cheap', 'codex-medium', 'codex-high']) assert.ok(kb.includes(`| \`${name}\``), name)
   assert.match(kb, /at least 2 of 3 cards/)
-  const ids = [...kb.matchAll(/claude-[a-z]+-[0-9]+-[0-9]+/g)].map(m => m[0])
-  assert.ok(ids.length >= 3)
-  for (const id of ids) assert.match(id, /^claude-(haiku|sonnet|opus)-5-5$/)
+  for (const id of kb.matchAll(/claude-[a-z]+-[0-9]+-[0-9]+/g)) assert.match(id[0], /^claude-(haiku|sonnet|opus)-5-5$/)
   const sample = JSON.parse(readFileSync(join(repo, '.pair/adoption/tech/workflow-profiles/claude-cheap.json'), 'utf8'))
   assert.deepEqual(validateProfile(sample).errors, [])
   assert.deepEqual(sample.modelClasses, { cheap: 'claude-haiku-5-5', balanced: 'claude-sonnet-5-5', frontier: 'claude-opus-5-5' })

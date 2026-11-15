@@ -6,7 +6,7 @@
     }
   },
   "workflowProfiles": {
-    "default": "codex-cheap",
+    "default": "codex-medium",
     "files": ".pair/adoption/tech/workflow-profiles/*.json"
   },
   "agents": {
