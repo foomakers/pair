@@ -47,6 +47,7 @@ Maps this project's GitHub Projects board columns to the 5 canonical macrostates
 
 - `Refined` (legacy board column) maps to the canonical `Ready` — the column keeps its name, skills treat it as `Ready` (migration note #243). This is what lets `/pair-process-refine-story` complete its Draft→Ready transition on this board.
 - `Review` holds stories whose implementation is complete and whose PR is ready for review. PR states (`to-be-reviewed`, `not-approved`, `ready-to-merge`) remain within this macrostate; only merge produces `Done`. See [ADL](../decision-log/2026-11-06-review-board-state.md).
+- `not-planned-state`: `Not planned` — the board-sync scripts write this column when a story closes without completion; it stays outside the macrostate table.
 - `Not planned` (Status option `1d5cee95`) is a board column **deliberately left unmapped** — skills ignore it, like `Removed` ([Closure Without Completion](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md#closure-without-completion)). Whoever closes an item as not planned sets its Status to `Not planned`, never `Done`: the built-in close automation cannot tell the reasons apart ([ADL](../decision-log/2026-10-14-not-planned-board-column.md)).
 
 ## Assignment
