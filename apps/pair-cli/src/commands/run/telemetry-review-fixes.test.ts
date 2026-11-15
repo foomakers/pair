@@ -283,3 +283,36 @@ it(
     }
   },
 )
+
+// #645 r2-1: merge is deterministic (no engine usage); card aggregates must not let it void measured tokens.
+it('card aggregates over a measured implement stage plus a merge stage', () => {
+  const implement: TelemetryRecord = {
+    kind: 'stage',
+    id: 's',
+    step: 'implement',
+    phase: 'a',
+    start: 0,
+    durationMs: 10,
+    tokens: { freshIn: 5, cachedIn: 1, out: 2 },
+  }
+  const merge: TelemetryRecord = { kind: 'stage', id: 'm', step: 'merge', start: 10, durationMs: 4 }
+  const card = cardTelemetryRecord({
+    id: 'c',
+    card: '1',
+    run: 'r',
+    pairVersion: 'v',
+    workflowVersion: 'w',
+    profile: 'p',
+    engine: 'e',
+    outcome: 'merged',
+    start: 0,
+    end: 20,
+    stages: [implement, merge],
+    interventions: [],
+  })
+  expect(card['tokens']).toEqual({ freshIn: 5, cachedIn: 1, out: 2 })
+  expect(card['activeMs']).toBe(14)
+  expect(card['dispatches']).toBe(2)
+  expect(card['retries']).toBe(0)
+  expect(card['idleMs']).toBe(6)
+})

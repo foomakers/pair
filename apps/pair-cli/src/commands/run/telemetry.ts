@@ -229,7 +229,9 @@ export interface CardTelemetryInput {
 function cardTokens(
   stages: readonly TelemetryRecord[],
 ): Tokens | Omit<Exclude<Tokens, string>, 'reasoning'> {
-  const measured = stages.map(stage => stage['tokens'])
+  const measured = stages
+    .filter(stage => stage['step'] !== 'merge') // deterministic: no engine usage
+    .map(stage => stage['tokens'])
   if (measured.length === 0 || measured.some(value => object(value) === undefined))
     return 'not measured'
   return {
