@@ -12,6 +12,12 @@
     },
     "implement": {
       "effort": "medium"
+    },
+    "refine-story": {
+      "effort": "medium"
+    },
+    "plan-tasks": {
+      "effort": "medium"
     }
   }
 }
