@@ -3688,12 +3688,13 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
 // A `--contextPolicy` is validated against CONTEXT_TABLE as a WHOLE before anything resolves: a
 // caller asking `reuse` where the table forbids it is refused fail-closed, never silently
 // downgraded to `fresh` — the refusal is the signal that a profile is wrong.
-export function contextPolicyError(contextPolicy) {
+export function contextPolicyError(contextPolicy, tier) {
   if (contextPolicy === undefined || contextPolicy === null) return null
   if (typeof contextPolicy !== 'object' || Array.isArray(contextPolicy)) return 'context-policy-invalid'
   for (const [transition, value] of Object.entries(contextPolicy)) {
     if (value !== 'fresh' && value !== 'reuse') return 'context-policy-invalid'
     if (value === 'reuse' && !CONTEXT_TABLE.reuseAllowed.includes(transition)) return 'context-policy-invalid'
+    if (tier === 'risk:red' && value === 'reuse' && transition.endsWith('->validate')) return 'context-policy-invalid'
   }
   return null
 }
@@ -3768,7 +3769,7 @@ const withContext = (next, handoffs, contextPolicy) =>
 
 export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels, host }) {
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
-  const policyError = contextPolicyError(contextPolicy)
+  const policyError = contextPolicyError(contextPolicy, tier)
   if (policyError) throw new Error(policyError)
   // r1-4: the retired `policy.blockingSeverities` (a severity LIST) is refused HERE too — the same
   // reason `publish` and `packet` refuse it — never silently accepted and acted on as if it named a floor.

@@ -111,6 +111,11 @@ test('#617 AC-14: verify remains fresh; validate may share below red', () => {
   assert.deepEqual(errorsOf({ name: 'p', stages: { validate: { context: 'reuse' } } }), [])
 })
 
+test('#617 AC-14: cycle resolution rejects validate sharing at risk:red', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'profile-red-context-'))
+  assert.throws(() => resolve({ dir, workflowVersion: '4.0.1', story: '617', tier: 'risk:red', contextPolicy: { 'prepare->validate': 'reuse' } }), /context-policy-invalid/)
+})
+
 test('T-1/AC5: admissibility IS the real cycle-state.mjs table — every transition it allows makes its target stage legal, every other stage is refused', () => {
   const allowedTargets = new Set(CONTEXT_TABLE.reuseAllowed.map(t => t.split('->')[1]))
   for (const stage of STAGES) {
