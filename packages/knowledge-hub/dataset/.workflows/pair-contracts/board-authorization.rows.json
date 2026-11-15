@@ -141,10 +141,11 @@
     "allStates": true
   },
   {
-    "id": "r1-g2-deny-refs",
+    "id": "r1-g2-refs-amended",
     "role": "write",
     "body": "Refs: #42",
-    "allow": false,
+    "requireCard": true,
+    "allow": true,
     "allStates": true
   },
   {
@@ -588,14 +589,6 @@
     "role": "admin",
     "body": "Implements the story.\n\nRefs: 01-01-042",
     "story": "01-01-042",
-    "requireCard": true,
-    "allow": true
-  },
-  {
-    "id": "r0-8-refs-numeric",
-    "role": "maintain",
-    "body": "Refs: #42",
-    "story": "42",
     "requireCard": true,
     "allow": true
   },

@@ -39,7 +39,7 @@ jobs:
           GH_TOKEN: ${{ secrets.PAIR_PROJECT_TOKEN || github.token }}
           REPO: ${{ github.repository }}
         run: |
-          story=$(node -e '
+          selection=$(node -e '
             const { spawnSync } = require("node:child_process");
             const e = require(process.env.GITHUB_EVENT_PATH);
             const repo = e.repository;
@@ -48,17 +48,23 @@ jobs:
             if (!repo?.full_name || !repo?.id || !sender || !pr?.head?.repo || !pr?.base?.repo) process.exit(0);
             if ([pr.head.repo, pr.base.repo].some(r => r.id !== repo.id || r.full_name !== repo.full_name)) process.exit(0);
             const body = String(pr.body ?? "");
-            const story = /^(?:Closes|Fixes|Resolves)\s+#(\d+)\s*$/im.exec(body)?.[1]
+            const native = /^(?:Closes|Fixes|Resolves)\s+#(\d+)\s*$/im.exec(body)?.[1]
               ?? /#(\d+)(?!\d)/.exec(String(pr.head.ref ?? ""))?.[1];
-            if (!story) process.exit(0);
+            // Split PM tool: one `Refs: <ID>` line; the transition writes only if it resolves to one card.
+            const refs = [...body.matchAll(/^Refs:[ \t]*(.*?)[ \t]*$/gim)].map(m => /^(?:AB#|#)?([A-Za-z0-9][A-Za-z0-9._-]{0,119})$/.exec(m[1])?.[1]);
+            const selection = native ? `native ${native}` : refs.length === 1 && refs[0] ? `ref ${refs[0]}` : "";
+            if (!selection) process.exit(0);
             const response = spawnSync("gh", ["api", `repos/${repo.full_name}/collaborators/${sender}/permission`, "--method", "GET"], { encoding: "utf8", timeout: 5000 });
             if (response.status !== 0) process.exit(0);
             let permission;
             try { permission = JSON.parse(response.stdout); } catch { process.exit(0); }
-            if (["admin", "maintain", "write"].includes(permission.role_name ?? permission.permission)) process.stdout.write(story);
+            if (["admin", "maintain", "write"].includes(permission?.role_name ?? permission?.permission)) process.stdout.write(selection);
           ')
-          if [ -z "$story" ]; then echo 'No linked story; nothing to sync'; exit 0; fi
+          if [ -z "$selection" ]; then echo 'No linked story; nothing to sync'; exit 0; fi
+          read -r source story <<< "$selection"
+          require=()
+          if [ "$source" = ref ]; then require=(--require-card); fi
           if [ "${{ github.event.action }}" != closed ]; then state=open; elif [ "${{ github.event.pull_request.merged }}" = true ]; then state=merged; else state=closed-unmerged; fi
-          result=$(node .claude/skills/pair-workflow-cycle/scripts/board-transition.mjs --story "$story" --pr-state "$state" --repo "$REPO")
+          result=$(node .claude/skills/pair-workflow-cycle/scripts/board-transition.mjs --story "$story" --pr-state "$state" --repo "$REPO" "${require[@]}")
           echo "$result"
-          echo "$result" | jq -e '.confirmed == true'
+          echo "$result" | jq -e '.confirmed == true or .skipped == "card-unresolved"'
