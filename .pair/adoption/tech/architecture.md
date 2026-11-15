@@ -13,6 +13,8 @@
 
 ## Knowledge Base Distribution
 
+- Workflow stage configuration is resolved by `workflow-profile.mjs`: profile stage, profile defaults, per-agent run settings, general run defaults, legacy engine settings, then KB defaults. Agent entries cannot select engine or effort. `verify` stays fresh; `validate` stays fresh at `risk:red`. See [ADR-029](adr/adr-029-workflow-profile-layered-run-defaults.md).
+
 - KB dataset is distributed separately from CLI bundle as GitHub release artifact.
 - CLI auto-downloads KB on first run from GitHub releases (default) or custom URL.
 - KB cache location: `~/.pair/kb/{version}/` for the official KB, `~/.pair/kb/external/{kind}-{hash}/` for every other source that needs materializing (only the remote-URL form keeps a `{label}`: `~/.pair/kb/external/url-{label}-{hash}/`; a `--source` directory is read in place and owns no slot; slot keyed by source identity — see the [2026-08-11 ADL](../decision-log/2026-08-11-kb-cache-slots-keyed-by-source-identity.md)).
