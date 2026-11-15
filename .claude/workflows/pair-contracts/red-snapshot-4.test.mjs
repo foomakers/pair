@@ -477,3 +477,22 @@ test('US-623 AC7: a seal in a repo without the ignore entry adds it in the snaps
   rmSync(cwd, { recursive: true, force: true })
   void base
 })
+
+test('verify-chain --base accepts the story base REF a PR-entry first review is handed (`$head` empty ⇒ `$base`, e.g. origin/main): resolved to the full merge-base sha, never `base-not-a-sha`', () => {
+  const { cwd, base } = repo()
+  git(cwd, 'checkout', '-q', '-b', 'story')
+  write(cwd, 'src/a.js', 'export const a = () => 2\n')
+  git(cwd, 'commit', '-qam', 'story work')
+  git(cwd, 'checkout', '-q', 'main')
+  write(cwd, 'src/other.js', 'export const o = 1\n')
+  git(cwd, 'commit', '-qam', 'main moved after the fork')
+  git(cwd, 'checkout', '-q', 'story')
+  const cli = ref => spawnSync(process.execPath, [CLI, 'verify-chain', '--pr', PR, '--base', ref, '--contract-expected', 'false'], { cwd, encoding: 'utf8' })
+  const r = cli('main')
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.deepEqual({ verified: out.verified, contract: out.contract, base: out.base }, { verified: true, contract: 'none', base })
+  // a ref that names no commit stays the typed refusal
+  assert.deepEqual(JSON.parse(cli('no-such-ref').stdout).breaches, [{ code: 'base-not-a-sha' }])
+  rmSync(cwd, { recursive: true, force: true })
+})

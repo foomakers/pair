@@ -4,7 +4,15 @@
 // reimplemented here: its `node --test` invocation is read from package.json / ci.yml, then RUN
 // against an isolated copy of scripts/dev with an injected regression.
 import { spawnSync } from 'child_process'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  symlinkSync,
+  writeFileSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { describe, expect, it } from 'vitest'
@@ -86,6 +94,8 @@ const sandbox = (mutate?: (root: string) => void): string => {
     '.claude/settings.json',
     '.claude/workflows/pair-implement-batch.js',
     'packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js',
+    '.husky/pre-commit',
+    '.husky/pre-push',
   ]) {
     mkdirSync(join(root, file, '..'), { recursive: true })
     cpSync(join(REPO_ROOT, file), join(root, file))
@@ -95,6 +105,9 @@ const sandbox = (mutate?: (root: string) => void): string => {
     join(root, '.claude/skills/pair-workflow-cycle/scripts'),
     { recursive: true },
   )
+  // the prettier wrappers with their installed binary (sealed-manifest-format.test.mjs)
+  mkdirSync(join(root, 'tools'))
+  symlinkSync(join(REPO_ROOT, 'tools/prettier-config'), join(root, 'tools/prettier-config'))
   mutate?.(root)
   return root
 }

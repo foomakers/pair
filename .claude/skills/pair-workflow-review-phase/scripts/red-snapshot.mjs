@@ -22,7 +22,9 @@
 //     path at all). Prints {verified, contractBreach,
 //     breaches[]}. Any breach is terminal for the attempt; the script repairs nothing.
 //
-//   node <skill dir>/scripts/red-snapshot.mjs verify-chain --pr <n> --base <sha> [--run-dir <dir>] [--base-ref <story base ref>]
+//   node <skill dir>/scripts/red-snapshot.mjs verify-chain --pr <n> --base <sha|ref> [--run-dir <dir>] [--base-ref <story base ref>]
+//     A non-sha <base> (a PR-entry first review hands the story base ref, e.g. origin/main) is resolved to
+//     its full merge-base sha with HEAD and printed back as `base`; a ref naming no commit is `base-not-a-sha`.
 //     The whole attempt since <base>: every snapshot of this PR in order, each well-formed on its
 //     declared base; every sealed blob at HEAD identical to the LATEST snapshot that lists it (a
 //     successor snapshot — a contract REVISION — is the only commit allowed to change a sealed
@@ -1059,7 +1061,12 @@ export function isGeneratedPath({ path, status, from, end, cwd, cache }) {
   return mirrorOrigins(path, end, cwd, cache).length > 0
 }
 
-export function verifyChain({ pr, base, cwd, expectContract, runDir, baseRef }) {
+export function verifyChain({ pr, base: given, cwd, expectContract, runDir, baseRef }) {
+  const base = SHA_RE.test(String(given)) ? given : (git(['merge-base', '--', String(given), 'HEAD'], cwd, { allowFail: true }) ?? given)
+  const out = verifyChainOf({ pr, base, cwd, expectContract, runDir, baseRef })
+  return SHA_RE.test(String(base)) ? { ...out, base } : out
+}
+function verifyChainOf({ pr, base, cwd, expectContract, runDir, baseRef }) {
   const overrides = runDir !== undefined ? readCustodyOverrides(runDir) : []
   if (runDir === undefined) return verifyChainCore({ pr, base, cwd, expectContract: expectContract ?? true, overrides, baseRef })
   const sealed = sealedHandoffsIn(runDir)

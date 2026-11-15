@@ -7,7 +7,7 @@
 # refuses to touch. Copy-pasted assembly is precisely how that drifts, and nothing
 # detects the drift (`dup:check` scans TypeScript only).
 #
-# Sources: the shared .prettierignore + the repo's own .gitignore files (repo root,
+# Sources: the shared .prettierignore + the repo-root .prettierignore + the repo's own .gitignore files (repo root,
 # and the package being checked), so "gitignored => never formatted/checked" holds
 # without enumerating generated dirs. Since #394 the gate runs prettier in CHECK
 # mode, where a generated artifact would BLOCK every push instead of being silently
@@ -30,6 +30,13 @@ fi
 
 if [ -n "$_ignore_git_root" ] && [ -f "$_ignore_git_root/.gitignore" ]; then
   set -- "$@" --ignore-path "$_ignore_git_root/.gitignore"
+fi
+
+# The repo-root .prettierignore: an explicit --ignore-path replaces prettier's default lookup, so without
+# this line the file is read by nothing — and it is where red-snapshot.mjs seal excludes the sealed RED
+# manifests (`.pair/red-snapshots/`), from the root and from a package directory alike.
+if [ -n "$_ignore_git_root" ] && [ -f "$_ignore_git_root/.prettierignore" ]; then
+  set -- "$@" --ignore-path "$_ignore_git_root/.prettierignore"
 fi
 
 # The package-local .gitignore, when the cwd is not the repo root. Compared on
