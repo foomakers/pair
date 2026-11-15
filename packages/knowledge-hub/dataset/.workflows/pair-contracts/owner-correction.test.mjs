@@ -147,3 +147,41 @@ test('preparation waiver r0-2: only the ADOPTED maintainer authorizes it — a -
   assert.equal(out.reason, 'author-not-authorized:mallory')
   assert.deepEqual(readApprovals(dir), [])
 })
+
+// The REAL GitHub comment-URL grammar: /pull/ and /issues/ name the same comment, and owner/repo case is
+// not identity to the API. A replay is judged on the comment (repo + id), never on the URL spelling.
+const ghHost = comments => ({
+  code: {
+    parseCommentRef: (ref, { repo }) => {
+      const m = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:pull|issues)\/(\d+)#issuecomment-(\d+)$/.exec(ref)
+      return m ? { pr: Number(m[3]), id: m[4], inScope: `${m[1]}/${m[2]}` === repo } : null
+    },
+    readComment: ({ id }) => comments[id],
+  },
+})
+for (const [label, ref, repo] of [
+  ['/issues/ instead of /pull/', 'https://github.com/o/r/issues/7#issuecomment-555', 'o/r'],
+  ['owner/repo in another case', 'https://github.com/O/R/pull/7#issuecomment-555', 'O/R'],
+]) {
+  test(`preparation waiver r0-1: a replay spelled with ${label} is the same comment — refused in another run`, () => {
+    const a = waiverRun()
+    const comments = { 555: c('rucka', waiver()) }
+    assert.equal(approveCorrection({ dir: a, decisionRef: 'https://github.com/o/r/pull/7#issuecomment-555', repo: 'o/r', pr: 7, host: ghHost(comments) }).approved, true)
+    const b = join(a, '..', '..', 'run-2', '42')
+    mkdirSync(b, { recursive: true })
+    put(b, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ id: 'r0-1', severity: 'Critical', blocking: true, transition: 'open', kind: 'defect', location: 'b', description: 'x', recommendation: 'r' }], custody: { contractBreach: false }, readiness: { ready: false } })
+    put(b, 'r1-g1', 'red-spec', { status: 'unprovable', mode: 'remediation', inputHead: SHA('c'), findings: { received: ['r0-1'] } })
+    assert.equal(approveCorrection({ dir: b, decisionRef: ref, repo, pr: 7, host: ghHost(comments) }).reason, 'decisionRef-already-used')
+    assert.deepEqual(readApprovals(b), [])
+  })
+}
+
+test('preparation waiver r1-1: a comment already consumed, edited to name a NEWER refused attempt of the same run, is refused — never a false already-applied', () => {
+  const dir = waiverRun()
+  assert.equal(approve(dir, 5, { 5: c('rucka', waiver()) }).approved, true)
+  writeFileSync(join(dir, 'r1-g1-red-spec.attempt-2.json'), JSON.stringify({ schemaVersion: 3, workflowVersion: V, run: 'run-1', story: '42', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('c'), seq: ++seq, attempt: 2, status: 'unprovable', mode: 'repair', findings: { received: ['r0-1'] } }))
+  assert.equal(go(dir).next.reason, 'failed-preparation', 'the new refusal is not covered by the consumed waiver')
+  const out = approve(dir, 5, { 5: c('rucka', waiver({ attempt: 2 })) })
+  assert.deepEqual([out.approved, out.reason], [false, 'decisionRef-already-used'])
+  assert.equal(readApprovals(dir).length, 1)
+})

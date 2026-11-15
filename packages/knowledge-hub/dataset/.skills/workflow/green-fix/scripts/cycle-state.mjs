@@ -1786,13 +1786,18 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
     // Bound to the refused attempt the maintainer saw: its attempt number and the head it was refused on.
     if (c.attempt !== last.attempt || c.inputHead !== last.data.inputHead) return { approved: false, reason: 'waiver-attempt-mismatch' }
     return withLock(dir, lockWaitMs, () => {
+      // One comment, one waiver. The comment's identity is the host's (repo, case-folded, + comment id), never the URL
+      // spelling (`/pull/` and `/issues/` name the same GitHub comment). The same comment on the SAME target is a
+      // replay of this approval; on any other target — a newer attempt here, or any other run of this story — it is reuse.
+      const commentKey = `${String(repo ?? '').toLowerCase()}#${ref.id}`
+      const target = `${last.name}.attempt-${last.attempt}`
       const all = readApprovals(dir)
-      if (all.some(a => a.decisionRef === decisionRef)) return { approved: true, reason: 'already-applied' }
-      // One comment, one waiver: a decisionRef recorded by ANY other run of this story (`<runs>/<run>/<story>`) is a replay.
+      const mine = all.find(a => a.kind === PREPARATION_WAIVER && a.commentKey === commentKey)
+      if (mine) return mine.target === target ? { approved: true, reason: 'already-applied' } : { approved: false, reason: 'decisionRef-already-used' }
       const runs = dirname(dirname(resolvePath(dir)))
       const story = basename(resolvePath(dir))
-      if (readdirSync(runs).some(r => join(runs, r, story) !== resolvePath(dir) && readApprovals(join(runs, r, story)).some(a => a.decisionRef === decisionRef))) return { approved: false, reason: 'decisionRef-already-used' }
-      const record = { decisionRef, status: 'approved', actor: comment.authorLogin, at: (now instanceof Date ? now : new Date(now)).toISOString(), ...c, target: `${last.name}.attempt-${last.attempt}` }
+      if (readdirSync(runs).some(r => join(runs, r, story) !== resolvePath(dir) && readApprovals(join(runs, r, story)).some(a => a.kind === PREPARATION_WAIVER && a.commentKey === commentKey))) return { approved: false, reason: 'decisionRef-already-used' }
+      const record = { decisionRef, commentKey, status: 'approved', actor: comment.authorLogin, at: (now instanceof Date ? now : new Date(now)).toISOString(), ...c, target }
       writeFileSync(join(dir, APPROVALS_FILE), JSON.stringify([...all, record], null, 2))
       return { approved: true, record }
     })
