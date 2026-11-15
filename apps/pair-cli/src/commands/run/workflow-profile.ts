@@ -70,6 +70,7 @@ export interface ResolvedWorkflowProfile {
 }
 
 /** Validate the resolved run before any stage can dispatch. */
+// eslint-disable-next-line complexity -- validate every stage before dispatch.
 export function validateProfileRun(
   profile: ResolvedWorkflowProfile,
   input: {

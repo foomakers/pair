@@ -357,6 +357,7 @@ async function runSingleBatch(fan: FanOut): Promise<number> {
   return await runBatch({ input, deps, plan, root: rootLabel(selection) })
 }
 
+// eslint-disable-next-line max-lines-per-function, complexity -- all selection checks precede child dispatch.
 export async function handleParallelRun(
   input: ParallelRunInput,
   deps: RunHandlerDependencies,

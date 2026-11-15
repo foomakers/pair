@@ -255,9 +255,8 @@ function loadResolvedContractSeverityRanks(repoRoot) {
 }
 // ── transition context policy (US-486 AC-7) ────────────────────────────────────────────────
 // `next.context` says whether the stage about to run gets a FRESH subagent or RESUMES the previous
-// subagent of the same role. The KB default is `fresh` on every transition (ADR-024: freeze the
-// baseline before optimizing). `reuse` is admissible only WITHIN one role — never into `validate`
-// or `verify`, whose whole value is an independent, blind verifier (ADR-017 §3, ADL 2026-07-11).
+// subagent. The KB default is `fresh` on every transition. A declared sharing rule may cross
+// roles; verify remains independent and validate stays fresh at risk:red (#617 AC-14).
 const CONTEXT_STAGES = ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge', 'refine-story', 'plan-tasks', 'triage', 'classify']
 export const CONTEXT_TABLE = {
   default: 'fresh',

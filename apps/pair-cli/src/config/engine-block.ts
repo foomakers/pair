@@ -177,6 +177,7 @@ export interface RunDeclaration {
 }
 
 /** Validate every entry, including agents unused by the selected profile. */
+// eslint-disable-next-line max-lines-per-function, complexity -- validate the complete finite config shape.
 export function readRunDeclaration(
   config: unknown,
   knownEngineIds: readonly string[],

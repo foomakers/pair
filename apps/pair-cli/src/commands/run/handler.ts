@@ -131,6 +131,7 @@ function perimeterSelection(
  * A refusal — no perimeter, an untrusted project, an engine with no confirmations and no
  * `--autonomous`, a malformed policy — happens here, so no iteration ever starts outside them.
  */
+// eslint-disable-next-line max-lines-per-function, max-params, complexity -- resolve before any dispatch.
 function resolveRun(
   config: RunCommandConfig,
   context: RunContext,

@@ -223,6 +223,7 @@ export async function driveRun(
  * (`--iteration <n+1>`), so a resumed run does not restart its own counter — nothing else crosses
  * the boundary between iterations.
  */
+// eslint-disable-next-line complexity -- prompt fields mirror the resolved run.
 function driveIteration(
   resolved: ResolvedRun,
   config: RunCommandConfig,

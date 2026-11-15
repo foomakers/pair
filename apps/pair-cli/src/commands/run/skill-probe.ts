@@ -35,6 +35,7 @@ export function createSkillProbe(
 }
 
 /** Read the installed skill through the same registry targets as the existence probe. */
+// eslint-disable-next-line complexity -- preserve registry target search order and containment.
 export function readInstalledSkill(
   fs: FileSystemService,
   config: Config,

@@ -87,7 +87,7 @@ The profile is resolved **once**, before the first dispatch, and its table is pr
 ```json
 {
   "run": {
-    "defaults": { "engine": "claude", "model": "claude-sonnet-4-5", "idleTimeout": 900 },
+    "defaults": { "engine": "claude", "model": "claude-sonnet-5-5", "idleTimeout": 900 },
     "agents": { "codex": { "command": "/opt/codex", "args": ["--config", "literal value"], "model": "gpt-6-sol", "idleTimeout": 600 } }
   }
 }

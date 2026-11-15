@@ -452,6 +452,7 @@ interface PrepSkillInput {
  * and printed here — the engine refusal included — so nothing is audited for a run that cannot
  * start; the returned function is the drive the caller runs under the lock (r1-1).
  */
+// eslint-disable-next-line max-lines-per-function, complexity -- pre-dispatch resolution stays atomic.
 function preparePrepSkill(
   input: PrepSkillInput,
   deps: RunHandlerDependencies,
