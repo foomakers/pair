@@ -129,16 +129,12 @@ export interface RunCycleInput {
    */
   readonly escalate?: (next: CycleNext) => Promise<unknown>
   /**
-   * A preparation refused for a dirty story worktree: stash the stray files and spend a recovery round. `true` ⇒
-   * the cause is cleared and `resolve` re-derives the step; `false` (budget spent, no worktree) ⇒ the card stays blocked.
-   */
-  readonly recoverDirty?: (next: CycleNext) => Promise<boolean>
-  /**
    * US-623 AC6: runs before a `prepare` dispatch beyond attempt 1 — stashes the files a failed attempt left, so they never
    * block it; after a `dirty` / `stale` refusal (`next.refusal`) it runs that process recovery (worktree-clean / base-sync,
-   * merge only). A returned string is the park reason (recovery spent, or the sync refused): the card parks, no dispatch.
+   * merge only). `park`: the reason the card parks with, no dispatch (recovery spent, or the sync refused). `head`: the
+   * worktree HEAD the retry is dispatched on (a `stale` refusal means the HEAD is not the dispatched one — r2-3).
    */
-  readonly beforePrepare?: (next: CycleNext) => Promise<string | void>
+  readonly beforePrepare?: (next: CycleNext) => Promise<{ park?: string; head?: string } | void>
   /**
    * r0-3: an explicit re-run whose first `resolve` is a spent process budget lifts it once (`recover --kind resume`).
    * `resumed: false` ⇒ the park stands, carrying `detail` (the resumes are spent too).
@@ -541,7 +537,6 @@ async function terminalOrResume(
   next: CycleNext,
   answer: CycleResolveAnswer,
 ): Promise<CycleOutcome | null> {
-  if (await recoveredDirty(input, state, next)) return null
   const resumed = await resumedPark(input, state, next)
   if (resumed === true) return null
   if (resumed !== false)
@@ -571,20 +566,6 @@ async function resumedPark(
   return out.resumed ? true : (out.detail ?? 'autoRecoveryRounds re-run resumes spent')
 }
 
-/** Once per distinct `next` (never a spin): a dirty-worktree refusal the driver could clear. */
-async function recoveredDirty(
-  input: RunCycleInput,
-  state: LoopState,
-  next: CycleNext,
-): Promise<boolean> {
-  if (next.step !== 'blocked' || next['refusal'] !== 'dirty' || input.recoverDirty === undefined)
-    return false
-  if (sameNext(state.resumedFrom, next) || !(await input.recoverDirty(next))) return false
-  state.resumedFrom = next
-  state.dispatchedNext = null
-  return true
-}
-
 /** A process park, recovered: the next resolve re-dispatches the step, with a fresh dead-dispatch budget. */
 async function recoveredStop(
   input: RunCycleInput,
@@ -612,12 +593,13 @@ async function cleanBeforePrepare(
   input: RunCycleInput,
   state: LoopState,
   next: CycleNext,
-): Promise<CycleOutcome | null> {
+): Promise<{ parked: CycleOutcome } | { dispatch: CycleNext }> {
   if (next.step !== 'prepare' || next['mode'] === 'repair' || Number(next['attempt']) <= 1)
-    return null
-  const park = await input.beforePrepare?.(next)
-  if (typeof park !== 'string') return null
-  return processPark(state, next, String(next['refusal'] ?? 'stale'), park)
+    return { dispatch: next }
+  const out = await input.beforePrepare?.(next)
+  if (out?.park !== undefined)
+    return { parked: processPark(state, next, String(next['refusal'] ?? 'stale'), out.park) }
+  return { dispatch: out?.head !== undefined ? { ...next, base: out.head } : next }
 }
 
 /** US-573: tells the live-progress observer, if any, which stage is about to run. */
@@ -666,10 +648,10 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
 
-    const parked = await cleanBeforePrepare(input, state, next)
-    if (parked !== null) return parked
+    const prepared = await cleanBeforePrepare(input, state, next)
+    if ('parked' in prepared) return prepared.parked
     announce(input, next)
-    const stagePacket = await packet(next)
+    const stagePacket = await packet(prepared.dispatch)
     state.dispatchedResult = await spawnStage(withFormatCorrection(stagePacket, state))
     state.stagesRun += 1
     state.dispatchedNext = next

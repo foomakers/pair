@@ -232,7 +232,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
         refusal,
       })
 
-      expect(park).toBeUndefined()
+      expect(park?.park).toBeUndefined()
       const recovery = JSON.parse(
         readFileSync(join(main, '.pair/working/runs/story-7/7/recovery.json'), 'utf8'),
       ) as {
@@ -246,10 +246,69 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
       else {
         expect(sh(tree, 'rev-parse', 'HEAD^1')).toBe(before) // merged on top of the branch, never rebased
         expect(sh(tree, 'rev-parse', 'HEAD^2')).toBe(moved)
+        // r2-3: the retry runs on the merged HEAD, never the head the stale refusal named
+        expect(park?.head).toBe(sh(tree, 'rev-parse', 'HEAD'))
       }
     },
     60_000,
   )
+
+  it('#646 r2-4: after a stale merge on a sealed PR cycle, custody is re-checked with verify-chain on the cycle base and --base-ref the base', async () => {
+    vi.mocked(runCycle).mockClear()
+    await drive(ENGINES.claude, 42)
+    const input = vi.mocked(runCycle).mock.calls[0]?.[0]
+    const tree = join(root, 'pair-worktrees', '7')
+    const sh = (cwd: string, ...args: string[]) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+        cwd,
+        encoding: 'utf8',
+      }).trim()
+    const seal = sh(tree, 'rev-parse', 'HEAD')
+    const cycleBase = sh(main, 'rev-parse', 'refs/remotes/origin/main')
+    const dir = join(main, '.pair/working/runs/story-7/7')
+    mkdirSync(dir, { recursive: true })
+    rmSync(join(dir, 'recovery.json'), { force: true })
+    writeFileSync(
+      join(dir, 'r1-g1-red-verify.json'),
+      JSON.stringify({
+        phase: 'r1-g1',
+        skill: 'red-verify',
+        seq: 1,
+        sealed: true,
+        verified: true,
+        snapshot: seal,
+        inputHead: cycleBase,
+      }),
+    )
+    // the custody script, recording how it was called
+    const calls = join(root, 'verify-chain.log')
+    const scripts = join(main, '.claude/skills/pair-workflow-review-phase/scripts')
+    mkdirSync(scripts, { recursive: true })
+    writeFileSync(
+      join(scripts, 'red-snapshot.mjs'),
+      `import { appendFileSync } from 'node:fs'\nappendFileSync(${JSON.stringify(calls)}, JSON.stringify(process.argv.slice(2)) + '\\n')\nprocess.stdout.write('{"verified":true}\\n')\n`,
+    )
+    sh(main, 'commit', '-q', '--allow-empty', '-m', 'base moved')
+    sh(main, 'update-ref', 'refs/remotes/origin/main', sh(main, 'rev-parse', 'HEAD'))
+
+    const out = await input?.beforePrepare?.({
+      step: 'prepare',
+      phase: 'r1-g1',
+      attempt: 2,
+      refusal: 'stale',
+    })
+
+    expect(out?.park).toBeUndefined()
+    const argv = JSON.parse(readFileSync(calls, 'utf8').trim()) as string[]
+    const flag = (name: string) => argv[argv.indexOf(`--${name}`) + 1]
+    expect(argv[0]).toBe('verify-chain')
+    expect([flag('pr'), flag('base'), flag('base-ref'), flag('run-dir')]).toEqual([
+      '42',
+      cycleBase,
+      'origin/main',
+      dir,
+    ])
+  }, 60_000)
 
   it("US-623 AC6/r0-2: the production driver hands runCycle a beforePrepare that stashes the failed attempt's stray files", async () => {
     vi.mocked(runCycle).mockClear()

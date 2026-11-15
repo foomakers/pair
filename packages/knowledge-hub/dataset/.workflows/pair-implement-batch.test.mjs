@@ -486,6 +486,24 @@ for (const reason of ['reset-group-not-tail', 'reset-group-sealed-or-clean'])
     assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
   })
 
+// #646 round 3 — r2-3: `stale` means the worktree HEAD is not the dispatched head; the retry runs on the HEAD base-sync
+// reports (merged or already up to date), never on the refused head — no deterministic second stale.
+for (const sync of [{ synced: true, head: HEAD2 }, { synced: false, reason: 'up-to-date', head: HEAD2 }])
+  test(`AC-13 (r2-3): a stale preparation is retried on the worktree HEAD base-sync reports (${sync.reason ?? 'merged'})`, async () => {
+    const std = stdDispatch()
+    let prepare = 0
+    const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'legacy', dispatch: (prompt, opts) => {
+      if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 5 }
+      if (opts.label?.startsWith('recover:stale')) return sync
+      if (opts.agentType === 'pair-fix-test-author' && prepare++ === 0)
+        return { status: 'stale', reason: 'HEAD is not $head', next: { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 2, base: HEAD } }
+      return std(prompt, opts)
+    } })
+    assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+    const retry = calls.filter(c => c.opts.agentType === 'pair-fix-test-author')[1]
+    assert.match(retry.prompt, new RegExp(`\\$head=${HEAD2}`))
+  })
+
 test('AC-10: a declared gate flake retries under process budget', async () => {
   const std = stdDispatch()
   let implementation = 0

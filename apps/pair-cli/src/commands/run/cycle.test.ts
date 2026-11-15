@@ -102,42 +102,6 @@ describe('runCycle (US-487 T-4)', () => {
     expect(outcome.status).toBe('escalate')
   })
 
-  it('a preparation blocked on a dirty worktree is recovered once (stray files stashed) and the cycle resolves again; a refused recovery stays blocked', async () => {
-    const DIRTY = {
-      step: 'blocked',
-      reason: 'failed-preparation',
-      refusal: 'dirty',
-      phase: 'r1-g1',
-    }
-    const resolve = scriptedResolve([
-      { status: 'blocked', next: DIRTY },
-      { status: 'in-progress', next: VALIDATE_A0 },
-      { status: 'completed', next: DONE },
-    ])
-    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
-    const recoverDirty = vi.fn(async () => true)
-    const outcome = await runCycle({
-      resolve,
-      worktree,
-      packet,
-      spawnStage,
-      policy: {},
-      recoverDirty,
-    })
-    expect(recoverDirty).toHaveBeenCalledOnce()
-    expect(outcome.status).toBe('ready-for-merge')
-
-    const stuck = await runCycle({
-      resolve: scriptedResolve([{ status: 'blocked', next: DIRTY }]),
-      worktree,
-      packet,
-      spawnStage,
-      policy: {},
-      recoverDirty: async () => false,
-    })
-    expect(stuck.next?.step).toBe('blocked')
-  })
-
   // #646 r1-2 — the class: every catalogued process fault a stage stops for (enumerated from the code, pinned to
   // STOP_CATALOG by cycle-catalogue.test.ts) is recovered, then parked with a resume token — never failed-<step>.
   it.each([...PROCESS_STOPS])(
@@ -755,7 +719,9 @@ describe('runCycle — re-run resume of a process-budget park (#646 r0-3)', () =
       packet,
       spawnStage,
       policy: {},
-      beforePrepare: async () => 'base-sync refused: sealed snapshot is not an ancestor of HEAD',
+      beforePrepare: async () => ({
+        park: 'base-sync refused: sealed snapshot is not an ancestor of HEAD',
+      }),
     })
     expect(spawnStage).not.toHaveBeenCalled()
     expect(outcome).toMatchObject({
@@ -763,5 +729,23 @@ describe('runCycle — re-run resume of a process-budget park (#646 r0-3)', () =
       resumeToken: 'prepare:a0:stale',
       reason: 'base-sync refused: sealed snapshot is not an ancestor of HEAD',
     })
+  })
+
+  it('#646 r2-3: a stale retry is dispatched on the head the recovery re-derived, never the refused one', async () => {
+    const synced = 'e'.repeat(40)
+    const due = { ...PREPARE_A0, attempt: 2, refusal: 'stale', base: 'a'.repeat(40) }
+    const sent = vi.fn(packet)
+    await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: due },
+        { status: 'completed', next: DONE },
+      ]),
+      worktree,
+      packet: sent,
+      spawnStage: ok,
+      policy: {},
+      beforePrepare: async () => ({ head: synced }),
+    })
+    expect(sent.mock.calls[0]?.[0]).toMatchObject({ step: 'prepare', base: synced })
   })
 })

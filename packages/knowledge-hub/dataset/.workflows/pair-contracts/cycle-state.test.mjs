@@ -549,6 +549,24 @@ test('AC-21/AC-22 (r1-1): a genuine rejection survives reset-group (redRepairs s
   assert.deepEqual(counted, [true, true, false])
 })
 
+// #646 round 3 — r2-2: a GENUINE step handoff re-created after a reset (the group seals) is progress; the card that
+// advanced is not parked by rounds spent before it.
+test('AC-10 (r2-2): a genuine seal re-created after a reset counts as progress — the next rounds start fresh', () => {
+  const policy = { ...POLICY, autoRecoveryRounds: 2 }
+  const { dir } = runDir()
+  redSpec(dir, 'r1-g1')
+  waitMs(5)
+  redVerify(dir, 'r1-g1', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: [], processFault: 'contract-hash-mismatch' }, { predecessor: 'r1-g1-red-spec' })
+  waitMs(5)
+  assert.equal(recover({ dir, kind: 'stage-retry', detail: 'validate hash', policy }).allowed, true)
+  assert.equal(resetGroup({ dir, phase: 'r1-g1', reason: 'contract-hash-mismatch', by: 'driver', workflowVersion: V, policy, entry: 'pr', pr: 7 }).reset, true)
+  waitMs(5)
+  redVerify(dir, 'r1-g1', {}, { predecessor: 'r1-g1-red-spec' })
+  waitMs(5)
+  const rounds = [1, 2].map(() => recover({ dir, kind: 'stage-retry', detail: 'green dead-dispatch', policy }))
+  assert.deepEqual(rounds.map(r => [r.allowed, r.round]), [[true, 1], [true, 2]])
+})
+
 // #646 round 2 — r1-2, the class: every external (process) preparation refusal hands its retry the refusal it follows,
 // so each driver runs that refusal's recovery (dirty ⇒ worktree-clean, stale ⇒ base-sync) before re-preparing.
 const EXTERNAL = [...readFileSync(new URL('../../skills/pair-workflow-cycle/scripts/cycle-state.mjs', import.meta.url), 'utf8').match(/const EXTERNAL_REFUSALS = new Set\(\[([^\]]+)\]/)[1].matchAll(/'([^']+)'/g)].map(m => m[1])

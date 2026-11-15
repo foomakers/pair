@@ -1898,6 +1898,9 @@ async function driveStoryInner(story) {
         )
         if (verify?.verified !== true) return { park: park('base-sync verify-chain failed') }
       }
+      // r2-3: `stale` means the worktree HEAD is not the dispatched head — the retry runs on the HEAD base-sync reports
+      // (merged or already up to date), never on the head the refusal named, which would refuse again.
+      if (fault === 'stale' && SHA40.test(String(action?.head ?? ''))) return { next: { ...due.next, base: action.head } }
     }
     return { next: due.next }
   }

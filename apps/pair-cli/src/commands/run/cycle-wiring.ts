@@ -1143,14 +1143,14 @@ function syncStaleBase(
   input: CycleDriverRequest,
   co: Coordinates,
   worktree: string,
-): string | undefined {
+): { park?: string; head?: string } {
   const round = co.bridge.recover({
     dir: co.runDir,
     kind: 'base-sync',
     detail: `stale preparation: merge ${ctx.baseBranch}`,
     policy: budgetsOf(input),
   })
-  if (!round.allowed) return round.next?.detail ?? 'autoRecoveryRounds spent'
+  if (!round.allowed) return { park: round.next?.detail ?? 'autoRecoveryRounds spent' }
   git(worktree, ['fetch', '-q', 'origin'])
   const sync = co.bridge.baseSync({
     cwd: worktree,
@@ -1158,15 +1158,18 @@ function syncStaleBase(
     story: input.card,
     dir: co.runDir,
   })
-  if (sync.synced !== true && sync.reason !== 'up-to-date')
-    return sync.detail ?? `base sync did not complete (${sync.reason ?? 'unknown'})`
+  if (sync.synced !== true && sync.reason !== 'up-to-date') return { park: syncRefusal(sync) }
   console.log(
-    `  Recovery: stale preparation — ${ctx.baseBranch} merged (round ${String(round.round)}/${String(round.budget)})`,
+    `  Recovery: stale preparation — base synced (${sync.reason ?? 'merged'}), retried on the worktree HEAD (round ${String(round.round)}/${String(round.budget)})`,
   )
-  return sync.synced === true
-    ? verifyAfterSync(co, worktree, sync, { pr: input.pr, baseRef: ctx.baseBranch })
-    : undefined
+  const park = verifyAfterSync(co, worktree, sync, { pr: input.pr, baseRef: ctx.baseBranch })
+  // r2-3: `stale` means the worktree HEAD is not the dispatched head — the retry runs on the HEAD the sync reports
+  return park !== undefined ? { park } : { ...(sync.head !== undefined && { head: sync.head }) }
 }
+
+/** Why a base sync did not complete, as the park reason. */
+const syncRefusal = (sync: BaseSyncResult): string =>
+  sync.detail ?? `base sync did not complete (${sync.reason ?? 'unknown'})`
 
 /** AC-13: on a sealed cycle with a PR, custody is re-checked on the merged head (`verify-chain --base-ref`). */
 function verifyAfterSync(
@@ -1175,7 +1178,7 @@ function verifyAfterSync(
   sync: BaseSyncResult,
   { pr, baseRef }: { pr: number | undefined; baseRef: string },
 ): string | undefined {
-  if (sync.cycleBase === undefined || pr === undefined) return undefined
+  if (sync.synced !== true || sync.cycleBase === undefined || pr === undefined) return undefined
   const failed = 'base-sync verify-chain failed: custody does not hold on the merged head'
   try {
     const chain = co.bridge.verifyChain({
@@ -1196,17 +1199,17 @@ function cleanDirty(
   input: CycleDriverRequest,
   co: Coordinates,
   worktree: string,
-): string | undefined {
+): { park?: string } {
   const round = co.bridge.recover({
     dir: co.runDir,
     kind: 'worktree-clean',
     detail: 'dirty preparation',
     policy: budgetsOf(input),
   })
-  if (!round.allowed) return round.next?.detail ?? 'autoRecoveryRounds spent'
+  if (!round.allowed) return { park: round.next?.detail ?? 'autoRecoveryRounds spent' }
   const cleaned = co.bridge.worktreeClean({ cwd: worktree, dir: co.runDir, story: input.card })
   console.log(`  Recovery: dirty worktree — ${cleaned.ref ?? cleaned.detail ?? 'nothing to save'}`)
-  return undefined
+  return {}
 }
 
 /** r0-3: an explicit re-run lifts a spent process budget once (`recover --kind resume`), within the run's resume budget. */
@@ -1231,38 +1234,16 @@ const resumeParkFor =
 /** The loop's process-recovery collaborators, bound to this card's run. */
 function recoveryHooks(ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) {
   return {
-    recoverDirty: recoverDirtyFor(ctx, input, co),
     beforePrepare: stashBeforePrepareFor(ctx, input, co),
     resumePark: resumeParkFor(input, co),
     recoverStop: recoverStopFor(ctx, input, co),
   }
 }
 
-/** A dirty-worktree refusal: one `worktree-clean` recovery round, the stray files stashed, `resolve` again. */
-const recoverDirtyFor =
-  (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
-  async (next: CycleNext): Promise<boolean> => {
-    const detail = String(next['detail'] ?? 'dirty story worktree').slice(0, 200)
-    const round = co.bridge.recover({
-      dir: co.runDir,
-      kind: 'worktree-clean',
-      detail,
-      policy: budgetsOf(input),
-    })
-    if (!round.allowed) return false
-    const worktree = worktreePathOf(await worktreeFor(ctx, input, co)())
-    if (worktree === undefined) return false
-    const cleaned = co.bridge.worktreeClean({ cwd: worktree, dir: co.runDir, story: input.card })
-    console.log(
-      `  Recovery: dirty worktree — ${cleaned.ref ?? cleaned.detail ?? 'nothing to save'}, retrying (round ${String(round.round)}/${String(round.budget)})`,
-    )
-    return cleaned.cleaned
-  }
-
 /** US-623 AC6: a prepare after a failed attempt starts from a clean tree — its stray files stashed, never deleted. */
 const stashBeforePrepareFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
-  async (next: CycleNext): Promise<string | void> => {
+  async (next: CycleNext): Promise<{ park?: string; head?: string } | void> => {
     const worktree = worktreePathOf(await worktreeFor(ctx, input, co)())
     if (worktree === undefined) return
     // AC-10 (r1-2): a dirty refusal is saved at a recorded ref under a worktree-clean round, never a plain stash.

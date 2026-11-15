@@ -2397,14 +2397,22 @@ function writeRecovery(dir, state) {
 // first handoff — `.attempt-N` retries are not progress), so a card that keeps advancing is never parked by
 // rounds an earlier step spent.
 const STEP_HANDOFF = /^[ar]\d+(?:-g\d+)?-[a-z-]+\.json$/
-// A step handoff re-created after `reset-group` set its predecessor aside is not progress (r1-1): the budget counts across resets.
+// A step handoff re-created after `reset-group` set its predecessor aside is progress only when it is not itself a
+// process fault (r1-1/r2-2): a faulted re-creation keeps the budget counting across resets, a genuine one (a seal) advances.
 const RESET_ASIDE = /^reset-\d{4}-\d{2}-\d{2}(?:-\d+)?-(.+)$/
+const faultedFile = path => {
+  try {
+    return isProcessFault(JSON.parse(readFileSync(path, 'utf8')))
+  } catch {
+    return false
+  }
+}
 function spentRounds(dir, rounds) {
   let since = 0
   try {
     const files = readdirSync(dir)
     const reset = new Set(files.map(f => RESET_ASIDE.exec(f)?.[1]).filter(Boolean))
-    for (const f of files) if (STEP_HANDOFF.test(f) && !reset.has(f)) since = Math.max(since, statSync(join(dir, f)).mtimeMs)
+    for (const f of files) if (STEP_HANDOFF.test(f) && !(reset.has(f) && faultedFile(join(dir, f)))) since = Math.max(since, statSync(join(dir, f)).mtimeMs)
   } catch {}
   return rounds.filter(r => Date.parse(r.at) > since)
 }
@@ -2485,7 +2493,8 @@ export function baseSync({ cwd, base, story, owned, snapshot, dir }) {
   const baseSha = g(['rev-parse', '--verify', `${base}^{commit}`])
   if (snapshot && (!SHA_RE.test(String(snapshot)) || run(['merge-base', '--is-ancestor', snapshot, 'HEAD']).status !== 0))
     return { synced: false, reason: 'sealed-history-rewritten', detail: `base-sync refused: sealed snapshot ${snapshot} is not an ancestor of HEAD — a rebase rewrote sealed history. Sync the base only by merge (\`cycle-state.mjs base-sync\`), never rebase; restore the sealed history or post a maintainer reset comment`, base: baseSha, conflicts: [] }
-  if (run(['merge-base', '--is-ancestor', baseSha, 'HEAD']).status === 0) return { synced: false, reason: 'up-to-date', base: baseSha, conflicts: [] }
+  // `head`: the worktree HEAD a `stale` preparation's retry must be dispatched on (r2-3), synced or not.
+  if (run(['merge-base', '--is-ancestor', baseSha, 'HEAD']).status === 0) return { synced: false, reason: 'up-to-date', base: baseSha, head: g(['rev-parse', 'HEAD']), conflicts: [] }
   if (g(['status', '--porcelain', '--untracked-files=no'])) return { synced: false, reason: 'dirty-worktree', base: baseSha, conflicts: [] }
   const fork = g(['merge-base', 'HEAD', baseSha])
   const sealed = new Set()
