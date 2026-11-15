@@ -144,7 +144,8 @@ test('board authorization', { concurrency: 4 }, async suite => {
       for (let replay = 0; replay < (row.replay ? 2 : 1); replay++) {
         const current = row.revoke && replay === 1 ? { ...row, role: 'read', allow: false } : row
         const result = await runWorkflow(workflow, current, action, merged)
-        const expected = current.allow ? [{ kind: 'transition', story: String(current.story ?? 42), state, repo: current.repo ?? 'acme/project' }] : []
+        // r3-16: every PR event asks the code host for the card's linked PR state.
+        const expected = current.allow ? [{ kind: 'transition', story: String(current.story ?? 42), state: 'linked', repo: current.repo ?? 'acme/project' }] : []
         const writes = result.writes.map(write => write.kind === 'transition' ? {
           kind: write.kind, story: write.args[write.args.indexOf('--story') + 1],
           state: write.args[write.args.indexOf('--pr-state') + 1], repo: write.args[write.args.indexOf('--repo') + 1],

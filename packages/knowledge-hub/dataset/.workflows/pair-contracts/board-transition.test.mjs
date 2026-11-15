@@ -34,6 +34,23 @@ test('AC-1/4: --require-card skips an unresolved or foreign card without writing
   assert.deepEqual(writes, ['ENG-42:Review'])
 })
 
+// r3-16: `--pr-state linked` derives the transition from every PR linking the card, not the event's PR.
+test('AC-1: a linked transition follows the code host, so a superseded unmerged PR never closes the card', () => {
+  assert.deepEqual(parseArgs(['--story', '42', '--pr-state', 'linked']), { story: '42', pr: 'linked' })
+  let boardState = 'Review'
+  const writes = []
+  const pm = {
+    cardState: () => ({ issueState: 'OPEN', issueReason: null, boardState, member: true }),
+    setBoardState: ({ state }) => { writes.push(state); boardState = state; return { confirmed: true } },
+    closeCard: () => { throw Error('must not close') },
+  }
+  const asked = []
+  const code = { linkedPr: ({ id, repo }) => { asked.push(`${id}@${repo}`); return 'open' } }
+  assert.deepEqual(runTransition({ hosts: { pm, code }, story: '42', pr: 'linked', repo: 'o/r', adoption: '' }), { confirmed: true, expected: 'Review', actions: [] })
+  assert.deepEqual(asked, ['42@o/r'])
+  assert.deepEqual(writes, [])
+})
+
 test('AC-1: transition args refuse implicit apply and unknown PR states', () => {
   assert.deepEqual(parseArgs(['--story', '42', '--pr-state', 'open']), { story: '42', pr: 'open' })
   assert.deepEqual(parseArgs(['--story', '42', '--pr-state', 'none']), { story: '42', pr: 'none' })

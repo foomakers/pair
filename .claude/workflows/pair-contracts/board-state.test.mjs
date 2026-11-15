@@ -3,9 +3,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { defineAdapter, REQUIRED_METHODS, loadAdapters } from '../../skills/pair-workflow-cycle/scripts/host/index.mjs'
 import { fileURLToPath } from 'node:url'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import github from '../../skills/pair-workflow-cycle/scripts/host/github.mjs'
 import filesystem from '../../skills/pair-workflow-cycle/scripts/host/filesystem.mjs'
 
@@ -54,7 +54,7 @@ else if (a[0] === 'api') process.stdout.write(JSON.stringify({ data: { repositor
 else { process.stderr.write('unexpected command ' + a.join(' ')); process.exit(3) }
 `)
   chmodSync(ghBin, 0o755)
-  const pm = github.instantiate({ ghBin, projectTitle: 'board', storyLabel: 'user story' })
+  const pm = github.instantiate({ ghBin, wayOfWorking: '- `pm-project`: `board`\n', storyLabel: 'user story' })
   assert.equal(pm.ensureBoardMembership({ id: 42, repo: 'owner/repo' }).confirmed, true)
   assert.equal(pm.ensureBoardMembership({ id: 42, repo: 'owner/repo' }).confirmed, true)
   assert.deepEqual(JSON.parse(readFileSync(state, 'utf8')), { member: true, adds: 1, issues: [], prs: [] })
@@ -85,6 +85,8 @@ test('AC-4/5: every installed PM adapter exposes membership and state writes', a
 const { default: azure } = await import('../../skills/pair-workflow-cycle/scripts/host/azure-devops.mjs')
 const { default: linear } = await import('../../skills/pair-workflow-cycle/scripts/host/linear.mjs')
 const { applyBoardState, stateMapping } = await import('../../skills/pair-workflow-cycle/scripts/board-sync.mjs')
+let repoRoot = fileURLToPath(new URL('.', import.meta.url))
+while (!existsSync(join(repoRoot, 'pnpm-workspace.yaml'))) repoRoot = dirname(repoRoot)
 const stubBin = (name, world, source) => {
   const dir = mkdtempSync(join(tmpdir(), `pair-${name}-`))
   const file = join(dir, 'world.json')
@@ -103,30 +105,62 @@ ${source}
   return { bin, world: () => JSON.parse(readFileSync(file, 'utf8')) }
 }
 
-// r0-3: GitHub membership and Status are resolved against the adopted project only.
+// r0-3 / r3-11 / r0-4: GitHub membership and Status come from the adopted project only, resolved by its full
+// title (`pm-project`) or, absent that, by the one project linked to the repository; an empty Status reads
+// as gh prints it (`{"optionId":"","name":""}`).
 const GH_BOARD = `
 const title = p => w.projects.find(x => x.id === p).title
-const fields = p => ({ nodes: [{ id: 'F-' + p, name: 'Status', options: ['Todo', 'Review'].map(n => ({ id: p + '-' + n, name: n })) }] })
-if (a[0] === 'issue' && a[1] === 'view') { process.stdout.write(JSON.stringify({ state: 'OPEN', stateReason: null, projectItems: w.items.map(i => ({ title: title(i.project), status: i.status ? { name: i.status } : null })) })); process.exit(0) }
-if (a[0] === 'project' && a[1] === 'list') { process.stdout.write(JSON.stringify({ projects: w.projects })); process.exit(0) }
+const fields = p => ({ nodes: [{ id: 'F-' + p, name: 'Status', options: ['Todo', 'Review', 'Done'].map(n => ({ id: p + '-' + n, name: n })) }] })
+if (a[0] === 'issue' && a[1] === 'view') { process.stdout.write(JSON.stringify({ state: 'OPEN', stateReason: null, projectItems: w.items.map(i => ({ title: title(i.project), status: { optionId: i.status ? 'o' : '', name: i.status ?? '' } })) })); process.exit(0) }
+if (a[0] === 'project' && a[1] === 'list') { process.stdout.write(JSON.stringify({ projects: w.projects, totalCount: w.projects.length })); process.exit(0) }
 if (a[0] === 'api' && a[1] === 'graphql') {
   const q = a.find(v => v.startsWith('query='))
   const f = k => (a.find(v => v.startsWith(k + '=')) || '').slice(k.length + 1)
   if (q.includes('addProjectV2ItemById')) { w.log.push('add:' + f('project')); w.items.push({ id: 'I-' + f('project'), project: f('project'), status: null }); save(); process.stdout.write(JSON.stringify({ data: { addProjectV2ItemById: { item: { id: 'I-' + f('project') } } } })); process.exit(0) }
   if (q.includes('updateProjectV2ItemFieldValue')) { const it = w.items.find(i => i.id === f('item')); it.status = f('option').split('-').pop(); w.log.push('status:' + f('project') + ':' + it.status); save(); process.stdout.write(JSON.stringify({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: it.id, fieldValueByName: { name: it.status } } } } })); process.exit(0) }
+  if (q.includes('projectsV2')) { process.stdout.write(JSON.stringify({ data: { repository: { projectsV2: { nodes: w.projects.filter(p => (w.linked ?? []).includes(p.id)) } } } })); process.exit(0) }
   process.stdout.write(JSON.stringify({ data: { repository: { issue: { id: 'C42', projectItems: { nodes: w.items.map(i => ({ id: i.id, project: { id: i.project, title: title(i.project), fields: fields(i.project) } })) } } } } })); process.exit(0)
 }
 process.stderr.write('unexpected ' + a.join(' ')); process.exit(3)
 `
+const wow = project => `- \`pm-tool\`: \`github\`\n- \`pm-project\`: \`${project}\`\n`
 test('r0-3: GitHub repairs the adopted board and never writes an unrelated project', () => {
   const gh = stubBin('gh', { projects: [{ id: 'PA', title: 'Adopted board' }, { id: 'PO', title: 'P-other' }], items: [{ id: 'I-PO', project: 'PO', status: 'Todo' }] }, GH_BOARD)
-  const pm = github.instantiate({ ghBin: gh.bin, projectTitle: 'Adopted board' })
+  const pm = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('Adopted board') })
   assert.deepEqual(pm.cardState({ id: 42, repo: 'owner/repo' }), { issueState: 'OPEN', issueReason: null, boardState: null, member: false })
   assert.equal(applyBoardState({ pm, id: '42', pr: 'open', repo: 'owner/repo' }).confirmed, true)
   assert.deepEqual(gh.world().log, ['add:PA', 'status:PA:Review'])
   assert.deepEqual(pm.cardState({ id: 42, repo: 'owner/repo' }), { issueState: 'OPEN', issueReason: null, boardState: 'Review', member: true })
   assert.equal(applyBoardState({ pm, id: '42', pr: 'open', repo: 'owner/repo' }).confirmed, true)
   assert.deepEqual(gh.world().log, ['add:PA', 'status:PA:Review'], 'rerun writes nothing')
+})
+test('r0-4: a GitHub item with an empty Status is initialized to the mapped Todo', () => {
+  const gh = stubBin('gh', { projects: [{ id: 'PA', title: 'Adopted board' }], items: [{ id: 'I-PA', project: 'PA', status: null }] }, GH_BOARD)
+  const pm = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('Adopted board') })
+  assert.deepEqual(pm.cardState({ id: 42, repo: 'owner/repo' }), { issueState: 'OPEN', issueReason: null, boardState: null, member: true })
+  assert.deepEqual(applyBoardState({ pm, id: '42', pr: 'none', repo: 'owner/repo', mapping: { Draft: 'Todo' } }), { confirmed: true, expected: 'Todo', actions: ['status:Todo'] })
+  assert.deepEqual(gh.world().log, ['status:PA:Todo'])
+})
+test('r3-11: the real way-of-working prose resolves "pair digital development", never the short name', () => {
+  const real = readFileSync(join(repoRoot, '.pair/adoption/tech/way-of-working.md'), 'utf8')
+  const prose = real.split('\n').filter(line => !line.includes('`pm-project`')).join('\n')
+  assert.match(prose, /The project is pair under the github organization/)
+  const projects = [{ id: 'P3', number: 3, title: 'pair digital development' }, { id: 'P2', number: 2, title: 'Vibe engineering content plan' }]
+  for (const [text, linked] of [[real, []], [prose, ['P3']]]) {
+    const gh = stubBin('gh', { projects, linked, items: [{ id: 'I-P3', project: 'P3', status: 'Review' }] }, GH_BOARD)
+    const pm = github.instantiate({ ghBin: gh.bin, wayOfWorking: text })
+    assert.deepEqual(pm.cardState({ id: 42, repo: 'foomakers/pair' }), { issueState: 'OPEN', issueReason: null, boardState: 'Review', member: true })
+    assert.deepEqual(pm.setBoardState({ id: 42, state: 'Done', repo: 'foomakers/pair' }), { applied: 'Done', confirmed: true, error: null })
+    assert.deepEqual(gh.world().log, ['status:P3:Done'])
+  }
+  for (const linked of [[], ['P3', 'P2']]) {
+    const gh = stubBin('gh', { projects, linked, items: [{ id: 'I-P3', project: 'P3', status: 'Review' }] }, GH_BOARD)
+    const pm = github.instantiate({ ghBin: gh.bin, wayOfWorking: prose })
+    assert.equal(pm.cardState({ id: 42, repo: 'foomakers/pair' }).member, false)
+    assert.equal(pm.ensureBoardMembership({ id: 42, repo: 'foomakers/pair' }).gap, 'board-unconfigured')
+    assert.equal(pm.setBoardState({ id: 42, state: 'Done', repo: 'foomakers/pair' }).gap, 'board-unconfigured')
+    assert.deepEqual(gh.world().log, [])
+  }
 })
 
 // r0-7: audits page through bounded requests; transport errors never carry card text.
@@ -144,11 +178,11 @@ process.stdout.write(JSON.stringify(rows.slice((page - 1) * 100, page * 100)))
 `
 test('r0-7: listCards and linkedPr read a >1 MiB backlog page by page with sanitized errors', () => {
   const gh = stubBin('gh', {}, GH_PAGES)
-  const pm = github.instantiate({ ghBin: gh.bin, projectTitle: 'board', storyLabel: 'user story' })
+  const pm = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board'), storyLabel: 'user story' })
   assert.equal(pm.listCards({ repo: 'owner/repo' }).length, 180)
   assert.equal(pm.linkedPr({ id: '180', repo: 'owner/repo' }), 'open')
   const failing = stubBin('gh', { failPage: 2 }, GH_PAGES)
-  const broken = github.instantiate({ ghBin: failing.bin, projectTitle: 'board', storyLabel: 'user story' })
+  const broken = github.instantiate({ ghBin: failing.bin, wayOfWorking: wow('board'), storyLabel: 'user story' })
   assert.throws(() => broken.listCards({ repo: 'owner/repo' }), e => !String(e.message).includes('CARD_BODY_SENTINEL') && !String(e.detail ?? '').includes('CARD_BODY_SENTINEL') && /HTTP 502/.test(e.message))
 })
 
@@ -229,4 +263,58 @@ process.stderr.write('unexpected ' + op); process.exit(3)
   assert.equal(pm.ensureBoardMembership({ id: 'ENG-1' }).confirmed, true)
   assert.deepEqual(pm.cardState({ id: 'ENG-1' }), { issueState: 'OPEN', issueReason: null, boardState: 'Todo', member: true })
   assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).log, ['project:p1'])
+})
+
+// r3-13: a failing host call never echoes argv values or card text — not even a short body.
+test('r3-13: host CLI errors redact body/description values and long argv', () => {
+  const gh = stubBin('gh', {}, `process.stderr.write('HTTP 422'); process.exit(1)`)
+  const pm = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') })
+  for (const body of ['ok', 'CARD_TEXT_SENTINEL '.repeat(20)]) {
+    assert.throws(() => pm.updateCard({ id: 42, repo: 'owner/repo', body }), e => {
+      const text = `${e.message} ${e.command} ${e.detail}`
+      return /HTTP 422/.test(e.message) && !text.includes(body.trim()) && !text.includes('CARD_TEXT_SENTINEL') && /issue edit 42/.test(e.command)
+    }, body)
+  }
+})
+
+// r3-14: one audit reads the repository's pull requests once, not once per card.
+test('r3-14: linkedPr reads the PR listing once per adapter instance', () => {
+  const gh = stubBin('gh', {}, `
+w.log.push(a.join(' ')); save()
+if (a[0] === 'api' && a.some(v => v.includes('/pulls?'))) { process.stdout.write(JSON.stringify([{ number: 1, title: 'x', body: 'Closes #1', state: 'open', merged_at: null }, { number: 2, title: 'y', body: 'Closes #2', state: 'closed', merged_at: '2026-01-01' }])); process.exit(0) }
+process.exit(3)`)
+  const code = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') })
+  assert.deepEqual(['1', '2', '3'].map(id => code.linkedPr({ id, repo: 'owner/repo' })), ['open', 'merged', 'none'])
+  assert.equal(gh.world().log.filter(l => l.includes('/pulls?')).length, 1)
+})
+
+// r3-16: several PRs link one card — a merged one wins, then an open one; a superseded closed PR never decides.
+test('r3-16: GitHub and Azure linkedPr resolve several linked PRs by precedence, branch links included', () => {
+  const pulls = [
+    { number: 1, title: 'old', body: 'Closes #42', state: 'closed', merged_at: null, head: { ref: 'feature/old' } },
+    { number: 2, title: 'new', body: 'Closes #42', state: 'open', merged_at: null, head: { ref: 'feature/new' } },
+    { number: 3, title: 'a', body: '', state: 'closed', merged_at: null, head: { ref: 'feature/US-7-x' } },
+    { number: 4, title: 'b', body: 'Refs: ENG-9', state: 'closed', merged_at: '2026-01-01', head: { ref: 'b' } },
+    { number: 5, title: 'c', body: 'Refs: ENG-9', state: 'open', merged_at: null, head: { ref: 'c' } },
+    { number: 6, title: 'd', body: '', state: 'open', merged_at: null, head: { ref: 'feature/#77-x' } },
+  ]
+  const gh = stubBin('gh', {}, `process.stdout.write(JSON.stringify(${JSON.stringify(pulls)})); process.exit(0)`)
+  const code = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') })
+  assert.deepEqual(['42', 'ENG-9', '77', '7'].map(id => code.linkedPr({ id, repo: 'owner/repo' })), ['open', 'merged', 'open', 'none'])
+  const prs = [{ description: 'Refs: ENG-42', status: 'abandoned' }, { description: 'Refs: ENG-42', status: 'active' }]
+  const az = stubBin('az', { states: [], items: {}, prs }, AZ)
+  assert.equal(azure.instantiate({ azBin: az.bin, wayOfWorking: '' }).linkedPr({ id: 'ENG-42', repo: 'Proj/app' }), 'open')
+})
+
+// r3-15: Azure reads closure through the adopted Done state, not fixed Done/Closed literals.
+test('r3-15: Azure card closure and epic children follow the adopted Done state', () => {
+  const custom = '## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Proposed | Draft |\n| Shipped | Done |\n'
+  const items = { 1: azItem('Shipped'), 2: azItem('Closed'), 3: azItem('Removed') }
+  const az = stubBin('az', { states: [], items, prs: [] }, AZ)
+  const pm = azure.instantiate({ azBin: az.bin, wayOfWorking: custom })
+  assert.deepEqual(['1', '2', '3'].map(id => pm.cardState({ id })), [
+    { issueState: 'CLOSED', issueReason: 'COMPLETED', boardState: 'Shipped', member: true },
+    { issueState: 'OPEN', issueReason: null, boardState: 'Closed', member: true },
+    { issueState: 'CLOSED', issueReason: 'NOT_PLANNED', boardState: 'Removed', member: true },
+  ])
 })

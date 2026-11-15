@@ -65,6 +65,30 @@ test('AC-1/4/6: Not planned converges on native terminal states and writes only 
   assert.deepEqual(auditCards({ pm, code: { linkedPr: () => 'none' }, mapping }), { mismatches: [], gaps: [] })
 })
 
+// r3-12: a board without a Review state is clean on the audit too — apply's skip is never an audit gap.
+test('AC-2/6: audit and apply agree on an unmapped Review: membership repaired once, then clean', () => {
+  let state = { issueState: 'OPEN', issueReason: null, boardState: 'Todo', member: false }
+  const pm = {
+    listCards: () => [{ id: '5' }],
+    cardState: () => state,
+    ensureBoardMembership: () => { state = { ...state, member: true }; return { confirmed: true } },
+    setBoardState: () => { throw Error('no Review option') },
+  }
+  const input = { pm, code: { linkedPr: () => 'open' }, mapping: { Draft: 'Todo', Done: 'Done' } }
+  assert.deepEqual(auditCards(input), { mismatches: [{ id: '5', actual: 'Todo', expected: null }], gaps: [] })
+  assert.deepEqual(auditCards({ ...input, apply: true }).gaps, [])
+  assert.deepEqual(auditCards(input), { mismatches: [], gaps: [] })
+})
+
+// Review r3 (non-blocking): an adapter's typed refusal keeps its code through applyBoardState.
+test('AC-6: a board write refused as board-unconfigured is reported with that code', () => {
+  const pm = {
+    cardState: () => ({ issueState: 'OPEN', issueReason: null, boardState: 'Todo', member: true }),
+    setBoardState: () => ({ confirmed: false, gap: 'board-unconfigured', error: 'no project' }),
+  }
+  assert.deepEqual(applyBoardState({ pm, id: '1', pr: 'open', mapping: { Review: 'Review' } }).gaps, ['board-unconfigured'])
+})
+
 // r0-4: creation and audit initialize a member whose Status is empty, once.
 test('AC-5: a member with an empty Status gets the mapped Todo, then audits clean', () => {
   let state = { issueState: 'OPEN', issueReason: null, boardState: null, member: true }
