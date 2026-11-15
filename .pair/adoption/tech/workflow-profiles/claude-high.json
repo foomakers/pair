@@ -1,0 +1,14 @@
+{
+  "name": "claude-high",
+  "defaults": {
+    "engine": "claude",
+    "model": "frontier",
+    "effort": "high",
+    "context": "fresh"
+  },
+  "modelClasses": {
+    "cheap": "claude-haiku-5-5",
+    "balanced": "claude-sonnet-5-5",
+    "frontier": "claude-opus-5-5"
+  }
+}
