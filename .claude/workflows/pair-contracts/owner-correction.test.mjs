@@ -90,7 +90,7 @@ const waiverRun = () => {
   put(dir, 'r1-g1', 'red-spec', { status: 'unprovable', mode: 'remediation', inputHead: SHA('c'), findings: { received: ['r0-1'] }, reason: 'vitest onTaskUpdate timeout, not caused by the code' })
   return dir
 }
-const waiver = (over = {}) => '```json\n' + JSON.stringify({ schemaVersion: 1, kind: 'preparation-waiver', story: '42', pr: 7, phase: 'r1-g1', findings: ['r0-1'], reason: 'flake, not causal', ...over }) + '\n```'
+const waiver = (over = {}) => '```json\n' + JSON.stringify({ schemaVersion: 1, kind: 'preparation-waiver', story: '42', pr: 7, phase: 'r1-g1', attempt: 1, inputHead: SHA('c'), findings: ['r0-1'], reason: 'flake, not causal', ...over }) + '\n```'
 
 test('preparation waiver: a verified maintainer waiver of an `unprovable` preparation routes a re-review carrying the waived findings, once', () => {
   const dir = waiverRun()
@@ -115,10 +115,35 @@ test('preparation waiver: refused — not the maintainer, a finding the refusal 
     [c('rucka', waiver({ findings: ['r0-2'] })), 'waiver-findings-unknown'],
     [c('rucka', waiver({ phase: 'r1-g2' })), 'waiver-not-owed'],
     [c('rucka', waiver({ findings: [] })), 'findings-invalid'],
+    // bound to the refused attempt: another attempt or another head is not this refusal
+    [c('rucka', waiver({ attempt: 2 })), 'waiver-attempt-mismatch'],
+    [c('rucka', waiver({ inputHead: SHA('d') })), 'waiver-attempt-mismatch'],
+    [c('rucka', waiver({ inputHead: undefined })), 'inputHead-invalid'],
   ]
   for (const [comment, reason] of cases) assert.equal(approve(dir, 6, { 6: comment }).reason, reason)
   assert.deepEqual(readApprovals(dir), [])
   assert.equal(go(dir).next.reason, 'failed-preparation')
   // a run whose tail is not an unprovable preparation owes no waiver
   assert.equal(approve(runDir(), 7, { 7: c('rucka', waiver()) }).reason, 'waiver-not-owed')
+})
+
+test('preparation waiver r0-1: the same comment replayed in ANOTHER run of the PR is refused — nothing recorded, nothing routed there', () => {
+  const a = waiverRun()
+  assert.equal(approve(a, 5, { 5: c('rucka', waiver()) }).approved, true)
+  // run B: same story, same PR, same phase/attempt/head, a different finding under the same id
+  const b = join(a, '..', '..', 'run-2', '42')
+  mkdirSync(b, { recursive: true })
+  const f = { id: 'r0-1', severity: 'Critical', blocking: true, transition: 'open', kind: 'defect', location: 'b', description: 'injection', recommendation: 'r' }
+  put(b, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [f], custody: { contractBreach: false }, readiness: { ready: false } })
+  put(b, 'r1-g1', 'red-spec', { status: 'unprovable', mode: 'remediation', inputHead: SHA('c'), findings: { received: ['r0-1'] } })
+  assert.equal(approve(b, 5, { 5: c('rucka', waiver()) }).reason, 'decisionRef-already-used')
+  assert.deepEqual(readApprovals(b), [])
+  assert.equal(go(b).next.reason, 'failed-preparation')
+})
+
+test('preparation waiver r0-2: only the ADOPTED maintainer authorizes it — a --maintainer naming the commenter is not honored', () => {
+  const dir = waiverRun()
+  const out = approveCorrection({ dir, decisionRef: 'pr7#c-8', repo: 'o/r', pr: 7, maintainer: 'mallory', host: hostOf({ 8: c('mallory', waiver()) }) })
+  assert.equal(out.reason, 'author-not-authorized:mallory')
+  assert.deepEqual(readApprovals(dir), [])
 })

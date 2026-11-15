@@ -1716,7 +1716,9 @@ export function parseCorrectionComment(body) {
     if (typeof p.phase !== 'string' || !phaseParts(p.phase.trim())?.groupId) return { error: 'phase-invalid' }
     if (!Array.isArray(p.findings) || !p.findings.length || p.findings.some(f => typeof f !== 'string' || !f.trim())) return { error: 'findings-invalid' }
     for (const k of ['story', 'reason']) if (typeof p[k] !== 'string' || !p[k].trim()) return { error: `${k}-missing` }
-    return { value: { kind: PREPARATION_WAIVER, story: p.story.trim(), pr: Number(p.pr), phase: p.phase.trim(), findings: [...new Set(p.findings)].sort(), reason: p.reason.trim() } }
+    if (!SHA_RE.test(String(p.inputHead ?? ''))) return { error: 'inputHead-invalid' }
+    if (!Number.isInteger(p.attempt) || p.attempt < 1) return { error: 'attempt-invalid' }
+    return { value: { kind: PREPARATION_WAIVER, story: p.story.trim(), pr: Number(p.pr), phase: p.phase.trim(), attempt: p.attempt, inputHead: p.inputHead, findings: [...new Set(p.findings)].sort(), reason: p.reason.trim() } }
   }
   if (!p || typeof p !== 'object' || p.schemaVersion !== 1 || p.kind !== 'contract-correction') return { error: 'not-a-contract-correction' }
   if (!/^sha256:[0-9a-f]{64}$/.test(String(p.predecessorContractHash ?? ''))) return { error: 'predecessorContractHash-invalid' }
@@ -1772,14 +1774,24 @@ export function approveCorrection({ dir, decisionRef, repo, pr, maintainer, now 
   if (c.story !== story) return { approved: false, reason: 'story-mismatch' }
   if (c.pr !== Number(pr)) return { approved: false, reason: 'pr-mismatch' }
   if (c.kind === PREPARATION_WAIVER) {
+    // Only the ADOPTED maintainer: a `--maintainer` argument is the caller's word, never authority for a waiver.
+    const adopted = resolveMaintainer({ dir })
+    if (adopted.error) return { approved: false, reason: adopted.error }
+    if (comment.authorLogin !== adopted.login) return { approved: false, reason: `author-not-authorized:${comment.authorLogin}` }
     const last = list[list.length - 1]
     const review = list.filter(h => h.skill === 'review-phase').pop()
     if (last.skill !== 'red-spec' || last.phase !== c.phase || last.data.status !== 'unprovable' || !review) return { approved: false, reason: 'waiver-not-owed' }
     const held = new Set(last.data.findings?.received ?? [])
     if (c.findings.some(id => !held.has(id))) return { approved: false, reason: 'waiver-findings-unknown' }
+    // Bound to the refused attempt the maintainer saw: its attempt number and the head it was refused on.
+    if (c.attempt !== last.attempt || c.inputHead !== last.data.inputHead) return { approved: false, reason: 'waiver-attempt-mismatch' }
     return withLock(dir, lockWaitMs, () => {
       const all = readApprovals(dir)
       if (all.some(a => a.decisionRef === decisionRef)) return { approved: true, reason: 'already-applied' }
+      // One comment, one waiver: a decisionRef recorded by ANY other run of this story (`<runs>/<run>/<story>`) is a replay.
+      const runs = dirname(dirname(resolvePath(dir)))
+      const story = basename(resolvePath(dir))
+      if (readdirSync(runs).some(r => join(runs, r, story) !== resolvePath(dir) && readApprovals(join(runs, r, story)).some(a => a.decisionRef === decisionRef))) return { approved: false, reason: 'decisionRef-already-used' }
       const record = { decisionRef, status: 'approved', actor: comment.authorLogin, at: (now instanceof Date ? now : new Date(now)).toISOString(), ...c, target: `${last.name}.attempt-${last.attempt}` }
       writeFileSync(join(dir, APPROVALS_FILE), JSON.stringify([...all, record], null, 2))
       return { approved: true, record }
@@ -3618,7 +3630,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
         : { step: 'prepare', mode: 'remediation', phase: `r${round}-g1`, round, attempt: 1, base: gateRed.reviewedHead, findings }
   }
   // A maintainer's verified waiver of THIS unprovable preparation: re-review with the waived findings closed by the human.
-  const waiver = last.skill === 'red-spec' && last.data.status === 'unprovable' && priorReview && readApprovals(dir).find(a => a.kind === PREPARATION_WAIVER && a.status === 'approved' && a.target === failureId)
+  const waiver = last.skill === 'red-spec' && last.data.status === 'unprovable' && priorReview && readApprovals(dir).find(a => a.kind === PREPARATION_WAIVER && a.status === 'approved' && a.target === failureId && a.inputHead === last.data.inputHead)
   if (waiver) {
     const round = Math.max(phaseParts(last.phase)?.round ?? 0, phaseParts(priorReview.phase)?.round ?? 0) + 1
     const waived = new Set(waiver.findings)
