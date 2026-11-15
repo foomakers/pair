@@ -285,6 +285,20 @@ automation/loop-audit.md
 
 If the resolved path cannot be created or written, `pair-loop` **MUST HALT the run** rather than proceed unaudited: an unattended run with no audit trail is not an acceptable degraded mode (ADR-017 §6).
 
+## Telemetry — local delivery records (opt-in)
+
+```markdown
+## Telemetry
+
+- enabled: true
+```
+
+- **Opt-in, default off.** Absent file, section or `enabled: true` ⇒ nothing is recorded. `pair-cli run --telemetry` / `--no-telemetry` wins over the adoption for one run.
+- When on, a run appends one JSON line per executed stage (including the deterministic merge/CI-wait stage) and one per card to `.pair/working/telemetry/records.jsonl`: timing, engine, model, session id, tokens, outcome class, retries, rounds, findings by round, repairs, PR and manual interventions. Usage the engine does not report is `not measured`, never estimated. Records carry no secrets or card text.
+- **Local only**: the path is gitignored under `.pair/working/` and is never packaged into the CLI or the dataset.
+- Read it with `pnpm --filter @pair/pair-cli telemetry:report [root]` (per-engine rounds, wall/active/idle time, per-stage time and wasted-token share).
+- A write or read failure never fails delivery.
+
 ## Workflows — which workflow each tag routes to
 
 The **tag→workflow mapping** (#217, R4.4): the declaration that makes automation opt-in **per card** instead of per run. `## Eligibility` above answers *which cards an unattended run may pick up at all*; this section answers *what runs on a card once a trigger fires on it*, keyed by a tag the card carries.

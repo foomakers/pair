@@ -194,6 +194,8 @@ automation/loop-audit.md
 
 **`## Audit Location`**: the project-relative path (under `working_path`) an unattended run appends its per-iteration record to. Absent ⇒ `automation/loop-audit.md`. See [automation-policy.md](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md) for the full schema, every fail-safe default, and every HALT trigger.
 
+**`## Telemetry`**: `- enabled: true` records local per-stage and per-card delivery telemetry under `.pair/working/telemetry/` (never committed or packaged). Absent ⇒ off; `pair-cli run --telemetry` / `--no-telemetry` wins for one run; `telemetry:report` reads it.
+
 ```text
 ## Workflows
 
