@@ -534,6 +534,12 @@ function reportOutcome(
 ): number {
   console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
   reportCycleReason(outcome.next)
+  if (outcome.resumeToken !== undefined)
+    console.log(
+      outcome.resumesSpent === true
+        ? `  Parked (process fault) — resume token ${outcome.resumeToken}: ${outcome.reason ?? 'the re-run resumes are spent'}`
+        : `  Parked (process fault) — resume token ${outcome.resumeToken}: a re-run of pair run --card resumes it once, within autoRecoveryRounds`,
+    )
   onOutcome?.(outcome)
   return exitCodeFor(outcome)
 }
@@ -545,6 +551,7 @@ function cardStatusOf(outcome: DriveCycleResult): string {
   if (outcome.status === 'ready-for-merge' || outcome.status === 'target-ready')
     return outcome.status
   if (outcome.status === 'merge-parked' && exitCodeFor(outcome) === 0) return 'awaiting-human'
+  if (outcome.status === 'awaiting-human') return 'awaiting-human'
   return 'failed'
 }
 

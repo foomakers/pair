@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { runCycle, type CycleResolveResult, type CycleStageResult } from './cycle'
+import { PROCESS_STOPS, runCycle, type CycleResolveResult, type CycleStageResult } from './cycle'
 
 /**
  * US-487 T-4 — the pure stage loop: `resolve → (worktree) → packet → spawnStage → resolve`, over
@@ -102,78 +102,51 @@ describe('runCycle (US-487 T-4)', () => {
     expect(outcome.status).toBe('escalate')
   })
 
-  it('a preparation blocked on a dirty worktree is recovered once (stray files stashed) and the cycle resolves again; a refused recovery stays blocked', async () => {
-    const DIRTY = {
-      step: 'blocked',
-      reason: 'failed-preparation',
-      refusal: 'dirty',
-      phase: 'r1-g1',
-    }
-    const resolve = scriptedResolve([
-      { status: 'blocked', next: DIRTY },
-      { status: 'in-progress', next: VALIDATE_A0 },
-      { status: 'completed', next: DONE },
-    ])
-    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
-    const recoverDirty = vi.fn(async () => true)
-    const outcome = await runCycle({
-      resolve,
-      worktree,
-      packet,
-      spawnStage,
-      policy: {},
-      recoverDirty,
-    })
-    expect(recoverDirty).toHaveBeenCalledOnce()
-    expect(outcome.status).toBe('ready-for-merge')
+  // #646 r1-2 — the class: every catalogued process fault a stage stops for (enumerated from the code, pinned to
+  // STOP_CATALOG by cycle-catalogue.test.ts) is recovered, then parked with a resume token — never failed-<step>.
+  it.each([...PROCESS_STOPS])(
+    'AC-10 (r1-2): a stage stopped for process fault %s spends a recovery round and is dispatched again; a spent budget parks awaiting-human with a resume token',
+    async fault => {
+      const sealFailed = async (): Promise<CycleStageResult> => ({
+        processOutcome: 'success',
+        final: { status: 'failed', reason: fault },
+      })
+      const recoverStop = vi.fn(async () => true)
+      let calls = 0
+      const outcome = await runCycle({
+        resolve: scriptedResolve([
+          { status: 'in-progress', next: VALIDATE_A0 },
+          { status: 'in-progress', next: VALIDATE_A0 },
+          { status: 'in-progress', next: VALIDATE_A0 },
+          { status: 'completed', next: DONE },
+        ]),
+        worktree,
+        packet,
+        spawnStage: async () => (calls++ === 0 ? sealFailed() : { processOutcome: 'success' }),
+        policy: {},
+        recoverStop,
+      })
+      expect(recoverStop).toHaveBeenCalledWith(VALIDATE_A0, fault)
+      expect(outcome.status).toBe('ready-for-merge')
 
-    const stuck = await runCycle({
-      resolve: scriptedResolve([{ status: 'blocked', next: DIRTY }]),
-      worktree,
-      packet,
-      spawnStage,
-      policy: {},
-      recoverDirty: async () => false,
-    })
-    expect(stuck.next?.step).toBe('blocked')
-  })
-
-  it('a stage stopped for seal-not-pushed spends a recovery round and is dispatched again; a spent budget stops', async () => {
-    const sealFailed = async (): Promise<CycleStageResult> => ({
-      processOutcome: 'success',
-      final: { status: 'failed', reason: 'seal-not-pushed' },
-    })
-    const recoverStop = vi.fn(async () => true)
-    let calls = 0
-    const outcome = await runCycle({
-      resolve: scriptedResolve([
-        { status: 'in-progress', next: VALIDATE_A0 },
-        { status: 'in-progress', next: VALIDATE_A0 },
-        { status: 'in-progress', next: VALIDATE_A0 },
-        { status: 'completed', next: DONE },
-      ]),
-      worktree,
-      packet,
-      spawnStage: async () => (calls++ === 0 ? sealFailed() : { processOutcome: 'success' }),
-      policy: {},
-      recoverStop,
-    })
-    expect(recoverStop).toHaveBeenCalledWith(VALIDATE_A0, 'seal-not-pushed')
-    expect(outcome.status).toBe('ready-for-merge')
-
-    const spent = await runCycle({
-      resolve: scriptedResolve([
-        { status: 'in-progress', next: VALIDATE_A0 },
-        { status: 'in-progress', next: VALIDATE_A0 },
-      ]),
-      worktree,
-      packet,
-      spawnStage: sealFailed,
-      policy: {},
-      recoverStop: async () => false,
-    })
-    expect(spent).toMatchObject({ status: 'failed-validate', reason: 'seal-not-pushed' })
-  })
+      const spent = await runCycle({
+        resolve: scriptedResolve([
+          { status: 'in-progress', next: VALIDATE_A0 },
+          { status: 'in-progress', next: VALIDATE_A0 },
+        ]),
+        worktree,
+        packet,
+        spawnStage: sealFailed,
+        policy: {},
+        recoverStop: async () => false,
+      })
+      expect(spent).toMatchObject({
+        status: 'awaiting-human',
+        reason: fault,
+        resumeToken: `validate:a0:${fault}`,
+      })
+    },
+  )
 
   it('AC4: a process outcome of "failed" with an ADVANCED handoff still continues (process ≠ stage outcome)', async () => {
     // The terminal event lied (or never arrived) but the handoff genuinely moved on — AC4's split:
@@ -227,7 +200,7 @@ describe('runCycle (US-487 T-4)', () => {
     expect(outcome.status).toBe('ready-for-merge')
   })
 
-  it('AC5: a SECOND not-advanced handoff (retry budget spent) ends the run failed-<step>, never a third dispatch', async () => {
+  it('AC5/AC-10: a SECOND not-advanced handoff (retry budget spent) parks awaiting-human (dead-dispatch), never a third dispatch', async () => {
     const resolve = scriptedResolve([
       { status: 'empty', next: PREPARE_A0 },
       { status: 'empty', next: PREPARE_A0 }, // 1st dead dispatch
@@ -244,7 +217,10 @@ describe('runCycle (US-487 T-4)', () => {
     })
 
     expect(spawnStage).toHaveBeenCalledTimes(2) // original + the ONE retry the policy allows
-    expect(outcome.status).toBe('failed-prepare')
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'prepare:a0:dead-dispatch',
+    })
   })
 
   it("AC5: the retry budget is READ from cycle-state's policy, never a literal in this file (grep guard)", async () => {
@@ -268,7 +244,7 @@ describe('runCycle (US-487 T-4)', () => {
     })
 
     expect(spawnStage).toHaveBeenCalledTimes(3) // original + 2 retries this policy allows
-    expect(outcome.status).toBe('failed-prepare')
+    expect(outcome.status).toBe('awaiting-human')
   })
 
   it('AC6: next.context "reuse" is treated as fresh and reported once per run, never resumed as a session', async () => {
@@ -462,7 +438,7 @@ describe('runCycle — stall resume (US-506 T-8, AC12)', () => {
     expect(notes.some(n => /40/.test(n))).toBe(true)
   })
 
-  it('a second failure ends `failed-<step>` — a stall resume and a dead-dispatch retry spend the SAME deadDispatchRetries budget', async () => {
+  it('AC-10: a second failure parks (idle-timeout / dead-dispatch) — a stall resume and a dead-dispatch retry spend the SAME deadDispatchRetries budget, then one process recovery', async () => {
     for (const second of [STALL, { processOutcome: 'success' } as CycleStageResult]) {
       const resolve = scriptedResolve([{ status: 'empty', next: IMPLEMENT_A0 }])
       const spawnStage = vi
@@ -476,7 +452,26 @@ describe('runCycle — stall resume (US-506 T-8, AC12)', () => {
         policy: { deadDispatchRetries: 1 },
       })
       expect(spawnStage).toHaveBeenCalledTimes(2)
-      expect(outcome.status).toBe('failed-implement')
+      const fault = second.stalled === true ? 'idle-timeout' : 'dead-dispatch'
+      expect(outcome).toMatchObject({
+        status: 'awaiting-human',
+        reason: fault,
+        resumeToken: `implement:a0:${fault}`,
+      })
+      // the process budget grants a round: the step is dispatched again with a fresh dead-dispatch budget
+      const reasons: string[] = []
+      const recoverStop = async (_next: unknown, reason: string): Promise<boolean> =>
+        reasons.push(reason) === 1
+      const recovered = await runCycle({
+        resolve: scriptedResolve([{ status: 'empty', next: IMPLEMENT_A0 }]),
+        worktree,
+        packet,
+        spawnStage: async () => second,
+        policy: { deadDispatchRetries: 1 },
+        recoverStop,
+      })
+      expect(reasons).toEqual([fault, fault])
+      expect(recovered.status).toBe('awaiting-human')
     }
   })
 })
@@ -659,5 +654,98 @@ describe('US-623 AC6 — stray files of a failed attempt are stashed before the 
     expect(await run(VALIDATE_A0)).toEqual(['spawn'])
     // A repair works ON the predecessor's untracked contract files: stashing them makes it `unprovable`.
     expect(await run({ ...PREPARE_A0, mode: 'repair', attempt: 2 })).toEqual(['spawn'])
+  })
+})
+
+// #646 round 2 — r0-3: the process-budget park resolve reports is lifted by an explicit re-run (its FIRST answer), once.
+describe('runCycle — re-run resume of a process-budget park (#646 r0-3)', () => {
+  const PARK = { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds', phase: 'a0' }
+  const ok = async (): Promise<CycleStageResult> => ({ processOutcome: 'success' })
+
+  it('a re-run whose first answer is the park lifts it once and the cycle goes on', async () => {
+    const resumePark = vi.fn(async () => ({ resumed: true }))
+    const outcome = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'blocked', next: PARK },
+        { status: 'completed', next: DONE },
+      ]),
+      worktree,
+      packet,
+      spawnStage: ok,
+      policy: {},
+      resumePark,
+    })
+    expect(resumePark).toHaveBeenCalledTimes(1)
+    expect(outcome.status).toBe('ready-for-merge')
+  })
+
+  it('spent resumes keep the park and say so — never a false "re-run to resume"', async () => {
+    const detail = 'autoRecoveryRounds (1) re-run resumes spent — clear the cause'
+    const outcome = await runCycle({
+      resolve: scriptedResolve([{ status: 'blocked', next: PARK }]),
+      worktree,
+      packet,
+      spawnStage: ok,
+      policy: {},
+      resumePark: async () => ({ resumed: false, detail }),
+    })
+    expect(outcome).toMatchObject({ status: 'awaiting-human', reason: detail, resumesSpent: true })
+  })
+
+  it('a park reached after a dispatch of this invocation is not lifted by it', async () => {
+    const resumePark = vi.fn(async () => ({ resumed: true }))
+    const outcome = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: IMPLEMENT_A0 },
+        { status: 'blocked', next: PARK },
+      ]),
+      worktree,
+      packet,
+      spawnStage: ok,
+      policy: {},
+      resumePark,
+    })
+    expect(resumePark).not.toHaveBeenCalled()
+    expect(outcome.status).toBe('awaiting-human')
+  })
+
+  it('#646 r1-2: a prepare retry whose process recovery refuses parks before any dispatch', async () => {
+    const spawnStage = vi.fn(ok)
+    const outcome = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: { ...PREPARE_A0, attempt: 2, refusal: 'stale' } },
+      ]),
+      worktree,
+      packet,
+      spawnStage,
+      policy: {},
+      beforePrepare: async () => ({
+        park: 'base-sync refused: sealed snapshot is not an ancestor of HEAD',
+      }),
+    })
+    expect(spawnStage).not.toHaveBeenCalled()
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'prepare:a0:stale',
+      reason: 'base-sync refused: sealed snapshot is not an ancestor of HEAD',
+    })
+  })
+
+  it('#646 r2-3: a stale retry is dispatched on the head the recovery re-derived, never the refused one', async () => {
+    const synced = 'e'.repeat(40)
+    const due = { ...PREPARE_A0, attempt: 2, refusal: 'stale', base: 'a'.repeat(40) }
+    const sent = vi.fn(packet)
+    await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: due },
+        { status: 'completed', next: DONE },
+      ]),
+      worktree,
+      packet: sent,
+      spawnStage: ok,
+      policy: {},
+      beforePrepare: async () => ({ head: synced }),
+    })
+    expect(sent.mock.calls[0]?.[0]).toMatchObject({ step: 'prepare', base: synced })
   })
 })
