@@ -86,7 +86,8 @@ export function applyBoardState({ pm, id, pr, repo, mapping = DEFAULT }) {
   }
 }
 
-export function auditCards({ pm, code, repo, mapping = DEFAULT, apply = false }) {
+// `onRepair` observes each confirmed --apply repair (the caller records it as a manual unblock, AC-7).
+export function auditCards({ pm, code, repo, mapping = DEFAULT, apply = false, onRepair }) {
   const mismatches = []
   const gaps = []
   let cards
@@ -115,6 +116,7 @@ export function auditCards({ pm, code, repo, mapping = DEFAULT, apply = false })
       if (apply) {
         const result = applyBoardState({ pm, id, pr, repo, mapping })
         if (!result.confirmed) gaps.push({ id, reason: result.gaps?.join(',') ?? result.error })
+        else onRepair?.({ id, actual: actual.boardState, expected })
       }
     } catch (e) {
       gaps.push({ id, reason: e.message })
