@@ -3820,7 +3820,12 @@ function appendIntervention(dir, row) {
   writeFileSync(file, `${prior}${prior && !head && !prior.endsWith('\n') ? '\n' : ''}${head}${line}\n`)
   return file
 }
-const resolveAfter = ({ dir, workflowVersion, policy, entry, pr }) => resolve({ dir, workflowVersion, policy: policy ?? {}, entry: entry ?? (pr !== undefined ? 'pr' : 'fresh'), ...(pr !== undefined ? { pr } : {}) })
+// A maintainer command run as documented (no --pr/--entry) still resolves the run it acted on: the PR comes from the
+// run's own handoffs (plus a just-renamed one), or a PR-entry run emptied by supersede restarted at `implement a0`.
+const resolveAfter = ({ dir, workflowVersion, policy, entry, pr: given, also = [] }) => {
+  const pr = given ?? [...also, ...readHandoffs(dir)].map(h => Number(h.data?.pr ?? h.data?.prNumber)).find(n => Number.isInteger(n) && n > 0)
+  return resolve({ dir, workflowVersion, policy: policy ?? {}, entry: entry ?? (pr !== undefined ? 'pr' : 'fresh'), ...(pr !== undefined ? { pr } : {}) })
+}
 
 export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by, now = new Date(), workflowVersion, policy, entry, pr, lockWaitMs = 5000 }) {
   const where = safeRunDir(dir)
@@ -3870,7 +3875,7 @@ export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by,
         contract = { from: basename(cp), to: cto }
       }
     }
-    const out = resolveAfter({ dir, workflowVersion, policy, entry, pr })
+    const out = resolveAfter({ dir, workflowVersion, policy, entry, pr, also: [target] })
     const hash = String(target.data.contractHash ?? '')
     const what = `${phase} ${skill} attempt ${target.attempt}${hash ? ` (contract \`${hash.slice(0, 15)}…\`)` : ''}, never validated`
     const index = appendIntervention(dir, [`\`${to}\``, what, reason, `${by}, ${dayOf(now)}`, `the step now due: ${describeNext(out.next)}`])
