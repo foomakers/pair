@@ -206,7 +206,8 @@ export default defineAdapter({
         const { project, repository } = splitRepo(repo)
         const scope = [...(project ? ['--project', project] : []), ...(repository ? ['--repository', repository] : [])]
         const rows = azJson(['repos', 'pr', 'list', '--status', 'all', ...scope], 'repos pr list')
-        const hits = (Array.isArray(rows) ? rows : []).filter(pr => linksCard(prLinks({ body: pr.description, branch: pr.sourceRefName }), id))
+        // Same-repository PRs only (Maintainer Decision): a PR from a fork (`forkSource`) never links a card.
+        const hits = (Array.isArray(rows) ? rows : []).filter(pr => !pr.forkSource && linksCard(prLinks({ body: pr.description, branch: pr.sourceRefName }), id))
         // Several PRs may link one card (a superseded PR abandoned): completed wins, then active.
         if (!hits.length) return 'none'
         if (hits.some(pr => pr.status === 'completed')) return 'merged'

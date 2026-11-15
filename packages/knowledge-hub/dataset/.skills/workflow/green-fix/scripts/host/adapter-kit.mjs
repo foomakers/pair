@@ -140,14 +140,15 @@ export function runCli({ bin, args, input, label }) {
 }
 
 // The ONE PR→card link grammar (#642): the board workflow's selector (board-event.mjs) and every code
-// host's linkedPr read it, so what selects a card is exactly what later counts as its PR. A closing keyword
-// (`Closes|Fixes|Resolves #N` or `AB#N`), a `Refs: <ID>` line (opaque split-PM ids; an invalid token is
-// null), a branch carrying `#N` not followed by an identifier character.
+// host's linkedPr read it, so what selects a card is exactly what later counts as its PR. Native links
+// (#642 Maintainer Decision): `Closes|Fixes|Resolves #N` and a branch carrying `#N` not followed by an
+// identifier character. Any other id — `AB#N` included — links only through one `Refs: <ID>` line, which
+// must resolve to exactly one card (the 2026-11-14 amendment); an invalid token is null.
 const LINK_ID = /^(?:AB#|#)?([A-Za-z0-9][A-Za-z0-9._-]{0,119})$/
 export function prLinks({ body, branch } = {}) {
   const text = String(body ?? '')
   return {
-    closes: [...text.matchAll(/^(?:Closes|Fixes|Resolves)[ \t]+(?:AB#|#)(\d+)[ \t]*$/gim)].map(m => m[1]),
+    closes: [...text.matchAll(/^(?:Closes|Fixes|Resolves)[ \t]+#(\d+)[ \t]*$/gim)].map(m => m[1]),
     refs: [...text.matchAll(/^Refs:[ \t]*(.*?)[ \t]*$/gim)].map(m => LINK_ID.exec(m[1])?.[1] ?? null),
     branch: [...String(branch ?? '').matchAll(/#(\d+)(?![A-Za-z0-9_])/g)].map(m => m[1]),
   }

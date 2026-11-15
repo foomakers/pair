@@ -238,7 +238,9 @@ export default defineAdapter({
         // One listing per repository per adapter instance: an audit asks for every card.
         const key = apiRepo(repo)
         if (!pulls.has(key)) pulls.set(key, listPages(`${key}/pulls?state=all`))
-        const hits = pulls.get(key).filter(pr => linksCard(prLinks({ body: pr.body, branch: pr.head?.ref }), id))
+        // Same-repository PRs only (Maintainer Decision): a fork's PR never moves or closes a card.
+        const sameRepo = pr => Boolean(pr.head?.repo?.full_name) && pr.head.repo.full_name === pr.base?.repo?.full_name
+        const hits = pulls.get(key).filter(pr => sameRepo(pr) && linksCard(prLinks({ body: pr.body, branch: pr.head?.ref }), id))
         // Several PRs may link one card (a superseded PR closed unmerged): merged wins, then open.
         if (!hits.length) return 'none'
         if (hits.some(pr => pr.merged_at)) return 'merged'
