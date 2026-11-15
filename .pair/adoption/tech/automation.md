@@ -33,3 +33,9 @@ Optional commands that `publish-pr` executes at defined points. Each hook is a s
 - `post-publish` — runs after quality gate passes, before review dispatch. Failure does not block (logs only).
 
 - `pre-publish`: `pnpm mirrors:regenerate`
+
+## Telemetry
+
+Local delivery records under `.pair/working/telemetry/`. Absent setting defaults off; `pair-cli run --telemetry` or `--no-telemetry` wins for one run.
+
+- enabled: true

@@ -32,7 +32,7 @@ This framework does not cover:
 
 **[delivery-cycle.md](delivery-cycle.md)** - the consolidated map of the delivery cycle: stages, realizations, profiles, Cycle Hooks, the `merge` stage, host adapters and the unattended flow, with links out to each owner
 
-**[automation-policy.md](automation-policy.md)** - `tech/automation.md` schema: the `## Eligibility` declaration that selects which cards may run unattended, and the `## Workflows` mapping that routes a tagged card to the workflow that runs on it
+**[automation-policy.md](automation-policy.md)** - `tech/automation.md` schema: the `## Eligibility` declaration that selects which cards may run unattended, and the `## Workflows` mapping that routes a tagged card to the workflow that runs on it, and the opt-in `## Telemetry` local delivery records
 
 **[workflow-profiles.md](workflow-profiles.md)** - named JSON profiles declaring the engine, model, effort and context each delivery-cycle stage uses; the resolution cascade, the `context` validation against the cycle's transition table, model classes, and the example `claude-cheap` profile
 
