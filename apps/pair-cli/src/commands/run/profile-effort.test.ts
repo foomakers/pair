@@ -88,8 +88,8 @@ describe('AC4: --profile / --workflow-config with --root/--parallel/--watch', ()
         .workflowConfig,
     ).toBe('/c.json')
   })
-  it('still refused with neither --card nor --parallel', () => {
-    expect(() => parseRunCommand({ skill: 'pair-next', profile: 'x' })).toThrow(/--card/)
+  it('accepts a profile on an off-cycle skill', () => {
+    expect(parseRunCommand({ skill: 'pair-next', profile: 'x' }).profile).toBe('x')
   })
   it('every child gets the same flag', () => {
     const config = parseRunCommand({ root: '1', parallel: '2', profile: 'x' })
