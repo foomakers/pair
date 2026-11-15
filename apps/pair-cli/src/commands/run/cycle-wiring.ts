@@ -1138,7 +1138,12 @@ function syncBase(
   console.log(
     `  Merge: ${co.branch} conflicts with ${ctx.baseBranch} — base sync (recovery round ${String(round.round)}/${String(round.budget)})`,
   )
-  const sync = co.bridge.baseSync({ cwd: worktree, base: ctx.baseBranch, story: input.card })
+  const sync = co.bridge.baseSync({
+    cwd: worktree,
+    base: ctx.baseBranch,
+    story: input.card,
+    dir: co.runDir,
+  })
   if (sync.synced !== true)
     return needsHuman(sync.detail ?? `base sync did not complete (${sync.reason ?? 'unknown'})`)
   return pushSynced(worktree, co.branch, sync)

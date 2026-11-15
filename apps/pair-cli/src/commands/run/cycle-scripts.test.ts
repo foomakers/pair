@@ -180,6 +180,31 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     expect(existsSync(join(tree, 'stray.txt'))).toBe(false)
   })
 
+  it('AC-13: baseSync with the run dir refuses a rewritten sealed history before merging', () => {
+    const tree = join(projectRoot, 'sealed')
+    const git = (...args: string[]) =>
+      spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+        cwd: tree,
+        encoding: 'utf8',
+      }).stdout.trim()
+    mkdirSync(tree)
+    git('init', '-q', '-b', 'main')
+    writeFileSync(join(tree, 'a.txt'), 'a')
+    git('add', 'a.txt')
+    git('commit', '-q', '-m', 'base')
+    const dir = join(runsRoot, 'story-487/487')
+    mkdirSync(dir, { recursive: true })
+    const seal = 'f'.repeat(40) // not in this history: a rebase rewrote it
+    writeFileSync(
+      join(dir, 'r1-g1-red-verify.json'),
+      JSON.stringify({ phase: 'r1-g1', skill: 'red-verify', seq: 1, sealed: true, verified: true, snapshot: seal }),
+    )
+    const result = bridge().baseSync({ cwd: tree, base: 'main', story: '487', dir })
+    expect(result.synced).toBe(false)
+    expect(result.reason).toBe('sealed-history-rewritten')
+    expect(result.detail).toMatch(/cycle-state\.mjs base-sync/)
+  })
+
   it('resolve() on an empty run directory returns the real implement/initial/a0 next — no up-front contract (AC1, US-506)', () => {
     const dir = join(runsRoot, 'story-487/487')
     const result = bridge().resolve({

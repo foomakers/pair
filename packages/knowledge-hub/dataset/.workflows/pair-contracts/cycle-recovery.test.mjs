@@ -763,6 +763,37 @@ test('AC-13: a missing sealed snapshot refuses base sync with the sync step name
   assert.equal(git(cwd, 'rev-parse', 'HEAD').length, original.length)
 })
 
+test('AC-13 (r0-6): base-sync derives the latest seal from the run dir — a rebased (rewritten) sealed history is refused before any merge, naming base-sync', () => {
+  const cwd = repo()
+  const cycleBase = git(cwd, 'rev-parse', 'HEAD')
+  const seal = commit(cwd, 'RED snapshot pr=7 phase=r1-g1', { 't.test.mjs': 'sealed\n' })
+  const dir = runDir()
+  put(dir, 'r1-g1', 'red-verify', { verified: true, sealed: true, snapshot: seal, inputHead: cycleBase })
+  git(cwd, 'checkout', '-q', 'main')
+  commit(cwd, 'base moved', { 'other.txt': 'x\n' })
+  git(cwd, 'checkout', '-q', 'story')
+  git(cwd, 'rebase', '-q', 'main') // a pushed rebase: the seal commit is rewritten
+  const head = git(cwd, 'rev-parse', 'HEAD')
+  const out = baseSync({ cwd, base: 'main', story: '42', dir })
+  assert.deepEqual([out.synced, out.reason], [false, 'sealed-history-rewritten'])
+  assert.match(out.detail, /base-sync/)
+  assert.equal(git(cwd, 'rev-parse', 'HEAD'), head, 'nothing merged')
+})
+
+test('AC-13 (r0-6 control): with the seal intact base-sync merges and returns the seal and cycle base for verify-chain', () => {
+  const cwd = repo()
+  const cycleBase = git(cwd, 'rev-parse', 'HEAD')
+  const seal = commit(cwd, 'RED snapshot pr=7 phase=r1-g1', { 't.test.mjs': 'sealed\n' })
+  const dir = runDir()
+  put(dir, 'r1-g1', 'red-verify', { verified: true, sealed: true, snapshot: seal, inputHead: cycleBase })
+  git(cwd, 'checkout', '-q', 'main')
+  commit(cwd, 'base moved', { 'other.txt': 'x\n' })
+  git(cwd, 'checkout', '-q', 'story')
+  const out = baseSync({ cwd, base: 'main', story: '42', dir })
+  assert.deepEqual(pick(out, 'synced', 'snapshot', 'cycleBase'), { synced: true, snapshot: seal, cycleBase })
+  assert.equal(git(cwd, 'merge-base', '--is-ancestor', seal, 'HEAD'), '')
+})
+
 test('AC5: conflicts resolve mechanically — story-owned keeps ours, a generated mirror takes theirs', () => {
   const cwd = repo()
   commit(cwd, '[#42] feat: own', { 'shared.txt': 'story\n', '.claude/mirror.md': 'story mirror\n' })

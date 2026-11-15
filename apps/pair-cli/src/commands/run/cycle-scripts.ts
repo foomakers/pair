@@ -248,7 +248,7 @@ export interface CycleScriptsBridge {
   gateRed(options: { dir: string; reviewedHead: string; gates: readonly GateRecord[] }): {
     readonly recorded: boolean
   }
-  baseSync(options: { cwd: string; base: string; story: string; snapshot?: string }): BaseSyncResult
+  baseSync(options: { cwd: string; base: string; story: string; dir?: string }): BaseSyncResult
   worktreeClean(options: { cwd: string; dir: string; story: string }): WorktreeCleanResult
   prereqState(options: { story: string; dir?: string }): PrereqState
   worktree(options: CycleWorktreeOptions): CycleWorktreeResult
@@ -679,7 +679,7 @@ function stateMethods(
         ['cwd', o.cwd],
         ['base', o.base],
         ['story', o.story],
-        ...optional([['snapshot', o.snapshot]]),
+        ...optional([['dir', o.dir]]),
       ]) as BaseSyncResult,
     worktreeClean: o =>
       runScript(cycleStatePath, 'worktree-clean', [

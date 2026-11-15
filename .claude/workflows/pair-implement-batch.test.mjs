@@ -307,6 +307,17 @@ test('AC-10: recovery budget exhaustion parks with a token and never dispatches 
   assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 1)
 })
 
+test('AC-10 (r0-4): a process budget spent in resolve itself parks awaiting-human with a resume token', async () => {
+  const std = stdDispatch()
+  const spent = { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds', phase: 'a0', detail: 'autoRecoveryRounds (5) spent on a0 — last: dirty' }
+  const { result } = await runWorkflow({ args: { cards: [STORY] }, entry: 'legacy', dispatch: (prompt, opts) => {
+    if (opts.agentType === 'pair-fix-test-author') return { status: 'redirect', next: spent }
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'awaiting-human')
+  assert.match(result.batch[0].resumeToken, /story-292:292:a0:autoRecoveryRounds/)
+})
+
 test('AC-13: stale preparation merges the base and resumes without a rebase', async () => {
   const std = stdDispatch()
   let prepare = 0
@@ -321,6 +332,33 @@ test('AC-13: stale preparation merges the base and resumes without a rebase', as
   const sync = calls.find(c => c.opts.label?.startsWith('recover:stale'))
   assert.match(sync.prompt, /base-sync --cwd/)
   assert.doesNotMatch(sync.prompt, /\brebase\b/)
+})
+
+test('AC-13 (r0-6): a stale preparation with no due contract still guards the seal — base-sync gets the run dir, verify-chain runs against the cycle base; a rewritten history parks naming base-sync', async () => {
+  const run = sync => {
+    const std = stdDispatch()
+    let prepare = 0
+    let reviews = 0
+    return runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, entry: 'legacy', dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-reviewer' && reviews++ === 0) return { status: 'redirect', next: { step: 'prepare', mode: 'remediation', phase: 'r1-g1', round: 1, attempt: 1 } }
+      if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 5 }
+      if (opts.label?.startsWith('recover:stale')) return sync
+      if (opts.label?.startsWith('recover:verify-chain')) return { verified: true }
+      if (opts.agentType === 'pair-fix-test-author' && prepare++ === 0)
+        return { status: 'stale', reason: 'base moved', next: { step: 'prepare', mode: 'remediation', phase: 'r1-g1', round: 1, attempt: 2 } }
+      return std(prompt, opts)
+    } })
+  }
+  const ok = await run({ synced: true, head: HEAD2, snapshot: SNAP, cycleBase: HEAD })
+  const sync = ok.calls.find(c => c.opts.label?.startsWith('recover:stale'))
+  assert.match(sync.prompt, /base-sync --cwd \S+ --base origin\/main --story 292 --dir \.pair\/working\/runs\/story-292\/292/)
+  const chain = ok.calls.find(c => c.opts.label?.startsWith('recover:verify-chain'))
+  assert.ok(chain, JSON.stringify(ok.calls.map(c => c.opts.label)))
+  assert.match(chain.prompt, new RegExp(`verify-chain --pr 7 --base ${HEAD} --base-ref origin/main`))
+  const refused = await run({ synced: false, reason: 'sealed-history-rewritten', detail: 'base-sync refused: rebased; sync only by merge with `cycle-state.mjs base-sync`' })
+  assert.equal(refused.result.batch[0].status, 'awaiting-human')
+  assert.match(refused.result.batch[0].reason, /cycle-state\.mjs base-sync/)
+  assert.equal(refused.calls.some(c => c.opts.label?.startsWith('recover:verify-chain')), false)
 })
 
 test('AC-10: a dead stage dispatch spends process recovery and retries without a card finding', async () => {

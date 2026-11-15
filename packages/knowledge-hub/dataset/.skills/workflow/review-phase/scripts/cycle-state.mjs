@@ -129,8 +129,12 @@ export const STOP_CATALOG = [
   { status: 'failed-publication', class: 'process', resume: 'pair run --card <card>' },
   { status: 'escalate', class: 'decision', resume: 'maintainer decision comment; pair run --card <card>' },
   { status: 'escalated', class: 'decision', resume: 'maintainer decision comment; pair run --card <card>' },
-  { status: 'needs-human', class: 'decision', resume: 'maintainer reset comment; pair run --card <card>' },
-  { status: 'awaiting-human', class: 'decision', resume: 'maintainer reset comment; pair run --card <card>' },
+  { status: 'needs-human', class: 'decision', resume: 'clear the recorded cause (a spent autoRecoveryRounds names it), or a maintainer reset comment; then pair run --card <card>' },
+  { status: 'awaiting-human', class: 'decision', resume: 'clear the recorded cause, then pair run --card <card> (resumeToken names the parked step); a merge hold needs the maintainer approval' },
+  { status: 'halted', class: 'decision', resume: 'maintainer decision on the refused or unreadable gate; pair run --card <card>' },
+  { status: 'interrupted', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'abandoned', class: 'decision', resume: 'maintainer reset comment; pair run --card <card>' },
+  { status: 'max-dispatches', class: 'decision', resume: 'cycle-state.mjs migrate-acknowledge --dir <new run dir> --legacy <run dir>; pair run --card <card>' },
   { status: 'awaiting-scope-decision', class: 'decision', resume: 'maintainer scope decision comment; pair run --card <card>' },
   { status: 'dirty', class: 'process', resume: 'pair run --card <card>' },
   { status: 'stale', class: 'process', resume: 'pair run --card <card>' },
@@ -1923,7 +1927,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       }
       // AC-20: the persisted bytes must be the contract this dispatch named. Do this before
       // normalization or formatting so a rewritten attempt cannot be silently restamped.
-      if (contractHash(parsed) !== data.contractHash) return { published: false, reason: 'contract-hash-mismatch', path: cp0, dispatched: data.contractHash, actual: contractHash(parsed) }
+      if (contractHash(parsed) !== data.contractHash) return { published: false, reason: 'contract-hash-mismatch', processFault: 'contract-hash-mismatch', path: cp0, dispatched: data.contractHash, actual: contractHash(parsed) }
       // US-514 T-5 (#514/AC6): a repair/revision names the predecessor it repairs by `supersedes`
       // (falling back to the `-rev<m>` phase the sealer itself derives) — the engine derives the
       // hash the sealer will check against and STAMPS it here, with no manual edit and no math
@@ -2026,7 +2030,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       try {
         intact = contractHash(JSON.parse(readFileSync(prev, 'utf8'))) === h.data.contractHash
       } catch {}
-      if (!intact) return { published: false, reason: `contract-attempt-overwritten:${basename(prev)}`, path: prev }
+      if (!intact) return { published: false, reason: `contract-attempt-overwritten:${basename(prev)}`, processFault: 'contract-attempt-overwritten', path: prev }
     }
   }
   // US-506 AC-7: a verdict points at the contract it validated — the one the latest preparation of the
@@ -2036,6 +2040,9 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
     if (spec) {
       if (data.contractPath !== undefined && data.contractPath !== spec.data.contractPath) return { published: false, reason: 'contract-path-mismatch', stated: data.contractPath, prepared: spec.data.contractPath }
       data = { ...data, contractPath: spec.data.contractPath }
+      // AC-21 (r0-3): a rejection of a contract whose bytes are no longer the prepared ones judged the wrong artifact —
+      // an identity fault, stamped here from the files, never taken from the verifier: it spends no redRepairs.
+      if (data.verified !== true && contractBytesChanged(spec.data.contractPath, spec.data.contractHash)) data = { ...data, processFault: 'contract-hash-mismatch' }
     }
   }
   // US-479 B1 (S3): the contradiction's budget key is derived HERE from the verified sealed
@@ -2163,7 +2170,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       const prior = JSON.parse(readFileSync(target, 'utf8'))
       if (skill === 'red-spec' && data.status === 'red' && prior.contractPath === data.contractPath && prior.contractHash === data.contractHash && prior.inputHead === data.inputHead)
         return { published: true, path: target, name, seq: prior.seq, attempt: n, reused: true }
-      return { published: false, reason: 'stale-write', path: target }
+      return { published: false, reason: 'stale-write', processFault: 'stale-write', path: target }
     }
     const seq = readHandoffs(dir).reduce((m, h) => Math.max(m, Number.isInteger(h.data?.seq) ? h.data.seq : 0), 0) + 1
     const stamped = { ...data, schemaVersion: SCHEMA_VERSION, workflowVersion, seq, attempt: n, createdAt: new Date().toISOString(), ...(predecessor ? { predecessor } : {}), ...profileStamp(dir) }
@@ -2444,7 +2451,12 @@ const mirrorOf = (mirror, source) => {
 }
 const BASE_OWNED_GENERATED = ['.claude/', '.agents/', '.agent/', '.cursor/', '.windsurf/', '.pair/knowledge/', '.pair/llms.txt']
 const isGenerated = p => BASE_OWNED_GENERATED.some(r => (r.endsWith('/') ? p.startsWith(r) : p === r))
-export function baseSync({ cwd, base, story, owned, snapshot }) {
+export function baseSync({ cwd, base, story, owned, snapshot, dir }) {
+  // AC-13 (r0-6): the guard never depends on the step being due — the run dir's seals name the latest snapshot and the cycle base.
+  const seals = dir && existsSync(dir) ? readHandoffs(dir).filter(h => h.skill === 'red-verify' && h.data?.sealed === true && h.data.verified === true && SHA_RE.test(String(h.data.snapshot ?? ''))) : []
+  snapshot ??= seals.at(-1)?.data.snapshot
+  const cycleBase = seals[0]?.data.inputHead
+  const sealIds = snapshot ? { snapshot, ...(cycleBase ? { cycleBase } : {}) } : {}
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !GIT_ENV_RE.test(k)))
   const run = args => spawnSync('git', args, { cwd, encoding: 'utf8', env })
   const g = args => {
@@ -2455,7 +2467,7 @@ export function baseSync({ cwd, base, story, owned, snapshot }) {
   const lines = out => out.split('\n').filter(Boolean)
   const baseSha = g(['rev-parse', '--verify', `${base}^{commit}`])
   if (snapshot && (!SHA_RE.test(String(snapshot)) || run(['merge-base', '--is-ancestor', snapshot, 'HEAD']).status !== 0))
-    return { synced: false, reason: 'sealed-history-rewritten', detail: `base-sync refused: sealed snapshot ${snapshot} is not an ancestor of HEAD; restore the sealed history before syncing`, base: baseSha, conflicts: [] }
+    return { synced: false, reason: 'sealed-history-rewritten', detail: `base-sync refused: sealed snapshot ${snapshot} is not an ancestor of HEAD — a rebase rewrote sealed history. Sync the base only by merge (\`cycle-state.mjs base-sync\`), never rebase; restore the sealed history or post a maintainer reset comment`, base: baseSha, conflicts: [] }
   if (run(['merge-base', '--is-ancestor', baseSha, 'HEAD']).status === 0) return { synced: false, reason: 'up-to-date', base: baseSha, conflicts: [] }
   if (g(['status', '--porcelain', '--untracked-files=no'])) return { synced: false, reason: 'dirty-worktree', base: baseSha, conflicts: [] }
   const fork = g(['merge-base', 'HEAD', baseSha])
@@ -2485,7 +2497,7 @@ export function baseSync({ cwd, base, story, owned, snapshot }) {
   const side = s => conflicts.filter(c => c.side === s).map(c => c.path)
   const trailer = `Pair-Base-Sync: base=${baseSha}${side('ours').length ? `; ours=${side('ours').join(',')}` : ''}${side('theirs').length ? `; theirs=${side('theirs').join(',')}` : ''}`
   g(['commit', '-q', '--no-verify', '-m', `[#${story}] chore: sync base ${base}`, '-m', trailer])
-  return { synced: true, base: baseSha, head: g(['rev-parse', 'HEAD']), conflicts }
+  return { synced: true, base: baseSha, head: g(['rev-parse', 'HEAD']), conflicts, ...sealIds }
 }
 /** Preserve dirty tracked and untracked work at a durable ref before a preparation retry. */
 export function worktreeClean({ cwd, dir, story }) {
@@ -2675,9 +2687,22 @@ export function acAssessmentErrors(data) {
 const isBlocking = f => f && f.blocking === true && f.transition !== 'resolved' && f.nonActionable !== true
 // Preparation refusals whose cause lies outside the cycle: a later dispatch can succeed unchanged.
 const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
+// A contract file that exists but no longer hashes to what its preparation recorded (an absent file proves nothing).
+const contractBytesChanged = (cp, hash) => {
+  if (!cp || !existsSync(cp)) return false
+  try {
+    return contractHash(JSON.parse(readFileSync(cp, 'utf8'))) !== hash
+  } catch {
+    return true
+  }
+}
 const isProcessFault = data => STOP_CATALOG.some(row => row.status === data?.processFault && row.class === 'process')
 
 function deriveNextStep(handoffs, policy, ctx = {}) {
+  // AC-10 (r0-4): process faults are exempt from card budgets but bounded HERE, so a caller that never runs `recover`
+  // (the in-session coordinator) still parks once a phase saw more than autoRecoveryRounds of them. A moved head retries.
+  const processBudgetSpent = (faults, phase, fault) =>
+    !ctx.stale && faults.length > recoveryBudget(policy) && blocked('needs-human', { budget: 'autoRecoveryRounds', phase, detail: `autoRecoveryRounds (${recoveryBudget(policy)}) spent on ${phase} — last: ${fault}` })
   // US-479 B2: a migration acknowledgment is evidence about provenance, never a cycle position.
   const list = handoffs.filter(h => h.data && h.data.recordType !== 'migration')
   // US-506 AC-1 (ADR-024 amendment 2026-09-23): a FRESH card has no up-front acceptance contract. Its
@@ -2910,6 +2935,8 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // External process refusals retry under the separate autoRecoveryRounds budget. A contract
     // refusal (`unprovable`, `split-required`) remains a finding and stops this preparation.
     if (EXTERNAL_REFUSALS.has(d.status) || ctx.stale) {
+      const spent = processBudgetSpent(byPhase('red-spec', last.phase).filter(h => EXTERNAL_REFUSALS.has(h.data.status)), last.phase, d.status)
+      if (spent) return spent
       const retry = { ...(ctx.stale ? { stale: true } : {}), attempt: byPhase('red-spec', last.phase).length + 1, detail: `retry after the ${d.status} refusal: ${d.reason ?? ''}`.trim() }
       // A revision a GREEN's contract gap opened is re-derived from that GREEN (its base, contract and gap findings), never from the refused attempt.
       const gapGreen = parts.revision > 1 ? list.filter(h => h.skill === 'green-fix' && h.data.contractGaps?.length && phaseParts(h.phase)?.groupId === parts.groupId).pop() : undefined
@@ -2921,6 +2948,8 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
   if (last.skill === 'red-verify') {
     if (d.verified !== true) {
       const repairs = byPhase('red-verify', last.phase).filter(h => h.data.verified !== true && !isProcessFault(h.data)).length
+      const spent = isProcessFault(d) && processBudgetSpent(byPhase('red-verify', last.phase).filter(h => isProcessFault(h.data)), last.phase, d.processFault)
+      if (spent) return spent
       // US-575: a spent repair budget is durable only on the heads it was spent on — once they moved, one more repair.
       if (repairs <= (policy.redRepairs ?? 1) || ctx.stale) return { ...(ctx.stale ? { stale: true } : {}), step: 'prepare', mode: 'repair', phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, rejection: d.findings ?? [], contract: contractOf(last.phase), group: groupOf(last.phase) }
       return blocked('failed-contract', { budget: 'redRepairs', phase: last.phase, findings: d.findings ?? [] })
@@ -2944,6 +2973,8 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // contract was approved; the implementation was not.
     const attempts = byPhase('implement-phase', last.phase)
     const charged = attempts.filter(h => !isProcessFault(h.data)).length
+    const spent = isProcessFault(d) && processBudgetSpent(attempts.filter(h => isProcessFault(h.data)), last.phase, d.processFault)
+    if (spent) return spent
     if (charged <= (policy.greenRetries ?? 1) || ctx.stale) return { step: 'implement', mode: 'retry', phase: last.phase, round: 0, attempt: attempts.length + 1, base: d.inputHead, contract: contractOf(last.phase), pr: Number.isInteger(d.prNumber) ? d.prNumber : undefined, detail: d.gatesPassed === false ? 'gate red' : d.reason, ...(ctx.stale ? { stale: true } : {}) }
     return blocked('failed-implement', { budget: 'greenRetries', detail: d.gatesPassed === false ? 'gate red twice' : d.reason })
   }
@@ -3252,7 +3283,7 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
   const correctiveSeal = h => h.skill === 'red-verify' && h.data.sealed === true && h.data.verified === true && !(phaseParts(h.phase)?.kind === 'initial' && (phaseParts(h.phase)?.revision ?? 1) === 1)
   let spentCycles = 0
   let lastCounted = -1
-  for (const r of reviews.filter(h => h.data.partial !== true && !isProcessFault(h.data))) {
+  for (const r of reviews.filter(h => h.data.partial !== true)) {
     const at = orderOf(r)
     if (!list.some(h => correctiveSeal(h) && orderOf(h) > lastCounted && orderOf(h) < at)) continue
     spentCycles++
@@ -3941,7 +3972,7 @@ if (isMain()) {
       version: [],
       recover: ['detail', 'dir', 'kind', 'policy'],
       'gate-red': ['dir', 'gates', 'reviewedHead'],
-      'base-sync': ['base', 'cwd', 'owned', 'snapshot', 'story'],
+      'base-sync': ['base', 'cwd', 'dir', 'owned', 'snapshot', 'story'],
       'worktree-clean': ['cwd', 'dir', 'story'],
       'prereq-state': ['dir', 'story'],
       card: ['dir', 'story'],
@@ -4109,7 +4140,7 @@ if (isMain()) {
       process.exit(out.recorded ? 0 : 1)
     } else if (cmd === 'base-sync') {
       need('cwd', 'base', 'story')
-      out = baseSync({ cwd: opts.cwd, base: opts.base, story: opts.story, owned: opts.owned ? JSON.parse(opts.owned) : undefined, snapshot: opts.snapshot })
+      out = baseSync({ cwd: opts.cwd, base: opts.base, story: opts.story, owned: opts.owned ? JSON.parse(opts.owned) : undefined, snapshot: opts.snapshot, dir: opts.dir })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.synced || out.reason === 'up-to-date' ? 0 : 1)
     } else if (cmd === 'worktree-clean') {

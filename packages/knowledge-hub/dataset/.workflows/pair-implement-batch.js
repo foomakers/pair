@@ -1829,6 +1829,8 @@ async function driveStoryInner(story) {
     // through unmapped — never silently coerced to failed-resume, which would make a clean
     // technical convergence with pending scope proposals look like an engine failure.
     const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', 'failed-verify': 'failed-verify', escalate: 'escalate', 'needs-human': 'needs-human', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned' }
+    // AC-10: a process budget spent (the state authority's or `recover`'s) parks with a resume token, never a terminal status.
+    if (n.budget === 'autoRecoveryRounds') return result('awaiting-human', { reason: n.detail ?? n.reason, budget: n.budget, phase: n.phase, resumeToken: `${runId}:${story.id}:${n.phase ?? 'run'}:autoRecoveryRounds` })
     return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
   }
   const recoverProcess = async (fault, due) => {
@@ -1854,13 +1856,15 @@ async function driveStoryInner(story) {
     if (fault === 'dirty' || fault === 'stale') {
       const command = fault === 'dirty'
         ? `node ${script} worktree-clean --cwd ${worktreePath} --dir ${runDir()} --story ${story.id}`
-        : `node ${script} base-sync --cwd ${worktreePath} --base ${storyBase} --story ${story.id}${due.contract?.snapshot ? ` --snapshot ${due.contract.snapshot}` : ''}`
+        : `node ${script} base-sync --cwd ${worktreePath} --base ${storyBase} --story ${story.id} --dir ${runDir()}`
       const action = await dispatch(`Run exactly this command from the main checkout and return its JSON verbatim: ${command}`,
         withModel('relay', { phase: 'Recovery', label: `recover:${fault}:${tag}`, effort: 'low' }))
       if (!(action?.cleaned === true || action?.synced === true || action?.reason === 'up-to-date')) return { park: park(action?.detail ?? action?.reason ?? `${fault}: recovery failed`) }
-      if (fault === 'stale' && due.contract?.snapshot && isPosInt(pr)) {
+      // AC-13 (r0-6): base-sync derives the seal and the cycle base from the run dir, so custody is re-checked after
+      // every merge on a sealed cycle — whatever step was due.
+      if (fault === 'stale' && action?.synced === true && SHA40.test(String(action.cycleBase ?? '')) && isPosInt(pr)) {
         const verify = await dispatch(
-          `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs verify-chain --pr ${pr} --base ${due.base} --base-ref ${storyBase} --run-dir ${runDir()} --cwd ${worktreePath}`,
+          `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs verify-chain --pr ${pr} --base ${action.cycleBase} --base-ref ${storyBase} --run-dir ${runDir()} --cwd ${worktreePath}`,
           withModel('relay', { phase: 'Recovery', label: `recover:verify-chain:${tag}`, effort: 'low' }),
         )
         if (verify?.verified !== true) return { park: park('base-sync verify-chain failed') }
