@@ -7,6 +7,7 @@ import { loadConfigWithOverrides, readEngineDeclaration, readRunDeclaration } fr
 import { resolveWorkingPathOverride, type Config } from '#registry'
 import type { RunCommandConfig } from './parser'
 import type { resolveEngine } from './resolve-engine'
+import type { ResolvedEngine } from './resolve-engine'
 import { DEFAULT_ENGINE_ID, ENGINE_IDS, isEngineId, type EngineDefinition, type EngineId } from './engines'
 import type { ResolvedInvocation, SkillProbe } from './resolve-skill'
 import { createSkillProbe } from './skill-probe'
@@ -250,7 +251,10 @@ export function withResolvedCardSelection(
 
 /** `engine.bin` from `pair.config.json`: where THIS machine keeps each executable, when it must say. */
 export function declaredEngineBin(config: Config): Readonly<Record<string, string>> | undefined {
-  return readEngineDeclaration(config, ENGINE_IDS).bin
+  const bin = readEngineDeclaration(config, ENGINE_IDS).bin
+  const run = readRunDeclaration(config, ENGINE_IDS)
+  if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  return Object.fromEntries(Object.entries(bin ?? {}).filter(([id]) => !run.agents?.[id]?.command))
 }
 
 /** `engine.model`: the model this project pins for each engine, run-wide (per-stage is #488's). */
@@ -264,6 +268,20 @@ export function declaredRunIdleTimeout(config: Config, id: string): number | und
   const run = readRunDeclaration(config, ENGINE_IDS)
   if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
   return run.agents?.[id]?.idleTimeout ?? run.defaults?.idleTimeout ?? readEngineDeclaration(config, ENGINE_IDS).idleTimeout
+}
+
+/** Apply a configured runner as executable and literal argv before engine flags. */
+export function withRunAgentRunner(resolved: ResolvedEngine, config: Config): ResolvedEngine {
+  const run = readRunDeclaration(config, ENGINE_IDS)
+  if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  const agent = run.agents?.[resolved.engine.id]
+  if (!agent?.command && !agent?.args?.length) return resolved
+  const engine = {
+    ...resolved.engine,
+    command: agent.command ?? resolved.engine.command,
+    headlessArgs: [...(agent.args ?? []), ...resolved.engine.headlessArgs],
+  }
+  return { ...resolved, engine, commandLine: [engine.command, ...engine.headlessArgs].join(' ') }
 }
 
 /**

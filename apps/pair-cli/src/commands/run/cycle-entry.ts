@@ -41,6 +41,7 @@ import {
   declaredEngine,
   declaredEngineBin,
   declaredEngineModel,
+  withRunAgentRunner,
   resolveAutonomyFor,
   type CycleDriver,
   type DriveCycleResult,
@@ -204,7 +205,7 @@ export function resolveEngineFor(
   cwd: string,
   fs: FileSystemService,
 ): EngineDefinition {
-  return assertEngineAvailable(engine, createExecutableProbe(fs), {
+  return assertEngineAvailable(withRunAgentRunner(engine, context.config), createExecutableProbe(fs), {
     fs,
     repoRoot: cwd,
     declaredBin: declaredEngineBin(context.config),

@@ -39,6 +39,7 @@ import {
   driveLockedCard,
   resolveAutonomyFor,
   resolveContext,
+  withRunAgentRunner,
   withResolvedCardSelection,
   type ResolvedRun,
   type RunContext,
@@ -168,10 +169,11 @@ function resolveRun(
     wanted === undefined
       ? resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
       : { ...resolveEngine({ flag: wanted }), source: 'workflow profile' as const }
+  const configured = withRunAgentRunner(engine, context.config)
   const engineDef =
     selected === undefined
-      ? engine.engine
-      : assertEngineAvailable(engine, createExecutableProbe(fs), {
+      ? configured.engine
+      : assertEngineAvailable(configured, createExecutableProbe(fs), {
           fs,
           repoRoot: cwd,
           declaredBin: declaredEngineBin(context.config),
@@ -180,7 +182,7 @@ function resolveRun(
   const autonomy = resolveAutonomyFor(engineDef, config, cwd, fs)
 
   return {
-    engine: { ...engine, engine: engineDef },
+    engine: { ...configured, engine: engineDef },
     ...(selected && { profile: { stage: selected.stage, table: selected.profile.table } }),
     ...(selected?.settings.model !== undefined && { model: selected.settings.model }),
     ...(selected?.settings.effort !== undefined && { effort: selected.settings.effort }),
