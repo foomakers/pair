@@ -708,25 +708,25 @@ function recordStageTelemetry(input: {
   if (!input.enabled) return
   const settle = (advanced: boolean) =>
     appendTelemetry(
-    co.main,
-    stageTelemetryRecord({
-      id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
-      run: co.runId,
-      card: co.cardId,
-      step: stage.step ?? 'unknown',
-      ...(stage.phase !== undefined && { phase: stage.phase }),
-      start,
-      end,
-      previousEnd,
-      engine: spawn.engine.id,
-      ...(spawn.model !== undefined && { model: spawn.model }),
-      processOutcome: result.processOutcome,
-      ...(result.final?.status !== undefined && { finalStatus: result.final.status }),
-      retries,
-      advanced,
-      observation: result.telemetry ?? {},
-    }),
-  )
+      co.main,
+      stageTelemetryRecord({
+        id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
+        run: co.runId,
+        card: co.cardId,
+        step: stage.step ?? 'unknown',
+        ...(stage.phase !== undefined && { phase: stage.phase }),
+        start,
+        end,
+        previousEnd,
+        engine: spawn.engine.id,
+        ...(spawn.model !== undefined && { model: spawn.model }),
+        processOutcome: result.processOutcome,
+        ...(result.final?.status !== undefined && { finalStatus: result.final.status }),
+        retries,
+        advanced,
+        observation: result.telemetry ?? {},
+      }),
+    )
   if (input.pending !== undefined) input.pending.push(settle)
   else settle(result.processOutcome === 'success')
 }

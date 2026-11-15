@@ -38,7 +38,10 @@ afterEach(() => {
 const usageStream =
   [
     { type: 'thread.started', thread_id: 't' },
-    { type: 'turn.completed', usage: { input_tokens: 10, cached_input_tokens: 0, output_tokens: 0 } },
+    {
+      type: 'turn.completed',
+      usage: { input_tokens: 10, cached_input_tokens: 0, output_tokens: 0 },
+    },
   ]
     .map(event => JSON.stringify(event))
     .join('\n') + '\n'
@@ -63,7 +66,11 @@ async function drive(options: {
   vi.spyOn(childProcess, 'execFileSync').mockImplementation((command, args) => {
     const argv = args as readonly string[]
     if (command === 'gh' && argv[0] === 'issue')
-      return JSON.stringify({ title: 'T', body: '', labels: options.merge ? [{ name: 'risk:green' }] : [] })
+      return JSON.stringify({
+        title: 'T',
+        body: '',
+        labels: options.merge ? [{ name: 'risk:green' }] : [],
+      })
     if (command === 'git' && argv[0] === 'rev-parse') return join(root, '.git')
     if (command === 'git') return ''
     throw new Error(`Unexpected host process: ${String(command)}`)
@@ -79,14 +86,22 @@ async function drive(options: {
   }
   vi.spyOn(childProcess, 'spawnSync').mockImplementation((command, args) => {
     const argv = args as readonly string[]
-    if (command === 'git') return { pid: 0, output: [], stdout: '', stderr: '', status: 0, signal: null }
+    if (command === 'git')
+      return { pid: 0, output: [], stdout: '', stderr: '', status: 0, signal: null }
     const cmd = argv[1]!
     const answer =
       cmd === 'resolve'
         ? options.resolves((resolves += 1), String(argv[argv.indexOf('--dir') + 1] ?? ''))
         : answers[cmd]
     if (answer === undefined) throw new Error(`Unexpected coordinator command: ${cmd}`)
-    return { pid: 0, output: [], stdout: JSON.stringify(answer), stderr: '', status: 0, signal: null }
+    return {
+      pid: 0,
+      output: [],
+      stdout: JSON.stringify(answer),
+      stderr: '',
+      status: 0,
+      signal: null,
+    }
   })
   vi.spyOn(console, 'log').mockImplementation(() => {})
   let time = 0
@@ -115,7 +130,11 @@ it('AC-1 r0-1: adopting another run keeps stages and tokens on the adopted run',
     resolves: call =>
       call === 1
         ? { status: 'other-run', runId: 'adopted' }
-        : { status: 'in-progress', policy: { deadDispatchRetries: 0 }, next: call > 3 ? { step: 'done' } : implement },
+        : {
+            status: 'in-progress',
+            policy: { deadDispatchRetries: 0 },
+            next: call > 3 ? { step: 'done' } : implement,
+          },
   })
   expect(readTelemetry(root, 'requested', '645')).toHaveLength(0)
   expect(readTelemetry(root, 'adopted', '645')).toHaveLength(1)
@@ -127,7 +146,11 @@ it('AC-1 r0-1: adopting another run keeps stages and tokens on the adopted run',
 
 it('AC-1 r0-3: dispatches rejected by resolve are failed and fully wasted', async () => {
   const { root, outcome } = await drive({
-    resolves: () => ({ status: 'in-progress', policy: { deadDispatchRetries: 1 }, next: implement }),
+    resolves: () => ({
+      status: 'in-progress',
+      policy: { deadDispatchRetries: 1 },
+      next: implement,
+    }),
   })
   expect(outcome.status).toBe('failed-implement')
   expect(readTelemetry(root, 'requested', '645').map(s => s['outcomeClass'])).toEqual([
@@ -141,7 +164,9 @@ it('AC-1 r0-3: dispatches rejected by resolve are failed and fully wasted', asyn
 it('AC-1 r0-7: a fresh card records the PR its final resolve names', async () => {
   const { root } = await drive({
     resolves: call =>
-      call > 2 ? { status: 'done', next: { step: 'done', pr: 651 } } : { status: 'in-progress', policy: {}, next: implement },
+      call > 2
+        ? { status: 'done', next: { step: 'done', pr: 651 } }
+        : { status: 'in-progress', policy: {}, next: implement },
   })
   expect(readTelemetryCard(root, 'requested')).toMatchObject({ pr: 651 })
 })
@@ -166,7 +191,9 @@ it('AC-1 r0-10: the deterministic merge stage is recorded with measured time', a
 it('AC-1 r0-5: unreadable intervention file does not fail the delivery', async () => {
   const { root, outcome } = await drive({
     resolves: call =>
-      call > 2 ? { status: 'done', next: { step: 'done' } } : { status: 'in-progress', policy: { deadDispatchRetries: 0 }, next: implement },
+      call > 2
+        ? { status: 'done', next: { step: 'done' } }
+        : { status: 'in-progress', policy: { deadDispatchRetries: 0 }, next: implement },
     setup: root => {
       const dir = join(root, '.pair/working/runs/requested/645')
       mkdirSync(dir, { recursive: true })
@@ -184,7 +211,10 @@ it('AC-2 r0-4: producer decision file names and escaped pipes survive the reader
   roots.push(root)
   writeFileSync(
     join(root, 'r0-review-phase.attempt-2.json'),
-    JSON.stringify({ recordType: 'decision', humanDecisions: [{ by: 'rucka', decision: 'use strict' }] }),
+    JSON.stringify({
+      recordType: 'decision',
+      humanDecisions: [{ by: 'rucka', decision: 'use strict' }],
+    }),
   )
   writeFileSync(
     join(root, 'maintainer-interventions.md'),
@@ -198,32 +228,58 @@ it('AC-2 r0-4: producer decision file names and escaped pipes survive the reader
 
 it('AC-1 r0-6: retries count dispatches beyond the first per logical stage', () => {
   const stage = (n: number) =>
-    ({ kind: 'stage', id: `s${n}`, step: 'implement', phase: 'a0', start: n, durationMs: 1, retries: n }) as TelemetryRecord
+    ({
+      kind: 'stage',
+      id: `s${n}`,
+      step: 'implement',
+      phase: 'a0',
+      start: n,
+      durationMs: 1,
+      retries: n,
+    }) as TelemetryRecord
   const card = cardTelemetryRecord({
-    id: 'c', card: '645', run: 'r', pairVersion: 'v', workflowVersion: 'w', profile: 'p', engine: 'e',
-    outcome: 'done', start: 0, end: 10, stages: [stage(0), stage(1), stage(2)], interventions: [],
+    id: 'c',
+    card: '645',
+    run: 'r',
+    pairVersion: 'v',
+    workflowVersion: 'w',
+    profile: 'p',
+    engine: 'e',
+    outcome: 'done',
+    start: 0,
+    end: 10,
+    stages: [stage(0), stage(1), stage(2)],
+    interventions: [],
   })
   expect(card['retries']).toBe(2)
 })
 
-it('AC-7 r0-9: local telemetry never reaches the CLI pack or the dataset', () => {
-  const repo = join(__dirname, '../../../../..')
-  const dir = join(repo, '.pair/working/telemetry')
-  const sentinel = join(dir, `sentinel-${process.pid}.jsonl`)
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(sentinel, 'local-only\n')
-  try {
-    expect(existsSync(sentinel)).toBe(true)
-    const packed = childProcess.execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
-      cwd: join(repo, 'apps/pair-cli'),
-      encoding: 'utf8',
-    })
-    expect(packed).not.toMatch(/sentinel-|\.pair\/working/)
-    const paths = readdirSync(join(repo, 'packages/knowledge-hub/dataset'), {
-      recursive: true,
-    }) as string[]
-    expect(paths.filter(path => /sentinel-|working[\\/]telemetry/.test(path))).toEqual([])
-  } finally {
-    rmSync(sentinel, { force: true })
-  }
-})
+it(
+  'AC-7 r0-9: local telemetry never reaches the CLI pack or the dataset',
+  { timeout: 60_000 },
+  () => {
+    const repo = join(__dirname, '../../../../..')
+    const dir = join(repo, '.pair/working/telemetry')
+    const sentinel = join(dir, `sentinel-${process.pid}.jsonl`)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(sentinel, 'local-only\n')
+    try {
+      expect(existsSync(sentinel)).toBe(true)
+      const packed = childProcess.execFileSync(
+        'npm',
+        ['pack', '--dry-run', '--json', '--ignore-scripts'],
+        {
+          cwd: join(repo, 'apps/pair-cli'),
+          encoding: 'utf8',
+        },
+      )
+      expect(packed).not.toMatch(/sentinel-|\.pair\/working/)
+      const paths = readdirSync(join(repo, 'packages/knowledge-hub/dataset'), {
+        recursive: true,
+      }) as string[]
+      expect(paths.filter(path => /sentinel-|working[\\/]telemetry/.test(path))).toEqual([])
+    } finally {
+      rmSync(sentinel, { force: true })
+    }
+  },
+)
