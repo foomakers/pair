@@ -412,13 +412,42 @@ test('r6-23: selectLink picks exactly one card; linkedPr counts a PR only for th
     [{ body: '' }, null],
   ]
   for (const [input, expected] of cases) assert.deepEqual(selectLink(prLinks(input)), expected, JSON.stringify(input))
+  // Clean PRs only (one card each): linkedPr counts a PR for exactly its selected card.
+  const clean = cases.filter(([, expected]) => expected)
   const same = { repo: { full_name: 'owner/repo' } }
-  const pulls = cases.map(([input], n) => ({ number: n + 1, body: input.body ?? '', state: 'closed', merged_at: '2026-01-01', head: { ref: input.branch ?? 'x', ...same }, base: same }))
+  const pulls = clean.map(([input], n) => ({ number: n + 1, body: input.body ?? '', state: 'closed', merged_at: '2026-01-01', head: { ref: input.branch ?? 'x', ...same }, base: same }))
   const gh = stubBin('gh', {}, `process.stdout.write(JSON.stringify(${JSON.stringify(pulls)})); process.exit(0)`)
   const code = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') })
-  assert.deepEqual(['ENG-1', 'ENG-2', '5', '6', '7', '9'].map(id => code.linkedPr({ id, repo: 'owner/repo' })), ['merged', 'none', 'merged', 'none', 'none', 'merged'])
-  const prs = cases.map(([input]) => ({ description: input.body ?? '', status: 'completed', sourceRefName: `refs/heads/${input.branch ?? 'x'}` }))
+  assert.deepEqual(['ENG-1', 'ENG-2', '5', '7', '9'].map(id => code.linkedPr({ id, repo: 'owner/repo' })), ['merged', 'none', 'merged', 'none', 'merged'])
+  const prs = clean.map(([input], n) => ({ pullRequestId: n + 1, description: input.body ?? '', status: 'completed', sourceRefName: `refs/heads/${input.branch ?? 'x'}` }))
   const az = stubBin('az', { states: [], items: {}, prs }, AZ)
   const azCode = azure.instantiate({ azBin: az.bin, wayOfWorking: '' })
-  assert.deepEqual(['ENG-1', 'ENG-2', '5', '6', '7', '9'].map(id => azCode.linkedPr({ id, repo: 'Proj/app' })), ['merged', 'none', 'merged', 'none', 'none', 'merged'])
+  assert.deepEqual(['ENG-1', 'ENG-2', '5', '7', '9'].map(id => azCode.linkedPr({ id, repo: 'Proj/app' })), ['merged', 'none', 'merged', 'none', 'merged'])
+})
+
+// r7-24 / AC-2: a PR whose links name several cards is never silently dropped — linkedPr reports a typed
+// gap (PR numbers and candidate card ids only, no PR text); the audit lists it and apply writes nothing.
+test('r7-24: an ambiguous PR link is an audit gap with PR ids and candidates, never a board write', () => {
+  const same = { repo: { full_name: 'owner/repo' } }
+  const pulls = [{ number: 77, body: 'Closes #42\nRefs: ENG-7\nSECRET_PR_TEXT', state: 'open', merged_at: null, head: { ref: 'x', ...same }, base: same }]
+  const gh = stubBin('gh', {}, `process.stdout.write(JSON.stringify(${JSON.stringify(pulls)})); process.exit(0)`)
+  const az = stubBin('az', { states: [], items: {}, prs: [{ pullRequestId: 77, description: pulls[0].body, status: 'active', sourceRefName: 'refs/heads/x' }] }, AZ)
+  const expected = { gap: 'pr-link-ambiguous', prs: [77], candidates: ['42', 'ENG-7'] }
+  for (const code of [github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') }), azure.instantiate({ azBin: az.bin, wayOfWorking: '' })]) {
+    const repo = code.id === 'github' ? 'owner/repo' : 'Proj/app'
+    assert.deepEqual(code.linkedPr({ id: '42', repo }), expected)
+    const writes = []
+    const pm = {
+      listCards: () => [{ id: '42' }],
+      cardState: () => ({ issueState: 'OPEN', issueReason: null, boardState: 'Todo', member: true }),
+      setBoardState: ({ state }) => { writes.push(state); return { confirmed: true } },
+      closeCard: () => { writes.push('close'); return { confirmed: true } },
+    }
+    for (const apply of [false, true]) {
+      const report = auditCards({ pm, code, repo, apply })
+      assert.deepEqual(report, { mismatches: [], gaps: [{ id: '42', reason: 'pr-link-ambiguous', prs: [77], candidates: ['42', 'ENG-7'] }] })
+      assert.ok(!JSON.stringify(report).includes('SECRET_PR_TEXT'))
+    }
+    assert.deepEqual(writes, [])
+  }
 })

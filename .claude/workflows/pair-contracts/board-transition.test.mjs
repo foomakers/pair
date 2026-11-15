@@ -64,6 +64,18 @@ test('AC-6: an unconfigured board is skipped, a real write failure is not', () =
   assert.deepEqual(failed.gaps, ['board-write-failed'])
 })
 
+// r7-24: a linked transition whose card has an ambiguous PR link is an explicit skip with no write.
+test('AC-1/2: a linked transition over an ambiguous PR link skips without writing', () => {
+  const writes = []
+  const pm = {
+    cardState: () => ({ issueState: 'OPEN', issueReason: null, boardState: 'Todo', member: true }),
+    setBoardState: ({ state }) => { writes.push(state); return { confirmed: true } },
+  }
+  const code = { linkedPr: () => ({ gap: 'pr-link-ambiguous', prs: [77], candidates: ['42', 'ENG-7'] }) }
+  assert.deepEqual(runTransition({ hosts: { pm, code }, story: '42', pr: 'linked', repo: 'o/r', adoption: '' }), { confirmed: false, skipped: 'pr-link-ambiguous', gaps: ['pr-link-ambiguous'], prs: [77], candidates: ['42', 'ENG-7'] })
+  assert.deepEqual(writes, [])
+})
+
 test('AC-1: transition args refuse implicit apply and unknown PR states', () => {
   assert.deepEqual(parseArgs(['--story', '42', '--pr-state', 'open']), { story: '42', pr: 'open' })
   assert.deepEqual(parseArgs(['--story', '42', '--pr-state', 'none']), { story: '42', pr: 'none' })
