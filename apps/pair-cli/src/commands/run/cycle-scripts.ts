@@ -250,6 +250,16 @@ export interface CycleScriptsBridge {
   }
   baseSync(options: { cwd: string; base: string; story: string; dir?: string }): BaseSyncResult
   worktreeClean(options: { cwd: string; dir: string; story: string }): WorktreeCleanResult
+  /** AC-22: `cycle-state.mjs reset-group` — restart a group from its last clean attempt (sealed attempts kept). */
+  resetGroup(options: {
+    dir: string
+    phase: string
+    reason: string
+    workflowVersion: string
+    policy: Record<string, unknown>
+    entry: 'fresh' | 'pr'
+    pr?: number
+  }): { readonly reset: boolean; readonly reason?: string }
   prereqState(options: { story: string; dir?: string }): PrereqState
   worktree(options: CycleWorktreeOptions): CycleWorktreeResult
   /** `cycle-merge.mjs check`: conditions 1-5 re-read live; a failure PARKS the card. */
@@ -651,6 +661,26 @@ function prepareMethods(
  * repository's issue. Absent ⇒ this process's cwd (the bridge's own unit tests).
  */
 /** `cycle-state.mjs resolve`, and US-575's auto-recovery commands (budget, gate-red record, base sync, prerequisite state). */
+/** AC-22: `reset-group`, run by the driver for a contract-identity process fault. */
+function resetGroupMethod(
+  runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
+  cycleStatePath: string,
+): Pick<CycleScriptsBridge, 'resetGroup'> {
+  return {
+    resetGroup: o =>
+      runScript(cycleStatePath, 'reset-group', [
+        ['dir', o.dir],
+        ['phase', o.phase],
+        ['reason', o.reason],
+        ['by', 'driver'],
+        ['workflowVersion', o.workflowVersion],
+        ['policy', JSON.stringify(o.policy)],
+        ['entry', o.entry],
+        ...optional([['pr', o.pr === undefined ? undefined : String(o.pr)]]),
+      ]) as { reset: boolean; reason?: string },
+  }
+}
+
 function stateMethods(
   runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
   cycleStatePath: string,
@@ -706,6 +736,7 @@ export function createCycleScriptsBridge(
 
   return {
     ...stateMethods(runScript, cycleStatePath),
+    ...resetGroupMethod(runScript, cycleStatePath),
     worktree: options =>
       runScript(cycleDispatchPath, 'worktree', [
         ['main', options.main],

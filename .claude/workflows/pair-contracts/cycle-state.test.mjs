@@ -152,7 +152,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock, supersede, resetGroup, decide, resolveMaintainer, CAPS } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock, supersede, resetGroup, decide, resolveMaintainer, CAPS, recover } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 import { STOP_CATALOG } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
@@ -470,6 +470,52 @@ test('AC-10 (r0-4): consecutive process faults past autoRecoveryRounds park in r
   const { dir: i } = runDir()
   for (let a = 1; a <= 3; a++) handoff(i, 'a0', 'implement-phase', { status: 'failed', gatesPassed: false, processFault: 'gate-flake', outputHead: SHA('b') }, { attempt: a })
   assert.deepEqual(parked(i, 'fresh'), PARK, 'implement faults')
+})
+
+// #646 r1-1 — the class: every catalogued process fault a GREEN reports retries GREEN on the SAME seal under
+// autoRecoveryRounds; greenRetries (the card budget) stays untouched, and the process budget still parks.
+for (const fault of STOP_CATALOG.filter(r => r.class === 'process').map(r => r.status)) {
+  test(`AC-10/AC-21 (r1-1): a GREEN failed with process fault ${fault} retries on the same seal, then parks on the process budget`, () => {
+    const { dir } = runDir()
+    review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')] })
+    const plan = { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }
+    redSpec(dir, 'r1-g1', { plan, groupId: 'r1-g1' }, { predecessor: 'r0-review-phase' })
+    redVerify(dir, 'r1-g1', {}, { predecessor: 'r1-g1-red-spec' })
+    const policy = { ...POLICY, greenRetries: 0, autoRecoveryRounds: 1 }
+    const green = attempt => handoff(dir, 'r1-g1', 'green-fix', { fixed: false, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [], reason: fault, processFault: fault }, { predecessor: 'r1-g1-red-verify', attempt })
+    green(1)
+    const retry = resolve({ dir, workflowVersion: V, policy, entry: 'pr', pr: 7 }).next
+    assert.deepEqual(pick(retry, 'step', 'mode', 'phase', 'attempt', 'base'), { step: 'green', mode: 'retry', phase: 'r1-g1', attempt: 2, base: readHandoffs(dir).find(h => h.skill === 'red-verify').data.inputHead })
+    assert.deepEqual(retry.findings.map(f => f.id), ['r0-1'])
+    green(2)
+    const park = resolve({ dir, workflowVersion: V, policy, entry: 'pr', pr: 7 }).next
+    assert.deepEqual(pick(park, 'step', 'reason', 'budget', 'phase'), { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds', phase: 'r1-g1' })
+  })
+}
+
+test('AC-10 (r1-3): a process-budget park clears once its cause is acted on (a recorded recovery round) or the heads move — never sticky', () => {
+  const policy = { ...POLICY, autoRecoveryRounds: 2 }
+  const PARK = { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds' }
+  const parkedRun = () => {
+    const { dir } = runDir()
+    for (let a = 1; a <= 3; a++) handoff(dir, 'a0', 'red-spec', { status: 'dirty', mode: 'initial', reason: 'unowned path' }, { attempt: a })
+    return dir
+  }
+  // the cause acted on: a worktree-clean round recorded after the park re-derives the retry
+  const cleaned = parkedRun()
+  assert.deepEqual(pick(resolve({ dir: cleaned, workflowVersion: V, policy, entry: 'fresh', head: SHA('a'), baseHead: SHA('b') }).next, 'step', 'reason', 'budget'), PARK)
+  assert.equal(recover({ dir: cleaned, kind: 'worktree-clean', detail: 'saved', policy, now: new Date(Date.now() + 1000) }).allowed, true)
+  const afterClean = resolve({ dir: cleaned, workflowVersion: V, policy, entry: 'fresh', head: SHA('a'), baseHead: SHA('b') }).next
+  assert.deepEqual(pick(afterClean, 'step', 'phase', 'attempt'), { step: 'prepare', phase: 'a0', attempt: 4 })
+  // a Step-0 resolve without heads agrees (the verdict sticks to the same handoff)
+  assert.equal(resolve({ dir: cleaned, workflowVersion: V, policy, entry: 'fresh' }).next.step, 'prepare')
+  // the heads moved: the park's cause may be gone — retry
+  const moved = parkedRun()
+  assert.deepEqual(pick(resolve({ dir: moved, workflowVersion: V, policy, entry: 'fresh', head: SHA('a'), baseHead: SHA('b') }).next, 'step', 'reason', 'budget'), PARK)
+  assert.equal(resolve({ dir: moved, workflowVersion: V, policy, entry: 'fresh', head: SHA('c'), baseHead: SHA('d') }).next.step, 'prepare')
+  // control: nothing changed — the park holds
+  const held = parkedRun()
+  for (let i = 0; i < 2; i++) assert.deepEqual(pick(resolve({ dir: held, workflowVersion: V, policy, entry: 'fresh', head: SHA('a'), baseHead: SHA('b') }).next, 'step', 'reason', 'budget'), PARK)
 })
 
 test('resolve: a rejected contract goes back to preparation as a REPAIR carrying the rejection; the second rejection exhausts the unchanged budget', () => {

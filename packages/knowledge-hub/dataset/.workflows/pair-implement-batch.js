@@ -1089,6 +1089,7 @@ const PREPARE_SCHEMA = {
   type: 'object',
   properties: {
     status: { type: 'string', enum: ['red', 'stale', 'split-required', 'unprovable', 'dirty', 'contradiction', 'failed', REDIRECT_STATUS] },
+    processFault: { type: 'string' },
     mode: { type: 'string', enum: ['initial', 'remediation', 'repair', 'revision'] },
     inputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     sourceOfTruth: { type: 'string' },
@@ -1166,9 +1167,18 @@ const PREPARE_SCHEMA = {
 const PREPARE_REFUSALS = new Set(['stale', 'split-required', 'unprovable', 'dirty'])
 const CONTRACT_PROCESS_FAULTS = new Set(['contract-hash-mismatch', 'contract-attempt-overwritten'])
 const contractProcessFaultKind = reason => {
-  if (typeof reason !== 'string') return null
-  const kind = reason.split(':', 1)[0]
-  return CONTRACT_PROCESS_FAULTS.has(kind) && (reason === 'contract-hash-mismatch' || /^contract-attempt-overwritten:[^/:]+\.json$/.test(reason)) ? kind : null
+  const kind = typeof reason === 'string' ? reason.split(':', 1)[0] : null
+  return CONTRACT_PROCESS_FAULTS.has(kind) ? kind : null
+}
+// AC-9/AC-10: the process class of cycle-state.mjs STOP_CATALOG, mirrored (this sandbox imports nothing); a test pins the equality.
+const PROCESS_FAULTS = new Set(['failed-seal', 'failed-verify', 'failed-resume', 'failed-publication', 'interrupted', 'dirty', 'stale', 'stale-write', 'parent-not-base', 'sealed-history-rewritten', 'contract-attempt-overwritten', 'contract-hash-mismatch', 'seal-not-pushed', 'dead-dispatch', 'idle-timeout', 'gate-flake'])
+// The process fault a stage reported, whatever stage and status: typed (`processFault`), a process refusal, or a failed stage's process reason.
+const processFaultOf = r => {
+  if (!r || typeof r !== 'object') return null
+  if (PROCESS_FAULTS.has(r.processFault)) return r.processFault
+  if (r.status === 'dirty' || r.status === 'stale') return r.status
+  const kind = r.status === 'failed' && typeof r.reason === 'string' ? r.reason.split(':', 1)[0] : null
+  return PROCESS_FAULTS.has(kind) ? kind : null
 }
 const isPrepareRefusal = r => !!r && PREPARE_REFUSALS.has(r.status)
 // US-479 B1 (S3): a contradiction is an ANSWER — the preparation proved its obligation cannot be
@@ -1330,6 +1340,7 @@ const VALIDATE_SCHEMA = {
     // declare is dropped by the harness, so the equality check below would be unenforceable.
     regressionGuards: { type: 'array', items: { type: 'string' } },
     status: { type: 'string', enum: ['verified', 'rejected', 'failed', REDIRECT_STATUS] },
+    processFault: { type: 'string' },
     verified: { type: 'boolean' },
     findings: { type: 'array', items: { type: 'object' } },
     sealed: { type: 'boolean' },
@@ -1375,6 +1386,7 @@ const GREEN_SCHEMA = {
       items: { type: 'object', properties: { claim: { type: 'string' }, oracle: { type: 'string' }, probe: { type: 'string' }, observed: { type: 'string' } }, required: ['claim', 'oracle', 'probe', 'observed'] },
     },
     reason: { type: 'string' },
+    processFault: { type: 'string' },
     next: NEXT_SCHEMA,
   },
   required: ['status'],
@@ -1878,25 +1890,25 @@ async function driveStoryInner(story) {
     agentRetry(
       invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || (r?.status === 'failed' && (contractProcessFaultKind(r.reason) || r.reason === 'stale-write')) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
+      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || !!processFaultOf(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
     )
   const validate = n =>
     agentRetry(
       invoke(SK.redVerify, `${common()} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'xhigh', schema: VALIDATE_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || hasValidation(r) || (r?.status === 'failed' && r.reason === 'seal-not-pushed'),
+      r => isRedirect(r) || isOtherRun(r) || hasValidation(r) || !!processFaultOf(r),
     )
   const implement = n =>
     agentRetry(
       invoke(SK.implementPhase, `${common()} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''} $attempt=${n.attempt ?? 1}${n.contract ? ` $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}` : ''} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
       withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `implement:${tag}${(n.attempt ?? 1) > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: IMPLEMENT_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || (!!r && (r.status === 'ok' || r.status === 'failed') && typeof r.gatesPassed === 'boolean'),
+      r => isRedirect(r) || isOtherRun(r) || (!!r && (r.status === 'ok' || r.status === 'failed') && typeof r.gatesPassed === 'boolean') || !!processFaultOf(r),
     )
   const green = n =>
     agentRetry(
       invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${notesArg()}`),
       withModel('green', { agentType: 'pair-implementer', phase: 'Implement', label: `green:${tag} ${n.phase}${n.attempt > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: GREEN_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || hasGreen(r),
+      r => isRedirect(r) || isOtherRun(r) || hasGreen(r) || !!processFaultOf(r),
     )
   const verify = (n, required) =>
     agentRetry(
@@ -1957,7 +1969,7 @@ async function driveStoryInner(story) {
   // AO: the FORMAT-class defects of a stage result — shape, never judgment. Mirrors, in order, the checks below that end the card
   // `failed-*` for a malformed handoff, returning the first one's exact message (or null). Those checks stay the final authority.
   const formatDefect = (stg, n, r, { openIds }) => {
-    if (stg === 'prepare' && (isPrepareRefusal(r) || (r.status === 'failed' && (contractProcessFaultKind(r.reason) || r.reason === 'stale-write')) || (n.rollbackRefusal ?? false))) return null
+    if (processFaultOf(r) || (stg === 'prepare' && (isPrepareRefusal(r) || (n.rollbackRefusal ?? false)))) return null
     if (stg === 'implement') {
       if (r.status !== 'ok') return null
       if (!isPosInt(r.prNumber) || !SHA40.test(String(r.outputHead ?? ''))) return NO_PR_DEFECT
@@ -2109,33 +2121,24 @@ async function driveStoryInner(story) {
       continue
     }
     redirectsInARow = 0
+    // AC-10 (r1-1): ONE route for every process fault any stage reports, ahead of every stage's own failure check —
+    // recovered under autoRecoveryRounds or parked with a resume token; never a failed-* and never a card budget.
+    // A rollback refusal is a maintainer directive, never a process fault: it keeps its stop below.
+    const fault = !(stage === 'prepare' && next.rollbackRefusal) && processFaultOf(res)
+    if (fault) {
+      const recovered = await recoverProcess(fault, { ...next, next: usableNext(res.next) ? res.next : next })
+      if (recovered.park) return recovered.park
+      seen.delete(key)
+      next = recovered.next
+      continue
+    }
     // ── Stage-specific validation of the typed evidence ─────────────────────────────────────
     if (stage === 'prepare') {
-      if (res.status === 'failed' && res.reason === 'stale-write') {
-        const recovered = await recoverProcess('stale-write', { ...next, next })
-        if (recovered.park) return recovered.park
-        seen.delete(key)
-        continue
-      }
-      if (res.status === 'failed' && contractProcessFaultKind(res.reason)) {
-        const recovered = await recoverProcess(res.reason, { ...next, next: res.next })
-        if (recovered.park) return recovered.park
-        seen.delete(key)
-        next = recovered.next
-        continue
-      }
       // US-479 DR3-03: a rollback the state authority refused must STOP the run, before anything
       // else in this branch. It used to be computed and dropped, so a maintainer who mistyped a head
       // got an ordinary patch-forward run and never learned their directive had been discarded.
       if (next.rollbackRefusal) return result('failed-preparation', { reason: `rollback refused: ${next.rollbackRefusal}`, phase: next.phase })
-      if (isPrepareRefusal(res)) {
-        if (res.status === 'dirty' || res.status === 'stale') {
-          const recovered = await recoverProcess(res.status, { ...next, next: res.next })
-          if (recovered.park) return recovered.park
-          if (nextDefect(recovered.next) === null) { next = recovered.next; continue }
-        }
-        return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
-      }
+      if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
       if (isContradiction(res)) {
         const defect = contradictionDefect(res)
         if (defect) return result('failed-preparation', { reason: `contradiction evidence is incomplete: ${defect}`, refusal: 'contradiction', phase: next.phase, findings: next.findings })
@@ -2153,12 +2156,6 @@ async function driveStoryInner(story) {
         if (carried.length) log(`${tag} ${next.phase}: ${carried.length} finding(s) located outside the repository — they stay blocking until dispositioned by a human`)
       }
     } else if (stage === 'validate') {
-      if (res.status === 'failed' && res.reason === 'seal-not-pushed') {
-        const recovered = await recoverProcess('seal-not-pushed', { ...next, next })
-        if (recovered.park) return recovered.park
-        seen.delete(key)
-        continue
-      }
       if (!hasValidation(res)) return result('failed-contract', { reason: 'the validation stage returned no usable verdict', phase: next.phase })
       // US-479 F-RR-03 (S12/AC-30): the independent verifier must have validated EXACTLY the guard
       // set the resolver derived — one missing, one extra or one renamed and the contract is
@@ -2175,12 +2172,6 @@ async function driveStoryInner(story) {
       if (res.status !== 'ok') return result('failed-implement', { reason: res.reason ?? 'implementation reported failure', phase: next.phase })
       if (!isPosInt(res.prNumber) || !SHA40.test(String(res.outputHead ?? ''))) return result('failed-implement', { reason: 'implementation returned no PR number or head', phase: next.phase })
       pr = res.prNumber
-      if (res.gatesPassed === false && res.processFault === 'gate-flake') {
-        const recovered = await recoverProcess('gate-flake', { ...next, next: res.next })
-        if (recovered.park) return recovered.park
-        if (nextDefect(recovered.next) === null) { next = recovered.next; continue }
-        return result('failed-resume', { reason: 'gate flake has no durable retry', phase: next.phase })
-      }
       // A red gate is not a green implementation: the durable state routes it back to implement
       // on the same seal (once) or blocks it — it never reaches the verifier as `ok`.
       if (res.gatesPassed !== true) {

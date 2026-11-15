@@ -14,6 +14,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import { severityRankErrors as canonicalSeverityRankErrors } from '../skills/pair-workflow-contract-phase/scripts/ensure-contract.mjs'
+import { STOP_CATALOG } from '../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 const SRC = readFileSync(new URL('./pair-implement-batch.js', import.meta.url), 'utf8').replace(/^export /gm, '')
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
@@ -72,6 +73,8 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3, entry = 'legacy' } =
     if (res === null || res === undefined) return res
     if (typeof res !== 'object') return res
     if (res.status === 'redirect' || res.status === 'other-run') return res
+    // A process fault is the stage's own typed answer: relayed as reported, the simulator derives no route from it.
+    if (res.processFault) return res
     const id = arg(prompt, 'story')
     const s = state(id)
     const phase = arg(prompt, 'phase')
@@ -396,6 +399,40 @@ test('AC-10: seal-not-pushed retries validation under the process budget', async
   assert.equal(result.batch[0].status, 'ready-for-merge')
   assert.ok(calls.some(c => c.opts.label?.startsWith('recover:budget') && c.prompt.includes('--kind stage-retry')))
 })
+
+// #646 r1-1 — the class: every process status of the catalogue, reported by any judgment stage, takes the ONE recovery route.
+const PROCESS_CLASS = STOP_CATALOG.filter(r => r.class === 'process').map(r => r.status)
+test('AC-9/AC-10 (r1-1): the driver mirrors exactly the catalogue process class', () => {
+  const declared = /const PROCESS_FAULTS = new Set\(\[([^\]]+)\]\)/.exec(SRC)
+  assert.ok(declared, 'PROCESS_FAULTS declaration not found')
+  assert.deepEqual([...declared[1].matchAll(/'([^']+)'/g)].map(m => m[1]).sort(), [...PROCESS_CLASS].sort())
+})
+const faultedRun = (stage, fault, budget) => {
+  const std = stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) })
+  let faulted = 0
+  return runWorkflow({ args: { cards: [STORY] }, entry: 'legacy', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:budget')) return budget
+    if (opts.label?.startsWith('recover:dirty')) return { cleaned: true, ref: 'refs/pair/recovery/292/x', commit: HEAD }
+    if (opts.label?.startsWith('recover:stale')) return { synced: false, reason: 'up-to-date' }
+    if (opts.label?.startsWith('recover:contract-')) return { reset: false, reason: 'reset-group-not-tail' }
+    // The legacy entry's contract-less first `implement` guess is a redirect, not the stage at work.
+    if (opts.label?.startsWith(`${stage}:`) && (stage !== 'implement' || prompt.includes('$contract=')) && faulted++ === 0) return { status: 'failed', reason: fault, processFault: fault, gatesPassed: false, fixed: false, evidenceLedger: [] }
+    return std(prompt, opts)
+  } })
+}
+for (const stage of ['prepare', 'validate', 'implement', 'green'])
+  for (const fault of PROCESS_CLASS) {
+    test(`AC-10/AC-21 (r1-1): ${stage} failing with process fault ${fault} is recovered on the same cycle, never failed-*`, async () => {
+      const { result, calls } = await faultedRun(stage, fault, { allowed: true, round: 1, budget: 5 })
+      assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+      assert.ok(calls.some(c => c.opts.label?.startsWith('recover:budget')))
+    })
+    test(`AC-10 (r1-1): ${stage} failing with process fault ${fault} past the process budget parks with a resume token`, async () => {
+      const { result } = await faultedRun(stage, fault, { allowed: false, next: { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds' } })
+      assert.equal(result.batch[0].status, 'awaiting-human', JSON.stringify(result.batch[0]))
+      assert.match(result.batch[0].resumeToken, new RegExp(`^story-292:292:[a-z0-9-]+:${fault}$`))
+    })
+  }
 
 test('AC-10: a declared gate flake retries under process budget', async () => {
   const std = stdDispatch()

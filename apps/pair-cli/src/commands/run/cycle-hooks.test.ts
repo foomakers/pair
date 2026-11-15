@@ -100,7 +100,9 @@ describe('runCycle with ## Cycle Hooks (US-489)', () => {
       policy: { deadDispatchRetries: 1 },
       resolve: scripted([step('implement'), step('implement'), step('implement')]),
     })
-    expect(h.log.filter(l => l.startsWith('post-'))).toEqual(['post-cycle(failed-implement)'])
+    // AC-10: a dead dispatch past its budget is a process park — `awaiting-human`, never an on-halt failure
+    expect(h.log.filter(l => l.startsWith('post-'))).toEqual(['post-cycle(awaiting-human)'])
+    expect(h.log.some(l => l.startsWith('on-halt'))).toBe(false)
   })
 
   it('AC4: pre-cycle and post-cycle run exactly once across several remediation rounds', async () => {
@@ -135,7 +137,10 @@ describe('runCycle with ## Cycle Hooks (US-489)', () => {
   })
 
   it.each([
-    ['failed-implement', [step('implement'), step('implement'), step('implement')]],
+    [
+      'failed-implement',
+      [step('implement'), { status: 'x', next: { step: 'blocked', reason: 'failed-implement' } }],
+    ],
     [
       'escalate',
       [step('implement'), { status: 'x', next: { step: 'blocked', reason: 'escalate' } }],

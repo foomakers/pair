@@ -119,6 +119,11 @@ export const CYCLE_STATUSES = ['in-progress', 'completed', 'blocked', 'escalated
 // returns control to the same run. Specific process fault codes override a broader failed status.
 export const STOP_CATALOG = [
   { status: 'failed-preparation', class: 'finding', resume: 'pair run --card <card>' },
+  // pair run's own stage stops (`failed-<step>`): a stage that refused on purpose for a non-process reason.
+  { status: 'failed-prepare', class: 'finding', resume: 'pair run --card <card>' },
+  { status: 'failed-validate', class: 'finding', resume: 'pair run --card <card>' },
+  { status: 'failed-green', class: 'finding', resume: 'pair run --card <card>' },
+  { status: 'failed-hook', class: 'decision', resume: 'fix the blocking hook the detail names; pair run --card <card>' },
   { status: 'failed-contract', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-seal', class: 'process', resume: 'pair run --card <card>' },
   { status: 'failed-implement', class: 'finding', resume: 'pair run --card <card>' },
@@ -2807,7 +2812,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     const ids = [...new Set(atf.map(f => f.groupId))].sort((a, b) => rank(a) - rank(b))
     for (const groupId of ids) {
       const phase = latestGroupPhase(groupId)
-      const greens = list.filter(h => h.skill === 'green-fix' && h.phase === phase).length
+      const greens = list.filter(h => h.skill === 'green-fix' && h.phase === phase && !isProcessFault(h.data)).length
       if (greens <= (policy.greenRetries ?? 1)) return { step: 'green', mode: 'retry', phase, round, attempt: greens + 1, base: latestOf('red-verify', phase, x => x.sealed)?.data.inputHead, contract: contractOf(phase), group: groupOf(phase), findings: atf.filter(f => f.groupId === groupId), detail: 'an approved test still fails on production', ...greenDirective(phase) }
     }
     return null
@@ -2981,6 +2986,13 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
   if (last.skill === 'green-fix') {
     if (d.needsHumanDecision === true) return blocked('escalate', { detail: 'green-fix asked for a human decision', phase: last.phase })
     if (d.fixed !== true && Array.isArray(d.contractGaps) && d.contractGaps.length) return gapRevision(last, d)
+    // AC-10/AC-21 (r1-1): a process fault (a gate flake) retries GREEN on the SAME seal under autoRecoveryRounds, never greenRetries.
+    if (d.fixed !== true && (isProcessFault(d) || ctx.stale)) {
+      const greens = byPhase('green-fix', last.phase)
+      const spent = processBudgetSpent(greens.filter(h => isProcessFault(h.data)), last.phase, d.processFault)
+      if (spent) return spent
+      return { step: 'green', mode: 'retry', phase: last.phase, round: parts.round, attempt: greens.length + 1, base: latestOf('red-verify', last.phase, x => x.sealed)?.data.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupFindingIds(groupOf(last.phase))), detail: `retry after ${d.processFault ?? 'a stale failure'}`, ...(ctx.stale ? { stale: true } : {}), ...greenDirective(last.phase) }
+    }
     if (d.fixed !== true) return blocked('failed-fix', { phase: last.phase, detail: d.reason })
     return afterGreen(last.phase, d.outputHead)
   }
@@ -3509,15 +3521,17 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   const failureId = `${last.name}.attempt-${last.attempt}`
   const recorded = recovery.failures[failureId]
   const moved = !!recorded && Object.entries(heads).some(([k, v]) => recorded[k] !== undefined && recorded[k] !== v)
-  // A `worktree-clean` round (the driver stashed what made the worktree dirty) after the failure was seen clears its cause too.
-  const cleaned = !!recorded && recorded.reason === 'failed-preparation' && recovery.rounds.some(r => r.kind === 'worktree-clean' && r.at >= recorded.at)
+  // A `worktree-clean` round (the driver stashed what made the worktree dirty) after the failure was seen clears its cause too;
+  // a spent process budget (AC-10, r1-3) is cleared by ANY recorded recovery round after it — the round is the act on its cause.
+  const cleaned = !!recorded && recovery.rounds.some(r => r.at >= recorded.at && (recorded.budget === 'autoRecoveryRounds' || (recorded.reason === 'failed-preparation' && r.kind === 'worktree-clean')))
   const stale = !!recorded && (recorded.stale !== undefined || moved || cleaned)
   let next = deriveNext(handoffs, policy, { entry, head, stale, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger, approvals: readApprovals(dir) })
   if (stale && next.step !== 'blocked') {
     if (recorded.stale === undefined) writeRecovery(dir, { ...recovery, failures: { ...recovery.failures, [failureId]: { ...recorded, stale: heads } } })
-  } else if (next.step === 'blocked' && DURABLE_FAILURES.has(next.reason)) {
+  } else if (next.step === 'blocked' && (DURABLE_FAILURES.has(next.reason) || next.budget === 'autoRecoveryRounds')) {
     const key = recorded ? Object.fromEntries(['prHead', 'baseHead'].filter(k => recorded[k] !== undefined).map(k => [k, recorded[k]])) : heads
-    if (!recorded && Object.keys(heads).length) writeRecovery(dir, { ...recovery, failures: { ...recovery.failures, [failureId]: { reason: next.reason, ...heads, at: new Date().toISOString() } } })
+    // A process-budget park is recorded even without heads: a later recovery round must be able to clear it (r1-3).
+    if (!recorded && (Object.keys(heads).length || next.budget === 'autoRecoveryRounds')) writeRecovery(dir, { ...recovery, failures: { ...recovery.failures, [failureId]: { reason: next.reason, ...(next.budget ? { budget: next.budget } : {}), ...heads, at: new Date().toISOString() } } })
     if (Object.keys(key).length) next = { ...next, failureKey: key }
   }
   const reReviewOf = extra =>

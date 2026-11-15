@@ -894,7 +894,8 @@ Process faults use a separate recovery budget and a recorded resume token. Re-ru
 
    Every stage prompt forbids background waits and real engines or `gh` in the stage's own probes. A
    stage that reaches no terminal event within `--iteration-timeout` is reported `stalled` and resumed fresh, within
-   the same dead-dispatch budget: one more try, then `failed-<step>`. A process has no session to
+   the same dead-dispatch budget: one more try, then one `autoRecoveryRounds` round and the same window again; spent, the
+   card parks `awaiting-human` with a resume token, never `failed-<step>`. A process has no session to
    resume.
 
    When a run needs a maintainer, two commands do what used to be done by hand:

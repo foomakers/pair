@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 
 import { REPO_ROOT } from './repo-root'
@@ -32,5 +32,37 @@ describe('delivery process docs (#646 AC-D)', () => {
     ['packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md', 'once a human clears it'],
   ])('%s no longer states %s', (file, phrase) => {
     expect(read(file)).not.toContain(phrase)
+  })
+
+  // #646 r1-5 — the class: every shipped instruction (stage and coordinator skills, guidelines, site docs, CLI docs)
+  // that speaks of a dead, stalled or process-faulted dispatch says it recovers or parks — never a failed-<step> end.
+  const walk = (dir: string, ext: RegExp): string[] =>
+    readdirSync(join(REPO_ROOT, dir), { withFileTypes: true }).flatMap(e =>
+      e.isDirectory()
+        ? walk(`${dir}/${e.name}`, ext)
+        : ext.test(e.name)
+          ? [`${dir}/${e.name}`]
+          : [],
+    )
+  const shipped = [
+    ...walk('packages/knowledge-hub/dataset/.skills', /\.md$/),
+    ...walk('packages/knowledge-hub/dataset/.pair/knowledge/guidelines', /\.md$/),
+    ...walk('apps/website/content/docs', /\.mdx$/),
+    'README.md',
+  ]
+  const PROCESS = /dead.dispatch|stall|unadvanced|idle.timeout|process fault/i
+  it('no shipped doc ends a dead, stalled or process-faulted dispatch with failed-<step>', () => {
+    const offenders = shipped.flatMap(file =>
+      read(file)
+        .split(/(?<=\.)\s+|\|/)
+        .filter(s => PROCESS.test(s))
+        .filter(s =>
+          [...s.matchAll(/`failed-<(?:step|stage)>`/g)].some(
+            m => !/never\s*$/.test(s.slice(0, m.index)),
+          ),
+        )
+        .map(s => `${file}: ${s.trim().slice(0, 160)}`),
+    )
+    expect(offenders).toEqual([])
   })
 })

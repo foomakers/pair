@@ -180,6 +180,27 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     expect(existsSync(join(tree, 'stray.txt'))).toBe(false)
   })
 
+  it('AC-22 (r1-2): resetGroup sets an unusable unsealed tail aside through the installed script bridge', () => {
+    const dir = join(runsRoot, 'story-487/487')
+    mkdirSync(dir, { recursive: true })
+    const tail = { phase: 'r1-g1', skill: 'red-verify', seq: 1, verified: false, sealed: false }
+    writeFileSync(join(dir, 'r1-g1-red-verify.json'), JSON.stringify(tail))
+    const result = bridge().resetGroup({
+      dir,
+      phase: 'r1-g1',
+      reason: 'contract-hash-mismatch',
+      workflowVersion: CYCLE_WORKFLOW_VERSION,
+      policy: {},
+      entry: 'pr',
+      pr: 7,
+    })
+    expect(result.reset).toBe(true)
+    expect(existsSync(join(dir, 'r1-g1-red-verify.json'))).toBe(false)
+    expect(readFileSync(join(dir, 'maintainer-interventions.md'), 'utf8')).toMatch(
+      /contract-hash-mismatch/,
+    )
+  })
+
   it('AC-13: baseSync with the run dir refuses a rewritten sealed history before merging', () => {
     const tree = join(projectRoot, 'sealed')
     const git = (...args: string[]) =>

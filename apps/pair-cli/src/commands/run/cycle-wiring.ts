@@ -1094,9 +1094,15 @@ const stashBeforePrepareFor =
     if (stashed) console.log('  Recovery: stray files of the failed attempt stashed before prepare')
   }
 
-/** A stage stopped for a transient cause: one `stage-retry` recovery round, then the same step again. */
+/** The contract-identity faults whose recovery resets the group (`STOP_CATALOG` resume: `reset-group`). */
+const CONTRACT_FAULTS = new Set(['contract-hash-mismatch', 'contract-attempt-overwritten'])
+
+/**
+ * AC-10/AC-22: a process fault — one `stage-retry` recovery round, then the same step again; a contract-identity
+ * fault first resets its group (`reset-group`), so the retry never meets the faulted attempt.
+ */
 const recoverStopFor =
-  (input: CycleDriverRequest, co: Coordinates) =>
+  (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
   async (next: CycleNext, reason: string): Promise<boolean> => {
     const round = co.bridge.recover({
       dir: co.runDir,
@@ -1105,6 +1111,21 @@ const recoverStopFor =
       policy: budgetsOf(input),
     })
     if (!round.allowed) return false
+    const kind = reason.split(':', 1)[0] ?? ''
+    if (CONTRACT_FAULTS.has(kind) && typeof next.phase === 'string') {
+      const reset = co.bridge.resetGroup({
+        dir: co.runDir,
+        phase: next.phase,
+        reason: kind,
+        workflowVersion: ctx.workflowVersion,
+        policy: budgetsOf(input),
+        entry: input.pr === undefined ? 'fresh' : 'pr',
+        ...(input.pr !== undefined && { pr: input.pr }),
+      })
+      console.log(
+        `  Recovery: ${kind} — reset-group ${next.phase}: ${reset.reset ? 'reset' : (reset.reason ?? 'nothing to reset')}`,
+      )
+    }
     console.log(
       `  Recovery: ${reason} — retrying ${next.step} (round ${String(round.round)}/${String(round.budget)})`,
     )
@@ -1368,7 +1389,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       escalate: escalateFor(input, co),
       recoverDirty: recoverDirtyFor(ctx, input, co),
       beforePrepare: stashBeforePrepareFor(ctx, input, co),
-      recoverStop: recoverStopFor(input, co),
+      recoverStop: recoverStopFor(ctx, input, co),
       policy,
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),

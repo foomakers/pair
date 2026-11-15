@@ -129,7 +129,7 @@ describe('A1: `{status: failed, reason: incomplete}` is resumable — it goes th
     processOutcome: 'success',
     final: { status: 'failed', reason: 'incomplete' },
   }
-  it('retried within deadDispatchRetries, then failed-<stage> by the budget (no deliberate stop)', async () => {
+  it('retried within deadDispatchRetries, then a dead-dispatch process park by the budget (no deliberate stop)', async () => {
     const spawnStage = vi.fn(async () => incomplete)
     const outcome = await runCycle({
       resolve: resolve(),
@@ -139,8 +139,7 @@ describe('A1: `{status: failed, reason: incomplete}` is resumable — it goes th
       policy: { deadDispatchRetries: 2 },
     })
     expect(spawnStage).toHaveBeenCalledTimes(3)
-    expect(outcome.status).toBe('failed-implement')
-    expect(outcome.reason).toBeUndefined()
+    expect(outcome).toMatchObject({ status: 'awaiting-human', reason: 'dead-dispatch' })
   })
   it('an explicit non-resumable reason or next.step blocked still stops at once', async () => {
     for (const final of [

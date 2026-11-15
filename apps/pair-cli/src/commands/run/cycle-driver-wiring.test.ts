@@ -108,7 +108,7 @@ if (a[0] === 'issue' && a[1] === 'view') {
       engine,
       `#!/usr/bin/env node
 require('fs').appendFileSync(process.env.FAKE_ENGINE_LOG, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }) + '\\n')
-process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\\n')
+process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', ...(process.env.FAKE_ENGINE_RESULT ? { result: process.env.FAKE_ENGINE_RESULT } : {}) }) + '\\n')
 process.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\\n')
 process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop' } }) + '\\n')
 `,
@@ -146,12 +146,35 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
       baseBranch: CYCLE_BASE_BRANCH_DEFAULT,
     })({ runId: 'story-7', card: '7', ...(pr !== undefined && { pr }) })
 
-  it("a success event with a NOT-advanced handoff is a dead dispatch, retried exactly the ONCE cycle-state's own budget allows (AC4, AC5)", async () => {
+  it("a success event with a NOT-advanced handoff is a dead dispatch: retried the ONCE cycle-state's own budget allows, then per recorded process round, then parked with a resume token (AC4, AC5, #646 AC-10)", async () => {
     const outcome = await drive(ENGINES.claude)
 
-    expect(calls()).toHaveLength(2) // the stage, plus the one retry — never a third
-    expect(outcome.status).toBe('failed-implement')
-    expect(outcome.stagesRun).toBe(2)
+    // (1 + deadDispatchRetries 1) dispatches per window, one window plus one per autoRecoveryRounds (KB default 5)
+    expect(calls()).toHaveLength(12)
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'implement:a0:dead-dispatch',
+    })
+    expect(outcome.stagesRun).toBe(12)
+  }, 60_000)
+
+  it('#646 r1-2: a stage stopped for a contract-identity fault is recovered through reset-group and the process budget, then parked with a resume token', async () => {
+    vi.stubEnv(
+      'FAKE_ENGINE_RESULT',
+      JSON.stringify({ status: 'failed', reason: 'contract-hash-mismatch' }),
+    )
+    const outcome = await drive(ENGINES.claude)
+
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'implement:a0:contract-hash-mismatch',
+    })
+    const said = vi.mocked(console.log).mock.calls.map(c => String(c[0]))
+    expect(said.filter(l => /contract-hash-mismatch — reset-group a0/.test(l))).toHaveLength(5)
+    const rounds = JSON.parse(
+      readFileSync(join(main, '.pair/working/runs/story-7/7/recovery.json'), 'utf8'),
+    ).rounds as { kind: string }[]
+    expect(rounds.map(r => r.kind)).toEqual(Array(5).fill('stage-retry'))
   }, 60_000)
 
   it("US-623 AC6/r0-2: the production driver hands runCycle a beforePrepare that stashes the failed attempt's stray files", async () => {
@@ -206,17 +229,20 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     const prompt = first!.argv[first!.argv.length - 1]!
     expect(prompt.startsWith('/pair-workflow-review-phase ')).toBe(true)
     expect(calls().some(c => c.argv.some(a => a.includes('pair-workflow-red-spec')))).toBe(false)
-    expect(outcome.status).toBe('failed-verify')
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'verify:r0:dead-dispatch',
+    })
   }, 60_000)
 
-  it('opencode, which does the file work but publishes no handoff, ends failed-<step> — never claimed complete (AC13 known limitation)', async () => {
+  it('opencode, which does the file work but publishes no handoff, parks awaiting-human — never claimed complete (AC13 known limitation)', async () => {
     // The canary's opencode leg, as the driver sees it: every stage exits with a success event and
     // no handoff. AC13 does not claim opencode completes; what the driver owes is to SAY so — a
     // bounded dead dispatch and a failed status, never a `ready-for-merge` it did not reach.
     const outcome = await drive(ENGINES.opencode)
 
-    expect(calls()).toHaveLength(2)
-    expect(outcome.status).toBe('failed-implement')
+    expect(calls()).toHaveLength(12)
+    expect(outcome.status).toBe('awaiting-human')
     expect(outcome.status).not.toBe('ready-for-merge')
   }, 60_000)
 

@@ -55,6 +55,7 @@ const TERMINAL_STATUS = new Set([
   'escalated',
   'escalate',
   'needs-human',
+  'awaiting-human',
   'merge-parked',
   'merged-closure-unfinished',
   'gate-red',
