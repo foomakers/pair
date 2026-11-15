@@ -119,6 +119,10 @@ test('preparation waiver: refused — not the maintainer, a finding the refusal 
     [c('rucka', waiver({ attempt: 2 })), 'waiver-attempt-mismatch'],
     [c('rucka', waiver({ inputHead: SHA('d') })), 'waiver-attempt-mismatch'],
     [c('rucka', waiver({ inputHead: undefined })), 'inputHead-invalid'],
+    [c('rucka', waiver({ attempt: 0 })), 'attempt-invalid'],
+    [c('rucka', waiver({ phase: 'r1' })), 'phase-invalid'],
+    [c('rucka', waiver({ reason: ' ' })), 'reason-missing'],
+    [c('rucka', waiver({ story: undefined })), 'story-missing'],
   ]
   for (const [comment, reason] of cases) assert.equal(approve(dir, 6, { 6: comment }).reason, reason)
   assert.deepEqual(readApprovals(dir), [])
@@ -254,4 +258,70 @@ test('preparation waiver r0-1: on GitHub the comment id is global — the same c
   const out = approveCorrection({ dir: b, decisionRef: 'https://github.com/n/r/pull/7#issuecomment-555', repo: 'n/r', pr: 7, host: faithful(comments, { repo: 'n/r' }) })
   assert.equal(out.reason, 'decisionRef-already-used')
   assert.deepEqual(readApprovals(b), [])
+})
+
+// A host whose comment ids are unique per repo only (not GitHub): the repo is part of the key. The repo is the one
+// the host returns, else the --repo the caller named; a ref id is normalized when the host returns none.
+const perRepo = comments => ({
+  code: {
+    id: 'azure-devops',
+    parseCommentRef: (ref, { repo }) => {
+      const m = /^([^#]+)#c-(\d+)$/.exec(ref)
+      return m ? { pr: 7, id: m[2], inScope: m[1] === repo } : null
+    },
+    readComment: ({ id, repo }) => comments[`${repo}#${Number(id)}`],
+  },
+})
+const perRepoComments = { 'a/x#555': c('rucka', waiver()), 'b/y#555': c('rucka', waiver()) }
+const viaRepo = (dir, repo, id = '555') => approveCorrection({ dir, decisionRef: `${repo}#c-${id}`, repo, pr: 7, host: perRepo(perRepoComments) })
+
+test('preparation waiver r4-1: on a per-repo host the same id in ANOTHER repo is another comment — approved in the second run', () => {
+  const a = waiverRun()
+  assert.equal(viaRepo(a, 'a/x').approved, true)
+  const b = runB(a)
+  const out = viaRepo(b, 'b/y')
+  assert.equal(out.approved, true, JSON.stringify(out))
+  assert.equal(readApprovals(b).length, 1)
+})
+
+test('preparation waiver r4-1: on a per-repo host the same repo + id (ref id normalized: 0555 = 555) in another run is a replay', () => {
+  const a = waiverRun()
+  assert.equal(viaRepo(a, 'a/x').approved, true)
+  const b = runB(a)
+  assert.equal(viaRepo(b, 'a/x', '0555').reason, 'decisionRef-already-used')
+  assert.deepEqual(readApprovals(b), [])
+})
+
+test('preparation waiver: the waiver is honoured only on the refusal it names — the same attempt rewritten on another head is not covered', () => {
+  const dir = waiverRun()
+  assert.equal(approve(dir, 5, { 5: c('rucka', waiver()) }).approved, true)
+  put(dir, 'r1-g1', 'red-spec', { status: 'unprovable', mode: 'remediation', inputHead: SHA('d'), findings: { received: ['r0-1'] } })
+  assert.equal(go(dir).next.reason, 'failed-preparation')
+})
+
+test('preparation waiver + a PR head moved since the refusal: the re-review carries both the waiver and headMoved', () => {
+  const dir = waiverRun()
+  assert.equal(approve(dir, 5, { 5: c('rucka', waiver()) }).approved, true)
+  const next = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, head: SHA('e') }).next
+  assert.deepEqual([next.step, next.headMoved, next.waived?.map(w => w.id)], ['verify', true, ['r0-1']])
+})
+
+test('preparation waiver: only an `unprovable` refusal is waivable — a `split-required` tail owes none', () => {
+  const dir = waiverRun()
+  put(dir, 'r1-g1', 'red-spec', { status: 'split-required', mode: 'remediation', inputHead: SHA('c'), findings: { received: ['r0-1'] } })
+  assert.equal(approve(dir, 5, { 5: c('rucka', waiver()) }).reason, 'waiver-not-owed')
+  assert.deepEqual(readApprovals(dir), [])
+})
+
+test('a recorded waiver is never read as a contract correction — even beside a legacy seal that carries no contract hash', () => {
+  const dir = runDir()
+  // legacy a0 evidence with no contractHash: a waiver record (no predecessorContractHash) must not "match" it
+  put(dir, 'a0', 'red-spec', { status: 'red', contractPath: join(dir, 'a0-red-contract.json'), contractHash: undefined })
+  put(dir, 'a0', 'red-verify', { verified: true, sealed: true, snapshot: SHA('b'), contractHash: undefined })
+  const f = { id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', kind: 'defect', location: 'a', description: 'd', recommendation: 'r' }
+  put(dir, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [f], custody: { contractBreach: false }, readiness: { ready: false } })
+  put(dir, 'r1-g1', 'red-spec', { status: 'unprovable', mode: 'remediation', inputHead: SHA('c'), findings: { received: ['r0-1'] } })
+  assert.equal(approve(dir, 5, { 5: c('rucka', waiver()) }).approved, true)
+  const next = go(dir).next
+  assert.deepEqual([next.step, next.mode, next.waived?.map(w => w.id)], ['verify', 're-review', ['r0-1']])
 })
