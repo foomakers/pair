@@ -1839,6 +1839,15 @@ test('T-4 (AC4): supersede accepts a failed-custody review-phase handoff (tail o
   assert.ok(out.index)
 })
 
+test('supersede of a PR-entry run\'s review, run as documented (no --pr/--entry): the step due is that review again on the PR, never `implement a0`', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { mode: 'partial', custody: { verified: false, contractBreach: true, breaches: ['x'] } })
+  const out = supersede({ dir, phase: 'r0', skill: 'review-phase', reason: 'custody false positive', by: 'rucka', workflowVersion: V })
+  assert.equal(out.superseded, true, JSON.stringify(out))
+  assert.deepEqual({ step: out.next.step, phase: out.next.phase }, { step: 'verify', phase: 'r0' })
+  assert.match(readFileSync(out.index, 'utf8'), /the step now due: verify first r0/)
+})
+
 test('T-4 (AC4): supersede sets the SAME phase aside twice on one day — distinct names, both invisible to resolve', () => {
   const { dir } = runDir()
   handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true }, { predecessor: undefined })
