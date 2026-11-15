@@ -218,6 +218,9 @@ export interface BaseSyncResult {
   readonly detail?: string
   readonly head?: string
   readonly conflicts?: readonly { readonly path: string; readonly side: string }[]
+  /** AC-13: on a sealed cycle, the latest seal and the cycle base `verify-chain` checks after the merge. */
+  readonly snapshot?: string
+  readonly cycleBase?: string
 }
 
 export interface WorktreeCleanResult {
@@ -241,7 +244,7 @@ export interface CycleScriptsBridge {
   resolve(options: CycleResolveOptions): CycleResolveResult
   recover(options: {
     dir: string
-    kind: 'gate-retry' | 'base-sync' | 'ci-rerun' | 'worktree-clean' | 'stage-retry'
+    kind: 'gate-retry' | 'base-sync' | 'ci-rerun' | 'worktree-clean' | 'stage-retry' | 'resume'
     detail: string
     policy: Record<string, unknown>
   }): CycleRecoveryResult
@@ -260,6 +263,16 @@ export interface CycleScriptsBridge {
     entry: 'fresh' | 'pr'
     pr?: number
   }): { readonly reset: boolean; readonly reason?: string }
+  /** AC-13: `red-snapshot.mjs verify-chain --base-ref` — custody re-checked after a base merge on a sealed cycle. */
+  verifyChain(options: {
+    pr: number
+    base: string
+    baseRef: string
+    runDir: string
+    cwd: string
+  }): {
+    readonly verified?: boolean
+  }
   prereqState(options: { story: string; dir?: string }): PrereqState
   worktree(options: CycleWorktreeOptions): CycleWorktreeResult
   /** `cycle-merge.mjs check`: conditions 1-5 re-read live; a failure PARKS the card. */
@@ -665,8 +678,21 @@ function prepareMethods(
 function resetGroupMethod(
   runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
   cycleStatePath: string,
-): Pick<CycleScriptsBridge, 'resetGroup'> {
+): Pick<CycleScriptsBridge, 'resetGroup' | 'verifyChain'> {
+  // the review stage's custody script, installed beside this skill
+  const redSnapshot = join(
+    cycleStatePath,
+    '../../../pair-workflow-review-phase/scripts/red-snapshot.mjs',
+  )
   return {
+    verifyChain: o =>
+      runScript(redSnapshot, 'verify-chain', [
+        ['pr', String(o.pr)],
+        ['base', o.base],
+        ['base-ref', o.baseRef],
+        ['run-dir', o.runDir],
+        ['cwd', o.cwd],
+      ]) as { verified?: boolean },
     resetGroup: o =>
       runScript(cycleStatePath, 'reset-group', [
         ['dir', o.dir],

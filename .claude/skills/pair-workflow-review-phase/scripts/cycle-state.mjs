@@ -134,8 +134,8 @@ export const STOP_CATALOG = [
   { status: 'failed-publication', class: 'process', resume: 'pair run --card <card>' },
   { status: 'escalate', class: 'decision', resume: 'maintainer decision comment; pair run --card <card>' },
   { status: 'escalated', class: 'decision', resume: 'maintainer decision comment; pair run --card <card>' },
-  { status: 'needs-human', class: 'decision', resume: 'clear the recorded cause (a spent autoRecoveryRounds names it), or a maintainer reset comment; then pair run --card <card>' },
-  { status: 'awaiting-human', class: 'decision', resume: 'clear the recorded cause, then pair run --card <card> (resumeToken names the parked step); a merge hold needs the maintainer approval' },
+  { status: 'needs-human', class: 'decision', resume: 'a spent autoRecoveryRounds: pair run --card <card> resumes it once per re-run (recover --kind resume, within autoRecoveryRounds); then clear the cause and a maintainer reset comment or a moved PR/base head' },
+  { status: 'awaiting-human', class: 'decision', resume: 'pair run --card <card> resumes the parked step once per re-run within autoRecoveryRounds (resumeToken names it); resumes spent: clear the cause, then a maintainer reset comment or a moved PR/base head; a merge hold needs the maintainer approval' },
   { status: 'halted', class: 'decision', resume: 'maintainer decision on the refused or unreadable gate; pair run --card <card>' },
   { status: 'interrupted', class: 'process', resume: 'pair run --card <card>' },
   { status: 'abandoned', class: 'decision', resume: 'maintainer reset comment; pair run --card <card>' },
@@ -2380,7 +2380,7 @@ const blocked = (reason, extra = {}) => ({ step: 'blocked', reason, ...extra })
 // `gateRed`: the merge-time gate set that stayed red on a reviewed head.
 const DURABLE_FAILURES = new Set(['failed-preparation', 'failed-implement', 'failed-custody', 'failed-contract'])
 export const RECOVERY_FILE = 'recovery.json'
-export const RECOVERY_KINDS = ['gate-retry', 'base-sync', 'ci-rerun', 'worktree-clean', 'stage-retry']
+export const RECOVERY_KINDS = ['gate-retry', 'base-sync', 'ci-rerun', 'worktree-clean', 'stage-retry', 'resume']
 function readRecovery(dir) {
   try {
     return { failures: {}, rounds: [], ...JSON.parse(readFileSync(join(dir, RECOVERY_FILE), 'utf8')) }
@@ -2397,10 +2397,14 @@ function writeRecovery(dir, state) {
 // first handoff — `.attempt-N` retries are not progress), so a card that keeps advancing is never parked by
 // rounds an earlier step spent.
 const STEP_HANDOFF = /^[ar]\d+(?:-g\d+)?-[a-z-]+\.json$/
+// A step handoff re-created after `reset-group` set its predecessor aside is not progress (r1-1): the budget counts across resets.
+const RESET_ASIDE = /^reset-\d{4}-\d{2}-\d{2}(?:-\d+)?-(.+)$/
 function spentRounds(dir, rounds) {
   let since = 0
   try {
-    for (const f of readdirSync(dir)) if (STEP_HANDOFF.test(f)) since = Math.max(since, statSync(join(dir, f)).mtimeMs)
+    const files = readdirSync(dir)
+    const reset = new Set(files.map(f => RESET_ASIDE.exec(f)?.[1]).filter(Boolean))
+    for (const f of files) if (STEP_HANDOFF.test(f) && !reset.has(f)) since = Math.max(since, statSync(join(dir, f)).mtimeMs)
   } catch {}
   return rounds.filter(r => Date.parse(r.at) > since)
 }
@@ -2415,6 +2419,14 @@ export function recover({ dir, kind, detail = '', policy = {}, lockWaitMs = 5000
   mkdirSync(dir, { recursive: true })
   return withLock(dir, lockWaitMs, () => {
     const state = readRecovery(dir)
+    // r0-3: an explicit re-run lifts a process-budget park once (`resume`), apart from the rounds; the run's total is the budget.
+    if (kind === 'resume') {
+      const resumes = state.resumes ?? []
+      if (resumes.length >= budget)
+        return { allowed: false, round: resumes.length, budget, next: blocked('needs-human', { budget: 'autoRecoveryRounds', resumesSpent: true, detail: `autoRecoveryRounds (${budget}) re-run resumes spent — clear the cause, then a maintainer reset comment (reset-group) or a moved PR/base head resumes the run`.trim() }) }
+      writeRecovery(dir, { ...state, resumes: [...resumes, { detail, at: now.toISOString() }] })
+      return { allowed: true, round: resumes.length + 1, budget }
+    }
     const spent = spentRounds(dir, state.rounds)
     if (spent.length >= budget)
       return { allowed: false, round: spent.length, budget, next: blocked('needs-human', { budget: 'autoRecoveryRounds', detail: `autoRecoveryRounds (${budget}) spent — last: ${kind}: ${detail}`.trim(), rounds: spent }) }
@@ -2942,11 +2954,11 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     if (EXTERNAL_REFUSALS.has(d.status) || ctx.stale) {
       const spent = processBudgetSpent(byPhase('red-spec', last.phase).filter(h => EXTERNAL_REFUSALS.has(h.data.status)), last.phase, d.status)
       if (spent) return spent
-      const retry = { ...(ctx.stale ? { stale: true } : {}), attempt: byPhase('red-spec', last.phase).length + 1, detail: `retry after the ${d.status} refusal: ${d.reason ?? ''}`.trim() }
+      const retry = { ...(ctx.stale ? { stale: true } : {}), ...(EXTERNAL_REFUSALS.has(d.status) ? { refusal: d.status } : {}), attempt: byPhase('red-spec', last.phase).length + 1, detail: `retry after the ${d.status} refusal: ${d.reason ?? ''}`.trim() }
       // A revision a GREEN's contract gap opened is re-derived from that GREEN (its base, contract and gap findings), never from the refused attempt.
       const gapGreen = parts.revision > 1 ? list.filter(h => h.skill === 'green-fix' && h.data.contractGaps?.length && phaseParts(h.phase)?.groupId === parts.groupId).pop() : undefined
       if (gapGreen) return { ...gapRevision(gapGreen, gapGreen.data), ...retry }
-      return { ...(ctx.stale ? { stale: true } : {}), step: 'prepare', mode: d.mode ?? (parts.kind === 'initial' ? 'initial' : 'remediation'), phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, detail: `retry after the ${d.status} refusal: ${d.reason ?? ''}`.trim() }
+      return { ...(ctx.stale ? { stale: true } : {}), ...(EXTERNAL_REFUSALS.has(d.status) ? { refusal: d.status } : {}), step: 'prepare', mode: d.mode ?? (parts.kind === 'initial' ? 'initial' : 'remediation'), phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, detail: `retry after the ${d.status} refusal: ${d.reason ?? ''}`.trim() }
     }
     return blocked('failed-preparation', { refusal: d.status, detail: d.reason ?? d.splitReason, phase: last.phase })
   }
@@ -3523,7 +3535,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   const moved = !!recorded && Object.entries(heads).some(([k, v]) => recorded[k] !== undefined && recorded[k] !== v)
   // A `worktree-clean` round (the driver stashed what made the worktree dirty) after the failure was seen clears its cause too;
   // a spent process budget (AC-10, r1-3) is cleared by ANY recorded recovery round after it — the round is the act on its cause.
-  const cleaned = !!recorded && recovery.rounds.some(r => r.at >= recorded.at && (recorded.budget === 'autoRecoveryRounds' || (recorded.reason === 'failed-preparation' && r.kind === 'worktree-clean')))
+  const cleaned = !!recorded && [...recovery.rounds, ...(recorded.budget === 'autoRecoveryRounds' ? recovery.resumes ?? [] : [])].some(r => r.at >= recorded.at && (recorded.budget === 'autoRecoveryRounds' || (recorded.reason === 'failed-preparation' && r.kind === 'worktree-clean')))
   const stale = !!recorded && (recorded.stale !== undefined || moved || cleaned)
   let next = deriveNext(handoffs, policy, { entry, head, stale, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger, approvals: readApprovals(dir) })
   if (stale && next.step !== 'blocked') {
@@ -3750,8 +3762,13 @@ export function resetGroup({ dir, phase, reason, by, now = new Date(), workflowV
       if (!existsSync(cp)) return false
       try { return contractHash(JSON.parse(readFileSync(cp, 'utf8'))) === h.data.contractHash } catch { return false }
     }
+    // An automatic reset for a process fault (`reason` a catalogued process code) never sets aside a genuine rejection
+    // (an intact contract judged): that would refund redRepairs (r1-1) — it is kept as the boundary. A maintainer's
+    // reset (free-text reason) may still drop a rejected tail.
+    const automatic = isProcessFault({ processFault: String(reason).split(':', 1)[0] })
     const clean = [...inGroup].reverse().find(h =>
       (h.skill === 'red-verify' && h.data?.verified === true && h.data.sealed === true) ||
+      (automatic && h.skill === 'red-verify' && h.data?.verified !== true && !isProcessFault(h.data)) ||
       (h.skill === 'red-spec' && h.data?.status === 'red' && contractIntact(h) && !isProcessFault(h.data)) ||
       (h.skill === 'green-fix' && h.data?.fixed === true && !isProcessFault(h.data)))
     const start = clean ? handoffs.indexOf(clean) + 1 : handoffs.indexOf(inGroup[0])

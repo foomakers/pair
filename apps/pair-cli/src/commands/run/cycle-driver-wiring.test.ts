@@ -199,6 +199,58 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     expect(rounds.map(r => r.kind)).toEqual(['stage-retry'])
   }, 60_000)
 
+  // #646 round 2 — r1-2, the class: each process refusal a preparation retry follows runs ITS recovery before the
+  // dispatch, under a recorded round — dirty ⇒ worktree-clean (saved at a recorded ref), stale ⇒ base-sync (a merge).
+  it.each([
+    ['dirty', 'worktree-clean'],
+    ['stale', 'base-sync'],
+  ])(
+    '#646 r1-2: a prepare retry after a %s refusal runs %s before the dispatch',
+    async (refusal, kind) => {
+      vi.mocked(runCycle).mockClear()
+      await drive(ENGINES.claude)
+      const input = vi.mocked(runCycle).mock.calls[0]?.[0]
+      const tree = join(root, 'pair-worktrees', '7')
+      const sh = (cwd: string, ...args: string[]) =>
+        execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+          cwd,
+          encoding: 'utf8',
+        }).trim()
+      writeFileSync(join(tree, 'stray.txt'), 'x')
+      // the base moved under the branch: a commit only origin/main has
+      sh(main, 'commit', '-q', '--allow-empty', '-m', 'base moved')
+      const moved = sh(main, 'rev-parse', 'HEAD')
+      sh(main, 'update-ref', 'refs/remotes/origin/main', moved)
+      const before = sh(tree, 'rev-parse', 'HEAD')
+      // the drive above spent the run's one round on its dead dispatch: start this recovery from a fresh record
+      rmSync(join(main, '.pair/working/runs/story-7/7/recovery.json'), { force: true })
+
+      const park = await input?.beforePrepare?.({
+        step: 'prepare',
+        phase: 'a0',
+        attempt: 2,
+        refusal,
+      })
+
+      expect(park).toBeUndefined()
+      const recovery = JSON.parse(
+        readFileSync(join(main, '.pair/working/runs/story-7/7/recovery.json'), 'utf8'),
+      ) as {
+        rounds: { kind: string }[]
+        stashes?: { ref: string }[]
+      }
+      expect(recovery.rounds.map(r => r.kind)).toContain(kind)
+      expect(existsSync(join(tree, 'stray.txt'))).toBe(false)
+      if (refusal === 'dirty')
+        expect(recovery.stashes?.[0]?.ref).toMatch(/^refs\/pair\/recovery\/7\//)
+      else {
+        expect(sh(tree, 'rev-parse', 'HEAD^1')).toBe(before) // merged on top of the branch, never rebased
+        expect(sh(tree, 'rev-parse', 'HEAD^2')).toBe(moved)
+      }
+    },
+    60_000,
+  )
+
   it("US-623 AC6/r0-2: the production driver hands runCycle a beforePrepare that stashes the failed attempt's stray files", async () => {
     vi.mocked(runCycle).mockClear()
     await drive(ENGINES.claude)

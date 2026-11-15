@@ -692,3 +692,76 @@ describe('US-623 AC6 — stray files of a failed attempt are stashed before the 
     expect(await run({ ...PREPARE_A0, mode: 'repair', attempt: 2 })).toEqual(['spawn'])
   })
 })
+
+// #646 round 2 — r0-3: the process-budget park resolve reports is lifted by an explicit re-run (its FIRST answer), once.
+describe('runCycle — re-run resume of a process-budget park (#646 r0-3)', () => {
+  const PARK = { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds', phase: 'a0' }
+  const ok = async (): Promise<CycleStageResult> => ({ processOutcome: 'success' })
+
+  it('a re-run whose first answer is the park lifts it once and the cycle goes on', async () => {
+    const resumePark = vi.fn(async () => ({ resumed: true }))
+    const outcome = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'blocked', next: PARK },
+        { status: 'completed', next: DONE },
+      ]),
+      worktree,
+      packet,
+      spawnStage: ok,
+      policy: {},
+      resumePark,
+    })
+    expect(resumePark).toHaveBeenCalledTimes(1)
+    expect(outcome.status).toBe('ready-for-merge')
+  })
+
+  it('spent resumes keep the park and say so — never a false "re-run to resume"', async () => {
+    const detail = 'autoRecoveryRounds (1) re-run resumes spent — clear the cause'
+    const outcome = await runCycle({
+      resolve: scriptedResolve([{ status: 'blocked', next: PARK }]),
+      worktree,
+      packet,
+      spawnStage: ok,
+      policy: {},
+      resumePark: async () => ({ resumed: false, detail }),
+    })
+    expect(outcome).toMatchObject({ status: 'awaiting-human', reason: detail, resumesSpent: true })
+  })
+
+  it('a park reached after a dispatch of this invocation is not lifted by it', async () => {
+    const resumePark = vi.fn(async () => ({ resumed: true }))
+    const outcome = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: IMPLEMENT_A0 },
+        { status: 'blocked', next: PARK },
+      ]),
+      worktree,
+      packet,
+      spawnStage: ok,
+      policy: {},
+      resumePark,
+    })
+    expect(resumePark).not.toHaveBeenCalled()
+    expect(outcome.status).toBe('awaiting-human')
+  })
+
+  it('#646 r1-2: a prepare retry whose process recovery refuses parks before any dispatch', async () => {
+    const spawnStage = vi.fn(ok)
+    const outcome = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: { ...PREPARE_A0, attempt: 2, refusal: 'stale' } },
+      ]),
+      worktree,
+      packet,
+      spawnStage,
+      policy: {},
+      beforePrepare: async () => 'base-sync refused: sealed snapshot is not an ancestor of HEAD',
+    })
+    expect(spawnStage).not.toHaveBeenCalled()
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'prepare:a0:stale',
+      reason: 'base-sync refused: sealed snapshot is not an ancestor of HEAD',
+    })
+  })
+})

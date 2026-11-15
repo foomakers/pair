@@ -858,7 +858,7 @@ terminal status, one fresh engine process per stage. **Review** re-enters the cy
 
 Review findings still go through `prepare → validate → green`, their failing tests written by someone other than the fixer. A run directory already on the old sealed-`a0` path finishes under its own rules.
 
-Process faults use a separate recovery budget and a recorded resume token. Re-run `pair-cli run --card 123` to continue a parked card without editing handoffs. The cycle resets a faulted group after its last clean attempt; sealed attempts remain intact. A sealed branch sync merges the base and checks custody with `--base-ref`.
+Process faults use a separate recovery budget and a recorded resume token. Re-run `pair-cli run --card 123` to continue a parked card without editing handoffs: each re-run lifts a spent process budget once (at most `autoRecoveryRounds` re-runs per run); a `stale` preparation merges the base before it is retried. The cycle resets a faulted group after its last clean attempt; sealed attempts remain intact. A sealed branch sync merges the base and checks custody with `--base-ref`.
    - **Not ready yet** ⇒ it routes to the preparation skill that gap calls for (`pair-process-refine-story` for a Draft, `pair-process-plan-tasks` for a Ready card with no
      breakdown) and says which one it chose and why. It does **not** start a cycle on a card that
      cannot yet produce an acceptance contract. On a board with no state mapped to Ready, the

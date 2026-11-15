@@ -536,7 +536,9 @@ function reportOutcome(
   reportCycleReason(outcome.next)
   if (outcome.resumeToken !== undefined)
     console.log(
-      `  Parked (process fault) — resume token ${outcome.resumeToken}: re-run pair run --card to resume`,
+      outcome.resumesSpent === true
+        ? `  Parked (process fault) — resume token ${outcome.resumeToken}: ${outcome.reason ?? 'the re-run resumes are spent'}`
+        : `  Parked (process fault) — resume token ${outcome.resumeToken}: a re-run of pair run --card resumes it once, within autoRecoveryRounds`,
     )
   onOutcome?.(outcome)
   return exitCodeFor(outcome)

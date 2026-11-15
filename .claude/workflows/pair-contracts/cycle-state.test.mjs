@@ -493,6 +493,73 @@ for (const fault of STOP_CATALOG.filter(r => r.class === 'process').map(r => r.s
   })
 }
 
+// #646 round 2 — r0-3: a park with the heads unchanged is lifted by an explicit re-run (`recover --kind resume`), once per
+// resume, within the run's autoRecoveryRounds; the resumes spent, the park stands and says why.
+test('AC-10 (r0-3): two gate-flaked implementations park; a re-run resume re-derives the retry; spent resumes keep the park with its true reason', () => {
+  const { dir } = runDir()
+  const policy = { ...POLICY, autoRecoveryRounds: 1 }
+  const R = () => resolve({ dir, workflowVersion: V, policy, entry: 'fresh', head: SHA('a'), baseHead: SHA('b') }).next
+  const flake = attempt => handoff(dir, 'a0', 'implement-phase', { status: 'failed', gatesPassed: false, processFault: 'gate-flake', reason: 'gate killed' }, { attempt })
+  flake(1)
+  flake(2)
+  assert.deepEqual(pick(R(), 'step', 'reason', 'budget'), { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds' })
+  assert.equal(R().step, 'blocked', 'unchanged heads, no act: the park holds')
+  assert.equal(recover({ dir, kind: 'resume', detail: 're-run', policy }).allowed, true)
+  assert.deepEqual(pick(R(), 'step', 'mode', 'attempt'), { step: 'implement', mode: 'retry', attempt: 3 })
+  flake(3)
+  assert.equal(R().step, 'blocked', 'the retry flaked again: parked again')
+  const spent = recover({ dir, kind: 'resume', detail: 're-run', policy })
+  assert.equal(spent.allowed, false)
+  assert.match(spent.next.detail, /resumes spent — clear the cause, then a maintainer reset comment \(reset-group\) or a moved PR\/base head/)
+  assert.equal(R().step, 'blocked', 'a refused resume clears nothing')
+})
+
+// #646 round 2 — r1-1: reset-group never sets aside a genuine rejection, and the process budget counts across resets.
+const waitMs = ms => { const end = Date.now() + ms; while (Date.now() < end); }
+test('AC-21/AC-22 (r1-1): a genuine rejection survives reset-group (redRepairs stays spent); contract faults past the budget park at the 3rd loop', () => {
+  const policy = { ...POLICY, autoRecoveryRounds: 2 }
+  const { dir } = runDir()
+  redSpec(dir, 'r1-g1')
+  waitMs(5)
+  redVerify(dir, 'r1-g1', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: rejectionOf(['row-1']) }, { predecessor: 'r1-g1-red-spec' })
+  const loops = []
+  for (let loop = 1; loop <= 6; loop++) {
+    waitMs(5)
+    const rc = recover({ dir, kind: 'stage-retry', detail: 'prepare contract-hash-mismatch', policy })
+    loops.push(rc.allowed)
+    if (!rc.allowed) break
+    const rs = resetGroup({ dir, phase: 'r1-g1', reason: 'contract-hash-mismatch', by: 'driver', workflowVersion: V, policy, entry: 'pr', pr: 7 })
+    assert.equal(rs.reset, false, 'the genuine rejection is the boundary: nothing to set aside')
+  }
+  assert.deepEqual(loops, [true, true, false])
+  assert.equal(existsSync(join(dir, 'r1-g1-red-verify.json')), true, 'the rejection is preserved')
+  // a faulted tail IS reset — and its re-creation is not progress: the rounds keep counting across the resets
+  const { dir: d2 } = runDir()
+  redSpec(d2, 'r1-g1')
+  const counted = []
+  for (let loop = 1; loop <= 6; loop++) {
+    waitMs(5)
+    redVerify(d2, 'r1-g1', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: [], processFault: 'contract-hash-mismatch' }, { predecessor: 'r1-g1-red-spec' })
+    waitMs(5)
+    const rc = recover({ dir: d2, kind: 'stage-retry', detail: 'validate contract-hash-mismatch', policy })
+    counted.push(rc.allowed)
+    if (!rc.allowed) break
+    assert.equal(resetGroup({ dir: d2, phase: 'r1-g1', reason: 'contract-hash-mismatch', by: 'driver', workflowVersion: V, policy, entry: 'pr', pr: 7 }).reset, true)
+  }
+  assert.deepEqual(counted, [true, true, false])
+})
+
+// #646 round 2 — r1-2, the class: every external (process) preparation refusal hands its retry the refusal it follows,
+// so each driver runs that refusal's recovery (dirty ⇒ worktree-clean, stale ⇒ base-sync) before re-preparing.
+const EXTERNAL = [...readFileSync(new URL('../../skills/pair-workflow-cycle/scripts/cycle-state.mjs', import.meta.url), 'utf8').match(/const EXTERNAL_REFUSALS = new Set\(\[([^\]]+)\]/)[1].matchAll(/'([^']+)'/g)].map(m => m[1])
+for (const refusal of EXTERNAL) {
+  test(`AC-10/AC-13 (r1-2): a ${refusal} preparation refusal's retry names the refusal it follows`, () => {
+    const { dir } = runDir()
+    handoff(dir, 'a0', 'red-spec', { status: refusal, mode: 'initial', reason: 'outside the cycle' })
+    assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' }).next, 'step', 'attempt', 'refusal'), { step: 'prepare', attempt: 2, refusal })
+  })
+}
+
 test('AC-10 (r1-3): a process-budget park clears once its cause is acted on (a recorded recovery round) or the heads move — never sticky', () => {
   const policy = { ...POLICY, autoRecoveryRounds: 2 }
   const PARK = { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds' }

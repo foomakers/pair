@@ -183,7 +183,15 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
   it('AC-22 (r1-2): resetGroup sets an unusable unsealed tail aside through the installed script bridge', () => {
     const dir = join(runsRoot, 'story-487/487')
     mkdirSync(dir, { recursive: true })
-    const tail = { phase: 'r1-g1', skill: 'red-verify', seq: 1, verified: false, sealed: false }
+    // a faulted tail (a genuine rejection is a kept verdict, never set aside by an automatic reset)
+    const tail = {
+      phase: 'r1-g1',
+      skill: 'red-verify',
+      seq: 1,
+      verified: false,
+      sealed: false,
+      processFault: 'contract-hash-mismatch',
+    }
     writeFileSync(join(dir, 'r1-g1-red-verify.json'), JSON.stringify(tail))
     const result = bridge().resetGroup({
       dir,

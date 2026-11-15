@@ -1845,7 +1845,23 @@ async function driveStoryInner(story) {
     if (n.budget === 'autoRecoveryRounds') return result('awaiting-human', { reason: n.detail ?? n.reason, budget: n.budget, phase: n.phase, resumeToken: `${runId}:${story.id}:${n.phase ?? 'run'}:autoRecoveryRounds` })
     return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
   }
+  // r0-3: an explicit re-run lifts the process-budget park `resolve` reports — once per invocation, only before this
+  // invocation spent a recovery round of its own (a park reached mid-run stays parked), within the run's resume budget.
+  let recoveredThisRun = false
+  let resumedThisRun = false
+  const resumePark = async n => {
+    if (recoveredThisRun || resumedThisRun) return false
+    resumedThisRun = true
+    const out = await dispatch(
+      `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs recover --dir ${runDir()} --kind resume --policy '${JSON.stringify(policy)}'`,
+      withModel('relay', { phase: 'Recovery', label: `recover:resume:${tag}`, effort: 'low' }),
+    )
+    if (out?.allowed === true) return true
+    if (out?.next?.detail) n.detail = out.next.detail
+    return false
+  }
   const recoverProcess = async (fault, due) => {
+    recoveredThisRun = true
     const faultKind = contractProcessFaultKind(fault) ?? fault
     const kind = fault === 'dirty' ? 'worktree-clean' : fault === 'stale' ? 'base-sync' : 'stage-retry'
     const token = `${runId}:${story.id}:${due.phase}:${faultKind}`
@@ -1862,7 +1878,8 @@ async function driveStoryInner(story) {
         withModel('relay', { phase: 'Recovery', label: `recover:${faultKind}:${tag}`, effort: 'low' }),
       )
       if (reset?.reset === true && nextDefect(reset.next) === null) return { next: reset.next }
-      if (reset?.reason === 'reset-group-not-tail') return { next: due.next ?? due }
+      // Nothing unusable to set aside (no tail of this group, or its tail is a kept verdict): the round was spent, retry the step.
+      if (reset?.reason === 'reset-group-not-tail' || reset?.reason === 'reset-group-sealed-or-clean') return { next: due.next ?? due }
       return { park: park(reset?.reason ?? `${faultKind}: reset-group failed`) }
     }
     if (fault === 'dirty' || fault === 'stale') {
@@ -2013,6 +2030,12 @@ async function driveStoryInner(story) {
       if (!AUTONOMY.merging) return result('ready-for-merge', ready)
       showStage('merge')
       return mergeStage({ story, runDirPath: runDir(), pr, tier: story.tier ?? cardTier, ready, result })
+    }
+    if (next.step === 'blocked' && next.budget === 'autoRecoveryRounds' && (await resumePark(next))) {
+      // the park is lifted: the first guess again — its stage resolves the durable state and redirects to the step now due
+      next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
+      seen.clear()
+      continue
     }
     if (next.step === 'blocked') return blockedResult(next)
     const key = `${next.step}:${next.phase}:${next.mode ?? ''}:${next.attempt ?? 1}:${next.reviewer ?? 1}`

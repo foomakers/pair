@@ -434,6 +434,58 @@ for (const stage of ['prepare', 'validate', 'implement', 'green'])
     })
   }
 
+// #646 round 2 — r0-3: a re-run whose first answer is resolve's process-budget park lifts it once (`recover --kind resume`);
+// a park reached mid-run is never lifted by the same invocation; spent resumes keep the park with their true reason.
+const PARK = { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds', phase: 'a0', detail: 'autoRecoveryRounds (1) spent on a0 — last: gate-flake' }
+const rerun = resume => {
+  const std = stdDispatch()
+  let parked = 0
+  return runWorkflow({ args: { cards: [STORY] }, entry: 'fresh', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:resume')) return resume
+    if (opts.agentType === 'pair-implementer' && parked++ === 0) return { status: 'redirect', next: PARK }
+    return std(prompt, opts)
+  } })
+}
+test('AC-10 (r0-3): a re-run lifts the process-budget park once and the card resumes', async () => {
+  const { result, calls } = await rerun({ allowed: true, round: 1, budget: 1 })
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  const relay = calls.filter(c => c.opts.label?.startsWith('recover:resume'))
+  assert.equal(relay.length, 1)
+  assert.match(relay[0].prompt, /recover --dir \S+ --kind resume/)
+})
+test('AC-10 (r0-3): spent re-run resumes keep the park, saying a re-run alone no longer resumes it', async () => {
+  const detail = 'autoRecoveryRounds (1) re-run resumes spent — clear the cause, then a maintainer reset comment (reset-group) or a moved PR/base head resumes the run'
+  const { result } = await rerun({ allowed: false, next: { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds', detail } })
+  assert.equal(result.batch[0].status, 'awaiting-human')
+  assert.equal(result.batch[0].reason, detail)
+  assert.match(result.batch[0].resumeToken, /autoRecoveryRounds$/)
+})
+test('AC-10 (r0-3): a park reached after this run spent its own recovery is not lifted in the same run', async () => {
+  const std = stdDispatch()
+  let implementation = 0
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, entry: 'fresh', dispatch: (prompt, opts) => {
+    if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 1 }
+    if (opts.agentType === 'pair-implementer' && implementation++ === 0) return { status: 'failed', gatesPassed: false, processFault: 'gate-flake', reason: 'gate killed', next: PARK }
+    return std(prompt, opts)
+  } })
+  assert.equal(result.batch[0].status, 'awaiting-human')
+  assert.equal(calls.some(c => c.opts.label?.startsWith('recover:resume')), false)
+})
+// #646 round 2 — r1-1: a contract fault whose group has nothing unusable to set aside (a kept verdict, or no tail) retries
+// under the round it spent — never a park on the first fault.
+for (const reason of ['reset-group-not-tail', 'reset-group-sealed-or-clean'])
+  test(`AC-22 (r1-1): reset-group answering ${reason} retries the step under the spent round`, async () => {
+    const std = stdDispatch()
+    let prepare = 0
+    const { result } = await runWorkflow({ args: { cards: [STORY] }, entry: 'legacy', dispatch: (prompt, opts) => {
+      if (opts.label?.startsWith('recover:budget')) return { allowed: true, round: 1, budget: 5 }
+      if (opts.label?.startsWith('recover:contract-hash-mismatch')) return { reset: false, reason }
+      if (opts.agentType === 'pair-fix-test-author' && prepare++ === 0) return { status: 'failed', reason: 'contract-hash-mismatch', processFault: 'contract-hash-mismatch' }
+      return std(prompt, opts)
+    } })
+    assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  })
+
 test('AC-10: a declared gate flake retries under process budget', async () => {
   const std = stdDispatch()
   let implementation = 0
@@ -543,7 +595,7 @@ test('TC-11: the workflow source dispatches ONLY skill invocations — no free-f
   // the prepare phase (cycle-prepare.mjs). No rule lives in them.
   const scriptRunners = all.filter(d => /^`(Run (?:EXACTLY|exactly)|Card )/.test(d))
   const dispatches = all.filter(d => !scriptRunners.includes(d))
-  assert.equal(scriptRunners.length, 15, `expected ten existing relays and five process recovery relays, found ${scriptRunners.length}`)
+  assert.equal(scriptRunners.length, 16, `expected ten existing relays and six process recovery relays (incl. the re-run resume), found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)

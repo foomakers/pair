@@ -79,6 +79,8 @@ export interface CycleOutcome {
   readonly reason?: string
   /** AC-10: a process park (`awaiting-human`) names the parked step and fault; `pair run --card N` resumes it. */
   readonly resumeToken?: string
+  /** r0-3: the park outlived every re-run resume — a re-run alone no longer resumes it. */
+  readonly resumesSpent?: true
 }
 
 export interface CyclePolicy {
@@ -131,8 +133,17 @@ export interface RunCycleInput {
    * the cause is cleared and `resolve` re-derives the step; `false` (budget spent, no worktree) ⇒ the card stays blocked.
    */
   readonly recoverDirty?: (next: CycleNext) => Promise<boolean>
-  /** US-623 AC6: runs before a `prepare` dispatch beyond attempt 1 — stashes the files a failed attempt left, so they never block it. */
-  readonly beforePrepare?: (next: CycleNext) => Promise<void>
+  /**
+   * US-623 AC6: runs before a `prepare` dispatch beyond attempt 1 — stashes the files a failed attempt left, so they never
+   * block it; after a `dirty` / `stale` refusal (`next.refusal`) it runs that process recovery (worktree-clean / base-sync,
+   * merge only). A returned string is the park reason (recovery spent, or the sync refused): the card parks, no dispatch.
+   */
+  readonly beforePrepare?: (next: CycleNext) => Promise<string | void>
+  /**
+   * r0-3: an explicit re-run whose first `resolve` is a spent process budget lifts it once (`recover --kind resume`).
+   * `resumed: false` ⇒ the park stands, carrying `detail` (the resumes are spent too).
+   */
+  readonly resumePark?: (next: CycleNext) => Promise<{ resumed: boolean; detail?: string }>
   /**
    * A process fault (`PROCESS_STOPS`: a stage's process reason, or a dispatch dead or stalled past its budget): spend a
    * recovery round (and reset the group for a contract-identity fault), then re-dispatch. `false` (budget spent) ⇒ the
@@ -180,6 +191,8 @@ interface LoopState {
   worktreePath: string | undefined
   /** US-575: the `next` a recovered merge stage last resumed from. */
   resumedFrom?: CycleNext
+  /** r0-3: this invocation already tried its one re-run resume. */
+  resumeTried?: boolean
 }
 
 function buildStageRecord(
@@ -284,7 +297,7 @@ function deliberateOutcome(
 ): CycleOutcome | null {
   const reason = deliberateStop(record.final)
   if (reason === undefined) return null
-  if (processKind(reason) !== undefined) return processPark(state, next, record.step, reason)
+  if (processKind(reason) !== undefined) return processPark(state, next, reason)
   observers.onNotice?.(
     `Stage ${record.step}${record.phase ? `:${record.phase}` : ''} stopped the card: ${reason} — not retried.`,
   )
@@ -343,7 +356,7 @@ function settlePreviousDispatch(
   if (deliberate !== null) return deliberate
   if (state.retryCount >= deadDispatchRetries) {
     const fault = record.stalled === true ? 'idle-timeout' : 'dead-dispatch'
-    return processPark(state, next, state.dispatchedNext.step, fault)
+    return processPark(state, next, fault)
   }
   state.retryCount += 1
   // US-506 T-8 (AC12): a stall is resumed within the SAME budget as a dead dispatch. A process
@@ -392,13 +405,19 @@ const processKind = (reason: string): string | undefined => {
 }
 
 /** AC-10: a process fault's park — `awaiting-human` with the token naming the step and fault; recovery may lift it. */
-function processPark(state: LoopState, next: CycleNext, step: string, fault: string): CycleOutcome {
-  const token = `${step}:${String(next.phase ?? 'run')}:${processKind(fault) ?? fault}`
+function processPark(
+  state: LoopState,
+  next: CycleNext,
+  fault: string,
+  detail: string = fault,
+): CycleOutcome {
+  // `next` is the step that did not advance (or is about to run): the parked step
+  const token = `${next.step}:${String(next.phase ?? 'run')}:${processKind(fault) ?? fault}`
   return {
     status: 'awaiting-human',
     stagesRun: state.stagesRun,
     next,
-    reason: fault,
+    reason: detail,
     resumeToken: token,
   }
 }
@@ -523,12 +542,33 @@ async function terminalOrResume(
   answer: CycleResolveAnswer,
 ): Promise<CycleOutcome | null> {
   if (await recoveredDirty(input, state, next)) return null
+  const resumed = await resumedPark(input, state, next)
+  if (resumed === true) return null
+  if (resumed !== false)
+    return { ...terminalOutcome(next, state.stagesRun), reason: resumed, resumesSpent: true }
   const outcome = await terminalStep(input, state, next, answer)
   if (outcome.resume !== true || sameNext(state.resumedFrom, next)) return outcome
   state.resumedFrom = next
   state.stagesRun = outcome.stagesRun
   state.dispatchedNext = null
   return null
+}
+
+/**
+ * r0-3: the first answer of an explicit re-run is a spent process budget — lift it once. `true` resumed, `false` not
+ * applicable, a string: the resumes are spent too (the park's true reason).
+ */
+async function resumedPark(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+): Promise<boolean | string> {
+  if (next.step !== 'blocked' || next['budget'] !== 'autoRecoveryRounds') return false
+  if (state.stagesRun > 0 || state.resumeTried === true || input.resumePark === undefined)
+    return false
+  state.resumeTried = true
+  const out = await input.resumePark(next)
+  return out.resumed ? true : (out.detail ?? 'autoRecoveryRounds re-run resumes spent')
 }
 
 /** Once per distinct `next` (never a spin): a dirty-worktree refusal the driver could clear. */
@@ -568,9 +608,16 @@ const MERGE_RAN = new Set(['merged', 'merged-closure-unfinished'])
  * collaborator's (US-490: `cycle-merge.mjs` re-verifies its own conjunction) — never this loop.
  */
 /** US-623 AC6: a `prepare` beyond attempt 1 starts from a clean tree — except a `repair`, which works on its predecessor's untracked contract files. */
-async function cleanBeforePrepare(input: RunCycleInput, next: CycleNext): Promise<void> {
-  if (next.step === 'prepare' && next['mode'] !== 'repair' && Number(next['attempt']) > 1)
-    await input.beforePrepare?.(next)
+async function cleanBeforePrepare(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+): Promise<CycleOutcome | null> {
+  if (next.step !== 'prepare' || next['mode'] === 'repair' || Number(next['attempt']) <= 1)
+    return null
+  const park = await input.beforePrepare?.(next)
+  if (typeof park !== 'string') return null
+  return processPark(state, next, String(next['refusal'] ?? 'stale'), park)
 }
 
 /** US-573: tells the live-progress observer, if any, which stage is about to run. */
@@ -619,7 +666,8 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
 
-    await cleanBeforePrepare(input, next)
+    const parked = await cleanBeforePrepare(input, state, next)
+    if (parked !== null) return parked
     announce(input, next)
     const stagePacket = await packet(next)
     state.dispatchedResult = await spawnStage(withFormatCorrection(stagePacket, state))

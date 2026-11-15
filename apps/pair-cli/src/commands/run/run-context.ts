@@ -78,6 +78,8 @@ export interface DriveCycleResult {
   readonly merge?: unknown
   /** AC-10: a process park's resume token — `pair run --card N` resumes the parked step. */
   readonly resumeToken?: string
+  readonly resumesSpent?: true
+  readonly reason?: string
 }
 
 /** US-487: drives one story's delivery cycle to its next terminal state (or the `--rounds` bound). */
