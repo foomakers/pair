@@ -4,15 +4,7 @@
 // reimplemented here: its `node --test` invocation is read from package.json / ci.yml, then RUN
 // against an isolated copy of scripts/dev with an injected regression.
 import { spawnSync } from 'child_process'
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  symlinkSync,
-  writeFileSync,
-} from 'fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { describe, expect, it } from 'vitest'
@@ -86,7 +78,7 @@ const requireOne = (found: Invocation[], where: string): Invocation => {
   return found[0] as Invocation
 }
 
-// an isolated copy of what the suites read, including the real workflow and formatter producers
+// an isolated copy of what the suites read, including the real workflow producers
 const sandbox = (mutate?: (root: string) => void): string => {
   const root = mkdtempSync(join(tmpdir(), 'devgate-'))
   cpSync(DEV, join(root, 'scripts/dev'), { recursive: true })
@@ -94,12 +86,6 @@ const sandbox = (mutate?: (root: string) => void): string => {
     '.claude/settings.json',
     '.claude/workflows/pair-implement-batch.js',
     'packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js',
-    'scripts/format-lib/run-format.sh',
-    'scripts/format-lib/git-tracked-paths.sh',
-    'tools/prettier-config/bin/prettier-check.sh',
-    'tools/prettier-config/bin/prettier-fix.sh',
-    'tools/prettier-config/bin/_ignore-args.sh',
-    'tools/prettier-config/.prettierignore',
   ]) {
     mkdirSync(join(root, file, '..'), { recursive: true })
     cpSync(join(REPO_ROOT, file), join(root, file))
@@ -108,10 +94,6 @@ const sandbox = (mutate?: (root: string) => void): string => {
     join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts'),
     join(root, '.claude/skills/pair-workflow-cycle/scripts'),
     { recursive: true },
-  )
-  symlinkSync(
-    join(REPO_ROOT, 'tools/prettier-config/node_modules'),
-    join(root, 'tools/prettier-config/node_modules'),
   )
   mutate?.(root)
   return root

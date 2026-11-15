@@ -28,10 +28,6 @@ if [ -n "$_ignore_git_root" ]; then
   _ignore_git_root="$(cd "$_ignore_git_root" && pwd -P)"
 fi
 
-if [ -n "$_ignore_git_root" ] && [ -f "$_ignore_git_root/.prettierignore" ]; then
-  set -- "$@" --ignore-path "$_ignore_git_root/.prettierignore"
-fi
-
 if [ -n "$_ignore_git_root" ] && [ -f "$_ignore_git_root/.gitignore" ]; then
   set -- "$@" --ignore-path "$_ignore_git_root/.gitignore"
 fi
