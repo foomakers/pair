@@ -20,9 +20,14 @@ const engineBlock = (idleTimeout: number) =>
 
 describe('r0-4: idle and total timeouts are bounded to what setTimeout can hold', () => {
   it('#617 AC-2: agent idle timeout precedes run default and legacy', () => {
-    const config = { engine: { id: 'pi', idleTimeout: 10 }, run: { defaults: { idleTimeout: 20 }, agents: { pi: { idleTimeout: 30 } } } }
+    const config = {
+      engine: { id: 'pi', idleTimeout: 10 },
+      run: { defaults: { idleTimeout: 20 }, agents: { pi: { idleTimeout: 30 } } },
+    }
     expect(declaredRunIdleTimeout(config as never, 'pi')).toBe(30)
-    expect(declaredRunIdleTimeout({ ...config, run: { defaults: { idleTimeout: 20 } } } as never, 'pi')).toBe(20)
+    expect(
+      declaredRunIdleTimeout({ ...config, run: { defaults: { idleTimeout: 20 } } } as never, 'pi'),
+    ).toBe(20)
   })
   it('W-r0-4a: --idle-timeout above 2147483 s is refused', () => {
     expect(() => parseRunCommand({ idleTimeout: OVER })).toThrow(/--idle-timeout/)

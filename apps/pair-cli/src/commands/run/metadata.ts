@@ -185,7 +185,7 @@ export const runCommandMetadata = {
     {
       flags: '--profile <name>',
       description:
-        'With --card, --root or --parallel (forwarded to every child card): the named workflow profile (per-stage engine/model/effort/context) from pair.config.json workflowProfiles; an unknown name halts profile-unresolved',
+        'With --card, --root or --parallel: select a workflow profile for stage engine/model/effort/context; run.defaults and run.agents provide fallbacks. An unknown name halts profile-unresolved',
     },
     {
       flags: '--workflow-config <path>',

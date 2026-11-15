@@ -112,7 +112,19 @@ describe('US-573 AC5: engine.idleTimeout', () => {
 
 describe('#617 AC-2/5: run defaults and per-agent declarations', () => {
   it('reads sparse defaults and agent settings without selecting an engine from an agent', () => {
-    expect(readRunDeclaration({ run: { defaults: { engine: 'pi', model: 'base', idleTimeout: 30 }, agents: { pi: { command: '/opt/pi', args: ['--literal', '$(touch x)'], model: 'agent' } } } }, KNOWN)).toEqual({
+    expect(
+      readRunDeclaration(
+        {
+          run: {
+            defaults: { engine: 'pi', model: 'base', idleTimeout: 30 },
+            agents: {
+              pi: { command: '/opt/pi', args: ['--literal', '$(touch x)'], model: 'agent' },
+            },
+          },
+        },
+        KNOWN,
+      ),
+    ).toEqual({
       defaults: { engine: 'pi', model: 'base', idleTimeout: 30 },
       agents: { pi: { command: '/opt/pi', args: ['--literal', '$(touch x)'], model: 'agent' } },
       errors: [],

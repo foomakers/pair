@@ -7,7 +7,13 @@ import { declaredEngine, declaredEngineModel } from './run-context'
 
 describe('resolveEngine', () => {
   it('#617 AC-2: run defaults select engine and model above legacy declarations', () => {
-    const config = { engine: { id: 'claude', model: { claude: 'claude-legacy', pi: 'provider/legacy' } }, run: { defaults: { engine: 'pi', model: 'provider/run' }, agents: { pi: { model: 'provider/agent' } } } }
+    const config = {
+      engine: { id: 'claude', model: { claude: 'claude-legacy', pi: 'provider/legacy' } },
+      run: {
+        defaults: { engine: 'pi', model: 'provider/run' },
+        agents: { pi: { model: 'provider/agent' } },
+      },
+    }
     expect(declaredEngine(config as never)).toBe('pi')
     expect(declaredEngineModel(config as never, 'pi')).toBe('provider/agent')
   })

@@ -205,11 +205,15 @@ export function resolveEngineFor(
   cwd: string,
   fs: FileSystemService,
 ): EngineDefinition {
-  return assertEngineAvailable(withRunAgentRunner(engine, context.config), createExecutableProbe(fs), {
-    fs,
-    repoRoot: cwd,
-    declaredBin: declaredEngineBin(context.config),
-  })
+  return assertEngineAvailable(
+    withRunAgentRunner(engine, context.config),
+    createExecutableProbe(fs),
+    {
+      fs,
+      repoRoot: cwd,
+      declaredBin: declaredEngineBin(context.config),
+    },
+  )
 }
 
 interface DriverInput {

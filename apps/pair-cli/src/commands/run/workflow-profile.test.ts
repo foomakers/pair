@@ -148,7 +148,12 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
   })
 
   it('#617 AC-2: --engine selects its agent model above run defaults without a false contradiction', () => {
-    write('pair.config.json', { run: { defaults: { engine: 'claude', model: 'claude-run' }, agents: { codex: { model: 'gpt-6-sol' } } } })
+    write('pair.config.json', {
+      run: {
+        defaults: { engine: 'claude', model: 'claude-run' },
+        agents: { codex: { model: 'gpt-6-sol' } },
+      },
+    })
     const p = resolveWorkflowProfile(SCRIPTS, { root, engine: 'codex' })
     expect(p.stages['implement']?.model.resolved.id).toBe('gpt-6-sol')
     expect(() => validateProfileRun(p, { commandLine: false, engineFlag: 'codex' })).not.toThrow()
@@ -176,7 +181,9 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
     expect(workflowProfileRequested({}, {})).toBe(false)
     expect(workflowProfileRequested({}, { engine: { id: 'pi' } })).toBe(false)
     expect(workflowProfileRequested({}, { run: { defaults: { engine: 'pi' } } })).toBe(true)
-    expect(workflowProfileRequested({}, { run: { agents: { pi: { model: 'provider/model' } } } })).toBe(true)
+    expect(
+      workflowProfileRequested({}, { run: { agents: { pi: { model: 'provider/model' } } } }),
+    ).toBe(true)
     expect(workflowProfileRequested({ profile: 'x' }, {})).toBe(true)
     expect(workflowProfileRequested({ workflowConfig: 'x' }, {})).toBe(true)
     expect(workflowProfileRequested({}, { workflowProfiles: { default: 'x' } })).toBe(true)

@@ -113,18 +113,64 @@ describe('run --root --parallel — AC1 plan printed before dispatch', () => {
   it('#617 AC-2/8: resolves config profile once and prints selection settings before dispatch', async () => {
     process.env['PATH'] = '/bin'
     const fs = projectFs(policy('2'))
-    await fs.writeFile(`${cwd}/pair.config.json`, JSON.stringify({ workflowProfiles: { default: 'p' } }))
+    await fs.writeFile(
+      `${cwd}/pair.config.json`,
+      JSON.stringify({ workflowProfiles: { default: 'p' } }),
+    )
     const lines = captureLog()
     const h = harness([card('1')])
     h.selectCandidates.mockImplementation(async () => {
       expect(lines.join('\n')).toContain('Profile: p (source: pair.config.json)')
       return [card('1')]
     })
-    const resolve = vi.fn(() => ({ name: 'p', source: 'pair.config.json', sourceDetail: 'p', hash: 'a'.repeat(64), profile: { name: 'p' }, stages: Object.fromEntries(['defaults', 'prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge'].map(stage => [stage, { engine: { value: 'pi', source: 'defaults' }, model: { value: 'provider/model', source: 'defaults', resolved: { id: 'provider/model', line: 'provider/model' } }, effort: { value: 'default', source: 'KB default' }, context: { value: 'fresh', source: 'KB default' } }])), table: ['Profile: p (source: pair.config.json)', 'defaults | engine pi | model provider/model'], notes: [], contextPolicy: {} }))
+    const resolve = vi.fn(() => ({
+      name: 'p',
+      source: 'pair.config.json',
+      sourceDetail: 'p',
+      hash: 'a'.repeat(64),
+      profile: { name: 'p' },
+      stages: Object.fromEntries(
+        [
+          'defaults',
+          'prepare',
+          'validate',
+          'implement',
+          'green',
+          'verify',
+          'contract',
+          'merge',
+        ].map(stage => [
+          stage,
+          {
+            engine: { value: 'pi', source: 'defaults' },
+            model: {
+              value: 'provider/model',
+              source: 'defaults',
+              resolved: { id: 'provider/model', line: 'provider/model' },
+            },
+            effort: { value: 'default', source: 'KB default' },
+            context: { value: 'fresh', source: 'KB default' },
+          },
+        ]),
+      ),
+      table: [
+        'Profile: p (source: pair.config.json)',
+        'defaults | engine pi | model provider/model',
+      ],
+      notes: [],
+      contextPolicy: {},
+    }))
     h.deps.resolveWorkflowProfile = resolve as never
-    await handleRunCommand(parseRunCommand({ root: '66', parallel: '2', autonomous: true, approveProjectTrust: true }), fs, h.deps)
+    await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '2', autonomous: true, approveProjectTrust: true }),
+      fs,
+      h.deps,
+    )
     expect(resolve).toHaveBeenCalledTimes(1)
-    expect(h.selectCandidates.mock.calls[0]?.[0]).toMatchObject({ engine: { id: 'pi' }, model: 'provider/model' })
+    expect(h.selectCandidates.mock.calls[0]?.[0]).toMatchObject({
+      engine: { id: 'pi' },
+      model: 'provider/model',
+    })
   })
   it('passes pair-next reported state through selection and excludes unknown before dispatch', async () => {
     process.env['PATH'] = '/bin'

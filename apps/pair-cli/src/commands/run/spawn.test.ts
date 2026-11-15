@@ -80,15 +80,25 @@ describe('spawnIteration — a real child process emitting fixture JSONL', () =>
   }
 
   it('#617 AC-4: runner command and args stay literal without a shell', async () => {
-    const { dir, file } = stubEngine(`require('fs').writeFileSync(process.argv[2], process.argv[3]); process.stdout.write(JSON.stringify({type:'result',subtype:'success'})+'\\n')`)
+    const { dir, file } = stubEngine(
+      `require('fs').writeFileSync(process.argv[2], process.argv[3]); process.stdout.write(JSON.stringify({type:'result',subtype:'success'})+'\\n')`,
+    )
     const output = join(dir, 'argv.txt')
     const marker = join(dir, 'injected')
     const literal = `; touch ${marker} #`
     const resolved = withRunAgentRunner(
       { engine: ENGINES.claude, source: 'schema default', commandLine: 'claude' },
-      { run: { agents: { claude: { command: process.execPath, args: [file, output, literal] } } } } as never,
+      {
+        run: { agents: { claude: { command: process.execPath, args: [file, output, literal] } } },
+      } as never,
     )
-    const result = await spawnIteration({ engine: resolved.engine, promptText: 'go', cwd: dir, autonomyArgs: [], timeoutSeconds: 10 })
+    const result = await spawnIteration({
+      engine: resolved.engine,
+      promptText: 'go',
+      cwd: dir,
+      autonomyArgs: [],
+      timeoutSeconds: 10,
+    })
     expect(result.outcome).toBe('success')
     expect(readFileSync(output, 'utf8')).toBe(literal)
     expect(existsSync(marker)).toBe(false)

@@ -8,7 +8,13 @@ import { resolveWorkingPathOverride, type Config } from '#registry'
 import type { RunCommandConfig } from './parser'
 import type { resolveEngine } from './resolve-engine'
 import type { ResolvedEngine } from './resolve-engine'
-import { DEFAULT_ENGINE_ID, ENGINE_IDS, isEngineId, type EngineDefinition, type EngineId } from './engines'
+import {
+  DEFAULT_ENGINE_ID,
+  ENGINE_IDS,
+  isEngineId,
+  type EngineDefinition,
+  type EngineId,
+} from './engines'
 import type { ResolvedInvocation, SkillProbe } from './resolve-skill'
 import { createSkillProbe } from './skill-probe'
 import type { Perimeter } from './perimeter'
@@ -216,7 +222,10 @@ export function resolveContext(
     idleTimeout: resolveIdleTimeout({
       flag: config.idleTimeoutSeconds,
       policy: policy.idleTimeoutSeconds,
-      declared: declaredRunIdleTimeout(loaded.config, config.engine ?? declaredEngine(loaded.config) ?? DEFAULT_ENGINE_ID),
+      declared: declaredRunIdleTimeout(
+        loaded.config,
+        config.engine ?? declaredEngine(loaded.config) ?? DEFAULT_ENGINE_ID,
+      ),
     }),
   }
 }
@@ -253,27 +262,39 @@ export function withResolvedCardSelection(
 export function declaredEngineBin(config: Config): Readonly<Record<string, string>> | undefined {
   const bin = readEngineDeclaration(config, ENGINE_IDS).bin
   const run = readRunDeclaration(config, ENGINE_IDS)
-  if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  if (run.errors.length)
+    throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
   return Object.fromEntries(Object.entries(bin ?? {}).filter(([id]) => !run.agents?.[id]?.command))
 }
 
 /** `engine.model`: the model this project pins for each engine, run-wide (per-stage is #488's). */
 export function declaredEngineModel(config: Config, id: string): string | undefined {
   const run = readRunDeclaration(config, ENGINE_IDS)
-  if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
-  return run.agents?.[id]?.model ?? run.defaults?.model ?? readEngineDeclaration(config, ENGINE_IDS).model?.[id]
+  if (run.errors.length)
+    throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  return (
+    run.agents?.[id]?.model ??
+    run.defaults?.model ??
+    readEngineDeclaration(config, ENGINE_IDS).model?.[id]
+  )
 }
 
 export function declaredRunIdleTimeout(config: Config, id: string): number | undefined {
   const run = readRunDeclaration(config, ENGINE_IDS)
-  if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
-  return run.agents?.[id]?.idleTimeout ?? run.defaults?.idleTimeout ?? readEngineDeclaration(config, ENGINE_IDS).idleTimeout
+  if (run.errors.length)
+    throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  return (
+    run.agents?.[id]?.idleTimeout ??
+    run.defaults?.idleTimeout ??
+    readEngineDeclaration(config, ENGINE_IDS).idleTimeout
+  )
 }
 
 /** Apply a configured runner as executable and literal argv before engine flags. */
 export function withRunAgentRunner(resolved: ResolvedEngine, config: Config): ResolvedEngine {
   const run = readRunDeclaration(config, ENGINE_IDS)
-  if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  if (run.errors.length)
+    throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
   const agent = run.agents?.[resolved.engine.id]
   if (!agent?.command && !agent?.args?.length) return resolved
   const engine = {
@@ -292,12 +313,17 @@ export function withRunAgentRunner(resolved: ResolvedEngine, config: Config): Re
  */
 export function declaredEngine(config: Config): EngineId | undefined {
   const run = readRunDeclaration(config, ENGINE_IDS)
-  if (run.errors.length) throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  if (run.errors.length)
+    throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
   const outcome = readEngineDeclaration(config, ENGINE_IDS)
   if (outcome.errors.length > 0) {
     throw new Error(`pair.config.json is invalid:\n  - ${outcome.errors.join('\n  - ')}`)
   }
-  return isEngineId(run.defaults?.engine) ? run.defaults.engine : isEngineId(outcome.engine) ? outcome.engine : undefined
+  return isEngineId(run.defaults?.engine)
+    ? run.defaults.engine
+    : isEngineId(outcome.engine)
+      ? outcome.engine
+      : undefined
 }
 
 /** The autonomy/trust posture for one resolved engine — shared by every entry that spawns one. */

@@ -339,8 +339,7 @@ it executes anything.
 
 An optional top-level `workflowProfiles` field declares which engine, model, effort level and
 context policy each delivery-cycle stage (`prepare`, `validate`, `implement`, `green`, `verify`,
-`contract`, `merge`) uses, for both `pair-cli run --card` and the in-session `pair-workflow-cycle`
-skill, through one shared resolver.
+`contract`, `merge`, `refine-story`, `plan-tasks`, `triage`, `classify`) uses across `pair-cli run`, skills and batches through one shared resolver.
 
 ```json
 {
@@ -366,11 +365,24 @@ context).
 | `engine` | `default` (the run's engine), `pi`, `opencode`, `claude`, `codex`. Spawned per stage by `pair-cli`; in a session only reported |
 | `model` | `default` (the engine's own), an explicit id, a class (`cheap`, `balanced`, `frontier`) mapped to an id by `modelClasses`, or `by-tier` (the card's `risk:*` label through `## Model Policy`). A near-miss of a keyword is refused as a typo |
 | `effort` | `default`, `low`, `medium`, `high`, `xhigh`, `max`. In a session enforced on Codex, a prompt request on Claude; `pair-cli` sends it to `claude` (`--effort`) and `codex` (`-c model_reasoning_effort`, passed through unclamped); for `pi` and `opencode` it warns once and marks the stage `ignored` |
-| `context` | `fresh`, `reuse`. `reuse` only into `prepare` and `green` |
+| `context` | `fresh`, `reuse`, or `{ "shared-with": "prepare", "when": { "risk": "yellow" } }`. `verify` is always fresh; `validate` is fresh at `risk:red` |
 
 Resolution is once per run, in this order: `--workflow-config` (verbatim), then `--profile`, then `workflowProfiles.default`, then the KB default. Both flags work with `--card`, `--root` or `--parallel` (forwarded to every child card). The coordinator prints the resolved profile, its source and the per-stage table before the first dispatch; `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . [--profile <name>] [--tier risk:<tier>]` prints the same table (`table` in its JSON) without running anything.
 
-An unknown name is `profile-unresolved`; `context: "reuse"` on a stage the cycle's transition table forbids (`validate`, `verify`, …), an unknown stage or key, or a name collision is refused at load, never a silent fallback. The profile's name and hash are recorded in every handoff but are not part of what invalidates prior evidence.
+An unknown name is `profile-unresolved`; forbidden context sharing, an unknown stage or key, or a name collision is refused at load. The profile's name and hash are recorded in every handoff.
+
+### Run defaults and agent runners
+
+```json
+{
+  "run": {
+    "defaults": { "engine": "claude", "model": "claude-sonnet-4-5", "idleTimeout": 900 },
+    "agents": { "codex": { "command": "/opt/codex", "args": ["--config", "literal value"], "model": "gpt-6-sol", "idleTimeout": 600 } }
+  }
+}
+```
+
+Each setting resolves from CLI flag, profile stage, profile defaults, `run.agents.<engine>`, `run.defaults`, legacy `engine.*`, then the KB default. An agent entry cannot select engine or effort. Runner `command` and `args` are executed as literal argv, without a shell. Invalid unused entries fail validation. A skill uses its `process-step` marker, a batch uses its mode, and an unmapped invocation uses profile `defaults`. An in-session host reports incompatible engine/model settings before dispatch.
 
 No `workflowProfiles` field and no flag: nothing changes.
 

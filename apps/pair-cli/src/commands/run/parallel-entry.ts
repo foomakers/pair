@@ -7,7 +7,13 @@ import chalk from 'chalk'
 import { acquireCardLock } from './card-lock'
 import { resolveEngineFor } from './cycle-entry'
 import { createCycleScriptsBridge, locateCycleScripts, type PrereqState } from './cycle-scripts'
-import { resolveWorkflowProfile, stageEngineIds, stageSettings, validateProfileRun, workflowProfileRequested } from './workflow-profile'
+import {
+  resolveWorkflowProfile,
+  stageEngineIds,
+  stageSettings,
+  validateProfileRun,
+  workflowProfileRequested,
+} from './workflow-profile'
 import { appendAuditLine } from './dispatch-audit'
 import {
   isInterrupted,
@@ -361,17 +367,30 @@ export async function handleParallelRun(
   const values = resolveLoopValues(config, context.policy)
   const profile = workflowProfileRequested(config, context.config)
     ? (deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
-      locateCycleScripts(fs, context.config, cwd).scriptsDir,
-      { root: cwd, engine: config.engine, profile: config.profile, workflowConfig: config.workflowConfig },
-    )
+        locateCycleScripts(fs, context.config, cwd).scriptsDir,
+        {
+          root: cwd,
+          engine: config.engine,
+          profile: config.profile,
+          workflowConfig: config.workflowConfig,
+        },
+      )
     : undefined
   if (profile) {
     stageEngineIds(profile, ENGINE_IDS)
-    validateProfileRun(profile, { commandLine: config.profile !== undefined || config.workflowConfig !== undefined, ...(config.engine && { engineFlag: config.engine }), runEngine: config.engine ?? declaredEngine(context.config) })
+    validateProfileRun(profile, {
+      commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
+      ...(config.engine && { engineFlag: config.engine }),
+      runEngine: config.engine ?? declaredEngine(context.config),
+    })
   }
   const selected = profile && stageSettings(profile, 'defaults')
-  if (selected?.engine !== undefined && !isEngineId(selected.engine)) throw new Error(`profile-invalid: defaults.engine '${selected.engine}' is unknown`)
-  const engine = resolveEngine({ flag: config.engine, declared: selected?.engine ?? declaredEngine(context.config) })
+  if (selected?.engine !== undefined && !isEngineId(selected.engine))
+    throw new Error(`profile-invalid: defaults.engine '${selected.engine}' is unknown`)
+  const engine = resolveEngine({
+    flag: config.engine,
+    declared: selected?.engine ?? declaredEngine(context.config),
+  })
   // Refused here, before anything spawns: the selection process runs under the same posture.
   const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
   reportPreamble(input, describeEngineResolution(engine), {
@@ -389,7 +408,14 @@ export async function handleParallelRun(
   }
 
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
-  const fan: FanOut = { input, deps, selection, engineDef, autonomyArgs: autonomy.args, ...(selected?.model && { selectionModel: selected.model }) }
+  const fan: FanOut = {
+    input,
+    deps,
+    selection,
+    engineDef,
+    autonomyArgs: autonomy.args,
+    ...(selected?.model && { selectionModel: selected.model }),
+  }
   return await withLiveCards(input, deps, onEvent => {
     const live: FanOut = { ...fan, input: { ...input, onEvent } }
     return values.loopMode ? runLoop(live, values) : runSingleBatch(live)

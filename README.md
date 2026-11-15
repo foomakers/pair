@@ -33,6 +33,8 @@ The plugin ships **one** skill: an assistant that installs `pair-cli` and runs i
 
 For a delivery card, `pair-cli run --card <id>` starts or resumes its cycle. Process faults use a recorded recovery budget and resume token; a sealed branch sync merges the base and verifies custody. See the [delivery-cycle guide](https://pair.foomakers.com/docs/process-lifecycle/delivery-cycle).
 
+Set `workflowProfiles` in `pair.config.json` to choose each stage's engine and model. `run.defaults` and `run.agents.<engine>` supply general and per-agent fallbacks, including literal runner command and args. See [configuration](https://pair.foomakers.com/docs/reference/configuration#workflow-profiles-workflowprofiles).
+
 ## What You Get
 
 - **Knowledge Base** — guidelines, how-to guides, and templates for every SDLC phase

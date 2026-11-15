@@ -48,6 +48,7 @@
 - [ADR-026: PM/code-host adapter interface for the delivery-cycle scripts](.pair/adoption/tech/adr/adr-026-pm-code-host-adapter-interface.md)
 - [ADR-027: Autonomy model — selection, target and two gates, resolved by one function](.pair/adoption/tech/adr/adr-027-autonomy-model-selection-gates.md)
 - [ADR-028: Autonomous prepare is a maintainer-chosen exception to R3.11](.pair/adoption/tech/adr/adr-028-autonomous-prepare-r3-11-exception.md)
+- [ADR: Workflow profile over layered run defaults](.pair/adoption/tech/adr/adr-029-workflow-profile-layered-run-defaults.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Bounded Context Catalog (Grouped)](.pair/adoption/tech/boundedcontext/README.md)
