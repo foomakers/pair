@@ -55,7 +55,8 @@ export default defineAdapter({
       } catch (e) {
         throw new HostError('invalid-json', { message: e.message, command: 'gh api --paginate' })
       }
-      return pages.flat().map(c => ({ id: c.id, body: String(c.body ?? ''), url: c.html_url }))
+      // The author as the host reports it (US-647): a maintainer decision is authenticated from this, never from a caller.
+      return pages.flat().map(c => ({ id: c.id, body: String(c.body ?? ''), url: c.html_url, authorLogin: c.user?.login, authorIsUser: c.user?.type === 'User' }))
     }
     const readCheck = ({ sha, repo, context = CHECK_CONTEXT }) => {
       const combined = JSON.parse(gh(['api', `${apiRepo(repo)}/commits/${sha}/status`]))
@@ -274,6 +275,10 @@ export default defineAdapter({
       // One marker-keyed comment on the CARD (never the PR thread): the park path's "awaits action".
       commentOnCard({ id, marker, body, repo }) {
         return upsertOnIssue({ number: id, marker, body, repo })
+      },
+      // The card's comments with their host-reported author (US-647: a maintainer decision may live on the card).
+      listCardComments({ id, repo }) {
+        return listComments({ pr: id, repo })
       },
 
       // ── pull-request side (code-host) ──

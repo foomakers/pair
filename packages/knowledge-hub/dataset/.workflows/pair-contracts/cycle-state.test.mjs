@@ -1749,7 +1749,7 @@ test('t9d-8: the CLI surface and the review-phase prose agree with the code — 
     assert.match(read(md), /scope-baseline --dir/, `${md} asks the reviewer for scopeBaselineHash without naming its producer`)
 })
 
-test('t9d-17: the authorized principal is READ FROM ADOPTION — `code-host-assignee`, else `default-assignee` (way-of-working.md); `--maintainer` overrides; unresolvable ⇒ typed refusal, nothing written; no login is a literal in shipped code', () => {
+test('t9d-17: the authorized principal is READ FROM ADOPTION — `code-host-assignee`, else `default-assignee` (way-of-working.md); `--maintainer` is refused (US-647 AC-11); unresolvable ⇒ typed refusal, nothing written; no login is a literal in shipped code', () => {
   const src = readFileSync(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url), 'utf8')
   assert.equal(/maintainer\s*=\s*'[a-z]+'/.test(src), false, 'no hard-coded principal in the script')
   const hash = scopeBaselineHashOf([scopeChange('sc-1')])
@@ -1783,11 +1783,11 @@ test('t9d-17: the authorized principal is READ FROM ADOPTION — `code-host-assi
   seedAdoption(r3, '## Assignment\n\nnothing declared here\n')
   assert.deepEqual(applyScopeDecisions({ dir: d3, decisionRef: ref(605), repo: 'foomakers/pair', pr: 7, workflowVersion: V }), { applied: false, reason: 'maintainer-unresolved:no-assignee-in-adoption' })
   assert.deepEqual(readdirSync(d3).sort(), before, 'a refused resolution writes nothing')
-  // 4. `--maintainer` is the explicit override, through the real CLI
+  // 4. US-647 AC-11: no caller chooses whose comments count — `--maintainer` is refused at the CLI boundary, nothing written
   const cli = spawnSync(process.execPath, [CLI, 'apply-scope-decisions', '--dir', d3, '--decision-ref', ref(605), '--repo', 'foomakers/pair', '--pr', '7', '--workflowVersion', V, '--maintainer', 'rucka'], { encoding: 'utf8' })
-  assert.equal(cli.status, 0, cli.stdout + cli.stderr)
-  const parsed = JSON.parse(cli.stdout.trim().split('\n').pop())
-  assert.deepEqual({ applied: parsed.applied, maintainer: parsed.maintainer }, { applied: true, maintainer: { login: 'rucka', source: 'flag' } })
+  assert.equal(cli.status, 2, cli.stdout + cli.stderr)
+  assert.match(cli.stdout, /unknown flag\(s\) for apply-scope-decisions: --maintainer/)
+  assert.deepEqual(readdirSync(d3).sort(), before, 'a refused flag writes nothing')
 })
 
 // ── US-514 T-6 (AC7): resolveMaintainer reads through the #492 CommonMark declaration reader —

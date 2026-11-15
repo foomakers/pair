@@ -840,7 +840,8 @@ export const OVERRIDABLE_BREACH_CODES = Object.freeze(['out-of-scope', 'unlisted
 // on an ALREADY-SEALED segment — never inferred, never self-granted by an agent, and never a field on
 // the sealed contract itself (that would mutate a sigillo already committed). Lives beside the story's
 // own working files as `<runDir>/custody-overrides.json`: `{ overrides: [{ code, path, segment, reason,
-// authorizedBy, at, verifyAgainst? }] }`. A malformed entry (missing any required field, an
+// authorizedBy, at, verifyAgainst?, decisionRef? }] }` — since US-647 DERIVED by `cycle-state.mjs decisions` from the
+// maintainer's verified override comments (an entry nobody decided is dropped at the next pickup), never hand-written. A malformed entry (missing any required field, an
 // unparseable `at`, a `code` outside OVERRIDABLE_BREACH_CODES) is DROPPED, never partially trusted —
 // the breach it would have covered stays blocking, fail-safe. `verifyAgainst`, when present, is not
 // taken on faith: `verifyChainCore` proves the path's blob at HEAD is byte-identical to that ref
@@ -1118,7 +1119,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
     if (OVERRIDABLE_BREACH_CODES.includes(code) && extra.path && extra.segment) {
       const o = findOverride(code, extra.path, extra.segment)
       if (o && overrideHolds(o)) {
-        overriddenBreaches.push({ code, ...extra, override: { authorizedBy: o.authorizedBy, reason: o.reason, at: o.at, ...(o.verifyAgainst ? { verifyAgainst: o.verifyAgainst } : {}) } })
+        overriddenBreaches.push({ code, ...extra, override: { authorizedBy: o.authorizedBy, reason: o.reason, at: o.at, ...(o.verifyAgainst ? { verifyAgainst: o.verifyAgainst } : {}), ...(o.decisionRef ? { decisionRef: o.decisionRef } : {}) } })
         return
       }
     }

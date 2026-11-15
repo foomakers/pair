@@ -527,6 +527,8 @@ function packetCommand(opts) {
   const notesArg = card.notes ? ` $notes=${JSON.stringify(card.notes)}` : ''
   const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
   const n = next
+  // US-647: the maintainer decision that resumed this block travels to the stage that answers it, verbatim.
+  const decisionArg = n.maintainerDecision ? ` $maintainerDecision=${JSON.stringify(n.maintainerDecision)}` : ''
 
   let skill
   let agentType
@@ -537,7 +539,7 @@ function packetCommand(opts) {
     skill = SK.redSpec
     agentType = 'pair-fix-test-author'
     phaseLabel = 'Prepare'
-    args = `${common} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(card.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle, ...(n.group.widen && { widen: true }) })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.ownerApproval ? ` $ownerApproval=${JSON.stringify(n.ownerApproval)}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg}`
+    args = `${common} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(card.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle, ...(n.group.widen && { widen: true }) })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.ownerApproval ? ` $ownerApproval=${JSON.stringify(n.ownerApproval)}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${decisionArg}${notesArg}`
   } else if (n.step === 'validate') {
     skill = SK.redVerify
     agentType = 'pair-red-contract-verifier'
@@ -554,7 +556,7 @@ function packetCommand(opts) {
     skill = SK.greenFix
     agentType = 'pair-implementer'
     phaseLabel = 'Implement'
-    args = `${common} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker)} $writeIssue=${SK.writeIssue}${notesArg}`
+    args = `${common} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker)} $writeIssue=${SK.writeIssue}${decisionArg}${notesArg}`
   } else if (n.step === 'verify') {
     skill = SK.reviewPhase
     agentType = 'pair-reviewer'
@@ -579,7 +581,7 @@ function packetCommand(opts) {
       contractSkill: SK.contractPhase,
       workflowVersion,
     }
-    args = `${common} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker)} $synthesisMarker=${JSON.stringify(synthesisMarker)} $template=${templateLabel(pipeline.reviewTemplate)} $severities=${JSON.stringify(severities)} $verdicts=${JSON.stringify(verdicts)}${severityFloor ? ` $floor=${severityFloor}` : ''} $ranks=${ranksArg} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${pipeline.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${contractResolved ? '' : ` $contractSpec=${JSON.stringify(contractSpec)}`}`
+    args = `${common} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker)} $synthesisMarker=${JSON.stringify(synthesisMarker)} $template=${templateLabel(pipeline.reviewTemplate)} $severities=${JSON.stringify(severities)} $verdicts=${JSON.stringify(verdicts)}${severityFloor ? ` $floor=${severityFloor}` : ''} $ranks=${ranksArg} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${pipeline.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${decisionArg}${contractResolved ? '' : ` $contractSpec=${JSON.stringify(contractSpec)}`}`
   } else {
     fail('step-not-dispatchable', `\`${n.step}\` is a terminal state, not a stage — the coordinator reports it, it never dispatches it`, { step: n.step })
   }

@@ -114,6 +114,7 @@ function reportCycleReason(next: DriveCycleResult['next']): void {
   if (parts.length > 0) console.log(`  ${parts.join(' · ')}`)
   if (typeof n.detail === 'string' && n.detail.trim()) console.log(`  ${n.detail}`)
   reportNeedsHuman(n)
+  reportDecisionBlock(next as { block?: unknown })
   const step = describeNextStep(next)
   if (step !== undefined) console.log(`  Next step: ${step}`)
 }
@@ -122,6 +123,14 @@ function reportCycleReason(next: DriveCycleResult['next']): void {
 function reportNeedsHuman(n: { reason?: unknown; detail?: unknown; needsHuman?: unknown }): void {
   const human = n.needsHuman ?? (n.reason === 'needs-human' ? n.detail : undefined)
   if (typeof human === 'string' && human.trim()) console.log(`  needs-human: ${human}`)
+}
+
+/** US-647: a blocked answer names its block — the value the maintainer's decision comment quotes to resume it. */
+function reportDecisionBlock(n: { block?: unknown }): void {
+  if (typeof n.block === 'string' && n.block)
+    console.log(
+      `  Decision block: ${n.block} — resume with one maintainer comment holding a fenced json {"schemaVersion":1,"kind":"maintainer-decision","story":"<card>","block":"${n.block}","choice":"decide|amend|override|reset","reason":"…"}, then pair run --card <card>`,
+    )
 }
 
 /** US-575: the run's budgets apply whether or not a target/merge gate is declared. */
@@ -547,7 +556,8 @@ function reportOutcome(
 /** The renderer's terminal status for the card: what the outcome means for the operator, never a raw cycle status. */
 function cardStatusOf(outcome: DriveCycleResult): string {
   if (outcome.status === 'merged') return 'merged'
-  if (outcome.status === 'escalated' || outcome.status === 'escalate') return 'escalated'
+  // US-647: a finding that contradicts a recorded decision waits for the maintainer, like an escalation.
+  if (['escalated', 'escalate', 'decision-conflict'].includes(outcome.status)) return 'escalated'
   if (outcome.status === 'ready-for-merge' || outcome.status === 'target-ready')
     return outcome.status
   if (outcome.status === 'merge-parked' && exitCodeFor(outcome) === 0) return 'awaiting-human'

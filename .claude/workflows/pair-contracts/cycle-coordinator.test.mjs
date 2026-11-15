@@ -2777,8 +2777,6 @@ const INVOCATIONS = {
         '7',
         '--decision-ref',
         fx.decisionRef,
-        '--maintainer',
-        'rucka',
         '--workflowVersion',
         version,
       ],

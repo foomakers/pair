@@ -992,6 +992,8 @@ const NEXT_SCHEMA = {
     // code is measured against. A content operation, committed forward; never a Git history one.
     reconstruct: { type: 'object' },
     rollbackRefusal: { type: 'string' },
+    // US-647: the maintainer decision that resumed this block, carried verbatim to the stage that answers it.
+    maintainerDecision: { type: 'object' },
     // The PR the cycle is bound to. A structured-output schema is STRICT: a field the schema does
     // not declare is dropped by the harness before the coordinator sees it — `pr` was, and a
     // fresh-path resume then had no PR to verify against (canary run 11, 3.0.4).
@@ -1840,7 +1842,7 @@ async function driveStoryInner(story) {
     // US-479 T-22 (S5) / ADR-024 amendment 2026-09-10: the four new non-ready statuses pass
     // through unmapped — never silently coerced to failed-resume, which would make a clean
     // technical convergence with pending scope proposals look like an engine failure.
-    const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', 'failed-verify': 'failed-verify', escalate: 'escalate', 'needs-human': 'needs-human', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned' }
+    const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', 'failed-verify': 'failed-verify', escalate: 'escalate', 'needs-human': 'needs-human', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned', 'decision-conflict': 'decision-conflict' }
     // AC-10: a process budget spent (the state authority's or `recover`'s) parks with a resume token, never a terminal status.
     if (n.budget === 'autoRecoveryRounds') return result('awaiting-human', { reason: n.detail ?? n.reason, budget: n.budget, phase: n.phase, resumeToken: `${runId}:${story.id}:${n.phase ?? 'run'}:autoRecoveryRounds` })
     return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
@@ -1906,9 +1908,11 @@ async function driveStoryInner(story) {
   }
 
   // ── The four stages, each a SKILL invoked by name with typed arguments ─────────────────────
+  // US-647: the maintainer decision that resumed this block travels to the stage that answers it, verbatim.
+  const decisionArg = n => (n.maintainerDecision ? ` $maintainerDecision=${JSON.stringify(n.maintainerDecision)}` : '')
   const prepare = n =>
     agentRetry(
-      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg()}`),
+      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${decisionArg(n)}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || !!processFaultOf(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
     )
@@ -1926,7 +1930,7 @@ async function driveStoryInner(story) {
     )
   const green = n =>
     agentRetry(
-      invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${notesArg()}`),
+      invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${decisionArg(n)}${notesArg()}`),
       withModel('green', { agentType: 'pair-implementer', phase: 'Implement', label: `green:${tag} ${n.phase}${n.attempt > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: GREEN_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasGreen(r) || !!processFaultOf(r),
     )
@@ -1934,7 +1938,7 @@ async function driveStoryInner(story) {
     agentRetry(
       invoke(
         SK.reviewPhase,
-        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${CONTRACT.status === 'unresolved' ? ` $contractSpec=${JSON.stringify(contractSpecArg())}` : ''}`,
+        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${decisionArg(n)}${CONTRACT.status === 'unresolved' ? ` $contractSpec=${JSON.stringify(contractSpecArg())}` : ''}`,
       ),
       withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Verify', label: `verify:${tag} ${n.phase}${n.reviewer > 1 ? ` reviewer ${n.reviewer}` : ''}`, effort: 'xhigh', schema: VERIFY_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasReviewEvidence(r),
@@ -2019,6 +2023,21 @@ async function driveStoryInner(story) {
     if (prep.outcome === 'needs-human') return result('awaiting-human', { stage: 'prepare', reason: prep.reason ?? 'prepare-needs-human' })
     if (prep.outcome === 'failed') return result('failed-preparation', { reason: prep.reason ?? 'the prepare phase failed' })
   }
+  // US-647 AC-11: a blocked answer first picks up the maintainer's decision comments (card + PR) — the script reads them
+  // through the host and authenticates the author; nothing is decided here. An accepted decision re-resolves once.
+  let decisionsRead = false
+  const pickDecisions = async () => {
+    decisionsRead = true
+    try {
+      const out = await dispatch(
+        `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs decisions --dir ${runDir()} --story ${story.id}${isPosInt(pr) ? ` --pr ${pr}` : ''}`,
+        withModel('relay', { phase: 'Recovery', label: `decisions:${tag}`, effort: 'low' }),
+      )
+      return Array.isArray(out?.recorded) && out.recorded.some(r => r?.status === 'accepted')
+    } catch {
+      return false // a failed pickup applies nothing: the card keeps its blocked answer
+    }
+  }
   let next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
   const seen = new Set()
   let redirectsInARow = 0
@@ -2036,6 +2055,11 @@ async function driveStoryInner(story) {
     }
     if (next.step === 'blocked' && next.budget === 'autoRecoveryRounds' && (await resumePark(next))) {
       // the park is lifted: the first guess again — its stage resolves the durable state and redirects to the step now due
+      next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
+      seen.clear()
+      continue
+    }
+    if (next.step === 'blocked' && !decisionsRead && (await pickDecisions())) {
       next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
       seen.clear()
       continue

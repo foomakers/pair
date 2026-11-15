@@ -593,6 +593,26 @@ function labelsFor(ctx: CycleDriverContext, input: CycleDriverRequest, co: Coord
     : {}
 }
 
+/**
+ * US-647 AC-11: before every resolve, the script reads the maintainer's decision comments (card + PR) and authenticates
+ * their author against the adopted maintainer — the driver passes no login. A failed pickup applies nothing.
+ */
+function pickDecisions(input: CycleDriverRequest, co: Coordinates): void {
+  try {
+    const out = co.bridge.decisions?.({
+      dir: co.runDir,
+      story: input.card,
+      ...(input.pr !== undefined && { pr: input.pr }),
+    })
+    for (const r of out?.recorded ?? [])
+      console.log(
+        `  Decision: ${r.decisionRef} — ${r.status}${r.reason ? ` (${r.reason})` : r.choice ? ` (${r.choice})` : ''}`,
+      )
+  } catch (e) {
+    console.log(`  Decision pickup failed, nothing applied: ${(e as Error).message}`)
+  }
+}
+
 const resolveFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () => {
     const head = remoteHead(co.main, co.branch)
@@ -605,6 +625,7 @@ const resolveFor =
     // behaviour (`readBlockingSeverities` HALTs on a malformed declaration — never a silent
     // fallback).
     const blocking = resolveBlockingSeverities(ctx.fs, co.main)
+    pickDecisions(input, co)
     return co.bridge.resolve({
       dir: co.runDir,
       workflowVersion: ctx.workflowVersion,
