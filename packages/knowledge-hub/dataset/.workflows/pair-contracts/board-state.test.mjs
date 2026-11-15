@@ -62,7 +62,7 @@ else { process.stderr.write('unexpected command ' + a.join(' ')); process.exit(3
     { number: 42, body: '## Story Statement\nA story' },
     { number: 43, body: '## Epic Context\nAn epic' },
     { number: 44, body: 'Manual entry', labels: [{ name: 'user story' }] },
-  ], prs: [{ title: '[#42] feat: change', body: 'Closes #42', state: 'open', merged_at: null }] }))
+  ], prs: [{ title: '[#42] feat: change', body: 'Closes #42', state: 'open', merged_at: null, head: { ref: 'x', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } }] }))
   assert.deepEqual(pm.listCards({ repo: 'owner/repo' }), [{ id: '42' }, { id: '44' }])
   assert.equal(pm.linkedPr({ id: '42', repo: 'owner/repo' }), 'open')
   assert.equal(pm.linkedPr({ id: '43', repo: 'owner/repo' }), 'none')
@@ -167,7 +167,7 @@ test('r3-11: the real way-of-working prose resolves "pair digital development", 
 const GH_PAGES = `
 const SENTINEL = 'CARD_BODY_SENTINEL'
 const all = Array.from({ length: 180 }, (_, i) => ({ number: i + 1, body: '## Story Statement\\n' + SENTINEL + 'x'.repeat(8192), labels: [] }))
-const pulls = [{ number: 900, title: 'x', body: 'Closes #180\\n' + 'y'.repeat(8192), state: 'open', merged_at: null }]
+const pulls = [{ number: 900, title: 'x', body: 'Closes #180\\n' + 'y'.repeat(8192), state: 'open', merged_at: null, head: { ref: 'x', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } }]
 if (a[0] !== 'api') { process.stderr.write('unexpected'); process.exit(3) }
 const path = a.find(v => v.includes('/issues?') || v.includes('/pulls?'))
 const rows = path.includes('/pulls?') ? pulls : all
@@ -281,7 +281,7 @@ test('r3-13: host CLI errors redact body/description values and long argv', () =
 test('r3-14: linkedPr reads the PR listing once per adapter instance', () => {
   const gh = stubBin('gh', {}, `
 w.log.push(a.join(' ')); save()
-if (a[0] === 'api' && a.some(v => v.includes('/pulls?'))) { process.stdout.write(JSON.stringify([{ number: 1, title: 'x', body: 'Closes #1', state: 'open', merged_at: null }, { number: 2, title: 'y', body: 'Closes #2', state: 'closed', merged_at: '2026-01-01' }])); process.exit(0) }
+if (a[0] === 'api' && a.some(v => v.includes('/pulls?'))) { process.stdout.write(JSON.stringify([{ number: 1, title: 'x', body: 'Closes #1', state: 'open', merged_at: null, head: { ref: 'x', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } }, { number: 2, title: 'y', body: 'Closes #2', state: 'closed', merged_at: '2026-01-01', head: { ref: 'x', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } }])); process.exit(0) }
 process.exit(3)`)
   const code = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') })
   assert.deepEqual(['1', '2', '3'].map(id => code.linkedPr({ id, repo: 'owner/repo' })), ['open', 'merged', 'none'])
@@ -291,12 +291,12 @@ process.exit(3)`)
 // r3-16: several PRs link one card — a merged one wins, then an open one; a superseded closed PR never decides.
 test('r3-16: GitHub and Azure linkedPr resolve several linked PRs by precedence, branch links included', () => {
   const pulls = [
-    { number: 1, title: 'old', body: 'Closes #42', state: 'closed', merged_at: null, head: { ref: 'feature/old' } },
-    { number: 2, title: 'new', body: 'Closes #42', state: 'open', merged_at: null, head: { ref: 'feature/new' } },
-    { number: 3, title: 'a', body: '', state: 'closed', merged_at: null, head: { ref: 'feature/US-7-x' } },
-    { number: 4, title: 'b', body: 'Refs: ENG-9', state: 'closed', merged_at: '2026-01-01', head: { ref: 'b' } },
-    { number: 5, title: 'c', body: 'Refs: ENG-9', state: 'open', merged_at: null, head: { ref: 'c' } },
-    { number: 6, title: 'd', body: '', state: 'open', merged_at: null, head: { ref: 'feature/#77-x' } },
+    { number: 1, title: 'old', body: 'Closes #42', state: 'closed', merged_at: null, head: { ref: 'feature/old', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } },
+    { number: 2, title: 'new', body: 'Closes #42', state: 'open', merged_at: null, head: { ref: 'feature/new', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } },
+    { number: 3, title: 'a', body: '', state: 'closed', merged_at: null, head: { ref: 'feature/US-7-x', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } },
+    { number: 4, title: 'b', body: 'Refs: ENG-9', state: 'closed', merged_at: '2026-01-01', head: { ref: 'b', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } },
+    { number: 5, title: 'c', body: 'Refs: ENG-9', state: 'open', merged_at: null, head: { ref: 'c', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } },
+    { number: 6, title: 'd', body: '', state: 'open', merged_at: null, head: { ref: 'feature/#77-x', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } },
   ]
   const gh = stubBin('gh', {}, `process.stdout.write(JSON.stringify(${JSON.stringify(pulls)})); process.exit(0)`)
   const code = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') })
@@ -320,11 +320,13 @@ test('r3-15: Azure card closure and epic children follow the adopted Done state'
 })
 
 // r4-18: ONE link grammar for the workflow selector and every code-host linkedPr.
+// r5-21: native links are `Closes/Fixes/Resolves #N` only (Maintainer Decision); `AB#N` links only through `Refs:`.
 const { prLinks } = await import('../../skills/pair-workflow-cycle/scripts/host/adapter-kit.mjs')
 test('r4-18: prLinks is the single PR→card grammar (closing keywords, Refs incl. AB#, branch #N)', () => {
   const rows = [
     [{ body: 'Closes #42' }, { closes: ['42'], refs: [], branch: [] }],
-    [{ body: 'fixes AB#42\nresolves #7' }, { closes: ['42', '7'], refs: [], branch: [] }],
+    [{ body: 'fixes AB#42\nresolves #7' }, { closes: ['7'], refs: [], branch: [] }],
+    [{ body: 'Closes AB#42' }, { closes: [], refs: [], branch: [] }],
     [{ body: 'Refs: AB#123' }, { closes: [], refs: ['123'], branch: [] }],
     [{ body: 'Refs: ENG-42\nRefs: #9' }, { closes: [], refs: ['ENG-42', '9'], branch: [] }],
     [{ body: 'Refs: ENG 42; rm -rf /' }, { closes: [], refs: [null], branch: [] }],
@@ -337,14 +339,14 @@ test('r4-18: prLinks is the single PR→card grammar (closing keywords, Refs inc
 })
 test('r4-18: GitHub and Azure linkedPr accept exactly what the workflow selects', () => {
   const pulls = [
-    { number: 1, title: 'a', body: 'Refs: AB#123', state: 'open', merged_at: null, head: { ref: 'a' } },
-    { number: 2, title: 'b', body: '', state: 'open', merged_at: null, head: { ref: 'feature/#12a-work' } },
-    { number: 3, title: '[#55] c', body: '', state: 'open', merged_at: null, head: { ref: 'c' } },
-    { number: 4, title: 'd', body: 'Fixes AB#66', state: 'closed', merged_at: '2026-01-01', head: { ref: 'd' } },
+    { number: 1, title: 'a', body: 'Refs: AB#123', state: 'open', merged_at: null, head: { ref: 'a', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } },
+    { number: 2, title: 'b', body: '', state: 'open', merged_at: null, head: { ref: 'feature/#12a-work', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } },
+    { number: 3, title: '[#55] c', body: '', state: 'open', merged_at: null, head: { ref: 'c', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } },
+    { number: 4, title: 'd', body: 'Fixes AB#66', state: 'closed', merged_at: '2026-01-01', head: { ref: 'd', repo: { full_name: 'owner/repo' } }, base: { repo: { full_name: 'owner/repo' } } },
   ]
   const gh = stubBin('gh', {}, `process.stdout.write(JSON.stringify(${JSON.stringify(pulls)})); process.exit(0)`)
   const code = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') })
-  assert.deepEqual(['123', '12', '55', '66'].map(id => code.linkedPr({ id, repo: 'owner/repo' })), ['open', 'none', 'none', 'merged'])
+  assert.deepEqual(['123', '12', '55', '66'].map(id => code.linkedPr({ id, repo: 'owner/repo' })), ['open', 'none', 'none', 'none'])
   const prs = [{ description: '', status: 'active', sourceRefName: 'refs/heads/feature/#31-x' }, { description: 'Resolves #32', status: 'completed', sourceRefName: 'refs/heads/y' }]
   const az = stubBin('az', { states: [], items: {}, prs }, AZ)
   const azCode = azure.instantiate({ azBin: az.bin, wayOfWorking: '' })
@@ -369,4 +371,28 @@ w.log.push(a.join(' ')); save(); process.stdout.write('{}')`)
   assert.deepEqual(result.gaps, ['adapter-failed'])
   assert.deepEqual(flaky.world().log, [], 'no board write on a transient error')
   assert.equal(auditCards({ pm: { ...broken, listCards: () => [{ id: '42' }] }, code: { linkedPr: () => 'none' }, repo: 'owner/repo', mapping: { Draft: 'Todo' } }).mismatches.length, 0)
+})
+
+// r5-22: a fork PR never links a card — the Maintainer Decision admits same-repository PRs only, so a
+// fork's `Closes #42` closed by its author can never close the card as Not planned.
+test('r5-22: GitHub and Azure linkedPr ignore fork PRs', () => {
+  const fork = { repo: { full_name: 'outsider/repo' } }
+  const same = { repo: { full_name: 'owner/repo' } }
+  const pulls = [
+    { number: 1, body: 'Closes #42', state: 'closed', merged_at: null, head: { ref: 'f', ...fork }, base: same },
+    { number: 2, body: 'Closes #43', state: 'closed', merged_at: null, head: { ref: 'f', repo: null }, base: same },
+    { number: 3, body: 'Closes #44', state: 'closed', merged_at: null, head: { ref: 'f', ...fork }, base: same },
+    { number: 4, body: 'Closes #44', state: 'open', merged_at: null, head: { ref: 'g', ...same }, base: same },
+  ]
+  const gh = stubBin('gh', {}, `process.stdout.write(JSON.stringify(${JSON.stringify(pulls)})); process.exit(0)`)
+  const code = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('board') })
+  assert.deepEqual(['42', '43', '44'].map(id => code.linkedPr({ id, repo: 'owner/repo' })), ['none', 'none', 'open'])
+  const prs = [
+    { description: 'Closes #50', status: 'abandoned', sourceRefName: 'refs/heads/x', forkSource: { repository: { name: 'fork' } } },
+    { description: 'Closes #51', status: 'abandoned', sourceRefName: 'refs/heads/y', forkSource: { repository: { name: 'fork' } } },
+    { description: 'Closes #51', status: 'active', sourceRefName: 'refs/heads/z' },
+  ]
+  const az = stubBin('az', { states: [], items: {}, prs }, AZ)
+  const azCode = azure.instantiate({ azBin: az.bin, wayOfWorking: '' })
+  assert.deepEqual(['50', '51'].map(id => azCode.linkedPr({ id, repo: 'Proj/app' })), ['none', 'open'])
 })

@@ -660,11 +660,10 @@
     "allow": true
   },
   {
-    "id": "r4-18-closes-azure",
+    "id": "r5-21-closes-ab-denied",
     "role": "write",
     "body": "Fixes AB#42",
-    "story": "42",
-    "allow": true
+    "allow": false
   },
   {
     "id": "r4-20-board-unconfigured",
