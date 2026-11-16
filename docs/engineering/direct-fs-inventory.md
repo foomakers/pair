@@ -24,6 +24,13 @@ imported names, not a decision that every use of the name performs IO.
 The operation, consumer, disposition, and proving test category still need
 per-path review.
 
+For the 189 candidates, `observedOperations` records direct calls found by
+following static `fs` imports and `require` bindings in each file. It is
+populated for 185 paths. Four paths have no direct call: the imported value is
+passed onward or used in another expression, so their operation remains for
+manual review. This field is call-site evidence, not a migration decision or
+proof that every runtime filesystem call was found.
+
 The content-ops pass classified six more paths: three `Dirent`/`Stats` type
 contracts, one temporary-directory byte-mode integration test, and two
 production migration targets. `integrity-validator.ts` has a direct stream

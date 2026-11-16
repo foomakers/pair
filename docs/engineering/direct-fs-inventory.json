@@ -30,7 +30,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/scripts/postbuild.js",
-      "sourceSymbols": ["fs"]
+      "sourceSymbols": ["fs"],
+      "observedOperations": ["copyFileSync", "mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "apps/pair-cli/src/cli.e2e.test.ts",
@@ -51,6 +52,14 @@
         "readFileSync",
         "rmSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
       ]
     },
     {
@@ -65,7 +74,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/cli.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/dispatcher.test.ts",
@@ -79,7 +89,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/commands/dispatcher.test.ts",
-      "sourceSymbols": ["chmodSync", "mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["chmodSync", "mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["chmodSync", "mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/index.test.ts",
@@ -93,7 +104,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/commands/index.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/install/workflow-presets.test.ts",
@@ -115,6 +127,15 @@
         "readdirSync",
         "rmSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "rmSync",
+        "writeFileSync"
       ]
     },
     {
@@ -129,7 +150,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/commands/kb-info/handler.test.ts",
-      "sourceSymbols": ["fs"]
+      "sourceSymbols": ["fs"],
+      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/kb-verify/handler.test.ts",
@@ -143,7 +165,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/commands/kb-verify/handler.test.ts",
-      "sourceSymbols": ["fs"]
+      "sourceSymbols": ["fs"],
+      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/package/link-rewriter.test.ts",
@@ -157,7 +180,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/commands/package/link-rewriter.test.ts",
-      "sourceSymbols": ["fs"]
+      "sourceSymbols": ["fs"],
+      "observedOperations": ["readFile", "writeFile"]
     },
     {
       "path": "apps/pair-cli/src/commands/package/round-trip.test.ts",
@@ -178,6 +202,14 @@
         "mkdtempSync",
         "readdirSync",
         "rmSync"
+      ],
+      "observedOperations": [
+        "copyFileSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readdirSync",
+        "rmSync"
       ]
     },
     {
@@ -192,7 +224,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/commands/package/zip-creator.test.ts",
-      "sourceSymbols": ["fs"]
+      "sourceSymbols": ["fs"],
+      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/run/__fixtures__/cards-cross-completion.cjs",
@@ -2158,7 +2191,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/commands/tokens/tokens.acceptance.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
@@ -2180,6 +2214,15 @@
         "readFileSync",
         "rmSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "closeSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "openSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
       ]
     },
     {
@@ -2194,7 +2237,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/config/loader-project-shape.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/config/loader.test.ts",
@@ -2208,7 +2252,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/config/loader.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/index.ts",
@@ -2222,7 +2267,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/index.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/kb-manager/git-clone.integration.test.ts",
@@ -2252,7 +2298,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/kb-manager/git-clone.test.ts",
-      "sourceSymbols": ["rmSync"]
+      "sourceSymbols": ["rmSync"],
+      "observedOperations": []
     },
     {
       "path": "apps/pair-cli/src/kb-manager/git-clone.ts",
@@ -2266,7 +2313,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/kb-manager/git-clone.ts",
-      "sourceSymbols": ["rmSync"]
+      "sourceSymbols": ["rmSync"],
+      "observedOperations": ["rmSync"]
     },
     {
       "path": "apps/pair-cli/src/kb-manager/official-kb-name.test.ts",
@@ -2280,7 +2328,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/kb-manager/official-kb-name.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/registry/adoption-risk-matrix.test.ts",
@@ -2294,7 +2343,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/registry/adoption-risk-matrix.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
@@ -2357,6 +2407,14 @@
         "mkdtempSync",
         "readFileSync",
         "rmSync"
+      ],
+      "observedOperations": [
+        "copyFileSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync"
       ]
     },
     {
@@ -2371,7 +2429,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/registry/layout.test.ts",
-      "sourceSymbols": ["fs"]
+      "sourceSymbols": ["fs"],
+      "observedOperations": []
     },
     {
       "path": "apps/pair-cli/src/registry/llms-generation.ts",
@@ -2438,7 +2497,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/registry/validation.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/test-utils/cli-entry.ts",
@@ -2452,7 +2512,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/test-utils/cli-entry.ts",
-      "sourceSymbols": ["existsSync"]
+      "sourceSymbols": ["existsSync"],
+      "observedOperations": ["existsSync"]
     },
     {
       "path": "apps/website/lib/adoption-files-fences.test.ts",
@@ -2466,7 +2527,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/adoption-files-fences.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/ci-docs-staleness-env.test.ts",
@@ -2480,7 +2542,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/ci-docs-staleness-env.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/deploy-build-command.test.ts",
@@ -2494,7 +2557,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/deploy-build-command.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/docs-ia.test.ts",
@@ -2508,7 +2572,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/docs-ia.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "apps/website/lib/docs-staleness-check.test.ts",
@@ -2527,7 +2592,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/docs-staleness-check.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/docs-staleness-check.ts",
@@ -2541,7 +2607,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/docs-staleness-check.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "apps/website/lib/get-llm-text.test.ts",
@@ -2555,7 +2622,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/get-llm-text.test.ts",
-      "sourceSymbols": ["fs"]
+      "sourceSymbols": ["fs"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "apps/website/lib/get-llm-text.ts",
@@ -2569,7 +2637,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/get-llm-text.ts",
-      "sourceSymbols": ["fs"]
+      "sourceSymbols": ["fs"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "apps/website/lib/skills-catalog-merge-coherence.test.ts",
@@ -2583,7 +2652,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/skills-catalog-merge-coherence.test.ts",
-      "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["existsSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "apps/website/lib/source.test.ts",
@@ -2597,7 +2667,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/source.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": []
     },
     {
       "path": "apps/website/lib/turbo-source-order.test.ts",
@@ -2611,7 +2682,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/turbo-source-order.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/whats-new-guard.test.ts",
@@ -2625,7 +2697,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/whats-new-guard.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"]
     },
     {
       "path": "apps/website/scripts/landing-video/github-scroll.mjs",
@@ -2639,7 +2712,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/scripts/landing-video/github-scroll.mjs",
-      "sourceSymbols": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"]
+      "sourceSymbols": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"],
+      "observedOperations": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"]
     },
     {
       "path": "apps/website/scripts/landing-video/login-closing.mjs",
@@ -2653,7 +2727,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "apps/website/scripts/landing-video/login-closing.mjs",
-      "sourceSymbols": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"]
+      "sourceSymbols": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"],
+      "observedOperations": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"]
     },
     {
       "path": "packages/content-ops/src/file-system/file-operations.ts",
@@ -2907,7 +2982,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/benchmark-update-link.ts",
-      "sourceSymbols": ["existsSync", "mkdirSync", "readdirSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["existsSync", "mkdirSync", "readdirSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["existsSync", "mkdirSync", "readdirSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/ci-staleness-checkout-depth.test.ts",
@@ -2921,7 +2997,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/ci-staleness-checkout-depth.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/code-hygiene-check.quarantine.test.ts",
@@ -2935,7 +3012,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/code-hygiene-check.quarantine.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/code-hygiene-check.ts",
@@ -2949,7 +3027,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/code-hygiene-check.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/delivery-process-docs.test.ts",
@@ -2963,7 +3042,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/delivery-process-docs.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
@@ -2985,6 +3065,15 @@
         "readdirSync",
         "symlinkSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "cpSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "symlinkSync",
+        "writeFileSync"
       ]
     },
     {
@@ -2999,7 +3088,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/format-paths.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/format-workflow-composition.test.ts",
@@ -3013,7 +3103,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/format-workflow-composition.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/format-workflow-composition.ts",
@@ -3027,7 +3118,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/format-workflow-composition.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.test.ts",
@@ -3048,6 +3140,14 @@
         "rmSync",
         "symlinkSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "symlinkSync",
+        "writeFileSync"
       ]
     },
     {
@@ -3062,7 +3162,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.ts",
-      "sourceSymbols": ["readFile", "readdir", "stat"]
+      "sourceSymbols": ["readFile", "readdir", "stat"],
+      "observedOperations": ["readFile", "readdir", "stat"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.test.ts",
@@ -3085,6 +3186,16 @@
         "rmSync",
         "statSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "chmodSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "rmSync",
+        "statSync",
+        "writeFileSync"
       ]
     },
     {
@@ -3099,7 +3210,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.ts",
-      "sourceSymbols": ["mkdir", "writeFile"]
+      "sourceSymbols": ["mkdir", "writeFile"],
+      "observedOperations": ["mkdir", "writeFile"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.test.ts",
@@ -3113,7 +3225,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.ts",
@@ -3127,7 +3240,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts",
@@ -3155,6 +3269,21 @@
         "statSync",
         "symlinkSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "chmodSync",
+        "copyFileSync",
+        "cpSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "realpathSync",
+        "rmSync",
+        "statSync",
+        "symlinkSync",
+        "writeFileSync"
       ]
     },
     {
@@ -3169,7 +3298,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/run-format.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/smoke-ci-platform.test.ts",
@@ -3183,7 +3313,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/smoke-ci-platform.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/smoke-scenario-modes.test.ts",
@@ -3197,7 +3328,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/smoke-scenario-modes.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/sync-version-in-docs.test.ts",
@@ -3211,7 +3343,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/sync-version-in-docs.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/sync-version-in-docs.ts",
@@ -3225,7 +3358,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/quality-gates/sync-version-in-docs.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "writeFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "writeFileSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/changelog-version.test.ts",
@@ -3239,7 +3373,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/changelog-version.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/changelog-version.ts",
@@ -3253,7 +3388,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/changelog-version.ts",
-      "sourceSymbols": ["readFileSync", "writeFileSync"]
+      "sourceSymbols": ["readFileSync", "writeFileSync"],
+      "observedOperations": ["readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/changeset-check.ts",
@@ -3267,7 +3403,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/changeset-check.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
@@ -3281,7 +3418,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/determine-version.test.ts",
@@ -3295,7 +3433,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/determine-version.test.ts",
-      "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "rmSync"]
+      "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "rmSync"],
+      "observedOperations": ["existsSync", "mkdtempSync", "readFileSync", "rmSync"]
     },
     {
       "path": "packages/dev-tools/src/release/determine-version.ts",
@@ -3309,7 +3448,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/determine-version.ts",
-      "sourceSymbols": ["appendFileSync"]
+      "sourceSymbols": ["appendFileSync"],
+      "observedOperations": ["appendFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-cli.ts",
@@ -3323,7 +3463,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/release-cli.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-concurrency.test.ts",
@@ -3337,7 +3478,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/release-concurrency.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-origin.test.ts",
@@ -3351,7 +3493,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/release-origin.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-publish.test.ts",
@@ -3372,6 +3515,14 @@
         "readFileSync",
         "rmSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "chmodSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
       ]
     },
     {
@@ -3386,7 +3537,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/release-remediation.test.ts",
-      "sourceSymbols": ["mkdtempSync", "rmSync"]
+      "sourceSymbols": ["mkdtempSync", "rmSync"],
+      "observedOperations": ["mkdtempSync", "rmSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-sandbox.test.ts",
@@ -3400,7 +3552,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/release-sandbox.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-workflows.test.ts",
@@ -3414,7 +3567,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/release/release-workflows.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/audit.test.ts",
@@ -3428,7 +3582,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/audit.test.ts",
-      "sourceSymbols": ["mkdtempSync", "writeFileSync"]
+      "sourceSymbols": ["mkdtempSync", "writeFileSync"],
+      "observedOperations": []
     },
     {
       "path": "packages/dev-tools/src/test-audit/audit.ts",
@@ -3442,7 +3597,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/audit.ts",
-      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"]
+      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"],
+      "observedOperations": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/baseline.ts",
@@ -3456,7 +3612,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/baseline.ts",
-      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["existsSync", "mkdirSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/gates.ts",
@@ -3470,7 +3627,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/gates.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
@@ -3484,7 +3642,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts",
@@ -3498,7 +3657,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
@@ -3512,7 +3672,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
-      "sourceSymbols": ["mkdtempSync", "writeFileSync"]
+      "sourceSymbols": ["mkdtempSync", "writeFileSync"],
+      "observedOperations": ["mkdtempSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
@@ -3526,7 +3687,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/inventory.ts",
@@ -3540,7 +3702,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/inventory.ts",
-      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"]
+      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"],
+      "observedOperations": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/mutation.ts",
@@ -3554,7 +3717,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/mutation.ts",
-      "sourceSymbols": ["mkdirSync", "readFileSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "readFileSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/playwright-overlap.ts",
@@ -3568,7 +3732,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/playwright-overlap.ts",
-      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/playwright-run.ts",
@@ -3582,7 +3747,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/playwright-run.ts",
-      "sourceSymbols": ["mkdtempSync", "readFileSync", "rmSync"]
+      "sourceSymbols": ["mkdtempSync", "readFileSync", "rmSync"],
+      "observedOperations": ["mkdtempSync", "readFileSync", "rmSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/profile.ts",
@@ -3596,7 +3762,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/profile.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/redundancy.ts",
@@ -3610,7 +3777,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/redundancy.ts",
-      "sourceSymbols": ["mkdirSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/suites-junit-attr-control.test.ts",
@@ -3624,7 +3792,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/suites-junit-attr-control.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/suites-junit-attr.test.ts",
@@ -3645,6 +3814,14 @@
         "realpathSync",
         "rmSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "realpathSync",
+        "rmSync",
+        "writeFileSync"
       ]
     },
     {
@@ -3659,7 +3836,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
@@ -3680,6 +3858,14 @@
         "realpathSync",
         "rmSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "realpathSync",
+        "rmSync",
+        "writeFileSync"
       ]
     },
     {
@@ -3694,7 +3880,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/suites.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/suites.ts",
@@ -3708,7 +3895,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/suites.ts",
-      "sourceSymbols": ["mkdtempSync", "readFileSync", "realpathSync", "rmSync"]
+      "sourceSymbols": ["mkdtempSync", "readFileSync", "realpathSync", "rmSync"],
+      "observedOperations": ["mkdtempSync", "readFileSync", "realpathSync", "rmSync"]
     },
     {
       "path": "packages/knowledge-hub/dataset/.pair/knowledge/assets/coverage-ratchet.cjs",
@@ -5474,7 +5662,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/adoption-informed-generation.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/adr-template.test.ts",
@@ -5488,7 +5677,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/adr-template.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/agent-harness-guides.test.ts",
@@ -5502,7 +5692,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/agent-harness-guides.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
@@ -5516,7 +5707,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/analyze-delivery-metrics.test.ts",
@@ -5530,7 +5722,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/analyze-delivery-metrics.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/analyze-test-skills-root-scripts.test.ts",
@@ -5544,7 +5737,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/analyze-test-skills-root-scripts.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/analyze-test-skills.test.ts",
@@ -5558,7 +5752,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/analyze-test-skills.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/approval-signal.test.ts",
@@ -5572,7 +5767,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/approval-signal.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/assess-cost.test.ts",
@@ -5586,7 +5782,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/assess-cost.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/assess-coupling.test.ts",
@@ -5600,7 +5797,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/assess-coupling.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/assess-output-only.test.ts",
@@ -5614,7 +5812,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/assess-output-only.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/assess-security.test.ts",
@@ -5628,7 +5827,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/assess-security.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/automation-eligibility.test.ts",
@@ -5642,7 +5842,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/automation-eligibility.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/autonomous-prepare-skills.test.ts",
@@ -5656,7 +5857,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/autonomous-prepare-skills.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/autonomy-arguments.test.ts",
@@ -5670,7 +5872,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/autonomy-arguments.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/bootstrap-classification-delta.test.ts",
@@ -5684,7 +5887,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/bootstrap-classification-delta.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/bootstrap.test.ts",
@@ -5698,7 +5902,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/bootstrap.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/brainstorm-phases.test.ts",
@@ -5712,7 +5917,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/brainstorm-phases.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/classify.test.ts",
@@ -5726,7 +5932,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/classify.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/code-host-routing.test.ts",
@@ -5740,7 +5947,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/code-host-routing.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/code-review-verdict-first.test.ts",
@@ -5754,7 +5962,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/code-review-verdict-first.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/coverage-ratchet-adopter-path.test.ts",
@@ -5768,7 +5977,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/coverage-ratchet-adopter-path.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/coverage-ratchet-asset.test.ts",
@@ -5782,7 +5992,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/coverage-ratchet-asset.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/cycle-autonomy-active.test.ts",
@@ -5796,7 +6007,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/cycle-autonomy-active.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/cycle-hooks-cwd.test.ts",
@@ -5810,7 +6022,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/cycle-hooks-cwd.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/cycle-hooks-schema.test.ts",
@@ -5824,7 +6037,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/cycle-hooks-schema.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts",
@@ -5838,7 +6052,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/dataset-adoption-no-leak.test.ts",
@@ -5852,7 +6067,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/dataset-adoption-no-leak.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "statSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "statSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync", "statSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/definition-of-ready-and-done.test.ts",
@@ -5866,7 +6082,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/definition-of-ready-and-done.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/delivery-cycle-process-gaps.test.ts",
@@ -5880,7 +6097,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/delivery-cycle-process-gaps.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/delivery-metrics.test.ts",
@@ -5894,7 +6112,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/delivery-metrics.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/doc-groups.test.ts",
@@ -5908,7 +6127,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/doc-groups.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts",
@@ -5922,7 +6142,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/github-automation.test.ts",
@@ -5944,6 +6165,15 @@
         "readFileSync",
         "rmSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "chmodSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
       ]
     },
     {
@@ -5958,7 +6188,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/headless-stage-execution.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/implement-compose-close.test.ts",
@@ -5972,7 +6203,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/implement-compose-close.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/implement-phase-fresh-branch.test.ts",
@@ -5986,7 +6218,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/implement-phase-fresh-branch.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/implementation-never-files-a-card.test.ts",
@@ -6000,7 +6233,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/implementation-never-files-a-card.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/macro-phase-modes.test.ts",
@@ -6014,7 +6248,20 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/macro-phase-modes.test.ts",
-      "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "readdirSync", "writeFileSync"]
+      "sourceSymbols": [
+        "existsSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "writeFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/mirror-realign-asset.test.ts",
@@ -6028,7 +6275,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/mirror-realign-asset.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/mirror-realignment.test.ts",
@@ -6042,7 +6290,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/mirror-realignment.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/output-shapes.test.ts",
@@ -6056,7 +6305,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/output-shapes.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-assistant-config-guide.test.ts",
@@ -6070,7 +6320,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/pair-assistant-config-guide.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-assistant-install-footprint.test.ts",
@@ -6084,7 +6335,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/pair-assistant-install-footprint.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
@@ -6098,7 +6350,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-next-autonomy-selection.test.ts",
@@ -6112,7 +6365,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/pair-next-autonomy-selection.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-next-control-state.test.ts",
@@ -6126,7 +6380,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/pair-next-control-state.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-next-scoping.test.ts",
@@ -6140,7 +6395,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/pair-next-scoping.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pm-tool-adapter-contract.test.ts",
@@ -6154,7 +6410,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/pm-tool-adapter-contract.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pr-state-flow.test.ts",
@@ -6168,7 +6425,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/pr-state-flow.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/process-profile.test.ts",
@@ -6182,7 +6440,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/process-profile.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/quality-model.test.ts",
@@ -6196,7 +6455,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/quality-model.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/record-decision.test.ts",
@@ -6210,7 +6470,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/record-decision.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/refine-story-draft-to-ready.test.ts",
@@ -6224,7 +6485,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/refine-story-draft-to-ready.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/review-identity.test.ts",
@@ -6238,7 +6500,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/review-identity.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/review-phase-classifies.test.ts",
@@ -6252,7 +6515,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/review-phase-classifies.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/scoped-context-skills.test.ts",
@@ -6266,7 +6530,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/scoped-context-skills.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/secret-scanning.test.ts",
@@ -6280,7 +6545,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/secret-scanning.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
@@ -6294,7 +6560,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/skills-defects-b.test.ts",
@@ -6308,7 +6575,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/skills-defects-b.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/story-local-markers.test.ts",
@@ -6322,7 +6590,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/story-local-markers.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync", "statSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync", "statSync"],
+      "observedOperations": ["readFileSync", "readdirSync", "statSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/task-progress-feedback.test.ts",
@@ -6336,7 +6605,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/task-progress-feedback.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
@@ -6350,7 +6620,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/template-shrink.test.ts",
@@ -6364,7 +6635,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/template-shrink.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/timeouts-section.test.ts",
@@ -6378,7 +6650,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/timeouts-section.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/to-issues-triage.test.ts",
@@ -6392,7 +6665,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/to-issues-triage.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/verified-writes-contract.test.ts",
@@ -6406,7 +6680,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/verified-writes-contract.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/verify-quality.test.ts",
@@ -6420,7 +6695,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/verify-quality.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/web-cloud-environment.test.ts",
@@ -6434,7 +6710,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/web-cloud-environment.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/workflow-scripts-shape.test.ts",
@@ -6448,7 +6725,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/workflow-scripts-shape.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/working-area.test.ts",
@@ -6462,7 +6740,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/working-area.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/build-ratchet-asset.ts",
@@ -6476,7 +6755,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/build-ratchet-asset.ts",
-      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/build-realign-asset.ts",
@@ -6490,7 +6770,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/build-realign-asset.ts",
-      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts",
@@ -6509,7 +6790,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "statSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "statSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync", "statSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts",
@@ -6523,7 +6805,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts",
-      "sourceSymbols": ["readFileSync", "writeFileSync"]
+      "sourceSymbols": ["readFileSync", "writeFileSync"],
+      "observedOperations": ["readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/macro-phase-modes.test.ts",
@@ -6537,7 +6820,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/macro-phase-modes.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/macro-phase-modes.ts",
@@ -6551,7 +6835,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/macro-phase-modes.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/mirror-guard.test.ts",
@@ -6565,7 +6850,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/mirror-guard.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "statSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "statSync"],
+      "observedOperations": ["existsSync", "readFileSync", "statSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/mirror-guard.ts",
@@ -6579,7 +6865,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/mirror-guard.ts",
-      "sourceSymbols": ["existsSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/mirror-realign.ts",
@@ -6593,7 +6880,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/mirror-realign.ts",
-      "sourceSymbols": ["existsSync"]
+      "sourceSymbols": ["existsSync"],
+      "observedOperations": ["existsSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skill-md-mirror.test.ts",
@@ -6607,7 +6895,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/skill-md-mirror.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skill-md-mirror.ts",
@@ -6621,7 +6910,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/skill-md-mirror.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"]
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts",
@@ -6643,6 +6933,15 @@
         "readFileSync",
         "rmSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "chmodSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
       ]
     },
     {
@@ -6657,7 +6956,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/skills-conformance-check.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skills-guide-mirror.test.ts",
@@ -6671,7 +6971,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/skills-guide-mirror.test.ts",
-      "sourceSymbols": ["readFileSync"]
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skills-guide-mirror.ts",
@@ -6685,7 +6986,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/tools/skills-guide-mirror.ts",
-      "sourceSymbols": ["readdirSync"]
+      "sourceSymbols": ["readdirSync"],
+      "observedOperations": ["readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/workflow-mirror.test.ts",
@@ -6708,6 +7010,16 @@
         "rmSync",
         "statSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "cpSync",
+        "existsSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "rmSync",
+        "statSync",
+        "writeFileSync"
       ]
     },
     {
@@ -6722,7 +7034,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "scripts/dev/delivery-process-overwrite.test.mjs",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "scripts/dev/hook-git-env.test.mjs",
@@ -6743,6 +7056,14 @@
         "mkdtempSync",
         "readFileSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "chmodSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "writeFileSync"
       ]
     },
     {
@@ -6757,7 +7078,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "scripts/dev/rtk-review-hook.mjs",
-      "sourceSymbols": ["existsSync", "readFileSync"]
+      "sourceSymbols": ["existsSync", "readFileSync"],
+      "observedOperations": ["existsSync", "readFileSync"]
     },
     {
       "path": "scripts/dev/rtk-review-hook.test.mjs",
@@ -6771,7 +7093,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "scripts/dev/rtk-review-hook.test.mjs",
-      "sourceSymbols": ["chmodSync", "mkdirSync", "mkdtempSync", "writeFileSync"]
+      "sourceSymbols": ["chmodSync", "mkdirSync", "mkdtempSync", "writeFileSync"],
+      "observedOperations": ["chmodSync", "mkdirSync", "mkdtempSync", "writeFileSync"]
     },
     {
       "path": "scripts/dev/rtk-session-path.mjs",
@@ -6785,7 +7108,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "scripts/dev/rtk-session-path.mjs",
-      "sourceSymbols": ["appendFileSync", "existsSync"]
+      "sourceSymbols": ["appendFileSync", "existsSync"],
+      "observedOperations": ["appendFileSync", "existsSync"]
     },
     {
       "path": "scripts/dev/rtk-session-path.test.mjs",
@@ -6807,6 +7131,15 @@
         "mkdtempSync",
         "readFileSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "chmodSync",
+        "cpSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "writeFileSync"
       ]
     },
     {
@@ -6821,7 +7154,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "scripts/dev/sealed-manifest-format.test.mjs",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "scripts/smoke-tests/lib/run-card-omission.test.js",
@@ -6835,7 +7169,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "scripts/smoke-tests/lib/run-card-omission.test.js",
-      "sourceSymbols": ["mkdtempSync", "rmSync"]
+      "sourceSymbols": ["mkdtempSync", "rmSync"],
+      "observedOperations": ["mkdtempSync", "rmSync"]
     },
     {
       "path": "scripts/smoke-tests/witnesses/packaged-control-state-615.mjs",
@@ -6856,6 +7191,14 @@
         "readFileSync",
         "rmSync",
         "writeFileSync"
+      ],
+      "observedOperations": [
+        "cpSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
       ]
     },
     {
@@ -6870,7 +7213,8 @@
       ],
       "disposition": "migration-candidate",
       "producer": "scripts/smoke-tests/witnesses/packaged-control-state-build-tree-615.mjs",
-      "sourceSymbols": ["cpSync", "mkdirSync", "mkdtempSync", "readFileSync", "rmSync"]
+      "sourceSymbols": ["cpSync", "mkdirSync", "mkdtempSync", "readFileSync", "rmSync"],
+      "observedOperations": ["cpSync", "mkdirSync", "mkdtempSync", "readFileSync", "rmSync"]
     }
   ]
 }
