@@ -1,4 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { ENGINES } from './engines'
 import {
   CANDIDATES_MARKER,
@@ -29,6 +32,14 @@ const candidate = {
 }
 
 const marker = (value: unknown) => `${CANDIDATES_MARKER} ${JSON.stringify(value)}`
+
+function expectEffortArgv(args: string[], id: string, effort: string | undefined) {
+  const supported = effort !== undefined && (id === 'claude' || id === 'codex')
+  expect(args.includes('--effort')).toBe(supported && id === 'claude')
+  expect(args.includes('high')).toBe(supported && id === 'claude')
+  expect(args.includes('-c')).toBe(supported && id === 'codex')
+  expect(args.includes('model_reasoning_effort=high')).toBe(supported && id === 'codex')
+}
 
 it('US-611: preserves the canonical delivery state returned by selection', () => {
   const [parsed] = parseCandidates(
@@ -189,7 +200,88 @@ describe('selectRootCandidates — one engine process, its marker read back', ()
     expect(call.cwd).toBe('/project')
     expect(call.promptText.startsWith('/pair-next --root 66 --filter risk:green')).toBe(true)
     expect(call.autonomyArgs).toEqual(['--dangerously-skip-permissions'])
+    expect(call.effort).toBeUndefined()
   })
+
+  it.each(['low', 'medium', 'high', 'xhigh', 'max'])(
+    '#617 r0-14: forwards %s with the model through selectOnce',
+    async effort => {
+      const runIteration = vi.fn(async (spawn: SpawnIterationInput) => {
+        spawn.onEvent?.({ type: 'assistant', text: marker({ candidates: [candidate] }) })
+        return { outcome: 'success' as const, detail: 'ok' }
+      })
+      await selectRootCandidates({
+        ...input,
+        model: 'claude-sonnet-5-5',
+        ...{ effort },
+        runIteration,
+      })
+      expect(runIteration.mock.calls[0]![0]).toMatchObject({
+        model: 'claude-sonnet-5-5',
+        effort,
+      })
+    },
+  )
+
+  it('#617 r0-14: retains effort and model on a malformed-answer retry', async () => {
+    let calls = 0
+    const runIteration = vi.fn(async (spawn: SpawnIterationInput) => {
+      spawn.onEvent?.({
+        type: 'assistant',
+        text: calls++ === 0 ? `${CANDIDATES_MARKER} {not json}` : marker({ candidates: [] }),
+      })
+      return { outcome: 'success' as const, detail: 'ok' }
+    })
+    await selectRootAnswer({
+      ...input,
+      model: 'claude-sonnet-5-5',
+      ...{ effort: 'medium' },
+      runIteration,
+    })
+    expect(runIteration).toHaveBeenCalledTimes(2)
+    for (const [spawn] of runIteration.mock.calls) {
+      expect(spawn.model).toBe('claude-sonnet-5-5')
+      expect(spawn.effort).toBe('medium')
+    }
+  })
+
+  it.each([
+    ['claude', 'high'],
+    ['codex', 'high'],
+    ['pi', 'high'],
+    ['opencode', 'high'],
+    ['claude', undefined],
+    ['codex', undefined],
+  ] as const)(
+    '#617 r0-14: %s selection reaches real runner argv with effort %s',
+    async (id, effort) => {
+      const dir = mkdtempSync(join(tmpdir(), 'pair-selection-'))
+      try {
+        const script = join(dir, 'engine.js')
+        const output = join(dir, 'argv.json')
+        writeFileSync(
+          script,
+          `const fs=require('fs'); fs.writeFileSync(process.argv[2], JSON.stringify(process.argv.slice(3))); const marker=${JSON.stringify(marker({ candidates: [] }))}; if(process.argv.includes('--output-last-message')) { console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:marker}})); console.log(JSON.stringify({type:'turn.completed'})); } else { console.log(JSON.stringify({type:'assistant',text:marker})); console.log(JSON.stringify(${id === 'claude' ? "{type:'result',subtype:'success'}" : id === 'pi' ? "{type:'agent_settled'}" : "{type:'step_finish',part:{reason:'stop'}}"})); }`,
+        )
+        const engine = { ...ENGINES[id], command: process.execPath, headlessArgs: [script, output] }
+        await selectRootAnswer({
+          ...input,
+          engine,
+          cwd: dir,
+          model: 'provider/model',
+          ...(effort !== undefined && { effort }),
+          autonomyArgs: [],
+          timeoutSeconds: 10,
+        })
+        const args = JSON.parse(readFileSync(output, 'utf8')) as string[]
+        expect(args).toContain('--model')
+        expect(args).toContain('provider/model')
+        expectEffortArgv(args, id, effort)
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    },
+  )
 
   it('fails closed when the selection process failed', async () => {
     const runIteration = vi.fn(async () => ({ outcome: 'failed' as const, detail: 'boom' }))

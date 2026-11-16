@@ -1,0 +1,9 @@
+{
+  "workflowProfiles": {
+    "default": {
+      "codex": "codex-medium",
+      "claude": "claude-medium"
+    },
+    "files": ".pair/adoption/tech/workflow-profiles/*.json"
+  }
+}

@@ -144,7 +144,11 @@ test('AC8: pair-implement-batch reports once per run that cycle hooks are not ex
   const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
   const logs = []
   const calls = []
-  const agent = async (prompt, opts) => (calls.push(opts?.label ?? ''), null)
+  const agent = async (prompt, opts) => {
+    if (opts?.label === 'profile:resolve') return { source: 'KB default', stages: Object.fromEntries(['prepare', 'validate', 'implement', 'green', 'verify'].map(stage => [stage, { engine: { value: 'default' }, model: { resolved: { id: null } }, effort: { value: 'default' } }])) }
+    calls.push(opts?.label ?? '')
+    return null
+  }
   const cards = [1, 2, 3].map(n => ({ id: String(500 + n), title: 'T', branch: `feature/US-${500 + n}-x` }))
   const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', src)({ cards, policyText: '' }, agent, fns => Promise.all(fns.map(f => f())), m => logs.push(m)).catch(e => ({ threw: String(e) }))
   const notices = logs.filter(l => /cycle hooks are NOT executed/.test(l))

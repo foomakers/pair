@@ -347,7 +347,7 @@ describe('the guarded mirrors are the ones this comparison is valid for (#393)',
       'agents:CLAUDE.md',
     ])
     // The excluded registries, and WHY each is excluded — asserted, not argued
-    // in prose. `adoption` is seeded-then-owned (divergence is the point);
+    // in prose. `adoption` and `project-config` are seeded-then-owned (divergence is the point);
     // `skills` flattens, which makes the pipeline skip the skill-ref rewrite
     // for it (that pair is guarded by `skill-md-mirror`); `workflows` and
     // `agent-definitions` (US-219) copy VERBATIM — no transform, no rewrite —
@@ -355,6 +355,7 @@ describe('the guarded mirrors are the ones this comparison is valid for (#393)',
     // doesn't already cover more strictly; that pair is guarded by
     // `workflow-mirror.test.ts`.
     expect(REGISTRY_CONFIG.adoption!.behavior).toBe('add')
+    expect(REGISTRY_CONFIG['project-config']!.behavior).toBe('add')
     expect(REGISTRY_CONFIG.skills!.flatten).toBe(true)
     expect(REGISTRY_CONFIG.workflows!.behavior).toBe('overwrite')
     expect(REGISTRY_CONFIG['agent-definitions']!.behavior).toBe('overwrite')
@@ -365,7 +366,7 @@ describe('the guarded mirrors are the ones this comparison is valid for (#393)',
       Object.keys(REGISTRY_CONFIG)
         .filter(k => !guardedKeys.has(k))
         .sort(),
-    ).toEqual(['adoption', 'agent-definitions', 'skills', 'workflows'])
+    ).toEqual(['adoption', 'agent-definitions', 'project-config', 'skills', 'workflows'])
   })
 
   it('guards the three .github agent files the github registry ships', () => {

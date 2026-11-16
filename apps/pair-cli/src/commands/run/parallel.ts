@@ -252,9 +252,16 @@ export function buildCardProcessArgs(
     ...(config.approveIneligible ? ['--approve-ineligible'] : []),
     ...telemetryArgv(config),
     ...autonomyArgv(config),
+    ...profileArgv(config),
+    ...timeoutArgv(config),
+  ]
+}
+
+function profileArgv(config: RunCommandConfig): string[] {
+  return [
     ...(config.profile !== undefined ? ['--profile', config.profile] : []),
     ...(config.workflowConfig !== undefined ? ['--workflow-config', config.workflowConfig] : []),
-    ...timeoutArgv(config),
+    ...(config.runSnapshot !== undefined ? ['--run-snapshot', config.runSnapshot] : []),
   ]
 }
 

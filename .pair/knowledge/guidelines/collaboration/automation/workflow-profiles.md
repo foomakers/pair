@@ -24,10 +24,12 @@ No `pair.config.json`, no `workflowProfiles` block, no `--profile` / `--workflow
 }
 ```
 
-- **`default`** — the profile name used when nothing is passed.
+- **`default`** — a profile name, or an engine-to-profile-name map such as `{"codex":"codex-medium","claude":"claude-medium"}`. Explicit selectors win. A map selects the actual CLI execution engine or in-session host, then configured engine fallbacks; a missing engine entry uses the KB default. Unknown keys, empty values and malformed unused entries fail validation. The selected profile stays fixed in run snapshots and external remedies.
 - **`files`** — a glob or an array of globs (project-relative; `*` inside a segment, `**` as a whole segment; never above the project root). Each file is one profile, **indexed by its own `name`**, never by its filename.
 - **`inline`** — profiles declared directly, keyed by name, for a project that wants no extra file.
 - Anything else under `workflowProfiles` is `profile-invalid`.
+
+Fresh official-dataset installs include six Claude/Codex profiles and seed `codex-medium` / `claude-medium` as per-engine defaults. Install and update preserve existing project configuration and customized profiles, while adding missing shipped assets. Projects without an installed configuration retain the KB default.
 
 ## Profile shape
 
@@ -63,7 +65,7 @@ Anything else — an unknown top-level key, an unknown stage (`verfy`), an unkno
 
 ### `context` is validated against the cycle's transition table
 
-`reuse` resumes the previous subagent of the same role, and `cycle-state.mjs` alone decides where that is allowed (`prepare→prepare`, `implement→green`, `green→green`). A stage entry asking `reuse` into any other stage — `validate` and `verify` above all, whose value is an independent verifier — is rejected **at load** as `profile-invalid`, never accepted and silently overridden at dispatch. A `defaults.context: reuse` is not an error: it applies only where the table admits it. The profile becomes the `contextPolicy` `resolve` is given, which contains only admissible transitions.
+`cycle-state.mjs` owns the allowed transitions. A conditional rule such as `"context": {"shared-with":"prepare","when":{"risk":"yellow"}}` shares only when the tier matches; otherwise the stage is fresh. `verify` is always fresh, and `validate` must be fresh at `risk:red`. `pair run` always starts a fresh process per stage. Legacy `defaults.context: reuse` covers only `prepare→prepare`, `implement→green` and `green→green`; validation and verification remain fresh.
 
 ### Model classes
 
@@ -79,6 +81,23 @@ Anything else — an unknown top-level key, an unknown stage (`verfy`), an unkno
 `inline` beats a `files` profile of the same name, and says so. Two `files` declaring the same `name` ⇒ `profile-name-collision`, naming both paths. An unresolvable name ⇒ `profile-unresolved`, naming the sources searched — **never** a silent fall back to the KB default: a typo in `--profile` must not quietly run the whole cycle on the wrong model.
 
 The profile is resolved **once**, before the first dispatch, and its table is printed once (profile, source, hash, then every stage with each field's value and the level that decided it). It is never re-resolved mid-cycle.
+
+## General and per-agent run defaults
+
+`pair.config.json` may also set machine-specific fallbacks:
+
+```json
+{
+  "run": {
+    "defaults": { "engine": "claude", "model": "claude-sonnet-5-5", "idleTimeout": 900 },
+    "agents": { "codex": { "command": "/opt/codex", "args": ["--config", "literal value"], "model": "gpt-6-sol", "idleTimeout": 600 } }
+  }
+}
+```
+
+For each field the order is CLI flag, profile `stages.<step>`, profile `defaults`, `run.agents.<engine>`, `run.defaults`, legacy `engine.*`, KB default. Per-agent settings cannot choose engine or effort. A malformed agent entry fails validation even when that engine is unused. `command` and `args` are passed as executable and literal argv; no shell interprets them. `run.defaults.engine` chooses the run engine when no flag or profile stage chooses one. Existing config needs no rewrite.
+
+`refine-story`, `plan-tasks`, `triage` and `classify` are stage ids for skills and batches. A skill uses its `process-step` marker, a batch uses its mode, and an unmapped invocation uses `defaults`. An in-session host reports engine/model gaps before dispatch with a runnable `pair-cli run` command retaining the card, profile and compatible engine.
 
 ## Audit, not input
 
@@ -98,13 +117,13 @@ The resolved profile's **name and content hash** are recorded in every handoff (
 | Stage | Role | Wired |
 | --- | --- | --- |
 | `prepare`, `validate`, `implement`, `green`, `verify`, `contract`, `merge` | the delivery cycle | yes |
-| `refine-story`, `plan-tasks`, `triage`, `classify` | the routing stages of #617 (AC-3) | **declared, not wired** — accepted and resolved, but nothing dispatches on them until #617 implements the routing |
+| `refine-story`, `plan-tasks`, `triage`, `classify` | skill and batch routing | yes |
 
-The four routing ids are valid in a profile today so profiles need no migration when #617 lands. `reuse` is never admissible into them (`CONTEXT_TABLE` lists no transition into them): they always run fresh. Shipped profiles set them from the affine cycle stage of the same profile: `refine-story` ≈ `prepare` (at least `balanced`), `plan-tasks` ≈ `prepare`, `classify` and `triage` ≈ `contract` (the profile's cheapest model). A profile with no override (`claude-high`, `codex-high`, `codex-cheap` for `classify`/`triage`) inherits `defaults`.
+The four routing ids inherit `defaults` unless the profile overrides them. The transition table determines whether a requested context reuse is admissible.
 
 ## Example
 
-Six profiles ship under `.pair/adoption/tech/workflow-profiles/` as samples; register the glob `"workflowProfiles": { "files": ".pair/adoption/tech/workflow-profiles/*.json" }` in `pair.config.json` and pass `--profile <name>`, or set `default`. This project's default is `codex-medium`; `medium` is the reference level.
+Six profiles ship under `.pair/adoption/tech/workflow-profiles/`; fresh installs register their glob and map Codex to `codex-medium`, Claude to `claude-medium`. Pass `--profile <name>` to override the selected default. This project uses the same per-engine map; `medium` is the reference level.
 
 | Profile | Defaults | Notable overrides |
 | --- | --- | --- |
@@ -125,7 +144,12 @@ Six profiles ship under `.pair/adoption/tech/workflow-profiles/` as samples; reg
 | `profile-invalid` | unknown key/stage/field, bad value, forbidden `reuse`, malformed JSON, unknown stage engine |
 | `profile-name-collision` | two files declare the same `name` |
 
-`--profile` / `--workflow-config` apply only to a card that enters the delivery cycle; on a card routed to a mapped workflow or a preparation skill they are refused, never silently ignored.
+`--profile` / `--workflow-config` apply to delivery-cycle cards, mapped workflows, preparation skills, `--skill`, and `--prompt`. A skill uses its `process-step` marker; an unmapped skill or prompt uses `defaults`. Batch work uses its mode (`refine-story`, `plan-tasks`, `triage`, or `classify`). Disabled process steps are ignored with a note; a workflow profile never enables them.
+
+```bash
+pair-cli run --skill pair-process-plan-tasks --profile claude-medium --engine claude
+pair-cli run --prompt 'Inspect the project' --workflow-config ./profile.json --engine codex
+```
 
 ## Related
 

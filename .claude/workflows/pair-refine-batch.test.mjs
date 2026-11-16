@@ -23,6 +23,10 @@ async function runWorkflow({ args, dispatch }) {
   const logs = []
   const agent = async (prompt, opts) => {
     calls.push({ prompt, opts })
+    if (opts.label === 'profile:resolve') {
+      const explicit = dispatch(prompt, opts)
+      return explicit?.stages ? explicit : { source: 'KB default', stages: Object.fromEntries(['classify', 'triage', 'refine-story'].map(stage => [stage, { engine: { value: 'default' }, model: { resolved: { id: null } }, effort: { value: 'default' } }])) }
+    }
     return dispatch(prompt, opts)
   }
   const parallel = fns => Promise.all(fns.map(f => f()))
@@ -115,6 +119,21 @@ test('triage skips the verify stage — there is no write to read back', async (
   assert.equal(result.triage.length, 1)
   assert.equal(result.ready.length, 1)
   assert.equal(result.unverified.length, 0, 'the skipped verify must not register as unverified')
+})
+
+test('#617 AC-3/10: batch mode uses the resolved stage and refuses a foreign engine before work', async () => {
+  const profile = { source: 'pair.config.json', stages: {
+    classify: { engine: { value: 'claude' }, model: { resolved: { id: 'haiku' } }, effort: { value: 'low' } },
+    triage: { engine: { value: 'codex' }, model: { resolved: { id: 'gpt-5' } }, effort: { value: 'high' } },
+  } }
+  const dispatch = (prompt, opts) => opts.label === 'profile:resolve' ? profile : okDispatch(prompt, opts)
+  const { calls } = await runWorkflow({ args: { items: [{ id: '216', mode: 'classify' }] }, dispatch })
+  assert.equal(calls.find(c => c.opts.label === 'classify:#216').opts.model, 'haiku')
+  assert.equal(calls.find(c => c.opts.label === 'classify:#216').opts.effort, 'low')
+  await assert.rejects(
+    runWorkflow({ args: { items: [{ id: '134', mode: 'triage' }] }, dispatch }),
+    /triage.*codex.*pair-cli run/i,
+  )
 })
 
 // ── Model routing ──────────────────────────────────────────────────────────

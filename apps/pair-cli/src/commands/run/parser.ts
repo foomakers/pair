@@ -68,6 +68,8 @@ export interface RunDispatchRequest {
 
 export interface RunCommandConfig {
   command: 'run'
+  /** Internal immutable configuration passed from the root/parallel parent. */
+  runSnapshot?: string
   /** AC-24: explicit --telemetry / --no-telemetry; absent reads the adoption. */
   telemetry?: boolean
   /** Present only when `--engine` was passed; resolution precedence lives in T-2. */
@@ -134,6 +136,7 @@ export const DEFAULT_WATCH_INTERVAL: RunInterval = { text: '10m', seconds: 600 }
 export const MIN_WATCH_INTERVAL_SECONDS = 60
 
 interface ParseRunOptions {
+  runSnapshot?: string
   telemetry?: boolean
   engine?: string
   skill?: string
@@ -542,31 +545,20 @@ function resolveStateOrder(options: ParseRunOptions): { stateOrder?: readonly st
   return { stateOrder: parseStateOrder(options.stateOrder) }
 }
 
-/**
- * US-488: `--profile` / `--workflow-config` select the DELIVERY-CYCLE profile, so they mean something
- * only on a `--card` entry or a `--root`/`--parallel` fan-out (forwarded to each child) — anywhere else they would be accepted and silently ignored, which is the
- * one thing a profile flag must never be (a typo'd model class quietly not applying).
- */
+/** `--profile` / `--workflow-config` select a workflow profile in every run mode. */
 function resolveProfileSelection(options: ParseRunOptions): {
   profile?: string
   workflowConfig?: string
+  runSnapshot?: string
 } {
   const profile = optionalText(options.profile, '--profile')
   const workflowConfig = optionalText(options.workflowConfig, '--workflow-config')
-  if (
-    (profile !== undefined || workflowConfig !== undefined) &&
-    options.card === undefined &&
-    options.cards === undefined &&
-    options.parallel === undefined &&
-    options.root === undefined
-  ) {
-    const flag = profile !== undefined ? '--profile' : '--workflow-config'
-    throw new Error(
-      `${flag} selects the delivery-cycle workflow profile and is only meaningful with --card, --root or --parallel ` +
-        '(the cycle coordinator entry)',
-    )
+  const runSnapshot = optionalText(options.runSnapshot, '--run-snapshot')
+  return {
+    ...(profile && { profile }),
+    ...(workflowConfig && { workflowConfig }),
+    ...(runSnapshot && { runSnapshot }),
   }
-  return { ...(profile && { profile }), ...(workflowConfig && { workflowConfig }) }
 }
 
 function resolveScope(options: ParseRunOptions): RunScopeOptions {

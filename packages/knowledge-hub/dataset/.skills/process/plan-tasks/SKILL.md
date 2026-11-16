@@ -15,6 +15,10 @@ Transform a refined user story into specific, actionable implementation tasks. T
 
 Executable form of the **`plan-tasks`** step, and a composer of `define-bounded-contexts`. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
+## Workflow Host
+
+Before in-session dispatch, check the selected `plan-tasks` stage against the detected host with the shared resolver's `gaps --host` command. Show any gap and wait; see [workflow host gaps](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/workflow-host-gaps.md).
+
 ## Composed Skills
 
 | Skill          | Type       | Required                                                   |

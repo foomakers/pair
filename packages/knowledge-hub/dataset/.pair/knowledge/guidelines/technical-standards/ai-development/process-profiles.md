@@ -2,6 +2,8 @@
 
 A **process profile** declares which of the [catalogued process steps](step-catalogue.md) a project runs. A team adopting a subset of the process configures it once, in adoption, and no disabled step is ever proposed — by `/next`, by a skill, or by the how-to path a project with **no skills installed** follows.
 
+A [workflow profile](../../collaboration/automation/workflow-profiles.md) instead selects an engine, model, effort and context for enabled steps. It never enables a process step.
+
 The KB owns the **schema**, the **built-in profiles** and the **step catalogue**. The profile itself lives **only** in the project's `way-of-working.md`, in a `## Process Profile` section (D19) — nothing here is per-project, and nothing per-project is here.
 
 ## Schema

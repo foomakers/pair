@@ -900,11 +900,46 @@ const ROLE_EFFORTS = Object.fromEntries(
 // `relay` = the pure script-relay dispatches (autonomy resolve / tier / decide / escalate / pr-state / cascade / merge-check;
 // NOT `merge:` — that dispatch runs verify-quality, judges the gate colour and writes the squash message): an agent only runs one command and returns its JSON, so it defaults to `haiku` and is NOT moved by the batch-wide
 // `model` / `effort` — only by `models.relay` / `efforts.relay`. A non-schema answer stays fail-closed (HALT), never retried silently.
+// A Workflow sandbox cannot read project files. Ask one bounded relay for the shared
+// resolver's result before any story agent starts, then retain that result for this batch.
+const AGENT_TIMEOUT_MINUTES = 30 // aligned with pair-cli's 1800 s per-stage watchdog
+const PROFILE_SCHEMA = { type: 'object', properties: { source: { type: 'string' }, cliEngineFlag: { type: ['string', 'null'] }, stages: { type: 'object' } }, required: ['source', 'stages'] }
+const PROFILE = PARSED.stories.length ? await boundedAgent('profile:resolve',
+  `Run exactly this read-only command in the project root: node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --host claude. Return its JSON unchanged. Do not dispatch a story or modify files.`,
+  { agentType: 'general-purpose', phase: 'Contracts', label: 'profile:resolve', model: 'haiku', effort: 'low', schema: PROFILE_SCHEMA },
+) : { source: 'KB default', stages: {} }
+if (!PROFILE || typeof PROFILE !== 'object' || !PROFILE.stages || typeof PROFILE.stages !== 'object')
+  throw new Error('implement-batch: profile:resolve returned no stage map; no story dispatched')
+const profileRoute = (card, engine, model, tier) => {
+  const selection = PROFILE.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(PROFILE.sourceDetail)}` : (PROFILE.source === 'argument' || PROFILE.mappedEngine) ? ` --profile ${JSON.stringify(PROFILE.name)}` : ''
+  const compatible = engine && engine !== 'default' ? engine : /^gpt-/.test(model ?? '') ? 'codex' : 'claude'
+  const view = PROFILE.byTierProfiles?.[tier] ?? PROFILE
+  const engineFlag = view.cliEngineFlag === undefined ? (PROFILE.source === 'KB default' ? compatible : null) : view.cliEngineFlag
+  return `pair-cli run --card ${card}${selection}${engineFlag ? ` --engine ${engineFlag}` : ''}`
+}
+
+for (const story of PARSED.stories) for (const stage of ['prepare', 'validate', 'implement', 'green', 'verify']) {
+  if (PROFILE.disabledStages?.includes(stage)) continue
+  const settings = (PROFILE.byTier?.[story.tier] ?? PROFILE.stages)[stage]
+  if (PARSED.stories.length && (!settings || typeof settings !== 'object')) throw new Error(`implement-batch: profile lacks ${stage}; no story dispatched`)
+  const engine = settings?.engine?.value
+  if (engine && !['default', 'claude'].includes(engine))
+    throw new Error(`implement-batch: ${stage} wants engine ${JSON.stringify(engine)}; this host runs claude. Run ${profileRoute(story.id, engine, undefined, story.tier)}; no story dispatched.`)
+  const model = settings?.model?.resolved?.id
+  if (model && !['fable', 'haiku', 'sonnet', 'opus'].includes(model))
+    throw new Error(`implement-batch: ${stage} wants model ${JSON.stringify(model)}; this host cannot run it. Run ${profileRoute(story.id, engine, model, story.tier)}; no story dispatched.`)
+}
+if (PROFILE.table) for (const line of PROFILE.table) log(line)
+const CARD_TIERS = new Map()
 const RELAY_DEFAULT_MODEL = 'haiku'
 const withModel = (role, opts) => {
   const relay = role === 'relay'
-  const model = relay ? (ROLE_MODELS.relay ?? RELAY_DEFAULT_MODEL) : (ROLE_MODELS[role] ?? BATCH_MODEL)
-  const effort = relay ? (ROLE_EFFORTS.relay ?? opts.effort) : (ROLE_EFFORTS[role] ?? BATCH_EFFORT ?? opts.effort)
+  const stage = { red: 'prepare', redVerifier: 'validate', implementation: 'implement', green: 'green', reviewer: 'verify' }[role]
+  const card = /#([^ ]+)/.exec(opts.label ?? '')?.[1]
+  const stages = PROFILE.byTier?.[CARD_TIERS.get(card)] ?? PROFILE.stages
+  const profile = stage ? stages[stage] : undefined
+  const model = relay ? (ROLE_MODELS.relay ?? RELAY_DEFAULT_MODEL) : (ROLE_MODELS[role] ?? BATCH_MODEL ?? profile?.model?.resolved?.id)
+  const effort = relay ? (ROLE_EFFORTS.relay ?? opts.effort) : (ROLE_EFFORTS[role] ?? BATCH_EFFORT ?? (profile?.effort?.value !== 'default' ? profile?.effort?.value : undefined) ?? opts.effort)
   return { ...opts, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
 }
 // Rounds of autonomous fix<->re-review before escalating to a human. Beyond 3 the loop is
@@ -1525,7 +1560,6 @@ const METRICS = { dispatches: [], retries: 0, redirects: 0 }
 // races a timer — when the sandbox exposes `setTimeout` (it has no clock: Date.now() throws, so this is feature-detected;
 // without it the limit cannot be enforced and the call is made unbounded, as before). `args.agentTimeoutMinutes`
 // overrides the default; a timeout throws an error carrying `.timeout` ("timeout after <n>m") and `.stage`.
-const AGENT_TIMEOUT_MINUTES = 30 // aligned with pair-cli's 1800 s per-stage watchdog
 async function boundedAgent(stage, prompt, opts) {
   const minutes = PARSED.agentTimeoutMinutes ?? AGENT_TIMEOUT_MINUTES
   if (typeof setTimeout !== 'function' || !(minutes > 0)) return agent(prompt, opts)
@@ -1797,7 +1831,8 @@ async function driveStoryInner(story) {
   const inputs = fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, reviewers: PIPELINE.reviewers }))
   const storyMetrics = { dispatches: 0, retries: 0, redirects: 0 }
   // US-524: under `until: merged` the tier the cycle is driven under is read ONCE here (the caller's Select-time tier when given).
-  const cardTier = AUTONOMY.merging && !story.tier ? await readTier(story) : story.tier
+  const cardTier = !story.tier && (AUTONOMY.merging || Object.values(PROFILE.stages).some(s => s.model?.value === 'by-tier')) ? await readTier(story) : story.tier
+  CARD_TIERS.set(story.id, cardTier)
   const common = () =>
     `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
   // AO: set for the ONE re-dispatch that follows a format-validation failure (see `formatDefect`); never else.

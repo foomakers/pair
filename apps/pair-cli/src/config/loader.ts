@@ -490,6 +490,23 @@ function loadBaseConfig(fsService: FileSystemService): { config: Config; source:
   }
 }
 
+function registryBaseForRuntimeConfig(
+  fs: FileSystemService,
+  base: Config,
+  project: unknown,
+  legacy: { path: string; allowed: boolean },
+): Config {
+  if (
+    !legacy.allowed ||
+    !isPlainObject(project) ||
+    ['asset_registries', 'dataset_registries'].some(key => Object.hasOwn(project, key))
+  )
+    return base
+  const declaration = JSON.parse(fs.readFileSync(legacy.path))
+  assertSkipRegistries(declaration, legacy.path)
+  return mergeConfigs(base, declaration)
+}
+
 function applyPairConfigIfExists(
   fsService: FileSystemService,
   baseConfig: Config,
@@ -517,7 +534,11 @@ function applyPairConfigIfExists(
       const pairConfigContent = fsService.readFileSync(configPath)
       const pairConfig = JSON.parse(pairConfigContent)
       assertSkipRegistries(pairConfig, configPath, options.pairConfigOnly)
-      return { config: mergeConfigs(baseConfig, pairConfig) }
+      const registryBase = registryBaseForRuntimeConfig(fsService, baseConfig, pairConfig, {
+        path: configJsonPath,
+        allowed: configPath === pairConfigPath && fallbackAllowed,
+      })
+      return { config: mergeConfigs(registryBase, pairConfig) }
     } catch (err) {
       // install/update: an unreadable project config silently dropping `skipRegistries`
       // would overwrite the user's own files.

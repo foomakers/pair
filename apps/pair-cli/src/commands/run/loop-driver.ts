@@ -233,7 +233,33 @@ function driveIteration(
     onRunEvent: (event: RunEvent) => void
   },
 ): Promise<IterationResult> {
-  const basePrompt = buildPromptText(resolved.engine.engine, resolved.invocation, {
+  const basePrompt = buildPromptText(
+    resolved.engine.engine,
+    resolved.invocation,
+    promptArgs(resolved, context),
+  )
+
+  const promptText =
+    context.formatCorrection === undefined
+      ? basePrompt
+      : formatCorrectionNote(context.formatCorrection) + basePrompt
+  const run = wiring.deps.runIteration ?? spawnIteration
+  return run({
+    engine: resolved.engine.engine,
+    ...(resolved.model !== undefined && { model: resolved.model }),
+    ...(resolved.effort !== undefined && { effort: resolved.effort }),
+    promptText,
+    cwd: resolved.perimeter.cwd,
+    autonomyArgs: resolved.autonomy.args,
+    timeoutSeconds: config.iterationTimeoutSeconds,
+    idleTimeoutSeconds: wiring.idleTimeoutSeconds,
+    onRunEvent: wiring.onRunEvent,
+    maxFixRounds: LOOP_MAX_FIX_ROUNDS,
+  })
+}
+
+function promptArgs(resolved: ResolvedRun, context: IterationContext) {
+  return {
     ...(resolved.perimeter.root !== undefined && { root: resolved.perimeter.root }),
     // Passed ONLY when the invocation actually carries it. `buildSkillArgs` would drop it anyway,
     // but relying on that is how a flag ends up looking effective while changing nothing: the
@@ -247,23 +273,7 @@ function driveIteration(
     }),
     iteration: context.iteration,
     ...approvalArguments(resolved),
-  })
-
-  const promptText =
-    context.formatCorrection === undefined
-      ? basePrompt
-      : formatCorrectionNote(context.formatCorrection) + basePrompt
-  const run = wiring.deps.runIteration ?? spawnIteration
-  return run({
-    engine: resolved.engine.engine,
-    promptText,
-    cwd: resolved.perimeter.cwd,
-    autonomyArgs: resolved.autonomy.args,
-    timeoutSeconds: config.iterationTimeoutSeconds,
-    idleTimeoutSeconds: wiring.idleTimeoutSeconds,
-    onRunEvent: wiring.onRunEvent,
-    maxFixRounds: LOOP_MAX_FIX_ROUNDS,
-  })
+  }
 }
 
 /**

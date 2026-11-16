@@ -185,12 +185,12 @@ export const runCommandMetadata = {
     {
       flags: '--profile <name>',
       description:
-        'With --card, --root or --parallel (forwarded to every child card): the named workflow profile (per-stage engine/model/effort/context) from pair.config.json workflowProfiles; an unknown name halts profile-unresolved',
+        'Select stage engine/model/effort/context for cards, skills, prompts and root/parallel runs; unmapped invocations use defaults. run.defaults and run.agents provide fallbacks. Unknown names halt profile-unresolved',
     },
     {
       flags: '--workflow-config <path>',
       description:
-        'With --card, --root or --parallel (forwarded to every child card): an external workflow profile file, used verbatim — wins over --profile and pair.config.json',
+        'External workflow profile for cards, mapped/preparation skills, --skill, --prompt and root/parallel children; wins over --profile and pair.config.json',
     },
     {
       flags: '--dry-run',

@@ -158,3 +158,118 @@ function readIdKeyedPaths(
   }
   return { value }
 }
+
+export interface RunAgentDeclaration {
+  readonly command?: string
+  readonly args?: readonly string[]
+  readonly model?: string
+  readonly idleTimeout?: number
+}
+
+export interface RunDeclaration {
+  readonly defaults?: {
+    readonly engine?: string
+    readonly model?: string
+    readonly idleTimeout?: number
+  }
+  readonly agents?: Readonly<Record<string, RunAgentDeclaration>>
+  readonly errors: string[]
+}
+
+/** Validate every entry, including agents unused by the selected profile. */
+export function readRunDeclaration(
+  config: unknown,
+  knownEngineIds: readonly string[],
+): RunDeclaration {
+  if (!isPlainObject(config) || !('run' in config)) return { errors: [] }
+  const run = config['run']
+  if (!isPlainObject(run)) return { errors: ['run: must be an object'] }
+  const errors: string[] = []
+  for (const key of Object.keys(run))
+    if (!['defaults', 'agents'].includes(key)) errors.push(`run.${key}: unknown field`)
+  const defaults = run['defaults']
+  const parsedDefaults = parseRunDefaults(defaults, knownEngineIds, errors)
+  const agents = run['agents']
+  const parsedAgents = parseRunAgents(agents, knownEngineIds, errors)
+  return {
+    ...(defaults !== undefined && {
+      defaults: parsedDefaults as NonNullable<RunDeclaration['defaults']>,
+    }),
+    ...(agents !== undefined && { agents: parsedAgents }),
+    errors,
+  }
+}
+
+function parseRunDefaults(raw: unknown, ids: readonly string[], errors: string[]) {
+  if (raw === undefined) return {}
+  if (!isPlainObject(raw)) {
+    errors.push('run.defaults: must be an object')
+    return {}
+  }
+  const parsed: Record<string, string | number> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    const field = `run.defaults.${key}`
+    const error = defaultFieldError(key, value, ids, field)
+    if (error) errors.push(error)
+    else parsed[key] = value as string | number
+  }
+  return parsed
+}
+
+function parseRunAgents(raw: unknown, ids: readonly string[], errors: string[]) {
+  const parsed: Record<string, RunAgentDeclaration> = {}
+  if (raw === undefined) return parsed
+  if (!isPlainObject(raw)) {
+    errors.push('run.agents: must be an object keyed by engine id')
+    return parsed
+  }
+  for (const [id, agent] of Object.entries(raw)) {
+    const where = `run.agents.${id}`
+    if (!ids.includes(id)) {
+      errors.push(`${where}: unknown engine; choose ${ids.join(' | ')}`)
+      continue
+    }
+    if (!isPlainObject(agent)) {
+      errors.push(`${where}: must be an object`)
+      continue
+    }
+    for (const [key, value] of Object.entries(agent)) {
+      const error = agentFieldError(key, value, `${where}.${key}`)
+      if (error) errors.push(error)
+    }
+    parsed[id] = agent as RunAgentDeclaration
+  }
+  return parsed
+}
+
+function defaultFieldError(
+  key: string,
+  value: unknown,
+  knownEngineIds: readonly string[],
+  field: string,
+): string | undefined {
+  if (!['engine', 'model', 'idleTimeout'].includes(key)) return `${field}: unknown field`
+  if (key === 'engine' && (typeof value !== 'string' || !knownEngineIds.includes(value)))
+    return `${field}: unknown engine ${JSON.stringify(value)}; choose ${knownEngineIds.join(' | ')}`
+  if (key === 'model' && (typeof value !== 'string' || !value.trim()))
+    return `${field}: must be a non-empty model id`
+  return timeoutFieldError(key, value, field)
+}
+
+function agentFieldError(key: string, value: unknown, field: string): string | undefined {
+  if (!['command', 'args', 'model', 'idleTimeout'].includes(key)) return `${field}: unknown field`
+  if ((key === 'command' || key === 'model') && (typeof value !== 'string' || !value.trim()))
+    return `${field}: must be a non-empty string`
+  if (key === 'args' && (!Array.isArray(value) || value.some(arg => typeof arg !== 'string')))
+    return `${field}: must be an array of strings`
+  return timeoutFieldError(key, value, field)
+}
+
+function timeoutFieldError(key: string, value: unknown, field: string): string | undefined {
+  if (
+    key === 'idleTimeout' &&
+    (!Number.isInteger(value) || Number(value) <= 0 || Number(value) > MAX_TIMEOUT_SECONDS)
+  )
+    return `${field}: must be a positive integer of seconds at most ${MAX_TIMEOUT_SECONDS}`
+  return undefined
+}

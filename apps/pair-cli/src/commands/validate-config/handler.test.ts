@@ -37,6 +37,21 @@ describe('handleValidateConfigCommand - reserved path overlap (D14)', () => {
     }),
   }
 
+  test('#617 AC-5: rejects an unused malformed run agent', async () => {
+    const fs = new InMemoryFileSystemService(baseConfigFiles, cwd, cwd)
+    const path = `${cwd}/custom-config.json`
+    await fs.writeFile(
+      path,
+      JSON.stringify({
+        asset_registries: JSON.parse(baseConfigFiles[`${cwd}/config.json`]!).asset_registries,
+        run: { agents: { unknown: { model: 'x' } } },
+      }),
+    )
+    await expect(
+      handleValidateConfigCommand({ command: 'validate-config', config: path }, fs),
+    ).rejects.toThrow(/run\.agents\.unknown.*unknown engine/)
+  })
+
   test('flags a registry that accidentally targets the working path', async () => {
     const fs = new InMemoryFileSystemService(baseConfigFiles, cwd, cwd)
     const customConfig = {
