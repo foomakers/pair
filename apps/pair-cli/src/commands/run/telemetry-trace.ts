@@ -151,10 +151,15 @@ export class Trace {
   event(name: EventName, extra: Record<string, unknown> = {}, round?: number): void {
     const ts = this.now()
     const id = `${this.init.run}:${this.init.card}:${name}:${ts}.${this.events++}`
-    this.write(envelope({ kind: 'event', id, ts }, this.keys(undefined, undefined, undefined, round ?? this.round), {
-        event: name,
-        ...extra,
-      }),
+    this.write(
+      envelope(
+        { kind: 'event', id, ts },
+        this.keys(undefined, undefined, undefined, round ?? this.round),
+        {
+          event: name,
+          ...extra,
+        },
+      ),
     )
   }
 

@@ -1771,25 +1771,25 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
     const merge = mergeFor(ctx, input, co, progress)
     const outcome = await traced(runTrace, () =>
       runCycle({
-      hooks,
-      resolve: resolveFor(ctx, input, co),
-      worktree: worktreeFor(ctx, input, co),
-      packet: packetFor(ctx, input, co) as never,
-      spawnStage: spawnStageFor(ctx, co, progress, pending),
-      mergeStage: mergeWithTelemetry(ctx, co, merge),
-      escalate: escalateFor(input, co),
-      ...recoveryHooks(ctx, input, co),
-      policy,
-      ...(input.rounds !== undefined && { rounds: input.rounds }),
-      onNotice: note => console.log(`  ${note}`),
-      ...(progress !== undefined && { onDispatch: progress.dispatch }),
-      // One line per stage, the moment the NEXT resolve reveals whether it advanced (else a long
-      // unattended run prints one terminal status and a silently misplaced handoff looks like a failure).
-      onStage: record => {
-        pending.shift()?.(record.handoffAdvanced)
-        logStage(record)
-      },
-    })
+        hooks,
+        resolve: resolveFor(ctx, input, co),
+        worktree: worktreeFor(ctx, input, co),
+        packet: packetFor(ctx, input, co) as never,
+        spawnStage: spawnStageFor(ctx, co, progress, pending),
+        mergeStage: mergeWithTelemetry(ctx, co, merge),
+        escalate: escalateFor(input, co),
+        ...recoveryHooks(ctx, input, co),
+        policy,
+        ...(input.rounds !== undefined && { rounds: input.rounds }),
+        onNotice: note => console.log(`  ${note}`),
+        ...(progress !== undefined && { onDispatch: progress.dispatch }),
+        // One line per stage, the moment the NEXT resolve reveals whether it advanced (else a long
+        // unattended run prints one terminal status and a silently misplaced handoff looks like a failure).
+        onStage: record => {
+          pending.shift()?.(record.handoffAdvanced)
+          logStage(record)
+        },
+      }),
     )
     pending.splice(0).forEach(settle => settle(true))
     runTrace.finish(outcome)

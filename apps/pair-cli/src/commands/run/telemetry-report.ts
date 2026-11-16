@@ -267,7 +267,7 @@ export function renderView(records: readonly TelemetryRecord[], by?: View): stri
 if (require.main === module) {
   const args = process.argv.slice(2)
   const at = args.indexOf('--by')
-  const by = at < 0 ? undefined : (args[at + 1] as View | undefined) ?? ''
+  const by = at < 0 ? undefined : ((args[at + 1] as View | undefined) ?? '')
   if (by !== undefined && !VIEWS.includes(by as View)) {
     process.stderr.write(`--by: expected one of ${VIEWS.join(', ')}\n`)
     process.exit(1)
