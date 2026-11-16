@@ -122,9 +122,13 @@ export function observeEngineEvent(
   }
 }
 
+/** `stage` is the v1 end record (read, never rewritten); `start`/`end`/`event` are the v2 envelope kinds. */
+export type TelemetryKind = 'stage' | 'card' | 'start' | 'end' | 'event'
+const KINDS: readonly unknown[] = ['stage', 'card', 'start', 'end', 'event']
+
 export interface TelemetryRecord {
   readonly id: string
-  readonly kind: 'stage' | 'card'
+  readonly kind: TelemetryKind
   readonly [key: string]: unknown
 }
 
@@ -137,8 +141,7 @@ export function parseTelemetryLine(line: string): TelemetryRecord | undefined {
   try {
     const value = JSON.parse(line) as unknown
     const record = object(value)
-    return (record?.['kind'] === 'stage' || record?.['kind'] === 'card') &&
-      typeof record['id'] === 'string'
+    return KINDS.includes(record?.['kind']) && typeof record?.['id'] === 'string'
       ? (record as unknown as TelemetryRecord)
       : undefined
   } catch {
@@ -274,7 +277,7 @@ export interface CardTelemetryInput {
   readonly pairVersion: string
   readonly workflowVersion: string
   readonly profile: string
-  readonly engine: string
+  readonly engine?: string
   readonly model?: string
   readonly outcome: string
   readonly cause?: string
@@ -317,9 +320,52 @@ function retryCount(stages: readonly TelemetryRecord[]): number {
   return [...dispatches.values()].reduce((total, n) => total + n - 1, 0)
 }
 
+/** v1 `stage` and v2 `end` read as one shape; an `end` supersedes the `stage` written for the same dispatch. */
+function normalizedStages(records: readonly TelemetryRecord[]): TelemetryRecord[] {
+  const superseded = new Set(records.filter(r => r.kind === 'end').map(r => r['legacyId']))
+  return records
+    .filter(r => r.kind === 'end' || (r.kind === 'stage' && !superseded.has(r.id)))
+    .map(r => {
+      if (r.kind !== 'end') return r
+      const durationMs = Number(r['durationMs'] ?? 0)
+      return {
+        ...r,
+        start: Date.parse(String(r['ts'])) - durationMs,
+        outcomeClass: String(r['outcome']),
+      }
+    })
+}
+
+type Totals = { stages: number; durationMs: number; tokens: unknown; cost: number | 'not measured' }
+
+/** C5: totals per runner and per model; unmeasured tokens/cost stay `not measured`, never partial. */
+function totalsBy(stages: readonly TelemetryRecord[], key: string): Record<string, Totals> {
+  const groups = new Map<string, TelemetryRecord[]>()
+  for (const stage of stages) {
+    const name = String(stage[key] ?? 'not measured')
+    groups.set(name, [...(groups.get(name) ?? []), stage])
+  }
+  return Object.fromEntries(
+    [...groups].map(([name, group]) => {
+      const costs = group.map(stage => stage['cost'])
+      return [
+        name,
+        {
+          stages: group.length,
+          durationMs: group.reduce((total, stage) => total + Number(stage['durationMs'] ?? 0), 0),
+          tokens: cardTokens(group),
+          cost: costs.every(c => typeof c === 'number')
+            ? (costs as number[]).reduce((total, c) => total + c, 0)
+            : 'not measured',
+        },
+      ]
+    }),
+  )
+}
+
 /** The card's numbers come from observed stage records; missing usage stays missing. */
 export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord {
-  const stages = input.stages
+  const stages = normalizedStages(input.stages)
   const activeMs = stages.reduce((total, stage) => total + Number(stage['durationMs'] ?? 0), 0)
   const start = Math.min(input.start, ...stages.map(stage => Number(stage['start'] ?? input.start)))
   const wallMs = input.end - start
@@ -332,8 +378,6 @@ export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord 
     pairVersion: input.pairVersion,
     workflowVersion: input.workflowVersion,
     profile: input.profile,
-    engine: input.engine,
-    model: input.model ?? 'not measured',
     outcome: input.outcome,
     ...(input.cause !== undefined && { cause: input.cause }),
     start,
@@ -348,6 +392,22 @@ export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord 
     findingsByRound: input.findingsByRound ?? {},
     repairs: input.repairs ?? 0,
     tokens: cardTokens(stages),
+    stageRecords: stages.map(stage => ({
+      step: stage['step'],
+      phase: stage['phase'] ?? null,
+      round: stage['round'] ?? null,
+      engine: stage['engine'],
+      model: stage['model'] ?? 'not measured',
+      effort: stage['effort'] ?? 'not measured',
+      context: stage['stageContext'] ?? 'not measured',
+      durationMs: stage['durationMs'],
+      tokens: stage['tokens'],
+      cost: stage['cost'] ?? 'not measured',
+      outcome: stage['outcome'] ?? stage['outcomeClass'],
+      cause: stage['cause'] ?? null,
+    })),
+    byRunner: totalsBy(stages, 'engine'),
+    byModel: totalsBy(stages, 'model'),
     interventions: input.interventions,
   }
 }
@@ -396,13 +456,25 @@ export function readCycleProgress(runDir: string): {
 }
 
 export function readTelemetry(root: string, run: string, card: string): TelemetryRecord[] {
+  return readRecords(root).filter(
+    record => record.kind === 'stage' && record['run'] === run && record['card'] === card,
+  )
+}
+
+/** Every stage-level record (v1 `stage`, v2 `end`) of the card across ALL its runs — what the card aggregates. */
+export function readCardStages(root: string, card: string): TelemetryRecord[] {
+  return readRecords(root).filter(
+    record => (record.kind === 'stage' || record.kind === 'end') && record['card'] === card,
+  )
+}
+
+function readRecords(root: string): TelemetryRecord[] {
   const path = telemetryFile(root)
   if (!existsSync(path)) return []
   try {
     return readFileSync(path, 'utf8')
       .split('\n')
       .flatMap(line => parseTelemetryLine(line) ?? [])
-      .filter(record => record.kind === 'stage' && record['run'] === run && record['card'] === card)
   } catch {
     return []
   }

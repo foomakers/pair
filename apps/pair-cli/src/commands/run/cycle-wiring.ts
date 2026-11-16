@@ -46,9 +46,20 @@ import {
   cardTelemetryRecord,
   readInterventions,
   readCycleProgress,
-  readTelemetry,
+  readCardStages,
   stageTelemetryRecord,
 } from './telemetry'
+import {
+  closeOpenStages,
+  createTrace,
+  envelope,
+  sweepLostStages,
+  type StageHandle,
+  type Trace,
+} from './telemetry-trace'
+import { telemetryPrices } from './telemetry-policy'
+import { onInterrupt } from './interrupt'
+import { hostname, platform as osPlatform } from 'os'
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -199,6 +210,15 @@ export function readCardTier(card: string, cwd: string): string | undefined {
   try {
     const tiers = readCard(card, cwd).labels.filter(name => name.startsWith('risk:'))
     return tiers.length === 1 && LABEL_SHAPE_RE.test(tiers[0]!) ? tiers[0] : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The card's parent epic id (`**Parent Epic**: [#605 …]`), or `undefined` — telemetry only, never a guess. */
+function readCardEpic(card: string, cwd: string): string | undefined {
+  try {
+    return /Parent Epic\*\*:\s*\[?#(\d+)/.exec(readCard(card, cwd).body)?.[1]
   } catch {
     return undefined
   }
@@ -487,8 +507,23 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   // US-492 AC2: the run's PM tool / code host are resolved ONCE, here, before any stage runs —
   // every later script call naming this run directory reuses the binding.
   bridge.bindHosts(runDir)
+  const trace: { current?: Trace } = {}
   return {
-    bridge,
+    trace,
+    // AC-3: every granted recovery round is a telemetry event (one wrap covers every recovery site).
+    bridge: {
+      ...bridge,
+      recover: (options: Parameters<typeof bridge.recover>[0]) => {
+        const round = bridge.recover(options)
+        if (round.allowed)
+          trace.current?.event('recovery-round', {
+            kind: options.kind,
+            round: round.round,
+            budget: round.budget,
+          })
+        return round
+      },
+    },
     main,
     runId: input.runId,
     cardId: input.card,
@@ -501,6 +536,7 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
     inputs: bridge.inputs(card, ctx.workflowVersion),
     // US-490: what lets `resolve` OFFER `merge` — read once, like the scripts' own inputs.
     tier: readCardTier(input.card, ctx.cwd),
+    epic: ctx.telemetryEnabled === true ? readCardEpic(input.card, ctx.cwd) : undefined,
     // An active autonomy policy replaces the tier list; otherwise the legacy read is unchanged (default off).
     autoAdvanceTiers: input.autonomy === undefined ? readAutoAdvanceTiers(ctx.fs, main) : [],
     autonomy: input.autonomy?.policy,
@@ -634,7 +670,7 @@ const resolveFor =
     // fallback).
     const blocking = resolveBlockingSeverities(ctx.fs, co.main)
     pickDecisions(input, co)
-    return co.bridge.resolve({
+    const answer = co.bridge.resolve({
       dir: co.runDir,
       workflowVersion: ctx.workflowVersion,
       policy: resolvePolicyFor(blocking, co, input),
@@ -654,6 +690,8 @@ const resolveFor =
       // only — the validation was the resolver's, against the same table).
       ...(ctx.profile !== undefined && { contextPolicy: ctx.profile.contextPolicy }),
     })
+    co.trace.current?.observePr((answer as { next?: { pr?: unknown } }).next?.pr)
+    return answer
   }
 
 /** `cycle-merge.mjs escalate`: the ONE marker-keyed card comment; a failed post is reported, never thrown. */
@@ -720,6 +758,13 @@ const packetFor =
     }) as never
   }
 
+/** C4: the cause the stage's own outcome already names; everything else is null (no guess). */
+function causeOf(result: CycleStageResult): string | undefined {
+  if (result.stalled === true) return 'stalled'
+  const status = result.final?.status
+  return status === 'halted' || status === 'cancelled' ? status : undefined
+}
+
 function recordStageTelemetry(input: {
   enabled: boolean
   co: Coordinates
@@ -732,13 +777,12 @@ function recordStageTelemetry(input: {
   retries: number
   result: CycleStageResult
   pending?: PendingStages | undefined
+  handle?: StageHandle | undefined
 }): void {
   const { co, stage, spawn, key, start, end, previousEnd, retries, result } = input
   if (!input.enabled) return
-  const settle = (advanced: boolean) =>
-    appendTelemetry(
-      co.main,
-      stageTelemetryRecord({
+  const settle = (advanced: boolean) => {
+    const record = stageTelemetryRecord({
         id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
         run: co.runId,
         card: co.cardId,
@@ -754,8 +798,14 @@ function recordStageTelemetry(input: {
         retries,
         advanced,
         observation: result.telemetry ?? {},
-      }),
-    )
+      })
+    appendTelemetry(co.main, record)
+    input.handle?.close({
+      outcome: String(record['outcomeClass']),
+      cause: causeOf(result),
+      observation: result.telemetry,
+    })
+  }
   if (input.pending !== undefined) input.pending.push(settle)
   else settle(result.processOutcome === 'success')
 }
@@ -783,6 +833,18 @@ const spawnStageFor = (
     const retries = attempts.get(key) ?? 0
     attempts.set(key, retries + 1)
     const start = Date.now()
+    const handle = co.trace.current?.start({
+      step: stage.step ?? 'unknown',
+      phase: stage.phase,
+      engine: spawn.engine.id,
+      model: spawn.model,
+      effort: spawn.effort ?? 'default',
+      context: ctx.profile?.stages[stage.step ?? '']?.context.value,
+      retries,
+      startedAt: start,
+      legacyId: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
+      worktree: (packet as { worktree?: string }).worktree,
+    })
     const result = await runStage({
       engine: spawn.engine,
       // Every phase skill anchors its run directory in the MAIN checkout. The packet's worktree
@@ -796,6 +858,9 @@ const spawnStageFor = (
       idleTimeoutSeconds: ctx.idleTimeoutSeconds,
       runIteration: spawnIteration,
       ...(progress !== undefined && { onEvent: taskReporter(progress) }),
+    }).catch((error: unknown) => {
+      handle?.close({ outcome: 'failed', cause: 'crashed' })
+      throw error
     })
     const end = Date.now()
     recordStageTelemetry({
@@ -810,6 +875,7 @@ const spawnStageFor = (
       retries,
       result,
       pending,
+      handle,
     })
     previousEnd = end
     return result as CycleStageResult
@@ -1576,9 +1642,8 @@ function recordCardTelemetry({
 }): void {
   if (outcome.status === 'rounds-bound-reached' || outcome.status === 'other-run') return
   const pr = finalPr(outcome) ?? input.pr
-  appendTelemetry(
-    co.main,
-    cardTelemetryRecord({
+  const end = Date.now()
+  const { kind: _kind, id, outcome: _outcome, cause: _cause, ...card } = cardTelemetryRecord({
       id: `${input.runId}:${input.card}`,
       card: input.card,
       run: input.runId,
@@ -1586,16 +1651,33 @@ function recordCardTelemetry({
       pairVersion,
       workflowVersion: ctx.workflowVersion,
       profile: ctx.profile?.name ?? 'default',
-      engine: ctx.engine.id,
-      ...(ctx.model !== undefined && { model: ctx.model }),
       start: startedAt,
-      end: Date.now(),
+      end,
       outcome: outcome.status,
       ...(!SUCCESS.has(outcome.status) && { cause: outcome.reason ?? outcome.status }),
-      stages: readTelemetry(co.main, input.runId, input.card),
+      stages: readCardStages(co.main, input.card),
       interventions: readInterventions(co.runDir),
       ...readCycleProgress(co.runDir),
-    }),
+    })
+  appendTelemetry(
+    co.main,
+    envelope(
+      'card',
+      id,
+      end,
+      {
+        run: input.runId,
+        card: input.card,
+        epic: co.epic,
+        pr,
+        branch: co.branch,
+        profile: ctx.profile?.name ?? 'default',
+        tier: co.tier,
+        outcome: outcome.status,
+        cause: SUCCESS.has(outcome.status) ? undefined : (outcome.reason ?? outcome.status),
+      },
+      card,
+    ),
   )
 }
 
@@ -1612,7 +1694,18 @@ const mergeWithTelemetry =
   (ctx: CycleDriverContext, co: Coordinates, merge: ReturnType<typeof mergeFor>) =>
   async (next: CycleNext, answer: CycleResolveAnswer): Promise<CycleMergeOutcome> => {
     const start = Date.now()
-    const merged = await merge(next, answer)
+    const handle = co.trace.current?.start({
+      step: 'merge',
+      engine: ctx.engine.id,
+      retries: 0,
+      startedAt: start,
+      legacyId: `${co.runId}:${co.cardId}:merge:${start}`,
+    })
+    const merged = await merge(next, answer).catch((error: unknown) => {
+      handle?.close({ outcome: 'failed', cause: 'crashed' })
+      throw error
+    })
+    handle?.close({ outcome: merged.status === 'merged' ? 'ok' : 'failed' })
     if (ctx.telemetryEnabled === true)
       appendTelemetry(
         co.main,
@@ -1633,6 +1726,77 @@ const mergeWithTelemetry =
     return merged
   }
 
+/**
+ * T-2/T-4/T-5: opens the run's trace (C1 context, allow-listed: never card text, prompts or secrets), sweeps
+ * orphan `start`s as `lost`, and makes a signal or crash close every open stage with ONE `end` before exit.
+ * Telemetry off ⇒ no trace and no handler. Returns the teardown.
+ */
+function startTrace(ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates): () => void {
+  if (ctx.telemetryEnabled !== true) return () => undefined
+  sweepLostStages(co.main)
+  co.trace.current = createTrace({
+    root: co.main,
+    run: co.runId,
+    card: co.cardId,
+    epic: co.epic,
+    branch: co.branch,
+    profile: ctx.profile?.name ?? 'default',
+    tier: co.tier,
+    pr: input.pr,
+    prices: telemetryPrices(co.main),
+    context: {
+      command: 'pair run',
+      flags: {
+        card: input.card,
+        ...(input.pr !== undefined && { pr: input.pr }),
+        ...(input.rounds !== undefined && { rounds: input.rounds }),
+        baseBranch: ctx.baseBranch,
+        timeoutSeconds: ctx.timeoutSeconds ?? null,
+        idleTimeoutSeconds: ctx.idleTimeoutSeconds ?? null,
+      },
+      runEngine: ctx.engine.id,
+      profileHash: ctx.profile?.hash ?? null,
+      stages: Object.fromEntries(
+        Object.entries(ctx.profile?.stages ?? {}).map(([step, s]) => [
+          step,
+          {
+            engine: s.engine.value,
+            model: s.model.resolved.id,
+            effort: s.effort.value,
+            context: s.context.value,
+          },
+        ]),
+      ),
+      autonomy: co.autonomy ?? null,
+      autoRecoveryRounds: input.budgets?.autoRecoveryRounds ?? null,
+      baseSha: remoteHead(co.main, ctx.baseBranch.replace(/^origin\//, '')) ?? null,
+      headSha: remoteHead(co.main, co.branch) ?? null,
+      pairVersion,
+      os: osPlatform(),
+      pid: process.pid,
+      host: hostname(),
+    },
+  })
+  const off = onInterrupt(signal => closeOpenStages('interrupted', signal))
+  const crashed = () => closeOpenStages('crashed')
+  // The monitor observes a crash without changing its default handling (a plain listener would swallow it).
+  process.once('uncaughtExceptionMonitor', crashed)
+  return () => {
+    off()
+    process.removeListener('uncaughtExceptionMonitor', crashed)
+  }
+}
+
+/** AC-3: the run's end as an event — an awaiting-human park, or a halt (any other non-success stop). */
+function traceOutcome(co: Coordinates, outcome: CycleOutcome): void {
+  const status = outcome.status
+  if (SUCCESS.has(status) || status === 'rounds-bound-reached' || status === 'other-run') return
+  const reason = outcome.reason ?? null
+  if (status === 'awaiting-human' || status === 'needs-human')
+    co.trace.current?.event('park', { status, reason })
+  else co.trace.current?.event('halt', { status, reason })
+}
+
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
     let input = requested
@@ -1652,6 +1816,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
     const hooks = loadCycleHooks(ctx, co)
     const progress = progressFor(input.card, policy, co.title, input.onRunEvent)
     const startedAt = Date.now()
+    const untrace = startTrace(ctx, input, co)
     const pending: PendingStages = []
     const merge = mergeFor(ctx, input, co, progress)
     const outcome = await runCycle({
@@ -1677,6 +1842,8 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       },
     })
     pending.splice(0).forEach(settle => settle(true))
+    traceOutcome(co, outcome)
+    untrace()
     if (ctx.telemetryEnabled === true) recordCardTelemetry({ ctx, input, co, outcome, startedAt })
     return outcome
   }

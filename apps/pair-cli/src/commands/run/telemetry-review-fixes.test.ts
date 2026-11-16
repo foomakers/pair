@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'fs'
@@ -20,6 +21,7 @@ import {
   cardTelemetryRecord,
   readInterventions,
   readTelemetry,
+  telemetryFile,
   type TelemetryRecord,
 } from './telemetry'
 
@@ -317,4 +319,36 @@ it('card aggregates over a measured implement stage plus a merge stage', () => {
   expect(card['dispatches']).toBe(2)
   expect(card['retries']).toBe(0)
   expect(card['idleMs']).toBe(6)
+})
+
+// #661 AC-1/2/3/6: the production driver writes start → end per stage and run events; no card text.
+it('AC-1/2/3 #661: start precedes end, events mark PR and park, records leak no prompt', async () => {
+  const { root } = await drive({
+    resolves: call =>
+      call > 2
+        ? { status: 'done', next: { step: 'done', pr: 651 } }
+        : { status: 'in-progress', policy: {}, next: implement },
+  })
+  const all = readTelemetryRecords(root)
+  const kinds = all.map(r => r.kind)
+  expect(kinds.indexOf('start')).toBeLessThan(kinds.indexOf('end'))
+  const start = all.find(r => r.kind === 'start')!
+  expect(start).toMatchObject({ step: 'implement', phase: 'a0', engine: 'codex', card: '645' })
+  expect(all.find(r => r.kind === 'end')).toMatchObject({
+    outcome: 'ok',
+    startId: start.id,
+    tokens: { freshIn: 10 },
+    cost: 'not measured',
+  })
+  expect(all.find(r => r.kind === 'event')).toMatchObject({ event: 'pr-opened', prNumber: 651 })
+  expect(readFileSync(telemetryFile(root), 'utf8')).not.toContain('probe')
+})
+
+it('AC-3 #661: an awaiting-human stop is a park event', async () => {
+  const { root } = await drive({
+    resolves: () => ({ status: 'in-progress', policy: { deadDispatchRetries: 1 }, next: implement }),
+  })
+  expect(readTelemetryRecords(root).filter(r => r.kind === 'event')).toMatchObject([
+    { event: 'park', status: 'awaiting-human' },
+  ])
 })

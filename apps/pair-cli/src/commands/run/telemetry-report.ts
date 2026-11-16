@@ -143,8 +143,112 @@ export function readTelemetryRecords(root: string): TelemetryRecord[] {
   }
 }
 
+export const VIEWS = ['run', 'runner', 'model', 'step', 'epic', 'engine'] as const
+export type View = (typeof VIEWS)[number]
+
+interface Group {
+  stages: number
+  inProgress: number
+  interrupted: number
+  lost: number
+  durationMs: number
+  tokens: number | 'not measured'
+  cost: number | 'not measured'
+}
+
+const FIELD: Record<Exclude<View, 'engine'> | 'card', string> = {
+  card: 'card',
+  run: 'run',
+  runner: 'engine',
+  model: 'model',
+  step: 'step',
+  epic: 'epic',
+}
+
+/** v1 `stage` and v2 `end` are both ended stages (an `end` supersedes the `stage` of its dispatch); a `start` with no `end` is in progress. */
+function stageRows(records: readonly TelemetryRecord[]): Array<TelemetryRecord & { open?: true }> {
+  const ended = new Set(records.filter(r => r.kind === 'end').map(r => r['startId']))
+  const superseded = new Set(records.filter(r => r.kind === 'end').map(r => r['legacyId']))
+  const epics = new Map(records.filter(r => r['epic'] != null).map(r => [r['card'], r['epic']]))
+  return records.flatMap(r => {
+    const epic = r['epic'] ?? epics.get(r['card'])
+    if (r.kind === 'end' || (r.kind === 'stage' && !superseded.has(r.id))) return [{ ...r, epic }]
+    return r.kind === 'start' && !ended.has(r.id) ? [{ ...r, epic, open: true as const }] : []
+  })
+}
+
+/** Per-card by default; `--by run|runner|model|step|epic` regroup the SAME records. Unmeasured stays `not measured`. */
+export function groupTelemetry(
+  records: readonly TelemetryRecord[],
+  by: Exclude<View, 'engine'> | 'card' = 'card',
+): Record<string, Group> {
+  const groups: Record<string, Group> = {}
+  const sums = new Map<string, { tokens: number[]; cost: number[]; unmeasured: [boolean, boolean] }>()
+  for (const row of stageRows(records)) {
+    const key = String(row[FIELD[by]] ?? 'none')
+    const group = (groups[key] ??= {
+      stages: 0,
+      inProgress: 0,
+      interrupted: 0,
+      lost: 0,
+      durationMs: 0,
+      tokens: 0,
+      cost: 0,
+    })
+    const sum = sums.get(key) ?? { tokens: [], cost: [], unmeasured: [false, false] }
+    sums.set(key, sum)
+    group.stages++
+    if (row.open) {
+      group.inProgress++
+      sum.unmeasured = [true, true]
+      continue
+    }
+    if (row['cause'] === 'lost') group.lost++
+    if (row['cause'] === 'interrupted') group.interrupted++
+    group.durationMs += number(row['durationMs']) ?? 0
+    const tokens = tokenCount(row)
+    if (tokens === undefined) sum.unmeasured[0] = true
+    else sum.tokens.push(tokens)
+    const cost = number(row['cost'])
+    if (cost === undefined) sum.unmeasured[1] = true
+    else sum.cost.push(cost)
+  }
+  for (const [key, group] of Object.entries(groups)) {
+    const sum = sums.get(key)!
+    const total = (values: number[]) => values.reduce((a, b) => a + b, 0)
+    group.tokens = sum.unmeasured[0] ? 'not measured' : total(sum.tokens)
+    group.cost = sum.unmeasured[1] ? 'not measured' : total(sum.cost)
+  }
+  return groups
+}
+
+export function renderGroups(groups: Record<string, Group>): string {
+  if (Object.keys(groups).length === 0) return 'No stages: not measured'
+  return Object.entries(groups)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(
+      ([key, g]) =>
+        `${key}\n  stages: ${g.stages} (in progress ${g.inProgress}, interrupted ${g.interrupted}, lost ${g.lost})` +
+        `\n  durationMs: ${g.durationMs}\n  tokens: ${g.tokens}\n  cost: ${g.cost}`,
+    )
+    .join('\n')
+}
+
+/** `--by engine` is the legacy per-engine cohort view; every other view (default: per card) is stage-level. */
+export function renderView(records: readonly TelemetryRecord[], by?: View): string {
+  return by === 'engine'
+    ? renderTelemetryReport(summarizeTelemetry([...records]))
+    : renderGroups(groupTelemetry(records, by))
+}
+
 if (require.main === module) {
-  process.stdout.write(
-    `${renderTelemetryReport(summarizeTelemetry(readTelemetryRecords(process.argv[2] ?? process.cwd())))}\n`,
-  )
+  const args = process.argv.slice(2)
+  const at = args.indexOf('--by')
+  const by = at < 0 ? undefined : (args[at + 1] as View)
+  if (by !== undefined && !VIEWS.includes(by)) {
+    process.stderr.write(`--by: expected one of ${VIEWS.join(', ')}\n`)
+    process.exit(1)
+  }
+  const root = args.find((a, i) => !a.startsWith('--') && i !== at + 1) ?? process.cwd()
+  process.stdout.write(`${renderView(readTelemetryRecords(root), by)}\n`)
 }
