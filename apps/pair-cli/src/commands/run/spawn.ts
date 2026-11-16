@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, type ChildProcess, type ChildProcessByStdio } from 'child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import type { Readable } from 'stream'
 import type { EngineDefinition } from './engines'
 import { HEADLESS_STDIN } from './autonomy'
 import {
@@ -208,6 +209,80 @@ function reap(child: ChildProcess, hardStop: boolean): void {
   child.stdout?.destroy()
 }
 
+type EngineChild = ChildProcessByStdio<null, Readable, Readable>
+
+function watchTransport(child: EngineChild, engine: EngineDefinition) {
+  let pipeError: Error | undefined
+  let childError: Error | undefined
+  let settled = false
+  const capture = (error: Error) => {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ABORT_ERR') return
+    if (settled) {
+      if (code !== 'EPIPE') console.error(error)
+      return
+    }
+    if (!pipeError || ((pipeError as NodeJS.ErrnoException).code === 'EPIPE' && code !== 'EPIPE'))
+      pipeError = error
+  }
+  child.on('error', error => {
+    if (settled) {
+      if ((error as NodeJS.ErrnoException).code !== 'EPIPE') console.error(error)
+    } else childError ??= error
+  })
+  // Ending the terminal-event reader cancels its iterator; Node reports ABORT_ERR on the pipe.
+  child.stdout.on('error', capture)
+  child.stderr.on('error', capture)
+  const stderr = relayLines(child.stderr, engine.id).catch(error => {
+    capture(error instanceof Error ? error : new Error(String(error)))
+  })
+  return {
+    stderr,
+    capture,
+    hasError: () => pipeError !== undefined,
+    finish: (): IterationResult | undefined => {
+      settled = true
+      const failure = pipeError ?? childError
+      if (!failure) return undefined
+      const code = (failure as NodeJS.ErrnoException).code
+      if (code !== 'EPIPE' && code !== 'ENOENT') throw failure
+      return { outcome: 'failed', detail: `${engine.command}: ${failure.message}` }
+    },
+  }
+}
+
+async function readEngineResult(
+  child: EngineChild,
+  input: SpawnIterationInput,
+  watchdog: ReturnType<typeof createWatchdog>,
+  channel: ReturnType<typeof openLastMessageChannel>,
+): Promise<IterationResult | undefined> {
+  child.stdout.setEncoding('utf-8')
+  const read = readIterationOutcome(
+    toLines(child.stdout),
+    input.engine,
+    payload => {
+      watchdog.rearm()
+      input.onEvent?.(payload)
+    },
+    event => {
+      watchdog.saw(event)
+      input.onRunEvent?.(event)
+    },
+    { maxFixRounds: input.maxFixRounds },
+  )
+  read.catch(() => undefined)
+  const result = await Promise.race([read, watchdog.grace])
+  return result && (channel?.merge(result) ?? result)
+}
+
+function handleReadError(error: unknown, transport: ReturnType<typeof watchTransport>): void {
+  if (!(error instanceof Error)) throw error
+  const code = (error as NodeJS.ErrnoException).code
+  if (code !== 'EPIPE' && !(code === 'ABORT_ERR' && transport.hasError())) throw error
+  if (code === 'EPIPE') transport.capture(error)
+}
+
 /**
  * Runs one iteration and returns what its STREAM said.
  *
@@ -231,75 +306,25 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
     // US-573 AC7: an engine's own env (claude: no background-wait ceiling) over the driver's.
     ...engineEnv(input.engine, isolation),
   })
-  let pipeError: Error | undefined
-  let childError: Error | undefined
-  let settled = false
-  const capture = (error: Error) => {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'ABORT_ERR') return
-    if (settled) {
-      if (code !== 'EPIPE') console.error(error)
-      return
-    }
-    if (!pipeError || ((pipeError as NodeJS.ErrnoException).code === 'EPIPE' && code !== 'EPIPE'))
-      pipeError = error
-  }
-  child.on('error', error => {
-    if (settled) {
-      if ((error as NodeJS.ErrnoException).code !== 'EPIPE') console.error(error)
-    } else childError ??= error
-  })
-  // Ending the terminal-event reader cancels its iterator; Node reports that local cancellation
-  // as ABORT_ERR on the pipe even when the engine succeeded.
-  child.stdout.on('error', capture)
-  child.stderr.on('error', capture)
+  const transport = watchTransport(child, input.engine)
   // Tracked so a SIGTERM/SIGINT on the driver stops it instead of orphaning it (r1-2).
   trackEngine(child)
-  // Relayed, never inherited: a raw write to the terminal moves the cursor under the live card rows.
-  const stderr = relayLines(child.stderr, input.engine.id).catch(error => {
-    capture(error instanceof Error ? error : new Error(String(error)))
-  })
 
   const watchdog = createWatchdog(input, signal => child.kill(signal))
   let result: IterationResult | undefined
   try {
-    child.stdout.setEncoding('utf-8')
-    const read = readIterationOutcome(
-      toLines(child.stdout),
-      input.engine,
-      payload => {
-        watchdog.rearm()
-        input.onEvent?.(payload)
-      },
-      event => {
-        watchdog.saw(event)
-        input.onRunEvent?.(event)
-      },
-      { maxFixRounds: input.maxFixRounds },
-    )
-    read.catch(() => undefined)
-    result = await Promise.race([read, watchdog.grace])
-    // US-623 AC3: the stream's last text carried no result ⇒ the engine's dedicated channel is read.
-    result = result && (channel?.merge(result) ?? result)
+    result = await readEngineResult(child, input, watchdog, channel)
   } catch (error) {
-    if (!(error instanceof Error)) throw error
-    const code = (error as NodeJS.ErrnoException).code
-    if (code !== 'EPIPE' && !(code === 'ABORT_ERR' && pipeError)) throw error
-    if (code === 'EPIPE') capture(error)
+    handleReadError(error, transport)
   } finally {
     watchdog.clear()
     channel?.close()
     reap(child, watchdog.stopped() !== undefined)
     // ponytail: 1s drain bound — a grandchild holding stderr open must not hold the iteration.
-    await Promise.race([stderr, new Promise(done => setTimeout(done, 1000).unref())])
+    await Promise.race([transport.stderr, new Promise(done => setTimeout(done, 1000).unref())])
   }
-  settled = true
-  const failure = pipeError ?? childError
-  if (failure) {
-    const code = (failure as NodeJS.ErrnoException).code
-    if (code !== 'EPIPE' && code !== 'ENOENT') throw failure
-    return { outcome: 'failed', detail: `${input.engine.command}: ${failure.message}` }
-  }
+  const failure = transport.finish()
+  if (failure) return failure
   return stalledOrResult(result, watchdog.stopped())
 }
 
