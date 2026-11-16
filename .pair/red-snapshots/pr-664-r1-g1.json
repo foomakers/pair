@@ -1,0 +1,505 @@
+{
+  "$meta": {
+    "pr": "664",
+    "phase": "r1-g1",
+    "base": "71e0da73467b9117dbf6d429a66fa81f30cdad45",
+    "trailer": "Pair-RED-Snapshot: pr=664; phase=r1-g1; base=71e0da73467b9117dbf6d429a66fa81f30cdad45; manifest=.pair/red-snapshots/pr-664-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts"
+    ]
+  },
+  "mode": "remediation",
+  "phase": "r1-g1",
+  "sourceOfTruth": "story #661 AC-1..AC-8 and C2/C5 (card), review r0 findings r0-1..r0-6",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "cycle-wiring.ts recordStageTelemetry (settle) + cycle-trace.ts startTrace/closeOpenStages: when a stage handle is closed",
+      "inputs": [
+        "engine exit observation",
+        "next resolve outcome (ok / signal / throw)"
+      ],
+      "representations": [
+        "telemetry JSONL end record",
+        "v1 stage record (same dispatch)"
+      ],
+      "consumers": [
+        "telemetry-report",
+        "card record"
+      ],
+      "classes": [
+        "normal: end ok, tokens, durationMs == v1",
+        "signal during next resolve: stage already finished stays ok",
+        "throw during next resolve: exactly one end, listener removed",
+        "engine exits non-zero: end outcome failed (= v1 outcomeClass), cause null, durationMs = v1",
+        "engine times out: end outcome failed, cause stalled (C4), durationMs = v1"
+      ],
+      "interactions": [
+        "finished stage × later signal",
+        "finished stage × later throw",
+        "engine processOutcome × end outcome/cause (settle derives both from result.processOutcome/causeOf)"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": "telemetry-report.ts summarizeTelemetry (card selection per engine) over cycle-trace.ts appendCardRecord envelope",
+      "inputs": [
+        "v2 card record (engine null, stageRecords)",
+        "end records"
+      ],
+      "representations": [
+        "--by engine view",
+        "default view cohorts"
+      ],
+      "consumers": [
+        "renderTelemetryReport"
+      ],
+      "classes": [
+        "single-engine card under v2 envelope: measures attributed to the engine of its stages",
+        "card whose stages ran on two engines: each engine that ran >=1 stage of the card gets the card's rounds/wallMs/activeMs/idleMs; an engine that ran none gets nothing (rule A-1: AC-8/C5 state no per-engine rule)"
+      ],
+      "interactions": [
+        "card engine null × per-engine summary",
+        "card engine null × per-engine summary over two engines"
+      ]
+    },
+    {
+      "id": "r0-3",
+      "producer": "telemetry-trace.ts Trace.keys/envelope (round key) + telemetry.ts cardTelemetryRecord stageRecords[].round",
+      "inputs": [
+        "next.round of the dispatched stage",
+        "recover() round"
+      ],
+      "representations": [
+        "end.round",
+        "event.round",
+        "card.stageRecords[].round"
+      ],
+      "consumers": [
+        "report",
+        "card"
+      ],
+      "classes": [
+        "stage with round 1: end + stageRecords carry 1",
+        "recovery-round event carries granted round"
+      ],
+      "interactions": [
+        "extras vs keys spread order"
+      ]
+    },
+    {
+      "id": "r0-4",
+      "producer": "cycle-trace.ts startTrace + cycle-wiring.ts createDefaultCycleDriver (shasOf eager)",
+      "inputs": [
+        "ctx.telemetryEnabled"
+      ],
+      "representations": [
+        "git ls-remote origin calls"
+      ],
+      "consumers": [
+        "driver"
+      ],
+      "classes": [
+        "telemetry off: no telemetry-only host call",
+        "telemetry on: sha lookups run"
+      ],
+      "interactions": [
+        "enabled flag × sha lookup"
+      ]
+    },
+    {
+      "id": "r0-5",
+      "producer": "production wiring seams: openStage order, tracedBridge, traceOutcome halt, onInterrupt subscription, uncaughtExceptionMonitor, sweepLostStages, readCardStages",
+      "inputs": [
+        "driver run with stubbed engine/host"
+      ],
+      "representations": [
+        "telemetry JSONL"
+      ],
+      "consumers": [
+        "report"
+      ],
+      "classes": [
+        "start on disk before engine spawn",
+        "recover granted ⇒ one event",
+        "blocked terminal ⇒ halt event",
+        "SIGTERM mid-stage ⇒ one end interrupted+signal",
+        "uncaught mid-stage ⇒ one end crashed",
+        "orphan dead-pid start ⇒ lost end at next run",
+        "two runs ⇒ card stageRecords span both"
+      ],
+      "interactions": [
+        "each seam × production driver"
+      ]
+    },
+    {
+      "id": "r0-6",
+      "producer": "telemetry-report.ts CLI entry (--by parsing)",
+      "inputs": [
+        "argv"
+      ],
+      "representations": [
+        "stderr message",
+        "exit code"
+      ],
+      "consumers": [
+        "npm script telemetry:report"
+      ],
+      "classes": [
+        "trailing --by (no value): invalid",
+        "--by bogus: invalid",
+        "--by run: valid"
+      ],
+      "interactions": [
+        "--by position × positional root",
+        "--by value then positional root (root after the value)",
+        "--by immediately followed by the root (root is the --by value, invalid)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "pair-cli run telemetry trace (apps/pair-cli/src/commands/run)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/cycle-wiring.ts",
+      "apps/pair-cli/src/commands/run/cycle-trace.ts",
+      "apps/pair-cli/src/commands/run/telemetry-trace.ts",
+      "apps/pair-cli/src/commands/run/telemetry.ts",
+      "apps/pair-cli/src/commands/run/telemetry-report.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "R-1a",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "drive(): signal fired inside resolve call 3 (after stage 1 finished)",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-1a)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "one end, outcome ok, tokens freshIn 10, no cause (AC-2, AC-5)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "R-1b",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "drive(): resolve call 3 throws",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-1b)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "driver rejects; exactly one end (ok or cause crashed); uncaughtExceptionMonitor listener count unchanged (AC-5)",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "throw class; the non-success engine classes are R-1d/R-1e"
+    },
+    {
+      "id": "R-1c",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "drive(): normal run",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-1c)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "end.durationMs == v1 stage durationMs (AC-2)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "R-2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "drive() implement→done then summarizeTelemetry(readTelemetryRecords)",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-2)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "codex rounds, wallMs, activeMs, idleMs are each measure objects, none \"not measured\" (AC-8)",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "single-engine card; the two-engine attribution rule (A-1) is R-2b"
+    },
+    {
+      "id": "R-3a",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "drive() with green r1-g1 round 1",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-3a)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "end.round === 1 and card.stageRecords[0].round === 1 (AC-6 C2, AC-7 C5)",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "R-3b",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "drive() with recover allowed round 1 budget 2",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-3b)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "recovery-round event round 1, budget 2 (AC-6 C2)",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "R-4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "drive() telemetry off vs on, counting git ls-remote",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-4)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "off makes exactly 2 fewer ls-remote calls than on (story Edges)",
+      "covers": [
+        "r0-4"
+      ]
+    },
+    {
+      "id": "R-5a",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "engine stub snapshots telemetry file when spawned",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-5a)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "snapshot contains a start record (AC-1)",
+      "covers": [
+        "r0-5"
+      ],
+      "rationale": "control guard: injected mutant in an isolated copy fails this test; passes on the current source. mutant M1 openStage after runEngine ⇒ fails R-5a"
+    },
+    {
+      "id": "R-5b",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "recover allowed once",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-5b)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "exactly one recovery-round event (AC-3)",
+      "covers": [
+        "r0-5"
+      ],
+      "rationale": "control guard: injected mutant in an isolated copy fails this test; passes on the current source. mutant M2 tracedBridge removed ⇒ fails R-5b"
+    },
+    {
+      "id": "R-5c",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "resolve returns blocked terminal (reason boom-halt)",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-5c)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "one halt event (AC-3)",
+      "covers": [
+        "r0-5"
+      ],
+      "rationale": "control guard: injected mutant in an isolated copy fails this test; passes on the current source. mutant M3 halt branch dropped ⇒ fails R-5c"
+    },
+    {
+      "id": "R-5d",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "SIGTERM through whileInterruptible mid-stage (engine hanging)",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-5d)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "one end failed/interrupted/SIGTERM (AC-5)",
+      "covers": [
+        "r0-5"
+      ],
+      "rationale": "control guard: injected mutant in an isolated copy fails this test; passes on the current source. mutant M4 onInterrupt subscription removed ⇒ fails R-5d"
+    },
+    {
+      "id": "R-5e",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "uncaughtExceptionMonitor emitted mid-stage",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-5e)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "one end failed/crashed (AC-5)",
+      "covers": [
+        "r0-5"
+      ],
+      "rationale": "control guard: injected mutant in an isolated copy fails this test; passes on the current source. mutant M5 monitor dropped ⇒ fails R-5e"
+    },
+    {
+      "id": "R-5f",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "orphan start of dead pid on this host present before the run",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-5f)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "end cause lost for the orphan start id (AC-5)",
+      "covers": [
+        "r0-5"
+      ],
+      "rationale": "control guard: injected mutant in an isolated copy fails this test; passes on the current source. mutant M6 sweepLostStages removed ⇒ fails R-5f"
+    },
+    {
+      "id": "R-5g",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "two runs of the same card on one root",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-5g)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "second card record stageRecords length 2 (AC-7)",
+      "covers": [
+        "r0-5"
+      ],
+      "rationale": "control guard: injected mutant in an isolated copy fails this test; passes on the current source. mutant M7 card stages filtered to current run ⇒ fails R-5g"
+    },
+    {
+      "id": "R-6a",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "telemetry-report CLI with trailing --by",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-6a)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "exit 1, stderr \"--by: expected one of\" (AC-8)",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "trailing --by with root first; --by/root position interactions are R-6d/R-6e"
+    },
+    {
+      "id": "R-6b",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "CLI --by bogus",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-6b)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "exit 1, same message",
+      "covers": [
+        "r0-6"
+      ]
+    },
+    {
+      "id": "R-6c",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "CLI --by run",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (R-6c)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "exit 0",
+      "covers": [
+        "r0-6"
+      ]
+    },
+    {
+      "id": "R-1d",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "drive(): stub engine exits non-zero, then done",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (AC-2 r0-1: engine exits non-zero ⇒ one end, outcome as v1, cause per C4)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "exactly one end; outcome failed == v1 stage outcomeClass (failed), cause null, durationMs == v1 (AC-2, C4: no cause for a plain failure)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "R-1e",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "drive(): stub engine hangs past timeoutSeconds 1, then done",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (AC-2 r0-1: engine times out (stalled) ⇒ one end, outcome as v1, cause per C4)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "exactly one end; outcome failed == v1, cause stalled (C4 stalled = timeout), durationMs == v1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "R-2b",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "drive() card with implement on codex then green on claude (profile stage engine), then summarizeTelemetry",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (AC-8 r0-2: a card with stages on two engines is attributed to each of them, to no other)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "summary keys exactly [claude, codex]; for each, rounds/wallMs/activeMs/idleMs mean equals the card record's own value (rule A-1)",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "AC-8/C5 state no rule for a multi-engine card: A-1 applies the most restrictive reading that never fabricates or splits a card measure: every engine that ran a stage of the card gets the card's own measures, an engine with no stage of it gets none"
+    },
+    {
+      "id": "R-6d",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "CLI ['--by','run',<root>] (root after the value), root holds a record of run run-in-root, cwd holds none",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (AC-8 r0-6: root after the --by value is the report root (output derived from it, not cwd))",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "exit 0; stdout contains run-in-root (read from the root argument)",
+      "covers": [
+        "r0-6"
+      ]
+    },
+    {
+      "id": "R-6e",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "CLI ['--by',<root>] (root directly after --by)",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts (AC-8 r0-6: --by directly followed by the root takes the root as the (invalid) value)",
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "expected": "exit 1, stderr contains '--by: expected one of'",
+      "covers": [
+        "r0-6"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:d4f429127bff83d45b6a80af929cff8cf7e7a8c26981c230e7a1ad81a884ab0f",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/telemetry-wiring.test.ts",
+      "observed": "Tests  11 failed | 11 passed (22)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1",
+          "r0-2",
+          "r0-3",
+          "r0-4",
+          "r0-5",
+          "r0-6"
+        ],
+        "owner": "pair-cli run telemetry trace",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/cycle-wiring.ts",
+          "apps/pair-cli/src/commands/run/cycle-trace.ts",
+          "apps/pair-cli/src/commands/run/telemetry-trace.ts",
+          "apps/pair-cli/src/commands/run/telemetry.ts",
+          "apps/pair-cli/src/commands/run/telemetry-report.ts"
+        ],
+        "dependsOn": [],
+        "oracle": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts"
+      }
+    ],
+    "carried": []
+  },
+  "remediationBatchId": "r1",
+  "mutationProof": "isolated copy: M1..M7 each fail at least one R-5* test (M1:R-5a,R-5d,R-5e; M2:R-5b; M3:R-5c; M4:R-5d; M5:R-5e; M6:R-5f; M7:R-5g)",
+  "changedRows": [
+    "R-1b",
+    "R-2",
+    "R-6a",
+    "R-1d",
+    "R-1e",
+    "R-2b",
+    "R-6d",
+    "R-6e"
+  ],
+  "assumptions": [
+    {
+      "id": "A-1",
+      "policy": "per-engine attribution of card measures (rounds, wallMs, activeMs, idleMs) for a card whose stages ran on several engines (AC-8, C5 silent)",
+      "reading": "each engine that ran at least one stage of the card receives the card's own measures unsplit; an engine that ran none receives nothing"
+    }
+  ]
+}
