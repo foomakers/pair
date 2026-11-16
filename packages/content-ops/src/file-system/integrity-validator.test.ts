@@ -15,10 +15,11 @@ describe('Integrity Validator - SHA256 Calculation', () => {
   })
 
   it('calculates hash for binary content', async () => {
-    const content = Buffer.alloc(1024, 'binary data')
+    const content = Buffer.from([0, 255, 128, 1])
     const expectedHash = createHash('sha256').update(content).digest('hex')
 
-    const fs = new InMemoryFileSystemService({ '/tmp/binary.dat': content.toString() }, '/', '/')
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    await fs.writeFileBinary('/tmp/binary.dat', content)
 
     const hash = await calculateSHA256('/tmp/binary.dat', fs)
     expect(hash).toBe(expectedHash)
