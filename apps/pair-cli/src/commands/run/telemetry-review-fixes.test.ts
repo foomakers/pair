@@ -165,6 +165,20 @@ it('AC-1 r0-3: dispatches rejected by resolve are failed and fully wasted', asyn
   expect(summary['codex']?.wastedTokenShare).toMatchObject({ mean: 1 })
 })
 
+// r1-1 AC-2/7/8: a dispatch the next resolve rejects is failed on the card's stageRecords too, not just in v1.
+it('AC-2 r1-1: rejected dispatches read failed on the card stageRecords and the report', async () => {
+  const { root } = await drive({
+    resolves: () => ({
+      status: 'in-progress',
+      policy: { deadDispatchRetries: 1 },
+      next: implement,
+    }),
+  })
+  const card = readTelemetryCard(root, 'requested')
+  const outcomes = (card?.['stageRecords'] as Array<{ outcome: string }>).map(r => r.outcome)
+  expect(outcomes).toEqual(['failed', 'failed'])
+})
+
 it('AC-1 r0-7: a fresh card records the PR its final resolve names', async () => {
   const { root } = await drive({
     resolves: call =>

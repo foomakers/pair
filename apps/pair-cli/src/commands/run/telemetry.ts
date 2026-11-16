@@ -323,15 +323,21 @@ function retryCount(stages: readonly TelemetryRecord[]): number {
 /** v1 `stage` and v2 `end` read as one shape; an `end` supersedes the `stage` written for the same dispatch. */
 function normalizedStages(records: readonly TelemetryRecord[]): TelemetryRecord[] {
   const superseded = new Set(records.filter(r => r.kind === 'end').map(r => r['legacyId']))
+  // The v1 stage settles after the next resolve (did the handoff advance?): its outcome is the final word.
+  const v1Outcome = new Map(
+    records.filter(r => r.kind === 'stage').map(r => [r.id, String(r['outcomeClass'])]),
+  )
   return records
     .filter(r => r.kind === 'end' || (r.kind === 'stage' && !superseded.has(r.id)))
     .map(r => {
       if (r.kind !== 'end') return r
       const durationMs = Number(r['durationMs'] ?? 0)
+      const outcome = v1Outcome.get(String(r['legacyId'])) ?? String(r['outcome'])
       return {
         ...r,
+        outcome,
         start: Date.parse(String(r['ts'])) - durationMs,
-        outcomeClass: String(r['outcome']),
+        outcomeClass: outcome,
       }
     })
 }
