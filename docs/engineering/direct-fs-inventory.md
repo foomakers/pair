@@ -10,9 +10,13 @@ are in the two knowledge-hub workflow zones. Those 223 paths are individually
 marked `in-flight-churn` with the Scope Limit decision and root-guard test
 category. Seven other imports are type-only `Dirent`/`Stats` contracts; these
 have exact-path `type-contract` exceptions because they perform no runtime IO.
-The remaining 208 entries are `migration-candidate` until their operation,
+The remaining entries are `migration-candidate` until their operation,
 consumer, test category, and any OS-guarantee or standalone-script exception
-are reviewed. **T-1 is incomplete.**
+are reviewed. The reviewed `os-guarantee` entries exercise real symlink,
+atomic rename, or git-clone behavior in temporary directories. The
+`boundary-adapter` entry is the real service implementation itself; the
+`standalone-script` entry ships without a workspace package dependency.
+**T-1 is incomplete.**
 
 The scan recognizes static imports, re-exports, TypeScript import-equals,
 `require('...')`, and literal `import('...')` for `fs`, `node:fs`,

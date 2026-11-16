@@ -4,9 +4,12 @@
   "files": 438,
   "distinctContents": 403,
   "dispositionCounts": {
-    "migration-candidate": 208,
+    "migration-candidate": 200,
     "in-flight-churn": 223,
-    "type-contract": 7
+    "os-guarantee": 6,
+    "type-contract": 7,
+    "boundary-adapter": 1,
+    "standalone-script": 1
   },
   "limits": [
     "literal module specifiers only",
@@ -2184,8 +2187,11 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/kb-manager/git-clone.integration.test.ts"
+      "disposition": "os-guarantee",
+      "producer": "apps/pair-cli/src/kb-manager/git-clone.integration.test.ts",
+      "reason": "Real git clone process and destination semantics",
+      "decision": "Keep isolated local-git integration test",
+      "testCategory": "real-git-process"
     },
     {
       "path": "apps/pair-cli/src/kb-manager/git-clone.test.ts",
@@ -2254,8 +2260,11 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/registry/atomic-target-race.test.ts"
+      "disposition": "os-guarantee",
+      "producer": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "reason": "Real rename and symlink race fixture",
+      "decision": "Keep isolated OS integration test",
+      "testCategory": "real-os-atomicity"
     },
     {
       "path": "apps/pair-cli/src/registry/atomic-target.test.ts",
@@ -2272,8 +2281,11 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/registry/atomic-target.test.ts"
+      "disposition": "os-guarantee",
+      "producer": "apps/pair-cli/src/registry/atomic-target.test.ts",
+      "reason": "Real atomic target rename and symlink cases",
+      "decision": "Keep narrow OS integration cases; ordinary cases already use the service double",
+      "testCategory": "real-os-atomicity"
     },
     {
       "path": "apps/pair-cli/src/registry/board-authorization-install.test.ts",
@@ -2348,8 +2360,11 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/registry/symlink-race.test.ts"
+      "disposition": "os-guarantee",
+      "producer": "apps/pair-cli/src/registry/symlink-race.test.ts",
+      "reason": "Real symlink replacement race fixture",
+      "decision": "Keep isolated OS integration test",
+      "testCategory": "real-os-containment"
     },
     {
       "path": "apps/pair-cli/src/registry/validation.test.ts",
@@ -2608,8 +2623,11 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/file-system/file-system-service.ts"
+      "disposition": "boundary-adapter",
+      "producer": "packages/content-ops/src/file-system/file-system-service.ts",
+      "reason": "Node filesystem implementation of FileSystemService",
+      "decision": "Retain direct fs only inside the real boundary adapter",
+      "testCategory": "service-contract"
     },
     {
       "path": "packages/content-ops/src/file-system/file-validations.ts",
@@ -2660,8 +2678,11 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/file-system/path-containment.test.ts"
+      "disposition": "os-guarantee",
+      "producer": "packages/content-ops/src/file-system/path-containment.test.ts",
+      "reason": "Real symlink resolution and containment",
+      "decision": "Keep isolated OS integration test",
+      "testCategory": "real-os-containment"
     },
     {
       "path": "packages/content-ops/src/ops/copy/copy-symlink-containment.test.ts",
@@ -2678,8 +2699,11 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/ops/copy/copy-symlink-containment.test.ts"
+      "disposition": "os-guarantee",
+      "producer": "packages/content-ops/src/ops/copy/copy-symlink-containment.test.ts",
+      "reason": "Real symlink traversal and containment",
+      "decision": "Keep isolated OS integration test",
+      "testCategory": "real-os-containment"
     },
     {
       "path": "packages/content-ops/src/ops/copy/copyPathOps.ts",
@@ -3483,8 +3507,11 @@
           "line": 9
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/dataset/.pair/knowledge/assets/coverage-ratchet.cjs"
+      "disposition": "standalone-script",
+      "producer": "packages/knowledge-hub/dataset/.pair/knowledge/assets/coverage-ratchet.cjs",
+      "reason": "Published asset executes without workspace package installation",
+      "decision": "Retain direct fs in standalone shipped script",
+      "testCategory": "installed-script-smoke"
     },
     {
       "path": "packages/knowledge-hub/dataset/.pair/knowledge/assets/mirror-realign.cjs",
