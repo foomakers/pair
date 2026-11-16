@@ -4,13 +4,13 @@
   "files": 438,
   "distinctContents": 403,
   "dispositionCounts": {
-    "migration-candidate": 194,
+    "migration-candidate": 189,
     "in-flight-churn": 223,
     "os-guarantee": 7,
     "type-contract": 10,
     "boundary-adapter": 1,
     "migrate": 2,
-    "standalone-script": 1
+    "standalone-script": 6
   },
   "limits": [
     "literal module specifiers only",
@@ -3548,8 +3548,12 @@
           "line": 8
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/dataset/.pair/knowledge/assets/mirror-realign.cjs"
+      "disposition": "standalone-script",
+      "producer": "packages/knowledge-hub/dataset/.pair/knowledge/assets/mirror-realign.cjs",
+      "reason": "Published knowledge asset invoked without installing workspace packages",
+      "decision": "Retain direct fs inside the independently shipped Node script",
+      "testCategory": "installed-script-smoke",
+      "operationConsumer": "Node fs for the installed mirror command; consumed by generated project mirror workflow"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs",
@@ -3561,8 +3565,12 @@
           "line": 8
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs"
+      "disposition": "standalone-script",
+      "producer": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs",
+      "reason": "Published publish-pr skill helper invoked by Node without installing workspace packages",
+      "decision": "Retain direct fs inside the independently shipped Node script",
+      "testCategory": "installed-script-smoke",
+      "operationConsumer": "readFileSync/realpathSync for template and body limits; consumed by the published skill"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/capability/write-issue/scripts/word-limits.mjs",
@@ -3574,8 +3582,12 @@
           "line": 8
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs"
+      "disposition": "standalone-script",
+      "producer": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs",
+      "reason": "Published write-issue skill helper invoked by Node without installing workspace packages",
+      "decision": "Retain direct fs inside the independently shipped Node script",
+      "testCategory": "installed-script-smoke",
+      "operationConsumer": "readFileSync/realpathSync for template and body limits; consumed by the published skill"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/next/control-state.mjs",
@@ -3587,8 +3599,12 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/dataset/.skills/next/control-state.mjs"
+      "disposition": "standalone-script",
+      "producer": "packages/knowledge-hub/dataset/.skills/next/control-state.mjs",
+      "reason": "Published next skill resolver invoked by Node without installing workspace packages",
+      "decision": "Retain direct fs inside the independently shipped Node script",
+      "testCategory": "installed-script-smoke",
+      "operationConsumer": "existsSync/readFileSync/realpathSync for adoption state resolution; consumed by published next skill"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/process/review/scripts/word-limits.mjs",
@@ -3600,8 +3616,12 @@
           "line": 8
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs"
+      "disposition": "standalone-script",
+      "producer": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs",
+      "reason": "Published review skill helper invoked by Node without installing workspace packages",
+      "decision": "Retain direct fs inside the independently shipped Node script",
+      "testCategory": "installed-script-smoke",
+      "operationConsumer": "readFileSync/realpathSync for template and body limits; consumed by the published skill"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/contract-phase/scripts/ensure-contract.mjs",

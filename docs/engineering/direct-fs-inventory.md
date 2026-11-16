@@ -10,12 +10,12 @@ are in the two knowledge-hub workflow zones. Those 223 paths are individually
 marked `in-flight-churn` with the Scope Limit decision and root-guard test
 category. Ten other imports are type-only `Dirent`/`Stats` contracts; these
 have exact-path `type-contract` exceptions because they perform no runtime IO.
-The 194 remaining entries are `migration-candidate` until their operation,
+The 189 remaining entries are `migration-candidate` until their operation,
 consumer, test category, and any OS-guarantee or standalone-script exception
 are reviewed. The reviewed `os-guarantee` entries exercise real symlink,
 atomic rename, git-clone, or binary disk behavior in temporary directories. The
-`boundary-adapter` entry is the real service implementation itself; the
-`standalone-script` entry ships without a workspace package dependency.
+`boundary-adapter` entry is the real service implementation itself; six
+`standalone-script` entries ship without a workspace package dependency.
 **T-1 is incomplete.**
 
 The content-ops pass classified six more paths: three `Dirent`/`Stats` type
@@ -25,6 +25,11 @@ fallback consumed by the CLI checksum manager; `lazy-loader.ts` exposes the
 native module to its test. Their operation, consumer, decision and proving
 test category are recorded per path in the JSON ledger. The three type
 imports should become explicit `import type` declarations in T-3.
+
+The published `word-limits.mjs` helpers (publish-pr, write-issue, review),
+`next/control-state.mjs`, and `mirror-realign.cjs` are five more exact-path
+`standalone-script` exceptions. Their skill or asset consumers invoke them with
+Node in an installed project; no workspace package is available there.
 
 The scan recognizes static imports, re-exports, TypeScript import-equals,
 `require('...')`, and literal `import('...')` for `fs`, `node:fs`,
