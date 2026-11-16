@@ -31,7 +31,9 @@ export interface RegistryRunCtx {
 export async function finalizeRegistryCopy(
   ctx: Pick<RegistryRunCtx, 'fs' | 'registryConfig' | 'baseTarget'>,
   paths: { effectiveTarget: string; datasetPath: string },
+  preserved = false,
 ): Promise<void> {
+  if (preserved) return
   const { fs, registryConfig, baseTarget } = ctx
   await postCopyOps({ fs, registryConfig, baseTarget, ...paths })
 }

@@ -24,10 +24,12 @@ No `pair.config.json`, no `workflowProfiles` block, no `--profile` / `--workflow
 }
 ```
 
-- **`default`** — the profile name used when nothing is passed.
+- **`default`** — a profile name, or an engine-to-profile-name map such as `{"codex":"codex-medium","claude":"claude-medium"}`. Explicit selectors win. A map selects the actual CLI execution engine or in-session host, then configured engine fallbacks; a missing engine entry uses the KB default. Unknown keys, empty values and malformed unused entries fail validation. The selected profile stays fixed in run snapshots and external remedies.
 - **`files`** — a glob or an array of globs (project-relative; `*` inside a segment, `**` as a whole segment; never above the project root). Each file is one profile, **indexed by its own `name`**, never by its filename.
 - **`inline`** — profiles declared directly, keyed by name, for a project that wants no extra file.
 - Anything else under `workflowProfiles` is `profile-invalid`.
+
+Fresh official-dataset installs include six Claude/Codex profiles and seed `codex-medium` / `claude-medium` as per-engine defaults. Install and update preserve existing project configuration and customized profiles, while adding missing shipped assets. Projects without an installed configuration retain the KB default.
 
 ## Profile shape
 
@@ -121,7 +123,7 @@ The four routing ids inherit `defaults` unless the profile overrides them. The t
 
 ## Example
 
-Six profiles ship under `.pair/adoption/tech/workflow-profiles/` as samples; register the glob `"workflowProfiles": { "files": ".pair/adoption/tech/workflow-profiles/*.json" }` in `pair.config.json` and pass `--profile <name>`, or set `default`. This project's default is `codex-medium`; `medium` is the reference level.
+Six profiles ship under `.pair/adoption/tech/workflow-profiles/`; fresh installs register their glob and map Codex to `codex-medium`, Claude to `claude-medium`. Pass `--profile <name>` to override the selected default. This project uses the same per-engine map; `medium` is the reference level.
 
 | Profile | Defaults | Notable overrides |
 | --- | --- | --- |

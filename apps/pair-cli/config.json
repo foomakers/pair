@@ -1,5 +1,11 @@
 {
   "asset_registries": {
+    "project-config": {
+      "source": ".pair/defaults/pair.config.json",
+      "behavior": "add",
+      "description": "Fresh-project workflow profile defaults",
+      "targets": [{ "path": "pair.config.json", "mode": "canonical" }]
+    },
     "github": {
       "source": ".github",
       "behavior": "mirror",

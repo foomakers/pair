@@ -332,6 +332,59 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     }
   })
 
+  it.each([
+    {
+      title: 'explicit Codex',
+      engine: 'codex' as const,
+      expectedModel: 'gpt-6-sol',
+      expectedEngine: 'codex',
+    },
+    { title: 'schema Claude', expectedModel: 'sonnet', expectedEngine: 'claude' },
+  ])(
+    '#617 engine default map: CLI $title dispatches its mapped profile without a global engine',
+    async ({ engine, expectedModel, expectedEngine }) => {
+      capture()
+      const root = mkdtempSync(join(tmpdir(), 'pair-cli-engine-map-'))
+      try {
+        const config = {
+          workflowProfiles: {
+            default: { codex: 'codex-medium', claude: 'claude-medium' },
+            inline: {
+              'codex-medium': {
+                name: 'codex-medium',
+                defaults: { engine: 'codex', model: 'gpt-6-sol' },
+              },
+              'claude-medium': {
+                name: 'claude-medium',
+                defaults: { engine: 'claude', model: 'sonnet' },
+              },
+            },
+          },
+        }
+        writeFileSync(join(root, 'pair.config.json'), JSON.stringify(config))
+        const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+        const fs = files({ '/bin/codex': '' }, config)
+        await run(
+          { prompt: 'go', cwd, autonomous: true, ...(engine && { engine }) },
+          fs,
+          baseDeps({
+            resolveWorkflowProfile: (_scripts, request) =>
+              resolveWorkflowProfile(REAL_SCRIPTS, { ...request, root }),
+            runIteration: iteration,
+          }),
+        )
+        expect(iteration).toHaveBeenCalledWith(
+          expect.objectContaining({
+            engine: expect.objectContaining({ id: expectedEngine }),
+            model: expectedModel,
+          }),
+        )
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    },
+  )
+
   it('--prompt uses profile defaults before spawning (AC-3)', async () => {
     capture()
     const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))

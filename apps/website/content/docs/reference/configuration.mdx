@@ -36,6 +36,8 @@ wins. Only the fields a layer actually states are overridden; the rest fall thro
 Layer 3 is your project's `pair.config.json` only. A `config.json` in your project root is
 not read as a Pair configuration: the name is too common to claim.
 
+Other commands that support legacy `config.json` discovery retain its registry settings when `pair.config.json` contains only runtime defaults. A declared registry block in `pair.config.json` still takes precedence, including an invalid declaration that must be reported.
+
 ### What layer 2 may say
 
 The source KB is the one layer whose content you do not control: it is shipped by whoever
@@ -368,6 +370,10 @@ context).
 | `context` | `fresh`, `reuse`, or `{ "shared-with": "prepare", "when": { "risk": "yellow" } }`. `verify` is always fresh; `validate` is fresh at `risk:red` |
 
 Resolution is once per run, in this order: `--workflow-config` (verbatim), then `--profile`, then `workflowProfiles.default`, then the KB default. Both flags work with `--card`, `--root`, `--parallel`, `--skill` and `--prompt`, including mapped workflows and preparation routes. A skill uses its `process-step` marker; unmapped skills and prompts use `defaults`. Batches use their work mode. Root/parallel children retain the run's configuration snapshot, with model policy resolved for each card's risk tier. The coordinator prints the resolved profile, its source and the per-stage table before the first dispatch; `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . [--profile <name>] [--tier risk:<tier>]` prints the same table (`table` in its JSON) without running anything.
+
+`workflowProfiles.default` also accepts an engine map, for example `{"codex":"codex-medium","claude":"claude-medium"}`. The actual CLI execution engine or in-session host selects its entry, followed by configured engine fallbacks. An absent entry uses the KB default, never another engine's profile. Every key must be a supported engine and every value a nonempty profile name, including unused entries. Explicit selectors retain precedence; child snapshots and external remedies preserve the selected profile.
+
+Fresh official-dataset installs ship six Claude/Codex profiles and seed this medium-profile map. Install and update preserve existing project config and customized profiles, adding only missing assets. No installed config means ordinary KB defaults.
 
 An unknown name is `profile-unresolved`; forbidden context sharing, an unknown stage or key, or a name collision is refused at load. The profile's name and hash are recorded in every handoff.
 

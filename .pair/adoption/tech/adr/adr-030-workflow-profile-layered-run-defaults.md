@@ -1,4 +1,4 @@
-# ADR: Workflow profile over layered run defaults
+# ADR-030: Workflow profile over layered run defaults
 
 ## Status
 
@@ -32,6 +32,12 @@ Choose option 2. `run.agents` may declare `command`, literal `args`, `model` and
 
 Context sharing uses a `shared-with` source and a risk condition. `verify` is always fresh. `validate` is fresh for `risk:red`; below red, a declared sharing transition may run. `pair run` continues to start each stage in a fresh process.
 
+`workflowProfiles.default` accepts a legacy profile-name string or an engine-to-profile-name map. Explicit selectors win. Otherwise the actual execution engine selects its mapped entry: CLI engine selection or the in-session host, then configured engine fallbacks. A missing entry uses the KB default; it never selects another engine's entry. Every map key and value is validated before selection. The selected profile is retained in run snapshots and external remedies.
+
+This project uses `codex: codex-medium` and `claude: claude-medium`, with no global profile or engine default. Existing `engine.*` and string defaults remain supported for other configurations; no automatic migration rewrites them.
+
+The official dataset ships its six Claude/Codex profiles through the existing add-only adoption registry. An add-only project-config registry seeds the per-engine medium map on fresh installs. Existing project configuration and customized profiles remain adopter-owned on install and update; missing shipped assets are added. The seed is an install asset, not a runtime default in the CLI's own configuration.
+
 ## Consequences
 
 ### Benefits
@@ -49,3 +55,4 @@ Context sharing uses a `shared-with` source and a risk condition. `verify` is al
 
 - `adoption/tech/architecture.md` names the profile-root precedence and context floor.
 - `pair.config.json` gains optional `run.defaults` and `run.agents` fields; no migration or rewrite is required.
+- The project `pair.config.json` selects medium profiles per execution engine through `workflowProfiles.default` and removes its legacy global engine settings.

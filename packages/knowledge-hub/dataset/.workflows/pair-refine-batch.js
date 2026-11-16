@@ -271,17 +271,19 @@ const { items: ITEMS, batchModel: BATCH_MODEL, prepareArg: PREPARE_ARG, agentTim
 // The Workflow sandbox has no filesystem API. Resolve once in the repository through a
 // bounded command relay, then use the returned stage settings for every child.
 const AGENT_TIMEOUT_MINUTES = 30 // aligned with pair-cli's 1800 s per-stage watchdog
-const PROFILE_SCHEMA = { type: 'object', properties: { source: { type: 'string' }, stages: { type: 'object' }, cardTiers: { type: 'object' } }, required: ['source', 'stages'] }
+const PROFILE_SCHEMA = { type: 'object', properties: { source: { type: 'string' }, cliEngineFlag: { type: ['string', 'null'] }, stages: { type: 'object' }, cardTiers: { type: 'object' } }, required: ['source', 'stages'] }
 const PROFILE = await boundedAgent('profile:resolve',
   `Run \`node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --host claude\` in the project root. Retain that single configuration snapshot. Only if a selected model is by-tier, read each card lacking an explicit tier (${JSON.stringify(ITEMS.filter(item => !item.tier).map(item => item.id))}) once with \`node .claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs card --story <id>\`; add cardTiers keyed by id with its single risk:* label (null when untagged). Return the snapshot with this cardTiers map; no model resolution from live files. If any read fails, report the error; do not start any card. You are running CONCURRENTLY in sibling worktrees: do NOT create, edit or delete ANY file; no add/commit/checkout/branch/worktree/stash.`,
   { agentType: 'general-purpose', phase: 'Contracts', label: 'profile:resolve', model: 'haiku', effort: 'low', schema: PROFILE_SCHEMA },
 )
 if (!PROFILE || typeof PROFILE !== 'object' || !PROFILE.stages || typeof PROFILE.stages !== 'object')
   throw new Error('refine-batch: profile:resolve returned no stage map; no card dispatched')
-const profileRoute = (card, engine, model) => {
-  const selection = PROFILE.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(PROFILE.sourceDetail)}` : PROFILE.name && PROFILE.source !== 'KB default' ? ` --profile ${JSON.stringify(PROFILE.name)}` : ''
+const profileRoute = (card, engine, model, tier) => {
+  const selection = PROFILE.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(PROFILE.sourceDetail)}` : (PROFILE.source === 'argument' || PROFILE.mappedEngine) ? ` --profile ${JSON.stringify(PROFILE.name)}` : ''
   const compatible = engine && engine !== 'default' ? engine : /^gpt-/.test(model ?? '') ? 'codex' : 'claude'
-  return `pair-cli run --card ${card}${selection} --engine ${compatible}`
+  const view = PROFILE.byTierProfiles?.[tier] ?? PROFILE
+  const engineFlag = view.cliEngineFlag === undefined ? (PROFILE.source === 'KB default' ? compatible : null) : view.cliEngineFlag
+  return `pair-cli run --card ${card}${selection}${engineFlag ? ` --engine ${engineFlag}` : ''}`
 }
 
 for (const item of ITEMS) {
@@ -290,10 +292,10 @@ for (const item of ITEMS) {
   if (!settings || typeof settings !== 'object') throw new Error(`refine-batch: profile lacks ${stage}; no card dispatched`)
   const engine = settings.engine?.value
   if (!['default', 'claude'].includes(engine))
-    throw new Error(`refine-batch: ${stage} wants engine ${JSON.stringify(engine)}; this host runs claude. Run ${profileRoute(item.id, engine)}; no card dispatched.`)
+    throw new Error(`refine-batch: ${stage} wants engine ${JSON.stringify(engine)}; this host runs claude. Run ${profileRoute(item.id, engine, undefined, item.tier ?? PROFILE.cardTiers?.[item.id])}; no card dispatched.`)
   const model = settings.model?.resolved?.id
   if (model && !['fable', 'haiku', 'sonnet', 'opus'].includes(model))
-    throw new Error(`refine-batch: ${stage} wants model ${JSON.stringify(model)}; this host cannot run it. Run ${profileRoute(item.id, engine, model)}; no card dispatched.`)
+    throw new Error(`refine-batch: ${stage} wants model ${JSON.stringify(model)}; this host cannot run it. Run ${profileRoute(item.id, engine, model, item.tier ?? PROFILE.cardTiers?.[item.id])}; no card dispatched.`)
 }
 const stageSettings = item => (PROFILE.byTier?.[item.tier ?? PROFILE.cardTiers?.[item.id]] ?? PROFILE.stages)[item.mode === 'refine' ? 'refine-story' : item.mode]
 

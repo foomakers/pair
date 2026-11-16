@@ -52,12 +52,13 @@ export interface ResolvedStage {
 }
 
 export interface ResolvedWorkflowProfile {
+  readonly cliEngineFlag?: string | null
   readonly disabledStages?: readonly string[]
   readonly byTier?: Readonly<Record<string, Readonly<Record<string, ResolvedStage>>>>
   readonly byTierProfiles?: Readonly<
     Record<
       string,
-      | Pick<ResolvedWorkflowProfile, 'stages' | 'table' | 'contextPolicy'>
+      | Pick<ResolvedWorkflowProfile, 'stages' | 'table' | 'contextPolicy' | 'cliEngineFlag'>
       | { readonly halt: string; readonly detail: string }
     >
   >

@@ -146,6 +146,17 @@ const hostAcceptsModel = (host, model) => model == null || (
   (host === 'pi' || host === 'opencode') ? /^[^/]+\/[^/]+$/.test(model) : false
 )
 
+function cliEngineFor(resolved) {
+  const settings = Object.entries(resolved.stages).filter(([stage]) => !resolved.disabledStages?.includes(stage)).map(([, value]) => value)
+  const bound = s => s.engine.value !== 'default' && ['stage', 'defaults'].includes(s.engine.source)
+  if (settings.every(bound)) return null
+  const explicit = ['argument', '--workflow-config'].includes(resolved.source) || resolved.mappedEngine !== undefined
+  const runnable = settings.every(s => hostAcceptsModel(s.engine.value === 'default' ? resolved.fallbackEngine : s.engine.value, s.model.resolved.id))
+  if (!explicit && resolved.source !== 'KB default' && runnable) return null
+  const candidates = [...new Set([resolved.mappedEngine, resolved.fallbackEngine, ...HOST_ENGINES])].filter(id => HOST_ENGINES.includes(id))
+  return candidates.find(engine => settings.every(s => (!bound(s) || s.engine.value === engine) && hostAcceptsModel(engine, s.model.resolved.id))) ?? null
+}
+
 /** Pre-dispatch gaps for an in-session host. Unknown hosts fail closed. */
 export function gapsForHost(resolved, host, card) {
   const gaps = []
@@ -158,9 +169,8 @@ export function gapsForHost(resolved, host, card) {
     const modelGap = !engineGap && !hostAcceptsModel(host, model)
     if (!engineGap && !modelGap) continue
     const wanted = `${engine ?? 'unknown'}${model ? ` / ${model}` : ' / engine default'}`
-    const selection = resolved.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(resolved.sourceDetail)}` : resolved.source === 'argument' ? ` --profile ${JSON.stringify(resolved.name)}` : ''
-    const compatible = HOST_ENGINES.includes(engine) && hostAcceptsModel(engine, model) ? engine : HOST_ENGINES.find(id => hostAcceptsModel(id, model))
-    const command = `pair-cli run --card ${card ?? '<card-id>'}${selection}${compatible ? ` --engine ${compatible}` : ''}`
+    const selection = resolved.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(resolved.sourceDetail)}` : resolved.source === 'argument' || resolved.mappedEngine !== undefined ? ` --profile ${JSON.stringify(resolved.name)}` : ''
+    const command = `pair-cli run --card ${card ?? '<card-id>'}${selection}${resolved.cliEngineFlag ? ` --engine ${resolved.cliEngineFlag}` : ''}`
     gaps.push({ stage, wanted, host, candidate: null, command, reason: engineGap ? 'engine' : 'model' })
   }
   return gaps
@@ -226,6 +236,18 @@ function readRunLayer(root) {
   return { ...run, legacy: config?.engine }
 }
 
+function defaultSelectionErrors(value) {
+  if (value === undefined) return []
+  if (typeof value === 'string' && value.trim()) return []
+  if (!isObject(value)) return ['workflowProfiles.default: must be a profile name or an object keyed by engine id']
+  const errors = []
+  for (const [engine, name] of Object.entries(value)) {
+    if (!HOST_ENGINES.includes(engine)) errors.push(`workflowProfiles.default.${engine}: unknown engine; choose ${HOST_ENGINES.join(' | ')}`)
+    if (typeof name !== 'string' || !name.trim()) errors.push(`workflowProfiles.default.${engine}: must be a non-empty profile name`)
+  }
+  return errors
+}
+
 function readBlock(root) {
   const path = join(root, 'pair.config.json')
   if (!existsSync(path)) return {}
@@ -240,7 +262,7 @@ function readBlock(root) {
   if (!isObject(block)) throw new ProfileError('profile-invalid', 'pair.config.json workflowProfiles: must be an object')
   const errs = []
   for (const k of Object.keys(block)) if (!CONFIG_KEYS.includes(k)) errs.push(`workflowProfiles: unknown key '${k}' (allowed: ${CONFIG_KEYS.join(', ')})`)
-  if (block.default !== undefined && (typeof block.default !== 'string' || block.default === '')) errs.push('workflowProfiles.default: must be a profile name')
+  errs.push(...defaultSelectionErrors(block.default))
   const files = block.files === undefined ? [] : Array.isArray(block.files) ? block.files : [block.files]
   if (files.some(f => typeof f !== 'string' || f === '')) errs.push('workflowProfiles.files: must be a glob or an array of globs')
   if (block.inline !== undefined && !isObject(block.inline)) errs.push('workflowProfiles.inline: must be an object keyed by profile name')
@@ -427,7 +449,7 @@ function finish(root, profile, source, sourceDetail, notes, tier, engineFlag) {
   const byTier = Object.fromEntries(['risk:green', 'risk:yellow', 'risk:red'].map(tier => [tier, stagesFor(tier)]))
   const freshness = freshnessError(stages, tier, sourceDetail)
   if (freshness) throw new ProfileError('profile-invalid', freshness)
-  return { name: profile.name, source, sourceDetail, hash: profileHash(profile), profile, stages, byTier, disabledStages, notes, ...(tier ? { tier } : {}) }
+  return { name: profile.name, source, sourceDetail, hash: profileHash(profile), profile, stages, byTier, disabledStages, notes, fallbackEngine: engineFlag ?? run.defaults?.engine ?? run.legacy?.id ?? 'claude', ...(tier ? { tier } : {}) }
 }
 
 function lookup(root, block, name, source, tier, engineFlag) {
@@ -449,7 +471,12 @@ function lookup(root, block, name, source, tier, engineFlag) {
  * Throws a `ProfileError` — never falls back to the KB default on an error (a typo must not quietly
  * run the whole cycle on the wrong model).
  */
-export function resolveProfile({ root, profile, workflowConfig, tier, engine }) {
+export function resolveProfile(request) {
+  const resolved = selectProfile(request)
+  return { ...resolved, cliEngineFlag: cliEngineFor(resolved) }
+}
+
+function selectProfile({ root, profile, workflowConfig, tier, engine, host }) {
   if (workflowConfig !== undefined) {
     const path = resolvePath(root, workflowConfig)
     if (!existsSync(path)) throw new ProfileError('profile-unresolved', `--workflow-config ${path} does not exist`)
@@ -464,7 +491,16 @@ export function resolveProfile({ root, profile, workflowConfig, tier, engine }) 
   }
   const block = readBlock(root)
   if (profile !== undefined) return lookup(root, block, profile, 'argument', tier, engine)
-  if (block.default !== undefined) return lookup(root, block, block.default, 'pair.config.json', tier, engine)
+  if (typeof block.default === 'string') return lookup(root, block, block.default, 'pair.config.json', tier, engine)
+  if (isObject(block.default)) {
+    const run = readRunLayer(root)
+    const selector = engine ?? host ?? run.defaults?.engine ?? run.legacy?.id ?? 'claude'
+    const name = block.default[selector]
+    if (name !== undefined) {
+      const resolved = lookup(root, block, name, 'pair.config.json', tier, engine)
+      return { ...resolved, mappedEngine: selector, notes: [...resolved.notes, `workflowProfiles.default.${selector}: ${name}`] }
+    }
+  }
   return finish(root, { name: 'KB default' }, 'KB default', 'KB default', [], tier, engine)
 }
 
@@ -566,7 +602,7 @@ if (isMain()) {
       process.exit(0)
     }
     if (opts.root === undefined) throw new Error('--root is required')
-    const resolved = resolveProfile({ root: opts.root, profile: opts.profile, workflowConfig: opts['workflow-config'], tier: opts.tier, engine: opts.engine })
+    const resolved = resolveProfile({ root: opts.root, profile: opts.profile, workflowConfig: opts['workflow-config'], tier: opts.tier, engine: opts.engine, host: opts.host })
     if (cmd === 'gaps') {
       if (opts.host === undefined) throw new Error('--host is required')
       out({ host: opts.host, gaps: gapsForHost(resolved, opts.host, opts.card) })
@@ -577,7 +613,7 @@ if (isMain()) {
       const view = { ...resolved, stages, tier }
       const freshness = freshnessError(stages, tier, resolved.sourceDetail)
       if (freshness) return [tier, { halt: 'profile-invalid', detail: freshness }]
-      return [tier, { stages, tier, table: describeProfile(view), contextPolicy: profileContextPolicy(view) }]
+      return [tier, { stages, tier, cliEngineFlag: cliEngineFor(view), table: describeProfile(view), contextPolicy: profileContextPolicy(view) }]
     }))
     out({ ...resolved, byTierProfiles, table: describeProfile(resolved), contextPolicy: profileContextPolicy(resolved), ...(opts.host ? { gaps: gapsForHost(resolved, opts.host, opts.card) } : {}), ...(binding ? { binding } : {}) })
   } catch (e) {

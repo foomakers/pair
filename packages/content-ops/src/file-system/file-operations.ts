@@ -216,7 +216,12 @@ async function copyDirEntry(entry: Dirent, context: CopyDirContext): Promise<voi
   const entryBehavior = resolveBehavior(relPath, folderBehavior, defaultBehavior)
 
   if (entryBehavior === 'skip') return
-  if (entryBehavior === 'add' && (await destinationExists(fileService, newEntry))) return
+  if (
+    entryBehavior === 'add' &&
+    !entry.isDirectory() &&
+    (await destinationExists(fileService, newEntry))
+  )
+    return
 
   if (entry.isDirectory()) {
     await copyDirHelper(descendContext(context, oldEntry, newEntry))

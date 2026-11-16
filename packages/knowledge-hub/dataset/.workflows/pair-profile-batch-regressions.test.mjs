@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { resolveProfile } from '../skills/pair-workflow-cycle/scripts/workflow-profile.mjs'
 
@@ -95,4 +96,38 @@ test('#617 r0-9: refine derives missing item tiers from card labels in its one s
   })
   assert.equal(resolutions, 1)
   assert.deepEqual(work.sort(), [['617', 'opus'], ['618', 'haiku']])
+})
+
+
+for (const name of ['implement', 'refine']) test(`#617 engine default map: ${name} relay selects its actual Claude host profile`, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pair-batch-engine-map-'))
+  try {
+    writeFileSync(join(root, 'pair.config.json'), JSON.stringify({ workflowProfiles: {
+      default: { codex: 'codex-medium', claude: 'claude-medium' }, inline: {
+        'codex-medium': { name: 'codex-medium', defaults: { engine: 'codex', model: 'gpt-6-sol' } },
+        'claude-medium': { name: 'claude-medium', defaults: { engine: 'claude', model: 'sonnet' } },
+      },
+    } }))
+    const work = []
+    let resolutions = 0
+    await evaluate(name, argsFor(name), async (prompt, opts) => {
+      if (opts.label === 'profile:resolve') {
+        resolutions++
+        assert.match(prompt, /resolve --root \. --host claude/)
+        const result = spawnSync(process.execPath, [new URL('../skills/pair-workflow-cycle/scripts/workflow-profile.mjs', import.meta.url).pathname, 'resolve', '--root', root, '--host', 'claude'], { encoding: 'utf8' })
+        assert.equal(result.status, 0, result.stdout)
+        const snapshot = JSON.parse(result.stdout)
+        assert.equal(snapshot.name, 'claude-medium')
+        return snapshot
+      }
+      if (String(opts.label).startsWith('prepare:phase')) return { outcome: 'nothing-to-prepare' }
+      if (opts.agentType === 'pair-implementer' || String(opts.label).startsWith('triage:#')) {
+        work.push(opts.model)
+        return name === 'implement' ? { status: 'redirect', next: { step: 'blocked', reason: 'needs-human' } } : { recommendation: 'ready', note: 'fixture' }
+      }
+      return {}
+    })
+    assert.equal(resolutions, 1)
+    assert.deepEqual(work, ['sonnet', 'sonnet'])
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })

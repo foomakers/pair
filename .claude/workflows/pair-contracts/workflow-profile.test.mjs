@@ -764,3 +764,62 @@ test('#617 AC-10: an unknown host receives a supported engine remedy for the emp
   assert.match(gap.command, /^pair-cli run --card 617 --engine claude$/)
   assert.equal(resolveProfile({ root, engine: 'claude' }).stages.implement.engine.value, 'claude')
 })
+
+
+const engineDefaultConfig = extra => ({ ...extra, workflowProfiles: {
+  default: { codex: 'codex-medium', claude: 'claude-medium' },
+  inline: {
+    'codex-medium': { name: 'codex-medium', defaults: { engine: 'codex', model: 'gpt-6-sol' } },
+    'claude-medium': { name: 'claude-medium', defaults: { engine: 'claude', model: 'sonnet' } },
+    forced: { name: 'forced', defaults: { engine: 'claude', model: 'opus' } },
+  },
+} })
+for (const [name, request, extra, expected] of [
+  ['explicit engine beats host', { engine: 'codex', host: 'claude' }, {}, 'codex-medium'],
+  ['host beats run fallback', { host: 'claude' }, { run: { defaults: { engine: 'codex' } } }, 'claude-medium'],
+  ['run fallback beats legacy', {}, { run: { defaults: { engine: 'codex' } }, engine: { id: 'claude' } }, 'codex-medium'],
+  ['legacy fallback', {}, { engine: { id: 'codex' } }, 'codex-medium'],
+  ['schema fallback', {}, {}, 'claude-medium'],
+]) test(`#617 engine default map: ${name}`, () => {
+  const root = project({ config: engineDefaultConfig(extra) })
+  assert.equal(resolveProfile({ root, ...request }).name, expected)
+})
+
+test('#617 engine default map: CLI host selects the Claude profile without setting a global engine', () => {
+  const root = project({ config: engineDefaultConfig({ run: { agents: { claude: { model: 'opus' } } } }) })
+  const script = fileURLToPath(new URL('../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs', import.meta.url))
+  const result = spawnSync(process.execPath, [script, 'resolve', '--root', root, '--host', 'claude'], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stdout)
+  const profile = JSON.parse(result.stdout)
+  assert.equal(profile.name, 'claude-medium')
+  assert.equal(profile.stages.defaults.model.resolved.id, 'sonnet')
+})
+
+for (const [name, request] of [['missing selected engine', { engine: 'pi' }], ['unknown host', { host: 'unknown' }]])
+  test(`#617 engine default map: ${name} uses KB default rather than another entry`, () => {
+    const root = project({ config: engineDefaultConfig({}) })
+    const selected = resolveProfile({ root, ...request })
+    assert.equal(selected.name, 'KB default')
+    if (request.host) assert.ok(gapsForHost(selected, request.host, '617').length > 0)
+  })
+
+for (const [value, field] of [[{ claude: 'claude-medium', unknown: 'codex-medium' }, 'unknown'], [{ claude: 'claude-medium', codex: 42 }, 'codex'], [{ claude: 'claude-medium', codex: '' }, 'codex']])
+  test(`#617 engine default map: malformed unused ${field} entry ${JSON.stringify(value[field])} fails before selection`, () => {
+    const config = engineDefaultConfig({})
+    config.workflowProfiles.default = value
+    const root = project({ config })
+    assert.throws(() => resolveProfile({ root, engine: 'claude' }), error => error.code === 'profile-invalid' && error.detail.includes(`default.${field}`))
+  })
+
+test('#617 engine default map: an unresolved selected name fails without another engine fallback', () => {
+  const config = engineDefaultConfig({})
+  config.workflowProfiles.default.codex = 'missing'
+  const root = project({ config })
+  assert.throws(() => resolveProfile({ root, engine: 'codex' }), error => error.code === 'profile-unresolved' && error.detail.includes('missing'))
+})
+
+for (const request of [{ profile: 'forced' }, { workflowConfig: 'external.json' }])
+  test(`#617 engine default map: explicit ${Object.keys(request)[0]} wins`, () => {
+    const root = project({ config: engineDefaultConfig({}), files: { 'external.json': { name: 'forced', defaults: { engine: 'claude', model: 'opus' } } } })
+    assert.equal(resolveProfile({ root, engine: 'codex', ...request }).name, 'forced')
+  })

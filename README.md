@@ -35,6 +35,8 @@ For a delivery card, `pair-cli run --card <id>` starts or resumes its cycle. Pro
 
 Set `workflowProfiles` in `pair.config.json` to choose each stage's engine and model. `run.defaults` and `run.agents.<engine>` supply general and per-agent fallbacks, including literal runner command and args. See [configuration](https://pair.foomakers.com/docs/reference/configuration#workflow-profiles-workflowprofiles).
 
+Choose default profiles per execution engine with `"default": {"codex":"codex-medium","claude":"claude-medium"}` inside `workflowProfiles`; explicit profile flags take precedence.
+
 ## What You Get
 
 - **Knowledge Base** — guidelines, how-to guides, and templates for every SDLC phase

@@ -384,7 +384,11 @@ async function updateSingleRegistry(ctx: UpdateRegistryCtx): Promise<RegistryOut
     return { result: reportNotShipped(ctx, { effectiveTarget, datasetPath }) }
   }
 
-  await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
+  await finalizeRegistryCopy(
+    ctx,
+    { effectiveTarget, datasetPath },
+    copyResult['preserved'] === true,
+  )
   presenter.registryDone(registryName)
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,

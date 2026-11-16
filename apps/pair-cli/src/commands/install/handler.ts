@@ -259,6 +259,7 @@ async function validateInstallContext(
   for (const [name, config] of Object.entries(registries)) {
     const target = resolveTarget(name, config, fs, baseTarget)
     targets[name] = target
+    if (config.behavior === 'add') continue
     // Copy targets too (a lone own CLAUDE.md): the copy would overwrite it silently.
     const existing = [target, ...copyTargets(config, fs, baseTarget)].find(t => fs.existsSync(t))
     if (existing) {
@@ -339,7 +340,11 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
     return { result: reportNotShipped(ctx, { effectiveTarget, datasetPath }) }
   }
 
-  await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
+  await finalizeRegistryCopy(
+    ctx,
+    { effectiveTarget, datasetPath },
+    copyResult['preserved'] === true,
+  )
   presenter.registryDone(registryName)
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,

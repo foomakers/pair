@@ -1,0 +1,50 @@
+{
+  "name": "claude-medium",
+  "defaults": {
+    "engine": "claude",
+    "model": "balanced",
+    "effort": "medium",
+    "context": "fresh"
+  },
+  "modelClasses": {
+    "cheap": "claude-haiku-5-5",
+    "balanced": "claude-sonnet-5-5",
+    "frontier": "claude-opus-5-5"
+  },
+  "stages": {
+    "contract": {
+      "model": "cheap"
+    },
+    "prepare": {
+      "model": "balanced"
+    },
+    "validate": {
+      "model": "balanced"
+    },
+    "implement": {
+      "model": "balanced"
+    },
+    "green": {
+      "model": "balanced"
+    },
+    "verify": {
+      "model": "frontier",
+      "effort": "high"
+    },
+    "merge": {
+      "model": "cheap"
+    },
+    "refine-story": {
+      "model": "balanced"
+    },
+    "plan-tasks": {
+      "model": "balanced"
+    },
+    "triage": {
+      "model": "cheap"
+    },
+    "classify": {
+      "model": "cheap"
+    }
+  }
+}

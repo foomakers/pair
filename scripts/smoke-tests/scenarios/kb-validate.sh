@@ -94,6 +94,7 @@ cd "$OPT_DIR"
 # unrelated structure error would mask the behavior under test.
 mkdir -p .pair/knowledge .pair/adoption .github .claude/skills .claude/workflows .claude/agents
 touch AGENTS.md CLAUDE.md
+cp "$KB_SOURCE_PATH/.pair/defaults/pair.config.json" pair.config.json
 cat > .pair/knowledge/index.md <<'EOF'
 # Knowledge
 

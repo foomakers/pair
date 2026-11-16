@@ -1,12 +1,9 @@
 {
-  "engine": {
-    "id": "codex",
-    "model": {
-      "codex": "gpt-6-sol"
-    }
-  },
   "workflowProfiles": {
-    "default": "codex-medium",
+    "default": {
+      "codex": "codex-medium",
+      "claude": "claude-medium"
+    },
     "files": ".pair/adoption/tech/workflow-profiles/*.json"
   },
   "agents": {

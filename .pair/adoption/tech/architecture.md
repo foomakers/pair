@@ -13,7 +13,9 @@
 
 ## Knowledge Base Distribution
 
-- Workflow stage configuration is resolved by `workflow-profile.mjs`: profile stage, profile defaults, per-agent run settings, general run defaults, legacy engine settings, then KB defaults. Agent entries cannot select engine or effort. `verify` stays fresh; `validate` stays fresh at `risk:red`. See [ADR-029](adr/adr-029-workflow-profile-layered-run-defaults.md).
+- Workflow stage configuration is resolved by `workflow-profile.mjs`: profile stage, profile defaults, per-agent run settings, general run defaults, legacy engine settings, then KB defaults. Agent entries cannot select engine or effort. `verify` stays fresh; `validate` stays fresh at `risk:red`. See [ADR-030](adr/adr-030-workflow-profile-layered-run-defaults.md).
+- Profile selection accepts a legacy global name or a per-engine `workflowProfiles.default` map after explicit selectors. The actual execution engine selects one entry; an absent entry uses the KB default. This project maps Codex to `codex-medium` and Claude to `claude-medium`, with no global profile or engine default. Snapshots and external remedies preserve the selected profile.
+- The official dataset seeds six profiles and the per-engine medium map through add-only asset registries. Existing project config and customized profiles are preserved; install/update add missing assets. Uninstalled zero-config execution retains KB defaults.
 
 - KB dataset is distributed separately from CLI bundle as GitHub release artifact.
 - CLI auto-downloads KB on first run from GitHub releases (default) or custom URL.

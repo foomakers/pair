@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
@@ -375,3 +375,380 @@ it.each([
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+it.each([
+  { selection: 'external', host: 'claude' },
+  { selection: 'external', host: 'unknown' },
+  { selection: 'config default', host: 'claude' },
+  { selection: 'config default', host: 'unknown' },
+])(
+  '#617 r0-11: $selection mixed-engine remedy on $host preserves the whole runnable profile',
+  async ({ selection, host }) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-mixed-remedy-')))
+    try {
+      const profile = {
+        name: 'mixed',
+        ...(selection === 'external'
+          ? {
+              defaults: { engine: 'claude', model: 'sonnet' },
+            }
+          : {}),
+        stages: { implement: { engine: 'codex', model: 'gpt-6-sol' } },
+      }
+      writeFileSync(join(root, 'mixed.json'), JSON.stringify(profile))
+      if (selection === 'config default')
+        writeFileSync(
+          join(root, 'pair.config.json'),
+          JSON.stringify({
+            workflowProfiles: { default: 'mixed', inline: { mixed: profile } },
+          }),
+        )
+      const initial = resolveWorkflowProfile(SCRIPTS, {
+        root,
+        ...(selection === 'external' && { workflowConfig: 'mixed.json' }),
+      })
+      expect(() =>
+        validateProfileRun(initial, { commandLine: selection === 'external' }),
+      ).not.toThrow()
+      const { gapsForHost } = await import(join(SCRIPTS, 'workflow-profile.mjs'))
+      const gap = gapsForHost(initial, host, '617').find(
+        (g: { stage: string }) => g.stage === 'implement',
+      )
+      const tokens = gap.command
+        .match(/"(?:\\.|[^"\\])*"|[^\s]+/g)
+        .map((token: string) => (token.startsWith('"') ? JSON.parse(token) : token))
+      expect(tokens.slice(0, 2)).toEqual(['pair-cli', 'run'])
+      const flags = Object.fromEntries(
+        Array.from({ length: (tokens.length - 2) / 2 }, (_, i) => [
+          tokens[2 + i * 2],
+          tokens[3 + i * 2],
+        ]),
+      )
+      const { parseRunCommand } = await import('./parser.js')
+      const parsed = parseRunCommand({
+        card: flags['--card'],
+        profile: flags['--profile'],
+        workflowConfig: flags['--workflow-config'],
+        engine: flags['--engine'],
+      })
+      expect(parsed.dispatch?.card).toBe('617')
+      const routed = resolveWorkflowProfile(SCRIPTS, {
+        root,
+        profile: parsed.profile,
+        workflowConfig: parsed.workflowConfig,
+        engine: parsed.engine,
+      })
+      expect(routed.hash).toBe(initial.hash)
+      expect(() =>
+        validateProfileRun(routed, {
+          commandLine: parsed.profile !== undefined || parsed.workflowConfig !== undefined,
+          ...(parsed.engine && { engineFlag: parsed.engine }),
+        }),
+      ).not.toThrow()
+      expect(
+        Object.fromEntries(
+          Object.keys(initial.stages).map(stage => [stage, stageSettings(routed, stage)]),
+        ),
+      ).toEqual(
+        Object.fromEntries(
+          Object.keys(initial.stages).map(stage => [stage, stageSettings(initial, stage)]),
+        ),
+      )
+      expect(stageEngineIds(routed, ['claude', 'codex']).sort()).toEqual(
+        ['codex'].concat(selection === 'external' ? ['claude'] : []).sort(),
+      )
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  },
+)
+
+it.each([
+  { batch: 'implement', selection: 'external' },
+  { batch: 'refine', selection: 'external' },
+  { batch: 'implement', selection: 'config default' },
+  { batch: 'refine', selection: 'config default' },
+])(
+  '#617 r0-11: $batch batch remedy preserves its $selection mixed profile',
+  async ({ batch, selection }) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-batch-remedy-')))
+    try {
+      const foreignStage = batch === 'implement' ? 'implement' : 'triage'
+      const profile = {
+        name: 'mixed',
+        ...(selection === 'external'
+          ? {
+              defaults: { engine: 'claude', model: 'sonnet' },
+            }
+          : {}),
+        stages: { [foreignStage]: { engine: 'codex', model: 'gpt-6-sol' } },
+      }
+      writeFileSync(join(root, 'mixed.json'), JSON.stringify(profile))
+      if (selection === 'config default')
+        writeFileSync(
+          join(root, 'pair.config.json'),
+          JSON.stringify({
+            workflowProfiles: { default: 'mixed', inline: { mixed: profile } },
+          }),
+        )
+      const initial = resolveWorkflowProfile(SCRIPTS, {
+        root,
+        ...(selection === 'external' && { workflowConfig: 'mixed.json' }),
+      })
+      expect(() =>
+        validateProfileRun(initial, { commandLine: selection === 'external' }),
+      ).not.toThrow()
+      const source = readFileSync(
+        join(REPO_ROOT, '.claude/workflows', `pair-${batch}-batch.js`),
+        'utf8',
+      ).replace(/^export /gm, '')
+      const evaluate = new Function(
+        'args',
+        'agent',
+        'parallel',
+        'pipeline',
+        'log',
+        `return (async () => {${source}})()`,
+      ) as (...args: unknown[]) => Promise<unknown>
+      const calls: string[] = []
+      let gap = ''
+      try {
+        await evaluate(
+          batch === 'implement'
+            ? {
+                cards: [
+                  {
+                    id: '617',
+                    title: 'Mixed profile',
+                    branch: 'feature/US-617-mixed',
+                    tier: 'risk:yellow',
+                  },
+                ],
+                policyText: '',
+              }
+            : { items: [{ id: '617', mode: 'triage', tier: 'risk:yellow' }] },
+          async (_prompt: string, opts: { label: string }) => {
+            calls.push(opts.label)
+            return initial
+          },
+          () => {
+            throw new Error('unexpected work dispatch')
+          },
+          () => {
+            throw new Error('unexpected work dispatch')
+          },
+          () => {},
+        )
+      } catch (error) {
+        gap = error instanceof Error ? error.message : String(error)
+      }
+      expect(calls).toEqual(['profile:resolve'])
+      const command = /Run (pair-cli run .*); no (?:story|card) dispatched/.exec(gap)?.[1]
+      expect(command).toBeDefined()
+      const tokens = command!
+        .match(/"(?:\\.|[^"\\])*"|[^\s]+/g)!
+        .map(token => (token.startsWith('"') ? (JSON.parse(token) as string) : token))
+      const flags = Object.fromEntries(
+        Array.from({ length: (tokens.length - 2) / 2 }, (_, i) => [
+          tokens[2 + i * 2],
+          tokens[3 + i * 2],
+        ]),
+      )
+      const { parseRunCommand } = await import('./parser.js')
+      const parsed = parseRunCommand({
+        card: flags['--card'],
+        profile: flags['--profile'],
+        workflowConfig: flags['--workflow-config'],
+        engine: flags['--engine'],
+      })
+      expect(parsed.dispatch?.card).toBe('617')
+      const routed = resolveWorkflowProfile(SCRIPTS, {
+        root,
+        profile: parsed.profile,
+        workflowConfig: parsed.workflowConfig,
+        engine: parsed.engine,
+      })
+      expect(routed.hash).toBe(initial.hash)
+      expect(() =>
+        validateProfileRun(routed, {
+          commandLine: parsed.profile !== undefined || parsed.workflowConfig !== undefined,
+          ...(parsed.engine && { engineFlag: parsed.engine }),
+        }),
+      ).not.toThrow()
+      expect(
+        Object.fromEntries(
+          Object.keys(initial.stages).map(stage => [stage, stageSettings(routed, stage)]),
+        ),
+      ).toEqual(
+        Object.fromEntries(
+          Object.keys(initial.stages).map(stage => [stage, stageSettings(initial, stage)]),
+        ),
+      )
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  },
+)
+
+it('#617 engine default map: host remedy pins the selected mixed profile across CLI fallback', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-map-remedy-')))
+  try {
+    writeFileSync(
+      join(root, 'pair.config.json'),
+      JSON.stringify({
+        workflowProfiles: {
+          default: { codex: 'mixed', claude: 'other' },
+          inline: {
+            mixed: {
+              name: 'mixed',
+              defaults: { engine: 'claude', model: 'sonnet' },
+              stages: { implement: { engine: 'codex', model: 'gpt-6-sol' } },
+            },
+            other: { name: 'other', defaults: { engine: 'claude', model: 'opus' } },
+          },
+        },
+      }),
+    )
+    const { resolveProfile, gapsForHost } = await import(join(SCRIPTS, 'workflow-profile.mjs'))
+    const initial = resolveProfile({ root, host: 'codex' })
+    expect(initial.name).toBe('mixed')
+    const command = gapsForHost(initial, 'codex', '617').find(
+      (gap: { stage: string }) => gap.stage === 'verify',
+    ).command
+    const tokens = command
+      .match(/"(?:\\.|[^"\\])*"|[^\s]+/g)
+      .map((token: string) => (token.startsWith('"') ? JSON.parse(token) : token))
+    const flags = Object.fromEntries(
+      Array.from({ length: (tokens.length - 2) / 2 }, (_, i) => [
+        tokens[2 + i * 2],
+        tokens[3 + i * 2],
+      ]),
+    )
+    const { parseRunCommand } = await import('./parser.js')
+    const parsed = parseRunCommand({
+      card: flags['--card'],
+      profile: flags['--profile'],
+      engine: flags['--engine'],
+    })
+    const routed = resolveWorkflowProfile(SCRIPTS, {
+      root,
+      profile: parsed.profile,
+      engine: parsed.engine,
+    })
+    expect(parsed.dispatch?.card).toBe('617')
+    expect(routed.name).toBe('mixed')
+    expect(routed.hash).toBe(initial.hash)
+    expect(() =>
+      validateProfileRun(routed, {
+        commandLine: parsed.profile !== undefined,
+        ...(parsed.engine && { engineFlag: parsed.engine }),
+      }),
+    ).not.toThrow()
+    expect(stageSettings(routed, 'verify')).toEqual({ engine: 'claude', model: 'sonnet' })
+    expect(stageSettings(routed, 'implement')).toEqual({ engine: 'codex', model: 'gpt-6-sol' })
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+it.each(['implement', 'refine'])(
+  '#617 r0-9/11: %s batch remedy uses the card tier engine binding',
+  async batch => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-tier-remedy-')))
+    try {
+      mkdirSync(join(root, '.pair/adoption/tech'), { recursive: true })
+      writeFileSync(
+        join(root, '.pair/adoption/tech/automation.md'),
+        '## Model Policy\n\nrisk:red: frontier\n',
+      )
+      writeFileSync(
+        join(root, 'pair.config.json'),
+        JSON.stringify({
+          workflowProfiles: {
+            default: 'p',
+            inline: {
+              p: {
+                name: 'p',
+                defaults: { model: 'by-tier' },
+                modelClasses: { frontier: 'gpt-6-sol' },
+              },
+            },
+          },
+        }),
+      )
+      const initial = resolveWorkflowProfile(SCRIPTS, { root })
+      const source = readFileSync(
+        join(REPO_ROOT, 'packages/knowledge-hub/dataset/.workflows', `pair-${batch}-batch.js`),
+        'utf8',
+      ).replace(/^export /gm, '')
+      const evaluate = new Function(
+        'args',
+        'agent',
+        'parallel',
+        'pipeline',
+        'log',
+        `return (async () => {${source}})()`,
+      ) as (...args: unknown[]) => Promise<unknown>
+      let gap = ''
+      try {
+        await evaluate(
+          batch === 'implement'
+            ? {
+                cards: [
+                  { id: '617', title: 'Red tier', branch: 'feature/US-617-red', tier: 'risk:red' },
+                ],
+                policyText: '',
+              }
+            : { items: [{ id: '617', mode: 'triage', tier: 'risk:red' }] },
+          async () => initial,
+          () => {
+            throw new Error('unexpected work dispatch')
+          },
+          () => {
+            throw new Error('unexpected work dispatch')
+          },
+          () => {},
+        )
+      } catch (error) {
+        gap = error instanceof Error ? error.message : String(error)
+      }
+      const command = /Run (pair-cli run .*); no (?:story|card) dispatched/.exec(gap)?.[1]
+      expect(command).toBeDefined()
+      const tokens = command!
+        .match(/"(?:\\.|[^"\\])*"|[^\s]+/g)!
+        .map(token => (token.startsWith('"') ? (JSON.parse(token) as string) : token))
+      const flags = Object.fromEntries(
+        Array.from({ length: (tokens.length - 2) / 2 }, (_, i) => [
+          tokens[2 + i * 2],
+          tokens[3 + i * 2],
+        ]),
+      )
+      const { parseRunCommand } = await import('./parser.js')
+      const parsed = parseRunCommand({
+        card: flags['--card'],
+        profile: flags['--profile'],
+        engine: flags['--engine'],
+      })
+      const routed = resolveWorkflowProfile(SCRIPTS, {
+        root,
+        profile: parsed.profile,
+        engine: parsed.engine,
+        tier: 'risk:red',
+      })
+      expect(parsed.dispatch?.card).toBe('617')
+      expect(routed.hash).toBe(initial.hash)
+      expect(() =>
+        validateProfileRun(routed, {
+          commandLine: parsed.profile !== undefined,
+          ...(parsed.engine && { engineFlag: parsed.engine }),
+        }),
+      ).not.toThrow()
+      expect(stageSettings(routed, batch === 'implement' ? 'implement' : 'triage')).toEqual({
+        engine: 'codex',
+        model: 'gpt-6-sol',
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  },
+)

@@ -903,17 +903,19 @@ const ROLE_EFFORTS = Object.fromEntries(
 // A Workflow sandbox cannot read project files. Ask one bounded relay for the shared
 // resolver's result before any story agent starts, then retain that result for this batch.
 const AGENT_TIMEOUT_MINUTES = 30 // aligned with pair-cli's 1800 s per-stage watchdog
-const PROFILE_SCHEMA = { type: 'object', properties: { source: { type: 'string' }, stages: { type: 'object' } }, required: ['source', 'stages'] }
+const PROFILE_SCHEMA = { type: 'object', properties: { source: { type: 'string' }, cliEngineFlag: { type: ['string', 'null'] }, stages: { type: 'object' } }, required: ['source', 'stages'] }
 const PROFILE = PARSED.stories.length ? await boundedAgent('profile:resolve',
   `Run exactly this read-only command in the project root: node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --host claude. Return its JSON unchanged. Do not dispatch a story or modify files.`,
   { agentType: 'general-purpose', phase: 'Contracts', label: 'profile:resolve', model: 'haiku', effort: 'low', schema: PROFILE_SCHEMA },
 ) : { source: 'KB default', stages: {} }
 if (!PROFILE || typeof PROFILE !== 'object' || !PROFILE.stages || typeof PROFILE.stages !== 'object')
   throw new Error('implement-batch: profile:resolve returned no stage map; no story dispatched')
-const profileRoute = (card, engine, model) => {
-  const selection = PROFILE.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(PROFILE.sourceDetail)}` : PROFILE.name && PROFILE.source !== 'KB default' ? ` --profile ${JSON.stringify(PROFILE.name)}` : ''
+const profileRoute = (card, engine, model, tier) => {
+  const selection = PROFILE.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(PROFILE.sourceDetail)}` : (PROFILE.source === 'argument' || PROFILE.mappedEngine) ? ` --profile ${JSON.stringify(PROFILE.name)}` : ''
   const compatible = engine && engine !== 'default' ? engine : /^gpt-/.test(model ?? '') ? 'codex' : 'claude'
-  return `pair-cli run --card ${card}${selection} --engine ${compatible}`
+  const view = PROFILE.byTierProfiles?.[tier] ?? PROFILE
+  const engineFlag = view.cliEngineFlag === undefined ? (PROFILE.source === 'KB default' ? compatible : null) : view.cliEngineFlag
+  return `pair-cli run --card ${card}${selection}${engineFlag ? ` --engine ${engineFlag}` : ''}`
 }
 
 for (const story of PARSED.stories) for (const stage of ['prepare', 'validate', 'implement', 'green', 'verify']) {
@@ -922,10 +924,10 @@ for (const story of PARSED.stories) for (const stage of ['prepare', 'validate', 
   if (PARSED.stories.length && (!settings || typeof settings !== 'object')) throw new Error(`implement-batch: profile lacks ${stage}; no story dispatched`)
   const engine = settings?.engine?.value
   if (engine && !['default', 'claude'].includes(engine))
-    throw new Error(`implement-batch: ${stage} wants engine ${JSON.stringify(engine)}; this host runs claude. Run ${profileRoute(story.id, engine)}; no story dispatched.`)
+    throw new Error(`implement-batch: ${stage} wants engine ${JSON.stringify(engine)}; this host runs claude. Run ${profileRoute(story.id, engine, undefined, story.tier)}; no story dispatched.`)
   const model = settings?.model?.resolved?.id
   if (model && !['fable', 'haiku', 'sonnet', 'opus'].includes(model))
-    throw new Error(`implement-batch: ${stage} wants model ${JSON.stringify(model)}; this host cannot run it. Run ${profileRoute(story.id, engine, model)}; no story dispatched.`)
+    throw new Error(`implement-batch: ${stage} wants model ${JSON.stringify(model)}; this host cannot run it. Run ${profileRoute(story.id, engine, model, story.tier)}; no story dispatched.`)
 }
 if (PROFILE.table) for (const line of PROFILE.table) log(line)
 const CARD_TIERS = new Map()
