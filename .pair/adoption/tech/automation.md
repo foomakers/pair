@@ -39,3 +39,9 @@ Optional commands that `publish-pr` executes at defined points. Each hook is a s
 Local delivery records under `.pair/working/telemetry/`. Absent setting defaults off; `pair-cli run --telemetry` or `--no-telemetry` wins for one run.
 
 - enabled: true
+
+Price table (USD per million tokens; maintained by hand, empty ⇒ cost reads `not measured`):
+
+```json
+{ "prices": {} }
+```
