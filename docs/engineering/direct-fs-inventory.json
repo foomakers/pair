@@ -29,7 +29,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/scripts/postbuild.js"
+      "producer": "apps/pair-cli/scripts/postbuild.js",
+      "sourceSymbols": ["fs"]
     },
     {
       "path": "apps/pair-cli/src/cli.e2e.test.ts",
@@ -42,7 +43,15 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/cli.e2e.test.ts"
+      "producer": "apps/pair-cli/src/cli.e2e.test.ts",
+      "sourceSymbols": [
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "apps/pair-cli/src/cli.ts",
@@ -55,7 +64,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/cli.ts"
+      "producer": "apps/pair-cli/src/cli.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/dispatcher.test.ts",
@@ -68,7 +78,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/commands/dispatcher.test.ts"
+      "producer": "apps/pair-cli/src/commands/dispatcher.test.ts",
+      "sourceSymbols": ["chmodSync", "mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/index.test.ts",
@@ -81,7 +92,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/commands/index.test.ts"
+      "producer": "apps/pair-cli/src/commands/index.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/install/workflow-presets.test.ts",
@@ -94,7 +106,16 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/commands/install/workflow-presets.test.ts"
+      "producer": "apps/pair-cli/src/commands/install/workflow-presets.test.ts",
+      "sourceSymbols": [
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "rmSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "apps/pair-cli/src/commands/kb-info/handler.test.ts",
@@ -107,7 +128,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/commands/kb-info/handler.test.ts"
+      "producer": "apps/pair-cli/src/commands/kb-info/handler.test.ts",
+      "sourceSymbols": ["fs"]
     },
     {
       "path": "apps/pair-cli/src/commands/kb-verify/handler.test.ts",
@@ -120,7 +142,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/commands/kb-verify/handler.test.ts"
+      "producer": "apps/pair-cli/src/commands/kb-verify/handler.test.ts",
+      "sourceSymbols": ["fs"]
     },
     {
       "path": "apps/pair-cli/src/commands/package/link-rewriter.test.ts",
@@ -133,7 +156,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/commands/package/link-rewriter.test.ts"
+      "producer": "apps/pair-cli/src/commands/package/link-rewriter.test.ts",
+      "sourceSymbols": ["fs"]
     },
     {
       "path": "apps/pair-cli/src/commands/package/round-trip.test.ts",
@@ -146,7 +170,15 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/commands/package/round-trip.test.ts"
+      "producer": "apps/pair-cli/src/commands/package/round-trip.test.ts",
+      "sourceSymbols": [
+        "copyFileSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readdirSync",
+        "rmSync"
+      ]
     },
     {
       "path": "apps/pair-cli/src/commands/package/zip-creator.test.ts",
@@ -159,7 +191,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/commands/package/zip-creator.test.ts"
+      "producer": "apps/pair-cli/src/commands/package/zip-creator.test.ts",
+      "sourceSymbols": ["fs"]
     },
     {
       "path": "apps/pair-cli/src/commands/run/__fixtures__/cards-cross-completion.cjs",
@@ -2124,7 +2157,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/commands/tokens/tokens.acceptance.test.ts"
+      "producer": "apps/pair-cli/src/commands/tokens/tokens.acceptance.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
@@ -2137,7 +2171,16 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts"
+      "producer": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
+      "sourceSymbols": [
+        "closeSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "openSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "apps/pair-cli/src/config/loader-project-shape.test.ts",
@@ -2150,7 +2193,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/config/loader-project-shape.test.ts"
+      "producer": "apps/pair-cli/src/config/loader-project-shape.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/config/loader.test.ts",
@@ -2163,7 +2207,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/config/loader.test.ts"
+      "producer": "apps/pair-cli/src/config/loader.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/index.ts",
@@ -2176,7 +2221,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/index.ts"
+      "producer": "apps/pair-cli/src/index.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/kb-manager/git-clone.integration.test.ts",
@@ -2205,7 +2251,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/kb-manager/git-clone.test.ts"
+      "producer": "apps/pair-cli/src/kb-manager/git-clone.test.ts",
+      "sourceSymbols": ["rmSync"]
     },
     {
       "path": "apps/pair-cli/src/kb-manager/git-clone.ts",
@@ -2218,7 +2265,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/kb-manager/git-clone.ts"
+      "producer": "apps/pair-cli/src/kb-manager/git-clone.ts",
+      "sourceSymbols": ["rmSync"]
     },
     {
       "path": "apps/pair-cli/src/kb-manager/official-kb-name.test.ts",
@@ -2231,7 +2279,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/kb-manager/official-kb-name.test.ts"
+      "producer": "apps/pair-cli/src/kb-manager/official-kb-name.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/registry/adoption-risk-matrix.test.ts",
@@ -2244,7 +2293,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/registry/adoption-risk-matrix.test.ts"
+      "producer": "apps/pair-cli/src/registry/adoption-risk-matrix.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
@@ -2299,7 +2349,15 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/registry/board-authorization-install.test.ts"
+      "producer": "apps/pair-cli/src/registry/board-authorization-install.test.ts",
+      "sourceSymbols": [
+        "copyFileSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync"
+      ]
     },
     {
       "path": "apps/pair-cli/src/registry/layout.test.ts",
@@ -2312,7 +2370,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/registry/layout.test.ts"
+      "producer": "apps/pair-cli/src/registry/layout.test.ts",
+      "sourceSymbols": ["fs"]
     },
     {
       "path": "apps/pair-cli/src/registry/llms-generation.ts",
@@ -2378,7 +2437,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/registry/validation.test.ts"
+      "producer": "apps/pair-cli/src/registry/validation.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/pair-cli/src/test-utils/cli-entry.ts",
@@ -2391,7 +2451,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/test-utils/cli-entry.ts"
+      "producer": "apps/pair-cli/src/test-utils/cli-entry.ts",
+      "sourceSymbols": ["existsSync"]
     },
     {
       "path": "apps/website/lib/adoption-files-fences.test.ts",
@@ -2404,7 +2465,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/adoption-files-fences.test.ts"
+      "producer": "apps/website/lib/adoption-files-fences.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/ci-docs-staleness-env.test.ts",
@@ -2417,7 +2479,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/ci-docs-staleness-env.test.ts"
+      "producer": "apps/website/lib/ci-docs-staleness-env.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/deploy-build-command.test.ts",
@@ -2430,7 +2493,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/deploy-build-command.test.ts"
+      "producer": "apps/website/lib/deploy-build-command.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/docs-ia.test.ts",
@@ -2443,7 +2507,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/docs-ia.test.ts"
+      "producer": "apps/website/lib/docs-ia.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "apps/website/lib/docs-staleness-check.test.ts",
@@ -2461,7 +2526,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/docs-staleness-check.test.ts"
+      "producer": "apps/website/lib/docs-staleness-check.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/docs-staleness-check.ts",
@@ -2474,7 +2540,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/docs-staleness-check.ts"
+      "producer": "apps/website/lib/docs-staleness-check.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "apps/website/lib/get-llm-text.test.ts",
@@ -2487,7 +2554,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/get-llm-text.test.ts"
+      "producer": "apps/website/lib/get-llm-text.test.ts",
+      "sourceSymbols": ["fs"]
     },
     {
       "path": "apps/website/lib/get-llm-text.ts",
@@ -2500,7 +2568,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/get-llm-text.ts"
+      "producer": "apps/website/lib/get-llm-text.ts",
+      "sourceSymbols": ["fs"]
     },
     {
       "path": "apps/website/lib/skills-catalog-merge-coherence.test.ts",
@@ -2513,7 +2582,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/skills-catalog-merge-coherence.test.ts"
+      "producer": "apps/website/lib/skills-catalog-merge-coherence.test.ts",
+      "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "apps/website/lib/source.test.ts",
@@ -2526,7 +2596,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/source.test.ts"
+      "producer": "apps/website/lib/source.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/turbo-source-order.test.ts",
@@ -2539,7 +2610,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/turbo-source-order.test.ts"
+      "producer": "apps/website/lib/turbo-source-order.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "apps/website/lib/whats-new-guard.test.ts",
@@ -2552,7 +2624,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/lib/whats-new-guard.test.ts"
+      "producer": "apps/website/lib/whats-new-guard.test.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"]
     },
     {
       "path": "apps/website/scripts/landing-video/github-scroll.mjs",
@@ -2565,7 +2638,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/scripts/landing-video/github-scroll.mjs"
+      "producer": "apps/website/scripts/landing-video/github-scroll.mjs",
+      "sourceSymbols": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"]
     },
     {
       "path": "apps/website/scripts/landing-video/login-closing.mjs",
@@ -2578,7 +2652,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "apps/website/scripts/landing-video/login-closing.mjs"
+      "producer": "apps/website/scripts/landing-video/login-closing.mjs",
+      "sourceSymbols": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"]
     },
     {
       "path": "packages/content-ops/src/file-system/file-operations.ts",
@@ -2831,7 +2906,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/benchmark-update-link.ts"
+      "producer": "packages/dev-tools/src/quality-gates/benchmark-update-link.ts",
+      "sourceSymbols": ["existsSync", "mkdirSync", "readdirSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/ci-staleness-checkout-depth.test.ts",
@@ -2844,7 +2920,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/ci-staleness-checkout-depth.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/ci-staleness-checkout-depth.test.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/code-hygiene-check.quarantine.test.ts",
@@ -2857,7 +2934,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/code-hygiene-check.quarantine.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/code-hygiene-check.quarantine.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/code-hygiene-check.ts",
@@ -2870,7 +2948,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/code-hygiene-check.ts"
+      "producer": "packages/dev-tools/src/quality-gates/code-hygiene-check.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/delivery-process-docs.test.ts",
@@ -2883,7 +2962,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/delivery-process-docs.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/delivery-process-docs.test.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
@@ -2896,7 +2976,16 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+      "sourceSymbols": [
+        "cpSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "symlinkSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/format-paths.test.ts",
@@ -2909,7 +2998,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/format-paths.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/format-paths.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/format-workflow-composition.test.ts",
@@ -2922,7 +3012,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/format-workflow-composition.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/format-workflow-composition.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/format-workflow-composition.ts",
@@ -2935,7 +3026,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/format-workflow-composition.ts"
+      "producer": "packages/dev-tools/src/quality-gates/format-workflow-composition.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.test.ts",
@@ -2948,7 +3040,15 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.test.ts",
+      "sourceSymbols": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "symlinkSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.ts",
@@ -2961,7 +3061,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.ts"
+      "producer": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.ts",
+      "sourceSymbols": ["readFile", "readdir", "stat"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.test.ts",
@@ -2974,7 +3075,17 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.test.ts",
+      "sourceSymbols": [
+        "chmodSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "rmSync",
+        "statSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.ts",
@@ -2987,7 +3098,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.ts"
+      "producer": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.ts",
+      "sourceSymbols": ["mkdir", "writeFile"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.test.ts",
@@ -3000,7 +3112,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.ts",
@@ -3013,7 +3126,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.ts"
+      "producer": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts",
@@ -3026,7 +3140,22 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts",
+      "sourceSymbols": [
+        "chmodSync",
+        "copyFileSync",
+        "cpSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "realpathSync",
+        "rmSync",
+        "statSync",
+        "symlinkSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/run-format.test.ts",
@@ -3039,7 +3168,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/run-format.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/run-format.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/smoke-ci-platform.test.ts",
@@ -3052,7 +3182,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/smoke-ci-platform.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/smoke-ci-platform.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/smoke-scenario-modes.test.ts",
@@ -3065,7 +3196,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/smoke-scenario-modes.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/smoke-scenario-modes.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/sync-version-in-docs.test.ts",
@@ -3078,7 +3210,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/sync-version-in-docs.test.ts"
+      "producer": "packages/dev-tools/src/quality-gates/sync-version-in-docs.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/quality-gates/sync-version-in-docs.ts",
@@ -3091,7 +3224,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/quality-gates/sync-version-in-docs.ts"
+      "producer": "packages/dev-tools/src/quality-gates/sync-version-in-docs.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/changelog-version.test.ts",
@@ -3104,7 +3238,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/changelog-version.test.ts"
+      "producer": "packages/dev-tools/src/release/changelog-version.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/changelog-version.ts",
@@ -3117,7 +3252,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/changelog-version.ts"
+      "producer": "packages/dev-tools/src/release/changelog-version.ts",
+      "sourceSymbols": ["readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/changeset-check.ts",
@@ -3130,7 +3266,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/changeset-check.ts"
+      "producer": "packages/dev-tools/src/release/changeset-check.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
@@ -3143,7 +3280,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/deploy-website-workflow.test.ts"
+      "producer": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/determine-version.test.ts",
@@ -3156,7 +3294,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/determine-version.test.ts"
+      "producer": "packages/dev-tools/src/release/determine-version.test.ts",
+      "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "rmSync"]
     },
     {
       "path": "packages/dev-tools/src/release/determine-version.ts",
@@ -3169,7 +3308,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/determine-version.ts"
+      "producer": "packages/dev-tools/src/release/determine-version.ts",
+      "sourceSymbols": ["appendFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-cli.ts",
@@ -3182,7 +3322,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/release-cli.ts"
+      "producer": "packages/dev-tools/src/release/release-cli.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-concurrency.test.ts",
@@ -3195,7 +3336,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/release-concurrency.test.ts"
+      "producer": "packages/dev-tools/src/release/release-concurrency.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-origin.test.ts",
@@ -3208,7 +3350,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/release-origin.test.ts"
+      "producer": "packages/dev-tools/src/release/release-origin.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-publish.test.ts",
@@ -3221,7 +3364,15 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/release-publish.test.ts"
+      "producer": "packages/dev-tools/src/release/release-publish.test.ts",
+      "sourceSymbols": [
+        "chmodSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "packages/dev-tools/src/release/release-remediation.test.ts",
@@ -3234,7 +3385,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/release-remediation.test.ts"
+      "producer": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "sourceSymbols": ["mkdtempSync", "rmSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-sandbox.test.ts",
@@ -3247,7 +3399,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/release-sandbox.test.ts"
+      "producer": "packages/dev-tools/src/release/release-sandbox.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/release/release-workflows.test.ts",
@@ -3260,7 +3413,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/release/release-workflows.test.ts"
+      "producer": "packages/dev-tools/src/release/release-workflows.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/audit.test.ts",
@@ -3273,7 +3427,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/audit.test.ts"
+      "producer": "packages/dev-tools/src/test-audit/audit.test.ts",
+      "sourceSymbols": ["mkdtempSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/audit.ts",
@@ -3286,7 +3441,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/audit.ts"
+      "producer": "packages/dev-tools/src/test-audit/audit.ts",
+      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/baseline.ts",
@@ -3299,7 +3455,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/baseline.ts"
+      "producer": "packages/dev-tools/src/test-audit/baseline.ts",
+      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/gates.ts",
@@ -3312,7 +3469,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/gates.ts"
+      "producer": "packages/dev-tools/src/test-audit/gates.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
@@ -3325,7 +3483,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts"
+      "producer": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts",
@@ -3338,7 +3497,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts"
+      "producer": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
@@ -3351,7 +3511,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/inventory.policy.test.ts"
+      "producer": "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
+      "sourceSymbols": ["mkdtempSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
@@ -3364,7 +3525,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts"
+      "producer": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/inventory.ts",
@@ -3377,7 +3539,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/inventory.ts"
+      "producer": "packages/dev-tools/src/test-audit/inventory.ts",
+      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/mutation.ts",
@@ -3390,7 +3553,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/mutation.ts"
+      "producer": "packages/dev-tools/src/test-audit/mutation.ts",
+      "sourceSymbols": ["mkdirSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/playwright-overlap.ts",
@@ -3403,7 +3567,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/playwright-overlap.ts"
+      "producer": "packages/dev-tools/src/test-audit/playwright-overlap.ts",
+      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/playwright-run.ts",
@@ -3416,7 +3581,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/playwright-run.ts"
+      "producer": "packages/dev-tools/src/test-audit/playwright-run.ts",
+      "sourceSymbols": ["mkdtempSync", "readFileSync", "rmSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/profile.ts",
@@ -3429,7 +3595,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/profile.ts"
+      "producer": "packages/dev-tools/src/test-audit/profile.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/redundancy.ts",
@@ -3442,7 +3609,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/redundancy.ts"
+      "producer": "packages/dev-tools/src/test-audit/redundancy.ts",
+      "sourceSymbols": ["mkdirSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/suites-junit-attr-control.test.ts",
@@ -3455,7 +3623,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/suites-junit-attr-control.test.ts"
+      "producer": "packages/dev-tools/src/test-audit/suites-junit-attr-control.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/suites-junit-attr.test.ts",
@@ -3468,7 +3637,15 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/suites-junit-attr.test.ts"
+      "producer": "packages/dev-tools/src/test-audit/suites-junit-attr.test.ts",
+      "sourceSymbols": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "realpathSync",
+        "rmSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts",
@@ -3481,7 +3658,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts"
+      "producer": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
@@ -3494,7 +3672,15 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/suites-junit.test.ts"
+      "producer": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
+      "sourceSymbols": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "realpathSync",
+        "rmSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "packages/dev-tools/src/test-audit/suites.test.ts",
@@ -3507,7 +3693,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/suites.test.ts"
+      "producer": "packages/dev-tools/src/test-audit/suites.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "packages/dev-tools/src/test-audit/suites.ts",
@@ -3520,7 +3707,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/dev-tools/src/test-audit/suites.ts"
+      "producer": "packages/dev-tools/src/test-audit/suites.ts",
+      "sourceSymbols": ["mkdtempSync", "readFileSync", "realpathSync", "rmSync"]
     },
     {
       "path": "packages/knowledge-hub/dataset/.pair/knowledge/assets/coverage-ratchet.cjs",
@@ -5285,7 +5473,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/adoption-informed-generation.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/adoption-informed-generation.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/adr-template.test.ts",
@@ -5298,7 +5487,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/adr-template.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/adr-template.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/agent-harness-guides.test.ts",
@@ -5311,7 +5501,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/agent-harness-guides.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/agent-harness-guides.test.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
@@ -5324,7 +5515,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/agents-md.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/analyze-delivery-metrics.test.ts",
@@ -5337,7 +5529,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/analyze-delivery-metrics.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/analyze-delivery-metrics.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/analyze-test-skills-root-scripts.test.ts",
@@ -5350,7 +5543,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/analyze-test-skills-root-scripts.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/analyze-test-skills-root-scripts.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/analyze-test-skills.test.ts",
@@ -5363,7 +5557,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/analyze-test-skills.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/analyze-test-skills.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/approval-signal.test.ts",
@@ -5376,7 +5571,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/approval-signal.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/approval-signal.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/assess-cost.test.ts",
@@ -5389,7 +5585,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/assess-cost.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/assess-cost.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/assess-coupling.test.ts",
@@ -5402,7 +5599,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/assess-coupling.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/assess-coupling.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/assess-output-only.test.ts",
@@ -5415,7 +5613,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/assess-output-only.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/assess-output-only.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/assess-security.test.ts",
@@ -5428,7 +5627,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/assess-security.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/assess-security.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/automation-eligibility.test.ts",
@@ -5441,7 +5641,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/automation-eligibility.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/automation-eligibility.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/autonomous-prepare-skills.test.ts",
@@ -5454,7 +5655,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/autonomous-prepare-skills.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/autonomous-prepare-skills.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/autonomy-arguments.test.ts",
@@ -5467,7 +5669,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/autonomy-arguments.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/autonomy-arguments.test.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/bootstrap-classification-delta.test.ts",
@@ -5480,7 +5683,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/bootstrap-classification-delta.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/bootstrap-classification-delta.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/bootstrap.test.ts",
@@ -5493,7 +5697,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/bootstrap.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/bootstrap.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/brainstorm-phases.test.ts",
@@ -5506,7 +5711,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/brainstorm-phases.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/brainstorm-phases.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/classify.test.ts",
@@ -5519,7 +5725,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/classify.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/classify.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/code-host-routing.test.ts",
@@ -5532,7 +5739,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/code-host-routing.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/code-host-routing.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/code-review-verdict-first.test.ts",
@@ -5545,7 +5753,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/code-review-verdict-first.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/code-review-verdict-first.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/coverage-ratchet-adopter-path.test.ts",
@@ -5558,7 +5767,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/coverage-ratchet-adopter-path.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/coverage-ratchet-adopter-path.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/coverage-ratchet-asset.test.ts",
@@ -5571,7 +5781,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/coverage-ratchet-asset.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/coverage-ratchet-asset.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/cycle-autonomy-active.test.ts",
@@ -5584,7 +5795,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/cycle-autonomy-active.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/cycle-autonomy-active.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/cycle-hooks-cwd.test.ts",
@@ -5597,7 +5809,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/cycle-hooks-cwd.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/cycle-hooks-cwd.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/cycle-hooks-schema.test.ts",
@@ -5610,7 +5823,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/cycle-hooks-schema.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/cycle-hooks-schema.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts",
@@ -5623,7 +5837,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/dataset-adoption-no-leak.test.ts",
@@ -5636,7 +5851,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/dataset-adoption-no-leak.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/dataset-adoption-no-leak.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "statSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/definition-of-ready-and-done.test.ts",
@@ -5649,7 +5865,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/definition-of-ready-and-done.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/definition-of-ready-and-done.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/delivery-cycle-process-gaps.test.ts",
@@ -5662,7 +5879,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/delivery-cycle-process-gaps.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/delivery-cycle-process-gaps.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/delivery-metrics.test.ts",
@@ -5675,7 +5893,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/delivery-metrics.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/delivery-metrics.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/doc-groups.test.ts",
@@ -5688,7 +5907,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/doc-groups.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/doc-groups.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts",
@@ -5701,7 +5921,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/github-automation.test.ts",
@@ -5714,7 +5935,16 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/github-automation.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/github-automation.test.ts",
+      "sourceSymbols": [
+        "chmodSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/headless-stage-execution.test.ts",
@@ -5727,7 +5957,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/headless-stage-execution.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/headless-stage-execution.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/implement-compose-close.test.ts",
@@ -5740,7 +5971,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/implement-compose-close.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/implement-compose-close.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/implement-phase-fresh-branch.test.ts",
@@ -5753,7 +5985,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/implement-phase-fresh-branch.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/implement-phase-fresh-branch.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/implementation-never-files-a-card.test.ts",
@@ -5766,7 +5999,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/implementation-never-files-a-card.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/implementation-never-files-a-card.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/macro-phase-modes.test.ts",
@@ -5779,7 +6013,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/macro-phase-modes.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/macro-phase-modes.test.ts",
+      "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "readdirSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/mirror-realign-asset.test.ts",
@@ -5792,7 +6027,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/mirror-realign-asset.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/mirror-realign-asset.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/mirror-realignment.test.ts",
@@ -5805,7 +6041,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/mirror-realignment.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/mirror-realignment.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/output-shapes.test.ts",
@@ -5818,7 +6055,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/output-shapes.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/output-shapes.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-assistant-config-guide.test.ts",
@@ -5831,7 +6069,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/pair-assistant-config-guide.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/pair-assistant-config-guide.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-assistant-install-footprint.test.ts",
@@ -5844,7 +6083,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/pair-assistant-install-footprint.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/pair-assistant-install-footprint.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
@@ -5857,7 +6097,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-next-autonomy-selection.test.ts",
@@ -5870,7 +6111,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/pair-next-autonomy-selection.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/pair-next-autonomy-selection.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-next-control-state.test.ts",
@@ -5883,7 +6125,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/pair-next-control-state.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/pair-next-control-state.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pair-next-scoping.test.ts",
@@ -5896,7 +6139,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/pair-next-scoping.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/pair-next-scoping.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pm-tool-adapter-contract.test.ts",
@@ -5909,7 +6153,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/pm-tool-adapter-contract.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/pm-tool-adapter-contract.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/pr-state-flow.test.ts",
@@ -5922,7 +6167,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/pr-state-flow.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/pr-state-flow.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/process-profile.test.ts",
@@ -5935,7 +6181,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/process-profile.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/process-profile.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/quality-model.test.ts",
@@ -5948,7 +6195,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/quality-model.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/quality-model.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/record-decision.test.ts",
@@ -5961,7 +6209,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/record-decision.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/record-decision.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/refine-story-draft-to-ready.test.ts",
@@ -5974,7 +6223,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/refine-story-draft-to-ready.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/refine-story-draft-to-ready.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/review-identity.test.ts",
@@ -5987,7 +6237,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/review-identity.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/review-identity.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/review-phase-classifies.test.ts",
@@ -6000,7 +6251,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/review-phase-classifies.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/review-phase-classifies.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/scoped-context-skills.test.ts",
@@ -6013,7 +6265,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/scoped-context-skills.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/scoped-context-skills.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/secret-scanning.test.ts",
@@ -6026,7 +6279,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/secret-scanning.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/secret-scanning.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
@@ -6039,7 +6293,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/setup-pm.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/skills-defects-b.test.ts",
@@ -6052,7 +6307,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/skills-defects-b.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/skills-defects-b.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/story-local-markers.test.ts",
@@ -6065,7 +6321,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/story-local-markers.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/story-local-markers.test.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync", "statSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/task-progress-feedback.test.ts",
@@ -6078,7 +6335,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/task-progress-feedback.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/task-progress-feedback.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
@@ -6091,7 +6349,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/template-resolution.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/template-shrink.test.ts",
@@ -6104,7 +6363,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/template-shrink.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/template-shrink.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/timeouts-section.test.ts",
@@ -6117,7 +6377,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/timeouts-section.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/timeouts-section.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/to-issues-triage.test.ts",
@@ -6130,7 +6391,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/to-issues-triage.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/to-issues-triage.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/verified-writes-contract.test.ts",
@@ -6143,7 +6405,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/verified-writes-contract.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/verified-writes-contract.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/verify-quality.test.ts",
@@ -6156,7 +6419,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/verify-quality.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/verify-quality.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/web-cloud-environment.test.ts",
@@ -6169,7 +6433,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/web-cloud-environment.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/web-cloud-environment.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/workflow-scripts-shape.test.ts",
@@ -6182,7 +6447,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/workflow-scripts-shape.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/workflow-scripts-shape.test.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/conformance/working-area.test.ts",
@@ -6195,7 +6461,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/conformance/working-area.test.ts"
+      "producer": "packages/knowledge-hub/src/conformance/working-area.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/build-ratchet-asset.ts",
@@ -6208,7 +6475,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/build-ratchet-asset.ts"
+      "producer": "packages/knowledge-hub/src/tools/build-ratchet-asset.ts",
+      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/build-realign-asset.ts",
@@ -6221,7 +6489,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/build-realign-asset.ts"
+      "producer": "packages/knowledge-hub/src/tools/build-realign-asset.ts",
+      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts",
@@ -6239,7 +6508,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts"
+      "producer": "packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "statSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts",
@@ -6252,7 +6522,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts"
+      "producer": "packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts",
+      "sourceSymbols": ["readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/macro-phase-modes.test.ts",
@@ -6265,7 +6536,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/macro-phase-modes.test.ts"
+      "producer": "packages/knowledge-hub/src/tools/macro-phase-modes.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/macro-phase-modes.ts",
@@ -6278,7 +6550,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/macro-phase-modes.ts"
+      "producer": "packages/knowledge-hub/src/tools/macro-phase-modes.ts",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/mirror-guard.test.ts",
@@ -6291,7 +6564,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/mirror-guard.test.ts"
+      "producer": "packages/knowledge-hub/src/tools/mirror-guard.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "statSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/mirror-guard.ts",
@@ -6304,7 +6578,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/mirror-guard.ts"
+      "producer": "packages/knowledge-hub/src/tools/mirror-guard.ts",
+      "sourceSymbols": ["existsSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/mirror-realign.ts",
@@ -6317,7 +6592,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/mirror-realign.ts"
+      "producer": "packages/knowledge-hub/src/tools/mirror-realign.ts",
+      "sourceSymbols": ["existsSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skill-md-mirror.test.ts",
@@ -6330,7 +6606,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/skill-md-mirror.test.ts"
+      "producer": "packages/knowledge-hub/src/tools/skill-md-mirror.test.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skill-md-mirror.ts",
@@ -6343,7 +6620,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/skill-md-mirror.ts"
+      "producer": "packages/knowledge-hub/src/tools/skill-md-mirror.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts",
@@ -6356,7 +6634,16 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts"
+      "producer": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts",
+      "sourceSymbols": [
+        "chmodSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skills-conformance-check.ts",
@@ -6369,7 +6656,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/skills-conformance-check.ts"
+      "producer": "packages/knowledge-hub/src/tools/skills-conformance-check.ts",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skills-guide-mirror.test.ts",
@@ -6382,7 +6670,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/skills-guide-mirror.test.ts"
+      "producer": "packages/knowledge-hub/src/tools/skills-guide-mirror.test.ts",
+      "sourceSymbols": ["readFileSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/skills-guide-mirror.ts",
@@ -6395,7 +6684,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/skills-guide-mirror.ts"
+      "producer": "packages/knowledge-hub/src/tools/skills-guide-mirror.ts",
+      "sourceSymbols": ["readdirSync"]
     },
     {
       "path": "packages/knowledge-hub/src/tools/workflow-mirror.test.ts",
@@ -6408,7 +6698,17 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "packages/knowledge-hub/src/tools/workflow-mirror.test.ts"
+      "producer": "packages/knowledge-hub/src/tools/workflow-mirror.test.ts",
+      "sourceSymbols": [
+        "cpSync",
+        "existsSync",
+        "mkdtempSync",
+        "readFileSync",
+        "readdirSync",
+        "rmSync",
+        "statSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "scripts/dev/delivery-process-overwrite.test.mjs",
@@ -6421,7 +6721,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "scripts/dev/delivery-process-overwrite.test.mjs"
+      "producer": "scripts/dev/delivery-process-overwrite.test.mjs",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
     },
     {
       "path": "scripts/dev/hook-git-env.test.mjs",
@@ -6434,7 +6735,15 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "scripts/dev/hook-git-env.test.mjs"
+      "producer": "scripts/dev/hook-git-env.test.mjs",
+      "sourceSymbols": [
+        "chmodSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "scripts/dev/rtk-review-hook.mjs",
@@ -6447,7 +6756,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "scripts/dev/rtk-review-hook.mjs"
+      "producer": "scripts/dev/rtk-review-hook.mjs",
+      "sourceSymbols": ["existsSync", "readFileSync"]
     },
     {
       "path": "scripts/dev/rtk-review-hook.test.mjs",
@@ -6460,7 +6770,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "scripts/dev/rtk-review-hook.test.mjs"
+      "producer": "scripts/dev/rtk-review-hook.test.mjs",
+      "sourceSymbols": ["chmodSync", "mkdirSync", "mkdtempSync", "writeFileSync"]
     },
     {
       "path": "scripts/dev/rtk-session-path.mjs",
@@ -6473,7 +6784,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "scripts/dev/rtk-session-path.mjs"
+      "producer": "scripts/dev/rtk-session-path.mjs",
+      "sourceSymbols": ["appendFileSync", "existsSync"]
     },
     {
       "path": "scripts/dev/rtk-session-path.test.mjs",
@@ -6486,7 +6798,16 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "scripts/dev/rtk-session-path.test.mjs"
+      "producer": "scripts/dev/rtk-session-path.test.mjs",
+      "sourceSymbols": [
+        "chmodSync",
+        "cpSync",
+        "existsSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "scripts/dev/sealed-manifest-format.test.mjs",
@@ -6499,7 +6820,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "scripts/dev/sealed-manifest-format.test.mjs"
+      "producer": "scripts/dev/sealed-manifest-format.test.mjs",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"]
     },
     {
       "path": "scripts/smoke-tests/lib/run-card-omission.test.js",
@@ -6512,7 +6834,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "scripts/smoke-tests/lib/run-card-omission.test.js"
+      "producer": "scripts/smoke-tests/lib/run-card-omission.test.js",
+      "sourceSymbols": ["mkdtempSync", "rmSync"]
     },
     {
       "path": "scripts/smoke-tests/witnesses/packaged-control-state-615.mjs",
@@ -6525,7 +6848,15 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "scripts/smoke-tests/witnesses/packaged-control-state-615.mjs"
+      "producer": "scripts/smoke-tests/witnesses/packaged-control-state-615.mjs",
+      "sourceSymbols": [
+        "cpSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
+      ]
     },
     {
       "path": "scripts/smoke-tests/witnesses/packaged-control-state-build-tree-615.mjs",
@@ -6538,7 +6869,8 @@
         }
       ],
       "disposition": "migration-candidate",
-      "producer": "scripts/smoke-tests/witnesses/packaged-control-state-build-tree-615.mjs"
+      "producer": "scripts/smoke-tests/witnesses/packaged-control-state-build-tree-615.mjs",
+      "sourceSymbols": ["cpSync", "mkdirSync", "mkdtempSync", "readFileSync", "rmSync"]
     }
   ]
 }

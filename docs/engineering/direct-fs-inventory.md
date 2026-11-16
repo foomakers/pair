@@ -18,6 +18,12 @@ atomic rename, git-clone, or binary disk behavior in temporary directories. The
 `standalone-script` entries ship without a workspace package dependency.
 **T-1 is incomplete.**
 
+The 189 candidate rows now record `sourceSymbols` from their import,
+`require`, or literal dynamic-import declarations. These are the source's
+imported names, not a decision that every use of the name performs IO.
+The operation, consumer, disposition, and proving test category still need
+per-path review.
+
 The content-ops pass classified six more paths: three `Dirent`/`Stats` type
 contracts, one temporary-directory byte-mode integration test, and two
 production migration targets. `integrity-validator.ts` has a direct stream
