@@ -17,6 +17,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    // Under the parallel quality gate (turbo x vitest) the default (cores - 1 forks) oversubscribes the CPU: real-CLI tests exceed their 60 s and workers hit the onTaskUpdate RPC timeout.
+    maxWorkers: 4,
     setupFiles: ['./vitest.setup.ts'],
     coverage: {
       provider: 'v8',
