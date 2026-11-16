@@ -18,6 +18,15 @@ export async function writeFile(
   }
 }
 
+export async function appendFile(
+  state: InMemoryFsState,
+  path: string,
+  content: string,
+): Promise<void> {
+  const resolvedPath = state.resolvePath(path)
+  await writeFile(state, path, (state.files.get(resolvedPath) ?? '') + content)
+}
+
 export async function writeFileBinary(
   state: InMemoryFsState,
   path: string,

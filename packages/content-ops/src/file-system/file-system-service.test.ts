@@ -142,3 +142,24 @@ describe('fileSystemService.readFileBytes — byte-mode read (US-395/#429)', () 
     }
   })
 })
+
+describe('fileSystemService.appendFile', () => {
+  it('preserves existing output and creates a missing file', async () => {
+    const { mkdtemp, rm } = await import('fs/promises')
+    const { tmpdir } = await import('os')
+    const { join } = await import('path')
+    const { fileSystemService } = await import('./file-system-service')
+    const dir = await mkdtemp(join(tmpdir(), 'pair-append-'))
+    try {
+      const existing = join(dir, 'existing.txt')
+      const missing = join(dir, 'missing.txt')
+      await fileSystemService.writeFile(existing, 'first\n')
+      await fileSystemService.appendFile(existing, 'second\n')
+      await fileSystemService.appendFile(missing, 'third\n')
+      expect(await fileSystemService.readFile(existing)).toBe('first\nsecond\n')
+      expect(await fileSystemService.readFile(missing)).toBe('third\n')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})

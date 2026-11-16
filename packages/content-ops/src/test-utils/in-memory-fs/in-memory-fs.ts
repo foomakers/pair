@@ -76,6 +76,10 @@ export class InMemoryFileSystemService implements FileSystemService {
     return write.writeFile(this.state, path, content)
   }
 
+  async appendFile(path: string, content: string): Promise<void> {
+    return write.appendFile(this.state, path, content)
+  }
+
   async writeFileBinary(path: string, content: Buffer): Promise<void> {
     return write.writeFileBinary(this.state, path, content)
   }

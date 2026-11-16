@@ -17,6 +17,7 @@ export interface FileSystemService {
   readFileSync: (file: string) => string
   existsSync: (file: string) => boolean
   writeFile: (file: string, content: string) => Promise<void>
+  appendFile: (file: string, content: string) => Promise<void>
   writeFileBinary: (file: string, content: Buffer) => Promise<void>
   /** Set a file's permission bits (e.g. `0o755` for a generated shell script) */
   chmod: (file: string, mode: number) => Promise<void>
@@ -63,6 +64,7 @@ export const fileSystemService: FileSystemService = {
   existsSync: file => existsSync(file),
   readFileSync: file => readFileSync(file, 'utf-8'),
   writeFile: (file, content) => fs.writeFile(file, content, 'utf-8'),
+  appendFile: (file, content) => fs.appendFile(file, content, 'utf-8'),
   writeFileBinary: (file, content) => fs.writeFile(file, content),
   chmod: (file, mode) => fs.chmod(file, mode),
   exists: async path => {
