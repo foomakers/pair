@@ -206,6 +206,7 @@ interface FanOut {
   readonly engineDef: ReturnType<typeof resolveEngineFor>
   readonly autonomyArgs: readonly string[]
   readonly selectionModel?: string
+  readonly selectionEffort?: string
 }
 
 /** One fresh selection process, scoped by the resolved selection (and the loop contract, in loop mode). */
@@ -232,6 +233,7 @@ function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRoot
     cwd: input.cwd,
     autonomyArgs: fan.autonomyArgs,
     model: fan.selectionModel ?? declaredEngineModel(input.context.config, engineDef.id),
+    ...(fan.selectionEffort !== undefined && { effort: fan.selectionEffort }),
     timeoutSeconds: input.config.iterationTimeoutSeconds,
     idleTimeoutSeconds: input.context.idleTimeout.seconds,
     ...(loop !== undefined && { loop }),
@@ -390,6 +392,7 @@ export async function handleParallelRun(
     engineDef,
     autonomyArgs: autonomy.args,
     ...(selected?.model && { selectionModel: selected.model }),
+    ...(selected?.effort && { selectionEffort: selected.effort }),
   }
   return await withLiveCards(input, deps, onEvent => {
     const live: FanOut = { ...fan, input: { ...input, onEvent } }
