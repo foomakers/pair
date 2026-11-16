@@ -37,6 +37,68 @@ const DONE = { step: 'done', verdict: 'APPROVED' }
 const BLOCKED_ESCALATE = { step: 'blocked', reason: 'escalate', detail: 'a human decision is owed' }
 
 describe('runCycle (US-487 T-4)', () => {
+  const EPIPE: CycleStageResult = { processOutcome: 'failed', detail: 'pi: write EPIPE' }
+
+  it('US-594 AC-2: an EPIPE after a valid handoff advances once and records the transport failure', async () => {
+    const stages: unknown[] = []
+    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => EPIPE)
+    const result = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'empty', next: IMPLEMENT_A0 },
+        { status: 'completed', next: DONE },
+      ]),
+      worktree,
+      packet,
+      spawnStage,
+      policy: { deadDispatchRetries: 1 },
+      onStage: record => stages.push(record),
+    })
+    expect(result.status).toBe('ready-for-merge')
+    expect(spawnStage).toHaveBeenCalledTimes(1)
+    expect(stages).toEqual([
+      expect.objectContaining({
+        processOutcome: 'failed',
+        detail: 'pi: write EPIPE',
+        handoffAdvanced: true,
+      }),
+    ])
+  })
+
+  it('US-594 AC-3/AC-6: missing handoff retries within its own budget, then parks without spending finding budgets', async () => {
+    const policy = Object.freeze({
+      deadDispatchRetries: 1,
+      redRepairs: 3,
+      greenRetries: 2,
+      maxFixRounds: 10,
+    })
+    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => EPIPE)
+    const records: unknown[] = []
+    const result = await runCycle({
+      resolve: scriptedResolve([{ status: 'empty', next: IMPLEMENT_A0 }]),
+      worktree,
+      packet,
+      spawnStage,
+      policy,
+      appendAudit: record => records.push(record),
+    })
+    expect(spawnStage).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({
+      status: 'awaiting-human',
+      reason: 'dead-dispatch',
+      resumeToken: 'implement:a0:dead-dispatch',
+    })
+    expect(records).toEqual([
+      expect.objectContaining({ processOutcome: 'failed', handoffAdvanced: false }),
+      expect.objectContaining({ processOutcome: 'failed', handoffAdvanced: false }),
+    ])
+    expect(policy).toEqual({
+      deadDispatchRetries: 1,
+      redRepairs: 3,
+      greenRetries: 2,
+      maxFixRounds: 10,
+    })
+  })
+
   it('AC1: drives resolve → worktree → packet → spawnStage → resolve until a terminal step, one fresh dispatch per stage', async () => {
     // Three stages, not two: a two-stage chain cannot discriminate a loop that is general in the
     // number of stages from one that happens to dispatch twice. prepare → validate → implement.

@@ -100,6 +100,20 @@ const config = (extra: Partial<WatchLoopConfig> = {}): WatchLoopConfig => ({
 const sel = (...cards: RootCandidate[]): LoopSelection => ({ candidates: cards })
 
 describe('runWatchLoop (US-522 T-6)', () => {
+  it('US-594 AC-4: a parked card does not stop watch from driving another eligible card', async () => {
+    const h = harness([sel(card('594')), sel(card('595')), sel()], {
+      outcomes: ids =>
+        ids.map(id =>
+          id === '594'
+            ? { id, outcome: 'completed', detail: 'awaiting-human', cycleStatus: 'awaiting-human' }
+            : outcome(id),
+        ),
+    })
+    const result = await runWatchLoop(config(), h.deps)
+    expect(h.batches).toEqual([['594'], ['595']])
+    expect(result).toMatchObject({ exitCode: 0, driven: ['594', '595'] })
+  })
+
   it('AC1: re-selects every iteration and never caches the candidate list', async () => {
     const h = harness([sel(card('1')), sel(card('2')), sel()])
     const r = await runWatchLoop(config(), h.deps)
