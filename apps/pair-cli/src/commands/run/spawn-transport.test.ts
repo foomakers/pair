@@ -62,16 +62,39 @@ describe('spawnIteration owned pipe failures (US-594 AC-1, AC-5)', () => {
     })
   })
 
+  it('contains a late EPIPE but reports a late unrelated pipe fault', async () => {
+    const { engine: stub, cwd } = engine('process.stdout.write(\'{"type":"agent_settled"}\\n\')')
+    const result = await spawnIteration({ engine: stub, cwd, promptText: 'go', autonomyArgs: [] })
+    expect(result.outcome).toBe('success')
+    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      spawned.child!.stderr!.emit(
+        'error',
+        Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }),
+      )
+      spawned.child!.stderr!.emit('error', Object.assign(new Error('late EIO'), { code: 'EIO' }))
+      expect(report).toHaveBeenCalledOnce()
+      expect(report.mock.calls[0]?.[0]).toMatchObject({ code: 'EIO', message: 'late EIO' })
+    } finally {
+      report.mockRestore()
+    }
+  })
+
   it('returns a controlled failure when the engine command is absent', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'pair-missing-engine-'))
-    const command = join(cwd, 'missing-engine')
-    const result = await spawnIteration({
-      engine: { ...ENGINES.pi, command },
-      cwd,
-      promptText: 'go',
-      autonomyArgs: [],
-    })
-    expect(result).toMatchObject({ outcome: 'failed' })
-    expect(result.detail).toContain(command)
+    const path = process.env['PATH']
+    process.env['PATH'] = cwd
+    try {
+      const result = await spawnIteration({
+        engine: ENGINES.pi,
+        cwd,
+        promptText: 'go',
+        autonomyArgs: [],
+      })
+      expect(result).toMatchObject({ outcome: 'failed' })
+      expect(result.detail).toContain('pi')
+    } finally {
+      process.env['PATH'] = path
+    }
   })
 })

@@ -233,18 +233,31 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   })
   let pipeError: Error | undefined
   let childError: Error | undefined
-  child.on('error', error => (childError ??= error))
+  let settled = false
+  const capture = (error: Error) => {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ABORT_ERR') return
+    if (settled) {
+      if (code !== 'EPIPE') console.error(error)
+      return
+    }
+    if (!pipeError || ((pipeError as NodeJS.ErrnoException).code === 'EPIPE' && code !== 'EPIPE'))
+      pipeError = error
+  }
+  child.on('error', error => {
+    if (settled) {
+      if ((error as NodeJS.ErrnoException).code !== 'EPIPE') console.error(error)
+    } else childError ??= error
+  })
   // Ending the terminal-event reader cancels its iterator; Node reports that local cancellation
   // as ABORT_ERR on the pipe even when the engine succeeded.
-  child.stdout.on('error', error => {
-    if ((error as NodeJS.ErrnoException).code !== 'ABORT_ERR') pipeError ??= error
-  })
-  child.stderr.on('error', error => (pipeError ??= error))
+  child.stdout.on('error', capture)
+  child.stderr.on('error', capture)
   // Tracked so a SIGTERM/SIGINT on the driver stops it instead of orphaning it (r1-2).
   trackEngine(child)
   // Relayed, never inherited: a raw write to the terminal moves the cursor under the live card rows.
   const stderr = relayLines(child.stderr, input.engine.id).catch(error => {
-    pipeError ??= error instanceof Error ? error : new Error(String(error))
+    capture(error instanceof Error ? error : new Error(String(error)))
   })
 
   const watchdog = createWatchdog(input, signal => child.kill(signal))
@@ -269,8 +282,10 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
     // US-623 AC3: the stream's last text carried no result ⇒ the engine's dedicated channel is read.
     result = result && (channel?.merge(result) ?? result)
   } catch (error) {
-    if (!(error instanceof Error) || (error as NodeJS.ErrnoException).code !== 'EPIPE') throw error
-    pipeError ??= error
+    if (!(error instanceof Error)) throw error
+    const code = (error as NodeJS.ErrnoException).code
+    if (code !== 'EPIPE' && !(code === 'ABORT_ERR' && pipeError)) throw error
+    if (code === 'EPIPE') capture(error)
   } finally {
     watchdog.clear()
     channel?.close()
@@ -278,6 +293,7 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
     // ponytail: 1s drain bound — a grandchild holding stderr open must not hold the iteration.
     await Promise.race([stderr, new Promise(done => setTimeout(done, 1000).unref())])
   }
+  settled = true
   const failure = pipeError ?? childError
   if (failure) {
     const code = (failure as NodeJS.ErrnoException).code
