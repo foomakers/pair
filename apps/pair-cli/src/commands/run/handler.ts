@@ -131,14 +131,13 @@ function perimeterSelection(
  * A refusal — no perimeter, an untrusted project, an engine with no confirmations and no
  * `--autonomous`, a malformed policy — happens here, so no iteration ever starts outside them.
  */
-// eslint-disable-next-line max-lines-per-function, max-params, complexity -- resolve before any dispatch.
 function resolveRun(
   config: RunCommandConfig,
   context: RunContext,
   cwd: string,
-  fs: FileSystemService,
-  deps: RunHandlerDependencies,
+  services: { fs: FileSystemService; deps: RunHandlerDependencies },
 ): ResolvedRun {
+  const { fs } = services
   const { policy } = context
   // On a routed run the WORKFLOW is the invocation: the card's tag chose it through the adoption
   // mapping, which is the whole point of tag-driven automation — the cascade never gets a say, and
@@ -147,38 +146,10 @@ function resolveRun(
     context.dispatch?.kind === 'route'
       ? { kind: 'skill', name: context.dispatch.workflow, source: 'mapping' }
       : resolveInvocation(config.invocation, context.probe)
-  const selected = resolveOffCycleProfile({
-    fs,
-    config: context.config,
-    cwd,
-    flags: config,
+  const { selected, configured, engineDef } = resolveProfileEngine(
+    { config, context, cwd, services },
     invocation,
-    tier: config.dispatch?.tags.find(tag => tag.startsWith('risk:')),
-    resolve: deps.resolveWorkflowProfile,
-  })
-  if (selected) stageEngineIds(selected.profile, ENGINE_IDS)
-  if (selected)
-    validateProfileRun(selected.profile, {
-      commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
-      ...(config.engine && { engineFlag: config.engine }),
-      runEngine: config.engine ?? declaredEngine(context.config),
-    })
-  const wanted = selected?.settings.engine
-  if (wanted !== undefined && !isEngineId(wanted))
-    throw new Error(`profile-invalid: stages.${selected?.stage}.engine: unknown engine '${wanted}'`)
-  const engine =
-    wanted === undefined
-      ? resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
-      : { ...resolveEngine({ flag: wanted }), source: 'workflow profile' as const }
-  const configured = withRunAgentRunner(engine, context.config)
-  const engineDef =
-    selected === undefined
-      ? configured.engine
-      : assertEngineAvailable(configured, createExecutableProbe(fs), {
-          fs,
-          repoRoot: cwd,
-          declaredBin: declaredEngineBin(context.config),
-        })
+  )
   const perimeter = perimeterFor({ config, context, cwd, invocation })
   const autonomy = resolveAutonomyFor(engineDef, config, cwd, fs)
 
@@ -195,6 +166,60 @@ function resolveRun(
     auditPath: context.auditPath,
     idleTimeout: context.idleTimeout,
   }
+}
+
+function resolveProfileEngine(
+  input: {
+    config: RunCommandConfig
+    context: RunContext
+    cwd: string
+    services: { fs: FileSystemService; deps: RunHandlerDependencies }
+  },
+  invocation: ResolvedInvocation,
+) {
+  const { config, context, cwd, services } = input
+  const { fs, deps } = services
+  const selected = resolveOffCycleProfile({
+    fs,
+    config: context.config,
+    cwd,
+    flags: config,
+    invocation,
+    tier: config.dispatch?.tags.find(tag => tag.startsWith('risk:')),
+    resolve: deps.resolveWorkflowProfile,
+  })
+  validateRunSelection(selected, config, context)
+  const wanted = selected?.settings.engine
+  if (wanted !== undefined && !isEngineId(wanted))
+    throw new Error(`profile-invalid: stages.${selected?.stage}.engine: unknown engine '${wanted}'`)
+  const engine =
+    wanted === undefined
+      ? resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
+      : { ...resolveEngine({ flag: wanted }), source: 'workflow profile' as const }
+  const configured = withRunAgentRunner(engine, context.config)
+  const engineDef =
+    selected === undefined
+      ? configured.engine
+      : assertEngineAvailable(configured, createExecutableProbe(fs), {
+          fs,
+          repoRoot: cwd,
+          declaredBin: declaredEngineBin(context.config),
+        })
+  return { selected, configured, engineDef }
+}
+
+function validateRunSelection(
+  selected: ReturnType<typeof resolveOffCycleProfile>,
+  config: RunCommandConfig,
+  context: RunContext,
+): void {
+  if (!selected) return
+  stageEngineIds(selected.profile, ENGINE_IDS)
+  validateProfileRun(selected.profile, {
+    commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
+    ...(config.engine && { engineFlag: config.engine }),
+    runEngine: config.engine ?? declaredEngine(context.config),
+  })
 }
 
 function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void {
@@ -431,7 +456,7 @@ async function runCommand(
     return await enterCycleAtReview({ config, context, fs, cwd, card: reviewCard }, deps)
   }
 
-  const resolved = resolveRun(config, context, cwd, fs, deps)
+  const resolved = resolveRun(config, context, cwd, { fs, deps })
 
   report(resolved, resolved.policy.warnings)
 

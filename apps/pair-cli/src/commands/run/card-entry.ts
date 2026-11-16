@@ -452,7 +452,6 @@ interface PrepSkillInput {
  * and printed here — the engine refusal included — so nothing is audited for a run that cannot
  * start; the returned function is the drive the caller runs under the lock (r1-1).
  */
-// eslint-disable-next-line max-lines-per-function, complexity -- pre-dispatch resolution stays atomic.
 function preparePrepSkill(
   input: PrepSkillInput,
   deps: RunHandlerDependencies,
@@ -463,30 +462,7 @@ function preparePrepSkill(
   // than adding a THIRD source label to `resolve-skill.ts` (out of this story's own fixScope); its
   // own `describeSkillResolution` line is never printed for this path, the line below is.
   const invocation: ResolvedInvocation = { kind: 'skill', name: skill, source: 'mapping' }
-  const selected = resolveOffCycleProfile({
-    fs,
-    config: context.config,
-    cwd,
-    flags: config,
-    invocation,
-    tier: config.dispatch?.tags.find(tag => tag.startsWith('risk:')),
-    resolve: deps.resolveWorkflowProfile,
-  })
-  if (selected) stageEngineIds(selected.profile, ENGINE_IDS)
-  if (selected)
-    validateProfileRun(selected.profile, {
-      commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
-      ...(config.engine && { engineFlag: config.engine }),
-      runEngine: config.engine ?? declaredEngine(context.config),
-    })
-  const wanted = selected?.settings.engine
-  if (wanted !== undefined && !isEngineId(wanted))
-    throw new Error(`profile-invalid: stages.${selected?.stage}.engine: unknown engine '${wanted}'`)
-  const engine =
-    wanted === undefined
-      ? resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
-      : { ...resolveEngine({ flag: wanted }), source: 'workflow profile' as const }
-  const engineDef = resolveEngineFor(engine, context, cwd, fs)
+  const { selected, engine, engineDef } = resolvePrepProfile(input, deps, invocation)
   const perimeter = createPerimeter({
     root: card,
     filter: undefined,
@@ -522,4 +498,44 @@ function preparePrepSkill(
   console.log(`  Fallback: card ${card} is ${label} — routing to ${skill}`)
 
   return () => driveRun(resolved, config, deps)
+}
+
+function resolvePrepProfile(
+  input: PrepSkillInput,
+  deps: RunHandlerDependencies,
+  invocation: ResolvedInvocation,
+) {
+  const { config, context, cwd, fs } = input
+  const selected = resolveOffCycleProfile({
+    fs,
+    config: context.config,
+    cwd,
+    flags: config,
+    invocation,
+    tier: config.dispatch?.tags.find(tag => tag.startsWith('risk:')),
+    resolve: deps.resolveWorkflowProfile,
+  })
+  validatePrepSelection(selected, config, context)
+  const wanted = selected?.settings.engine
+  if (wanted !== undefined && !isEngineId(wanted))
+    throw new Error(`profile-invalid: stages.${selected?.stage}.engine: unknown engine '${wanted}'`)
+  const engine =
+    wanted === undefined
+      ? resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
+      : { ...resolveEngine({ flag: wanted }), source: 'workflow profile' as const }
+  return { selected, engine, engineDef: resolveEngineFor(engine, context, cwd, fs) }
+}
+
+function validatePrepSelection(
+  selected: ReturnType<typeof resolveOffCycleProfile>,
+  config: RunCommandConfig,
+  context: RunContext,
+): void {
+  if (!selected) return
+  stageEngineIds(selected.profile, ENGINE_IDS)
+  validateProfileRun(selected.profile, {
+    commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
+    ...(config.engine && { engineFlag: config.engine }),
+    runEngine: config.engine ?? declaredEngine(context.config),
+  })
 }

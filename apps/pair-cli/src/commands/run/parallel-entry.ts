@@ -357,7 +357,6 @@ async function runSingleBatch(fan: FanOut): Promise<number> {
   return await runBatch({ input, deps, plan, root: rootLabel(selection) })
 }
 
-// eslint-disable-next-line max-lines-per-function, complexity -- all selection checks precede child dispatch.
 export async function handleParallelRun(
   input: ParallelRunInput,
   deps: RunHandlerDependencies,
@@ -366,32 +365,7 @@ export async function handleParallelRun(
   const selection = resolveSelection(config, context.policy, context.autonomySelection)
   assertScope(selection)
   const values = resolveLoopValues(config, context.policy)
-  const profile = workflowProfileRequested(config, context.config)
-    ? (deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
-        locateCycleScripts(fs, context.config, cwd).scriptsDir,
-        {
-          root: cwd,
-          engine: config.engine,
-          profile: config.profile,
-          workflowConfig: config.workflowConfig,
-        },
-      )
-    : undefined
-  if (profile) {
-    stageEngineIds(profile, ENGINE_IDS)
-    validateProfileRun(profile, {
-      commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
-      ...(config.engine && { engineFlag: config.engine }),
-      runEngine: config.engine ?? declaredEngine(context.config),
-    })
-  }
-  const selected = profile && stageSettings(profile, 'defaults')
-  if (selected?.engine !== undefined && !isEngineId(selected.engine))
-    throw new Error(`profile-invalid: defaults.engine '${selected.engine}' is unknown`)
-  const engine = resolveEngine({
-    flag: config.engine,
-    declared: selected?.engine ?? declaredEngine(context.config),
-  })
+  const { profile, selected, engine } = resolveParallelProfile(input, deps)
   // Refused here, before anything spawns: the selection process runs under the same posture.
   const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
   reportPreamble(input, describeEngineResolution(engine), {
@@ -420,6 +394,44 @@ export async function handleParallelRun(
   return await withLiveCards(input, deps, onEvent => {
     const live: FanOut = { ...fan, input: { ...input, onEvent } }
     return values.loopMode ? runLoop(live, values) : runSingleBatch(live)
+  })
+}
+
+function resolveParallelProfile(input: ParallelRunInput, deps: RunHandlerDependencies) {
+  const { config, context, fs, cwd } = input
+  const profile = workflowProfileRequested(config, context.config)
+    ? (deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
+        locateCycleScripts(fs, context.config, cwd).scriptsDir,
+        {
+          root: cwd,
+          engine: config.engine,
+          profile: config.profile,
+          workflowConfig: config.workflowConfig,
+        },
+      )
+    : undefined
+  validateParallelSelection(profile, config, context)
+  const selected = profile && stageSettings(profile, 'defaults')
+  if (selected?.engine !== undefined && !isEngineId(selected.engine))
+    throw new Error(`profile-invalid: defaults.engine '${selected.engine}' is unknown`)
+  const engine = resolveEngine({
+    flag: config.engine,
+    declared: selected?.engine ?? declaredEngine(context.config),
+  })
+  return { profile, selected, engine }
+}
+
+function validateParallelSelection(
+  profile: ReturnType<typeof resolveWorkflowProfile> | undefined,
+  config: RunCommandConfig,
+  context: RunContext,
+): void {
+  if (!profile) return
+  stageEngineIds(profile, ENGINE_IDS)
+  validateProfileRun(profile, {
+    commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
+    ...(config.engine && { engineFlag: config.engine }),
+    runEngine: config.engine ?? declaredEngine(context.config),
   })
 }
 

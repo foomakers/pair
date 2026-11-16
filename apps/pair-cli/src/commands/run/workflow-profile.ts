@@ -70,7 +70,6 @@ export interface ResolvedWorkflowProfile {
 }
 
 /** Validate the resolved run before any stage can dispatch. */
-// eslint-disable-next-line complexity -- validate every stage before dispatch.
 export function validateProfileRun(
   profile: ResolvedWorkflowProfile,
   input: {
@@ -83,24 +82,43 @@ export function validateProfileRun(
   const stages = Object.keys(profile.stages).filter(stage => stage !== 'defaults')
   for (const stage of stages) {
     const selected = profile.stages[stage]
-    if (!selected) continue
-    const wanted = selected.engine.value
-    if (input.engineFlag && wanted !== 'default' && wanted !== input.engineFlag)
-      throw new Error(
-        `profile-invalid: stages.${stage}.engine '${wanted}' contradicts --engine '${input.engineFlag}'; remove --engine or set it to '${wanted}'`,
-      )
-    if (input.commandLine && !input.engineFlag && wanted === 'default')
-      throw new Error(
-        `profile-invalid: stages.${stage}.engine 'default' has no engine for a command-line profile; set stages.${stage}.engine or pass --engine`,
-      )
-    const engine = wanted === 'default' ? (input.engineFlag ?? input.runEngine) : wanted
-    if (!isEngineId(engine)) continue
-    const model = selected.model.resolved.id
-    if (model !== null && !modelFitsEngine(engine, model))
-      throw new Error(
-        `profile-invalid: stages.${stage}.model '${model}' cannot run on engine '${engine}'; choose a model for ${engine} or change stages.${stage}.engine`,
-      )
+    if (selected) validateProfileStage(stage, selected, input)
   }
+}
+
+function validateProfileStage(
+  stage: string,
+  selected: ResolvedStage,
+  input: {
+    readonly commandLine: boolean
+    readonly engineFlag?: EngineId
+    readonly runEngine?: EngineId | undefined
+  },
+): void {
+  const wanted = selected.engine.value
+  if (input.engineFlag && wanted !== 'default' && wanted !== input.engineFlag)
+    throw new Error(
+      `profile-invalid: stages.${stage}.engine '${wanted}' contradicts --engine '${input.engineFlag}'; remove --engine or set it to '${wanted}'`,
+    )
+  if (input.commandLine && !input.engineFlag && wanted === 'default')
+    throw new Error(
+      `profile-invalid: stages.${stage}.engine 'default' has no engine for a command-line profile; set stages.${stage}.engine or pass --engine`,
+    )
+  const engine = wanted === 'default' ? (input.engineFlag ?? input.runEngine) : wanted
+  validateStageModel(stage, selected, engine)
+}
+
+function validateStageModel(
+  stage: string,
+  selected: ResolvedStage,
+  engine: string | undefined,
+): void {
+  if (!isEngineId(engine)) return
+  const model = selected.model.resolved.id
+  if (model !== null && !modelFitsEngine(engine, model))
+    throw new Error(
+      `profile-invalid: stages.${stage}.model '${model}' cannot run on engine '${engine}'; choose a model for ${engine} or change stages.${stage}.engine`,
+    )
 }
 
 function modelFitsEngine(engine: EngineId, model: string): boolean {

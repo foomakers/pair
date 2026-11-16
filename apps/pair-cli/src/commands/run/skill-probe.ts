@@ -35,7 +35,6 @@ export function createSkillProbe(
 }
 
 /** Read the installed skill through the same registry targets as the existence probe. */
-// eslint-disable-next-line complexity -- preserve registry target search order and containment.
 export function readInstalledSkill(
   fs: FileSystemService,
   config: Config,
@@ -48,12 +47,8 @@ export function readInstalledSkill(
   const directories = prefix ? [name, `${prefix}-${name}`, stripPrefix(name, prefix)] : [name]
   for (const target of targets)
     for (const directory of directories) {
-      const targetRoot = resolve(projectRoot, target)
-      const candidate = resolve(targetRoot, directory)
-      const inside = relative(targetRoot, candidate)
-      if (inside.startsWith('..') || isAbsolute(inside)) continue
-      const path = join(candidate, 'SKILL.md')
-      if (fs.existsSync(path)) return fs.readFileSync(path)
+      const path = installedSkillPath(fs, projectRoot, target, directory)
+      if (path) return fs.readFileSync(path)
     }
   return undefined
 }
@@ -73,11 +68,21 @@ function isInstalledUnder(
   target: string,
   directory: string,
 ): boolean {
+  return installedSkillPath(fs, projectRoot, target, directory) !== undefined
+}
+
+function installedSkillPath(
+  fs: FileSystemService,
+  projectRoot: string,
+  target: string,
+  directory: string,
+): string | undefined {
   const targetRoot = resolve(projectRoot, target)
   const candidate = resolve(targetRoot, directory)
   const inside = relative(targetRoot, candidate)
-  if (inside.startsWith('..') || isAbsolute(inside)) return false
-  return fs.existsSync(join(candidate, 'SKILL.md'))
+  if (inside.startsWith('..') || isAbsolute(inside)) return undefined
+  const path = join(candidate, 'SKILL.md')
+  return fs.existsSync(path) ? path : undefined
 }
 
 /** `pair-loop` installed from dataset entry `loop`: probe the bare name too. */

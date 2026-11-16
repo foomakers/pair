@@ -223,7 +223,6 @@ export async function driveRun(
  * (`--iteration <n+1>`), so a resumed run does not restart its own counter — nothing else crosses
  * the boundary between iterations.
  */
-// eslint-disable-next-line complexity -- prompt fields mirror the resolved run.
 function driveIteration(
   resolved: ResolvedRun,
   config: RunCommandConfig,
@@ -234,21 +233,11 @@ function driveIteration(
     onRunEvent: (event: RunEvent) => void
   },
 ): Promise<IterationResult> {
-  const basePrompt = buildPromptText(resolved.engine.engine, resolved.invocation, {
-    ...(resolved.perimeter.root !== undefined && { root: resolved.perimeter.root }),
-    // Passed ONLY when the invocation actually carries it. `buildSkillArgs` would drop it anyway,
-    // but relying on that is how a flag ends up looking effective while changing nothing: the
-    // decision belongs where the perimeter recorded it (round 1, finding 1).
-    ...(resolved.perimeter.filterDelivery === 'argument' &&
-      resolved.perimeter.filter !== undefined && { filter: resolved.perimeter.filter }),
-    ...(resolved.perimeter.assignee !== undefined && { assignee: resolved.perimeter.assignee }),
-    ...(resolved.perimeter.status !== undefined && { status: resolved.perimeter.status }),
-    ...(resolved.policy.stopPredicate !== undefined && {
-      predicate: resolved.policy.stopPredicate,
-    }),
-    iteration: context.iteration,
-    ...approvalArguments(resolved),
-  })
+  const basePrompt = buildPromptText(
+    resolved.engine.engine,
+    resolved.invocation,
+    promptArgs(resolved, context),
+  )
 
   const promptText =
     context.formatCorrection === undefined
@@ -267,6 +256,24 @@ function driveIteration(
     onRunEvent: wiring.onRunEvent,
     maxFixRounds: LOOP_MAX_FIX_ROUNDS,
   })
+}
+
+function promptArgs(resolved: ResolvedRun, context: IterationContext) {
+  return {
+    ...(resolved.perimeter.root !== undefined && { root: resolved.perimeter.root }),
+    // Passed ONLY when the invocation actually carries it. `buildSkillArgs` would drop it anyway,
+    // but relying on that is how a flag ends up looking effective while changing nothing: the
+    // decision belongs where the perimeter recorded it (round 1, finding 1).
+    ...(resolved.perimeter.filterDelivery === 'argument' &&
+      resolved.perimeter.filter !== undefined && { filter: resolved.perimeter.filter }),
+    ...(resolved.perimeter.assignee !== undefined && { assignee: resolved.perimeter.assignee }),
+    ...(resolved.perimeter.status !== undefined && { status: resolved.perimeter.status }),
+    ...(resolved.policy.stopPredicate !== undefined && {
+      predicate: resolved.policy.stopPredicate,
+    }),
+    iteration: context.iteration,
+    ...approvalArguments(resolved),
+  }
 }
 
 /**
