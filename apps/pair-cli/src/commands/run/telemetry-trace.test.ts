@@ -292,3 +292,11 @@ it.each([
 it('AC-8: --by engine keeps the legacy per-engine cohort view', () => {
   expect(renderView([], 'engine')).toContain('not measured')
 })
+
+it.each([
+  ['linux', '/r/.pair/working/telemetry/records.jsonl'],
+  ['darwin', '/r/.pair/working/telemetry/records.jsonl'],
+  ['win32', '\\r\\.pair\\working\\telemetry\\records.jsonl'],
+] as const)('v2 records share one file path on platform %s', (platform, expected) => {
+  expect(telemetryFile('/r', platform)).toBe(expected)
+})
