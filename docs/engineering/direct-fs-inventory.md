@@ -35,5 +35,12 @@ Identical source hashes identify copied files; the first tracked path is the
 provisional producer and needs mirror provenance review before T-1 completes.
 
 Baseline: `pnpm --filter @pair/content-ops test` passed: 51 files, 677 tests,
-1.86 s Vitest duration. A repository-wide `pnpm test` baseline was interrupted
-after over two minutes without a final result. Its status is unknown.
+1.86 s Vitest duration. On this branch, `pnpm --filter @pair/dev-tools test`
+passed 47 files and 893 tests (98.43 s; one pre-existing skip);
+`pnpm --filter @pair/knowledge-hub test` passed 82 files and 6,853 tests
+(6.19 s Vitest duration; two pre-existing skips), and both dataset and root
+link checks passed. `pnpm --filter @pair/pair-cli test` passed 278 files and
+4,244 tests (404.95 s). `pnpm --filter @pair/website test` passed its Vitest
+and component suites (26 Chromium component tests). A repository-wide
+`pnpm test` baseline was interrupted after over two minutes without a final
+result. Its status is unknown.
