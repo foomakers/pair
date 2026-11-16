@@ -4,8 +4,9 @@
   "files": 438,
   "distinctContents": 403,
   "dispositionCounts": {
-    "migration-candidate": 215,
-    "in-flight-churn": 223
+    "migration-candidate": 208,
+    "in-flight-churn": 223,
+    "type-contract": 7
   },
   "limits": [
     "literal module specifiers only",
@@ -167,7 +168,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/__fixtures__/cards-cross-completion.cjs"
+      "producer": "apps/pair-cli/src/commands/run/__fixtures__/cards-cross-completion.cjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/__fixtures__/cards-lifecycle-gh.cjs",
@@ -180,7 +184,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/__fixtures__/cards-lifecycle-gh.cjs"
+      "producer": "apps/pair-cli/src/commands/run/__fixtures__/cards-lifecycle-gh.cjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/__fixtures__/cards-review-gh.cjs",
@@ -193,7 +200,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/__fixtures__/cards-review-gh.cjs"
+      "producer": "apps/pair-cli/src/commands/run/__fixtures__/cards-review-gh.cjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/__fixtures__/session-telemetry-driver.ts",
@@ -206,7 +216,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/__fixtures__/session-telemetry-driver.ts"
+      "producer": "apps/pair-cli/src/commands/run/__fixtures__/session-telemetry-driver.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/__fixtures__/usage-authority.mjs",
@@ -219,7 +232,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/__fixtures__/usage-authority.mjs"
+      "producer": "apps/pair-cli/src/commands/run/__fixtures__/usage-authority.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/__fixtures__/usage-contract-hash.mjs",
@@ -232,7 +248,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/__fixtures__/usage-contract-hash.mjs"
+      "producer": "apps/pair-cli/src/commands/run/__fixtures__/usage-contract-hash.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/autonomy-card-entry.test.ts",
@@ -245,7 +264,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/autonomy-card-entry.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/autonomy-card-entry.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/autonomy-legacy-parity.test.ts",
@@ -258,7 +280,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/autonomy-legacy-parity.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/autonomy-legacy-parity.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/autonomy-parity.test.ts",
@@ -271,7 +296,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/autonomy-parity.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/autonomy-parity.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/autonomy-policy.ts",
@@ -284,7 +312,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/autonomy-policy.ts"
+      "producer": "apps/pair-cli/src/commands/run/autonomy-policy.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/autonomy-relay.test.ts",
@@ -297,7 +328,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/autonomy-relay.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/autonomy-relay.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/autonomy-selection.test.ts",
@@ -310,7 +344,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/autonomy-selection.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/autonomy-selection.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/card-entry-prepare.test.ts",
@@ -323,7 +360,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/card-entry-prepare.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/card-entry-prepare.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/card-interrupt.test.ts",
@@ -336,7 +376,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/card-interrupt.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/card-interrupt.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/card-lock.test.ts",
@@ -349,7 +392,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/card-lock.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/card-lock.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/card-lock.ts",
@@ -362,7 +408,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/card-lock.ts"
+      "producer": "apps/pair-cli/src/commands/run/card-lock.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/card-prepare.ts",
@@ -375,7 +424,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/card-prepare.ts"
+      "producer": "apps/pair-cli/src/commands/run/card-prepare.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/card-read-pm-agnostic.test.ts",
@@ -388,7 +440,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/card-read-pm-agnostic.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/card-read-pm-agnostic.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/card-readiness.ts",
@@ -401,7 +456,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/card-readiness.ts"
+      "producer": "apps/pair-cli/src/commands/run/card-readiness.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
@@ -414,7 +472,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/card-risk-label.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cards-classify-partitions.test.ts",
@@ -427,7 +488,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-classify-partitions.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cards-classify-partitions.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cards-entry.ts",
@@ -440,7 +504,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-entry.ts"
+      "producer": "apps/pair-cli/src/commands/run/cards-entry.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cards-gate-red.test.ts",
@@ -453,7 +520,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-gate-red.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cards-gate-red.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cards-handler.test.ts",
@@ -466,7 +536,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-handler.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cards-handler.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cards-lifecycle-2.test.ts",
@@ -479,7 +552,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-lifecycle-2.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cards-lifecycle-2.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cards-lifecycle-lib.ts",
@@ -492,7 +568,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-lifecycle-lib.ts"
+      "producer": "apps/pair-cli/src/commands/run/cards-lifecycle-lib.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cards-review-progress-4.test.ts",
@@ -505,7 +584,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-review-progress-4.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cards-review-progress-4.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cards-review-progress-lib.ts",
@@ -518,7 +600,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-review-progress-lib.ts"
+      "producer": "apps/pair-cli/src/commands/run/cards-review-progress-lib.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cards-run.test.ts",
@@ -531,7 +616,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-run.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cards-run.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cards-run.ts",
@@ -544,7 +632,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-run.ts"
+      "producer": "apps/pair-cli/src/commands/run/cards-run.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/codex-agent-message.test.ts",
@@ -557,7 +648,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/codex-agent-message.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/codex-agent-message.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/codex-agents.test.ts",
@@ -570,7 +664,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/codex-agents.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/codex-agents.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/codex-agents.ts",
@@ -583,7 +680,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/codex-agents.ts"
+      "producer": "apps/pair-cli/src/commands/run/codex-agents.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/codex-live-reader.test.ts",
@@ -596,7 +696,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/codex-live-reader.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/codex-live-reader.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/control-state-authority.test.ts",
@@ -609,7 +712,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/control-state-authority.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/control-state-authority.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/control-state-distribution.test.ts",
@@ -622,7 +728,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/control-state-distribution.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/control-state-distribution.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-agents-dir.test.ts",
@@ -635,7 +744,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-agents-dir.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-agents-dir.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-agents-sync-wiring.test.ts",
@@ -648,7 +760,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-agents-sync-wiring.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-agents-sync-wiring.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-blocking-policy-relay.test.ts",
@@ -661,7 +776,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-blocking-policy-relay.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-blocking-policy-relay.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-catalogue.test.ts",
@@ -674,7 +792,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-catalogue.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-catalogue.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-contract-gaps.test.ts",
@@ -687,7 +808,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-contract-gaps.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-contract-gaps.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-defaults-parity.test.ts",
@@ -700,7 +824,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-defaults-parity.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-defaults-parity.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
@@ -713,7 +840,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-dispatch-stdout.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
@@ -726,7 +856,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-hooks-executor.test.ts",
@@ -739,7 +872,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-hooks-executor.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-hooks-executor.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-hooks-output-transport.test.ts",
@@ -752,7 +888,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-hooks-output-transport.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-hooks-output-transport.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
@@ -765,7 +904,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-hooks-timeout.test.ts",
@@ -778,7 +920,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-hooks-timeout.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-hooks-timeout.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-installed-defaults.test.ts",
@@ -791,7 +936,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-installed-defaults.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-installed-defaults.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-merge-hooks.test.ts",
@@ -804,7 +952,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-merge-hooks.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-merge-hooks.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-merge-stage-1.test.ts",
@@ -817,7 +968,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-merge-stage-1.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-merge-stage-1.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-merge-stage-2.test.ts",
@@ -830,7 +984,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-merge-stage-2.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-merge-stage-2.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-merge-stage-3.test.ts",
@@ -843,7 +1000,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-merge-stage-3.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-merge-stage-3.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-merge-stage-lib.ts",
@@ -856,7 +1016,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-merge-stage-lib.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-merge-stage-lib.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-profile-docs.test.ts",
@@ -869,7 +1032,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-profile-docs.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-profile-docs.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-profile-entry.test.ts",
@@ -882,7 +1048,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-profile-entry.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-profile-entry.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-profile-wiring.test.ts",
@@ -895,7 +1064,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-profile-wiring.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-profile-wiring.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-project-cwd.test.ts",
@@ -908,7 +1080,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-project-cwd.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-project-cwd.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
@@ -921,7 +1096,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
@@ -934,7 +1112,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-scripts.ts",
@@ -947,7 +1128,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-scripts.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-scripts.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-wiring.test.ts",
@@ -960,7 +1144,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-wiring.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-wiring.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-wiring.ts",
@@ -973,7 +1160,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cycle-wiring.ts"
+      "producer": "apps/pair-cli/src/commands/run/cycle-wiring.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/dispatch-audit.test.ts",
@@ -986,7 +1176,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/dispatch-audit.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/dispatch-audit.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/dispatch-audit.ts",
@@ -999,7 +1192,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/dispatch-audit.ts"
+      "producer": "apps/pair-cli/src/commands/run/dispatch-audit.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts",
@@ -1012,7 +1208,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/dor-fallback-routing.test.ts",
@@ -1025,7 +1224,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/dor-fallback-routing.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/dor-fallback-routing.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/handler.test.ts",
@@ -1038,7 +1240,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/handler.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/handler.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/interrupt-group.test.ts",
@@ -1051,7 +1256,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/interrupt-group.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/interrupt-group.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/invocation.test.ts",
@@ -1064,7 +1272,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/invocation.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/invocation.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/live-guard-597.test.ts",
@@ -1077,7 +1288,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/live-guard-597.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/live-guard-597.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/lock-holder.ts",
@@ -1090,7 +1304,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/lock-holder.ts"
+      "producer": "apps/pair-cli/src/commands/run/lock-holder.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/lock-probe.test.ts",
@@ -1103,7 +1320,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/lock-probe.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/lock-probe.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/lock-probe.ts",
@@ -1116,7 +1336,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/lock-probe.ts"
+      "producer": "apps/pair-cli/src/commands/run/lock-probe.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/lock-stale.test.ts",
@@ -1129,7 +1352,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/lock-stale.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/lock-stale.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/loop-driver-unknown-outcome.test.ts",
@@ -1142,7 +1368,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/loop-driver-unknown-outcome.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/loop-driver-unknown-outcome.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
@@ -1155,7 +1384,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/loop-driver.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/loop-prereq-597.test.ts",
@@ -1168,7 +1400,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/loop-prereq-597.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/loop-prereq-597.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/pair-loop-parity.test.ts",
@@ -1181,7 +1416,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/pair-loop-parity.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/pair-loop-parity.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/parallel-entry.test.ts",
@@ -1194,7 +1432,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/parallel-entry.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/parallel-entry.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
@@ -1207,7 +1448,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/parallel-loop.test.ts",
@@ -1220,7 +1464,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/parallel-loop.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/parallel-loop.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/parallel.test.ts",
@@ -1233,7 +1480,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/parallel.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/parallel.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/preparation-failure-pr.test.ts",
@@ -1246,7 +1496,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/preparation-failure-pr.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/preparation-failure-pr.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/preparation-failure.test.ts",
@@ -1259,7 +1512,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/preparation-failure.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/preparation-failure.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/preparation-failure.ts",
@@ -1272,7 +1528,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/preparation-failure.ts"
+      "producer": "apps/pair-cli/src/commands/run/preparation-failure.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/profile-caveat-docs.test.ts",
@@ -1285,7 +1544,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/profile-caveat-docs.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/profile-caveat-docs.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/profile-stages-617.test.ts",
@@ -1298,7 +1560,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/profile-stages-617.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/profile-stages-617.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/prompt-safety.test.ts",
@@ -1311,7 +1576,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/prompt-safety.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/prompt-safety.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/root-plan.test.ts",
@@ -1324,7 +1592,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/root-plan.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/root-plan.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/root-select.test.ts",
@@ -1337,7 +1608,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/root-select.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/root-select.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/routing-purity.test.ts",
@@ -1350,7 +1624,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/routing-purity.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/routing-purity.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/run-audit.test.ts",
@@ -1363,7 +1640,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/run-audit.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/run-audit.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/run-audit.ts",
@@ -1376,7 +1656,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/run-audit.ts"
+      "producer": "apps/pair-cli/src/commands/run/run-audit.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts",
@@ -1389,7 +1672,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
@@ -1402,7 +1688,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/run-events.test.ts",
@@ -1415,7 +1704,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/run-events.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/run-events.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
@@ -1428,7 +1720,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts",
@@ -1441,7 +1736,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/spawn-codex-home-relative.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts",
@@ -1454,7 +1752,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/spawn-idle-guards.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/spawn-reap.test.ts",
@@ -1467,7 +1768,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/spawn-reap.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/spawn-reap.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/spawn.test.ts",
@@ -1480,7 +1784,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/spawn.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/spawn.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/spawn.ts",
@@ -1493,7 +1800,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/spawn.ts"
+      "producer": "apps/pair-cli/src/commands/run/spawn.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/stage-telemetry.test.ts",
@@ -1506,7 +1816,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/stage-telemetry.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/stage-telemetry.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/stop-predicate.test.ts",
@@ -1519,7 +1832,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/stop-predicate.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/stop-predicate.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/stream-reader.test.ts",
@@ -1532,7 +1848,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/stream-reader.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/stream-reader.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-policy.test.ts",
@@ -1545,7 +1864,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/telemetry-policy.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/telemetry-policy.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-policy.ts",
@@ -1558,7 +1880,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/telemetry-policy.ts"
+      "producer": "apps/pair-cli/src/commands/run/telemetry-policy.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-report.test.ts",
@@ -1571,7 +1896,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/telemetry-report.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/telemetry-report.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-report.ts",
@@ -1584,7 +1912,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/telemetry-report.ts"
+      "producer": "apps/pair-cli/src/commands/run/telemetry-report.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-review-fixes.test.ts",
@@ -1597,7 +1928,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/telemetry-review-fixes.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/telemetry-review-fixes.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-trace.test.ts",
@@ -1610,7 +1944,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/telemetry-trace.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/telemetry-trace.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-trace.ts",
@@ -1623,7 +1960,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/telemetry-trace.ts"
+      "producer": "apps/pair-cli/src/commands/run/telemetry-trace.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
@@ -1636,7 +1976,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/telemetry-wiring.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry.test.ts",
@@ -1649,7 +1992,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/telemetry.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/telemetry.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry.ts",
@@ -1662,7 +2008,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/telemetry.ts"
+      "producer": "apps/pair-cli/src/commands/run/telemetry.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/tier-parity.test.ts",
@@ -1675,7 +2024,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/tier-parity.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/tier-parity.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/usage-accounting.test.ts",
@@ -1688,7 +2040,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/usage-accounting.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/usage-accounting.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/workflow-profile.test.ts",
@@ -1701,7 +2056,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/workflow-profile.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/workflow-profile.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/working-cleanup.test.ts",
@@ -1714,7 +2072,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/working-cleanup.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/working-cleanup.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/working-cleanup.ts",
@@ -1727,7 +2088,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/working-cleanup.ts"
+      "producer": "apps/pair-cli/src/commands/run/working-cleanup.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/worktree-recovery.test.ts",
@@ -1740,7 +2104,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/worktree-recovery.test.ts"
+      "producer": "apps/pair-cli/src/commands/run/worktree-recovery.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/tokens/tokens.acceptance.test.ts",
@@ -1944,8 +2311,11 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/registry/llms-generation.ts"
+      "disposition": "type-contract",
+      "producer": "apps/pair-cli/src/registry/llms-generation.ts",
+      "reason": "Node filesystem types only; no runtime filesystem access.",
+      "decision": "Retain the type-only import as an exact-path exception; the service contract and in-memory double use Node Dirent or Stats shapes.",
+      "testCategory": "typecheck"
     },
     {
       "path": "apps/pair-cli/src/registry/llms-generation.win32.test.ts",
@@ -1957,8 +2327,11 @@
           "line": 27
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "apps/pair-cli/src/registry/llms-generation.win32.test.ts"
+      "disposition": "type-contract",
+      "producer": "apps/pair-cli/src/registry/llms-generation.win32.test.ts",
+      "reason": "Node filesystem types only; no runtime filesystem access.",
+      "decision": "Retain the type-only import as an exact-path exception; the service contract and in-memory double use Node Dirent or Stats shapes.",
+      "testCategory": "typecheck"
     },
     {
       "path": "apps/pair-cli/src/registry/symlink-race.test.ts",
@@ -2201,8 +2574,11 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/file-system/file-operations.ts"
+      "disposition": "type-contract",
+      "producer": "packages/content-ops/src/file-system/file-operations.ts",
+      "reason": "Node filesystem types only; no runtime filesystem access.",
+      "decision": "Retain the type-only import as an exact-path exception; the service contract and in-memory double use Node Dirent or Stats shapes.",
+      "testCategory": "typecheck"
     },
     {
       "path": "packages/content-ops/src/file-system/file-system-service.test.ts",
@@ -2341,8 +2717,11 @@
           "line": 1
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/ops/path-operation-helpers.ts"
+      "disposition": "type-contract",
+      "producer": "packages/content-ops/src/ops/path-operation-helpers.ts",
+      "reason": "Node filesystem types only; no runtime filesystem access.",
+      "decision": "Retain the type-only import as an exact-path exception; the service contract and in-memory double use Node Dirent or Stats shapes.",
+      "testCategory": "typecheck"
     },
     {
       "path": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs-read.ts",
@@ -2354,8 +2733,11 @@
           "line": 1
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs-read.ts"
+      "disposition": "type-contract",
+      "producer": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs-read.ts",
+      "reason": "Node filesystem types only; no runtime filesystem access.",
+      "decision": "Retain the type-only import as an exact-path exception; the service contract and in-memory double use Node Dirent or Stats shapes.",
+      "testCategory": "typecheck"
     },
     {
       "path": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs-state.ts",
@@ -2367,8 +2749,11 @@
           "line": 1
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs-state.ts"
+      "disposition": "type-contract",
+      "producer": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs-state.ts",
+      "reason": "Node filesystem types only; no runtime filesystem access.",
+      "decision": "Retain the type-only import as an exact-path exception; the service contract and in-memory double use Node Dirent or Stats shapes.",
+      "testCategory": "typecheck"
     },
     {
       "path": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs.ts",
@@ -2380,8 +2765,11 @@
           "line": 1
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs.ts"
+      "disposition": "type-contract",
+      "producer": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs.ts",
+      "reason": "Node filesystem types only; no runtime filesystem access.",
+      "decision": "Retain the type-only import as an exact-path exception; the service contract and in-memory double use Node Dirent or Stats shapes.",
+      "testCategory": "typecheck"
     },
     {
       "path": "packages/dev-tools/src/quality-gates/benchmark-update-link.ts",
@@ -3174,7 +3562,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/contract-phase/scripts/ensure-contract.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/contract-phase/scripts/ensure-contract.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs",
@@ -3187,7 +3578,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/blocking-severities.mjs",
@@ -3200,7 +3594,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/blocking-severities.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/blocking-severities.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/board-audit.mjs",
@@ -3213,7 +3610,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/board-audit.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/board-audit.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/board-event.mjs",
@@ -3226,7 +3626,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/board-event.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/board-event.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/board-transition.mjs",
@@ -3239,7 +3642,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/board-transition.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/board-transition.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
@@ -3252,7 +3658,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-hooks.mjs",
@@ -3265,7 +3674,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-hooks.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-hooks.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-merge.mjs",
@@ -3278,7 +3690,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-merge.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-merge.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-prepare.mjs",
@@ -3291,7 +3706,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-prepare.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-prepare.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
@@ -3304,7 +3722,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs",
@@ -3317,7 +3738,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs",
@@ -3330,7 +3754,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
@@ -3343,7 +3770,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs",
@@ -3356,7 +3786,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/loop-workflow-dispatch.mjs",
@@ -3369,7 +3802,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/loop-workflow-dispatch.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/loop-workflow-dispatch.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/pi-bridge.mjs",
@@ -3382,7 +3818,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/pi-bridge.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/pi-bridge.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/run-guard.mjs",
@@ -3395,7 +3834,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/run-guard.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/run-guard.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
@@ -3408,7 +3850,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/autonomy-policy.mjs",
@@ -3421,7 +3866,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
@@ -3434,7 +3882,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/adapter-kit.mjs",
@@ -3447,7 +3898,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/azure-devops.mjs",
@@ -3460,7 +3914,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/filesystem.mjs",
@@ -3473,7 +3930,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/index.mjs",
@@ -3486,7 +3946,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/pr-comment.mjs",
@@ -3499,7 +3962,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/pr-comment.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/pr-comment.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/autonomy-policy.mjs",
@@ -3512,7 +3978,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
@@ -3525,7 +3994,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/adapter-kit.mjs",
@@ -3538,7 +4010,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/azure-devops.mjs",
@@ -3551,7 +4026,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/filesystem.mjs",
@@ -3564,7 +4042,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/index.mjs",
@@ -3577,7 +4058,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/autonomy-policy.mjs",
@@ -3590,7 +4074,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
@@ -3603,7 +4090,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/adapter-kit.mjs",
@@ -3616,7 +4106,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/azure-devops.mjs",
@@ -3629,7 +4122,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/filesystem.mjs",
@@ -3642,7 +4138,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/index.mjs",
@@ -3655,7 +4154,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/autonomy-policy.mjs",
@@ -3668,7 +4170,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
@@ -3681,7 +4186,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/adapter-kit.mjs",
@@ -3694,7 +4202,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/azure-devops.mjs",
@@ -3707,7 +4218,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/filesystem.mjs",
@@ -3720,7 +4234,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/index.mjs",
@@ -3733,7 +4250,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
@@ -3746,7 +4266,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/autonomy-policy.mjs",
@@ -3759,7 +4282,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-metrics.mjs",
@@ -3777,7 +4303,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-metrics.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-metrics.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-runtime.mjs",
@@ -3790,7 +4319,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-runtime.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-runtime.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
@@ -3803,7 +4335,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/adapter-kit.mjs",
@@ -3816,7 +4351,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/azure-devops.mjs",
@@ -3829,7 +4367,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/filesystem.mjs",
@@ -3842,7 +4383,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/index.mjs",
@@ -3855,7 +4399,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/index.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/pr-comment.mjs",
@@ -3868,7 +4415,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/pr-comment.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/pr-comment.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/pr-state.mjs",
@@ -3881,7 +4431,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/pr-state.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/pr-state.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
@@ -3894,7 +4447,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/word-limits.mjs",
@@ -3907,7 +4463,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs"
+      "producer": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/autonomy-cycle.test.mjs",
@@ -3920,7 +4479,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/autonomy-cycle.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/autonomy-cycle.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/autonomy-parity.test.mjs",
@@ -3933,7 +4495,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/autonomy-parity.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/autonomy-parity.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/autonomy-policy.test.mjs",
@@ -3946,7 +4511,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/autonomy-policy.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/autonomy-policy.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-audit.test.mjs",
@@ -3959,7 +4527,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-audit.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-audit.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
@@ -3972,7 +4543,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-authorization.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-state.test.mjs",
@@ -3985,7 +4559,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-state.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-state.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-sync.test.mjs",
@@ -4008,7 +4585,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-sync.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-sync.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-transition.test.mjs",
@@ -4021,7 +4601,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-transition.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/board-transition.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs",
@@ -4034,7 +4617,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-metrics.test.mjs",
@@ -4047,7 +4633,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-metrics.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-metrics.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-prepare-parity.test.mjs",
@@ -4060,7 +4649,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-prepare-parity.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-prepare-parity.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-prepare.test.mjs",
@@ -4073,7 +4665,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-prepare.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-prepare.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-recovery.test.mjs",
@@ -4086,7 +4681,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-recovery.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-recovery.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-runtime.test.mjs",
@@ -4104,7 +4702,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-runtime.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-runtime.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs",
@@ -4122,7 +4723,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/delta-review-witnesses.test.mjs",
@@ -4135,7 +4739,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/delta-review-witnesses.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/delta-review-witnesses.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/dependency-foreign-597.test.mjs",
@@ -4148,7 +4755,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/dependency-foreign-597.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/dependency-foreign-597.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/engine-boundaries.test.mjs",
@@ -4161,7 +4771,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/engine-boundaries.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/engine-boundaries.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/engine-integration.test.mjs",
@@ -4179,7 +4792,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/engine-integration.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/engine-integration.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/ensure-contract.test.mjs",
@@ -4192,7 +4808,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/ensure-contract.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/ensure-contract.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/filesystem-adapter.test.mjs",
@@ -4205,7 +4824,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/filesystem-adapter.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/filesystem-roundtrip.test.mjs",
@@ -4218,7 +4840,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/filesystem-roundtrip.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/filesystem-roundtrip.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/fixtures/linear/fake-linear.mjs",
@@ -4231,7 +4856,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/fixtures/linear/fake-linear.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/fixtures/linear/fake-linear.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/gitleaks-allowlist-control.test.mjs",
@@ -4244,7 +4872,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/gitleaks-allowlist-control.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/gitleaks-allowlist-control.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/gitleaks-allowlist.test.mjs",
@@ -4257,7 +4888,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/gitleaks-allowlist.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/gitleaks-allowlist.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/host-adapter.test.mjs",
@@ -4270,7 +4904,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/host-adapter.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/host-adapter.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/linear-adapter.test.mjs",
@@ -4283,7 +4920,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/linear-adapter.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/linear-adapter.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/maintainer-decisions.test.mjs",
@@ -4296,7 +4936,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/maintainer-decisions.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/maintainer-decisions.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/opaque-card-ids.test.mjs",
@@ -4309,7 +4952,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/opaque-card-ids.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/opaque-card-ids.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/owner-approval-bound.test.mjs",
@@ -4322,7 +4968,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/owner-approval-bound.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/owner-approval-bound.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/owner-correction.test.mjs",
@@ -4335,7 +4984,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/owner-correction.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/owner-correction.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pm-agnostic-conformance.test.mjs",
@@ -4348,7 +5000,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pm-agnostic-conformance.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pm-agnostic-conformance.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pr-comment.test.mjs",
@@ -4361,7 +5016,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pr-comment.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pr-comment.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pr-state.test.mjs",
@@ -4374,7 +5032,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pr-state.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pr-state.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/prepare-partitions.test.mjs",
@@ -4387,7 +5048,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/prepare-partitions.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/prepare-partitions.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/recipe.test.mjs",
@@ -4400,7 +5064,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/recipe.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/recipe.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/red-snapshot-lib.mjs",
@@ -4413,7 +5080,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/red-snapshot-lib.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/red-snapshot-lib.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/stage-achash.test.mjs",
@@ -4426,7 +5096,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/stage-achash.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/stage-achash.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/word-limits.test.mjs",
@@ -4439,7 +5112,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/word-limits.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/word-limits.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/workflow-profile.test.mjs",
@@ -4452,7 +5128,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/workflow-profile.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/workflow-profile.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.test.mjs",
@@ -4470,7 +5149,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-loop.test.mjs",
@@ -4483,7 +5165,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-loop.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-loop.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-profile-batch-regressions.test.mjs",
@@ -4496,7 +5181,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-profile-batch-regressions.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-profile-batch-regressions.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.test.mjs",
@@ -4509,7 +5197,10 @@
         }
       ],
       "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.test.mjs"
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.test.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
     },
     {
       "path": "packages/knowledge-hub/src/conformance/adoption-informed-generation.test.ts",

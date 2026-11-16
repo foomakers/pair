@@ -7,9 +7,12 @@ The path-level AST scan is in [direct-fs-inventory.json](direct-fs-inventory.jso
 dependency; 403 distinct contents. The prior 419-file estimate is stale on this
 base. Of the 438 files, 122 are in `apps/pair-cli/src/commands/run/` and 101
 are in the two knowledge-hub workflow zones. Those 223 paths are individually
-marked `in-flight-churn` in the ledger. The other 215 entries remain
-`migration-candidate` until their operation, consumer, test category, and any
-OS-guarantee or standalone-script exception are reviewed. **T-1 is incomplete.**
+marked `in-flight-churn` with the Scope Limit decision and root-guard test
+category. Seven other imports are type-only `Dirent`/`Stats` contracts; these
+have exact-path `type-contract` exceptions because they perform no runtime IO.
+The remaining 208 entries are `migration-candidate` until their operation,
+consumer, test category, and any OS-guarantee or standalone-script exception
+are reviewed. **T-1 is incomplete.**
 
 The scan recognizes static imports, re-exports, TypeScript import-equals,
 `require('...')`, and literal `import('...')` for `fs`, `node:fs`,
