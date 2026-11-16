@@ -294,9 +294,18 @@ If the resolved path cannot be created or written, `pair-loop` **MUST HALT the r
 ```
 
 - **Opt-in, default off.** Absent file, section or `enabled: true` ⇒ nothing is recorded. `pair-cli run --telemetry` / `--no-telemetry` wins over the adoption for one run.
-- When on, a run appends one JSON line per executed stage (including the deterministic merge/CI-wait stage) and one per card to `.pair/working/telemetry/records.jsonl`: timing, engine, model, session id, tokens, outcome class, retries, rounds, findings by round, repairs, PR and manual interventions. Usage the engine does not report is `not measured`, never estimated. Records carry no secrets or card text.
+- When on, a run appends JSON lines (JSONL, append-only, schema versioned) to `.pair/working/telemetry/records.jsonl`. Usage the engine does not report is `not measured`, never estimated. Records are allow-listed: never card text, prompts or secrets.
+- **Record kinds** (`schema: 2`): `start` (written BEFORE the engine spawns; run context: command + effective flags, engine, profile name + hash, resolved model/effort/context per stage, card tier, autonomy, `autoRecoveryRounds`, base/head sha, worktree, branch, PR, card, pair-cli version, OS, pid, host), `end` (outcome, cause, duration, tokens, session id, effective model/effort/context, cost), `event` (`recovery-round`, `park`, `halt`, `pr-opened`), `card` (one per run end: per stage runner/model/effort/context/duration/tokens/cost/round/outcome, totals per runner and per model; no single `engine`). The legacy v1 `stage` record (no `schema`) is still written and read as an `end`; an `end` supersedes the `stage` of the same dispatch (`legacyId`).
+- **Keys on every v2 record**: `schema`, `id` (`run:card:step:phase:kind:seq`, idempotent: the same id appended twice is a no-op), `ts` (UTC), `run`, `card`, `epic`, `pr`, `branch`, `step`, `phase`, `block`, `round`, `group`, `engine`, `model`, `effort`, `profile`, `tier`, `outcome`, `cause` (`null` when not applicable).
+- **Causes**: `interrupted` (+ `signal`: SIGINT/SIGTERM; TaskStop arrives as SIGTERM), `halted`, `stalled` (timeout), `cancelled`, `crashed`, `lost`. A signal or crash writes ONE `end` per open stage before exit. A `start` with no `end` is in progress or interrupted; at the next run start an orphan whose pid is dead on the same host gets one synthetic `end` `lost`, timed at the stage's last record (no heartbeat: a killed long stage is dated at its `start` or last event). A live pid or another host is untouched.
+- **Cost** = tokens × price per Mtok (fresh / cached / out), from a fenced JSON price table in this same section; the KB ships none (prices go stale). Unpriced model or unmeasured tokens ⇒ `not measured`:
+
+  ```json
+  { "prices": { "<model-id>": { "fresh": 3, "cached": 0.3, "out": 15 } } }
+  ```
+
 - **Local only**: the path is gitignored under `.pair/working/` and is never packaged into the CLI or the dataset.
-- Read it with `pnpm --filter @pair/pair-cli telemetry:report [root]` (per-engine rounds, wall/active/idle time, per-stage time and wasted-token share).
+- Read it with `pnpm --filter @pair/pair-cli telemetry:report [root] [--by run|runner|model|step|epic|engine]`: per card by default (including in-progress, interrupted and `lost` stages), every `--by` view derived from the same records; `--by engine` is the per-engine cohort view (rounds, wall/active/idle time, per-stage time and wasted-token share).
 - A write or read failure never fails delivery.
 
 ## Workflows — which workflow each tag routes to
