@@ -204,6 +204,27 @@ function readHumanDecisions(runDir: string): ManualIntervention[] {
   return entries
 }
 
+function parseObject(text: string): Record<string, unknown> | undefined {
+  try {
+    return object(JSON.parse(text))
+  } catch {
+    return undefined
+  }
+}
+
+/** #642 AC-7: human board repairs (`board-audit --apply`) appended to the card's run trail. */
+function readManualUnblocks(runDir: string): ManualIntervention[] {
+  const file = join(runDir, 'manual-unblocks.jsonl')
+  if (!existsSync(file)) return []
+  const entries: ManualIntervention[] = []
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    const entry = parseObject(line)
+    if (typeof entry?.['who'] === 'string' && typeof entry['reason'] === 'string')
+      entries.push({ kind: 'manual-unblock', who: entry['who'], reason: entry['reason'] })
+  }
+  return entries
+}
+
 /** US-647: every maintainer decision comment the script recorded — accepted (by choice), revoked or ignored, never its text as authority. */
 function readMaintainerDecisions(runDir: string): ManualIntervention[] {
   const path = join(runDir, 'maintainer-decisions.json')
@@ -238,6 +259,7 @@ export function readInterventions(runDir: string): ManualIntervention[] {
       ...readSupersedes(runDir),
       ...readHumanDecisions(runDir),
       ...readMaintainerDecisions(runDir),
+      ...readManualUnblocks(runDir),
     ]
   } catch {
     return [] // best effort: telemetry never fails delivery

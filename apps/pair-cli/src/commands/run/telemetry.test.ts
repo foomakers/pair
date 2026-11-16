@@ -263,9 +263,15 @@ it('AC-2: records each durable maintainer intervention with actor and reason', (
       ],
     }),
   )
+  // #642 AC-7: a human board repair (board-audit --apply) is a manual unblock.
+  writeFileSync(
+    join(dir, 'manual-unblocks.jsonl'),
+    '{"kind":"manual-unblock","who":"alice","reason":"board-repair: Todo -> Review","card":"642"}\n{bad\n',
+  )
   expect(readInterventions(dir)).toEqual([
     { kind: 'supersede', who: 'rucka', reason: 'invalid contract' },
     { kind: 'decision', who: 'rucka', reason: 'use strict' },
+    { kind: 'manual-unblock', who: 'alice', reason: 'board-repair: Todo -> Review' },
   ])
 })
 

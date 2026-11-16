@@ -15,6 +15,8 @@
 // untouched except for the GIT_* repository-pinning variables a git hook exports.
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 
 // The eight methods of the interface, named from the call sites the cycle scripts had (US-492).
 export const INTERFACE_METHODS = ['readCard', 'cardHash', 'prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'closeAndCascade']
@@ -23,10 +25,10 @@ export const REQUIRED_METHODS = INTERFACE_METHODS.filter(m => m !== 'cardHash')
 // Primitives the cycle's scope-decision and pr-state paths already used through `gh` beyond the
 // eight (card create/search/edit, one comment read, the check/label read-backs, ref parsing). An
 // adapter MAY omit them: the feature that needs one then fails typed, naming the method.
-export const SUPPORT_METHODS = ['createCard', 'findCards', 'updateCard', 'parseCardRef', 'listCardComments', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState', 'resolveUser']
+export const SUPPORT_METHODS = ['createCard', 'findCards', 'listCards', 'linkedPr', 'syncEpic', 'updateCard', 'parseCardRef', 'listCardComments', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState', 'ensureBoardMembership', 'closeCard', 'resolveUser', 'readPermission']
 // ADR-018's split: card operations resolve `pm-tool`, pull-request operations resolve `code-host`.
-export const PM_METHODS = ['readCard', 'cardHash', 'closeAndCascade', 'createCard', 'findCards', 'updateCard', 'parseCardRef', 'listCardComments', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard', 'resolveUser']
-export const CODE_METHODS = ['prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'deleteBranch']
+export const PM_METHODS = ['readCard', 'cardHash', 'cardState', 'closeAndCascade', 'closeCard', 'ensureBoardMembership', 'syncEpic', 'createCard', 'findCards', 'listCards', 'updateCard', 'parseCardRef', 'listCardComments', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard', 'resolveUser']
+export const CODE_METHODS = ['prHead', 'linkedPr', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'deleteBranch', 'readPermission']
 // setClassification's family/value vocabulary (the review's classification tags, pr-states.md /
 // quality-model.md §5): each family carries its own chromatic enum — never shared across families.
 export const CLASSIFICATION_FAMILIES = { risk: ['green', 'yellow', 'red'], cost: ['green', 'yellow', 'orange', 'red'] }
@@ -34,6 +36,38 @@ export const CLASSIFICATION_FAMILIES = { risk: ['green', 'yellow', 'red'], cost:
 // declares its own spelling of them; these are the vocabulary pr-state.mjs maps a verdict onto.
 export const MERGE_STRATEGIES = ['squash', 'merge', 'rebase']
 export const CHECK_STATES = ['success', 'failure', 'pending']
+
+// Keep an epic's visible child checklist in sync with its PM-tool relations.
+export function updateEpicBody(body, children) {
+  let source = String(body ?? '')
+  if (!children.length) return source
+  const escape = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const missing = []
+  for (const child of children) {
+    const id = String(child.id)
+    const ref = /^\d+$/.test(id) ? `#${id}` : id
+    const token = escape(ref)
+    const leading = new RegExp(`^(?:\\[${token}\\]\\([^\\n)]*\\)|${/^\d+$/.test(id) ? `\\*\\*US-${escape(id)}:\\*\\*|` : ''}${token}(?=$|[\\s—:,]))`)
+    let found = false
+    source = source.replace(/^(\s*[-*]\s+)\[([ xX])\](\s+)([^\n]*)/gm, (line, bullet, mark, space, content) => {
+      if (found || !leading.test(content)) return line
+      found = true
+      return `${bullet}[${child.closed ? 'x' : ' '}]${space}${content}`
+    })
+    if (!found) missing.push(`- [${child.closed ? 'x' : ' '}] ${ref}`)
+  }
+  if (!missing.length) return source
+  const heading = /^## Sub-Issues[ \t]*$/m.exec(source)
+  if (!heading) return `${source.trimEnd()}\n\n## Sub-Issues\n\n${missing.join('\n')}\n`
+  const afterHeading = heading.index + heading[0].length
+  const rest = source.slice(afterHeading)
+  const next = /^## /m.exec(rest)
+  const end = next ? afterHeading + next.index : source.length
+  const section = source.slice(afterHeading, end)
+  const before = source.slice(0, end).trimEnd()
+  const after = source.slice(end)
+  return `${before}${section.trim() ? '\n' : '\n\n'}${missing.join('\n')}${after ? `\n\n${after.trimStart()}` : '\n'}`
+}
 
 export class HostError extends Error {
   // kind: failed (the CLI exited non-zero) | invalid-json | invalid-output | not-implemented |
@@ -78,16 +112,87 @@ export function assertCardId(ref, method = 'parseCardRef') {
   return id
 }
 
+// One call's output is bounded (callers page large listings); a failure names the command and its
+// stderr only — never stdout, a content flag's value, or any argv token that is not a short plain
+// identifier (no-card-text-in-logs).
+const MAX_OUTPUT = 64 * 1024 * 1024
+const MAX_ERROR = 2000
+const CONTENT_FLAGS = new Set(['--body', '-b', '--description', '--title', '-t', '--comment', '--message', '-m', '--fields', '--wiql'])
+const FIELD_FLAGS = new Set(['-f', '-F', '--raw-field', '--field'])
+const SAFE_ARG = /^[A-Za-z0-9._:/@#?&+%-]{1,80}$/
+export function redactArgs(args) {
+  return args.map((a, i) => {
+    const s = String(a)
+    if (CONTENT_FLAGS.has(String(args[i - 1]))) return '<redacted>'
+    const kv = /^([A-Za-z_]+)=([\s\S]*)$/.exec(s)
+    if (kv && FIELD_FLAGS.has(String(args[i - 1]))) return `${kv[1]}=${kv[1] !== 'query' && SAFE_ARG.test(kv[2]) ? kv[2] : '<redacted>'}`
+    return SAFE_ARG.test(s) ? s : '<redacted>'
+  })
+}
 export function runCli({ bin, args, input, label }) {
-  const r = spawnSync(bin, args, { encoding: 'utf8', input, env: cleanGitEnv(process.env) })
+  const r = spawnSync(bin, args, { encoding: 'utf8', input, env: cleanGitEnv(process.env), maxBuffer: MAX_OUTPUT })
   if (r.error || r.status !== 0) {
-    throw new HostError('failed', {
-      message: `${label ?? bin} ${args.join(' ')} failed: ${(r.stderr || r.stdout || '').trim()}`,
-      command: `${label ?? bin} ${args.join(' ')}`,
-      detail: (r.stderr || r.error?.message || '').trim(),
-    })
+    const command = `${label ?? bin} ${redactArgs(args).join(' ')}`
+    const detail = (r.stderr || r.error?.message || '').trim().slice(0, MAX_ERROR)
+    throw new HostError('failed', { message: `${command} failed: ${detail}`, command, detail })
   }
   return r.stdout
+}
+
+// The ONE PR→card link grammar (#642): the board workflow's selector (board-event.mjs) and every code
+// host's linkedPr read it through selectLink (resolveLinked), so what selects a card is exactly what later counts as its PR. Native links
+// (#642 Maintainer Decision): `Closes|Fixes|Resolves #N` and a branch carrying `#N` not followed by an
+// identifier character. Any other id — `AB#N` included — links only through one `Refs: <ID>` line, which
+// must resolve to exactly one card (the 2026-11-14 amendment); an invalid token is null.
+const LINK_ID = /^(?:AB#|#)?([A-Za-z0-9][A-Za-z0-9._-]{0,119})$/
+export function prLinks({ body, branch } = {}) {
+  const text = String(body ?? '')
+  return {
+    closes: [...text.matchAll(/^(?:Closes|Fixes|Resolves)[ \t]+#(\d+)[ \t]*$/gim)].map(m => m[1]),
+    refs: [...text.matchAll(/^Refs:[ \t]*(.*?)[ \t]*$/gim)].map(m => LINK_ID.exec(m[1])?.[1] ?? null),
+    branch: [...String(branch ?? '').matchAll(/#(\d+)(?![A-Za-z0-9_])/g)].map(m => m[1]),
+  }
+}
+// Exactly one card per PR: every link must name the same card (a native link wins the source), else none —
+// several distinct ids, or an invalid `Refs:` token, is ambiguous. The workflow selector and linkedPr both use it.
+export function selectLink(links) {
+  if (links.refs.includes(null)) return null
+  const natives = new Set([...links.closes, ...links.branch])
+  const ids = new Set([...natives, ...links.refs])
+  if (ids.size !== 1) return null
+  const [id] = ids
+  return { source: natives.has(id) ? 'native' : 'ref', id }
+}
+// linkedPr's one resolution over a host's PR rows ({ number, links, state }, same-repository only). A row whose
+// links mention the card but select no single card is a typed gap (PR numbers and candidate ids, no PR text),
+// never a silent `none`; otherwise several PRs linking the card resolve merged > open > closed-unmerged.
+export function resolveLinked(rows, id) {
+  const card = String(id).replace(/^#/, '')
+  const mentioned = links => [...links.closes, ...links.refs.filter(Boolean), ...links.branch]
+  const ambiguous = rows.filter(row => !selectLink(row.links) && mentioned(row.links).includes(card))
+  if (ambiguous.length) return { gap: 'pr-link-ambiguous', prs: ambiguous.map(row => row.number), candidates: [...new Set(ambiguous.flatMap(row => mentioned(row.links)))].sort() }
+  const hits = rows.filter(row => selectLink(row.links)?.id === card)
+  if (!hits.length) return 'none'
+  if (hits.some(row => row.state === 'merged')) return 'merged'
+  if (hits.some(row => row.state === 'open')) return 'open'
+  return hits.every(row => row.state === 'closed-unmerged') ? 'closed-unmerged' : 'unknown'
+}
+
+// way-of-working.md text, found upward from `from`; '' when none.
+export function adoptionText(from) {
+  for (let cur = from; ; cur = dirname(cur)) {
+    const f = join(cur, '.pair', 'adoption', 'tech', 'way-of-working.md')
+    if (existsSync(f)) return readFileSync(f, 'utf8')
+    if (dirname(cur) === cur) return ''
+  }
+}
+
+// `## State Mapping` rows → { macrostate (lower-case) → board state }, first row wins.
+export function stateMapOf(text) {
+  const section = /^##\s+State Mapping\s*$([\s\S]*?)(?=^##\s|$(?![\s\S]))/m.exec(text)?.[1] ?? ''
+  const map = {}
+  for (const c of section.split('\n').map(l => l.split('|').map(x => x.trim()))) if (c.length > 3 && c[1] && !/^-+$/.test(c[1]) && !(c[2].toLowerCase() in map)) map[c[2].toLowerCase()] = c[1]
+  return map
 }
 
 export function parseJson(text, { command } = {}) {
@@ -226,6 +331,21 @@ export function defineAdapter(spec) {
         cardHash(id, opts = {}) {
           const { body } = readCard(id, { ...opts, fields: undefined })
           return canonicalCardHash(body)
+        },
+        cardState({ id, repo }) {
+          const card = readCard(id, { repo, fields: ['state', 'stateReason', 'projectItems'] })
+          // An adapter whose card can sit on several boards scopes membership to the adopted one.
+          const scoped = typeof methods.boardItems === 'function' ? methods.boardItems({ items: card.projectItems ?? [], repo }) : card.projectItems ?? []
+          // An unresolved board is a reported gap, never "not a member" (that would reset the Status).
+          if (!Array.isArray(scoped)) return { issueState: card.state ?? null, issueReason: card.stateReason ?? null, boardState: null, member: false, gap: scoped.gap }
+          const items = scoped
+          return {
+            issueState: card.state ?? null,
+            issueReason: card.stateReason ?? null,
+            // gh prints an empty Status as {"optionId":"","name":""}: uninitialized, not a state.
+            boardState: items.length === 1 ? items[0]?.status?.name || null : null,
+            member: items.length > 0,
+          }
         },
       })
     },
