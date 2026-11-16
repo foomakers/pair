@@ -297,6 +297,9 @@ it.each([
   ['linux', '/r/.pair/working/telemetry/records.jsonl'],
   ['darwin', '/r/.pair/working/telemetry/records.jsonl'],
   ['win32', '\\r\\.pair\\working\\telemetry\\records.jsonl'],
-] as const)('v2 records share one file path on platform %s', (platform, expected) => {
-  expect(telemetryFile('/r', platform)).toBe(expected)
-})
+] as const)(
+  'v2 records file path per platform (linux, darwin posix; win32 backslash): %s',
+  (platform, expected) => {
+    expect(telemetryFile('/r', platform)).toBe(expected)
+  },
+)
