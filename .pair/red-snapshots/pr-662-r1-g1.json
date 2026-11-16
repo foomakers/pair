@@ -1,0 +1,1012 @@
+{
+  "$meta": {
+    "pr": "662",
+    "phase": "r1-g1",
+    "base": "999e309fc0bb01fb2070a3d78b7bbcc850bb6d9c",
+    "trailer": "Pair-RED-Snapshot: pr=662; phase=r1-g1; base=999e309fc0bb01fb2070a3d78b7bbcc850bb6d9c; manifest=.pair/red-snapshots/pr-662-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/parallel-entry.test.ts",
+      "apps/pair-cli/src/commands/run/root-select.test.ts"
+    ]
+  },
+  "run": "story-617",
+  "story": "617",
+  "phase": "r1-g1",
+  "mode": "repair",
+  "inputHead": "999e309fc0bb01fb2070a3d78b7bbcc850bb6d9c",
+  "sourceOfTruth": "PR #662 review findings r0-1 through r0-14 and story #617 AC-2/3",
+  "inventory": [
+    {
+      "id": "r0-14",
+      "producer": "profile selection settings resolve in workflow-profile.ts; selectionInput in parallel-entry.ts forwards them to selectRootCandidates or selectRootAnswer; selectOnce in root-select.ts forwards them to spawnIteration; buildEngineArgs in spawn.ts maps them through each engine definition",
+      "inputs": [
+        "profile effort default/omitted",
+        "profile effort low",
+        "profile effort medium",
+        "profile effort high",
+        "profile effort xhigh",
+        "profile effort max",
+        "selected model",
+        "single-batch selection",
+        "repeated loop selection",
+        "malformed-answer retry",
+        "engine claude",
+        "engine codex",
+        "engine pi",
+        "engine opencode"
+      ],
+      "representations": [
+        "workflow profile selection setting",
+        "SelectRootInput",
+        "SpawnIterationInput",
+        "engine argv"
+      ],
+      "consumers": [
+        "handleParallelRun single-batch selectCandidates",
+        "loopDeps selectRootAnswer on every iteration",
+        "selectRootCandidates",
+        "selectRootAnswer retry via selectOnce",
+        "spawnIteration and engine executable"
+      ],
+      "classes": [
+        "default/omitted -> no effort field and no effort argv",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "claude --effort level",
+        "codex -c model_reasoning_effort=level",
+        "pi/opencode no verified effort flag -> omission"
+      ],
+      "interactions": [
+        "each admitted effort with parent single-batch forwarding",
+        "each admitted effort with selectOnce forwarding",
+        "xhigh with repeated loop selection",
+        "medium with malformed-answer retry",
+        "high with claude/codex/unsupported engine argv",
+        "omitted with both forwarding boundaries and supported engine argv"
+      ]
+    }
+  ],
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-14"
+        ],
+        "owner": "root selection",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/parallel-entry.ts",
+          "apps/pair-cli/src/commands/run/root-select.ts"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-14": [
+            "apps/pair-cli/src/commands/run/parallel-entry.ts",
+            "apps/pair-cli/src/commands/run/root-select.ts"
+          ]
+        }
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-1",
+          "r0-4",
+          "r0-7",
+          "r0-13"
+        ],
+        "owner": "workflow profile resolver",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/workflow-profile.ts",
+          "apps/pair-cli/src/commands/run/handler.ts",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-1": [
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+            "apps/pair-cli/src/commands/run/handler.ts"
+          ],
+          "r0-4": [
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs"
+          ],
+          "r0-7": [
+            "apps/pair-cli/src/commands/run/workflow-profile.ts",
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs"
+          ],
+          "r0-13": [
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+            "apps/pair-cli/src/commands/run/workflow-profile.ts"
+          ]
+        }
+      },
+      {
+        "groupId": "r1-g3",
+        "findings": [
+          "r0-2",
+          "r0-6"
+        ],
+        "owner": "CLI dispatch validation",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/workflow-profile.ts",
+          "apps/pair-cli/src/commands/run/handler.ts",
+          "apps/pair-cli/src/commands/run/cycle-entry.ts"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-2": [
+            "apps/pair-cli/src/commands/run/workflow-profile.ts",
+            "apps/pair-cli/src/commands/run/handler.ts"
+          ],
+          "r0-6": [
+            "apps/pair-cli/src/commands/run/cycle-entry.ts"
+          ]
+        }
+      },
+      {
+        "groupId": "r1-g4",
+        "findings": [
+          "r0-3"
+        ],
+        "owner": "run context timeout",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/run-context.ts",
+          "apps/pair-cli/src/commands/run/handler.ts",
+          "apps/pair-cli/src/commands/run/cycle-entry.ts"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-3": [
+            "apps/pair-cli/src/commands/run/run-context.ts",
+            "apps/pair-cli/src/commands/run/handler.ts",
+            "apps/pair-cli/src/commands/run/cycle-entry.ts"
+          ]
+        }
+      },
+      {
+        "groupId": "r1-g5",
+        "findings": [
+          "r0-5"
+        ],
+        "owner": "cycle context resolver",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          "apps/website/content/docs/process-lifecycle/delivery-cycle.mdx",
+          "apps/website/content/docs/guides/autonomy-and-profiles.mdx"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-5": [
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+            "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+            "apps/website/content/docs/process-lifecycle/delivery-cycle.mdx",
+            "apps/website/content/docs/guides/autonomy-and-profiles.mdx"
+          ]
+        }
+      },
+      {
+        "groupId": "r1-g6",
+        "findings": [
+          "r0-8"
+        ],
+        "owner": "parallel child snapshot",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/parallel-entry.ts",
+          "apps/pair-cli/src/commands/run/parallel.ts"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-8": [
+            "apps/pair-cli/src/commands/run/parallel-entry.ts",
+            "apps/pair-cli/src/commands/run/parallel.ts"
+          ]
+        }
+      },
+      {
+        "groupId": "r1-g7",
+        "findings": [
+          "r0-9",
+          "r0-10"
+        ],
+        "owner": "batch profile relay",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-9": [
+            "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+            "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js"
+          ],
+          "r0-10": [
+            "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+            "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js"
+          ]
+        }
+      },
+      {
+        "groupId": "r1-g8",
+        "findings": [
+          "r0-11"
+        ],
+        "owner": "host gap remedy",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/workflow-host-gaps.md"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-11": [
+            "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+            "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+            "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js",
+            "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/workflow-host-gaps.md"
+          ]
+        }
+      },
+      {
+        "groupId": "r1-g9",
+        "findings": [
+          "r0-12"
+        ],
+        "owner": "workflow profile documentation",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md",
+          "apps/pair-cli/src/commands/run/metadata.ts",
+          "apps/website/content/docs/reference/configuration.mdx"
+        ],
+        "dependsOn": [
+          "r1-g3"
+        ],
+        "findingPaths": {
+          "r0-12": [
+            "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md",
+            "apps/pair-cli/src/commands/run/metadata.ts",
+            "apps/website/content/docs/reference/configuration.mdx"
+          ]
+        }
+      }
+    ],
+    "inventory": [
+      {
+        "id": "r0-1",
+        "producer": "workflow-profile resolveProfile",
+        "inputs": [
+          "no engine flag, Claude agent model",
+          "explicit engine",
+          "no agent model"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+          "apps/pair-cli/src/commands/run/handler.ts"
+        ],
+        "consumers": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+          "apps/pair-cli/src/commands/run/handler.ts"
+        ],
+        "classes": [
+          "no engine flag, Claude agent model",
+          "explicit engine",
+          "no agent model"
+        ],
+        "interactions": [
+          "no engine flag, Claude agent model",
+          "explicit engine"
+        ]
+      },
+      {
+        "id": "r0-2",
+        "producer": "validateProfileRun and handleRunCommand",
+        "inputs": [
+          "config default GPT on Claude",
+          "off-cycle defaults GPT on Claude",
+          "compatible stage override"
+        ],
+        "representations": [
+          "apps/pair-cli/src/commands/run/workflow-profile.ts",
+          "apps/pair-cli/src/commands/run/handler.ts"
+        ],
+        "consumers": [
+          "apps/pair-cli/src/commands/run/workflow-profile.ts",
+          "apps/pair-cli/src/commands/run/handler.ts"
+        ],
+        "classes": [
+          "config default GPT on Claude",
+          "off-cycle defaults GPT on Claude",
+          "compatible stage override"
+        ],
+        "interactions": [
+          "config default GPT on Claude",
+          "off-cycle defaults GPT on Claude"
+        ]
+      },
+      {
+        "id": "r0-3",
+        "producer": "resolveContext and selected-stage dispatch",
+        "inputs": [
+          "Codex selected over Claude fallback",
+          "mixed-engine stages",
+          "explicit timeout override"
+        ],
+        "representations": [
+          "apps/pair-cli/src/commands/run/run-context.ts",
+          "apps/pair-cli/src/commands/run/handler.ts",
+          "apps/pair-cli/src/commands/run/cycle-entry.ts"
+        ],
+        "consumers": [
+          "apps/pair-cli/src/commands/run/run-context.ts",
+          "apps/pair-cli/src/commands/run/handler.ts",
+          "apps/pair-cli/src/commands/run/cycle-entry.ts"
+        ],
+        "classes": [
+          "Codex selected over Claude fallback",
+          "mixed-engine stages",
+          "explicit timeout override"
+        ],
+        "interactions": [
+          "Codex selected over Claude fallback",
+          "mixed-engine stages"
+        ]
+      },
+      {
+        "id": "r0-4",
+        "producer": "workflow-profile effectiveStage",
+        "inputs": [
+          "legacy defaults reuse at red",
+          "legacy reuse at yellow",
+          "legacy reuse at green",
+          "explicit red validate reuse invalid"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs"
+        ],
+        "consumers": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs"
+        ],
+        "classes": [
+          "legacy defaults reuse at red",
+          "legacy reuse at yellow",
+          "legacy reuse at green",
+          "explicit red validate reuse invalid"
+        ],
+        "interactions": [
+          "legacy defaults reuse at red",
+          "legacy reuse at yellow"
+        ]
+      },
+      {
+        "id": "r0-5",
+        "producer": "cycle-state context resolution",
+        "inputs": [
+          "yellow prepare to validate share",
+          "red validate fresh",
+          "verify fresh",
+          "missing source context"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          "apps/website/content/docs/process-lifecycle/delivery-cycle.mdx",
+          "apps/website/content/docs/guides/autonomy-and-profiles.mdx"
+        ],
+        "consumers": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          "apps/website/content/docs/process-lifecycle/delivery-cycle.mdx",
+          "apps/website/content/docs/guides/autonomy-and-profiles.mdx"
+        ],
+        "classes": [
+          "yellow prepare to validate share",
+          "red validate fresh",
+          "verify fresh",
+          "missing source context"
+        ],
+        "interactions": [
+          "yellow prepare to validate share",
+          "red validate fresh"
+        ]
+      },
+      {
+        "id": "r0-6",
+        "producer": "prepareCycleCoordinator",
+        "inputs": [
+          "Codex-only profile without Claude",
+          "Claude profile with Claude",
+          "missing selected engine"
+        ],
+        "representations": [
+          "apps/pair-cli/src/commands/run/cycle-entry.ts"
+        ],
+        "consumers": [
+          "apps/pair-cli/src/commands/run/cycle-entry.ts"
+        ],
+        "classes": [
+          "Codex-only profile without Claude",
+          "Claude profile with Claude",
+          "missing selected engine"
+        ],
+        "interactions": [
+          "Codex-only profile without Claude",
+          "Claude profile with Claude"
+        ]
+      },
+      {
+        "id": "r0-7",
+        "producer": "validateProfileRun and workflow-profile finish",
+        "inputs": [
+          "explicit engine-less profile with run fallback",
+          "config default profile fallback",
+          "explicit --engine"
+        ],
+        "representations": [
+          "apps/pair-cli/src/commands/run/workflow-profile.ts",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs"
+        ],
+        "consumers": [
+          "apps/pair-cli/src/commands/run/workflow-profile.ts",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs"
+        ],
+        "classes": [
+          "explicit engine-less profile with run fallback",
+          "config default profile fallback",
+          "explicit --engine"
+        ],
+        "interactions": [
+          "explicit engine-less profile with run fallback",
+          "config default profile fallback"
+        ]
+      },
+      {
+        "id": "r0-8",
+        "producer": "handleParallelRun and buildCardProcessArgs",
+        "inputs": [
+          "two sequential children with profile edited after first",
+          "unchanged profile",
+          "card-specific tier"
+        ],
+        "representations": [
+          "apps/pair-cli/src/commands/run/parallel-entry.ts",
+          "apps/pair-cli/src/commands/run/parallel.ts"
+        ],
+        "consumers": [
+          "apps/pair-cli/src/commands/run/parallel-entry.ts",
+          "apps/pair-cli/src/commands/run/parallel.ts"
+        ],
+        "classes": [
+          "two sequential children with profile edited after first",
+          "unchanged profile",
+          "card-specific tier"
+        ],
+        "interactions": [
+          "two sequential children with profile edited after first",
+          "unchanged profile"
+        ]
+      },
+      {
+        "id": "r0-9",
+        "producer": "batch profile stage resolution",
+        "inputs": [
+          "red and green cards in one batch",
+          "unconfigured model",
+          "refine and implement relays"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js"
+        ],
+        "consumers": [
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js"
+        ],
+        "classes": [
+          "red and green cards in one batch",
+          "unconfigured model",
+          "refine and implement relays"
+        ],
+        "interactions": [
+          "red and green cards in one batch",
+          "unconfigured model"
+        ]
+      },
+      {
+        "id": "r0-10",
+        "producer": "batch boundedAgent",
+        "inputs": [
+          "never-settling profile agent in both batches",
+          "successful bounded resolution",
+          "no subsequent dispatch after timeout"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js"
+        ],
+        "consumers": [
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js"
+        ],
+        "classes": [
+          "never-settling profile agent in both batches",
+          "successful bounded resolution",
+          "no subsequent dispatch after timeout"
+        ],
+        "interactions": [
+          "never-settling profile agent in both batches",
+          "successful bounded resolution"
+        ]
+      },
+      {
+        "id": "r0-11",
+        "producer": "gapsForHost and batch relay",
+        "inputs": [
+          "external engine-less Claude model on Codex",
+          "compatible route",
+          "unavailable host model"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/workflow-host-gaps.md"
+        ],
+        "consumers": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+          "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+          "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.js",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/workflow-host-gaps.md"
+        ],
+        "classes": [
+          "external engine-less Claude model on Codex",
+          "compatible route",
+          "unavailable host model"
+        ],
+        "interactions": [
+          "external engine-less Claude model on Codex",
+          "compatible route"
+        ]
+      },
+      {
+        "id": "r0-12",
+        "producer": "workflow profile guide and CLI help",
+        "inputs": [
+          "off-cycle skill",
+          "prompt",
+          "mapped and preparation routes",
+          "card/root/parallel"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md",
+          "apps/pair-cli/src/commands/run/metadata.ts",
+          "apps/website/content/docs/reference/configuration.mdx"
+        ],
+        "consumers": [
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md",
+          "apps/pair-cli/src/commands/run/metadata.ts",
+          "apps/website/content/docs/reference/configuration.mdx"
+        ],
+        "classes": [
+          "off-cycle skill",
+          "prompt",
+          "mapped and preparation routes",
+          "card/root/parallel"
+        ],
+        "interactions": [
+          "off-cycle skill",
+          "prompt"
+        ]
+      },
+      {
+        "id": "r0-13",
+        "producer": "workflow-profile finish and validateProfileRun",
+        "inputs": [
+          "disabled refine-story override",
+          "enabled stages",
+          "malformed run-agent schema"
+        ],
+        "representations": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+          "apps/pair-cli/src/commands/run/workflow-profile.ts"
+        ],
+        "consumers": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs",
+          "apps/pair-cli/src/commands/run/workflow-profile.ts"
+        ],
+        "classes": [
+          "disabled refine-story override",
+          "enabled stages",
+          "malformed run-agent schema"
+        ],
+        "interactions": [
+          "disabled refine-story override",
+          "enabled stages"
+        ]
+      },
+      {
+        "id": "r0-14",
+        "producer": "profile selection settings resolve in workflow-profile.ts; selectionInput in parallel-entry.ts forwards them to selectRootCandidates or selectRootAnswer; selectOnce in root-select.ts forwards them to spawnIteration; buildEngineArgs in spawn.ts maps them through each engine definition",
+        "inputs": [
+          "profile effort default/omitted",
+          "profile effort low",
+          "profile effort medium",
+          "profile effort high",
+          "profile effort xhigh",
+          "profile effort max",
+          "selected model",
+          "single-batch selection",
+          "repeated loop selection",
+          "malformed-answer retry",
+          "engine claude",
+          "engine codex",
+          "engine pi",
+          "engine opencode"
+        ],
+        "representations": [
+          "workflow profile selection setting",
+          "SelectRootInput",
+          "SpawnIterationInput",
+          "engine argv"
+        ],
+        "consumers": [
+          "handleParallelRun single-batch selectCandidates",
+          "loopDeps selectRootAnswer on every iteration",
+          "selectRootCandidates",
+          "selectRootAnswer retry via selectOnce",
+          "spawnIteration and engine executable"
+        ],
+        "classes": [
+          "default/omitted -> no effort field and no effort argv",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "claude --effort level",
+          "codex -c model_reasoning_effort=level",
+          "pi/opencode no verified effort flag -> omission"
+        ],
+        "interactions": [
+          "each admitted effort with parent single-batch forwarding",
+          "each admitted effort with selectOnce forwarding",
+          "xhigh with repeated loop selection",
+          "medium with malformed-answer retry",
+          "high with claude/codex/unsupported engine argv",
+          "omitted with both forwarding boundaries and supported engine argv"
+        ]
+      }
+    ]
+  },
+  "fixScope": {
+    "owner": "root selection",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/parallel-entry.ts",
+      "apps/pair-cli/src/commands/run/root-select.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-14-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "profile high effort at single-batch selection",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parallel-entry.test.ts -t '#617 r0-14: forwards profile effort high'",
+      "expected": "selection input retains high and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/parallel-entry.test.ts"
+    },
+    {
+      "id": "r0-14-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "high effort at selectOnce",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: forwards high'",
+      "expected": "spawn input retains high and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "omitted/default effort at selectOnce",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t 'spawns pair-next once, in the project'",
+      "expected": "model-independent selection and no effort field",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-parent-low",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "profile low at parent single-batch selection",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parallel-entry.test.ts -t '#617 r0-14: forwards profile effort low'",
+      "expected": "selection input retains low and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/parallel-entry.test.ts"
+    },
+    {
+      "id": "r0-14-direct-low",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "low at selectOnce",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: forwards low'",
+      "expected": "spawn input retains low and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-parent-medium",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "profile medium at parent single-batch selection",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parallel-entry.test.ts -t '#617 r0-14: forwards profile effort medium'",
+      "expected": "selection input retains medium and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/parallel-entry.test.ts"
+    },
+    {
+      "id": "r0-14-direct-medium",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "medium at selectOnce",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: forwards medium'",
+      "expected": "spawn input retains medium and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-parent-xhigh",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "profile xhigh at parent single-batch selection",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parallel-entry.test.ts -t '#617 r0-14: forwards profile effort xhigh'",
+      "expected": "selection input retains xhigh and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/parallel-entry.test.ts"
+    },
+    {
+      "id": "r0-14-direct-xhigh",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "xhigh at selectOnce",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: forwards xhigh'",
+      "expected": "spawn input retains xhigh and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-parent-max",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "profile max at parent single-batch selection",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parallel-entry.test.ts -t '#617 r0-14: forwards profile effort max'",
+      "expected": "selection input retains max and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/parallel-entry.test.ts"
+    },
+    {
+      "id": "r0-14-direct-max",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "max at selectOnce",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: forwards max'",
+      "expected": "spawn input retains max and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-values",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "all five admitted explicit efforts at both forwarding boundaries",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parallel-entry.test.ts -t '#617 r0-14'",
+      "expected": "all values forwarded with selected model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/parallel-entry.test.ts",
+      "rationale": "The single-batch and loop paths call the same selectionInput; selectRootCandidates and selectRootAnswer call the same selectOnce. Value handling is generic field forwarding, with no per-level branch. Individual rows cover each value at both boundaries."
+    },
+    {
+      "id": "r0-14-routes",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "repeated loop selectRootAnswer dispatches",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parallel-entry.test.ts -t '#617 r0-14: forwards profile effort and model on each loop selection'",
+      "expected": "both loop selections retain xhigh and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/parallel-entry.test.ts"
+    },
+    {
+      "id": "r0-14-retry",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "malformed answer triggers second selectOnce",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: retains effort and model on a malformed-answer retry'",
+      "expected": "both attempts retain medium and model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-argv",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Claude real runner to stub executable",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: claude selection reaches real runner argv with effort high'",
+      "expected": "argv includes --model provider/model and --effort high",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-codex-argv",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "Codex real runner to stub executable",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: codex selection reaches real runner argv with effort high'",
+      "expected": "argv includes --model provider/model and -c model_reasoning_effort=high",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-pi-argv",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "pi real runner to stub executable with high effort",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: pi selection reaches real runner argv with effort high'",
+      "expected": "model retained; effort argv omitted because engine has no effortArgs",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-opencode-argv",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "opencode real runner to stub executable with high effort",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: opencode selection reaches real runner argv with effort high'",
+      "expected": "model retained; effort argv omitted because engine has no effortArgs",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-claude-default-argv",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "claude real runner to stub executable with omitted/default effort",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: claude selection reaches real runner argv with effort undefined'",
+      "expected": "model retained; no effort argv",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-codex-default-argv",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "codex real runner to stub executable with omitted/default effort",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14: codex selection reaches real runner argv with effort undefined'",
+      "expected": "model retained; no effort argv",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts"
+    },
+    {
+      "id": "r0-14-parent-default",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "default profile effort at parent selection",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parallel-entry.test.ts -t '#617 AC-2/8: resolves config profile once'",
+      "expected": "parent selection has no effort field and retains model",
+      "covers": [
+        "r0-14"
+      ],
+      "file": "apps/pair-cli/src/commands/run/parallel-entry.test.ts"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/parallel-entry.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:aef3c78b220210edf51087a37dca6d95e1d0caa1af3d1dc24787dc0b7c9c1e1e",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parallel-entry.test.ts -t '#617 r0-14'",
+      "observed": "failed: 6 tests; each admitted effort and repeated loop selection omit effort while retaining model"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:92c71cff63a1027b70810dac42706849cb326f05aa97d85df615cfeb4cf3c633",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/root-select.test.ts -t '#617 r0-14'",
+      "observed": "failed: 8 tests; each admitted effort, retry and Claude/Codex argv omit effort; unsupported and omitted controls pass"
+    }
+  ],
+  "testExempt": false,
+  "changedRows": [
+    "r0-14-w1",
+    "r0-14-w2",
+    "r0-14-c1",
+    "r0-14-parent-low",
+    "r0-14-direct-low",
+    "r0-14-parent-medium",
+    "r0-14-direct-medium",
+    "r0-14-parent-xhigh",
+    "r0-14-direct-xhigh",
+    "r0-14-parent-max",
+    "r0-14-direct-max",
+    "r0-14-values",
+    "r0-14-routes",
+    "r0-14-retry",
+    "r0-14-argv",
+    "r0-14-codex-argv",
+    "r0-14-pi-argv",
+    "r0-14-opencode-argv",
+    "r0-14-claude-default-argv",
+    "r0-14-codex-default-argv",
+    "r0-14-parent-default"
+  ],
+  "reconciled": [
+    {
+      "path": "apps/pair-cli/src/commands/run/parallel-entry.test.ts",
+      "sha256": "sha256:1ce26ab75bbb67451fe7262ab40103935cf2dd34d876ed92ebeae240a03222f0"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/root-select.test.ts",
+      "sha256": "sha256:bfc08f01f71968948dee2ba3702f09236a49c5bbcee415ca7f3aad84b4a95b79"
+    }
+  ],
+  "preserved": []
+}

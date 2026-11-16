@@ -171,6 +171,130 @@ describe('run --root --parallel — AC1 plan printed before dispatch', () => {
       engine: { id: 'pi' },
       model: 'provider/model',
     })
+    expect(h.selectCandidates.mock.calls[0]?.[0]).not.toHaveProperty('effort')
+  })
+
+  it.each(['low', 'medium', 'high', 'xhigh', 'max'])(
+    '#617 r0-14: forwards profile effort %s and model to single-batch selection',
+    async effort => {
+      process.env['PATH'] = '/bin'
+      captureLog()
+      const h = harness([])
+      h.deps.resolveWorkflowProfile = vi.fn(() => ({
+        name: 'p',
+        source: 'pair.config.json',
+        sourceDetail: 'p',
+        hash: 'a'.repeat(64),
+        profile: { name: 'p' },
+        stages: Object.fromEntries(
+          [
+            'defaults',
+            'prepare',
+            'validate',
+            'implement',
+            'green',
+            'verify',
+            'contract',
+            'merge',
+          ].map(stage => [
+            stage,
+            {
+              engine: { value: 'pi', source: 'defaults' },
+              model: {
+                value: 'provider/model',
+                source: 'defaults',
+                resolved: { id: 'provider/model', line: 'provider/model' },
+              },
+              effort: { value: effort, source: 'defaults' },
+              context: { value: 'fresh', source: 'KB default' },
+            },
+          ]),
+        ),
+        table: [],
+        notes: [],
+        contextPolicy: {},
+      })) as never
+      const fs = projectFs(policy('2'))
+      await fs.writeFile(
+        `${cwd}/pair.config.json`,
+        JSON.stringify({ workflowProfiles: { default: 'p' } }),
+      )
+      await handleRunCommand(
+        parseRunCommand({ root: '66', parallel: '2', autonomous: true, approveProjectTrust: true }),
+        fs,
+        h.deps,
+      )
+      expect(h.selectCandidates.mock.calls[0]?.[0]).toMatchObject({
+        model: 'provider/model',
+        effort,
+      })
+    },
+  )
+
+  it('#617 r0-14: forwards profile effort and model on each loop selection', async () => {
+    process.env['PATH'] = '/bin'
+    captureLog()
+    const h = harness([])
+    let selected = 0
+    const selectAnswer = vi.fn(async (_input: unknown) => ({
+      candidates: [card(String(++selected))],
+    }))
+    h.deps.selectAnswer = selectAnswer as never
+    h.deps.wait = vi.fn(async () => {}) as never
+    h.deps.resolveWorkflowProfile = vi.fn(() => ({
+      name: 'p',
+      source: 'pair.config.json',
+      sourceDetail: 'p',
+      hash: 'a'.repeat(64),
+      profile: { name: 'p' },
+      stages: Object.fromEntries(
+        [
+          'defaults',
+          'prepare',
+          'validate',
+          'implement',
+          'green',
+          'verify',
+          'contract',
+          'merge',
+        ].map(stage => [
+          stage,
+          {
+            engine: { value: 'pi', source: 'defaults' },
+            model: {
+              value: 'provider/model',
+              source: 'defaults',
+              resolved: { id: 'provider/model', line: 'provider/model' },
+            },
+            effort: { value: 'xhigh', source: 'defaults' },
+            context: { value: 'fresh', source: 'KB default' },
+          },
+        ]),
+      ),
+      table: [],
+      notes: [],
+      contextPolicy: {},
+    })) as never
+    const fs = projectFs(policy('2'))
+    await fs.writeFile(
+      `${cwd}/pair.config.json`,
+      JSON.stringify({ workflowProfiles: { default: 'p' } }),
+    )
+    await handleRunCommand(
+      parseRunCommand({
+        root: '66',
+        watch: true,
+        maxIterations: '2',
+        autonomous: true,
+        approveProjectTrust: true,
+      }),
+      fs,
+      h.deps,
+    )
+    expect(selectAnswer).toHaveBeenCalledTimes(2)
+    for (const [selection] of selectAnswer.mock.calls) {
+      expect(selection).toMatchObject({ model: 'provider/model', effort: 'xhigh' })
+    }
   })
   it('passes pair-next reported state through selection and excludes unknown before dispatch', async () => {
     process.env['PATH'] = '/bin'
