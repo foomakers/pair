@@ -234,15 +234,15 @@ it('AC-2 r0-1: end durationMs equals the v1 stage durationMs of the same dispatc
 
 // r0-1 (d) AC-2/AC-5: the end's outcome and cause are the engine's own result, not a constant: a failed or timed-out engine is never recorded ok.
 it.each([
-  ['engine exits non-zero', { exitCode: 3 }, null],
-  ['engine times out (stalled)', { hang: true, timeoutSeconds: 1 }, 'stalled'],
-])('AC-2 r0-1: %s ⇒ one end, outcome as v1, cause per C4', async (_name, extra, cause) => {
+  ['engine exits non-zero (exit code never read, #451 AC7: complete stream = ok)', { exitCode: 3 }, 'ok', null],
+  ['engine times out (stalled)', { hang: true, timeoutSeconds: 1 }, 'failed', 'stalled'],
+])('AC-2 r0-1: %s ⇒ one end, outcome as v1, cause per C4', async (_name, extra, outcome, cause) => {
   const { root } = await drive({ ...extra, resolves: doneAfter(2) })
   const ends = all(root, 'end')
   expect(ends).toHaveLength(1)
   const stage = readTelemetry(root, 'run-a', '661')[0]!
-  expect(stage['outcomeClass']).toBe('failed')
-  expect(ends[0]).toMatchObject({ outcome: 'failed', durationMs: stage['durationMs'] })
+  expect(stage['outcomeClass']).toBe(outcome)
+  expect(ends[0]).toMatchObject({ outcome, durationMs: stage['durationMs'] })
   expect(ends[0]!['cause'] ?? null).toBe(cause)
 })
 
