@@ -48,6 +48,20 @@ describe('spawnIteration owned pipe failures (US-594 AC-1, AC-5)', () => {
     await expect(run).rejects.toThrow('disk fault')
   })
 
+  it('contains stdout EPIPE and a duplicate pipe notification', async () => {
+    const { engine: stub, cwd } = engine(
+      'setTimeout(() => process.stdout.write(\'{"type":"agent_end"}\\n\'), 20)',
+    )
+    const run = spawnIteration({ engine: stub, cwd, promptText: 'go', autonomyArgs: [] })
+    const error = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
+    spawned.child!.stdout!.emit('error', error)
+    spawned.child!.stderr!.emit('error', error)
+    await expect(run).resolves.toMatchObject({
+      outcome: 'failed',
+      detail: expect.stringContaining('EPIPE'),
+    })
+  })
+
   it('returns a controlled failure when the engine command is absent', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'pair-missing-engine-'))
     const command = join(cwd, 'missing-engine')
