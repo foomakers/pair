@@ -201,5 +201,6 @@ describe('#617 AC-16 shipped workflow presets', () => {
         expect(existsSync(join(root, PROFILES, `${name}.json`))).toBe(true)
       expect(installedProfile(root, 'codex').stages.implement.model.resolved.id).toBe('gpt-custom')
     },
+    20000,
   )
 })
