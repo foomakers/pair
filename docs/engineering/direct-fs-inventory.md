@@ -8,9 +8,9 @@ dependency; 403 distinct contents. The prior 419-file estimate is stale on this
 base. Of the 438 files, 122 are in `apps/pair-cli/src/commands/run/` and 101
 are in the two knowledge-hub workflow zones. Those 223 paths are individually
 marked `in-flight-churn` with the Scope Limit decision and root-guard test
-category. Ten other imports are type-only `Dirent`/`Stats` contracts; these
+category. Eleven other imports are type-only `Dirent`/`Stats` contracts; these
 have exact-path `type-contract` exceptions because they perform no runtime IO.
-The 189 remaining entries are `migration-candidate` until their operation,
+The 188 remaining entries are `migration-candidate` until their operation,
 consumer, test category, and any OS-guarantee or standalone-script exception
 are reviewed. The reviewed `os-guarantee` entries exercise real symlink,
 atomic rename, git-clone, or binary disk behavior in temporary directories. The
@@ -18,18 +18,21 @@ atomic rename, git-clone, or binary disk behavior in temporary directories. The
 `standalone-script` entries ship without a workspace package dependency.
 **T-1 is incomplete.**
 
-The 189 candidate rows now record `sourceSymbols` from their import,
+The candidate rows record `sourceSymbols` from their import,
 `require`, or literal dynamic-import declarations. These are the source's
 imported names, not a decision that every use of the name performs IO.
 The operation, consumer, disposition, and proving test category still need
 per-path review.
 
-For the 189 candidates, `observedOperations` records direct calls found by
+For the candidates, `observedOperations` records direct calls found by
 following static `fs` imports and `require` bindings in each file. It is
-populated for 185 paths. Four paths have no direct call: the imported value is
-passed onward or used in another expression, so their operation remains for
-manual review. This field is call-site evidence, not a migration decision or
-proof that every runtime filesystem call was found.
+populated for 185 paths by the static pass. Four missing cases were reviewed:
+`git-clone.test.ts` mocks and asserts `rmSync`; `layout.test.ts` uses `Dirent`
+only as a type; `source.test.ts` reads a checked-in fixture; and
+`audit.test.ts` writes temporary configuration. These rows now record their
+consumer, and the type-only import in `layout.test.ts` is explicit. The other
+three remain migration candidates. This field is call-site evidence, not a
+decision or proof that every runtime filesystem call was found.
 
 The content-ops pass classified six more paths: three `Dirent`/`Stats` type
 contracts, one temporary-directory byte-mode integration test, and two

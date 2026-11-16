@@ -4,10 +4,10 @@
   "files": 438,
   "distinctContents": 403,
   "dispositionCounts": {
-    "migration-candidate": 189,
+    "migration-candidate": 188,
     "in-flight-churn": 223,
     "os-guarantee": 7,
-    "type-contract": 10,
+    "type-contract": 11,
     "boundary-adapter": 1,
     "migrate": 2,
     "standalone-script": 6
@@ -2299,7 +2299,8 @@
       "disposition": "migration-candidate",
       "producer": "apps/pair-cli/src/kb-manager/git-clone.test.ts",
       "sourceSymbols": ["rmSync"],
-      "observedOperations": []
+      "observedOperations": ["rmSync (mock assertion)"],
+      "operationConsumer": "vi.mock('fs') replaces rmSync; cloneGitRepo failure tests assert cleanup without deleting a real destination"
     },
     {
       "path": "apps/pair-cli/src/kb-manager/git-clone.ts",
@@ -2427,10 +2428,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "type-contract",
       "producer": "apps/pair-cli/src/registry/layout.test.ts",
       "sourceSymbols": ["fs"],
-      "observedOperations": []
+      "observedOperations": [],
+      "reason": "fs.Dirent is used only as a type for a service-provided readdir result; no Node filesystem operation runs.",
+      "decision": "Retain an exact-path type-only contract while removing the runtime import.",
+      "testCategory": "typecheck",
+      "operationConsumer": "Dirent type assertions in layout tests"
     },
     {
       "path": "apps/pair-cli/src/registry/llms-generation.ts",
@@ -2668,7 +2673,8 @@
       "disposition": "migration-candidate",
       "producer": "apps/website/lib/source.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": []
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "fumadocs sidebar test reads the checked-in meta.json fixture"
     },
     {
       "path": "apps/website/lib/turbo-source-order.test.ts",
@@ -3583,7 +3589,8 @@
       "disposition": "migration-candidate",
       "producer": "packages/dev-tools/src/test-audit/audit.test.ts",
       "sourceSymbols": ["mkdtempSync", "writeFileSync"],
-      "observedOperations": []
+      "observedOperations": ["mkdtempSync", "writeFileSync"],
+      "operationConsumer": "loadConfig rejection test writes invalid JSON configuration in a temporary directory"
     },
     {
       "path": "packages/dev-tools/src/test-audit/audit.ts",
