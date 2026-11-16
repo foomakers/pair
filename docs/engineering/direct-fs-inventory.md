@@ -8,15 +8,23 @@ dependency; 403 distinct contents. The prior 419-file estimate is stale on this
 base. Of the 438 files, 122 are in `apps/pair-cli/src/commands/run/` and 101
 are in the two knowledge-hub workflow zones. Those 223 paths are individually
 marked `in-flight-churn` with the Scope Limit decision and root-guard test
-category. Seven other imports are type-only `Dirent`/`Stats` contracts; these
+category. Ten other imports are type-only `Dirent`/`Stats` contracts; these
 have exact-path `type-contract` exceptions because they perform no runtime IO.
-The remaining entries are `migration-candidate` until their operation,
+The 194 remaining entries are `migration-candidate` until their operation,
 consumer, test category, and any OS-guarantee or standalone-script exception
 are reviewed. The reviewed `os-guarantee` entries exercise real symlink,
-atomic rename, or git-clone behavior in temporary directories. The
+atomic rename, git-clone, or binary disk behavior in temporary directories. The
 `boundary-adapter` entry is the real service implementation itself; the
 `standalone-script` entry ships without a workspace package dependency.
 **T-1 is incomplete.**
+
+The content-ops pass classified six more paths: three `Dirent`/`Stats` type
+contracts, one temporary-directory byte-mode integration test, and two
+production migration targets. `integrity-validator.ts` has a direct stream
+fallback consumed by the CLI checksum manager; `lazy-loader.ts` exposes the
+native module to its test. Their operation, consumer, decision and proving
+test category are recorded per path in the JSON ledger. The three type
+imports should become explicit `import type` declarations in T-3.
 
 The scan recognizes static imports, re-exports, TypeScript import-equals,
 `require('...')`, and literal `import('...')` for `fs`, `node:fs`,

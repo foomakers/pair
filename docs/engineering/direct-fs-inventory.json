@@ -4,11 +4,12 @@
   "files": 438,
   "distinctContents": 403,
   "dispositionCounts": {
-    "migration-candidate": 200,
+    "migration-candidate": 194,
     "in-flight-churn": 223,
-    "os-guarantee": 6,
-    "type-contract": 7,
+    "os-guarantee": 7,
+    "type-contract": 10,
     "boundary-adapter": 1,
+    "migrate": 2,
     "standalone-script": 1
   },
   "limits": [
@@ -2605,8 +2606,12 @@
           "line": 121
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/file-system/file-system-service.test.ts"
+      "disposition": "os-guarantee",
+      "producer": "packages/content-ops/src/file-system/file-system-service.test.ts",
+      "reason": "Real byte-mode interoperability of the Node service; an in-memory double cannot prove bytes survive disk I/O.",
+      "decision": "Keep the isolated temporary-directory integration case with finally cleanup.",
+      "testCategory": "real-os-binary",
+      "operationConsumer": "mkdtemp and rm around real readFileBytes contract"
     },
     {
       "path": "packages/content-ops/src/file-system/file-system-service.ts",
@@ -2639,8 +2644,12 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/file-system/file-validations.ts"
+      "disposition": "type-contract",
+      "producer": "packages/content-ops/src/file-system/file-validations.ts",
+      "reason": "Stats is used only as the return type of a FileSystemService result; no Node filesystem operation runs.",
+      "decision": "Retain exact-path type exception; make import type-only during the package wave.",
+      "testCategory": "typecheck",
+      "operationConsumer": "Stats type for validateSourceExists"
     },
     {
       "path": "packages/content-ops/src/file-system/integrity-validator.ts",
@@ -2652,8 +2661,12 @@
           "line": 30
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/file-system/integrity-validator.ts"
+      "disposition": "migrate",
+      "producer": "packages/content-ops/src/file-system/integrity-validator.ts",
+      "reason": "The optional service parameter permits a direct Node stream fallback in production.",
+      "decision": "Require the service at this boundary and hash bytes returned by readFileBytes; verify the CLI checksum consumer.",
+      "testCategory": "service-contract",
+      "operationConsumer": "createReadStream fallback for calculateSHA256; consumed by checksum-manager"
     },
     {
       "path": "packages/content-ops/src/file-system/lazy-loader.ts",
@@ -2665,8 +2678,12 @@
           "line": 44
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/file-system/lazy-loader.ts"
+      "disposition": "migrate",
+      "producer": "packages/content-ops/src/file-system/lazy-loader.ts",
+      "reason": "getFsInstance exposes a raw Node fs module instead of FileSystemService.",
+      "decision": "Remove the direct loader or return the service; update its existing unit test and exported contract.",
+      "testCategory": "unit-memory",
+      "operationConsumer": "dynamic import of fs from getFsInstance; consumed by lazy-loader.test.ts"
     },
     {
       "path": "packages/content-ops/src/file-system/path-containment.test.ts",
@@ -2715,8 +2732,12 @@
           "line": 1
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/ops/copy/copyPathOps.ts"
+      "disposition": "type-contract",
+      "producer": "packages/content-ops/src/ops/copy/copyPathOps.ts",
+      "reason": "Stats is used only to type the service-provided stat result; no Node filesystem operation runs.",
+      "decision": "Retain exact-path type exception; make import type-only during the package wave.",
+      "testCategory": "typecheck",
+      "operationConsumer": "Stats type for copy dispatch"
     },
     {
       "path": "packages/content-ops/src/ops/movePathOps.ts",
@@ -2728,8 +2749,12 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
-      "producer": "packages/content-ops/src/ops/movePathOps.ts"
+      "disposition": "type-contract",
+      "producer": "packages/content-ops/src/ops/movePathOps.ts",
+      "reason": "Dirent is used only to type service-provided directory entries; no Node filesystem operation runs.",
+      "decision": "Retain exact-path type exception; make import type-only during the package wave.",
+      "testCategory": "typecheck",
+      "operationConsumer": "Dirent type for move traversal"
     },
     {
       "path": "packages/content-ops/src/ops/path-operation-helpers.ts",
