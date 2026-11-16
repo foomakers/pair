@@ -1,0 +1,555 @@
+{
+  "$meta": {
+    "pr": "665",
+    "phase": "r1-g1",
+    "base": "028553048c2bdddd68538699024b9d7e9ea30873",
+    "trailer": "Pair-RED-Snapshot: pr=665; phase=r1-g1; base=028553048c2bdddd68538699024b9d7e9ea30873; manifest=.pair/red-snapshots/pr-665-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/spawn-transport.test.ts"
+    ]
+  },
+  "sourceOfTruth": "PR #665 r0 review findings r0-1 and r0-2; US-594 AC-4/AC-5",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "spawnIteration/readEngineResult/reap transport lifecycle in apps/pair-cli/src/commands/run/spawn.ts",
+      "inputs": [
+        "stdout or stderr EPIPE",
+        "live resistant or exited leader",
+        "inherited-pipe descendant",
+        "idle timeout",
+        "healthy terminal",
+        "missing engine",
+        "sequential retry dispatch"
+      ],
+      "representations": [
+        "real detached Node process group",
+        "stdout JSONL reader",
+        "stderr relay",
+        "IterationResult"
+      ],
+      "consumers": [
+        "spawnIteration caller",
+        "runStage",
+        "runCycle next dispatch"
+      ],
+      "classes": [
+        "stdout EPIPE with live resistant leader and ready descendant",
+        "stderr EPIPE with live resistant leader and ready descendant",
+        "stdout EPIPE after leader exits but descendant holds pipe",
+        "idle timeout with live resistant leader and ready descendant",
+        "healthy terminal exit",
+        "missing engine PATH",
+        "next dispatch after owned group cleanup",
+        "stderr EPIPE after leader exits but descendant holds pipe"
+      ],
+      "interactions": [
+        "EPIPE channel × leader state × descendant pipe ownership",
+        "settlement × next dispatch ownership boundary",
+        "stderr capture does not end stdout reader; idle bound then group reap after leader exit"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": "watchTransport capture/child error/finish plus handleReadError in apps/pair-cli/src/commands/run/spawn.ts",
+      "inputs": [
+        "child or stdout or stderr channel",
+        "EPERM/EPIPE/EIO/ABORT_ERR",
+        "first/second and duplicate order",
+        "active or settled"
+      ],
+      "representations": [
+        "ChildProcess error events",
+        "stdout/stderr error events",
+        "read iterator rejection",
+        "IterationResult or rejected promise",
+        "late console report"
+      ],
+      "consumers": [
+        "spawnIteration caller",
+        "runStage failure reporting"
+      ],
+      "classes": [
+        "child EPERM alone",
+        "child EPERM plus stdout EPIPE in both orders",
+        "child EPERM plus stderr EPIPE in both orders",
+        "child EPIPE then EPERM first-write retention",
+        "duplicate child error with pipe EPIPE",
+        "stdout and stderr EPIPE alone",
+        "duplicate EPIPE across channels",
+        "stdout and stderr EIO alone",
+        "EPIPE plus EIO in both orders on both channels",
+        "stderr ABORT_ERR ignored",
+        "stdout ABORT_ERR after captured EPIPE",
+        "late child/stdout/stderr EPIPE contained with unrelated EIO reported",
+        "child EPIPE alone remains a controlled failure",
+        "child EPIPE then EPERM retains EPERM visibility",
+        "stdout EPIPE then stderr EIO",
+        "stderr EPIPE then stdout EIO",
+        "stdout EIO then stderr EPIPE",
+        "stderr EIO then stdout EPIPE"
+      ],
+      "interactions": [
+        "channel × error-kind × order while active",
+        "child error precedence × pipe failure",
+        "active × settled reporting",
+        "cross-pipe EPIPE/EIO assignment × notification order"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli/src/commands/run/spawn.ts",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/spawn.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r1-g1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "stdout EPIPE with live resistant leader and ready descendant",
+      "oracle": "real stub process group dead at settlement",
+      "expected": "failed EPIPE and both PIDs absent",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stdout EPIPE reaps resistant leader\"",
+      "rationale": "Live-leader stdout EPIPE; exited-leader stdout and stderr cases are r1-g1-w5 and r1-g1-w9."
+    },
+    {
+      "id": "r1-g1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "child EPERM then pipe EPIPE on both stdout and stderr",
+      "oracle": "child error precedence on both channels",
+      "expected": "both reject kill EPERM",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"child then pipe\"",
+      "rationale": "Child precedence on both pipe channels; cross-pipe EIO order classes are r1-g1-c21 through r1-g1-c24."
+    },
+    {
+      "id": "r1-g1-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "stderr EPIPE then child EPERM",
+      "oracle": "spawn-transport.test.ts child EPERM remains visible",
+      "expected": "rejects with kill EPERM",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"pipe then child\""
+    },
+    {
+      "id": "r1-g1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "child EPERM alone",
+      "oracle": "spawn-transport.test.ts child EPERM alone",
+      "expected": "rejects with kill EPERM",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"child EPERM alone\""
+    },
+    {
+      "id": "r1-g1-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stderr EPIPE alone",
+      "oracle": "controlled transport failure",
+      "expected": "failed EPIPE result",
+      "covers": [
+        "r0-1",
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stderr EPIPE alone\""
+    },
+    {
+      "id": "r1-g1-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "unrelated stderr EIO",
+      "oracle": "spawn-transport.test.ts keeps unrelated stderr error visible",
+      "expected": "rejects with disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"keeps an unrelated stderr error\""
+    },
+    {
+      "id": "r1-g1-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "stderr EPIPE reaps resistant leader",
+      "oracle": "stderr EPIPE reaps resistant leader in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "failed EPIPE and both PIDs absent",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stderr EPIPE reaps resistant leader\""
+    },
+    {
+      "id": "r1-g1-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "stdout EPIPE reaps descendant after leader exits",
+      "oracle": "stdout EPIPE reaps descendant after leader exits in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "failed EPIPE and descendant absent",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stdout EPIPE reaps descendant after leader exits\""
+    },
+    {
+      "id": "r1-g1-w6",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "idle timeout reaps resistant leader",
+      "oracle": "idle timeout reaps resistant leader in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "timed-out result and both PIDs absent",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"idle timeout reaps resistant leader\""
+    },
+    {
+      "id": "r1-g1-w7",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "next dispatch starts after EPIPE-owned processes exit",
+      "oracle": "next dispatch starts after EPIPE-owned processes exit in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "prior PIDs absent before next spawn",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"next dispatch starts after EPIPE-owned processes exit\""
+    },
+    {
+      "id": "r1-g1-c4",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "healthy terminal succeeds",
+      "oracle": "healthy terminal succeeds in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "success",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"healthy terminal succeeds\""
+    },
+    {
+      "id": "r1-g1-c5",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "missing engine returns controlled failure",
+      "oracle": "missing engine returns controlled failure in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "failed result naming pi",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"missing engine returns controlled failure\""
+    },
+    {
+      "id": "r1-g1-c6",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stdout EPIPE alone returns controlled failure",
+      "oracle": "stdout EPIPE alone returns controlled failure in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "failed result",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stdout EPIPE alone returns controlled failure\""
+    },
+    {
+      "id": "r1-g1-c7",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stdout EIO alone rejects",
+      "oracle": "stdout EIO alone rejects in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stdout EIO alone rejects\""
+    },
+    {
+      "id": "r1-g1-c8",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stderr EIO alone rejects",
+      "oracle": "stderr EIO alone rejects in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stderr EIO alone rejects\""
+    },
+    {
+      "id": "r1-g1-c9",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stdout EPIPE then EIO rejects with EIO",
+      "oracle": "stdout EPIPE then EIO rejects with EIO in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stdout EPIPE then EIO rejects with EIO\""
+    },
+    {
+      "id": "r1-g1-c10",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stderr EPIPE then EIO rejects with EIO",
+      "oracle": "stderr EPIPE then EIO rejects with EIO in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stderr EPIPE then EIO rejects with EIO\""
+    },
+    {
+      "id": "r1-g1-c11",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stdout EIO then EPIPE keeps EIO",
+      "oracle": "stdout EIO then EPIPE keeps EIO in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stdout EIO then EPIPE keeps EIO\""
+    },
+    {
+      "id": "r1-g1-c12",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stderr EIO then EPIPE keeps EIO",
+      "oracle": "stderr EIO then EPIPE keeps EIO in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stderr EIO then EPIPE keeps EIO\""
+    },
+    {
+      "id": "r1-g1-c13",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stderr ABORT_ERR is ignored",
+      "oracle": "stderr ABORT_ERR is ignored in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "success",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stderr ABORT_ERR is ignored\""
+    },
+    {
+      "id": "r1-g1-c14",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stdout ABORT_ERR after EPIPE is controlled cancellation",
+      "oracle": "stdout ABORT_ERR after EPIPE is controlled cancellation in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "failed EPIPE result",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stdout ABORT_ERR after EPIPE is controlled cancellation\""
+    },
+    {
+      "id": "r1-g1-c15",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "child EPIPE then EPERM reports unrelated child fault",
+      "oracle": "child EPIPE then EPERM reports EPERM",
+      "expected": "reject late EPERM",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"child EPIPE then EPERM reports EPERM\""
+    },
+    {
+      "id": "r1-g1-c16",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "duplicate EPIPE across stdout and stderr stays controlled",
+      "oracle": "duplicate EPIPE across stdout and stderr stays controlled in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "failed result",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"duplicate EPIPE across stdout and stderr stays controlled\""
+    },
+    {
+      "id": "r1-g1-c17",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "late stdout EPIPE is contained while unrelated error is reported",
+      "oracle": "late stdout EPIPE is contained while unrelated error is reported in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "one EIO report",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"late stdout EPIPE is contained while unrelated error is reported\""
+    },
+    {
+      "id": "r1-g1-c18",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "late stderr EPIPE is contained while unrelated error is reported",
+      "oracle": "late stderr EPIPE is contained while unrelated error is reported in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "one EIO report",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"late stderr EPIPE is contained while unrelated error is reported\""
+    },
+    {
+      "id": "r1-g1-c19",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "late child EPIPE is contained while unrelated error is reported",
+      "oracle": "late child EPIPE is contained while unrelated error is reported in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "one EIO report",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"late child EPIPE is contained while unrelated error is reported\""
+    },
+    {
+      "id": "r1-g1-w8",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "child first error survives duplicate child and pipe notifications",
+      "oracle": "child first error survives duplicate child and pipe notifications in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject first child fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"child first error survives duplicate child and pipe notifications\""
+    },
+    {
+      "id": "r1-g1-w9",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "stderr EPIPE after leader exits while descendant retains inherited pipe",
+      "oracle": "stderr EPIPE reaps descendant after leader exits in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "failed EPIPE and descendant absent before settlement",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stderr EPIPE reaps descendant after leader exits\""
+    },
+    {
+      "id": "r1-g1-c20",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "child EPIPE alone",
+      "oracle": "child EPIPE alone returns controlled failure in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "failed EPIPE result",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"child EPIPE alone returns controlled failure\""
+    },
+    {
+      "id": "r1-g1-c21",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stdout EPIPE then stderr EIO",
+      "oracle": "stdout EPIPE then stderr EIO reports EIO in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stdout EPIPE then stderr EIO reports EIO\""
+    },
+    {
+      "id": "r1-g1-c22",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stderr EPIPE then stdout EIO",
+      "oracle": "stderr EPIPE then stdout EIO reports EIO in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stderr EPIPE then stdout EIO reports EIO\""
+    },
+    {
+      "id": "r1-g1-c23",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stdout EIO then stderr EPIPE",
+      "oracle": "stdout EIO then stderr EPIPE keeps EIO in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stdout EIO then stderr EPIPE keeps EIO\""
+    },
+    {
+      "id": "r1-g1-c24",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "stderr EIO then stdout EPIPE",
+      "oracle": "stderr EIO then stdout EPIPE keeps EIO in apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "expected": "reject disk fault",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts -t \"stderr EIO then stdout EPIPE keeps EIO\""
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/spawn-transport.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:ccda959d1e65cc7b2b2b3636cefe5b4d821edb6b57dc8feb129bd18adcc672ce",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn-transport.test.ts",
+      "observed": "12 failed, 23 passed: six lifecycle and six child precedence witnesses red; cross-pipe EIO and child EPIPE-only controls passed"
+    }
+  ],
+  "testExempt": false,
+  "changedRows": [
+    "r1-g1-w1"
+  ]
+}
