@@ -600,3 +600,30 @@ test('T-6: pi.md records the pinned pi-subagents version the bridge holds — on
   assert.ok(guide.includes(pin.piMin), `pi.md names the minimum pi ${pin.piMin}`)
   assert.match(guide, /stdin closed/)
 })
+
+
+test('#617 r0-5: yellow validation resumes the requested prepare agent through state, packet and host', async () => {
+  const state = await import(join(SKILLS, 'pair-workflow-cycle/scripts/cycle-state.mjs'))
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const inA = { PI_SESSION_ID: w.session }
+  const prepare = packetFor(w, { step: 'prepare', mode: 'initial', phase: 'a0', context: 'fresh' })
+  const initialCall = bridge(['call', '--packet', prepare.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assert.equal(initialCall.status, 0, initialCall.out)
+  const retained = await stubSubagent(initialCall.json.arguments, w)
+  assert.equal(bridge(['record', '--ledger', ledger, '--result', JSON.stringify(retained.result)], inA).json.recorded, true)
+  const dir = join(w.main, prepare.packet.runDir)
+  const file = join(w.main, 'red-draft.json')
+  writeFileSync(file, JSON.stringify({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'a0', skill: 'red-spec', inputHead: 'a'.repeat(40), status: 'red', mode: 'initial', contractPath: '/abs/contract.json', contractHash: `sha256:${'1'.repeat(64)}` }))
+  assert.equal(state.publish({ dir, file, phase: 'a0', skill: 'red-spec', workflowVersion: '4.0.1', attempt: 1, pr: 7 }).published, true)
+  const next = state.resolve({ dir, workflowVersion: '4.0.1', entry: 'fresh', pr: 7, tier: 'risk:yellow', contextPolicy: { 'prepare->validate': 'reuse' } }).next
+  const validation = packetFor(w, next)
+  const resumed = bridge(['call', '--packet', validation.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assert.equal(resumed.status, 0, resumed.out)
+  assert.equal(resumed.json.op, 'resume')
+  assert.equal(resumed.json.arguments.args.runId, retained.result.runId)
+  const child = await stubSubagent(resumed.json.arguments, w)
+  assert.equal(child.children[0].resume, retained.result.runId)
+  assert.equal(state.contextPolicyError({ 'prepare->validate': 'reuse' }, 'risk:red'), 'context-policy-invalid')
+  assert.equal(state.contextPolicyError({ 'prepare->verify': 'reuse' }, 'risk:yellow'), 'context-policy-invalid')
+})

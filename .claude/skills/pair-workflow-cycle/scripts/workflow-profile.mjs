@@ -19,7 +19,7 @@ export const STAGES = ['prepare', 'validate', 'implement', 'green', 'verify', 'c
 export const FIELDS = ['engine', 'model', 'effort', 'context']
 export const EFFORTS = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
 export const CONTEXTS = ['fresh', 'reuse']
-const LEGACY_REUSE_STAGES = [...new Set(CONTEXT_TABLE.reuseAllowed.map(t => t.split('->')[1]))]
+const LEGACY_REUSE_STAGES = ['prepare', 'green']
 // The KB default (D21): the schema default for engine and model, default effort, a fresh context.
 export const MODEL_CLASSES = ['cheap', 'balanced', 'frontier']
 /** A model value meaning "the class `## Model Policy` assigns to the card's risk tier". */
@@ -103,7 +103,7 @@ export function validateProfile(profile) {
         errs.push(...fieldErrors(`stages.${stage}`, entry))
         // A stage entry's own `reuse` must be one the transition table admits — never accepted here
         // and silently overridden at dispatch time.
-        if (isObject(entry) && entry.context === 'reuse' && !LEGACY_REUSE_STAGES.includes(stage))
+        if (isObject(entry) && entry.context === 'reuse' && !CONTEXT_TABLE.reuseAllowed.some(t => t.endsWith(`->${stage}`)))
           errs.push(`stages.${stage}.context: 'reuse' is not admissible into '${stage}' by the cycle transition table (cycle-state.mjs CONTEXT_TABLE) — the stage always runs fresh`)
       }
   }
@@ -150,6 +150,7 @@ const hostAcceptsModel = (host, model) => model == null || (
 export function gapsForHost(resolved, host, card) {
   const gaps = []
   for (const stage of [...STAGES, 'defaults']) {
+    if (resolved.disabledStages?.includes(stage)) continue
     const settings = resolved.stages[stage]
     const engine = settings.engine.value === 'default' ? host : settings.engine.value
     const model = settings.model.resolved.id
@@ -158,7 +159,8 @@ export function gapsForHost(resolved, host, card) {
     if (!engineGap && !modelGap) continue
     const wanted = `${engine ?? 'unknown'}${model ? ` / ${model}` : ' / engine default'}`
     const selection = resolved.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(resolved.sourceDetail)}` : resolved.source === 'argument' ? ` --profile ${JSON.stringify(resolved.name)}` : ''
-    const command = `pair run --card ${card ?? '<card-id>'}${selection}`
+    const compatible = HOST_ENGINES.includes(engine) && hostAcceptsModel(engine, model) ? engine : HOST_ENGINES.find(id => hostAcceptsModel(id, model))
+    const command = `pair-cli run --card ${card ?? '<card-id>'}${selection}${compatible ? ` --engine ${compatible}` : ''}`
     gaps.push({ stage, wanted, host, candidate: null, command, reason: engineGap ? 'engine' : 'model' })
   }
   return gaps
@@ -347,22 +349,72 @@ function resolveModel(value, { tier, modelClasses = {}, policyOf }) {
   return { class: named, id, ...(tier ? { tier } : {}), line: id === null ? `${via} → engine default (no modelClasses.${named} declared)` : `${via} → ${id}` }
 }
 
+// Process steps govern only their declared workflow stages; cycle internals remain enabled.
+function disabledProcessStages(root) {
+  const path = join(root, '.pair/adoption/tech/way-of-working.md')
+  if (!existsSync(path)) return []
+  const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').replace(/<!--[\s\S]*?-->/g, '')
+  let fenced = null
+  let inside = false
+  let sections = 0
+  const keys = {}
+  for (const line of text.split('\n')) {
+    const fence = /^\s*(`{3,}|~{3,})/.exec(line)?.[1]
+    if (fence) {
+      if (!fenced) fenced = fence
+      else if (fence[0] === fenced[0] && fence.length >= fenced.length) fenced = null
+      continue
+    }
+    if (fenced) continue
+    const heading = /^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line)
+    if (heading) {
+      const name = heading[2].replace(/\*\*|\(optional\)/g, '').trim().toLowerCase()
+      if (name === 'process profile') {
+        if (heading[1] !== '##' || ++sections > 1) throw new ProfileError('profile-invalid', `${path}: unreadable Process Profile section`)
+        inside = true
+      } else if (heading[1].length <= 2) inside = false
+      continue
+    }
+    if (!inside || !/^\s*(?:[-*+]\s+)?[\x60*]*(?:profile|whitelist)\b/i.test(line)) continue
+    const match = /^ {0,3}[-*+] +`(profile|whitelist)`: *(.*?) *$/i.exec(line)
+    if (!match || match[2].replace(/`[^`]*`/g, '').replace(/[,\s]/g, '') || /,\s*$/.test(match[2])) throw new ProfileError('profile-invalid', `${path}: Process Profile keys and values must be backticked list items on one line`)
+    const key = match[1].toLowerCase()
+    if (keys[key]) throw new ProfileError('profile-invalid', `${path}: duplicate ${key}`)
+    keys[key] = [...match[2].matchAll(/`([^`]*)`/g)].map(m => m[1])
+  }
+  if (fenced) throw new ProfileError('profile-invalid', `${path}: unterminated fence`)
+  if (!keys.profile && !keys.whitelist) return []
+  const name = keys.profile?.length === 1 ? keys.profile[0] : undefined
+  if (!['default', 'poc', 'custom'].includes(name)) throw new ProfileError('profile-invalid', `${path}: unknown process profile; choose default | poc | custom`)
+  if (name !== 'custom' && keys.whitelist) throw new ProfileError('profile-invalid', `${path}: whitelist requires custom`)
+  if (name !== 'custom') return [] // Every workflow stage's process step is in both built-ins.
+  const known = ['specify-prd', 'bootstrap', 'brainstorm', 'plan-initiatives', 'define-subdomains', 'define-bounded-contexts', 'plan-epics', 'plan-stories', 'refine-story', 'plan-tasks', 'implement', 'review']
+  const enabled = keys.whitelist
+  if (!enabled?.length || new Set(enabled).size !== enabled.length || enabled.some(id => !known.includes(id))) throw new ProfileError('profile-invalid', `${path}: custom whitelist must contain distinct catalogue step ids`)
+  return Object.entries({ 'refine-story': 'refine-story', 'plan-tasks': 'plan-tasks', implement: 'implement', green: 'implement', verify: 'review' }).filter(([, step]) => !enabled.includes(step)).map(([stage]) => stage)
+}
+
+const freshnessError = (stages, tier, sourceDetail) => tier === 'risk:red' && stages.validate.context.value === 'reuse' ? `${sourceDetail}: stages.validate.context: risk:red validate must be fresh` : null
+
 function finish(root, profile, source, sourceDetail, notes, tier, engineFlag) {
-  const { errors } = validateProfile(profile)
+  const disabledStages = disabledProcessStages(root)
+  const selectedProfile = isObject(profile) ? { ...profile, ...(isObject(profile.stages) ? { stages: Object.fromEntries(Object.entries(profile.stages).filter(([stage]) => !disabledStages.includes(stage))) } : {}) } : profile
+  const { errors } = validateProfile(selectedProfile)
   if (errors.length) throw new ProfileError('profile-invalid', `${sourceDetail}: ${errors.join('; ')}`)
   let policy
   const policyOf = () => (policy ??= readModelPolicy(root))
   const run = readRunLayer(root)
-  const stages = Object.fromEntries(
+  notes = [...notes, ...Object.keys(profile.stages ?? {}).filter(stage => disabledStages.includes(stage)).map(stage => `${stage}: disabled by process profile; ignored`)]
+  const stagesFor = tier => Object.fromEntries(
     [...STAGES, 'defaults'].map(stage => {
-      const eff = effectiveStage(profile, stage, tier)
+      const eff = effectiveStage(selectedProfile, stage, tier)
       if (eff.engine.source === 'KB default') {
         if (engineFlag) eff.engine = { value: engineFlag, source: '--engine' }
         else if (run.defaults?.engine) eff.engine = { value: run.defaults.engine, source: 'run.defaults.engine' }
         else if (run.legacy?.id) eff.engine = { value: run.legacy.id, source: 'engine.id' }
       }
       if (eff.model.source === 'KB default') {
-        const engine = eff.engine.value
+        const engine = eff.engine.value === 'default' ? (engineFlag ?? run.defaults?.engine ?? run.legacy?.id ?? 'claude') : eff.engine.value
         if (run.agents?.[engine]?.model) eff.model = { value: run.agents[engine].model, source: `run.agents.${engine}.model` }
         else if (run.defaults?.model) eff.model = { value: run.defaults.model, source: 'run.defaults.model' }
         else if (run.legacy?.model?.[engine]) eff.model = { value: run.legacy.model[engine], source: `engine.model.${engine}` }
@@ -371,8 +423,11 @@ function finish(root, profile, source, sourceDetail, notes, tier, engineFlag) {
       return [stage, eff]
     }),
   )
-  if (tier === 'risk:red' && stages.validate.context.value === 'reuse') throw new ProfileError('profile-invalid', `${sourceDetail}: stages.validate.context: risk:red validate must be fresh`)
-  return { name: profile.name, source, sourceDetail, hash: profileHash(profile), profile, stages, notes, ...(tier ? { tier } : {}) }
+  const stages = stagesFor(tier)
+  const byTier = Object.fromEntries(['risk:green', 'risk:yellow', 'risk:red'].map(tier => [tier, stagesFor(tier)]))
+  const freshness = freshnessError(stages, tier, sourceDetail)
+  if (freshness) throw new ProfileError('profile-invalid', freshness)
+  return { name: profile.name, source, sourceDetail, hash: profileHash(profile), profile, stages, byTier, disabledStages, notes, ...(tier ? { tier } : {}) }
 }
 
 function lookup(root, block, name, source, tier, engineFlag) {
@@ -464,7 +519,7 @@ export function profileContextPolicy(resolved) {
     if (resolved.stages[stage].context.value === 'reuse')
       for (const transition of CONTEXT_TABLE.reuseAllowed) {
         const [from, to] = transition.split('->')
-        if (to === stage && (resolved.stages[stage].context.sharedWith === undefined ? ['prepare->prepare', 'implement->green', 'green->green'].includes(transition) : resolved.stages[stage].context.sharedWith.includes(from))) policy[transition] = 'reuse'
+        if (to === stage && (resolved.stages[stage].context.sharedWith === undefined ? (LEGACY_REUSE_STAGES.includes(stage) ? ['prepare->prepare', 'implement->green', 'green->green'].includes(transition) : ['risk:green', 'risk:yellow', 'risk:red'].includes(resolved.tier)) : resolved.stages[stage].context.sharedWith.includes(from))) policy[transition] = 'reuse'
       }
   return policy
 }
@@ -518,7 +573,13 @@ if (isMain()) {
       process.exit(0)
     }
     const binding = opts.dir !== undefined ? bindProfile({ dir: opts.dir, resolved }) : undefined
-    out({ ...resolved, table: describeProfile(resolved), contextPolicy: profileContextPolicy(resolved), ...(opts.host ? { gaps: gapsForHost(resolved, opts.host, opts.card) } : {}), ...(binding ? { binding } : {}) })
+    const byTierProfiles = Object.fromEntries(Object.entries(resolved.byTier).map(([tier, stages]) => {
+      const view = { ...resolved, stages, tier }
+      const freshness = freshnessError(stages, tier, resolved.sourceDetail)
+      if (freshness) return [tier, { halt: 'profile-invalid', detail: freshness }]
+      return [tier, { stages, tier, table: describeProfile(view), contextPolicy: profileContextPolicy(view) }]
+    }))
+    out({ ...resolved, byTierProfiles, table: describeProfile(resolved), contextPolicy: profileContextPolicy(resolved), ...(opts.host ? { gaps: gapsForHost(resolved, opts.host, opts.card) } : {}), ...(binding ? { binding } : {}) })
   } catch (e) {
     if (e instanceof ProfileError) {
       out({ halt: e.code, detail: e.detail })

@@ -41,6 +41,7 @@ import {
   declaredEngine,
   declaredEngineBin,
   declaredEngineModel,
+  idleTimeoutForEngine,
   withRunAgentRunner,
   resolveAutonomyFor,
   type CycleDriver,
@@ -252,7 +253,8 @@ function productionCycleDriver(
     location: driver.location,
     autonomyArgs,
     timeoutSeconds: config.iterationTimeoutSeconds,
-    idleTimeoutSeconds: context.idleTimeout.seconds,
+    idleTimeoutSeconds: idleTimeoutForEngine(context, config, driver.engineDef.id).seconds,
+    idleTimeoutOf: id => idleTimeoutForEngine(context, config, id).seconds,
     workflowVersion: defaults.workflowVersion,
     baseBranch: defaults.baseBranch,
     telemetryEnabled: telemetryEnabled(mainCheckout(cwd), config.telemetry),
@@ -361,17 +363,9 @@ function resolveRunProfile(
  */
 function resolveProfileSetup(
   input: CycleCoordinatorInput,
-  deps: RunHandlerDependencies,
-  location: CycleScriptsLocation,
   engineDef: EngineDefinition,
+  resolved: ResolvedWorkflowProfile | undefined,
 ) {
-  const resolved = resolveRunProfile(input, deps, location)
-  if (resolved)
-    validateProfileRun(resolved, {
-      commandLine: input.config.profile !== undefined || input.config.workflowConfig !== undefined,
-      ...(input.config.engine && { engineFlag: input.config.engine }),
-      runEngine: engineDef.id,
-    })
   const stageEngineDefs = stageEnginesOf(resolved, engineDef, input)
   if (resolved === undefined)
     return { profile: resolved, stageEngineDefs, effortWarning: undefined }
@@ -388,6 +382,22 @@ function resolveProfileSetup(
 }
 
 /** The engines a profile names beyond the run's own, each proven installed before the first print. */
+const CYCLE_PROFILE_STAGES = new Set([
+  'prepare',
+  'validate',
+  'implement',
+  'green',
+  'verify',
+  'contract',
+  'merge',
+])
+
+function enabledCycleStages(profile: ResolvedWorkflowProfile) {
+  return Object.entries(profile.stages).filter(
+    ([stage]) => CYCLE_PROFILE_STAGES.has(stage) && !profile.disabledStages?.includes(stage),
+  )
+}
+
 function stageEnginesOf(
   profile: ResolvedWorkflowProfile | undefined,
   runEngine: EngineDefinition,
@@ -396,7 +406,11 @@ function stageEnginesOf(
   if (profile === undefined) return {}
   const { context, fs, cwd } = input
   const out: Record<string, EngineDefinition> = {}
-  for (const id of stageEngineIds(profile, ENGINE_IDS)) {
+  const selected = {
+    ...profile,
+    stages: Object.fromEntries(enabledCycleStages(profile)),
+  }
+  for (const id of stageEngineIds(selected, ENGINE_IDS)) {
     if (id === runEngine.id) continue
     out[id] = resolveEngineFor(resolveEngine({ flag: id as EngineId }), context, cwd, fs)
   }
@@ -413,6 +427,33 @@ function stageEnginesOf(
  * a run that was never going to spawn posts no `DISPATCH-RECORD:` claiming it started (r1-1).
  * The returned function is the drive itself.
  */
+function concreteCycleEngine(profile: ResolvedWorkflowProfile | undefined): string | undefined {
+  if (!profile || enabledCycleStages(profile).some(([, stage]) => stage.engine.value === 'default'))
+    return undefined
+  const firstStage = profile.disabledStages?.includes('implement') ? 'verify' : 'implement'
+  return stageSettings(profile, firstStage).engine
+}
+
+function resolveCycleEngine(
+  input: CycleCoordinatorInput,
+  profile: ResolvedWorkflowProfile | undefined,
+) {
+  const { config, context } = input
+  if (profile) stageEngineIds(profile, ENGINE_IDS)
+  const selectedEngine = concreteCycleEngine(profile)
+  const engine = resolveEngine({
+    flag: config.engine,
+    declared: (selectedEngine as EngineId | undefined) ?? declaredEngine(context.config),
+  })
+  if (profile)
+    validateProfileRun(profile, {
+      commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
+      ...(config.engine && { engineFlag: config.engine }),
+      runEngine: engine.engine.id,
+    })
+  return engine
+}
+
 export function prepareCycleCoordinator(
   input: CycleCoordinatorInput,
   deps: RunHandlerDependencies,
@@ -421,16 +462,16 @@ export function prepareCycleCoordinator(
 
   assertNoLoopModeConcerns(config)
 
-  const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
-  const engineDef = resolveEngineFor(engine, context, cwd, fs)
-
   // AC11: HALTs skill-missing, naming pair-workflow-cycle, before anything is printed or spawned —
   // for BOTH fallback reasons (`unmapped` and `no-mapping-declared`) and the `--pr` entry alike.
   const location: CycleScriptsLocation = {
     ...locateCycleScripts(fs, context.config, cwd),
     agentsDir: locateAgentDefinitions(context.config, cwd),
   }
-  const setup = resolveProfileSetup(input, deps, location, engineDef)
+  const profile = resolveRunProfile(input, deps, location)
+  const engine = resolveCycleEngine(input, profile)
+  const engineDef = resolveEngineFor(engine, context, cwd, fs)
+  const setup = resolveProfileSetup(input, engineDef, profile)
   const autonomy = resolveEntryAutonomy(input, deps, location)
   syncAgentsFromConfig(context.config, cwd)
   const { driveCycle, shown } = driverFor(input, deps, { engine, engineDef, location, ...setup })

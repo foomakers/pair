@@ -174,6 +174,7 @@ function effectiveCardEligibility(
 
 export interface RunContext {
   config: Config
+  profileSnapshot?: ResolvedWorkflowProfile
   probe: SkillProbe
   policy: AutomationPolicy
   dispatch?: DispatchDecision
@@ -189,13 +190,28 @@ export interface RunContext {
 
 export type SkipDecision = Extract<DispatchDecision, { kind: 'skip' }>
 
+function readRunSnapshot(path: string | undefined, fs: FileSystemService, cwd: string) {
+  if (path === undefined) return undefined
+  const snapshot = JSON.parse(fs.readFileSync(path)) as {
+    root: string
+    config: Config
+    profile?: ResolvedWorkflowProfile
+  }
+  if (snapshot.root !== cwd || !snapshot.config || typeof snapshot.config !== 'object')
+    throw new Error(
+      'profile-invalid: run snapshot does not belong to this project; restart the parent run',
+    )
+  return snapshot
+}
+
 export function resolveContext(
   config: RunCommandConfig,
   fs: FileSystemService,
   cwd: string,
   deferDispatch = false,
 ): RunContext {
-  const loaded = loadConfigWithOverrides(fs, { projectRoot: cwd })
+  const snapshot = readRunSnapshot(config.runSnapshot, fs, cwd)
+  const loaded = snapshot ?? loadConfigWithOverrides(fs, { projectRoot: cwd })
   // One probe per RUN, not per iteration: the installed skill set does not change mid-run.
   const probe = createSkillProbe(fs, loaded.config, cwd)
   const policy = effectiveCardEligibility(readAutomationPolicy(fs, cwd), config)
@@ -214,6 +230,7 @@ export function resolveContext(
 
   return {
     config: loaded.config,
+    ...(snapshot?.profile && { profileSnapshot: snapshot.profile }),
     probe,
     policy,
     ...(dispatch && { dispatch }),
@@ -288,6 +305,30 @@ export function declaredRunIdleTimeout(config: Config, id: string): number | und
     run.defaults?.idleTimeout ??
     readEngineDeclaration(config, ENGINE_IDS).idleTimeout
   )
+}
+
+/** Resolve the hang guard after the profile has selected this stage's engine. */
+export function idleTimeoutForEngine(
+  context: RunContext,
+  config: RunCommandConfig,
+  id: string,
+): IdleTimeout {
+  const timeout = resolveIdleTimeout({
+    flag: config.idleTimeoutSeconds,
+    policy: context.policy.idleTimeoutSeconds,
+    declared: declaredRunIdleTimeout(context.config, id),
+  })
+  if (timeout.source !== 'pair.config.json engine.idleTimeout') return timeout
+  const run = readRunDeclaration(context.config, ENGINE_IDS)
+  return {
+    ...timeout,
+    source:
+      run.agents?.[id]?.idleTimeout !== undefined
+        ? `run.agents.${id}.idleTimeout`
+        : run.defaults?.idleTimeout !== undefined
+          ? 'run.defaults.idleTimeout'
+          : timeout.source,
+  }
 }
 
 /** Apply a configured runner as executable and literal argv before engine flags. */

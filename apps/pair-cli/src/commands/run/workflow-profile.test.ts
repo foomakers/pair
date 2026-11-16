@@ -159,6 +159,66 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
     expect(() => validateProfileRun(p, { commandLine: false, engineFlag: 'codex' })).not.toThrow()
   })
 
+  it('#617 r0-7: explicit engine-less selection cannot borrow run defaults.engine', () => {
+    write('pair.config.json', { run: { defaults: { engine: 'claude' } } })
+    write('engine-less.json', { name: 'engine-less', defaults: { model: 'sonnet' } })
+    const p = resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'engine-less.json' })
+    expect(() => validateProfileRun(p, { commandLine: true, runEngine: 'claude' })).toThrow(
+      /engine.*--engine/,
+    )
+    expect(() => validateProfileRun(p, { commandLine: false, runEngine: 'claude' })).not.toThrow()
+  })
+
+  it('#617 r0-2: off-cycle defaults are validated against the concrete fallback engine', () => {
+    write('pair.config.json', {
+      workflowProfiles: {
+        default: 'p',
+        inline: {
+          p: {
+            name: 'p',
+            defaults: { model: 'gpt-6-sol' },
+            stages: Object.fromEntries(
+              [
+                'prepare',
+                'validate',
+                'implement',
+                'green',
+                'verify',
+                'contract',
+                'merge',
+                'refine-story',
+                'plan-tasks',
+                'triage',
+                'classify',
+              ].map(id => [id, { model: 'sonnet' }]),
+            ),
+          },
+        },
+      },
+    })
+    const p = resolveWorkflowProfile(SCRIPTS, { root })
+    expect(() => validateProfileRun(p, { commandLine: false, runEngine: 'claude' })).toThrow(
+      /defaults.model.*gpt-6-sol.*claude/,
+    )
+  })
+
+  it('#617 r0-13: disabled process stages cannot contradict enabled dispatch', () => {
+    write(
+      '.pair/adoption/tech/way-of-working.md',
+      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`, `review`\n',
+    )
+    write('disabled.json', {
+      name: 'disabled',
+      defaults: { engine: 'claude' },
+      stages: { 'refine-story': { engine: 'codex' } },
+    })
+    const p = resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'disabled.json' })
+    expect(() => validateProfileRun(p, { commandLine: true, engineFlag: 'claude' })).not.toThrow()
+    expect(p.notes.join(' ')).toMatch(
+      /refine-story.*(?:disabled|ignored)|(?:disabled|ignored).*refine-story/,
+    )
+  })
+
   it('globs resolve identically on every platform (darwin and linux differ in filesystem case-sensitivity): matching is by the listed name, exactly, in a root with spaces', () => {
     const spaced = join(root, 'my project')
     write('my project/profiles/claude-cheap.json', { name: 'claude-cheap' })
@@ -231,4 +291,87 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
       /stages\.validate\.context.*risk:red.*fresh/,
     )
   })
+})
+
+it('#617 r0-11: external engine-less host remedy survives CLI parser and predispatch validation', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-host-remedy-')))
+  try {
+    writeFileSync(
+      join(root, 'p.json'),
+      JSON.stringify({ name: 'p', defaults: { model: 'claude-sonnet-5-5' } }),
+    )
+    const p = resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'p.json' })
+    const { gapsForHost } = await import(join(SCRIPTS, 'workflow-profile.mjs'))
+    const gap = gapsForHost(p, 'codex', '617').find(
+      (g: { stage: string }) => g.stage === 'implement',
+    )
+    const tokens = gap.command
+      .match(/"(?:\\.|[^"\\])*"|[^\s]+/g)
+      .map((token: string) => (token.startsWith('"') ? JSON.parse(token) : token))
+    expect(tokens.slice(0, 2)).toEqual(['pair-cli', 'run'])
+    const flags = Object.fromEntries(
+      Array.from({ length: (tokens.length - 2) / 2 }, (_, index) => [
+        tokens[2 + index * 2],
+        tokens[3 + index * 2],
+      ]),
+    )
+    const { parseRunCommand } = await import('./parser.js')
+    const parsed = parseRunCommand({
+      card: flags['--card'],
+      workflowConfig: flags['--workflow-config'],
+      engine: flags['--engine'],
+    })
+    expect(parsed.dispatch?.card).toBe('617')
+    const routed = resolveWorkflowProfile(SCRIPTS, {
+      root,
+      workflowConfig: parsed.workflowConfig,
+      engine: parsed.engine,
+    })
+    expect(() =>
+      validateProfileRun(routed, {
+        commandLine: true,
+        ...(parsed.engine && { engineFlag: parsed.engine }),
+      }),
+    ).not.toThrow()
+    expect(routed.stages['implement']?.model.resolved.id).toBe('claude-sonnet-5-5')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+it.each([
+  { title: 'named plain reuse', entry: { stages: { validate: { context: 'reuse' } } } },
+  {
+    title: 'conditional defaults',
+    entry: {
+      defaults: {
+        context: { 'shared-with': 'prepare', when: { risk: ['green', 'yellow', 'red'] } },
+      },
+    },
+  },
+])('#617 AC-14: cached red view refuses $title before dispatch', async ({ entry }) => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-context-snapshot-')))
+  try {
+    writeFileSync(
+      join(root, 'pair.config.json'),
+      JSON.stringify({
+        workflowProfiles: {
+          default: 'p',
+          inline: { p: { name: 'p', ...entry } },
+        },
+      }),
+    )
+    const snapshot = resolveWorkflowProfile(SCRIPTS, { root })
+    const { profileForTier } = await import('./workflow-profile.js')
+    for (const tier of ['risk:green', 'risk:yellow']) {
+      expect(() =>
+        validateProfileRun(profileForTier(snapshot, tier), { commandLine: false }),
+      ).not.toThrow()
+    }
+    expect(() =>
+      validateProfileRun(profileForTier(snapshot, 'risk:red'), { commandLine: false }),
+    ).toThrow(/profile-invalid.*validate.context.*risk:red.*fresh/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

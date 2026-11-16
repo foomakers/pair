@@ -28,6 +28,7 @@ import { locateCycleScripts } from './cycle-scripts'
 import {
   resolveOffCycleProfile,
   resolveWorkflowProfile,
+  profileForTier,
   stageEngineIds,
   validateProfileRun,
 } from './workflow-profile'
@@ -36,6 +37,7 @@ import { handleParallelRun } from './parallel-entry'
 import {
   declaredEngine,
   declaredEngineBin,
+  idleTimeoutForEngine,
   driveLockedCard,
   resolveAutonomyFor,
   resolveContext,
@@ -164,7 +166,7 @@ function resolveRun(
     autonomy,
     ...(context.dispatch && { dispatch: context.dispatch }),
     auditPath: context.auditPath,
-    idleTimeout: context.idleTimeout,
+    idleTimeout: idleTimeoutForEngine(context, config, engineDef.id),
   }
 }
 
@@ -299,7 +301,14 @@ function resolveEntry(
   return {
     config,
     context: withResolvedCardSelection(base, config, selection),
-    deps: { ...callerDeps, resolveAutonomy: () => selection },
+    deps: {
+      ...callerDeps,
+      resolveAutonomy: () => selection,
+      ...(base.profileSnapshot && {
+        resolveWorkflowProfile: (_scripts, request) =>
+          profileForTier(base.profileSnapshot!, request.tier),
+      }),
+    },
   }
 }
 

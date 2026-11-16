@@ -20,7 +20,7 @@ test('#617 AC-10: host gaps name each conflicting stage, model and executable re
   const gaps = gapsForHost(resolved, 'claude', '617')
   assert.deepEqual(gaps.map(g => g.stage), ['verify'])
   assert.match(gaps[0].wanted, /codex.*gpt-6-luna/)
-  assert.match(gaps[0].command, /pair run --card 617 --workflow-config/)
+  assert.match(gaps[0].command, /pair-cli run --card 617 --workflow-config/)
   assert.deepEqual(gapsForHost(resolved, 'unknown').map(g => g.stage), [...STAGES, 'defaults'])
 })
 
@@ -129,6 +129,108 @@ test('T-1/AC5: a defaults-level reuse is not an error — it applies only where 
   assert.deepEqual(errorsOf(p), [])
   assert.equal(effectiveStage(p, 'green').context.value, 'reuse')
   assert.equal(effectiveStage(p, 'verify').context.value, 'fresh')
+})
+
+const r04Repo = new URL('../../../', import.meta.url)
+const r04Engines = [
+  ['canonical', fileURLToPath(new URL('packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs', r04Repo))],
+  ['installed', fileURLToPath(new URL('.claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs', r04Repo))],
+]
+const r04Policy = { 'prepare->prepare': 'reuse', 'implement->green': 'reuse', 'green->green': 'reuse' }
+const r04Root = profile => project({ config: { workflowProfiles: { inline: { p: { name: 'p', ...profile } }, default: 'p' } } })
+const r04Cli = (file, root, tier) => {
+  const result = spawnSync('node', [file, 'resolve', '--root', root, ...(tier ? ['--tier', tier] : [])], { encoding: 'utf8' })
+  return { code: result.status, out: JSON.parse(result.stdout.trim()) }
+}
+
+test('#617 r0-4: legacy defaults reuse keeps red validation fresh', async () => {
+  for (const [name, file] of r04Engines) {
+    const { resolveProfile: resolve, profileContextPolicy: policy } = await import(new URL(file, r04Repo))
+    const root = r04Root({ defaults: { context: 'reuse' } })
+    const resolved = resolve({ root, tier: 'risk:red' })
+    assert.deepEqual(policy(resolved), r04Policy, name)
+    for (const stage of STAGES) {
+      const expected = ['prepare', 'green'].includes(stage) ? 'reuse' : 'fresh'
+      assert.equal(resolved.stages[stage].context.value, expected, `${name} ${stage}`)
+    }
+    const cliResult = r04Cli(file, root, 'risk:red')
+    assert.equal(cliResult.code, 0, name)
+    assert.deepEqual(cliResult.out.contextPolicy, r04Policy, name)
+  }
+})
+
+test('#617 r0-4: legacy defaults reuse still resolves below red', async () => {
+  for (const [name, file] of r04Engines) {
+    const { resolveProfile: resolve, profileContextPolicy: policy } = await import(new URL(file, r04Repo))
+    for (const tier of ['risk:yellow', 'risk:green', undefined]) {
+      const root = r04Root({ defaults: { context: 'reuse' } })
+      const resolved = resolve({ root, tier })
+      assert.deepEqual(policy(resolved), r04Policy, `${name} ${tier}`)
+      for (const stage of STAGES)
+        assert.equal(resolved.stages[stage].context.value, ['prepare', 'green'].includes(stage) ? 'reuse' : 'fresh', `${name} ${tier} ${stage}`)
+      const output = r04Cli(file, root, tier)
+      assert.equal(output.code, 0, `${name} ${tier}`)
+      assert.deepEqual(output.out.contextPolicy, r04Policy, `${name} ${tier}`)
+    }
+  }
+})
+
+test('#617 r0-4: explicit red validation reuse remains invalid', async () => {
+  for (const [name, file] of r04Engines) {
+    const { resolveProfile: resolve } = await import(new URL(file, r04Repo))
+    for (const [stage, tier] of [['validate', 'risk:red'], ['verify', 'risk:red'], ['verify', 'risk:yellow'], ['verify', 'risk:green'], ['verify', undefined]]) {
+      const root = r04Root({ stages: { [stage]: { context: 'reuse' } } })
+      assert.throws(() => resolve({ root, tier }), /profile-invalid/, `${name} ${stage} ${tier}`)
+      assert.equal(r04Cli(file, root, tier).code, 1, `${name} ${stage} ${tier}`)
+    }
+    for (const tier of ['risk:yellow', 'risk:green', undefined]) {
+      const root = r04Root({ stages: { validate: { context: 'reuse' } } })
+      assert.equal(resolve({ root, tier }).stages.validate.context.value, 'reuse', `${name} ${tier}`)
+      assert.equal(r04Cli(file, root, tier).out.stages.validate.context.value, 'reuse', `${name} ${tier}`)
+    }
+  }
+})
+
+test('#617 r0-4: CLI emits legacy red context policy without validate reuse', () => {
+  for (const [name, file] of r04Engines) {
+    const root = r04Root({ defaults: { context: 'reuse' } })
+    const output = r04Cli(file, root, 'risk:red')
+    assert.equal(output.code, 0, name)
+    assert.deepEqual(output.out.contextPolicy, r04Policy, name)
+    assert.equal(output.out.stages.validate.context.value, 'fresh', name)
+  }
+})
+
+test('#617 r0-4: omitted and fresh defaults remain fresh', async () => {
+  for (const [name, file] of r04Engines) {
+    const { resolveProfile: resolve, profileContextPolicy: policy } = await import(new URL(file, r04Repo))
+    for (const tier of ['risk:red', 'risk:yellow', 'risk:green']) {
+      for (const context of [undefined, 'fresh']) {
+        const profile = context === undefined ? {} : { defaults: { context } }
+        const root = r04Root(profile)
+        assert.deepEqual(policy(resolve({ root, tier })), {}, `${name} ${tier} ${context}`)
+        const output = r04Cli(file, root, tier)
+        assert.equal(output.code, 0, `${name} ${tier} ${context}`)
+        assert.deepEqual(output.out.contextPolicy, {}, `${name} ${tier} ${context}`)
+      }
+    }
+  }
+})
+
+test('#617 r0-4: explicit fresh override and conditional shared-with retain their own rules', async () => {
+  for (const [name, file] of r04Engines) {
+    const { resolveProfile: resolve, profileContextPolicy: policy } = await import(new URL(file, r04Repo))
+    const root = r04Root({ defaults: { context: 'reuse' }, stages: { prepare: { context: 'fresh' }, validate: { context: 'fresh' }, green: { context: { 'shared-with': 'implement', when: { risk: 'yellow' } } } } })
+    for (const tier of ['risk:red', 'risk:yellow', 'risk:green', undefined]) {
+      const expected = tier === 'risk:yellow' ? { 'implement->green': 'reuse' } : {}
+      const resolved = resolve({ root, tier })
+      assert.equal(resolved.stages.prepare.context.value, 'fresh', `${name} ${tier}`)
+      assert.deepEqual(policy(resolved), expected, `${name} ${tier}`)
+      const output = r04Cli(file, root, tier)
+      assert.equal(output.code, 0, `${name} ${tier}`)
+      assert.deepEqual(output.out.contextPolicy, expected, `${name} ${tier}`)
+    }
+  }
 })
 
 test('T-1: workflow-profile.mjs ships byte-identical in the installed skill and the dataset source', () => {
@@ -579,4 +681,86 @@ test('claude-cheap: the KB documents every stage and the six shipped profiles; t
   const configPath = join(repo, 'pair.config.json')
   const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {}
   assert.notEqual(config.workflowProfiles?.default, sample.name, 'the Claude pilot is never the project default')
+})
+
+// #617 review regressions: expected behavior comes from AC-2, AC-10 and AC-14.
+test('#617 r0-1: schema-default Claude selects its configured agent model and provenance', () => {
+  const root = project({ config: { run: { agents: { claude: { model: 'sonnet' } } } } })
+  const selected = resolveProfile({ root }).stages.defaults.model
+  assert.equal(selected.resolved.id, 'sonnet')
+  assert.equal(selected.source, 'run.agents.claude.model')
+})
+
+test('#617 r0-11: engine-less host gap offers runnable compatible CLI route', () => {
+  const root = project({ files: { 'p.json': { name: 'p', defaults: { model: 'claude-sonnet-5-5' } } } })
+  const resolved = resolveProfile({ root, workflowConfig: 'p.json' })
+  const gap = gapsForHost(resolved, 'codex', '617').find(g => g.stage === 'implement')
+  assert.ok(gap)
+  assert.match(gap.command, /^pair-cli run --card 617\b/)
+  assert.match(gap.command, /--workflow-config .*p\.json/)
+  assert.match(gap.command, /--engine claude\b/)
+})
+
+test('#617 r0-5: yellow prepare context reaches cross-role validation', () => {
+  const dir = runDirOf()
+  const file = join(dir, 'prepare-draft.json')
+  writeFileSync(file, JSON.stringify({
+    run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec',
+    inputHead: SHA('a'), status: 'red', mode: 'initial',
+    contractPath: '/abs/a0-red-contract.json', contractHash: `sha256:${'1'.repeat(64)}`,
+  }))
+  const published = publish({ dir, file, phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 1, pr: 7 })
+  assert.equal(published.published, true, JSON.stringify(published))
+  const next = resolve({ dir, workflowVersion: V, entry: 'fresh', pr: 7, tier: 'risk:yellow', contextPolicy: { 'prepare->validate': 'reuse' } }).next
+  assert.equal(next.step, 'validate')
+  assert.equal(next.context, 'reuse')
+})
+
+
+test('#617 r0-1: explicit default engine follows --engine for its agent model', () => {
+  const root = project({ config: {
+    run: { agents: { claude: { model: 'sonnet' }, codex: { model: 'gpt-6-sol' } } },
+    workflowProfiles: { default: 'p', inline: { p: { name: 'p', defaults: { engine: 'default' } } } },
+  } })
+  const selected = resolveProfile({ root, engine: 'codex' }).stages.implement.model
+  assert.equal(selected.resolved.id, 'gpt-6-sol')
+  assert.equal(selected.source, 'run.agents.codex.model')
+})
+
+
+test('#617 AC-1: an explicit legacy model ignores unused malformed Model Policy', () => {
+  const root = project({
+    config: { engine: { id: 'claude', model: { claude: 'sonnet' } } },
+    files: { '.pair/adoption/tech/automation.md': '## Model Policy\n\nrisk:red: turbo\n' },
+  })
+  assert.equal(resolveProfile({ root }).stages.implement.model.resolved.id, 'sonnet')
+})
+
+
+test('#617 AC-2/14: explicit yellow validate reuse reaches the published prepare context', () => {
+  const root = project({ config: { workflowProfiles: { default: 'p', inline: {
+    p: { name: 'p', stages: { validate: { context: 'reuse' } } },
+  } } } })
+  const resolved = resolveProfile({ root, tier: 'risk:yellow' })
+  const dir = runDirOf()
+  const file = join(dir, 'explicit-validate-reuse-draft.json')
+  writeFileSync(file, JSON.stringify({
+    run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec',
+    inputHead: SHA('a'), status: 'red', mode: 'initial',
+    contractPath: '/abs/a0-red-contract.json', contractHash: `sha256:${'1'.repeat(64)}`,
+  }))
+  assert.equal(publish({ dir, file, phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 1, pr: 7 }).published, true)
+  const next = resolve({ dir, workflowVersion: V, entry: 'fresh', pr: 7, tier: 'risk:yellow', contextPolicy: profileContextPolicy(resolved) }).next
+  assert.equal(next.step, 'validate')
+  assert.equal(next.context, 'reuse')
+  assert.equal(next.contextSource, 'prepare')
+})
+
+
+test('#617 AC-10: an unknown host receives a supported engine remedy for the empty project', () => {
+  const root = project()
+  const gap = gapsForHost(resolveProfile({ root }), 'unknown', '617').find(g => g.stage === 'implement')
+  assert.ok(gap)
+  assert.match(gap.command, /^pair-cli run --card 617 --engine claude$/)
+  assert.equal(resolveProfile({ root, engine: 'claude' }).stages.implement.engine.value, 'claude')
 })

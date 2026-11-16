@@ -121,7 +121,7 @@ function parseArgs(raw) {
   const items = a.items.map((it, i) => {
     if (!it || typeof it !== 'object' || Array.isArray(it))
       throw new Error(`refine-batch: items[${i}] is not an object: ${JSON.stringify(it)}.`)
-    rejectUnknownKeys(it, ['id', 'mode', 'notes', 'breakdown', 'fixStatusLine', 'model'], `items[${i}]`)
+    rejectUnknownKeys(it, ['id', 'mode', 'notes', 'breakdown', 'fixStatusLine', 'model', 'tier'], `items[${i}]`)
     // A number is lossless and unambiguous for an issue ref (`{"id":218}` is what a caller
     // composing JSON from an issue number writes), so it is coerced deliberately. Anything
     // else is not: `id: ['218']` and `id: true` both used to survive `String()` and then PASS
@@ -186,6 +186,7 @@ function parseArgs(raw) {
     // Same rule in both engines, kept together deliberately.
     const isSegment = v => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
     constrain(id, 'id', isSegment, 'a single safe path segment (it reaches a tracker read of `<id>`)')
+    constrain(it.tier, 'tier', v => /^risk:(green|yellow|red)$/.test(v), 'a risk:green, risk:yellow or risk:red label')
     constrain(it.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
     // Type before coercion, same rule as `constrain` and `checkModel`: `mode: ['refine']`
     // joined to "refine" and was silently accepted as the mode the caller never wrote.
@@ -269,31 +270,37 @@ const { items: ITEMS, batchModel: BATCH_MODEL, prepareArg: PREPARE_ARG, agentTim
 
 // The Workflow sandbox has no filesystem API. Resolve once in the repository through a
 // bounded command relay, then use the returned stage settings for every child.
-const PROFILE_SCHEMA = { type: 'object', properties: { source: { type: 'string' }, stages: { type: 'object' } }, required: ['source', 'stages'] }
-const PROFILE = await agent(
-  'Run `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --host claude` in the project root. Return its JSON unchanged. If it fails, report the error; do not start any card. You are running CONCURRENTLY in sibling worktrees: do NOT create, edit or delete ANY file; no add/commit/checkout/branch/worktree/stash.',
+const AGENT_TIMEOUT_MINUTES = 30 // aligned with pair-cli's 1800 s per-stage watchdog
+const PROFILE_SCHEMA = { type: 'object', properties: { source: { type: 'string' }, stages: { type: 'object' }, cardTiers: { type: 'object' } }, required: ['source', 'stages'] }
+const PROFILE = await boundedAgent('profile:resolve',
+  `Run \`node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --host claude\` in the project root. Retain that single configuration snapshot. Only if a selected model is by-tier, read each card lacking an explicit tier (${JSON.stringify(ITEMS.filter(item => !item.tier).map(item => item.id))}) once with \`node .claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs card --story <id>\`; add cardTiers keyed by id with its single risk:* label (null when untagged). Return the snapshot with this cardTiers map; no model resolution from live files. If any read fails, report the error; do not start any card. You are running CONCURRENTLY in sibling worktrees: do NOT create, edit or delete ANY file; no add/commit/checkout/branch/worktree/stash.`,
   { agentType: 'general-purpose', phase: 'Contracts', label: 'profile:resolve', model: 'haiku', effort: 'low', schema: PROFILE_SCHEMA },
 )
 if (!PROFILE || typeof PROFILE !== 'object' || !PROFILE.stages || typeof PROFILE.stages !== 'object')
   throw new Error('refine-batch: profile:resolve returned no stage map; no card dispatched')
+const profileRoute = (card, engine, model) => {
+  const selection = PROFILE.source === '--workflow-config' ? ` --workflow-config ${JSON.stringify(PROFILE.sourceDetail)}` : PROFILE.name && PROFILE.source !== 'KB default' ? ` --profile ${JSON.stringify(PROFILE.name)}` : ''
+  const compatible = engine && engine !== 'default' ? engine : /^gpt-/.test(model ?? '') ? 'codex' : 'claude'
+  return `pair-cli run --card ${card}${selection} --engine ${compatible}`
+}
+
 for (const item of ITEMS) {
   const stage = item.mode === 'refine' ? 'refine-story' : item.mode
-  const settings = PROFILE.stages[stage]
+  const settings = (PROFILE.byTier?.[item.tier ?? PROFILE.cardTiers?.[item.id]] ?? PROFILE.stages)[stage]
   if (!settings || typeof settings !== 'object') throw new Error(`refine-batch: profile lacks ${stage}; no card dispatched`)
   const engine = settings.engine?.value
   if (!['default', 'claude'].includes(engine))
-    throw new Error(`refine-batch: ${stage} wants engine ${JSON.stringify(engine)}; this host runs claude. Run pair run --engine ${engine} for this stage; no card dispatched.`)
+    throw new Error(`refine-batch: ${stage} wants engine ${JSON.stringify(engine)}; this host runs claude. Run ${profileRoute(item.id, engine)}; no card dispatched.`)
   const model = settings.model?.resolved?.id
   if (model && !['fable', 'haiku', 'sonnet', 'opus'].includes(model))
-    throw new Error(`refine-batch: ${stage} wants model ${JSON.stringify(model)}; this host cannot run it. Use a same-class Claude model or pair run; no card dispatched.`)
+    throw new Error(`refine-batch: ${stage} wants model ${JSON.stringify(model)}; this host cannot run it. Run ${profileRoute(item.id, engine, model)}; no card dispatched.`)
 }
-const stageSettings = item => PROFILE.stages[item.mode === 'refine' ? 'refine-story' : item.mode]
+const stageSettings = item => (PROFILE.byTier?.[item.tier ?? PROFILE.cardTiers?.[item.id]] ?? PROFILE.stages)[item.mode === 'refine' ? 'refine-story' : item.mode]
 
 // Every agent() call is time-bounded (same pattern as pair-loop / pair-implement-batch): the runtime has no per-agent
 // timeout, so each call races a timer (feature-detected `setTimeout`; without it the call is unbounded). A timeout
 // throws an error carrying `.timeout` and `.stage`; a timed-out agent is NEVER re-dispatched (it cannot be cancelled —
 // a retry would be a second writer on the same issue), so work/verify stages degrade to null instead.
-const AGENT_TIMEOUT_MINUTES = 30 // aligned with pair-cli's 1800 s per-stage watchdog
 async function boundedAgent(stage, prompt, opts) {
   const minutes = AGENT_TIMEOUT_ARG ?? AGENT_TIMEOUT_MINUTES
   if (typeof setTimeout !== 'function' || !(minutes > 0)) return agent(prompt, opts)

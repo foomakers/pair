@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Command } from 'commander'
+import { Command, Option } from 'commander'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import chalk from 'chalk'
@@ -188,6 +188,7 @@ function addCommandOptions(
   cmd: Command,
   options: readonly { flags: string; description: string; defaultValue?: unknown }[],
 ): [Seen, Seen][] {
+  if (cmd.name() === 'run') cmd.addOption(new Option('--run-snapshot <path>').hideHelp())
   for (const opt of options) {
     if (opt.flags.startsWith('[') || opt.flags.startsWith('<')) {
       cmd.argument(opt.flags, opt.description)

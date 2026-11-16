@@ -273,6 +273,65 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     )
   })
 
+  it('#617 r0-3: profile engine uses its own agent idle timeout', async () => {
+    capture()
+    const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+    const fs = files(
+      {},
+      {
+        run: {
+          defaults: { engine: 'claude' },
+          agents: { claude: { idleTimeout: 111 }, codex: { idleTimeout: 222 } },
+        },
+      },
+    )
+    fs.writeFile('/bin/codex', '')
+    await run(
+      { prompt: 'go', cwd, profile: 'claude-cheap', autonomous: true },
+      fs,
+      baseDeps({ resolveWorkflowProfile: () => profileOf('codex'), runIteration: iteration }),
+    )
+    expect(iteration).toHaveBeenCalledWith(expect.objectContaining({ idleTimeoutSeconds: 222 }))
+  })
+
+  it('#617 r0-6: a Codex-only profile never requires unused Claude installed', async () => {
+    capture()
+    const fs = files({ '/bin/codex': '' })
+    await fs.unlink('/bin/claude')
+    const driveCycle = vi.fn(async () => ({ status: 'ready-for-merge', stagesRun: 1 }))
+    await run(
+      { card: '12', cardTags: '', profile: 'claude-cheap' },
+      fs,
+      baseDeps({ resolveWorkflowProfile: () => profileOf('codex'), driveCycle }),
+    )
+    expect(driveCycle).toHaveBeenCalledOnce()
+  })
+
+  it('#617 r0-6: one stage engine override preserves the cycle fallback engine', async () => {
+    const output = capture()
+    const root = mkdtempSync(join(tmpdir(), 'pair-partial-engine-'))
+    try {
+      const declared = {
+        workflowProfiles: {
+          default: 'p',
+          inline: { p: { name: 'p', stages: { implement: { engine: 'codex' } } } },
+        },
+      }
+      writeFileSync(join(root, 'pair.config.json'), JSON.stringify(declared))
+      const fs = files({ '/bin/codex': '' }, declared)
+      const profile = resolveWorkflowProfile(REAL_SCRIPTS, { root })
+      expect(profile.stages['verify']?.engine.value).toBe('default')
+      await run(
+        { card: '12', cardTags: '' },
+        fs,
+        baseDeps({ resolveWorkflowProfile: () => profile }),
+      )
+      expect(output()).toMatch(/Engine: claude .*from schema default/)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('--prompt uses profile defaults before spawning (AC-3)', async () => {
     capture()
     const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))

@@ -104,6 +104,77 @@ function harness(candidates: RootCandidate[], exits: Record<string, CardProcessE
 
 const PATH_BEFORE = process.env['PATH']
 
+it('#617 r0-8: sequential children retain the original resolved configuration after the source changes', async () => {
+  process.env['PATH'] = '/bin'
+  const lines = captureLog()
+  const fs = projectFs(policy('1'))
+  for (const name of ['cycle-state.mjs', 'cycle-dispatch.mjs'])
+    await fs.writeFile(`${cwd}/.claude/skills/pair-workflow-cycle/scripts/${name}`, '')
+  await fs.writeFile(
+    `${cwd}/pair.config.json`,
+    JSON.stringify({ workflowProfiles: { default: 'p' } }),
+  )
+  let model = 'provider/original'
+  const resolve = vi.fn(() => ({
+    name: 'p',
+    source: 'pair.config.json',
+    sourceDetail: 'p',
+    hash: 'a'.repeat(64),
+    profile: { name: 'p' },
+    stages: Object.fromEntries(
+      ['defaults', 'prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge'].map(
+        stage => [
+          stage,
+          {
+            engine: { value: 'pi', source: 'defaults' },
+            model: { value: model, source: 'defaults', resolved: { id: model, line: model } },
+            effort: { value: 'default', source: 'KB default' },
+            context: { value: 'fresh', source: 'KB default' },
+          },
+        ],
+      ),
+    ),
+    table: [`Profile: p (source: pair.config.json) model ${model}`],
+    notes: [],
+    contextPolicy: {},
+  }))
+  const observed: string[] = []
+  const children = [card('617'), card('618')]
+  const h = harness(children)
+  h.deps.resolveWorkflowProfile = resolve as never
+  h.deps.cardReadiness = async () => 'ready'
+  h.deps.driveCycle = async () => ({ status: 'ready-for-merge', stagesRun: 1 })
+  const { optionsOfArgv } = await import('./parallel.js')
+  h.runCardProcess.mockImplementation(async ({ args }) => {
+    const start = lines.length
+    const exitCode = await handleRunCommand(parseRunCommand(optionsOfArgv(args)), fs, h.deps)
+    observed.push(
+      lines
+        .slice(start)
+        .find(line => line.includes('Profile: p (source:'))
+        ?.trim() ?? 'profile missing',
+    )
+    model = 'provider/edited-after-first-child'
+    await fs.writeFile(
+      `${cwd}/pair.config.json`,
+      JSON.stringify({ workflowProfiles: { default: 'edited' } }),
+    )
+    return { exitCode, signal: null }
+  })
+  expect(
+    await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '1', autonomous: true, approveProjectTrust: true }),
+      fs,
+      h.deps,
+    ),
+  ).toBe(0)
+  expect(observed).toEqual([
+    'Profile: p (source: pair.config.json) model provider/original',
+    'Profile: p (source: pair.config.json) model provider/original',
+  ])
+  expect(resolve).toHaveBeenCalledTimes(1)
+})
+
 afterEach(() => {
   vi.restoreAllMocks()
   process.env['PATH'] = PATH_BEFORE
@@ -941,5 +1012,59 @@ describe('US-593 omitted argument precedence through the handler', () => {
     expect(h.selectCandidates).not.toHaveBeenCalled()
     expect(h.started).toEqual([])
     expect(h.audit).toEqual([])
+  })
+})
+
+it('#617 r0-3: parallel audit records the selected agent timeout and source', async () => {
+  process.env['PATH'] = '/bin'
+  captureLog()
+  const fs = projectFs(policy('1'))
+  await fs.writeFile('/bin/codex', '')
+  await fs.writeFile(
+    `${cwd}/pair.config.json`,
+    JSON.stringify({
+      run: {
+        defaults: { engine: 'claude' },
+        agents: { claude: { idleTimeout: 111 }, codex: { idleTimeout: 222 } },
+      },
+      workflowProfiles: { default: 'p' },
+    }),
+  )
+  const h = harness([])
+  const live: Array<{ event: string; detail: { policy: { idleTimeout: unknown } } }> = []
+  h.deps.runAudit = (_path, line) => void live.push(JSON.parse(line))
+  h.deps.resolveWorkflowProfile = () => ({
+    name: 'p',
+    source: 'pair.config.json',
+    sourceDetail: 'p',
+    hash: 'a'.repeat(64),
+    profile: { defaults: { engine: 'codex' } },
+    stages: {
+      defaults: {
+        engine: { value: 'codex', source: 'defaults' },
+        model: {
+          value: 'default',
+          source: 'KB default',
+          resolved: { id: null, line: 'engine default' },
+        },
+        effort: { value: 'default', source: 'KB default' },
+        context: { value: 'fresh', source: 'KB default' },
+      },
+    },
+    table: [],
+    notes: [],
+    contextPolicy: {},
+  })
+  await handleRunCommand(
+    parseRunCommand({ root: '66', parallel: '1', autonomous: true }),
+    fs,
+    h.deps,
+  )
+  expect(h.selectCandidates).toHaveBeenCalledWith(
+    expect.objectContaining({ idleTimeoutSeconds: 222 }),
+  )
+  expect(live.find(row => row.event === 'loop-start')?.detail.policy.idleTimeout).toEqual({
+    seconds: 222,
+    source: 'run.agents.codex.idleTimeout',
   })
 })

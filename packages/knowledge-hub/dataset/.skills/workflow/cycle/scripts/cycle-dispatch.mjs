@@ -594,8 +594,9 @@ function packetCommand(opts) {
     agentType,
     phaseLabel,
     // `next.context` is the cycle state's decision, carried through untouched: the coordinator
-    // honours it (fresh ⇒ spawn, reuse ⇒ resume the previous subagent of this role), never decides it.
+    // honours it (fresh ⇒ spawn, reuse ⇒ resume the named source context), never decides it.
     context: n.context ?? CONTEXT_TABLE.default,
+    ...(n.context === 'reuse' && n.contextSource ? { contextSource: n.contextSource, contextAgentType: n.contextAgentType } : {}),
     label: `${n.step}:${tag} ${n.phase}`,
     worktree,
     runDir,

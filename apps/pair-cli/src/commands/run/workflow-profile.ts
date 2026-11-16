@@ -3,7 +3,7 @@ import { join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
 import type { EngineDefinition } from './engines'
-import { isEngineId, type EngineId } from './engines'
+import { DEFAULT_ENGINE_ID, isEngineId, type EngineId } from './engines'
 import type { ResolvedInvocation } from './resolve-skill'
 import { readInstalledSkill } from './skill-probe'
 import { locateCycleScripts } from './cycle-scripts'
@@ -52,6 +52,15 @@ export interface ResolvedStage {
 }
 
 export interface ResolvedWorkflowProfile {
+  readonly disabledStages?: readonly string[]
+  readonly byTier?: Readonly<Record<string, Readonly<Record<string, ResolvedStage>>>>
+  readonly byTierProfiles?: Readonly<
+    Record<
+      string,
+      | Pick<ResolvedWorkflowProfile, 'stages' | 'table' | 'contextPolicy'>
+      | { readonly halt: string; readonly detail: string }
+    >
+  >
   readonly name: string
   /** `--workflow-config` | `argument` | `pair.config.json` | `KB default`. */
   readonly source: string
@@ -79,7 +88,9 @@ export function validateProfileRun(
   },
 ): void {
   if (!profile.profile) return
-  const stages = Object.keys(profile.stages).filter(stage => stage !== 'defaults')
+  const stages = Object.keys(profile.stages).filter(
+    stage => !profile.disabledStages?.includes(stage),
+  )
   for (const stage of stages) {
     const selected = profile.stages[stage]
     if (selected) validateProfileStage(stage, selected, input)
@@ -100,12 +111,19 @@ function validateProfileStage(
     throw new Error(
       `profile-invalid: stages.${stage}.engine '${wanted}' contradicts --engine '${input.engineFlag}'; remove --engine or set it to '${wanted}'`,
     )
-  if (input.commandLine && !input.engineFlag && wanted === 'default')
+  if (input.commandLine && !input.engineFlag && !profileBindsEngine(selected))
     throw new Error(
       `profile-invalid: stages.${stage}.engine 'default' has no engine for a command-line profile; set stages.${stage}.engine or pass --engine`,
     )
-  const engine = wanted === 'default' ? (input.engineFlag ?? input.runEngine) : wanted
+  const engine =
+    wanted === 'default' ? (input.engineFlag ?? input.runEngine ?? DEFAULT_ENGINE_ID) : wanted
   validateStageModel(stage, selected, engine)
+}
+
+function profileBindsEngine(selected: ResolvedStage): boolean {
+  return (
+    selected.engine.value !== 'default' && ['stage', 'defaults'].includes(selected.engine.source)
+  )
 }
 
 function validateStageModel(
@@ -134,6 +152,16 @@ export interface ProfileRequest {
   readonly workflowConfig?: string | undefined
   /** The card's `risk:*` tag, when it carries one (resolves a model class). */
   readonly tier?: string | undefined
+}
+
+/** Resolve card-dependent values from the immutable parent's configuration. */
+export function profileForTier(
+  profile: ResolvedWorkflowProfile,
+  tier?: string,
+): ResolvedWorkflowProfile {
+  const view = tier === undefined ? undefined : profile.byTierProfiles?.[tier]
+  if (view !== undefined && 'halt' in view) throw new Error(`${view.halt}: ${view.detail}`)
+  return view === undefined ? profile : { ...profile, ...view }
 }
 
 /** Spawns `workflow-profile.mjs resolve` and relays its `{halt, detail}` as `<halt>: <detail>`. */
@@ -247,6 +275,7 @@ export function stageEngineIds(
 ): string[] {
   const used: string[] = []
   for (const [stage, s] of Object.entries(profile.stages)) {
+    if (profile.disabledStages?.includes(stage)) continue
     const id = s.engine.value
     if (id === 'default') continue
     if (!supported.includes(id)) {
@@ -287,6 +316,7 @@ export function markIgnoredEffort(
   const ignored = new Map<string, string>()
   const table = [...profile.table]
   for (const [stage, s] of Object.entries(profile.stages)) {
+    if (profile.disabledStages?.includes(stage)) continue
     const engine = engineOf(stage)
     if (s.effort.value === 'default' || engine.effortArgs) continue
     ignored.set(`${engine.id} (${s.effort.value})`, stage)

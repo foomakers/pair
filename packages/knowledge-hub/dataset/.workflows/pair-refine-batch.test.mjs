@@ -132,7 +132,7 @@ test('#617 AC-3/10: batch mode uses the resolved stage and refuses a foreign eng
   assert.equal(calls.find(c => c.opts.label === 'classify:#216').opts.effort, 'low')
   await assert.rejects(
     runWorkflow({ args: { items: [{ id: '134', mode: 'triage' }] }, dispatch }),
-    /triage.*codex.*pair run/i,
+    /triage.*codex.*pair-cli run/i,
   )
 })
 

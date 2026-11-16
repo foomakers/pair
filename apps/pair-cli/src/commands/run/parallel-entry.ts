@@ -1,4 +1,5 @@
 import { join } from 'path'
+import { randomUUID } from 'node:crypto'
 import { POLICY_PATH, sectionLines } from './policy-sections'
 import type { FileSystemService } from '@pair/content-ops'
 import { readCardTitle, remoteBaseHead } from './cycle-wiring'
@@ -70,6 +71,7 @@ import { selectRootAnswer, selectRootCandidates, type SelectRootInput } from './
 import {
   declaredEngine,
   declaredEngineModel,
+  idleTimeoutForEngine,
   resolveAutonomyFor,
   type RunContext,
   type RunHandlerDependencies,
@@ -235,7 +237,7 @@ function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRoot
     model: fan.selectionModel ?? declaredEngineModel(input.context.config, engineDef.id),
     ...(fan.selectionEffort !== undefined && { effort: fan.selectionEffort }),
     timeoutSeconds: input.config.iterationTimeoutSeconds,
-    idleTimeoutSeconds: input.context.idleTimeout.seconds,
+    idleTimeoutSeconds: idleTimeoutForEngine(input.context, input.config, engineDef.id).seconds,
     ...(loop !== undefined && { loop }),
     ...(deps.runIteration !== undefined && { runIteration: deps.runIteration }),
   }
@@ -367,7 +369,7 @@ export async function handleParallelRun(
   const selection = resolveSelection(config, context.policy, context.autonomySelection)
   assertScope(selection)
   const values = resolveLoopValues(config, context.policy)
-  const { profile, selected, engine } = resolveParallelProfile(input, deps)
+  const { profile, selected, engine, resolvedInput } = resolveParallelProfile(input, deps)
   // Refused here, before anything spawns: the selection process runs under the same posture.
   const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
   reportPreamble(input, describeEngineResolution(engine), {
@@ -385,8 +387,14 @@ export async function handleParallelRun(
   }
 
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
+  const snapshot = join(context.workingArea, `run-config-${randomUUID()}.json`)
+  await fs.mkdir(context.workingArea, { recursive: true })
+  await fs.writeFile(
+    snapshot,
+    JSON.stringify({ root: cwd, config: context.config, ...(profile && { profile }) }),
+  )
   const fan: FanOut = {
-    input,
+    input: { ...resolvedInput, config: { ...config, runSnapshot: snapshot } },
     deps,
     selection,
     engineDef,
@@ -394,10 +402,24 @@ export async function handleParallelRun(
     ...(selected?.model && { selectionModel: selected.model }),
     ...(selected?.effort && { selectionEffort: selected.effort }),
   }
-  return await withLiveCards(input, deps, onEvent => {
-    const live: FanOut = { ...fan, input: { ...input, onEvent } }
-    return values.loopMode ? runLoop(live, values) : runSingleBatch(live)
-  })
+  try {
+    return await withLiveCards(resolvedInput, deps, onEvent => {
+      const live: FanOut = { ...fan, input: { ...fan.input, onEvent } }
+      return values.loopMode ? runLoop(live, values) : runSingleBatch(live)
+    })
+  } finally {
+    await fs.unlink(snapshot)
+  }
+}
+
+function withSelectionIdleTimeout(input: ParallelRunInput, engine: string): ParallelRunInput {
+  return {
+    ...input,
+    context: {
+      ...input.context,
+      idleTimeout: idleTimeoutForEngine(input.context, input.config, engine),
+    },
+  }
 }
 
 function resolveParallelProfile(input: ParallelRunInput, deps: RunHandlerDependencies) {
@@ -421,7 +443,12 @@ function resolveParallelProfile(input: ParallelRunInput, deps: RunHandlerDepende
     flag: config.engine,
     declared: selected?.engine ?? declaredEngine(context.config),
   })
-  return { profile, selected, engine }
+  return {
+    profile,
+    selected,
+    engine,
+    resolvedInput: withSelectionIdleTimeout(input, engine.engine.id),
+  }
 }
 
 function validateParallelSelection(

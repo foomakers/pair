@@ -63,7 +63,7 @@ Anything else — an unknown top-level key, an unknown stage (`verfy`), an unkno
 
 ### `context` is validated against the cycle's transition table
 
-`cycle-state.mjs` owns the allowed transitions. A conditional rule such as `"context": {"shared-with":"prepare","when":{"risk":"yellow"}}` shares only when the tier matches; otherwise the stage is fresh. `verify` is always fresh, and `validate` must be fresh at `risk:red`. `pair run` always starts a fresh process per stage. A `defaults.context: reuse` applies only where the table admits it.
+`cycle-state.mjs` owns the allowed transitions. A conditional rule such as `"context": {"shared-with":"prepare","when":{"risk":"yellow"}}` shares only when the tier matches; otherwise the stage is fresh. `verify` is always fresh, and `validate` must be fresh at `risk:red`. `pair run` always starts a fresh process per stage. Legacy `defaults.context: reuse` covers only `prepare→prepare`, `implement→green` and `green→green`; validation and verification remain fresh.
 
 ### Model classes
 
@@ -95,7 +95,7 @@ The profile is resolved **once**, before the first dispatch, and its table is pr
 
 For each field the order is CLI flag, profile `stages.<step>`, profile `defaults`, `run.agents.<engine>`, `run.defaults`, legacy `engine.*`, KB default. Per-agent settings cannot choose engine or effort. A malformed agent entry fails validation even when that engine is unused. `command` and `args` are passed as executable and literal argv; no shell interprets them. `run.defaults.engine` chooses the run engine when no flag or profile stage chooses one. Existing config needs no rewrite.
 
-`refine-story`, `plan-tasks`, `triage` and `classify` are stage ids for skills and batches. A skill uses its `process-step` marker, a batch uses its mode, and an unmapped invocation uses `defaults`. An in-session host reports engine/model gaps before dispatch with a `pair run` command.
+`refine-story`, `plan-tasks`, `triage` and `classify` are stage ids for skills and batches. A skill uses its `process-step` marker, a batch uses its mode, and an unmapped invocation uses `defaults`. An in-session host reports engine/model gaps before dispatch with a runnable `pair-cli run` command retaining the card, profile and compatible engine.
 
 ## Audit, not input
 
@@ -142,7 +142,12 @@ Six profiles ship under `.pair/adoption/tech/workflow-profiles/` as samples; reg
 | `profile-invalid` | unknown key/stage/field, bad value, forbidden `reuse`, malformed JSON, unknown stage engine |
 | `profile-name-collision` | two files declare the same `name` |
 
-`--profile` / `--workflow-config` apply only to a card that enters the delivery cycle; on a card routed to a mapped workflow or a preparation skill they are refused, never silently ignored.
+`--profile` / `--workflow-config` apply to delivery-cycle cards, mapped workflows, preparation skills, `--skill`, and `--prompt`. A skill uses its `process-step` marker; an unmapped skill or prompt uses `defaults`. Batch work uses its mode (`refine-story`, `plan-tasks`, `triage`, or `classify`). Disabled process steps are ignored with a note; a workflow profile never enables them.
+
+```bash
+pair-cli run --skill pair-process-plan-tasks --profile claude-medium --engine claude
+pair-cli run --prompt 'Inspect the project' --workflow-config ./profile.json --engine codex
+```
 
 ## Related
 

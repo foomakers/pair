@@ -3764,8 +3764,13 @@ const priorStepOfRole = (handoffs, toStep) => {
   }
   return null
 }
-const withContext = (next, handoffs, contextPolicy) =>
-  next && typeof next === 'object' && next.context === undefined ? { ...next, context: contextOf(priorStepOfRole(handoffs, next.step), next.step, contextPolicy) } : next
+const withContext = (next, handoffs, contextPolicy, tier) => {
+  if (!next || typeof next !== 'object' || next.context !== undefined) return next
+  const source = [...handoffs].reverse().map(h => STEP_OF_SKILL[h.skill]).find(step => contextPolicy?.[`${step}->${next.step}`] === 'reuse' && (AGENT_OF_STEP[step] === AGENT_OF_STEP[next.step] || ['risk:green', 'risk:yellow', 'risk:red'].includes(tier)))
+  const from = source ?? priorStepOfRole(handoffs, next.step)
+  const context = contextOf(from, next.step, contextPolicy)
+  return { ...next, context, ...(context === 'reuse' ? { contextSource: from, contextAgentType: AGENT_OF_STEP[from] } : {}) }
+}
 
 export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels, host }) {
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
@@ -3828,7 +3833,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
     }
     // US-521: the autonomy decision applies to a card with no handoff yet too (`until: ready` stops it before
     // `implement`; an escalation fires before its first dispatch).
-    const first = withContext(applyAutonomy(deriveNext([], policy, { entry }), { policy, tier, labels, prLabels }), [], contextPolicy)
+    const first = withContext(applyAutonomy(deriveNext([], policy, { entry }), { policy, tier, labels, prLabels }), [], contextPolicy, tier)
     return { status: first.step === 'blocked' && first.reason === 'escalated' ? 'escalated' : first.step === 'done' ? 'completed' : 'empty', next: first, handoffs: [], legacyRuns, workflowVersion, recovery: { spent: spentRounds(dir, readRecovery(dir).rounds).length, budget: recoveryBudget(policy) } }
   }
   for (const h of handoffs) {
@@ -3971,7 +3976,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
     if (next.step !== 'blocked' && Number.isInteger(Number(redirects)) && Number(redirects) >= CAPS.consecutiveRedirects)
       next = { step: 'blocked', reason: 'failed-resume', cap: 'consecutiveRedirects', detail: `${CAPS.consecutiveRedirects} consecutive redirects — the durable state and the dispatched step disagree` }
   }
-  next = withContext(next, handoffs, contextPolicy)
+  next = withContext(next, handoffs, contextPolicy, tier)
   // US-647: a blocked answer names its block — the value a maintainer decision comment quotes to resume it.
   if (next.step === 'blocked') next = { ...next, block }
   const status = next.step === 'done' ? 'completed' : next.reason === 'escalated' && next.step === 'blocked' ? 'escalated' : next.step === 'blocked' ? 'blocked' : 'in-progress'

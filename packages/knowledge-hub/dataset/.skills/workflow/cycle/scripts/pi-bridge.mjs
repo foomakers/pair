@@ -195,7 +195,8 @@ function callCommand(opts) {
   const n = (ledger.dispatches ?? 0) + 1
   // A new stable workflow key per pass: pi-subagents reuses a key only for identical launches.
   const key = `${packet.step}-${packet.phase}-${n}`.replace(/[^A-Za-z0-9._-]/g, '-')
-  const prev = ledger.roles?.[packet.agentType]
+  const sourceRole = packet.contextAgentType ?? packet.agentType
+  const prev = ledger.roles?.[sourceRole]
   const session = currentSession()
   const cwd = isAbsolute(packet.worktree) ? packet.worktree : resolvePath(packet.worktree)
   const task = `Read the stage skill first: ${skillFile}\n\n${packet.prompt}`
@@ -228,7 +229,7 @@ function callCommand(opts) {
   }
   // A host-rejected run stays rejected: drop it from the role in this same write, so a later
   // overwrite of `pending` (an unrecorded fresh retry, another role's call) cannot revive it.
-  if (rejected && ledger.roles?.[packet.agentType]?.runId === ledger.pending.runId) delete ledger.roles[packet.agentType]
+  if (rejected && ledger.roles?.[sourceRole]?.runId === ledger.pending.runId) delete ledger.roles[sourceRole]
   const args =
     op === 'resume'
       ? { key, runId: prev.runId, task: `${rehydration({ ...prev, role: packet.agentType })}\n\n${task}` }

@@ -639,7 +639,7 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
 
 test('TC-11: the workflow source dispatches ONLY skill invocations — no free-form prompt, no shell, no retired rule or role', () => {
   const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
-  const all = [...code.matchAll(/\b(?:agent(?:Retry)?|dispatch)\(\s*\n?\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
+  const all = [...code.matchAll(/\b(?:agent(?:Retry)?|dispatch)\(\s*\n?\s*([^\n,]+)/g), ...code.matchAll(/\bboundedAgent\('profile:resolve',\s*\n\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
   // US-524: the only dispatches that are not a skill invocation are the eight SCRIPT RUNNERS of the autonomy model (an agent
   // runs one named script and relays its JSON): resolve, tier, decide, escalate, pr-state, cascade, merge check, merge — and, US-523,
   // the prepare phase (cycle-prepare.mjs). No rule lives in them.
@@ -1297,7 +1297,7 @@ test('#617 AC-3/10: implement batch resolves stage model before dispatch and ref
   assert.equal(calls.find(c => c.opts.label === 'implement:#292').opts.model, 'opus')
   assert.equal(calls.find(c => c.opts.label === 'implement:#292').opts.effort, 'medium')
   stages.implement.engine.value = 'codex'
-  await assert.rejects(runWorkflow({ args: { cards: [STORY] }, entry: 'fresh', dispatch }), /implement.*codex.*pair run/i)
+  await assert.rejects(runWorkflow({ args: { cards: [STORY] }, entry: 'fresh', dispatch }), /implement.*codex.*pair-cli run/i)
 })
 
 test('US-486 canary follow-up: retired `efforts` roles are REJECTED with the same migration message as `models` — never mapped, never dropped', async () => {

@@ -409,6 +409,7 @@ export interface CycleDriverContext {
   readonly timeoutSeconds?: number | undefined
   /** US-573: seconds without an engine event before the stage is stopped (default 30 min). */
   readonly idleTimeoutSeconds?: number | undefined
+  readonly idleTimeoutOf?: ((engine: string) => number) | undefined
   readonly workflowVersion: string
   readonly baseBranch: string
   /** The model pinned for this engine, if the project declared one. */
@@ -793,7 +794,7 @@ const spawnStageFor = (
       ...(spawn.model !== undefined && { model: spawn.model }),
       ...(spawn.effort !== undefined && { effort: spawn.effort }),
       timeoutSeconds: ctx.timeoutSeconds,
-      idleTimeoutSeconds: ctx.idleTimeoutSeconds,
+      idleTimeoutSeconds: ctx.idleTimeoutOf?.(spawn.engine.id) ?? ctx.idleTimeoutSeconds,
       runIteration: spawnIteration,
       ...(progress !== undefined && { onEvent: taskReporter(progress) }),
     })

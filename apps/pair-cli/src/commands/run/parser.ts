@@ -68,6 +68,8 @@ export interface RunDispatchRequest {
 
 export interface RunCommandConfig {
   command: 'run'
+  /** Internal immutable configuration passed from the root/parallel parent. */
+  runSnapshot?: string
   /** AC-24: explicit --telemetry / --no-telemetry; absent reads the adoption. */
   telemetry?: boolean
   /** Present only when `--engine` was passed; resolution precedence lives in T-2. */
@@ -134,6 +136,7 @@ export const DEFAULT_WATCH_INTERVAL: RunInterval = { text: '10m', seconds: 600 }
 export const MIN_WATCH_INTERVAL_SECONDS = 60
 
 interface ParseRunOptions {
+  runSnapshot?: string
   telemetry?: boolean
   engine?: string
   skill?: string
@@ -546,10 +549,16 @@ function resolveStateOrder(options: ParseRunOptions): { stateOrder?: readonly st
 function resolveProfileSelection(options: ParseRunOptions): {
   profile?: string
   workflowConfig?: string
+  runSnapshot?: string
 } {
   const profile = optionalText(options.profile, '--profile')
   const workflowConfig = optionalText(options.workflowConfig, '--workflow-config')
-  return { ...(profile && { profile }), ...(workflowConfig && { workflowConfig }) }
+  const runSnapshot = optionalText(options.runSnapshot, '--run-snapshot')
+  return {
+    ...(profile && { profile }),
+    ...(workflowConfig && { workflowConfig }),
+    ...(runSnapshot && { runSnapshot }),
+  }
 }
 
 function resolveScope(options: ParseRunOptions): RunScopeOptions {
