@@ -50,16 +50,14 @@ import {
   stageTelemetryRecord,
 } from './telemetry'
 import {
-  closeOpenStages,
-  createTrace,
-  envelope,
-  sweepLostStages,
-  type StageHandle,
-  type Trace,
-} from './telemetry-trace'
-import { telemetryPrices } from './telemetry-policy'
-import { onInterrupt } from './interrupt'
-import { hostname, platform as osPlatform } from 'os'
+  SUCCESS,
+  appendCardRecord,
+  causeOf,
+  openStage,
+  startTrace,
+  tracedBridge,
+} from './cycle-trace'
+import type { StageHandle, Trace } from './telemetry-trace'
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -510,20 +508,7 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   const trace: { current?: Trace } = {}
   return {
     trace,
-    // AC-3: every granted recovery round is a telemetry event (one wrap covers every recovery site).
-    bridge: {
-      ...bridge,
-      recover: (options: Parameters<typeof bridge.recover>[0]) => {
-        const round = bridge.recover(options)
-        if (round.allowed)
-          trace.current?.event('recovery-round', {
-            kind: options.kind,
-            round: round.round,
-            budget: round.budget,
-          })
-        return round
-      },
-    },
+    bridge: tracedBridge(bridge, trace),
     main,
     runId: input.runId,
     cardId: input.card,
@@ -758,13 +743,6 @@ const packetFor =
     }) as never
   }
 
-/** C4: the cause the stage's own outcome already names; everything else is null (no guess). */
-function causeOf(result: CycleStageResult): string | undefined {
-  if (result.stalled === true) return 'stalled'
-  const status = result.final?.status
-  return status === 'halted' || status === 'cancelled' ? status : undefined
-}
-
 function recordStageTelemetry(input: {
   enabled: boolean
   co: Coordinates
@@ -783,22 +761,22 @@ function recordStageTelemetry(input: {
   if (!input.enabled) return
   const settle = (advanced: boolean) => {
     const record = stageTelemetryRecord({
-        id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
-        run: co.runId,
-        card: co.cardId,
-        step: stage.step ?? 'unknown',
-        ...(stage.phase !== undefined && { phase: stage.phase }),
-        start,
-        end,
-        previousEnd,
-        engine: spawn.engine.id,
-        ...(spawn.model !== undefined && { model: spawn.model }),
-        processOutcome: result.processOutcome,
-        ...(result.final?.status !== undefined && { finalStatus: result.final.status }),
-        retries,
-        advanced,
-        observation: result.telemetry ?? {},
-      })
+      id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
+      run: co.runId,
+      card: co.cardId,
+      step: stage.step ?? 'unknown',
+      ...(stage.phase !== undefined && { phase: stage.phase }),
+      start,
+      end,
+      previousEnd,
+      engine: spawn.engine.id,
+      ...(spawn.model !== undefined && { model: spawn.model }),
+      processOutcome: result.processOutcome,
+      ...(result.final?.status !== undefined && { finalStatus: result.final.status }),
+      retries,
+      advanced,
+      observation: result.telemetry ?? {},
+    })
     appendTelemetry(co.main, record)
     input.handle?.close({
       outcome: String(record['outcomeClass']),
@@ -818,6 +796,57 @@ const taskReporter = (progress: CardProgress) => (payload: unknown) => {
   if (task !== undefined) progress.task(task)
 }
 
+/** The trace's `start` facts for one dispatch (allow-listed: no packet text). */
+const stageStart = (
+  ctx: CycleDriverContext,
+  co: Coordinates,
+  d: {
+    stage: { step?: string; phase?: string }
+    spawn: ReturnType<typeof stageSpawnFor>
+    key: string
+    retries: number
+    start: number
+    packet: unknown
+  },
+) => ({
+  step: d.stage.step ?? 'unknown',
+  phase: d.stage.phase,
+  engine: d.spawn.engine.id,
+  model: d.spawn.model,
+  effort: d.spawn.effort,
+  context: ctx.profile?.stages[d.stage.step ?? '']?.context.value,
+  retries: d.retries,
+  startedAt: d.start,
+  legacyId: `${co.runId}:${co.cardId}:${d.key}:${d.start}:${d.retries}`,
+  worktree: (d.packet as { worktree?: string }).worktree,
+})
+
+const runEngine = (
+  ctx: CycleDriverContext,
+  co: Coordinates,
+  d: {
+    progress: CardProgress | undefined
+    packet: unknown
+    spawn: ReturnType<typeof stageSpawnFor>
+  },
+) => {
+  const { progress, packet, spawn } = d
+  return runStage({
+    engine: spawn.engine,
+    // Every phase skill anchors its run directory in the MAIN checkout. The packet's worktree
+    // still names where the agent edits; spawning there would misplace the handoff and make a
+    // successful stage appear not advanced.
+    packet: { ...(packet as object), worktree: co.main } as never,
+    autonomyArgs: spawn.autonomyArgs,
+    ...(spawn.model !== undefined && { model: spawn.model }),
+    ...(spawn.effort !== undefined && { effort: spawn.effort }),
+    timeoutSeconds: ctx.timeoutSeconds,
+    idleTimeoutSeconds: ctx.idleTimeoutSeconds,
+    runIteration: spawnIteration,
+    ...(progress !== undefined && { onEvent: taskReporter(progress) }),
+  })
+}
+
 const spawnStageFor = (
   ctx: CycleDriverContext,
   co: Coordinates,
@@ -833,32 +862,8 @@ const spawnStageFor = (
     const retries = attempts.get(key) ?? 0
     attempts.set(key, retries + 1)
     const start = Date.now()
-    const handle = co.trace.current?.start({
-      step: stage.step ?? 'unknown',
-      phase: stage.phase,
-      engine: spawn.engine.id,
-      model: spawn.model,
-      effort: spawn.effort ?? 'default',
-      context: ctx.profile?.stages[stage.step ?? '']?.context.value,
-      retries,
-      startedAt: start,
-      legacyId: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
-      worktree: (packet as { worktree?: string }).worktree,
-    })
-    const result = await runStage({
-      engine: spawn.engine,
-      // Every phase skill anchors its run directory in the MAIN checkout. The packet's worktree
-      // still names where the agent edits; spawning there would misplace the handoff and make a
-      // successful stage appear not advanced.
-      packet: { ...(packet as object), worktree: co.main } as never,
-      autonomyArgs: spawn.autonomyArgs,
-      ...(spawn.model !== undefined && { model: spawn.model }),
-      ...(spawn.effort !== undefined && { effort: spawn.effort }),
-      timeoutSeconds: ctx.timeoutSeconds,
-      idleTimeoutSeconds: ctx.idleTimeoutSeconds,
-      runIteration: spawnIteration,
-      ...(progress !== undefined && { onEvent: taskReporter(progress) }),
-    }).catch((error: unknown) => {
+    const handle = openStage(co, stageStart(ctx, co, { stage, spawn, key, retries, start, packet }))
+    const result = await runEngine(ctx, co, { progress, packet, spawn }).catch((error: unknown) => {
       handle?.close({ outcome: 'failed', cause: 'crashed' })
       throw error
     })
@@ -1625,7 +1630,9 @@ function finalPr(outcome: CycleOutcome): number | undefined {
   return typeof pr === 'number' ? pr : undefined
 }
 
-const SUCCESS = new Set(['ready-for-merge', 'merged'])
+/** A non-success stop's reason (or status), else none. */
+const causeOfOutcome = (outcome: CycleOutcome): string | undefined =>
+  SUCCESS.has(outcome.status) ? undefined : (outcome.reason ?? outcome.status)
 
 function recordCardTelemetry({
   ctx,
@@ -1643,41 +1650,33 @@ function recordCardTelemetry({
   if (outcome.status === 'rounds-bound-reached' || outcome.status === 'other-run') return
   const pr = finalPr(outcome) ?? input.pr
   const end = Date.now()
-  const { kind: _kind, id, outcome: _outcome, cause: _cause, ...card } = cardTelemetryRecord({
-      id: `${input.runId}:${input.card}`,
-      card: input.card,
-      run: input.runId,
-      ...(pr !== undefined && { pr }),
-      pairVersion,
-      workflowVersion: ctx.workflowVersion,
+  const cause = causeOfOutcome(outcome)
+  const card = cardTelemetryRecord({
+    id: `${input.runId}:${input.card}`,
+    card: input.card,
+    run: input.runId,
+    ...(pr !== undefined && { pr }),
+    pairVersion,
+    workflowVersion: ctx.workflowVersion,
+    profile: ctx.profile?.name ?? 'default',
+    start: startedAt,
+    end,
+    outcome: outcome.status,
+    ...(cause !== undefined && { cause }),
+    stages: readCardStages(co.main, input.card),
+    interventions: readInterventions(co.runDir),
+    ...readCycleProgress(co.runDir),
+  })
+  appendCardRecord(
+    co,
+    card,
+    {
       profile: ctx.profile?.name ?? 'default',
-      start: startedAt,
-      end,
+      pr,
       outcome: outcome.status,
-      ...(!SUCCESS.has(outcome.status) && { cause: outcome.reason ?? outcome.status }),
-      stages: readCardStages(co.main, input.card),
-      interventions: readInterventions(co.runDir),
-      ...readCycleProgress(co.runDir),
-    })
-  appendTelemetry(
-    co.main,
-    envelope(
-      'card',
-      id,
-      end,
-      {
-        run: input.runId,
-        card: input.card,
-        epic: co.epic,
-        pr,
-        branch: co.branch,
-        profile: ctx.profile?.name ?? 'default',
-        tier: co.tier,
-        outcome: outcome.status,
-        cause: SUCCESS.has(outcome.status) ? undefined : (outcome.reason ?? outcome.status),
-      },
-      card,
-    ),
+      cause,
+    },
+    end,
   )
 }
 
@@ -1694,7 +1693,7 @@ const mergeWithTelemetry =
   (ctx: CycleDriverContext, co: Coordinates, merge: ReturnType<typeof mergeFor>) =>
   async (next: CycleNext, answer: CycleResolveAnswer): Promise<CycleMergeOutcome> => {
     const start = Date.now()
-    const handle = co.trace.current?.start({
+    const handle = openStage(co, {
       step: 'merge',
       engine: ctx.engine.id,
       retries: 0,
@@ -1726,76 +1725,10 @@ const mergeWithTelemetry =
     return merged
   }
 
-/**
- * T-2/T-4/T-5: opens the run's trace (C1 context, allow-listed: never card text, prompts or secrets), sweeps
- * orphan `start`s as `lost`, and makes a signal or crash close every open stage with ONE `end` before exit.
- * Telemetry off ⇒ no trace and no handler. Returns the teardown.
- */
-function startTrace(ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates): () => void {
-  if (ctx.telemetryEnabled !== true) return () => undefined
-  sweepLostStages(co.main)
-  co.trace.current = createTrace({
-    root: co.main,
-    run: co.runId,
-    card: co.cardId,
-    epic: co.epic,
-    branch: co.branch,
-    profile: ctx.profile?.name ?? 'default',
-    tier: co.tier,
-    pr: input.pr,
-    prices: telemetryPrices(co.main),
-    context: {
-      command: 'pair run',
-      flags: {
-        card: input.card,
-        ...(input.pr !== undefined && { pr: input.pr }),
-        ...(input.rounds !== undefined && { rounds: input.rounds }),
-        baseBranch: ctx.baseBranch,
-        timeoutSeconds: ctx.timeoutSeconds ?? null,
-        idleTimeoutSeconds: ctx.idleTimeoutSeconds ?? null,
-      },
-      runEngine: ctx.engine.id,
-      profileHash: ctx.profile?.hash ?? null,
-      stages: Object.fromEntries(
-        Object.entries(ctx.profile?.stages ?? {}).map(([step, s]) => [
-          step,
-          {
-            engine: s.engine.value,
-            model: s.model.resolved.id,
-            effort: s.effort.value,
-            context: s.context.value,
-          },
-        ]),
-      ),
-      autonomy: co.autonomy ?? null,
-      autoRecoveryRounds: input.budgets?.autoRecoveryRounds ?? null,
-      baseSha: remoteHead(co.main, ctx.baseBranch.replace(/^origin\//, '')) ?? null,
-      headSha: remoteHead(co.main, co.branch) ?? null,
-      pairVersion,
-      os: osPlatform(),
-      pid: process.pid,
-      host: hostname(),
-    },
-  })
-  const off = onInterrupt(signal => closeOpenStages('interrupted', signal))
-  const crashed = () => closeOpenStages('crashed')
-  // The monitor observes a crash without changing its default handling (a plain listener would swallow it).
-  process.once('uncaughtExceptionMonitor', crashed)
-  return () => {
-    off()
-    process.removeListener('uncaughtExceptionMonitor', crashed)
-  }
-}
-
-/** AC-3: the run's end as an event — an awaiting-human park, or a halt (any other non-success stop). */
-function traceOutcome(co: Coordinates, outcome: CycleOutcome): void {
-  const status = outcome.status
-  if (SUCCESS.has(status) || status === 'rounds-bound-reached' || status === 'other-run') return
-  const reason = outcome.reason ?? null
-  if (status === 'awaiting-human' || status === 'needs-human')
-    co.trace.current?.event('park', { status, reason })
-  else co.trace.current?.event('halt', { status, reason })
-}
+const shasOf = (ctx: CycleDriverContext, co: Coordinates) => ({
+  base: remoteHead(co.main, ctx.baseBranch.replace(/^origin\//, '')),
+  head: remoteHead(co.main, co.branch),
+})
 
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
@@ -1816,7 +1749,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
     const hooks = loadCycleHooks(ctx, co)
     const progress = progressFor(input.card, policy, co.title, input.onRunEvent)
     const startedAt = Date.now()
-    const untrace = startTrace(ctx, input, co)
+    const runTrace = startTrace(ctx, input, co, shasOf(ctx, co))
     const pending: PendingStages = []
     const merge = mergeFor(ctx, input, co, progress)
     const outcome = await runCycle({
@@ -1842,8 +1775,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       },
     })
     pending.splice(0).forEach(settle => settle(true))
-    traceOutcome(co, outcome)
-    untrace()
+    runTrace.finish(outcome)
     if (ctx.telemetryEnabled === true) recordCardTelemetry({ ctx, input, co, outcome, startedAt })
     return outcome
   }

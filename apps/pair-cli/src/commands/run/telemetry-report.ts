@@ -177,45 +177,56 @@ function stageRows(records: readonly TelemetryRecord[]): Array<TelemetryRecord &
   })
 }
 
+const newGroup = (): Group => ({
+  stages: 0,
+  inProgress: 0,
+  interrupted: 0,
+  lost: 0,
+  durationMs: 0,
+  tokens: 0,
+  cost: 0,
+})
+
+interface Sums {
+  tokens: number[]
+  cost: number[]
+  unmeasured: [boolean, boolean]
+}
+
+function addRow(group: Group, sum: Sums, row: TelemetryRecord & { open?: true }): void {
+  group.stages++
+  if (row.open) {
+    group.inProgress++
+    sum.unmeasured = [true, true]
+    return
+  }
+  if (row['cause'] === 'lost') group.lost++
+  if (row['cause'] === 'interrupted') group.interrupted++
+  group.durationMs += number(row['durationMs']) ?? 0
+  const tokens = tokenCount(row)
+  const cost = number(row['cost'])
+  if (tokens === undefined) sum.unmeasured[0] = true
+  else sum.tokens.push(tokens)
+  if (cost === undefined) sum.unmeasured[1] = true
+  else sum.cost.push(cost)
+}
+
 /** Per-card by default; `--by run|runner|model|step|epic` regroup the SAME records. Unmeasured stays `not measured`. */
 export function groupTelemetry(
   records: readonly TelemetryRecord[],
   by: Exclude<View, 'engine'> | 'card' = 'card',
 ): Record<string, Group> {
   const groups: Record<string, Group> = {}
-  const sums = new Map<string, { tokens: number[]; cost: number[]; unmeasured: [boolean, boolean] }>()
+  const sums: Record<string, Sums> = {}
   for (const row of stageRows(records)) {
     const key = String(row[FIELD[by]] ?? 'none')
-    const group = (groups[key] ??= {
-      stages: 0,
-      inProgress: 0,
-      interrupted: 0,
-      lost: 0,
-      durationMs: 0,
-      tokens: 0,
-      cost: 0,
-    })
-    const sum = sums.get(key) ?? { tokens: [], cost: [], unmeasured: [false, false] }
-    sums.set(key, sum)
-    group.stages++
-    if (row.open) {
-      group.inProgress++
-      sum.unmeasured = [true, true]
-      continue
-    }
-    if (row['cause'] === 'lost') group.lost++
-    if (row['cause'] === 'interrupted') group.interrupted++
-    group.durationMs += number(row['durationMs']) ?? 0
-    const tokens = tokenCount(row)
-    if (tokens === undefined) sum.unmeasured[0] = true
-    else sum.tokens.push(tokens)
-    const cost = number(row['cost'])
-    if (cost === undefined) sum.unmeasured[1] = true
-    else sum.cost.push(cost)
+    const group = (groups[key] ??= newGroup())
+    const sum = (sums[key] ??= { tokens: [], cost: [], unmeasured: [false, false] })
+    addRow(group, sum, row)
   }
+  const total = (values: number[]) => values.reduce((a, b) => a + b, 0)
   for (const [key, group] of Object.entries(groups)) {
-    const sum = sums.get(key)!
-    const total = (values: number[]) => values.reduce((a, b) => a + b, 0)
+    const sum = sums[key]!
     group.tokens = sum.unmeasured[0] ? 'not measured' : total(sum.tokens)
     group.cost = sum.unmeasured[1] ? 'not measured' : total(sum.cost)
   }
@@ -234,11 +245,17 @@ export function renderGroups(groups: Record<string, Group>): string {
     .join('\n')
 }
 
-/** `--by engine` is the legacy per-engine cohort view; every other view (default: per card) is stage-level. */
+const engineView = (records: readonly TelemetryRecord[]) =>
+  renderTelemetryReport(summarizeTelemetry([...records]))
+
+/**
+ * Default: per card (stage-level, incl. in-progress/interrupted/lost), then the legacy per-engine cohorts
+ * (existing readers keep their lines). `--by engine` is the cohorts alone; every other view is stage-level.
+ */
 export function renderView(records: readonly TelemetryRecord[], by?: View): string {
-  return by === 'engine'
-    ? renderTelemetryReport(summarizeTelemetry([...records]))
-    : renderGroups(groupTelemetry(records, by))
+  if (by === 'engine') return engineView(records)
+  const groups = renderGroups(groupTelemetry(records, by))
+  return by === undefined ? `${groups}\n${engineView(records)}` : groups
 }
 
 if (require.main === module) {
@@ -249,6 +266,7 @@ if (require.main === module) {
     process.stderr.write(`--by: expected one of ${VIEWS.join(', ')}\n`)
     process.exit(1)
   }
-  const root = args.find((a, i) => !a.startsWith('--') && i !== at + 1) ?? process.cwd()
+  const root =
+    args.find((a, i) => !a.startsWith('--') && i !== (at < 0 ? -1 : at + 1)) ?? process.cwd()
   process.stdout.write(`${renderView(readTelemetryRecords(root), by)}\n`)
 }

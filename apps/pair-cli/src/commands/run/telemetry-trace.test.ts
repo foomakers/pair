@@ -27,11 +27,52 @@ const records = (root: string): TelemetryRecord[] =>
     .split('\n')
     .flatMap(line => parseTelemetryLine(line) ?? [])
 
-const KEYS = ['schema', 'id', 'ts', 'run', 'card', 'epic', 'pr', 'branch', 'step', 'phase', 'block', 'round', 'group', 'engine', 'model', 'effort', 'profile', 'tier', 'outcome', 'cause']
+const KEYS = [
+  'schema',
+  'id',
+  'ts',
+  'run',
+  'card',
+  'epic',
+  'pr',
+  'branch',
+  'step',
+  'phase',
+  'block',
+  'round',
+  'group',
+  'engine',
+  'model',
+  'effort',
+  'profile',
+  'tier',
+  'outcome',
+  'cause',
+]
 const trace = (root: string, now: () => number, prices = {}) =>
-  createTrace({ root, run: 'r1', card: '661', profile: 'p', context: { command: 'pair run' }, prices, now })
-const info = { step: 'implement', phase: 'a0', engine: 'codex', model: 'm1', effort: 'high', retries: 0 }
-const tokens = { freshIn: 1_000_000, cachedIn: 2_000_000, out: 500_000, reasoning: 'not measured' as const }
+  createTrace({
+    root,
+    run: 'r1',
+    card: '661',
+    profile: 'p',
+    context: { command: 'pair run' },
+    prices,
+    now,
+  })
+const info = {
+  step: 'implement',
+  phase: 'a0',
+  engine: 'codex',
+  model: 'm1',
+  effort: 'high',
+  retries: 0,
+}
+const tokens = {
+  freshIn: 1_000_000,
+  cachedIn: 2_000_000,
+  out: 500_000,
+  reasoning: 'not measured' as const,
+}
 
 it('AC-1/2/6: start precedes end; both carry every key; end has outcome, duration, tokens, cost', () => {
   const root = tmp()
@@ -42,7 +83,13 @@ it('AC-1/2/6: start precedes end; both carry every key; end has outcome, duratio
   expect([start!.kind, end!.kind]).toEqual(['start', 'end'])
   for (const r of [start!, end!]) expect(Object.keys(r)).toEqual(expect.arrayContaining(KEYS))
   expect(start).toMatchObject({ schema: 2, pid: process.pid, command: 'pair run', phase: 'a0' })
-  expect(end).toMatchObject({ outcome: 'ok', cause: null, durationMs: 500, tokens, startId: start!.id })
+  expect(end).toMatchObject({
+    outcome: 'ok',
+    cause: null,
+    durationMs: 500,
+    tokens,
+    startId: start!.id,
+  })
   // 1M fresh × $2 + 2M cached × $1 + 0.5M out × $8
   expect(end!['cost']).toBe(8)
 })
@@ -72,7 +119,10 @@ it('AC-4: malformed or absent price table ⇒ no prices', () => {
   const md = (json: string) => `## Telemetry\n- enabled: true\n\n\`\`\`json\n${json}\n\`\`\`\n`
   writeFileSync(join(root, '.pair/adoption/tech/automation.md'), md('{ nope'))
   expect(telemetryPrices(root)).toEqual({})
-  writeFileSync(join(root, '.pair/adoption/tech/automation.md'), md('{"prices":{"m":{"fresh":1,"cached":0.1,"out":5},"bad":{"fresh":"x"}}}'))
+  writeFileSync(
+    join(root, '.pair/adoption/tech/automation.md'),
+    md('{"prices":{"m":{"fresh":1,"cached":0.1,"out":5},"bad":{"fresh":"x"}}}'),
+  )
   expect(telemetryPrices(root)).toEqual({ m: { fresh: 1, cached: 0.1, out: 5 } })
 })
 
@@ -106,7 +156,11 @@ it('AC-5: a signal closes every open stage with one interrupted end carrying the
 const orphan = (root: string, over: Record<string, unknown>) =>
   appendTelemetry(
     root,
-    envelope('start', 'r1:661:implement:a0:start:0.1000', 1000, { run: 'r1', card: '661', step: 'implement', phase: 'a0' }, over),
+    envelope(
+      { kind: 'start', id: 'r1:661:implement:a0:start:0.1000', ts: 1000 },
+      { run: 'r1', card: '661', step: 'implement', phase: 'a0' },
+      over,
+    ),
   )
 
 it('AC-5: orphan start with a dead pid on this host ⇒ one lost end at the stage last record; idempotent', () => {
@@ -128,9 +182,9 @@ it.each([
   expect(records(root).filter(r => r.kind === 'end')).toHaveLength(0)
 })
 
-const end = (card: string, run: string, engine: string, model: string, over: Record<string, unknown> = {}): TelemetryRecord => ({
+const end = (card: string, run: string, over: Record<string, unknown> = {}): TelemetryRecord => ({
   kind: 'end',
-  id: `${run}:${card}:${engine}:${model}:${String(over['cause'])}`,
+  id: `${run}:${card}:${String(over['engine'])}:${String(over['cause'])}`,
   schema: 2,
   ts: '2026-01-01T00:00:10.000Z',
   run,
@@ -138,8 +192,8 @@ const end = (card: string, run: string, engine: string, model: string, over: Rec
   epic: '605',
   step: 'implement',
   phase: 'a0',
-  engine,
-  model,
+  engine: 'codex',
+  model: 'm1',
   effort: 'high',
   outcome: 'ok',
   cause: null,
@@ -151,9 +205,15 @@ const end = (card: string, run: string, engine: string, model: string, over: Rec
 
 it('AC-7: the card lists each stage and totals per runner and per model across runs; no single engine', () => {
   const stages = [
-    end('661', 'r1', 'codex', 'm1'),
-    end('661', 'r2', 'claude', 'm2'),
-    end('661', 'r2', 'claude', 'm2', { cause: 'interrupted', tokens: 'not measured', cost: 'not measured' }),
+    end('661', 'r1', { engine: 'codex', model: 'm1' }),
+    end('661', 'r2', { engine: 'claude', model: 'm2' }),
+    end('661', 'r2', {
+      engine: 'claude',
+      model: 'm2',
+      cause: 'interrupted',
+      tokens: 'not measured',
+      cost: 'not measured',
+    }),
   ]
   const card = cardTelemetryRecord({
     id: 'r2:661',
@@ -190,15 +250,25 @@ const legacy: TelemetryRecord = {
 }
 
 it('AC-8: per-card default includes in-progress, interrupted and lost; legacy stage counts as an end', () => {
-  const start: TelemetryRecord = { ...end('661', 'r3', 'codex', 'm1'), kind: 'start', id: 'r3:start' }
+  const start: TelemetryRecord = {
+    ...end('661', 'r3', { engine: 'codex', model: 'm1' }),
+    kind: 'start',
+    id: 'r3:start',
+  }
   const groups = groupTelemetry([
-    end('661', 'r1', 'codex', 'm1'),
-    end('661', 'r1', 'codex', 'm1', { cause: 'interrupted' }),
-    end('661', 'r1', 'codex', 'm1', { cause: 'lost' }),
+    end('661', 'r1', { engine: 'codex', model: 'm1' }),
+    end('661', 'r1', { engine: 'codex', model: 'm1', cause: 'interrupted' }),
+    end('661', 'r1', { engine: 'codex', model: 'm1', cause: 'lost' }),
     start,
     legacy,
   ])
-  expect(groups['661']).toMatchObject({ stages: 4, inProgress: 1, interrupted: 1, lost: 1, tokens: 'not measured' })
+  expect(groups['661']).toMatchObject({
+    stages: 4,
+    inProgress: 1,
+    interrupted: 1,
+    lost: 1,
+    tokens: 'not measured',
+  })
   expect(groups['9']).toMatchObject({ stages: 1, durationMs: 7, tokens: 1, cost: 'not measured' })
 })
 
@@ -210,7 +280,10 @@ it.each([
   ['epic', ['605']],
 ] as const)('AC-8: --by %s regroups the same records', (view, keys) => {
   const groups = groupTelemetry(
-    [end('661', 'r1', 'codex', 'm1'), end('661', 'r2', 'claude', 'm2')],
+    [
+      end('661', 'r1', { engine: 'codex', model: 'm1' }),
+      end('661', 'r2', { engine: 'claude', model: 'm2' }),
+    ],
     view,
   )
   expect(Object.keys(groups).sort()).toEqual([...keys])

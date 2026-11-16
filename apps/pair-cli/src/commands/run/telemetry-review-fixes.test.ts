@@ -346,7 +346,11 @@ it('AC-1/2/3 #661: start precedes end, events mark PR and park, records leak no 
 
 it('AC-3 #661: an awaiting-human stop is a park event', async () => {
   const { root } = await drive({
-    resolves: () => ({ status: 'in-progress', policy: { deadDispatchRetries: 1 }, next: implement }),
+    resolves: () => ({
+      status: 'in-progress',
+      policy: { deadDispatchRetries: 1 },
+      next: implement,
+    }),
   })
   expect(readTelemetryRecords(root).filter(r => r.kind === 'event')).toMatchObject([
     { event: 'park', status: 'awaiting-human' },

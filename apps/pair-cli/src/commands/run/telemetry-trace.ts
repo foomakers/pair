@@ -36,18 +36,16 @@ export type EnvelopeKeys = { [K in (typeof KEYS)[number]]?: string | number | un
 
 /** C2: every v2 record carries every key (null when n/a); extras can never shadow them. */
 export function envelope(
-  kind: TelemetryKind,
-  id: string,
-  ts: number,
+  head: { readonly kind: TelemetryKind; readonly id: string; readonly ts: number },
   keys: EnvelopeKeys,
   extra: Record<string, unknown> = {},
 ): TelemetryRecord {
   return {
     ...extra,
     schema: TELEMETRY_SCHEMA,
-    id,
-    kind,
-    ts: new Date(ts).toISOString(),
+    id: head.id,
+    kind: head.kind,
+    ts: new Date(head.ts).toISOString(),
     ...Object.fromEntries(KEYS.map(k => [k, keys[k] ?? null])),
   } as TelemetryRecord
 }
@@ -101,93 +99,116 @@ export function closeOpenStages(cause: string, signal?: string): void {
   for (const handle of [...open]) handle.close({ outcome: 'failed', cause, signal })
 }
 
-export function createTrace(init: TraceInit) {
-  const now = init.now ?? Date.now
-  let pr = init.pr
-  const keys = (s?: Partial<StageInfo>, outcome?: string, cause?: string): EnvelopeKeys => ({
-    run: init.run,
-    card: init.card,
-    epic: init.epic,
-    pr,
-    branch: init.branch,
-    step: s?.step,
-    phase: s?.phase,
-    engine: s?.engine,
-    model: s?.model,
-    effort: s?.effort,
-    profile: init.profile,
-    tier: init.tier,
-    outcome,
-    cause,
-  })
-  const write = (record: TelemetryRecord) => appendTelemetry(init.root, record)
-  let events = 0
-  const event = (
-    name: 'recovery-round' | 'park' | 'halt' | 'pr-opened',
-    extra: Record<string, unknown> = {},
-  ): void => {
-    const ts = now()
-    write(
-      envelope('event', `${init.run}:${init.card}:${name}:${ts}.${events++}`, ts, keys(), {
-        event: name,
-        ...extra,
+type EventName = 'recovery-round' | 'park' | 'halt' | 'pr-opened'
+
+export class Trace {
+  private pr: number | undefined
+  private events = 0
+
+  constructor(private readonly init: TraceInit) {
+    this.pr = init.pr
+  }
+
+  private now(): number {
+    return (this.init.now ?? Date.now)()
+  }
+
+  private keys(s?: Partial<StageInfo>, outcome?: string, cause?: string): EnvelopeKeys {
+    const { run, card, epic, branch, profile, tier } = this.init
+    const { step, phase, engine, model, effort } = s ?? {}
+    return {
+      run,
+      card,
+      epic,
+      pr: this.pr,
+      branch,
+      step,
+      phase,
+      engine,
+      model,
+      effort,
+      profile,
+      tier,
+      outcome,
+      cause,
+    }
+  }
+
+  private write(record: TelemetryRecord): void {
+    appendTelemetry(this.init.root, record)
+  }
+
+  /** AC-3: `recovery-round`, `park`, `halt`, `pr-opened`. */
+  event(name: EventName, extra: Record<string, unknown> = {}): void {
+    const ts = this.now()
+    const id = `${this.init.run}:${this.init.card}:${name}:${ts}.${this.events++}`
+    this.write(envelope({ kind: 'event', id, ts }, this.keys(), { event: name, ...extra }))
+  }
+
+  /** The first PR number a resolve names is the publication; later records carry it as `pr`. */
+  observePr(next: unknown): void {
+    if (typeof next !== 'number' || this.pr !== undefined) return
+    this.pr = next
+    this.event('pr-opened', { prNumber: next })
+  }
+
+  /** AC-1: the `start` is written before the engine spawns. */
+  start(s: StageInfo): StageHandle {
+    const ts = s.startedAt ?? this.now()
+    const seq = `${s.retries}.${ts}`
+    const at = `${this.init.run}:${this.init.card}:${s.step}:${s.phase ?? ''}`
+    const startId = `${at}:start:${seq}`
+    this.write(
+      envelope({ kind: 'start', id: startId, ts }, this.keys(s), {
+        ...this.init.context,
+        stageContext: s.context ?? null,
+        worktree: s.worktree ?? null,
+        pid: process.pid,
+        host: hostname(),
       }),
     )
+    let closed = false
+    const handle: StageHandle & { readonly runKey: string } = {
+      runKey: this.init.run,
+      close: end => {
+        if (closed) return
+        closed = true
+        open.delete(handle)
+        this.writeEnd({ at, seq, startId, startTs: ts }, s, end)
+      },
+    }
+    open.add(handle)
+    return handle
   }
-  return {
-    /** AC-3: `recovery-round`, `park`, `halt`, `pr-opened`. */
-    event,
-    /** The first PR number a resolve names is the publication; later records carry it as `pr`. */
-    observePr(next: unknown): void {
-      if (typeof next !== 'number' || pr !== undefined) return
-      pr = next
-      event('pr-opened', { prNumber: next })
-    },
-    /** AC-1: the `start` is written before the engine spawns. */
-    start(s: StageInfo): StageHandle {
-      const ts = s.startedAt ?? now()
-      const seq = `${s.retries}.${ts}`
-      const at = `${init.run}:${init.card}:${s.step}:${s.phase ?? ''}`
-      const startId = `${at}:start:${seq}`
-      write(
-        envelope('start', startId, ts, keys(s), {
-          ...init.context,
+
+  private writeEnd(
+    ids: { at: string; seq: string; startId: string; startTs: number },
+    s: StageInfo,
+    end: StageEnd,
+  ): void {
+    const endTs = this.now()
+    const tokens = end.observation?.tokens ?? 'not measured'
+    const price = s.model === undefined ? undefined : this.init.prices[s.model]
+    this.write(
+      envelope(
+        { kind: 'end', id: `${ids.at}:end:${ids.seq}`, ts: endTs },
+        this.keys(s, end.outcome, end.cause),
+        {
+          startId: ids.startId,
+          signal: end.signal ?? null,
+          legacyId: s.legacyId ?? null,
+          durationMs: endTs - ids.startTs,
+          tokens,
+          sessionId: end.observation?.sessionId ?? 'not measured',
           stageContext: s.context ?? null,
-          worktree: s.worktree ?? null,
-          pid: process.pid,
-          host: hostname(),
-        }),
-      )
-      let closed = false
-      const handle = {
-        runKey: init.run,
-        close(end: StageEnd): void {
-          if (closed) return
-          closed = true
-          open.delete(handle)
-          const endTs = now()
-          const tokens = end.observation?.tokens ?? 'not measured'
-          write(
-            envelope('end', `${at}:end:${seq}`, endTs, keys(s, end.outcome, end.cause), {
-              startId,
-              signal: end.signal ?? null,
-              legacyId: s.legacyId ?? null,
-              durationMs: endTs - ts,
-              tokens,
-              sessionId: end.observation?.sessionId ?? 'not measured',
-              stageContext: s.context ?? null,
-              cost: costOf(tokens, s.model === undefined ? undefined : init.prices[s.model]),
-            }),
-          )
+          cost: costOf(tokens, price),
         },
-      }
-      open.add(handle)
-      return handle
-    },
+      ),
+    )
   }
 }
 
-export type Trace = ReturnType<typeof createTrace>
+export const createTrace = (init: TraceInit): Trace => new Trace(init)
 
 function isDead(pid: number): boolean {
   try {
@@ -225,17 +246,23 @@ export function sweepLostStages(root: string, host: string = hostname()): number
       r['step'] === start['step'] &&
       r['phase'] === start['phase']
     const last = Math.max(
-      ...records.filter(same).map(r => Date.parse(String(r['ts']))).filter(Number.isFinite),
+      ...records
+        .filter(same)
+        .map(r => Date.parse(String(r['ts'])))
+        .filter(Number.isFinite),
     )
-    const { id, kind: _kind, schema: _schema, ts: _ts, ...rest } = start
+    const keys = Object.fromEntries(KEYS.map(k => [k, start[k]])) as EnvelopeKeys
     appendTelemetry(
       root,
       envelope(
-        'end',
-        id.replace(':start:', ':end:'),
-        last,
-        { ...(rest as EnvelopeKeys), outcome: 'failed', cause: 'lost' },
-        { startId: id, durationMs: last - Date.parse(String(start['ts'])), tokens: 'not measured', cost: 'not measured' },
+        { kind: 'end', id: start.id.replace(':start:', ':end:'), ts: last },
+        { ...keys, outcome: 'failed', cause: 'lost' },
+        {
+          startId: start.id,
+          durationMs: last - Date.parse(String(start['ts'])),
+          tokens: 'not measured',
+          cost: 'not measured',
+        },
       ),
     )
     swept++
