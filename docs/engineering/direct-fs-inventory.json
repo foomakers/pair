@@ -4,12 +4,12 @@
   "files": 438,
   "distinctContents": 403,
   "dispositionCounts": {
-    "migration-candidate": 188,
+    "migration-candidate": 183,
     "in-flight-churn": 223,
-    "os-guarantee": 7,
+    "os-guarantee": 8,
     "type-contract": 11,
     "boundary-adapter": 1,
-    "migrate": 2,
+    "migrate": 6,
     "standalone-script": 6
   },
   "limits": [
@@ -28,10 +28,14 @@
           "line": 9
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/scripts/postbuild.js",
       "sourceSymbols": ["fs"],
-      "observedOperations": ["copyFileSync", "mkdirSync", "readFileSync", "writeFileSync"]
+      "observedOperations": ["copyFileSync", "mkdirSync", "readFileSync", "writeFileSync"],
+      "operationConsumer": "postbuild copies the package manifest and bundled control-state script into dist/; invoked by apps/pair-cli/package.json postbuild",
+      "reason": "Build-time manifest and asset generation currently use Node fs directly.",
+      "decision": "Migrate build-time file operations through the service during the CLI wave.",
+      "testCategory": "package-build"
     },
     {
       "path": "apps/pair-cli/src/cli.e2e.test.ts",
@@ -72,10 +76,14 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/cli.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "CLI startup reads package.json for Commander name, description and version; cli.test.ts exercises the public command entry",
+      "reason": "Startup manifest reading is ordinary filesystem IO before runCli receives its injected service.",
+      "decision": "Move the manifest read behind an injectable service without changing CLI metadata.",
+      "testCategory": "unit-memory"
     },
     {
       "path": "apps/pair-cli/src/commands/dispatcher.test.ts",
@@ -2265,10 +2273,14 @@
           "line": 1
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/index.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "version export is read by commands/run/cycle-trace.ts and cycle-wiring.ts",
+      "reason": "Module initialization reads package.json for its version export.",
+      "decision": "Remove the direct read while preserving the version consumed by run-zone modules.",
+      "testCategory": "unit-memory"
     },
     {
       "path": "apps/pair-cli/src/kb-manager/git-clone.integration.test.ts",
@@ -2312,10 +2324,14 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/kb-manager/git-clone.ts",
       "sourceSymbols": ["rmSync"],
-      "observedOperations": ["rmSync"]
+      "observedOperations": ["rmSync"],
+      "operationConsumer": "cloneGitRepo removes a destination after a failed git child process; kb-installer.ts calls the cloner",
+      "reason": "Cleanup is ordinary filesystem IO adjacent to the real git process boundary.",
+      "decision": "Inject the service for cleanup; retain the real git integration test for clone semantics.",
+      "testCategory": "unit-memory-and-real-git"
     },
     {
       "path": "apps/pair-cli/src/kb-manager/official-kb-name.test.ts",
@@ -2515,10 +2531,14 @@
           "line": 1
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "apps/pair-cli/src/test-utils/cli-entry.ts",
       "sourceSymbols": ["existsSync"],
-      "observedOperations": ["existsSync"]
+      "observedOperations": ["existsSync"],
+      "operationConsumer": "cli.epipe.test.ts and token acceptance/pipe tests select the built CLI or ts-node entry for a real child process",
+      "reason": "The test helper checks whether the compiled process entry exists on disk.",
+      "decision": "Retain real artifact detection for the subprocess tests as a narrow process-boundary exception.",
+      "testCategory": "real-process"
     },
     {
       "path": "apps/website/lib/adoption-files-fences.test.ts",

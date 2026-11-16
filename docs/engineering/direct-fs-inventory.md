@@ -10,13 +10,19 @@ are in the two knowledge-hub workflow zones. Those 223 paths are individually
 marked `in-flight-churn` with the Scope Limit decision and root-guard test
 category. Eleven other imports are type-only `Dirent`/`Stats` contracts; these
 have exact-path `type-contract` exceptions because they perform no runtime IO.
-The 188 remaining entries are `migration-candidate` until their operation,
+The 183 remaining entries are `migration-candidate` until their operation,
 consumer, test category, and any OS-guarantee or standalone-script exception
 are reviewed. The reviewed `os-guarantee` entries exercise real symlink,
 atomic rename, git-clone, or binary disk behavior in temporary directories. The
 `boundary-adapter` entry is the real service implementation itself; six
 `standalone-script` entries ship without a workspace package dependency.
 **T-1 is incomplete.**
+
+Five CLI paths have now been reviewed: the build helper, CLI startup manifest
+read, version export, and git-clone cleanup are migration targets. The shared
+CLI entry test helper remains a real-process exception because it selects the
+compiled artifact for subprocess tests. Its callers and the four migration
+consumers are recorded in the ledger.
 
 The candidate rows record `sourceSymbols` from their import,
 `require`, or literal dynamic-import declarations. These are the source's
