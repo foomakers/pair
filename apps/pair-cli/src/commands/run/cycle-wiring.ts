@@ -642,6 +642,12 @@ function decisionLines(out: CycleDecisionsResult | undefined): string[] {
   ]
 }
 
+const observeNext = (co: Coordinates, answer: unknown) => {
+  const next = (answer as { next?: { pr?: unknown; round?: unknown } }).next
+  co.trace.current?.observePr(next?.pr)
+  co.trace.current?.observeRound(next?.round)
+}
+
 const resolveFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () => {
     const head = remoteHead(co.main, co.branch)
@@ -675,7 +681,7 @@ const resolveFor =
       // only — the validation was the resolver's, against the same table).
       ...(ctx.profile !== undefined && { contextPolicy: ctx.profile.contextPolicy }),
     })
-    co.trace.current?.observePr((answer as { next?: { pr?: unknown } }).next?.pr)
+    observeNext(co, answer)
     return answer
   }
 
@@ -759,8 +765,8 @@ function recordStageTelemetry(input: {
 }): void {
   const { co, stage, spawn, key, start, end, previousEnd, retries, result } = input
   if (!input.enabled) return
-  const settle = (advanced: boolean) => {
-    const record = stageTelemetryRecord({
+  const record = (advanced?: boolean) =>
+    stageTelemetryRecord({
       id: `${co.runId}:${co.cardId}:${key}:${start}:${retries}`,
       run: co.runId,
       card: co.cardId,
@@ -774,16 +780,17 @@ function recordStageTelemetry(input: {
       processOutcome: result.processOutcome,
       ...(result.final?.status !== undefined && { finalStatus: result.final.status }),
       retries,
-      advanced,
+      ...(advanced !== undefined && { advanced }),
       observation: result.telemetry ?? {},
     })
-    appendTelemetry(co.main, record)
-    input.handle?.close({
-      outcome: String(record['outcomeClass']),
-      cause: causeOf(result),
-      observation: result.telemetry,
-    })
-  }
+  const settle = (advanced: boolean) => appendTelemetry(co.main, record(advanced))
+  // The handle ends with the engine (not at the next resolve); only the v1 outcome waits for `advanced`.
+  input.handle?.close({
+    outcome: String(record()['outcomeClass']),
+    cause: causeOf(result),
+    observation: result.telemetry,
+    at: end,
+  })
   if (input.pending !== undefined) input.pending.push(settle)
   else settle(result.processOutcome === 'success')
 }
@@ -1730,6 +1737,16 @@ const shasOf = (ctx: CycleDriverContext, co: Coordinates) => ({
   head: remoteHead(co.main, co.branch),
 })
 
+/** A throw ends the trace too: open stages close `crashed` and the handlers come off before the driver rejects. */
+const traced = async (runTrace: { finish(): void }, run: () => Promise<CycleOutcome>) => {
+  try {
+    return await run()
+  } catch (error) {
+    runTrace.finish()
+    throw error
+  }
+}
+
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
     let input = requested
@@ -1749,10 +1766,11 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
     const hooks = loadCycleHooks(ctx, co)
     const progress = progressFor(input.card, policy, co.title, input.onRunEvent)
     const startedAt = Date.now()
-    const runTrace = startTrace(ctx, input, co, shasOf(ctx, co))
+    const runTrace = startTrace(ctx, input, co, () => shasOf(ctx, co))
     const pending: PendingStages = []
     const merge = mergeFor(ctx, input, co, progress)
-    const outcome = await runCycle({
+    const outcome = await traced(runTrace, () =>
+      runCycle({
       hooks,
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),
@@ -1765,15 +1783,14 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),
       ...(progress !== undefined && { onDispatch: progress.dispatch }),
-      // One line per stage, the moment the NEXT resolve reveals whether it advanced. Without it a
-      // forty-dispatch unattended run prints a single terminal status and nothing else: the stage
-      // that mattered is indistinguishable from the thirty-nine that did not, and a stage that
-      // silently wrote its handoff in the wrong place reads exactly like one that failed.
+      // One line per stage, the moment the NEXT resolve reveals whether it advanced (else a long
+      // unattended run prints one terminal status and a silently misplaced handoff looks like a failure).
       onStage: record => {
         pending.shift()?.(record.handoffAdvanced)
         logStage(record)
       },
     })
+    )
     pending.splice(0).forEach(settle => settle(true))
     runTrace.finish(outcome)
     if (ctx.telemetryEnabled === true) recordCardTelemetry({ ctx, input, co, outcome, startedAt })

@@ -74,7 +74,13 @@ export function summarizeTelemetry(
   const result: Record<string, EngineSummary> = {}
   const terminalCards = records.filter(record => record.kind === 'card')
   for (const engine of engines) {
-    const cards = terminalCards.filter(record => record['engine'] === engine)
+    // v2 cards carry no top-level engine: a card belongs to every engine that ran one of its stages.
+    const cards = terminalCards.filter(
+      record =>
+        record['engine'] === engine ||
+        (Array.isArray(record['stageRecords']) &&
+          record['stageRecords'].some(stage => (stage as { engine?: unknown }).engine === engine)),
+    )
     const stages = records.filter(
       record =>
         record.kind === 'stage' &&
@@ -261,12 +267,12 @@ export function renderView(records: readonly TelemetryRecord[], by?: View): stri
 if (require.main === module) {
   const args = process.argv.slice(2)
   const at = args.indexOf('--by')
-  const by = at < 0 ? undefined : (args[at + 1] as View)
-  if (by !== undefined && !VIEWS.includes(by)) {
+  const by = at < 0 ? undefined : (args[at + 1] as View | undefined) ?? ''
+  if (by !== undefined && !VIEWS.includes(by as View)) {
     process.stderr.write(`--by: expected one of ${VIEWS.join(', ')}\n`)
     process.exit(1)
   }
   const root =
     args.find((a, i) => !a.startsWith('--') && i !== (at < 0 ? -1 : at + 1)) ?? process.cwd()
-  process.stdout.write(`${renderView(readTelemetryRecords(root), by)}\n`)
+  process.stdout.write(`${renderView(readTelemetryRecords(root), by as View | undefined)}\n`)
 }

@@ -70,6 +70,8 @@ export interface StageEnd {
   readonly cause?: string | undefined
   readonly signal?: string | undefined
   readonly observation?: EngineObservation | undefined
+  /** The engine's own exit time; defaults to now. */
+  readonly at?: number | undefined
 }
 
 export interface StageHandle {
@@ -104,6 +106,7 @@ type EventName = 'recovery-round' | 'park' | 'halt' | 'pr-opened'
 export class Trace {
   private pr: number | undefined
   private events = 0
+  private round: number | undefined
 
   constructor(private readonly init: TraceInit) {
     this.pr = init.pr
@@ -113,7 +116,12 @@ export class Trace {
     return (this.init.now ?? Date.now)()
   }
 
-  private keys(s?: Partial<StageInfo>, outcome?: string, cause?: string): EnvelopeKeys {
+  private keys(
+    s?: Partial<StageInfo>,
+    outcome?: string,
+    cause?: string,
+    round: number | undefined = this.round,
+  ): EnvelopeKeys {
     const { run, card, epic, branch, profile, tier } = this.init
     const { step, phase, engine, model, effort } = s ?? {}
     return {
@@ -124,6 +132,7 @@ export class Trace {
       branch,
       step,
       phase,
+      round,
       engine,
       model,
       effort,
@@ -139,10 +148,19 @@ export class Trace {
   }
 
   /** AC-3: `recovery-round`, `park`, `halt`, `pr-opened`. */
-  event(name: EventName, extra: Record<string, unknown> = {}): void {
+  event(name: EventName, extra: Record<string, unknown> = {}, round?: number): void {
     const ts = this.now()
     const id = `${this.init.run}:${this.init.card}:${name}:${ts}.${this.events++}`
-    this.write(envelope({ kind: 'event', id, ts }, this.keys(), { event: name, ...extra }))
+    this.write(envelope({ kind: 'event', id, ts }, this.keys(undefined, undefined, undefined, round ?? this.round), {
+        event: name,
+        ...extra,
+      }),
+    )
+  }
+
+  /** The round the resolver names for the next stage: carried as the `round` key until it changes. */
+  observeRound(next: unknown): void {
+    this.round = typeof next === 'number' ? next : undefined
   }
 
   /** The first PR number a resolve names is the publication; later records carry it as `pr`. */
@@ -186,7 +204,7 @@ export class Trace {
     s: StageInfo,
     end: StageEnd,
   ): void {
-    const endTs = this.now()
+    const endTs = end.at ?? this.now()
     const tokens = end.observation?.tokens ?? 'not measured'
     const price = s.model === undefined ? undefined : this.init.prices[s.model]
     this.write(

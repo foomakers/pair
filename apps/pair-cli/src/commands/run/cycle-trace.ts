@@ -39,11 +39,11 @@ export function tracedBridge(
     recover: options => {
       const round = bridge.recover(options)
       if (round.allowed)
-        trace.current?.event('recovery-round', {
-          kind: options.kind,
-          round: round.round,
-          budget: round.budget,
-        })
+        trace.current?.event(
+          'recovery-round',
+          { kind: options.kind, budget: round.budget },
+          round.round,
+        )
       return round
     },
   }
@@ -96,8 +96,8 @@ function runContext(
 }
 
 export interface RunTrace {
-  /** The run's end as an event (park / halt), then the handlers are removed. */
-  finish(outcome: CycleOutcome): void
+  /** The run's end as an event (park / halt), then the handlers are removed. No outcome = the run threw: open stages end `crashed`. */
+  finish(outcome?: CycleOutcome): void
 }
 
 /**
@@ -108,7 +108,7 @@ export function startTrace(
   ctx: CycleDriverContext,
   input: CycleDriverRequest,
   co: TraceCoordinates,
-  shas: { base?: string | undefined; head?: string | undefined },
+  shas: () => { base?: string | undefined; head?: string | undefined },
 ): RunTrace {
   if (ctx.telemetryEnabled !== true) return { finish: () => undefined }
   sweepLostStages(co.main)
@@ -122,7 +122,7 @@ export function startTrace(
     tier: co.tier,
     pr: input.pr,
     prices: telemetryPrices(co.main),
-    context: runContext(ctx, input, co, shas),
+    context: runContext(ctx, input, co, shas()),
   })
   const off = onInterrupt(signal => closeOpenStages('interrupted', signal))
   const crashed = () => closeOpenStages('crashed')
@@ -130,7 +130,8 @@ export function startTrace(
   process.once('uncaughtExceptionMonitor', crashed)
   return {
     finish: outcome => {
-      traceOutcome(co, outcome)
+      if (outcome === undefined) closeOpenStages('crashed')
+      else traceOutcome(co, outcome)
       off()
       process.removeListener('uncaughtExceptionMonitor', crashed)
     },
