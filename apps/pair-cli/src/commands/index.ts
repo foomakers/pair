@@ -14,6 +14,7 @@ import type { ScaffoldKbCommandConfig } from './scaffold-kb/parser'
 import type { KbCacheCommandConfig } from './kb-cache/parser'
 import type { RunCommandConfig } from './run/parser'
 import type { TokensCommandConfig } from './tokens/parser'
+import type { TelemetryCommandConfig } from './telemetry/parser'
 
 export type {
   TokensCommandConfig,
@@ -65,6 +66,9 @@ import { parseRunCommand } from './run/parser'
 import { handleRunCommand } from './run/handler'
 import { runCommandMetadata } from './run/metadata'
 import { parseTokensCommand } from './tokens/parser'
+import { parseTelemetryCommand } from './telemetry/parser'
+import { handleTelemetryCommand } from './telemetry/handler'
+import { telemetryCommandMetadata } from './telemetry/metadata'
 import { handleTokensCommand } from './tokens/handler'
 import { tokensCommandMetadata } from './tokens/metadata'
 
@@ -109,6 +113,7 @@ export type CommandConfig =
   | KbCacheCommandConfig
   | RunCommandConfig
   | TokensCommandConfig
+  | TelemetryCommandConfig
 
 /**
  * Command registry mapping command names to their parse/handle/metadata functions.
@@ -173,6 +178,11 @@ export const commandRegistry = {
     parse: parseTokensCommand,
     handle: handleTokensCommand,
     metadata: tokensCommandMetadata,
+  },
+  telemetry: {
+    parse: parseTelemetryCommand,
+    handle: handleTelemetryCommand,
+    metadata: telemetryCommandMetadata,
   },
 } as const
 
