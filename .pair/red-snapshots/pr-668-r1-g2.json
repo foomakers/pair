@@ -1,0 +1,162 @@
+{
+  "$meta": {
+    "pr": "668",
+    "phase": "r1-g2",
+    "base": "c87746761976799cff6f9783b4b051689388d6e2",
+    "trailer": "Pair-RED-Snapshot: pr=668; phase=r1-g2; base=c87746761976799cff6f9783b4b051689388d6e2; manifest=.pair/red-snapshots/pr-668-r1-g2.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts"
+    ]
+  },
+  "phase": "r1-g2",
+  "mode": "remediation",
+  "inputHead": "c87746761976799cff6f9783b4b051689388d6e2",
+  "sourceOfTruth": "finding r0-1 of r0-review-phase; AC-2, AC-3",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "final-state steps of review-phase and cycle SKILL.md (dataset source + .claude/skills mirror) documenting `pair-cli telemetry card`",
+      "inputs": "card id, pr, final outcome, end iso; telemetry enabled switch",
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/{review-phase,cycle}/SKILL.md",
+        ".claude/skills/pair-workflow-{review-phase,cycle}/SKILL.md"
+      ],
+      "consumers": [
+        "skills-only carriers (AC-3)",
+        "pair-cli telemetry card (finalizeManualCard)"
+      ],
+      "classes": [
+        "review-phase converged → review-approved",
+        "cycle done/parked/merged outcomes",
+        "telemetry disabled / write failure → warning only",
+        "implement-phase, green-fix: step only (never final state)"
+      ],
+      "interactions": [
+        "source × installed mirror per skill"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "workflow skills (review-phase, cycle) + dataset sources",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/skills/pair-workflow-review-phase/SKILL.md",
+      ".claude/skills/pair-workflow-implement-phase/SKILL.md",
+      ".claude/skills/pair-workflow-green-fix/SKILL.md",
+      ".claude/skills/pair-workflow-cycle/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "review-phase SKILL.md (dataset + installed) final-state step",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts :: r0-1: review-phase … w1",
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "a `telemetry card` call carrying --card, --pr, --outcome, --end",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "review-phase card call outcomes",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts :: r0-1: review-phase … w2",
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "names outcome review-approved",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "review-phase card call gating",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts :: r0-1: review-phase … w3",
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "gated on telemetry enabled; write problem is a warning",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "cycle SKILL.md (dataset + installed) final-state step",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts :: r0-1: cycle … w1",
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "a `telemetry card` call carrying --card, --pr, --outcome, --end",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "cycle card call outcomes",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts :: r0-1: cycle … w2",
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "names outcomes review-approved, merged, parked",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w6",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "cycle card call gating",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts :: r0-1: cycle … w3",
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "gated on telemetry enabled; write problem is a warning",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "implement-phase and green-fix (dataset + installed)",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts :: c1: … stage keeps step records only",
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "keep `telemetry step`, no `telemetry card`",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-na1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "implement-phase/green-fix card call",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "n/a",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "These stages never observe a final state (review converged / done / parked / merged is seen by review-phase and the cycle); r0-1-c1 guards that they stay step-only."
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:47cc851d83dc62296b8787071037a3f89347ade33281b658e9875eaa4c0ed919",
+      "command": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/telemetry-card-final-state.test.ts",
+      "observed": "12 failed | 4 passed: w1-w3 fail for review-phase and cycle in dataset and installed (no telemetry card call); 4 c1 controls pass"
+    }
+  ],
+  "testExempt": false
+}
