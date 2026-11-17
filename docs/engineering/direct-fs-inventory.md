@@ -10,7 +10,7 @@ are in the two knowledge-hub workflow zones. Those 223 paths are individually
 marked `in-flight-churn` with the Scope Limit decision and root-guard test
 category. Eleven other imports are type-only `Dirent`/`Stats` contracts; these
 have exact-path `type-contract` exceptions because they perform no runtime IO.
-The 183 remaining entries are `migration-candidate` until their operation,
+The 175 remaining entries are `migration-candidate` until their operation,
 consumer, test category, and any OS-guarantee or standalone-script exception
 are reviewed. The reviewed `os-guarantee` entries exercise real symlink,
 atomic rename, git-clone, or binary disk behavior in temporary directories. The
@@ -23,6 +23,13 @@ read, version export, and git-clone cleanup are migration targets. The shared
 CLI entry test helper remains a real-process exception because it selects the
 compiled artifact for subprocess tests. Its callers and the four migration
 consumers are recorded in the ledger.
+
+Eight more CLI paths are classified. The dispatcher executable-stub test and
+tokens pipe test retain real process and file-descriptor integration; the
+link-rewriter import supplies only a `Dirent` type. The git-clone cleanup mock,
+command manifest and three config/risk-matrix fixture reads are migration
+targets. Their consumers, decisions and proving categories are recorded per
+path in the JSON ledger.
 
 The candidate rows record `sourceSymbols` from their import,
 `require`, or literal dynamic-import declarations. These are the source's

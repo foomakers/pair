@@ -4,12 +4,12 @@
   "files": 438,
   "distinctContents": 403,
   "dispositionCounts": {
-    "migration-candidate": 183,
+    "migrate": 11,
+    "migration-candidate": 175,
+    "os-guarantee": 10,
+    "type-contract": 12,
     "in-flight-churn": 223,
-    "os-guarantee": 8,
-    "type-contract": 11,
     "boundary-adapter": 1,
-    "migrate": 6,
     "standalone-script": 6
   },
   "limits": [
@@ -95,10 +95,14 @@
           "line": 5
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "apps/pair-cli/src/commands/dispatcher.test.ts",
       "sourceSymbols": ["chmodSync", "mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["chmodSync", "mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
+      "observedOperations": ["chmodSync", "mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "operationConsumer": "The test writes an executable stub and invokes a child process; executable permissions and process launch require the OS.",
+      "reason": "The test writes an executable stub and invokes a child process; executable permissions and process launch require the OS.",
+      "decision": "Keep a temp-directory process integration witness, with cleanup; ordinary dispatcher cases already use the in-memory service.",
+      "testCategory": "real-process"
     },
     {
       "path": "apps/pair-cli/src/commands/index.test.ts",
@@ -110,10 +114,14 @@
           "line": 1
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/commands/index.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "The test reads the checked-in package manifest to assert command metadata.",
+      "reason": "The test reads the checked-in package manifest to assert command metadata.",
+      "decision": "Seed the manifest through the service or extract the metadata assertion from the disk read.",
+      "testCategory": "unit"
     },
     {
       "path": "apps/pair-cli/src/commands/install/workflow-presets.test.ts",
@@ -186,10 +194,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "type-contract",
       "producer": "apps/pair-cli/src/commands/package/link-rewriter.test.ts",
       "sourceSymbols": ["fs"],
-      "observedOperations": ["readFile", "writeFile"]
+      "observedOperations": ["readFile", "writeFile"],
+      "operationConsumer": "The Node fs namespace supplies only Dirent assertions for the injected service; it performs no Node fs call.",
+      "reason": "The Node fs namespace supplies only Dirent assertions for the injected service; it performs no Node fs call.",
+      "decision": "Keep the type contract, make the import type-only during the CLI wave.",
+      "testCategory": "typecheck"
     },
     {
       "path": "apps/pair-cli/src/commands/package/round-trip.test.ts",
@@ -2212,7 +2224,7 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
       "sourceSymbols": [
         "closeSync",
@@ -2231,7 +2243,11 @@
         "readFileSync",
         "rmSync",
         "writeFileSync"
-      ]
+      ],
+      "operationConsumer": "The test opens a real file descriptor and pipes child-process stdout into it; this is process and descriptor interoperability.",
+      "reason": "The test opens a real file descriptor and pipes child-process stdout into it; this is process and descriptor interoperability.",
+      "decision": "Keep an isolated temp-directory process witness with cleanup.",
+      "testCategory": "real-process"
     },
     {
       "path": "apps/pair-cli/src/config/loader-project-shape.test.ts",
@@ -2243,10 +2259,14 @@
           "line": 4
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/config/loader-project-shape.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "The checked-in config is read to seed in-memory package-shape cases.",
+      "reason": "The checked-in config is read to seed in-memory package-shape cases.",
+      "decision": "Seed the config without a runtime disk read while retaining package-shape assertions.",
+      "testCategory": "unit"
     },
     {
       "path": "apps/pair-cli/src/config/loader.test.ts",
@@ -2258,10 +2278,14 @@
           "line": 4
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/config/loader.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "The checked-in config is read once to seed otherwise in-memory loader tests.",
+      "reason": "The checked-in config is read once to seed otherwise in-memory loader tests.",
+      "decision": "Seed the config without a runtime disk read while retaining the config-shape contract.",
+      "testCategory": "unit"
     },
     {
       "path": "apps/pair-cli/src/index.ts",
@@ -2308,11 +2332,14 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/kb-manager/git-clone.test.ts",
       "sourceSymbols": ["rmSync"],
       "observedOperations": ["rmSync (mock assertion)"],
-      "operationConsumer": "vi.mock('fs') replaces rmSync; cloneGitRepo failure tests assert cleanup without deleting a real destination"
+      "operationConsumer": "The global fs mock asserts best-effort clone cleanup after a mocked git failure.",
+      "reason": "The global fs mock asserts best-effort clone cleanup after a mocked git failure.",
+      "decision": "Inject an in-memory filesystem for cleanup assertions; retain real git integration separately.",
+      "testCategory": "unit"
     },
     {
       "path": "apps/pair-cli/src/kb-manager/git-clone.ts",
@@ -2358,10 +2385,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/registry/adoption-risk-matrix.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "The checked-in config is read to seed risk-matrix assertions.",
+      "reason": "The checked-in config is read to seed risk-matrix assertions.",
+      "decision": "Seed the expected config independently of runtime disk access.",
+      "testCategory": "unit"
     },
     {
       "path": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
