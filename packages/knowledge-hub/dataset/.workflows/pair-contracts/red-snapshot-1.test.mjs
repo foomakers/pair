@@ -372,6 +372,18 @@ test('defect AQ (c): a lint violation IN the listed test is refused as package:l
   assert.equal(git(r.cwd, 'rev-parse', 'HEAD'), r.base, 'nothing committed')
 })
 
+test('per-file static gate runs in the OWNING package dir with a package-relative path (per-package eslint config)', async () => {
+  const { runStaticGates } = await import(CLI_URL)
+  const { cwd } = repo()
+  mkdirSync(join(cwd, 'apps/pkg/src'), { recursive: true })
+  writeFileSync(join(cwd, 'apps/pkg/package.json'), '{}')
+  writeFileSync(join(cwd, 'apps/pkg/src/a.test.js'), '')
+  const contract = { testExempt: false, redTests: [{ file: 'apps/pkg/src/a.test.js', kind: 'test' }] }
+  const probe = [{ name: 'probe', command: [process.execPath, '-e', 'process.exit(require("fs").existsSync(process.argv[1]) && process.cwd().endsWith("pkg") ? 0 : 2)', '{file}'] }]
+  const r = runStaticGates({ gates: probe, contract, cwd })
+  assert.equal(r.refusal, undefined, JSON.stringify(r.refusal))
+})
+
 test('defect AQ: a gate that hangs is killed with its WHOLE process tree on timeout; chatty output is not refused as ENOBUFS', async () => {
   const { runStaticGates } = await import(CLI_URL)
   const { cwd } = repo()
