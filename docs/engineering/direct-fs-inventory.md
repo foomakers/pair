@@ -10,10 +10,11 @@ are in the two knowledge-hub workflow zones. Those 223 paths are individually
 marked `in-flight-churn` with the Scope Limit decision and root-guard test
 category. Eleven other imports are type-only `Dirent`/`Stats` contracts; these
 have exact-path `type-contract` exceptions because they perform no runtime IO.
-The 175 remaining entries are `migration-candidate` until their operation,
+The 165 remaining entries are `migration-candidate` until their operation,
 consumer, test category, and any OS-guarantee or standalone-script exception
 are reviewed. The reviewed `os-guarantee` entries exercise real symlink,
-atomic rename, git-clone, or binary disk behavior in temporary directories. The
+atomic rename, git-clone, subprocess, installed artifact, or binary disk
+behavior in temporary directories. The
 `boundary-adapter` entry is the real service implementation itself; six
 `standalone-script` entries ship without a workspace package dependency.
 **T-1 is incomplete.**
@@ -30,6 +31,15 @@ link-rewriter import supplies only a `Dirent` type. The git-clone cleanup mock,
 command manifest and three config/risk-matrix fixture reads are migration
 targets. Their consumers, decisions and proving categories are recorded per
 path in the JSON ledger.
+
+Ten further CLI tests are classified. The workflow-preset install, package
+round-trip, token CLI, and board-authorization install tests retain narrow
+real subprocess or distributed-artifact proof. The KB handler tests retain
+real ZIP interoperability cases while their ordinary setup is a migration
+target. The CLI end-to-end test, ZIP creator unit cases, checked-in release
+script read, and registry config read are migration targets; the CLI test's
+run-zone lock assertions remain real-OS proof under the Scope Limit. The
+ledger records each path's consumer and decision.
 
 The candidate rows record `sourceSymbols` from their import,
 `require`, or literal dynamic-import declarations. These are the source's

@@ -4,11 +4,11 @@
   "files": 438,
   "distinctContents": 403,
   "dispositionCounts": {
-    "migrate": 11,
-    "migration-candidate": 175,
-    "os-guarantee": 10,
+    "migrate": 17,
+    "os-guarantee": 14,
     "type-contract": 12,
     "in-flight-churn": 223,
+    "migration-candidate": 165,
     "boundary-adapter": 1,
     "standalone-script": 6
   },
@@ -47,7 +47,7 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/cli.e2e.test.ts",
       "sourceSymbols": [
         "existsSync",
@@ -64,7 +64,11 @@
         "readFileSync",
         "rmSync",
         "writeFileSync"
-      ]
+      ],
+      "operationConsumer": "CLI end-to-end test exercises in-memory package operations and a run-zone dispatch scenario.",
+      "reason": "CLI end-to-end test exercises in-memory package operations and a run-zone dispatch scenario.",
+      "decision": "Route ordinary package assertions and setup through the injected service; retain the run-zone lock proof on real temporary files.",
+      "testCategory": "package-e2e-and-lock-integration"
     },
     {
       "path": "apps/pair-cli/src/cli.ts",
@@ -133,7 +137,7 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "apps/pair-cli/src/commands/install/workflow-presets.test.ts",
       "sourceSymbols": [
         "existsSync",
@@ -152,7 +156,11 @@
         "readdirSync",
         "rmSync",
         "writeFileSync"
-      ]
+      ],
+      "operationConsumer": "Installs and verifies workflow profiles through spawned CLI processes using real temporary projects.",
+      "reason": "Installs and verifies workflow profiles through spawned CLI processes using real temporary projects.",
+      "decision": "Keep the subprocess round-trip in isolated temporary directories; route unit-level project setup through the service where separable.",
+      "testCategory": "installed-cli-integration"
     },
     {
       "path": "apps/pair-cli/src/commands/kb-info/handler.test.ts",
@@ -164,10 +172,14 @@
           "line": 13
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/commands/kb-info/handler.test.ts",
       "sourceSymbols": ["fs"],
-      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"]
+      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"],
+      "operationConsumer": "Creates ZIP packages for the kb-info handler and tests invalid archive input.",
+      "reason": "Creates ZIP packages for the kb-info handler and tests invalid archive input.",
+      "decision": "Seed ordinary project files through the service; retain only real ZIP interoperability cases.",
+      "testCategory": "zip-interoperability"
     },
     {
       "path": "apps/pair-cli/src/commands/kb-verify/handler.test.ts",
@@ -179,10 +191,14 @@
           "line": 7
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/commands/kb-verify/handler.test.ts",
       "sourceSymbols": ["fs"],
-      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"]
+      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"],
+      "operationConsumer": "Creates ZIP packages for the kb-verify handler and tests invalid archive input.",
+      "reason": "Creates ZIP packages for the kb-verify handler and tests invalid archive input.",
+      "decision": "Seed ordinary project files through the service; retain only real ZIP interoperability cases.",
+      "testCategory": "zip-interoperability"
     },
     {
       "path": "apps/pair-cli/src/commands/package/link-rewriter.test.ts",
@@ -213,7 +229,7 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "apps/pair-cli/src/commands/package/round-trip.test.ts",
       "sourceSymbols": [
         "copyFileSync",
@@ -230,7 +246,11 @@
         "mkdtempSync",
         "readdirSync",
         "rmSync"
-      ]
+      ],
+      "operationConsumer": "Installs the shipped dataset, packages it, verifies it, and reinstalls it in real temporary projects.",
+      "reason": "Installs the shipped dataset, packages it, verifies it, and reinstalls it in real temporary projects.",
+      "decision": "Keep the distribution and archive round-trip as an isolated real-OS integration test.",
+      "testCategory": "distribution-integration"
     },
     {
       "path": "apps/pair-cli/src/commands/package/zip-creator.test.ts",
@@ -242,10 +262,14 @@
           "line": 6
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/commands/package/zip-creator.test.ts",
       "sourceSymbols": ["fs"],
-      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"]
+      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"],
+      "operationConsumer": "Most cases exercise ZIP creator content and links through the service; trailing cases use real archives.",
+      "reason": "Most cases exercise ZIP creator content and links through the service; trailing cases use real archives.",
+      "decision": "Move ordinary setup and assertions to the seeded in-memory service; keep only archive interoperability cases on disk.",
+      "testCategory": "unit-and-zip-interoperability"
     },
     {
       "path": "apps/pair-cli/src/commands/run/__fixtures__/cards-cross-completion.cjs",
@@ -2209,10 +2233,14 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "apps/pair-cli/src/commands/tokens/tokens.acceptance.test.ts",
       "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
+      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "operationConsumer": "Runs the compiled tokens CLI as a child process over temporary corpus and baseline files.",
+      "reason": "Runs the compiled tokens CLI as a child process over temporary corpus and baseline files.",
+      "decision": "Retain real process and file interoperability in isolated temporary directories.",
+      "testCategory": "installed-cli-integration"
     },
     {
       "path": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
@@ -2370,10 +2398,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/kb-manager/official-kb-name.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "Reads the checked-in release packaging script to compare its official KB name with the exported constant.",
+      "reason": "Reads the checked-in release packaging script to compare its official KB name with the exported constant.",
+      "decision": "Read the authored fixture through the injected service; preserve the checked-in artifact assertion.",
+      "testCategory": "source-contract"
     },
     {
       "path": "apps/pair-cli/src/registry/adoption-risk-matrix.test.ts",
@@ -2446,7 +2478,7 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "apps/pair-cli/src/registry/board-authorization-install.test.ts",
       "sourceSymbols": [
         "copyFileSync",
@@ -2463,7 +2495,11 @@
         "mkdtempSync",
         "readFileSync",
         "rmSync"
-      ]
+      ],
+      "operationConsumer": "Copies shipped workflow scripts into a temporary adopter tree and compares installed bytes and excluded paths.",
+      "reason": "Copies shipped workflow scripts into a temporary adopter tree and compares installed bytes and excluded paths.",
+      "decision": "Keep the installed-artifact proof on disk with temporary-directory cleanup.",
+      "testCategory": "installed-artifact-integration"
     },
     {
       "path": "apps/pair-cli/src/registry/layout.test.ts",
@@ -2547,10 +2583,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/pair-cli/src/registry/validation.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "Reads the checked-in CLI registry config for validation contract cases.",
+      "reason": "Reads the checked-in CLI registry config for validation contract cases.",
+      "decision": "Read the config through the injected service and preserve registry validation assertions.",
+      "testCategory": "registry-unit"
     },
     {
       "path": "apps/pair-cli/src/test-utils/cli-entry.ts",
