@@ -72,7 +72,9 @@ export function summarizeTelemetry(
     records.map(record => record['engine']).filter((id): id is string => typeof id === 'string'),
   )
   const result: Record<string, EngineSummary> = {}
-  const replaced = new Set(records.flatMap(r => (Array.isArray(r['supersedes']) ? r['supersedes'] : [])))
+  const replaced = new Set(
+    records.flatMap(r => (Array.isArray(r['supersedes']) ? r['supersedes'] : [])),
+  )
   const terminalCards = records.filter(record => record.kind === 'card' && !replaced.has(record.id))
   for (const engine of engines) {
     // v2 cards carry no top-level engine: a card belongs to every engine that ran one of its stages.

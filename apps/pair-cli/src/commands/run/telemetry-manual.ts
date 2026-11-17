@@ -45,13 +45,17 @@ export function recordManualStep(i: ManualStepInput): boolean {
   const startId = `${at}:start:${i.start}`
   const records: TelemetryRecord[] = [
     envelope({ kind: 'start', id: startId, ts: i.start }, keys, { source: 'manual' }),
-    envelope({ kind: 'end', id: `${at}:end:${i.start}`, ts: i.end }, { ...keys, outcome: i.outcome ?? 'ok' }, {
-      source: 'manual',
-      startId,
-      durationMs: i.end - i.start,
-      ...(i.tokens && { tokens: i.tokens }),
-      ...(i.sessionId && { sessionId: i.sessionId }),
-    }),
+    envelope(
+      { kind: 'end', id: `${at}:end:${i.start}`, ts: i.end },
+      { ...keys, outcome: i.outcome ?? 'ok' },
+      {
+        source: 'manual',
+        startId,
+        durationMs: i.end - i.start,
+        ...(i.tokens && { tokens: i.tokens }),
+        ...(i.sessionId && { sessionId: i.sessionId }),
+      },
+    ),
   ]
   return records.map(r => appendTelemetry(i.root, r)).every(Boolean)
 }
