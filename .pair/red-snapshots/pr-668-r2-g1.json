@@ -1,0 +1,97 @@
+{
+  "$meta": {
+    "pr": "668",
+    "phase": "r2-g1",
+    "base": "1081847e8a937b7431eea2ebf756ac966ec99590",
+    "trailer": "Pair-RED-Snapshot: pr=668; phase=r2-g1; base=1081847e8a937b7431eea2ebf756ac966ec99590; manifest=.pair/red-snapshots/pr-668-r2-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts"
+    ]
+  },
+  "phase": "r2-g1",
+  "mode": "remediation",
+  "inputHead": "",
+  "sourceOfTruth": "finding r1-5 of r1-review-phase; AC-2, AC-3; step-line in-session convention (review-phase SKILL.md:168)",
+  "inventory": [
+    {
+      "id": "r1-5",
+      "producer": "review-phase SKILL.md \"Manual card final state\" line (dataset source + .claude/skills mirror)",
+      "inputs": "telemetry enabled switch, carriage (in-session person vs pair run driver), review-approved convergence",
+      "representations": [
+        ".claude/skills/pair-workflow-review-phase/SKILL.md",
+        "packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md"
+      ],
+      "consumers": [
+        "review agent dispatched by pair run driver (must not write manual card)",
+        "in-session reviewer (AC-3)"
+      ],
+      "classes": [
+        "in-session person + telemetry on → manual card written",
+        "pair run driver carries card → no manual card (driver writes its own)",
+        "telemetry disabled → none"
+      ],
+      "interactions": [
+        "dataset source × installed mirror",
+        "card line gate × step line gate (same in-session convention)",
+        "cycle producer already gated in-session (control)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "review-phase skill + dataset source",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/skills/pair-workflow-review-phase/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r1-5-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "review-phase dataset source card line",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts :: w4 review-phase dataset",
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "card call paragraph states in-session carriage gate",
+      "covers": [
+        "r1-5"
+      ]
+    },
+    {
+      "id": "r1-5-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "review-phase installed mirror card line",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts :: w4 review-phase installed",
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "card call paragraph states in-session carriage gate",
+      "covers": [
+        "r1-5"
+      ]
+    },
+    {
+      "id": "r1-5-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "cycle dataset+installed card line already gated in-session",
+      "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts :: w4 cycle",
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "expected": "in-session present",
+      "covers": [
+        "r1-5"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:71813e9b90fa0ce9c608343d551dee19e9a08a06a5814d483b8f1ee60adc6a00",
+      "command": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/telemetry-card-final-state.test.ts",
+      "observed": "2 failed | 18 passed: w4 fails for review-phase dataset and installed; cycle w4 and all earlier tests pass"
+    }
+  ],
+  "testExempt": false
+}

@@ -51,6 +51,13 @@ describe.each([
       expect(call).toMatch(/telemetry is enabled|## Telemetry/)
       expect(call).toMatch(/warning/i)
     })
+
+    // r1-5 (AC-2, AC-3): under `pair run` the driver writes the card record; a skill-written
+    // manual card would duplicate it with false provenance, so it is gated on in-session carriage.
+    it('w4: the call is gated on in-session carriage (no `pair run` driver records it)', () => {
+      const call = calls.find(c => c.includes('--outcome')) ?? ''
+      expect(call).toMatch(/in-session/)
+    })
   })
 })
 
