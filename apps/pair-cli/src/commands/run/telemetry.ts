@@ -281,6 +281,8 @@ export interface CardTelemetryInput {
   readonly model?: string
   readonly outcome: string
   readonly cause?: string
+  /** Ids of earlier card records this one replaces (US-667). */
+  readonly supersedes?: readonly string[]
   readonly start: number
   readonly end: number
   readonly stages: readonly TelemetryRecord[]
@@ -330,16 +332,53 @@ function normalizedStages(records: readonly TelemetryRecord[]): TelemetryRecord[
   return records
     .filter(r => r.kind === 'end' || (r.kind === 'stage' && !superseded.has(r.id)))
     .map(r => {
-      if (r.kind !== 'end') return r
+      // US-667: a record with no `source` (v1, or v2 before manual steps) is the driver's.
+      if (r.kind !== 'end') return { ...r, source: r['source'] ?? 'driver' }
       const durationMs = Number(r['durationMs'] ?? 0)
       const outcome = v1Outcome.get(String(r['legacyId'])) ?? String(r['outcome'])
       return {
         ...r,
+        source: r['source'] ?? 'driver',
         outcome,
         start: Date.parse(String(r['ts'])) - durationMs,
         outcomeClass: outcome,
       }
     })
+}
+
+/** Wall-clock covered by the stages' intervals (overlap counted once); unknown starts fall back to the plain sum. */
+function unionMs(stages: readonly TelemetryRecord[]): number {
+  const sum = stages.reduce((t, s) => t + Number(s['durationMs'] ?? 0), 0)
+  const spans = stages
+    .map(s => [Number(s['start']), Number(s['start']) + Number(s['durationMs'] ?? 0)] as const)
+    .sort((a, b) => a[0] - b[0])
+  if (spans.some(([a, b]) => !Number.isFinite(a) || !Number.isFinite(b))) return sum
+  let total = 0
+  let edge = -Infinity
+  for (const [a, b] of spans) {
+    total += Math.max(0, b - Math.max(a, edge))
+    edge = Math.max(edge, b)
+  }
+  return total
+}
+
+/** US-667: wall/active/idle per `source` (driver|manual), so manual spend never hides inside driver spend. */
+function spendBySource(stages: readonly TelemetryRecord[]): Record<string, unknown> {
+  const groups = new Map<string, TelemetryRecord[]>()
+  for (const s of stages) {
+    const key = String(s['source'])
+    groups.set(key, [...(groups.get(key) ?? []), s])
+  }
+  return Object.fromEntries(
+    [...groups].map(([source, group]) => {
+      const activeMs = unionMs(group)
+      const starts = group.map(s => Number(s['start']))
+      const ends = group.map(s => Number(s['start']) + Number(s['durationMs'] ?? 0))
+      const span = Math.max(...ends) - Math.min(...starts)
+      const wallMs = Number.isFinite(span) ? span : activeMs
+      return [source, { activeMs, wallMs, idleMs: Math.max(0, wallMs - activeMs) }]
+    }),
+  )
 }
 
 type Totals = { stages: number; durationMs: number; tokens: unknown; cost: number | 'not measured' }
@@ -372,7 +411,7 @@ function totalsBy(stages: readonly TelemetryRecord[], key: string): Record<strin
 /** The card's numbers come from observed stage records; missing usage stays missing. */
 export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord {
   const stages = normalizedStages(input.stages)
-  const activeMs = stages.reduce((total, stage) => total + Number(stage['durationMs'] ?? 0), 0)
+  const activeMs = unionMs(stages)
   const start = Math.min(input.start, ...stages.map(stage => Number(stage['start'] ?? input.start)))
   const wallMs = input.end - start
   return {
@@ -386,11 +425,13 @@ export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord 
     profile: input.profile,
     outcome: input.outcome,
     ...(input.cause !== undefined && { cause: input.cause }),
+    ...(input.supersedes !== undefined && { supersedes: input.supersedes }),
     start,
     end: input.end,
     wallMs,
     activeMs,
     idleMs: Math.max(0, wallMs - activeMs),
+    bySource: spendBySource(stages),
     rounds: new Set(stages.filter(stage => stage['step'] === 'verify').map(stage => stage['phase']))
       .size,
     dispatches: stages.length,
@@ -400,6 +441,7 @@ export function cardTelemetryRecord(input: CardTelemetryInput): TelemetryRecord 
     tokens: cardTokens(stages),
     stageRecords: stages.map(stage => ({
       step: stage['step'],
+      source: stage['source'],
       phase: stage['phase'] ?? null,
       round: stage['round'] ?? null,
       engine: stage['engine'],
@@ -474,7 +516,7 @@ export function readCardStages(root: string, card: string): TelemetryRecord[] {
   )
 }
 
-function readRecords(root: string): TelemetryRecord[] {
+export function readRecords(root: string): TelemetryRecord[] {
   const path = telemetryFile(root)
   if (!existsSync(path)) return []
   try {
@@ -538,17 +580,19 @@ export function stageTelemetryRecord(input: StageTelemetryInput): TelemetryRecor
 }
 
 /** The run directory is local and ignored; a repeated terminal write is a no-op by record id. */
-export function appendTelemetry(root: string, record: TelemetryRecord): void {
+export function appendTelemetry(root: string, record: TelemetryRecord): boolean {
   const path = telemetryFile(root)
   try {
     if (existsSync(path)) {
       for (const line of readFileSync(path, 'utf8').split('\n')) {
-        if (parseTelemetryLine(line)?.id === record.id) return
+        if (parseTelemetryLine(line)?.id === record.id) return true
       }
     }
     mkdirSync(dirname(path), { recursive: true })
     appendFileSync(path, `${JSON.stringify(record)}\n`)
+    return true
   } catch {
     // Telemetry is best effort; a local file error cannot fail delivery.
+    return false
   }
 }

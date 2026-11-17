@@ -184,6 +184,7 @@ export class Trace {
     this.write(
       envelope({ kind: 'start', id: startId, ts }, this.keys(s), {
         ...this.init.context,
+        source: 'driver',
         stageContext: s.context ?? null,
         worktree: s.worktree ?? null,
         pid: process.pid,
@@ -218,6 +219,7 @@ export class Trace {
         this.keys(s, end.outcome, end.cause),
         {
           startId: ids.startId,
+          source: 'driver',
           signal: end.signal ?? null,
           legacyId: s.legacyId ?? null,
           durationMs: endTs - ids.startTs,
