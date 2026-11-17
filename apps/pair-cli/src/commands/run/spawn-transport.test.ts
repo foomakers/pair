@@ -129,6 +129,31 @@ describe('spawnIteration transport ownership (US-594 AC-1, AC-4, AC-5)', () => {
     10000,
   )
 
+  it.each([
+    ['EPIPE', 'resolves'],
+    ['EPERM', 'rejects'],
+  ])(
+    'child %s reaps resistant leader and ready descendant',
+    async (code, mode) => {
+      const { stub, cwd } = engine(ownedStub(false))
+      const pending = spawnIteration({
+        engine: stub,
+        cwd,
+        promptText: 'go',
+        autonomyArgs: [],
+        idleTimeoutSeconds: 0.2,
+        onEvent: () => spawned.child!.emit('error', err(code)),
+      })
+      if (spawned.child?.pid) groups.push(spawned.child.pid)
+      const [leader, descendant] = await pids(cwd)
+      if (mode === 'rejects') await expect(bounded(pending)).rejects.toMatchObject({ code })
+      else expect(await bounded(pending)).toMatchObject({ outcome: 'failed' })
+      expect(alive(leader)).toBe(false)
+      expect(alive(descendant)).toBe(false)
+    },
+    10000,
+  )
+
   it('stdout EPIPE reaps descendant after leader exits', async () => {
     const { pending, child, cwd } = start(ownedStub(true))
     const [leader, descendant] = await pids(cwd)

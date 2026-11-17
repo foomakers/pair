@@ -279,7 +279,7 @@ function watchTransport(child: EngineChild, engine: EngineDefinition) {
     stderr,
     failed,
     capture,
-    hasError: () => pipeError !== undefined,
+    hasError: () => (pipeError ?? childError) !== undefined,
     finish: (): IterationResult | undefined => {
       settled = true
       const failure = transportFailure(childError, pipeError)
