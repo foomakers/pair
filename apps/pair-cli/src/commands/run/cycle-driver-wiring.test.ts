@@ -137,6 +137,13 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
           .map(l => JSON.parse(l) as EngineCall)
       : []
 
+  const expectFindingCounters = async (resolve: () => Promise<unknown>) => {
+    const answer = (await resolve()) as { counters?: Record<string, number> }
+    expect(answer.counters?.['implementationRetries']).toBe(1)
+    expect(answer.counters?.['preparationRepairs']).toBe(0)
+    expect(answer.counters?.['spentCycles']).toBe(0)
+  }
+
   const drive = (engine: EngineDefinition, pr?: number, telemetryEnabled?: boolean) =>
     createDefaultCycleDriver({
       engine: { ...engine, command: join(root, 'bin', 'fake-engine') },
@@ -295,6 +302,53 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
       resumeToken: 'implement:a0:dead-dispatch',
     })
     expect(outcome.stagesRun).toBe(4)
+  }, 60_000)
+
+  it('US-594 AC-6: prior finding spend survives process recovery', async () => {
+    vi.mocked(runCycle).mockClear()
+    await drive(ENGINES.claude)
+    const dir = join(main, '.pair/working/runs/story-7/7')
+    rmSync(join(dir, 'recovery.json'), { force: true })
+    const first = {
+      schemaVersion: 3,
+      workflowVersion: CYCLE_WORKFLOW_VERSION,
+      run: 'story-7',
+      story: '7',
+      phase: 'a0',
+      skill: 'implement-phase',
+      inputHead: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: main, encoding: 'utf8' }).trim(),
+      status: 'failed',
+      gatesPassed: false,
+      reason: 'gate red',
+    }
+    for (const attempt of [1, 2]) {
+      writeFileSync(
+        join(dir, attempt === 1 ? 'a0-implement-phase.json' : 'a0-implement-phase.attempt-2.json'),
+        JSON.stringify({
+          ...first,
+          seq: attempt,
+          attempt,
+          status: 'failed',
+          gatesPassed: false,
+          reason: 'gate red',
+        }),
+      )
+    }
+    const resolve = vi.mocked(runCycle).mock.calls[0]?.[0]?.resolve
+    expect(resolve).toBeDefined()
+    await expectFindingCounters(resolve!)
+
+    const outcome = await drive(ENGINES.claude)
+    expect(calls()).toHaveLength(8)
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'implement:a0:dead-dispatch',
+    })
+    const rounds = JSON.parse(readFileSync(join(dir, 'recovery.json'), 'utf8')) as {
+      rounds: { kind: string }[]
+    }
+    expect(rounds.rounds.map(round => round.kind)).toEqual(['stage-retry'])
+    await expectFindingCounters(resolve!)
   }, 60_000)
 
   it('#646 r1-2: a stage stopped for a contract-identity fault is recovered through reset-group and the process budget, then parked with a resume token', async () => {
