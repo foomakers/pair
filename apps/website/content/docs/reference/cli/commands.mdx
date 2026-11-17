@@ -20,6 +20,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [kb-validate](#kb-validate): Validate KB structure
 - [validate-config](#validate-config): Validate configuration
 - [tokens](#tokens): Count words and estimated tokens per area of a project's pair files
+- [telemetry](#telemetry): Record a manual in-session delivery step or the final card outcome
 - [run](#run): Run a pair skill headlessly on a chosen engine, in a re-invocation loop
 
 ## Rules that apply to every command
@@ -763,6 +764,38 @@ pair-cli tokens [options]
 ```bash
 pair-cli tokens --json > base.json   # record a baseline
 pair-cli tokens --baseline base.json # later: delta per area
+```
+
+## telemetry
+
+**Via (optional, Claude Code):** called by `/pair-workflow-implement-phase`, `/pair-workflow-green-fix` and `/pair-workflow-review-phase` at step end.
+
+Record a manual in-session delivery step (`step`) or the card's final outcome (`card`) in the same
+local telemetry as driver runs, with `source: manual`. Writes nothing unless `## Telemetry` is enabled
+in `automation.md`. Unavailable figures are omitted, never estimated; re-running a step is a no-op.
+
+### Usage
+
+```bash
+pair-cli telemetry <step|card> --card <id> [options]
+```
+
+### Options
+
+| Option | Description |
+| --- | --- |
+| `--root <dir>` | Project root (default: the current directory) |
+| `--card <id>`, `--pr <n>` | Card and PR the record links to |
+| `--step <id>`, `--phase <id>`, `--engine <name>`, `--model <name>`, `--effort <level>` | Step identity (`step` mode; `--step`, `--engine` required) |
+| `--start <time>`, `--end <time>` | ISO time or epoch ms (`card` mode: `--end` is the final time) |
+| `--tokens <f,c,o>`, `--session <id>` | Measured figures; omit when unknown |
+| `--outcome <value>` | Step outcome (default `ok`), or the card's true final outcome (`card`, required) |
+
+### Example
+
+```bash
+pair-cli telemetry step --card 594 --step implement --engine claude --start 2026-11-17T07:50:00Z --end 2026-11-17T08:33:00Z
+pair-cli telemetry card --card 594 --outcome review-approved --end 2026-11-17T09:06:00Z
 ```
 
 ## run

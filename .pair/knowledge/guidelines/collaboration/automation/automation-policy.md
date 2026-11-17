@@ -306,6 +306,7 @@ If the resolved path cannot be created or written, `pair-loop` **MUST HALT the r
 
 - **Local only**: the path is gitignored under `.pair/working/` and is never packaged into the CLI or the dataset.
 - Read it with `pnpm --filter @pair/pair-cli telemetry:report [root] [--by run|runner|model|step|epic|engine]`: per card by default (including in-progress, interrupted and `lost` stages), every `--by` view derived from the same records; `--by engine` is the per-engine cohort view (rounds, wall/active/idle time, per-stage time and wasted-token share).
+- **`source: driver|manual`** (additive, no schema bump): every `start`/`end` carries it; a record without it is the driver's (v1 `stage`, earlier v2). Manual in-session steps (implement, green-fix, review) are written with `source: manual` by `pair-cli telemetry step` (same enable switch, #652 step ids, ids deterministic so a re-run is a no-op; absent tokens/session stay absent). `pair-cli telemetry card --outcome <final> --end <time>` writes a `card` record with the true final outcome (review-approved, merged, parked) that `supersedes` the earlier card records of that card; the card carries `bySource: {driver, manual}` wall/active/idle, active/wall are interval unions (overlap counted once), and a card with no driver run is created by the manual path. Reports ignore superseded card records.
 - A write or read failure never fails delivery.
 
 ## Workflows — which workflow each tag routes to
