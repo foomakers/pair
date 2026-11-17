@@ -73,7 +73,7 @@ export interface ManualCardInput {
 /** AC-2: the card record with the true outcome; it supersedes the card records written before it. */
 export function finalizeManualCard(i: ManualCardInput): boolean {
   if (!i.enabled) return true
-  const id = `${i.card}:manual:${i.outcome}`
+  const id = `${i.card}:manual:${i.outcome}:${i.end}`
   const prior = readRecords(i.root).filter(r => r.kind === 'card' && r['card'] === i.card)
   const last = prior.at(-1)
   const stages = readCardStages(i.root, i.card)

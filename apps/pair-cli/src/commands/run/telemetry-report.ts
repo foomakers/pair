@@ -64,6 +64,15 @@ function stageMeasures(stages: readonly TelemetryRecord[]): Record<string, Measu
   )
 }
 
+/** One live card per card id: superseded records dropped, the latest record wins (mixed manual/driver carriage). */
+function liveCards(records: readonly TelemetryRecord[]): TelemetryRecord[] {
+  const replaced = new Set(
+    records.flatMap(r => (Array.isArray(r['supersedes']) ? r['supersedes'] : [])),
+  )
+  const cards = records.filter(r => r.kind === 'card' && !replaced.has(r.id))
+  return [...new Map(cards.map(r => [r['card'], r])).values()]
+}
+
 /** Population statistics over recorded cards; an incomplete field is never estimated. */
 export function summarizeTelemetry(
   records: readonly TelemetryRecord[],
@@ -72,10 +81,7 @@ export function summarizeTelemetry(
     records.map(record => record['engine']).filter((id): id is string => typeof id === 'string'),
   )
   const result: Record<string, EngineSummary> = {}
-  const replaced = new Set(
-    records.flatMap(r => (Array.isArray(r['supersedes']) ? r['supersedes'] : [])),
-  )
-  const terminalCards = records.filter(record => record.kind === 'card' && !replaced.has(record.id))
+  const terminalCards = liveCards(records)
   for (const engine of engines) {
     // v2 cards carry no top-level engine: a card belongs to every engine that ran one of its stages.
     const cards = terminalCards.filter(
