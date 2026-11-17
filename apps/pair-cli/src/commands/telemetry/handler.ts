@@ -8,7 +8,7 @@ export async function handleTelemetryCommand(
   config: TelemetryCommandConfig,
   _fs: FileSystemService,
 ): Promise<number> {
-  const { command: _command, mode, ...input } = config
+  const { mode, ...input } = config
   const ok = (mode === 'step' ? recordManualStep : finalizeManualCard)({
     ...input,
     enabled: telemetryEnabled(config.root),
