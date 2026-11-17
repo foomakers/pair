@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, type ChildProcess, type ChildProcessByStdio } from 'child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import type { Readable } from 'stream'
 import type { EngineDefinition } from './engines'
 import { HEADLESS_STDIN } from './autonomy'
 import {
@@ -195,8 +196,31 @@ function openLastMessageChannel(engine: EngineDefinition) {
   }
 }
 
+async function awaitGroupExit(child: ChildProcess): Promise<void> {
+  if (!child.stdout?.closed || !child.stderr?.closed) {
+    await Promise.race([
+      new Promise<void>(done => child.once('close', () => done())),
+      new Promise<void>(done => setTimeout(done, 1000)),
+    ])
+  }
+  // The leader may already have exited while an inherited pipe still belongs to its group.
+  if (child.pid) {
+    const deadline = Date.now() + 1000
+    while (Date.now() < deadline) {
+      try {
+        process.kill(-child.pid, 0)
+      } catch {
+        break
+      }
+      await new Promise<void>(done => setTimeout(done, 10))
+    }
+  }
+  // Pipe closure can precede kernel reaping of an orphaned descendant by one turn.
+  await new Promise<void>(done => setTimeout(done, 20))
+}
+
 /** Leaves no engine behind; after a timeout it is SIGKILLed and its pipes released (US-600). */
-function reap(child: ChildProcess, hardStop: boolean): void {
+async function reap(child: ChildProcess, hardStop: boolean): Promise<void> {
   const exited = child.exitCode !== null || child.signalCode !== null
   if (!hardStop) return void (exited || child.kill('SIGTERM'))
   // The engine leads its own process group (detached): descendants die with it, even after it exited.
@@ -206,6 +230,100 @@ function reap(child: ChildProcess, hardStop: boolean): void {
     if (!exited) child.kill('SIGKILL')
   }
   child.stdout?.destroy()
+  await awaitGroupExit(child)
+}
+
+type EngineChild = ChildProcessByStdio<null, Readable, Readable>
+
+function preferError(previous: Error | undefined, current: Error): Error {
+  return !previous || (previous as NodeJS.ErrnoException).code === 'EPIPE' ? current : previous
+}
+
+function transportFailure(childError: Error | undefined, pipeError: Error | undefined) {
+  if (childError && (childError as NodeJS.ErrnoException).code !== 'EPIPE') return childError
+  if (pipeError && (pipeError as NodeJS.ErrnoException).code !== 'EPIPE') return pipeError
+  return pipeError ?? childError
+}
+
+function watchTransport(child: EngineChild, engine: EngineDefinition) {
+  let pipeError: Error | undefined
+  let childError: Error | undefined
+  let settled = false
+  let fail!: () => void
+  const failed = new Promise<undefined>(done => (fail = () => done(undefined)))
+  const capture = (error: Error) => {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ABORT_ERR') return
+    if (settled) {
+      if (code !== 'EPIPE') console.error(error)
+      return
+    }
+    pipeError = preferError(pipeError, error)
+    fail()
+  }
+  child.on('error', error => {
+    if (settled) {
+      if ((error as NodeJS.ErrnoException).code !== 'EPIPE') console.error(error)
+    } else {
+      childError = preferError(childError, error)
+      fail()
+    }
+  })
+  // Ending the terminal-event reader cancels its iterator; Node reports ABORT_ERR on the pipe.
+  child.stdout.on('error', capture)
+  child.stderr.on('error', capture)
+  const stderr = relayLines(child.stderr, engine.id).catch(error => {
+    capture(error instanceof Error ? error : new Error(String(error)))
+  })
+  return {
+    stderr,
+    failed,
+    capture,
+    hasError: () => (pipeError ?? childError) !== undefined,
+    finish: (): IterationResult | undefined => {
+      settled = true
+      const failure = transportFailure(childError, pipeError)
+      if (!failure) return undefined
+      const code = (failure as NodeJS.ErrnoException).code
+      if (code !== 'EPIPE' && code !== 'ENOENT') throw failure
+      return { outcome: 'failed', detail: `${engine.command}: ${failure.message}` }
+    },
+  }
+}
+
+async function readEngineResult(
+  child: EngineChild,
+  input: SpawnIterationInput,
+  watchdog: ReturnType<typeof createWatchdog>,
+  channels: {
+    channel: ReturnType<typeof openLastMessageChannel>
+    transport: ReturnType<typeof watchTransport>
+  },
+): Promise<IterationResult | undefined> {
+  child.stdout.setEncoding('utf-8')
+  const read = readIterationOutcome(
+    toLines(child.stdout),
+    input.engine,
+    payload => {
+      watchdog.rearm()
+      input.onEvent?.(payload)
+    },
+    event => {
+      watchdog.saw(event)
+      input.onRunEvent?.(event)
+    },
+    { maxFixRounds: input.maxFixRounds },
+  )
+  read.catch(() => undefined)
+  const result = await Promise.race([read, watchdog.grace, channels.transport.failed])
+  return result && (channels.channel?.merge(result) ?? result)
+}
+
+function handleReadError(error: unknown, transport: ReturnType<typeof watchTransport>): void {
+  if (!(error instanceof Error)) throw error
+  const code = (error as NodeJS.ErrnoException).code
+  if (code !== 'EPIPE' && !(code === 'ABORT_ERR' && transport.hasError())) throw error
+  if (code === 'EPIPE') transport.capture(error)
 }
 
 /**
@@ -231,39 +349,26 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
     // US-573 AC7: an engine's own env (claude: no background-wait ceiling) over the driver's.
     ...engineEnv(input.engine, isolation),
   })
+  const transport = watchTransport(child, input.engine)
   // Tracked so a SIGTERM/SIGINT on the driver stops it instead of orphaning it (r1-2).
   trackEngine(child)
-  // Relayed, never inherited: a raw write to the terminal moves the cursor under the live card rows.
-  const stderr = relayLines(child.stderr, input.engine.id)
 
   const watchdog = createWatchdog(input, signal => child.kill(signal))
+  let result: IterationResult | undefined
   try {
-    child.stdout.setEncoding('utf-8')
-    const read = readIterationOutcome(
-      toLines(child.stdout),
-      input.engine,
-      payload => {
-        watchdog.rearm()
-        input.onEvent?.(payload)
-      },
-      event => {
-        watchdog.saw(event)
-        input.onRunEvent?.(event)
-      },
-      { maxFixRounds: input.maxFixRounds },
-    )
-    read.catch(() => undefined)
-    const result = await Promise.race([read, watchdog.grace])
-    // US-623 AC3: the stream's last text carried no result ⇒ the engine's dedicated channel is read.
-    const channelResult = result && channel?.merge(result)
-    return stalledOrResult(channelResult ?? result, watchdog.stopped())
+    result = await readEngineResult(child, input, watchdog, { channel, transport })
+  } catch (error) {
+    handleReadError(error, transport)
   } finally {
     watchdog.clear()
     channel?.close()
-    reap(child, watchdog.stopped() !== undefined)
+    await reap(child, watchdog.stopped() !== undefined || transport.hasError())
     // ponytail: 1s drain bound — a grandchild holding stderr open must not hold the iteration.
-    await Promise.race([stderr, new Promise(done => setTimeout(done, 1000).unref())])
+    await Promise.race([transport.stderr, new Promise(done => setTimeout(done, 1000).unref())])
   }
+  const failure = transport.finish()
+  if (failure) return failure
+  return stalledOrResult(result, watchdog.stopped())
 }
 
 /** codex prints this on a non-TTY stdin even though stdin is closed (US-603): cosmetic noise. */

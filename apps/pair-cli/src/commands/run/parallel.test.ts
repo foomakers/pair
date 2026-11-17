@@ -38,6 +38,16 @@ const card = (id: string, extra: Partial<RootCandidate> = {}): RootCandidate => 
 
 const ok = (id: string): CardOutcome => ({ id, outcome: 'completed', detail: 'exit 0' })
 
+it('US-594 AC-4: a process-parked card is not failed by root scheduling', () => {
+  expect(
+    outcomeOfExit('594', {
+      exitCode: 1,
+      signal: null,
+      cycleStatus: 'awaiting-human',
+    }),
+  ).toMatchObject({ id: '594', outcome: 'completed', cycleStatus: 'awaiting-human' })
+})
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>(r => (resolve = r))
