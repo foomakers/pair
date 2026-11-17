@@ -108,3 +108,4 @@ This is a CONTENT operation. The branch stays where it is, the sealed snapshot s
 - Do NOT post any other PR comment; the final verifier publishes the synthesis. Never merge.
 - Blind: read nothing under `.pair/working/` except the checkpoint, `$reviewLog` and `$RUN_DIR`.
 - Your handoff publish is observed by the host runtime (`cycle-runtime.mjs`, US-479 T-25) as a phase-level progress point, through `cycle-state.mjs` — never something you invoke yourself.
+- **Manual telemetry (US-667)**: only when a person runs this step in-session (no `pair run` driver records it) AND telemetry is enabled (`## Telemetry`, same switch as the driver) — at step end run `pair-cli telemetry step --card $story --pr <pr> --step green-fix --phase r<n> --engine <engine> --model <model> --start <iso> --end <iso>` (add `--tokens`/`--session` only when measured; never estimate). A write problem is a warning, never a failed step.
