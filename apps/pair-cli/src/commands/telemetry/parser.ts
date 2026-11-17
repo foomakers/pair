@@ -12,7 +12,7 @@ export interface TelemetryCommandConfig {
   start?: number
   end?: number
   tokens?: { freshIn: number; cachedIn: number; out: number }
-  session?: string
+  sessionId?: string
   outcome?: string
 }
 
@@ -40,6 +40,19 @@ const time = (flag: string, raw: string | undefined): number | undefined => {
   return ms
 }
 
+const REQUIRED = {
+  step: ['card', 'step', 'engine', 'start', 'end'],
+  card: ['card', 'outcome', 'end'],
+} as const
+
+function tokensOf(raw: string | undefined): TelemetryCommandConfig['tokens'] {
+  if (raw === undefined) return undefined
+  const [freshIn, cachedIn, out] = raw.split(',').map(Number)
+  if ([freshIn, cachedIn, out].some(n => !Number.isInteger(n)))
+    throw new Error(`--tokens: expected <fresh>,<cached>,<out> integers, got "${raw}"`)
+  return { freshIn: freshIn!, cachedIn: cachedIn!, out: out! }
+}
+
 export function parseTelemetryCommand(
   options: ParseTelemetryOptions = {},
   args: string[] = [],
@@ -47,38 +60,21 @@ export function parseTelemetryCommand(
   const mode = args[0]
   if (mode !== 'step' && mode !== 'card')
     throw new Error(`telemetry: expected "step" or "card", got "${mode ?? ''}"`)
-  if (!options.card) throw new Error('telemetry: --card is required')
-  const need = (flag: string, v: string | undefined) => {
-    if (v === undefined) throw new Error(`telemetry ${mode}: --${flag} is required`)
-  }
-  const [freshIn, cachedIn, out] = (options.tokens ?? '').split(',').map(Number)
-  if (options.tokens !== undefined && [freshIn, cachedIn, out].some(n => !Number.isInteger(n)))
-    throw new Error(`--tokens: expected <fresh>,<cached>,<out> integers, got "${options.tokens}"`)
-  if (mode === 'step') {
-    ;(['step', 'engine', 'start', 'end'] as const).forEach(f => need(f, options[f]))
-  } else {
-    need('outcome', options.outcome)
-    need('end', options.end)
-  }
-  const set = <K extends string>(k: K, v: unknown) => (v === undefined ? {} : { [k]: v })
-  return {
+  for (const flag of REQUIRED[mode])
+    if (options[flag] === undefined) throw new Error(`telemetry ${mode}: --${flag} is required`)
+  const { pr, start, end, tokens, session, ...rest } = options
+  const config = {
+    ...rest,
     command: 'telemetry',
     mode,
     root: options.root ?? process.cwd(),
-    card: options.card,
-    ...set('pr', options.pr === undefined ? undefined : Number(options.pr)),
-    ...set('step', options.step),
-    ...set('phase', options.phase),
-    ...set('engine', options.engine),
-    ...set('model', options.model),
-    ...set('effort', options.effort),
-    ...set('start', time('start', options.start)),
-    ...set('end', time('end', options.end)),
-    ...set(
-      'tokens',
-      options.tokens === undefined ? undefined : { freshIn, cachedIn, out },
-    ),
-    ...set('session', options.session),
-    ...set('outcome', options.outcome),
-  } as TelemetryCommandConfig
+    pr: pr === undefined ? undefined : Number(pr),
+    start: time('start', start),
+    end: time('end', end),
+    tokens: tokensOf(tokens),
+    sessionId: session,
+  }
+  return Object.fromEntries(
+    Object.entries(config).filter(([, v]) => v !== undefined),
+  ) as unknown as TelemetryCommandConfig
 }
