@@ -1,0 +1,189 @@
+{
+  "$meta": {
+    "pr": "668",
+    "phase": "r1-g1",
+    "base": "7d05c697c7883acb95c786713bca958ea088e588",
+    "trailer": "Pair-RED-Snapshot: pr=668; phase=r1-g1; base=7d05c697c7883acb95c786713bca958ea088e588; manifest=.pair/red-snapshots/pr-668-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts"
+    ]
+  },
+  "phase": "r1-g1",
+  "mode": "repair",
+  "inputHead": "7d05c697c7883acb95c786713bca958ea088e588",
+  "sourceOfTruth": "findings r0-2, r0-3 of r0-review-phase",
+  "inventory": [
+    {
+      "id": "r0-2",
+      "producer": "finalizeManualCard (telemetry-manual.ts) card record id",
+      "inputs": "card, outcome, end; prior card records",
+      "representations": [
+        "records.jsonl card record"
+      ],
+      "consumers": [
+        "summarizeTelemetry",
+        "live-card readers (non-superseded)"
+      ],
+      "classes": [
+        "parked→step→parked (same outcome, different end): later supersedes earlier",
+        "identical re-run (same outcome, same end): deduped",
+        "different outcome finalize (existing superseding path)"
+      ],
+      "interactions": [
+        "id dedupe in appendTelemetry × supersedes list"
+      ]
+    },
+    {
+      "id": "r0-3",
+      "producer": "summarizeTelemetry terminalCards (telemetry-report.ts)",
+      "inputs": "card records, supersedes lists",
+      "representations": [
+        "records.jsonl"
+      ],
+      "consumers": [
+        "renderTelemetryReport",
+        "telemetry views"
+      ],
+      "classes": [
+        "manual card then driver card without supersedes: one live card, the latest",
+        "distinct card ids: all counted",
+        "explicit supersedes (existing)"
+      ],
+      "interactions": [
+        "manual finalize × later driver card (new run id)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli telemetry",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/telemetry-manual.ts",
+      "apps/pair-cli/src/commands/run/telemetry-report.ts",
+      "apps/pair-cli/src/commands/run/telemetry.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-2-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "step implement 0-60s, finalize parked@60s, step green-fix 120-300s, finalize parked@300s",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts :: r0-2 witness",
+      "file": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts",
+      "expected": "exactly one live (non-superseded) card for 594 with activeMs 240000, dispatches 2",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-2-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "finalize parked@60s twice, identical",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts :: r0-2 control",
+      "file": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts",
+      "expected": "one card record (identical re-run still dedupes)",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-2-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "step 0-60s, finalize parked@60s, finalize merged@60s (same end, different outcome)",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts :: r0-2 control: finalize merged sharing its end",
+      "file": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts",
+      "expected": "exactly one live card for 594 with outcome merged",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-3-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "manual card (finalize parked) then driver card id story-594b:594, outcome review-approved wallMs 99, no supersedes",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts :: r0-3 witness",
+      "file": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts",
+      "expected": "summarizeTelemetry claude wallMs {mean 99, median 99, sd 0}: one card, the later",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "The driver fixture carries no supersedes, so only the report-side latest-per-card rule satisfies it (the finding's first alternative)."
+    },
+    {
+      "id": "r0-3-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "two card records with different card ids 594 and 595",
+      "oracle": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts :: r0-3 control",
+      "file": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts",
+      "expected": "both counted: wallMs {mean 15, median 15, sd 5}",
+      "covers": [
+        "r0-3"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:45f100ce255000b2d468979fc38bae62366e058893d436c1a8ba8b6abc21a22d",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/telemetry-card-supersede.test.ts",
+      "observed": "FAIL r0-2 witness: expected activeMs 240000, dispatches 2, received activeMs 60000, dispatches 1; FAIL r0-3 witness: expected mean 99, received mean 30049.5 (two cards counted); 3 controls pass incl. r0-2-c2"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-2",
+          "r0-3"
+        ],
+        "owner": "apps/pair-cli telemetry",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/telemetry-manual.ts",
+          "apps/pair-cli/src/commands/run/telemetry-report.ts",
+          "apps/pair-cli/src/commands/run/telemetry.ts"
+        ],
+        "oracle": "apps/pair-cli/src/commands/run/telemetry-card-supersede.test.ts",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "workflow skills (review-phase, cycle) + dataset sources",
+        "mode": "behavioral",
+        "allowedPaths": [
+          ".claude/skills/pair-workflow-review-phase/SKILL.md",
+          ".claude/skills/pair-workflow-implement-phase/SKILL.md",
+          ".claude/skills/pair-workflow-green-fix/SKILL.md",
+          ".claude/skills/pair-workflow-cycle/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md"
+        ],
+        "oracle": "packages/knowledge-hub/src/conformance/telemetry-card-final-state.test.ts",
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-1": []
+        }
+      }
+    ],
+    "carried": []
+  },
+  "groupId": "r1-g1",
+  "remediationBatchId": "r1",
+  "changedRows": [
+    "r0-2-c2"
+  ]
+}
