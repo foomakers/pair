@@ -184,3 +184,9 @@ it('AC-6: legacy v1 stage and v2 end without source read as driver', () => {
   const card = lines(r).find(x => x.kind === 'card')!
   expect(card['bySource']).toMatchObject({ driver: { activeMs: 1000 } })
 })
+
+it('manual records land in the same file on every platform (platform linux/darwin posix, win32 backslash)', () => {
+  expect(telemetryFile('/p', 'linux')).toBe('/p/.pair/working/telemetry/records.jsonl')
+  expect(telemetryFile('/p', 'darwin')).toBe(telemetryFile('/p', 'linux'))
+  expect(telemetryFile('C:\\p', 'win32')).toBe('C:\\p\\.pair\\working\\telemetry\\records.jsonl')
+})
