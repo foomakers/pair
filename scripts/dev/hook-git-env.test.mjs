@@ -34,6 +34,9 @@ for (const hook of ['pre-commit', 'pre-push']) {
       'i',
     )
     git(main, 'worktree', 'add', '-q', join(t, 'wt'), '-b', 'b')
+    // pre-commit is differential: stage a .ts file so the fixture `pnpm` runs
+    writeFileSync(join(t, 'wt', 'a.ts'), '')
+    git(join(t, 'wt'), 'add', 'a.ts')
     // the hook as husky runs it, its husky.sh stubbed; `pnpm` is the fixture
     const hooks = join(t, 'hooks')
     mkdirSync(join(hooks, '_'), { recursive: true })
