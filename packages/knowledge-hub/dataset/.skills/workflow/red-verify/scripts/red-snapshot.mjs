@@ -586,6 +586,21 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
     const stated = contract.redTests.find(a => a.file === f).sha256
     if (actual !== stated) return { sealed: false, reason: 'artifact-hash-mismatch', path: f, stated, actual }
   }
+  // A failed commit may leave our manifest and ignore entry staged if an index lock
+  // prevented cleanup. Only recover the exact generated entry and matching manifest.
+  const stagedManifest = git(['show', `:${manifest}`], cwd, { allowFail: true })
+  const stagedIgnore = spawnSync('git', ['show', `:${FORMAT_IGNORE}`], { cwd, encoding: 'utf8', env: cleanGitEnv() })
+  const baseIgnore = spawnSync('git', ['show', `${base}:${FORMAT_IGNORE}`], { cwd, encoding: 'utf8', env: cleanGitEnv() })
+  const originalIgnore = baseIgnore.status === 0 ? baseIgnore.stdout : ''
+  const generatedIgnore = `${originalIgnore}${originalIgnore && !originalIgnore.endsWith('\n') ? '\n' : ''}${dirname(manifest)}/\n`
+  const currentIgnore = existsSync(join(cwd, FORMAT_IGNORE)) ? readFileSync(join(cwd, FORMAT_IGNORE), 'utf8') : ''
+  if (stagedManifest && stagedIgnore.status === 0 && stagedIgnore.stdout === generatedIgnore && currentIgnore === originalIgnore) {
+    let saved
+    try { saved = JSON.parse(stagedManifest) } catch { saved = null }
+    if (saved?.$meta?.pr === pr && saved.$meta.phase === phase && saved.$meta.base === base && contractHash(saved) === contractHash(contract)) {
+      git(['reset', '-q', base, '--', FORMAT_IGNORE], cwd)
+    }
+  }
   const dirty = (git(['status', '--porcelain', '--untracked-files=all'], cwd) ?? '')
     .split('\n')
     .filter(Boolean)
