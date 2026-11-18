@@ -657,11 +657,24 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
   )
   // The manifest is machine-written JSON, never prettier-shaped — the seal ignores its own directory.
   const ignoreAbs = join(cwd, FORMAT_IGNORE)
-  const ignored = existsSync(ignoreAbs) ? readFileSync(ignoreAbs, 'utf8') : ''
+  const ignoreExisted = existsSync(ignoreAbs)
+  const ignored = ignoreExisted ? readFileSync(ignoreAbs, 'utf8') : ''
   const entry = `${dirname(manifest)}/`
-  if (!ignored.split('\n').some(l => l.trim() === entry)) writeFileSync(ignoreAbs, `${ignored}${ignored && !ignored.endsWith('\n') ? '\n' : ''}${entry}\n`)
-  git(['add', '--', manifest, FORMAT_IGNORE, ...files], cwd)
-  git(['commit', '--no-verify', '-q', '-m', `RED snapshot pr=${pr} phase=${phase}\n\n${trailer}`], cwd)
+  const addIgnore = !ignored.split('\n').some(l => l.trim() === entry)
+  try {
+    if (addIgnore) writeFileSync(ignoreAbs, `${ignored}${ignored && !ignored.endsWith('\n') ? '\n' : ''}${entry}\n`)
+    git(['add', '--', manifest, FORMAT_IGNORE, ...files], cwd)
+    git(['commit', '--no-verify', '-q', '-m', `RED snapshot pr=${pr} phase=${phase}\n\n${trailer}`], cwd)
+  } catch (error) {
+    // A retry already accepts the prepared artifacts and transient manifest. Restore the generated
+    // ignore entry so a failed commit does not create a change outside those paths.
+    if (addIgnore && git(['rev-parse', 'HEAD'], cwd) === base) {
+      if (ignoreExisted) writeFileSync(ignoreAbs, ignored)
+      else rmSync(ignoreAbs, { force: true })
+      git(['reset', '-q', base, '--', FORMAT_IGNORE], cwd)
+    }
+    throw error
+  }
   const snapshot = git(['rev-parse', 'HEAD'], cwd)
   return { sealed: true, snapshot, manifest, preSeal }
 }

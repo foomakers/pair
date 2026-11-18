@@ -463,6 +463,28 @@ test('US-575 AC5: a merge whose Pair-Base-Sync record does not match its bytes (
   rmSync(cwd, { recursive: true, force: true })
 })
 
+test('#687 AC3: an unchanged contract seals after a transient Git commit failure', t => {
+  const { cwd, base } = repo()
+  t.after(() => rmSync(cwd, { recursive: true, force: true }))
+  const { contractPath } = redContract(cwd)
+  const command = { pr: PR, phase: PHASE, base, contractPath, cwd }
+  const witness = readFileSync(join(cwd, 'test/a.test.js'))
+  const hooks = join(cwd, '.git', 'hooks')
+  git(cwd, 'config', 'core.hooksPath', hooks)
+  const hook = join(hooks, 'prepare-commit-msg')
+  writeFileSync(hook, '#!/bin/sh\necho transient-seal-failure >&2\nexit 1\n', { mode: 0o755 })
+
+  assert.throws(() => seal(command), /transient-seal-failure/)
+  assert.equal(git(cwd, 'rev-parse', 'HEAD'), base)
+  assert.equal(git(cwd, 'status', '--porcelain', '--', '.prettierignore'), '')
+  rmSync(hook)
+  const retried = seal(command)
+  assert.equal(retried.sealed, true, JSON.stringify(retried))
+  assert.equal(git(cwd, 'rev-parse', 'HEAD^'), base)
+  assert.deepEqual(readFileSync(join(cwd, 'test/a.test.js')), witness)
+  assert.equal(verify({ pr: PR, phase: PHASE, base, cwd }).verified, true)
+})
+
 test('US-623 AC7: a seal in a repo without the ignore entry adds it in the snapshot, once, and verify accepts it', () => {
   const { cwd, base } = repo()
   write(cwd, '.prettierignore', 'dist')
