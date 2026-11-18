@@ -121,7 +121,7 @@ a matrix you could not reproduce.
 
 ## Notes
 
-- Read-only on the repository except the seal commit the script makes. Never edit, format, push, publish, comment, create a card or merge; never rehash a changed artifact into approval.
+- Read-only on the repository except the seal commit and test-only seal push the script makes. Always publish your own handoff, including a rejection, through `cycle-state.mjs publish --workflowVersion $workflowVersion`. Never edit, format, publish a PR, comment, create a card, merge or rehash a changed artifact into approval.
 - Blind: read nothing under `.pair/working/` except `$RUN_DIR`.
 - A typed rejection is the cycle's answer: the coordinator routes it to ONE repair; a second rejection exhausts the unchanged budget. A rejection of a contract whose bytes no longer hash to what its preparation recorded is a process fault: `publish` stamps `processFault: contract-hash-mismatch` on it from the files (never set it yourself) and it spends `autoRecoveryRounds`, not `redRepairs`. Never soften a gap's SEVERITY to let the contract through — `$policy.blockingFloor` is the only thing that ever changes whether a correctly-severed gap blocks.
 - A repair naming `changedRows` that drops one of this rejection's `rowId`s (when this rejection's findings carried one) is refused by `publish` before it is written — verify every prior closure assertion holds before treating anything as newly closed.
