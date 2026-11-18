@@ -83,3 +83,13 @@ describe('red-verify test-only seal push', () => {
     expect(text).not.toMatch(/Never edit, format, push, publish a PR/i)
   })
 })
+
+// #687: workflow suites can keep running while the test runner buffers their output.
+describe('implement-phase waits for a quiet gate', () => {
+  it('checks whether the process is still running and keeps polling until exit', () => {
+    const text = readFileSync(join(DATASET, '.skills/workflow/implement-phase/SKILL.md'), 'utf-8')
+    expect(text).toMatch(/check whether the process is still running when output goes quiet/i)
+    expect(text).toMatch(/continue polling a running gate through quiet periods/i)
+    expect(text).not.toMatch(/never run a single command that can stay silent/i)
+  })
+})
