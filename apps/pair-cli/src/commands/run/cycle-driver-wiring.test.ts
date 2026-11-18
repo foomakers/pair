@@ -371,7 +371,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
   }, 60_000)
 
   it('#687: Codex prepare rejects a divergent Git worktree and dispatches after base-sync', async () => {
-    const run = vi.mocked(runCycle).getMockImplementation()!
+    const { runCycle: run } = await vi.importActual<typeof import('./cycle')>('./cycle')
     vi.mocked(runCycle).mockImplementationOnce(async input => {
       const tree = join(root, 'pair-worktrees', '7')
       const git = (...args: string[]) =>
