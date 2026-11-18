@@ -135,6 +135,7 @@ export interface RunCycleInput {
    * worktree HEAD the retry is dispatched on (a `stale` refusal means the HEAD is not the dispatched one — r2-3).
    */
   readonly beforePrepare?: (next: CycleNext) => Promise<{ park?: string; head?: string } | void>
+  readonly readWorktreeHead?: (path: string) => Promise<string | undefined>
   /**
    * r0-3: an explicit re-run whose first `resolve` is a spent process budget lifts it once (`recover --kind resume`).
    * `resumed: false` ⇒ the park stands, carrying `detail` (the resumes are spent too).
@@ -650,12 +651,32 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
 
     const prepared = await cleanBeforePrepare(input, state, next)
     if ('parked' in prepared) return prepared.parked
+    const mismatch = await checkPrepareHead(input, state, prepared.dispatch)
+    if (mismatch !== undefined) return mismatch
     announce(input, next)
     const stagePacket = await packet(prepared.dispatch)
     state.dispatchedResult = await spawnStage(withFormatCorrection(stagePacket, state))
     state.stagesRun += 1
     state.dispatchedNext = next
   }
+}
+
+async function checkPrepareHead(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+): Promise<CycleOutcome | undefined> {
+  if (next.step !== 'prepare' || next['mode'] === 'initial' || input.readWorktreeHead === undefined)
+    return
+  const expected = next['base']
+  if (typeof expected !== 'string' || !/^[a-f0-9]{40}$/i.test(expected)) return
+  const actual = state.worktreePath && (await input.readWorktreeHead(state.worktreePath))
+  if (actual === expected) return
+  const reason = 'prepare-head-mismatch'
+  const detail = actual
+    ? `Worktree HEAD differs from dispatch: expected ${expected}, actual ${actual}. Use cycle-state.mjs base-sync for this story, then re-run.`
+    : `Cannot read worktree HEAD: expected ${expected}. Restore access to the story worktree, then re-run.`
+  return processPark(state, { ...next, reason, detail }, reason, detail)
 }
 
 /** `resolve` answered no `next`: the dispatch in flight (if any) is logged as not advanced, then the typed stop. */
