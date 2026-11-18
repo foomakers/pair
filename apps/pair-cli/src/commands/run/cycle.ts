@@ -608,6 +608,17 @@ function announce(input: RunCycleInput, next: CycleNext): void {
   input.onDispatch?.(next)
 }
 
+async function prepareDispatch(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+): Promise<{ parked: CycleOutcome } | { dispatch: CycleNext }> {
+  const prepared = await cleanBeforePrepare(input, state, next)
+  if ('parked' in prepared) return prepared
+  const mismatch = await checkPrepareHead(input, state, prepared.dispatch)
+  return mismatch === undefined ? prepared : { parked: mismatch }
+}
+
 async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
   const { resolve, packet, spawnStage, policy, onNotice, hooks } = input
   const observers: StageObservers = {
@@ -649,10 +660,8 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
 
-    const prepared = await cleanBeforePrepare(input, state, next)
+    const prepared = await prepareDispatch(input, state, next)
     if ('parked' in prepared) return prepared.parked
-    const mismatch = await checkPrepareHead(input, state, prepared.dispatch)
-    if (mismatch !== undefined) return mismatch
     announce(input, next)
     const stagePacket = await packet(prepared.dispatch)
     state.dispatchedResult = await spawnStage(withFormatCorrection(stagePacket, state))

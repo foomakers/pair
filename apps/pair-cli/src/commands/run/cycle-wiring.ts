@@ -1748,21 +1748,28 @@ const traced = async (runTrace: { finish(): void }, run: () => Promise<CycleOutc
   }
 }
 
+async function readWorktreeHead(cwd: string): Promise<string | undefined> {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' })
+  return result.status === 0 ? result.stdout.trim() : undefined
+}
+
+async function resolveDriverStart(ctx: CycleDriverContext, requested: CycleDriverRequest) {
+  let input = requested
+  let co = coordinatesFor(ctx, input)
+  // Retry budgets come from cycle-state's resolve output.
+  let first: unknown = await resolveFor(ctx, input, co)()
+  const adopted = adoptOtherRun(input, co, first)
+  if (adopted !== undefined) {
+    ;({ input, co } = adopted)
+    first = await resolveFor(ctx, input, co)()
+  }
+  const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
+  return { input, co, policy }
+}
+
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
-    let input = requested
-    let co = coordinatesFor(ctx, input)
-    // The budgets are `cycle-state`'s, never this driver's: AC5 says the dead-dispatch retry is
-    // "read from cycle-state, never defined in pair-cli". Its own `resolve` output carries them,
-    // so they are read once here and handed to the loop — passing `{}` silently set every budget
-    // to zero, which the opencode leg showed as a stage that was never retried.
-    let first: unknown = await resolveFor(ctx, input, co)()
-    const adopted = adoptOtherRun(input, co, first)
-    if (adopted !== undefined) {
-      ;({ input, co } = adopted)
-      first = await resolveFor(ctx, input, co)()
-    }
-    const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
+    const { input, co, policy } = await resolveDriverStart(ctx, requested)
     recordRunProfile(ctx, co)
     const hooks = loadCycleHooks(ctx, co)
     const progress = progressFor(input.card, policy, co.title, input.onRunEvent)
@@ -1775,10 +1782,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
         hooks,
         resolve: resolveFor(ctx, input, co),
         worktree: worktreeFor(ctx, input, co),
-        readWorktreeHead: async cwd => {
-          const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' })
-          return result.status === 0 ? result.stdout.trim() : undefined
-        },
+        readWorktreeHead,
         packet: packetFor(ctx, input, co) as never,
         spawnStage: spawnStageFor(ctx, co, progress, pending),
         mergeStage: mergeWithTelemetry(ctx, co, merge),

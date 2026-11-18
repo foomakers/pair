@@ -483,6 +483,35 @@ test('pushSnapshot: a local-only seal reaches the story branch; the repo pre-pus
   assert.equal(pushSnapshot({ snapshot: sealed.snapshot, branch: 'feature/US-1-x', cwd }).pushed, true)
 })
 
+test('#687 AC4: publish a failing witness only with GREEN, preserving the seal on the remote', t => {
+  const { cwd, base } = repo()
+  const remote = mkdtempSync(join(tmpdir(), 'red-remote-'))
+  const fresh = mkdtempSync(join(tmpdir(), 'red-clone-'))
+  t.after(() => {
+    for (const dir of [cwd, remote, fresh]) rmSync(dir, { recursive: true, force: true })
+  })
+  const branch = 'feature/US-1-x'
+  const ref = `refs/heads/${branch}`
+  git(remote, 'init', '-q', '--bare', '-b', 'main')
+  git(cwd, 'remote', 'add', 'origin', remote)
+  git(cwd, 'push', '-q', 'origin', `HEAD:${ref}`)
+  writeFileSync(join(cwd, '.git', 'hooks', 'pre-push'), '#!/bin/sh\nnode test/a.test.js\n', { mode: 0o755 })
+  const { contractPath } = redContract(cwd)
+  const red = seal({ pr: PR, phase: PHASE, base, contractPath, cwd })
+  assert.equal(red.sealed, true)
+  rmSync(join(cwd, contractPath))
+  const rejected = spawnSync('git', ['push', 'origin', `HEAD:${ref}`], { cwd, encoding: 'utf8' })
+  assert.notEqual(rejected.status, 0)
+  assert.match(rejected.stderr, /Error: FAIL/)
+  assert.equal(git(remote, 'rev-parse', ref), base)
+
+  green(cwd, manifestPathFor(PR, PHASE), { 'src/a.js': 'export const a = () => 2\n' })
+  git(cwd, 'push', '-q', 'origin', `HEAD:${ref}`)
+  git(fresh, 'clone', '-q', '-b', branch, remote, '.')
+  assert.equal(git(fresh, 'rev-parse', 'HEAD^'), red.snapshot)
+  assert.equal(verifyChain({ pr: PR, base, cwd: fresh, expectContract: true }).verified, true)
+})
+
 test('pushSnapshot: a passing pre-push hook that prints more than 1 MB (a full quality gate) still pushes — the output never kills the push', () => {
   const { cwd, base } = repo()
   const remote = mkdtempSync(join(tmpdir(), 'red-remote-'))
