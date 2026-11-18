@@ -722,8 +722,9 @@ export function pushSnapshot({ snapshot, branch, cwd, remote = 'origin' }) {
   const trailer = (git(['log', '-1', '--format=%B', snapshot], cwd, { allowFail: true }) ?? '').split('\n').map(l => SNAP_TRAILER_RE.exec(l)).find(Boolean)
   const manifest = trailer?.[4]
   let removedManifest = false
-  if (manifest && git(['ls-files', '--error-unmatch', '--', manifest], cwd, { allowFail: true }) !== null) {
-    git(['rm', '-q', '--', manifest], cwd)
+  if (manifest && git(['cat-file', '-e', `HEAD:${manifest}`], cwd, { allowFail: true }) !== null) {
+    if (git(['ls-files', '--error-unmatch', '--', manifest], cwd, { allowFail: true }) !== null)
+      git(['rm', '-q', '--', manifest], cwd)
     git(['commit', '-q', '--no-verify', '-m', `chore: remove the transient RED manifest (${trailer[2]}, phase ${trailer[3]})`, '--', manifest], cwd)
     removedManifest = true
   }

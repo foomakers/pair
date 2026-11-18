@@ -531,6 +531,27 @@ test('#687: seal publication preserves unrelated staged changes', t => {
   assert.equal(verifyChain({ pr: PR, base, cwd, expectContract: true }).verified, true)
 })
 
+test('#687: retry publishes after the manifest removal commit fails', t => {
+  const { cwd, base } = repo()
+  const remote = mkdtempSync(join(tmpdir(), 'red-remote-'))
+  t.after(() => { rmSync(cwd, { recursive: true, force: true }); rmSync(remote, { recursive: true, force: true }) })
+  git(remote, 'init', '-q', '--bare', '-b', 'main')
+  git(cwd, 'remote', 'add', 'origin', remote)
+  git(cwd, 'push', '-q', 'origin', 'main:refs/heads/story')
+  const { contractPath } = redContract(cwd)
+  const result = seal({ pr: PR, phase: PHASE, base, contractPath, cwd })
+  assert.equal(result.sealed, true)
+  const hook = join(cwd, '.git/hooks/prepare-commit-msg')
+  writeFileSync(hook, '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+  assert.throws(() => pushSnapshot({ snapshot: result.snapshot, branch: 'story', cwd }))
+  rmSync(hook)
+  const pushed = pushSnapshot({ snapshot: result.snapshot, branch: 'story', cwd })
+  assert.equal(pushed.pushed, true, JSON.stringify(pushed))
+  assert.equal(git(cwd, 'rev-parse', 'HEAD^'), result.snapshot)
+  assert.equal(git(cwd, 'ls-tree', '--name-only', 'HEAD', manifestPathFor(PR, PHASE)), '')
+  assert.equal(verifyChain({ pr: PR, base, cwd, expectContract: true }).verified, true)
+})
+
 test('pushSnapshot: a passing pre-push hook that prints more than 1 MB (a full quality gate) still pushes — the output never kills the push', () => {
   const { cwd, base } = repo()
   const remote = mkdtempSync(join(tmpdir(), 'red-remote-'))
