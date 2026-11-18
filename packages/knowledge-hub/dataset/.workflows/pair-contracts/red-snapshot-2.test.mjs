@@ -299,6 +299,26 @@ test('#687 AC4: a push terminated after a passing gate reports the Git signal an
   assert.equal(git(cwd, 'rev-parse', 'HEAD^'), snapshot)
 })
 
+test('#687 AC4: a hook failure retains the last gate output and the real Git exit', t => {
+  const { cwd, base, snapshot } = sealed()
+  const remote = mkdtempSync(join(tmpdir(), 'red-remote-'))
+  t.after(() => {
+    for (const dir of [cwd, remote]) rmSync(dir, { recursive: true, force: true })
+  })
+  git(remote, 'init', '-q', '--bare', '-b', 'main')
+  git(cwd, 'remote', 'add', 'origin', remote)
+  git(cwd, 'push', '-q', 'origin', `${base}:refs/heads/story`)
+  const hooks = join(cwd, '.git', 'hooks')
+  git(cwd, 'config', 'core.hooksPath', hooks)
+  writeFileSync(join(hooks, 'pre-push'), '#!/bin/sh\necho gate-green\nexit 141\n', { mode: 0o755 })
+
+  const outcome = pushSnapshot({ snapshot, branch: 'story', cwd })
+  assert.equal(outcome.reason, 'push-rejected')
+  assert.match(outcome.detail, /git push exited with code 1/)
+  assert.match(outcome.detail, /gate-green/)
+  assert.equal(git(remote, 'rev-parse', 'refs/heads/story'), base)
+})
+
 test('doc seal + verify: a manifest-only snapshot; custody passes for a prose edit inside the scope, breaches on code or an out-of-scope file', () => {
   const { cwd, base } = repo()
   write(cwd, 'docs/guide.md', 'old\n')
