@@ -4,13 +4,14 @@
   "files": 438,
   "distinctContents": 403,
   "dispositionCounts": {
-    "migrate": 17,
-    "os-guarantee": 14,
+    "migrate": 21,
+    "os-guarantee": 19,
     "type-contract": 12,
     "in-flight-churn": 223,
-    "migration-candidate": 165,
+    "repo-contract": 8,
+    "standalone-script": 10,
     "boundary-adapter": 1,
-    "standalone-script": 6
+    "migration-candidate": 144
   },
   "limits": [
     "literal module specifiers only",
@@ -2621,10 +2622,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "repo-contract",
       "producer": "apps/website/lib/adoption-files-fences.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
+      "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
     },
     {
       "path": "apps/website/lib/ci-docs-staleness-env.test.ts",
@@ -2636,10 +2641,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "repo-contract",
       "producer": "apps/website/lib/ci-docs-staleness-env.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
+      "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
     },
     {
       "path": "apps/website/lib/deploy-build-command.test.ts",
@@ -2651,10 +2660,14 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "repo-contract",
       "producer": "apps/website/lib/deploy-build-command.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
+      "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
     },
     {
       "path": "apps/website/lib/docs-ia.test.ts",
@@ -2666,10 +2679,14 @@
           "line": 12
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "repo-contract",
       "producer": "apps/website/lib/docs-ia.test.ts",
       "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
+      "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
     },
     {
       "path": "apps/website/lib/docs-staleness-check.test.ts",
@@ -2686,10 +2703,14 @@
           "line": 495
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "repo-contract",
       "producer": "apps/website/lib/docs-staleness-check.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
+      "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
     },
     {
       "path": "apps/website/lib/docs-staleness-check.ts",
@@ -2701,10 +2722,14 @@
           "line": 16
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/website/lib/docs-staleness-check.ts",
       "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "operationConsumer": "website docs generation / staleness check reads docs tree (existsSync, readFileSync, readdirSync)",
+      "reason": "Ordinary read-only docs IO.",
+      "decision": "Migrate behind injected FileSystemService in the website wave.",
+      "testCategory": "unit-in-memory"
     },
     {
       "path": "apps/website/lib/get-llm-text.test.ts",
@@ -2716,10 +2741,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/website/lib/get-llm-text.test.ts",
       "sourceSymbols": ["fs"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"]
+      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "operationConsumer": "test builds a temporary docs tree on disk for the production reader",
+      "reason": "Ordinary temp-dir fixture setup/cleanup.",
+      "decision": "Seed InMemoryFileSystemService once its production consumer is migrated.",
+      "testCategory": "unit-in-memory"
     },
     {
       "path": "apps/website/lib/get-llm-text.ts",
@@ -2731,10 +2760,14 @@
           "line": 1
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/website/lib/get-llm-text.ts",
       "sourceSymbols": ["fs"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"]
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "operationConsumer": "website docs generation / staleness check reads docs tree (existsSync, readFileSync, readdirSync)",
+      "reason": "Ordinary read-only docs IO.",
+      "decision": "Migrate behind injected FileSystemService in the website wave.",
+      "testCategory": "unit-in-memory"
     },
     {
       "path": "apps/website/lib/skills-catalog-merge-coherence.test.ts",
@@ -2746,10 +2779,14 @@
           "line": 3
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "migrate",
       "producer": "apps/website/lib/skills-catalog-merge-coherence.test.ts",
       "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["existsSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"]
+      "observedOperations": ["existsSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
+      "operationConsumer": "test builds a temporary docs tree on disk for the production reader",
+      "reason": "Ordinary temp-dir fixture setup/cleanup.",
+      "decision": "Seed InMemoryFileSystemService once its production consumer is migrated.",
+      "testCategory": "unit-in-memory"
     },
     {
       "path": "apps/website/lib/source.test.ts",
@@ -2761,11 +2798,14 @@
           "line": 15
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "repo-contract",
       "producer": "apps/website/lib/source.test.ts",
       "sourceSymbols": ["readFileSync"],
       "observedOperations": ["readFileSync"],
-      "operationConsumer": "fumadocs sidebar test reads the checked-in meta.json fixture"
+      "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
+      "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
     },
     {
       "path": "apps/website/lib/turbo-source-order.test.ts",
@@ -2777,10 +2817,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "repo-contract",
       "producer": "apps/website/lib/turbo-source-order.test.ts",
       "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"]
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
+      "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
     },
     {
       "path": "apps/website/lib/whats-new-guard.test.ts",
@@ -2792,10 +2836,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "repo-contract",
       "producer": "apps/website/lib/whats-new-guard.test.ts",
       "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"]
+      "observedOperations": ["readFileSync", "readdirSync"],
+      "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
+      "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
     },
     {
       "path": "apps/website/scripts/landing-video/github-scroll.mjs",
@@ -2807,10 +2855,14 @@
           "line": 18
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "standalone-script",
       "producer": "apps/website/scripts/landing-video/github-scroll.mjs",
       "sourceSymbols": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"],
-      "observedOperations": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"]
+      "observedOperations": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"],
+      "operationConsumer": "standalone .mjs run directly by node (video capture / developer hook), no workspace package at runtime",
+      "reason": "Runs outside the package graph; importing a service would add a build dependency.",
+      "decision": "Exact-path exception.",
+      "testCategory": "none"
     },
     {
       "path": "apps/website/scripts/landing-video/login-closing.mjs",
@@ -2822,10 +2874,14 @@
           "line": 17
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "standalone-script",
       "producer": "apps/website/scripts/landing-video/login-closing.mjs",
       "sourceSymbols": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"],
-      "observedOperations": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"]
+      "observedOperations": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"],
+      "operationConsumer": "standalone .mjs run directly by node (video capture / developer hook), no workspace package at runtime",
+      "reason": "Runs outside the package graph; importing a service would add a build dependency.",
+      "decision": "Exact-path exception.",
+      "testCategory": "none"
     },
     {
       "path": "packages/content-ops/src/file-system/file-operations.ts",
@@ -6346,13 +6402,7 @@
       ],
       "disposition": "migration-candidate",
       "producer": "packages/knowledge-hub/src/conformance/macro-phase-modes.test.ts",
-      "sourceSymbols": [
-        "existsSync",
-        "mkdtempSync",
-        "readFileSync",
-        "readdirSync",
-        "writeFileSync"
-      ],
+      "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "readdirSync", "writeFileSync"],
       "observedOperations": [
         "existsSync",
         "mkdtempSync",
@@ -7145,7 +7195,7 @@
           "line": 8
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "scripts/dev/hook-git-env.test.mjs",
       "sourceSymbols": [
         "chmodSync",
@@ -7162,7 +7212,11 @@
         "mkdtempSync",
         "readFileSync",
         "writeFileSync"
-      ]
+      ],
+      "operationConsumer": "real subprocess/executable-bit (chmod) or packaged-artifact copy proof in temp dirs",
+      "reason": "Proves OS permission bits, real process execution or installed-artifact layout; the double cannot.",
+      "decision": "Exact-path exception; keep isolated temp dir with cleanup.",
+      "testCategory": "real-os-integration"
     },
     {
       "path": "scripts/dev/rtk-review-hook.mjs",
@@ -7174,10 +7228,14 @@
           "line": 8
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "standalone-script",
       "producer": "scripts/dev/rtk-review-hook.mjs",
       "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"]
+      "observedOperations": ["existsSync", "readFileSync"],
+      "operationConsumer": "standalone .mjs run directly by node (video capture / developer hook), no workspace package at runtime",
+      "reason": "Runs outside the package graph; importing a service would add a build dependency.",
+      "decision": "Exact-path exception.",
+      "testCategory": "none"
     },
     {
       "path": "scripts/dev/rtk-review-hook.test.mjs",
@@ -7189,10 +7247,14 @@
           "line": 7
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "scripts/dev/rtk-review-hook.test.mjs",
       "sourceSymbols": ["chmodSync", "mkdirSync", "mkdtempSync", "writeFileSync"],
-      "observedOperations": ["chmodSync", "mkdirSync", "mkdtempSync", "writeFileSync"]
+      "observedOperations": ["chmodSync", "mkdirSync", "mkdtempSync", "writeFileSync"],
+      "operationConsumer": "real subprocess/executable-bit (chmod) or packaged-artifact copy proof in temp dirs",
+      "reason": "Proves OS permission bits, real process execution or installed-artifact layout; the double cannot.",
+      "decision": "Exact-path exception; keep isolated temp dir with cleanup.",
+      "testCategory": "real-os-integration"
     },
     {
       "path": "scripts/dev/rtk-session-path.mjs",
@@ -7204,10 +7266,14 @@
           "line": 4
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "standalone-script",
       "producer": "scripts/dev/rtk-session-path.mjs",
       "sourceSymbols": ["appendFileSync", "existsSync"],
-      "observedOperations": ["appendFileSync", "existsSync"]
+      "observedOperations": ["appendFileSync", "existsSync"],
+      "operationConsumer": "standalone .mjs run directly by node (video capture / developer hook), no workspace package at runtime",
+      "reason": "Runs outside the package graph; importing a service would add a build dependency.",
+      "decision": "Exact-path exception.",
+      "testCategory": "none"
     },
     {
       "path": "scripts/dev/rtk-session-path.test.mjs",
@@ -7219,7 +7285,7 @@
           "line": 9
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "scripts/dev/rtk-session-path.test.mjs",
       "sourceSymbols": [
         "chmodSync",
@@ -7238,7 +7304,11 @@
         "mkdtempSync",
         "readFileSync",
         "writeFileSync"
-      ]
+      ],
+      "operationConsumer": "real subprocess/executable-bit (chmod) or packaged-artifact copy proof in temp dirs",
+      "reason": "Proves OS permission bits, real process execution or installed-artifact layout; the double cannot.",
+      "decision": "Exact-path exception; keep isolated temp dir with cleanup.",
+      "testCategory": "real-os-integration"
     },
     {
       "path": "scripts/dev/sealed-manifest-format.test.mjs",
@@ -7280,7 +7350,7 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "scripts/smoke-tests/witnesses/packaged-control-state-615.mjs",
       "sourceSymbols": [
         "cpSync",
@@ -7297,7 +7367,11 @@
         "readFileSync",
         "rmSync",
         "writeFileSync"
-      ]
+      ],
+      "operationConsumer": "real subprocess/executable-bit (chmod) or packaged-artifact copy proof in temp dirs",
+      "reason": "Proves OS permission bits, real process execution or installed-artifact layout; the double cannot.",
+      "decision": "Exact-path exception; keep isolated temp dir with cleanup.",
+      "testCategory": "real-os-integration"
     },
     {
       "path": "scripts/smoke-tests/witnesses/packaged-control-state-build-tree-615.mjs",
@@ -7309,10 +7383,14 @@
           "line": 2
         }
       ],
-      "disposition": "migration-candidate",
+      "disposition": "os-guarantee",
       "producer": "scripts/smoke-tests/witnesses/packaged-control-state-build-tree-615.mjs",
       "sourceSymbols": ["cpSync", "mkdirSync", "mkdtempSync", "readFileSync", "rmSync"],
-      "observedOperations": ["cpSync", "mkdirSync", "mkdtempSync", "readFileSync", "rmSync"]
+      "observedOperations": ["cpSync", "mkdirSync", "mkdtempSync", "readFileSync", "rmSync"],
+      "operationConsumer": "real subprocess/executable-bit (chmod) or packaged-artifact copy proof in temp dirs",
+      "reason": "Proves OS permission bits, real process execution or installed-artifact layout; the double cannot.",
+      "decision": "Exact-path exception; keep isolated temp dir with cleanup.",
+      "testCategory": "real-os-integration"
     }
   ]
 }

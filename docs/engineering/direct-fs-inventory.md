@@ -10,7 +10,7 @@ are in the two knowledge-hub workflow zones. Those 223 paths are individually
 marked `in-flight-churn` with the Scope Limit decision and root-guard test
 category. Eleven other imports are type-only `Dirent`/`Stats` contracts; these
 have exact-path `type-contract` exceptions because they perform no runtime IO.
-The 165 remaining entries are `migration-candidate` until their operation,
+The 144 remaining entries are `migration-candidate` until their operation,
 consumer, test category, and any OS-guarantee or standalone-script exception
 are reviewed. The reviewed `os-guarantee` entries exercise real symlink,
 atomic rename, git-clone, subprocess, installed artifact, or binary disk
@@ -77,6 +77,13 @@ The scan recognizes static imports, re-exports, TypeScript import-equals,
 directories. Nonliteral dynamic imports are outside this static scan.
 Identical source hashes identify copied files; the first tracked path is the
 provisional producer and needs mirror provenance review before T-1 completes.
+
+Website and root-script pass (21 paths): eight website tests that read checked-in
+repo files are `repo-contract` exceptions (the real files are the asserted subject);
+`docs-staleness-check.ts`, `get-llm-text.ts` and two temp-dir tests are `migrate`;
+two landing-video scripts and two `rtk-*` hooks are `standalone-script`; three chmod/
+subprocess tests and two packaged-artifact witnesses are `os-guarantee`. Three root
+script tests stay `migration-candidate`.
 
 Baseline: `pnpm --filter @pair/content-ops test` passed: 51 files, 677 tests,
 1.86 s Vitest duration. On this branch, `pnpm --filter @pair/dev-tools test`
