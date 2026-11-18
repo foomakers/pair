@@ -16,6 +16,10 @@ const project = (files: Record<string, string>) => {
 }
 
 describe('US-623 AC9 neutral agents -> per-engine dirs', () => {
+  it('US-687 AC1 permits the validator to seal and publish its handoff', () => {
+    const role = readFileSync(join(REPO, '.agents/agents/pair-red-contract-verifier.md'), 'utf8')
+    expect(toCodexRole(role)).toContain('sandbox_mode = "workspace-write"')
+  })
   it('maps name, description, body; read-only without Edit/Write', () => {
     const t = toCodexRole(md('Read, Grep'))
     expect(t).toContain('name = "pair-x"')
