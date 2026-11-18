@@ -29,7 +29,8 @@ const FS_SPECIFIERS = new Set(['fs', 'node:fs', 'fs/promises', 'node:fs/promises
 const EXTENSIONS = /\.(?:[cm]?[jt]sx?)$/
 const ROOTS = /^(?:apps|packages|scripts)\//
 // third-party at any depth; generated output only at the package root (nested `build/` dirs are authored code)
-const EXCLUDED = /(?:^|\/)node_modules\/|^(?:apps|packages)\/[^/]+\/(?:dist|build|\.next|coverage)\//
+const EXCLUDED =
+  /(?:^|\/)node_modules\/|^(?:apps|packages)\/[^/]+\/(?:dist|build|\.next|coverage)\//
 /** Dispositions that are not a reviewed exception: `migrate` must stop using fs, candidates are unresolved. */
 const UNRESOLVED = new Set(['migrate', 'migration-candidate', 'to-evaluate'])
 

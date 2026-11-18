@@ -3270,6 +3270,14 @@
       "testCategory": "unit-in-memory-pending"
     },
     {
+      "path": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "dependencies": [],
+      "disposition": "repo-contract",
+      "reason": "Runs the root gate on temp git repos: needs real fs and git (readFileSync, symlinkSync) to exercise runGuard end to end.",
+      "decision": "Keep real fs: the test verifies the gate entrypoint against real disk, in-memory doubles cannot.",
+      "testCategory": "root-guard"
+    },
+    {
       "path": "packages/dev-tools/src/quality-gates/direct-fs-guard.ts",
       "dependencies": [],
       "disposition": "repo-contract",
