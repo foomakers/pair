@@ -1245,3 +1245,20 @@ test('base-sync: after a sync the remediation prepare is based on the synced hea
   assert.equal(go(dir, { head: out.head }).next.base, out.head, 'dispatch head')
   assert.equal(go(dir).next.base, out.head, 'a stage-local resolve (no --head) agrees')
 })
+
+// #605: a verified contract whose seal failed retries validation, never preparation or GREEN.
+test('#605: failed seal retries the unchanged contract within autoRecoveryRounds', () => {
+  const dir = runDir()
+  put(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: 'contract.json', contractHash: 'unchanged' })
+  put(dir, 'r1-g1', 'red-verify', { verified: true, sealed: false, reason: 'git commit failed' })
+  const next = go(dir).next
+  assert.deepEqual(pick(next, 'step', 'mode', 'phase', 'attempt', 'base'), {
+    step: 'validate', mode: 'remediation', phase: 'r1-g1', attempt: 2, base: SHA('a'),
+  })
+  assert.deepEqual(next.contract, { path: 'contract.json', hash: 'unchanged', revision: 1 })
+  for (let attempt = 2; attempt <= 6; attempt++)
+    put(dir, 'r1-g1', 'red-verify', { verified: true, sealed: false, reason: 'git commit failed' }, attempt)
+  assert.deepEqual(pick(go(dir).next, 'step', 'reason', 'budget'), {
+    step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds',
+  })
+})
