@@ -74,3 +74,12 @@ describe('red-spec reports a moved HEAD', () => {
     expect(text).toMatch(/expected and actual HEAD/i)
   })
 })
+
+// #605: the validator can push a test-only seal as required by red-verify.
+describe('red-verify test-only seal push', () => {
+  it('permits the required push without a conflicting unconditional prohibition', () => {
+    const text = readFileSync(join(DATASET, '.skills/workflow/red-verify/SKILL.md'), 'utf-8')
+    expect(text).toMatch(/except.*test.only.*seal push/i)
+    expect(text).not.toMatch(/Never edit, format, push, publish a PR/i)
+  })
+})
