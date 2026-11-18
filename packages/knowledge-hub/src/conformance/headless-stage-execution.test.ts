@@ -56,3 +56,12 @@ describe('red-verify / red-spec handoff hygiene (AB/AC): the envelope fields pub
     },
   )
 })
+
+// #605 / #687: the dispatched role must permit red-verify's durable outcome.
+describe('red-verify role permits its required writes', () => {
+  it('publishes accepted and rejected handoffs without a conflicting role prohibition', () => {
+    const text = readFileSync(join(DATASET, '.agents/pair-red-contract-verifier.md'), 'utf-8')
+    expect(text).toMatch(/Always publish your own validator handoff.*accepted or rejected/i)
+    expect(text).not.toMatch(/never[^.;\n]*\b(?:publish|push)\b/i)
+  })
+})
