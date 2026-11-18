@@ -325,6 +325,19 @@ function scheduleFormatRetry(
   return true
 }
 
+function rememberIncompleteImplementation(
+  state: LoopState,
+  next: CycleNext,
+  record: CycleStageRecord,
+): void {
+  if (
+    next.step === 'implement' &&
+    record.final?.status === 'failed' &&
+    record.final.reason === RESUMABLE_REASON
+  )
+    state.resumeImplementation = next
+}
+
 /**
  * Logs the PREVIOUS dispatch (now that `next` reveals whether it advanced) and applies the
  * dead-dispatch retry budget. Returns a terminal outcome only when that budget is spent.
@@ -352,12 +365,7 @@ function settlePreviousDispatch(
   if (scheduleFormatRetry(state, record, observers)) return null
   const deliberate = deliberateOutcome(state, next, record, observers)
   if (deliberate !== null) return deliberate
-  if (
-    next.step === 'implement' &&
-    record.final?.status === 'failed' &&
-    record.final.reason === RESUMABLE_REASON
-  )
-    state.resumeImplementation = next
+  rememberIncompleteImplementation(state, next, record)
   if (state.retryCount >= deadDispatchRetries) {
     const fault = record.stalled === true ? 'idle-timeout' : 'dead-dispatch'
     return processPark(state, next, fault)
@@ -616,7 +624,7 @@ function announce(input: RunCycleInput, next: CycleNext): void {
 }
 
 async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
-  const { resolve, packet, spawnStage, policy, onNotice, hooks } = input
+  const { resolve, policy, onNotice, hooks } = input
   const observers: StageObservers = {
     onStage: input.onStage,
     appendAudit: input.appendAudit,
@@ -656,28 +664,38 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
 
-    const prepared = await cleanBeforePrepare(input, state, next)
-    if ('parked' in prepared) return prepared.parked
-    const mismatch = await checkPrepareHead(input, state, prepared.dispatch)
-    if (mismatch !== undefined) return mismatch
-    announce(input, next)
-    const stagePacket = await packet(prepared.dispatch)
-    const corrected = withFormatCorrection(stagePacket, state)
-    const resume = sameNext(state.resumeImplementation ?? null, next)
-    delete state.resumeImplementation
-    state.dispatchedResult = await spawnStage(
-      resume
-        ? {
-            ...corrected,
-            prompt:
-              corrected.prompt +
-              '\n\nThis is a retry of incomplete implementation. Resume the first pending task from the checkpoint and story worktree. Complete its test, implementation and verification before moving to the next task. Continue the phase through publication. If blocked, report the specific failed command or missing prerequisite and what remains.',
-          }
-        : corrected,
-    )
-    state.stagesRun += 1
-    state.dispatchedNext = next
+    const blocked = await dispatchStage(input, state, next)
+    if (blocked !== undefined) return blocked
   }
+}
+
+async function dispatchStage(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+): Promise<CycleOutcome | undefined> {
+  const prepared = await cleanBeforePrepare(input, state, next)
+  if ('parked' in prepared) return prepared.parked
+  const mismatch = await checkPrepareHead(input, state, prepared.dispatch)
+  if (mismatch !== undefined) return mismatch
+  announce(input, next)
+  const stagePacket = await input.packet(prepared.dispatch)
+  const corrected = withFormatCorrection(stagePacket, state)
+  const resume = sameNext(state.resumeImplementation ?? null, next)
+  delete state.resumeImplementation
+  state.dispatchedResult = await input.spawnStage(
+    resume
+      ? {
+          ...corrected,
+          prompt:
+            corrected.prompt +
+            '\n\nThis is a retry of incomplete implementation. Resume the first pending task from the checkpoint and story worktree. Complete its test, implementation and verification before moving to the next task. Continue the phase through publication. If blocked, report the specific failed command or missing prerequisite and what remains.',
+        }
+      : corrected,
+  )
+  state.stagesRun += 1
+  state.dispatchedNext = next
+  return undefined
 }
 
 async function checkPrepareHead(
