@@ -57,6 +57,8 @@ describe('US-623 AC9 neutral agents -> per-engine dirs', () => {
     const src = join(REPO, '.agents/agents')
     for (const f of readdirSync(src)) {
       const text = readFileSync(join(src, f), 'utf8')
+      // #605: a stale neutral role must not overwrite a corrected dataset role at run startup.
+      expect(text).toBe(readFileSync(join(REPO, 'packages/knowledge-hub/dataset/.agents', f), 'utf8'))
       expect(readFileSync(join(REPO, '.claude/agents', f), 'utf8')).toBe(text)
       expect(readFileSync(join(REPO, '.codex/agents', f.replace(/\.md$/, '.toml')), 'utf8')).toBe(
         toCodexRole(text),

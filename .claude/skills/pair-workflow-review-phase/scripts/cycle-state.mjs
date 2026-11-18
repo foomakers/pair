@@ -3252,7 +3252,12 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       if (repairs <= (policy.redRepairs ?? 1) || ctx.stale) return { ...(ctx.stale ? { stale: true } : {}), step: 'prepare', mode: 'repair', phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, rejection: d.findings ?? [], contract: contractOf(last.phase), group: groupOf(last.phase) }
       return blocked('failed-contract', { budget: 'redRepairs', phase: last.phase, findings: d.findings ?? [] })
     }
-    if (d.sealed !== true) return blocked('failed-seal', { phase: last.phase, detail: d.reason })
+    if (d.sealed !== true) {
+      const failed = byPhase('red-verify', last.phase).filter(h => h.data.verified === true && h.data.sealed !== true)
+      const spent = !answered && processBudgetSpent(failed, last.phase, 'failed-seal')
+      if (spent) return spent
+      return { step: 'validate', mode: latestOf('red-spec', last.phase)?.data.mode ?? (parts.kind === 'initial' ? 'initial' : 'remediation'), phase: last.phase, round: parts.round, attempt: byPhase('red-verify', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, detail: 'retry after failed-seal: ' + (d.reason ?? '') }
+    }
     if (parts.kind === 'initial') return { step: 'implement', mode: parts.revision > 1 ? 'revision' : 'initial', phase: last.phase, round: 0, attempt: byPhase('implement-phase', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), pr: list.map(h => h.data.pr).find(x => Number.isInteger(x)) }
     // A sealed `mode: test` group has nothing to implement: the guard is the fix, verified on the sealed head.
     if (fixModeOf(list, last.phase) === 'test') return afterGreen(last.phase, d.outputHead ?? d.snapshot ?? d.inputHead)
