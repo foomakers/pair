@@ -2213,6 +2213,7 @@ test('#605: cycle implementation resumes pending tasks without asking for routin
   const md = SKILL('implement-phase')
   assert.match(md, /routine confirmation.*already authorized/i)
   assert.match(md, /first pending task/i)
+  assert.match(md, /external verification.*must not stop.*remaining tasks/i)
 })
 
 test('US-506 T-2: implement-phase states the fresh entry — TDD as practice above the base, an informal self-review that is fixed and NEVER recorded, no predecessor', () => {
