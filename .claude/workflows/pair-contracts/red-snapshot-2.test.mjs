@@ -274,6 +274,31 @@ test('pushSnapshot: never forces — a diverged remote branch is a typed refusal
   assert.equal(out.reason, 'push-rejected')
 })
 
+test('#687 AC4: a push terminated after a passing gate reports the Git signal and keeps the seal', t => {
+  const { cwd, base, snapshot } = sealed()
+  const remote = mkdtempSync(join(tmpdir(), 'red-remote-'))
+  const bin = mkdtempSync(join(tmpdir(), 'red-git-'))
+  t.after(() => {
+    for (const dir of [cwd, remote, bin]) rmSync(dir, { recursive: true, force: true })
+  })
+  git(remote, 'init', '-q', '--bare', '-b', 'main')
+  git(cwd, 'remote', 'add', 'origin', remote)
+  git(cwd, 'push', '-q', 'origin', `${base}:refs/heads/story`)
+  writeFileSync(join(bin, 'git'), '#!/bin/sh\nif [ "$1" = push ]; then\n  echo gate-green\n  trap - PIPE\n  kill -PIPE $$\nfi\nexec "$PAIR_TEST_REAL_GIT" "$@"\n', { mode: 0o755 })
+  const result = spawnSync(process.execPath, [CLI, 'push', '--snapshot', snapshot, '--branch', 'story'], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, PAIR_TEST_REAL_GIT: sh(cwd, 'sh', '-c', 'command -v git') },
+  })
+  const outcome = JSON.parse(result.stdout)
+  assert.equal(outcome.pushed, false)
+  assert.equal(outcome.reason, 'push-rejected')
+  assert.match(outcome.detail, /git push terminated by SIGPIPE/)
+  assert.match(outcome.detail, /gate-green/)
+  assert.equal(git(remote, 'rev-parse', 'refs/heads/story'), base)
+  assert.equal(git(cwd, 'rev-parse', 'HEAD^'), snapshot)
+})
+
 test('doc seal + verify: a manifest-only snapshot; custody passes for a prose edit inside the scope, breaches on code or an out-of-scope file', () => {
   const { cwd, base } = repo()
   write(cwd, 'docs/guide.md', 'old\n')
