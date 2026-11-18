@@ -718,7 +718,8 @@ export function pushSnapshot({ snapshot, branch, cwd, remote = 'origin' }) {
     const termination = r.error ? `git push: ${r.error.message}` : r.signal ? `git push terminated by ${r.signal}` : `git push exited with code ${r.status}`
     const output = `${r.stdout ?? ''}\n${r.stderr ?? ''}`.trim().split('\n')
     const errors = output.filter(line => /fail|error|✖|×|ELIFECYCLE|rejected/i.test(line))
-    const detail = [termination, ...(errors.length ? errors.slice(-8) : output.slice(-3))].filter(Boolean).join(' | ')
+    const gateTail = (r.stdout ?? '').trim().slice(-2048).split('\n').slice(-3)
+    const detail = [...new Set([termination, ...gateTail, ...(errors.length ? errors.slice(-8) : output.slice(-3))])].filter(Boolean).join(' | ')
     return { pushed: false, reason: 'push-rejected', snapshot, outputHead, removedManifest, detail }
   }
   const remoteHead = remoteHeadOf()
