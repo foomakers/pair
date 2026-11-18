@@ -167,6 +167,7 @@ it('G5-engine-boundary: real preparation and in-process entry relay their result
   expect(prompts).toHaveLength(2)
   expect(prompts[0]).toContain('pair-process-refine-story')
   expect(prompts[1]).toContain('pair-process-plan-tasks')
+  expect(prompts[1]).toMatch(/autonomous prepare phase.*Draft/i)
   expect(output.join('\n')).toContain('PREPARE-RESULT: prepared')
   expect(cycles).toEqual(['12', '12'])
   expect(code).toBe(0)

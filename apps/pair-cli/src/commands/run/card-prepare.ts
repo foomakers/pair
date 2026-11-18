@@ -409,6 +409,7 @@ async function planStep(
   const { entry, phase, routes } = drive
   const planned = await routes.driveSkill(PLAN_SKILL, 'Refined, task breakdown next', {
     approval: 'auto',
+    prepare: phase.gate.mode === 'when' ? 'hold-when' : 'hold-never',
   })
   if (planned !== 0) return await fail(phase, `prepare:plan exited ${planned}`)
   const stopped = await boundaryStop(drive, 'B2')
