@@ -1,0 +1,273 @@
+{
+  "$meta": {
+    "pr": "689",
+    "phase": "r5-g2",
+    "base": "0e20b3005c4f9cdb50b863989c3bb055d39e9b89",
+    "trailer": "Pair-RED-Snapshot: pr=689; phase=r5-g2; base=0e20b3005c4f9cdb50b863989c3bb055d39e9b89; manifest=.pair/red-snapshots/pr-689-r5-g2.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "packages/knowledge-hub/src/conformance/red-snapshot-push-regression.test.ts",
+      "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs"
+    ]
+  },
+  "sourceOfTruth": "review findings r2-5 and r4-7; red-snapshot.mjs pushSnapshot and push CLI",
+  "inventory": [
+    {
+      "id": "r2-5",
+      "producer": "red-snapshot.mjs pushSnapshot and push CLI",
+      "inputs": [
+        "valid test-only seal",
+        "committed tree and index",
+        "bare remote tip",
+        "commit hook outcome"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+        "push CLI"
+      ],
+      "consumers": [
+        "remote tree",
+        "index",
+        "verify-chain"
+      ],
+      "classes": [
+        "failed manifest cleanup commit leaves staged deletion; retry must use committed tree",
+        "clean manifest removal",
+        "already removed manifest",
+        "refusal without remote movement"
+      ],
+      "interactions": [
+        "dataset and installed function and CLI crossed with retry, staged edit and clean publication"
+      ]
+    },
+    {
+      "id": "r4-7",
+      "producer": "red-snapshot.mjs pushSnapshot and push CLI",
+      "inputs": [
+        "valid test-only seal",
+        "committed tree and index",
+        "bare remote tip",
+        "commit hook outcome"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+        "push CLI"
+      ],
+      "consumers": [
+        "remote tree",
+        "index",
+        "verify-chain"
+      ],
+      "classes": [
+        "unrelated staged production edit must not enter cleanup publication",
+        "clean manifest removal",
+        "already removed manifest",
+        "refusal without remote movement"
+      ],
+      "interactions": [
+        "dataset and installed function and CLI crossed with retry, staged edit and clean publication"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "red-snapshot.mjs pushSnapshot",
+    "mode": "test",
+    "allowedPaths": []
+  },
+  "matrix": [
+    {
+      "id": "r2-5-installed-function-retry",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "installed function: retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "clean publication has seal parent and no manifest, preserves staged edit and passes remote verify-chain; refusal leaves remote at base",
+      "covers": [
+        "r2-5"
+      ],
+      "observed": "PASS current source; four matching cases fail on isolated reported regression"
+    },
+    {
+      "id": "r4-7-installed-function-staged",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "installed function: staged",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "clean publication has seal parent and no manifest, preserves staged edit and passes remote verify-chain; refusal leaves remote at base",
+      "covers": [
+        "r4-7"
+      ],
+      "observed": "PASS current source; isolated whole-index mutation fails this witness; reproduce: node packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs"
+    },
+    {
+      "id": "r2-5-installed-function-clean",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed function: clean",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "normal cleanup and repeat push succeed and remote custody passes",
+      "covers": [
+        "r2-5",
+        "r4-7"
+      ],
+      "observed": "PASS current source"
+    },
+    {
+      "id": "r2-5-installed-cli-retry",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "installed cli: retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "clean publication has seal parent and no manifest, preserves staged edit and passes remote verify-chain; refusal leaves remote at base",
+      "covers": [
+        "r2-5"
+      ],
+      "observed": "PASS current source; four matching cases fail on isolated reported regression"
+    },
+    {
+      "id": "r4-7-installed-cli-staged",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "installed cli: staged",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "clean publication has seal parent and no manifest, preserves staged edit and passes remote verify-chain; refusal leaves remote at base",
+      "covers": [
+        "r4-7"
+      ],
+      "observed": "PASS current source; isolated whole-index mutation fails this witness; reproduce: node packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs"
+    },
+    {
+      "id": "r2-5-installed-cli-clean",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed cli: clean",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "normal cleanup and repeat push succeed and remote custody passes",
+      "covers": [
+        "r2-5",
+        "r4-7"
+      ],
+      "observed": "PASS current source"
+    },
+    {
+      "id": "r2-5-dataset-function-retry",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "dataset function: retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "clean publication has seal parent and no manifest, preserves staged edit and passes remote verify-chain; refusal leaves remote at base",
+      "covers": [
+        "r2-5"
+      ],
+      "observed": "PASS current source; four matching cases fail on isolated reported regression"
+    },
+    {
+      "id": "r4-7-dataset-function-staged",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "dataset function: staged",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "clean publication has seal parent and no manifest, preserves staged edit and passes remote verify-chain; refusal leaves remote at base",
+      "covers": [
+        "r4-7"
+      ],
+      "observed": "PASS current source; isolated whole-index mutation fails this witness; reproduce: node packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs"
+    },
+    {
+      "id": "r2-5-dataset-function-clean",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset function: clean",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "normal cleanup and repeat push succeed and remote custody passes",
+      "covers": [
+        "r2-5",
+        "r4-7"
+      ],
+      "observed": "PASS current source"
+    },
+    {
+      "id": "r2-5-dataset-cli-retry",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "dataset cli: retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "clean publication has seal parent and no manifest, preserves staged edit and passes remote verify-chain; refusal leaves remote at base",
+      "covers": [
+        "r2-5"
+      ],
+      "observed": "PASS current source; four matching cases fail on isolated reported regression"
+    },
+    {
+      "id": "r4-7-dataset-cli-staged",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "dataset cli: staged",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "clean publication has seal parent and no manifest, preserves staged edit and passes remote verify-chain; refusal leaves remote at base",
+      "covers": [
+        "r4-7"
+      ],
+      "observed": "PASS current source; isolated whole-index mutation fails this witness; reproduce: node packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs"
+    },
+    {
+      "id": "r2-5-dataset-cli-clean",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset cli: clean",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "expected": "normal cleanup and repeat push succeed and remote custody passes",
+      "covers": [
+        "r2-5",
+        "r4-7"
+      ],
+      "observed": "PASS current source"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:a175d1f2660933fb929c3d70b33f4341c3410c3779ba00156d19540d0ab81770",
+      "command": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-push-regression.mjs",
+      "observed": "PASS 12 tests"
+    },
+    {
+      "file": "packages/knowledge-hub/src/conformance/red-snapshot-push-regression.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:02c852f4274915277f4be4a7d2bc9325cbb1523999dbd21a96b271456375fba4",
+      "command": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/red-snapshot-push-regression.test.ts",
+      "observed": "PASS 1 test"
+    },
+    {
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:06efe40c302c19a60c7fbb4b94f87022543022bce433ee04a8e31e9a0bfa2494",
+      "command": "node packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs",
+      "observed": "PASS current 4 staged witnesses; whole-index regression 4 detected"
+    }
+  ],
+  "testExempt": false,
+  "regressionProbe": {
+    "command": "node packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs",
+    "observed": "Current source: 4 staged witnesses pass. Isolated copies with path-limited commit changed to whole-index commit: all 4 staged witnesses fail on remote production blob. The script creates and removes its isolated copy and local bare remotes."
+  },
+  "contractHash": "sha256:b1f9894ce2c17b62c3e15a6278ba98314d466f90cfba0fb469206614e70f344e"
+}
