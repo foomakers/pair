@@ -1,0 +1,323 @@
+{
+  "$meta": {
+    "pr": "690",
+    "phase": "r1-g1-rev2",
+    "base": "a4b0d74aff430f7938e570fd9a3874fe0073d4ca",
+    "trailer": "Pair-RED-Snapshot: pr=690; phase=r1-g1-rev2; base=a4b0d74aff430f7938e570fd9a3874fe0073d4ca; manifest=.pair/red-snapshots/pr-690-r1-g1-rev2.json",
+    "artifacts": [
+      "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "packages/dev-tools/src/quality-gates/direct-fs-guard-registry.test.ts"
+    ]
+  },
+  "mode": "revision",
+  "phase": "r1-g1-rev2",
+  "sourceOfTruth": "packages/dev-tools/src/quality-gates/direct-fs-guard.ts",
+  "inventory": [
+    {
+      "id": "r0-2",
+      "producer": "packages/dev-tools/src/quality-gates/direct-fs-guard.ts#runGuard (git ls-files -> isAuditedPath -> registry load -> checkRegistry)",
+      "inputs": [
+        "tracked files of a git repo",
+        "docs/engineering/direct-fs-inventory.json rows"
+      ],
+      "representations": [
+        "runGuard(root) function",
+        "main() CLI wrapper (pnpm direct-fs:check)"
+      ],
+      "consumers": [
+        "pnpm direct-fs:check",
+        "quality-gate"
+      ],
+      "classes": [
+        "unlisted import -> diagnostic",
+        "listed reasoned entry -> []",
+        "stale entry -> diagnostic",
+        "non-audited tracked path -> ignored",
+        "CLI main: failing registry -> exit 1 + FAIL; clean -> exit 0 + PASS"
+      ],
+      "interactions": [
+        "audited filter x registry: non-audited path never needs a row"
+      ]
+    },
+    {
+      "id": "r0-3",
+      "producer": "packages/dev-tools/src/quality-gates/direct-fs-guard.ts#EXCLUDED/isAuditedPath",
+      "inputs": [
+        "tracked path"
+      ],
+      "representations": [
+        "EXCLUDED regex"
+      ],
+      "consumers": [
+        "runGuard"
+      ],
+      "classes": [
+        "nested authored dir named build|dist|coverage|.next -> scanned",
+        "package-root (apps|packages)/<pkg>/(dist|build|.next|coverage)/ -> excluded",
+        "tracked node_modules code -> excluded (third-party, documented limit)"
+      ],
+      "interactions": [
+        "each of the 4 dir names x nested/root position",
+        "node_modules x any depth"
+      ]
+    },
+    {
+      "id": "r1-g1-gap1",
+      "producer": "packages/dev-tools/src/quality-gates/direct-fs-guard.ts runGuard() over docs/engineering/direct-fs-inventory.json (registry)",
+      "inputs": [
+        "git ls-files of the tracked tree",
+        "registry rows"
+      ],
+      "representations": [
+        "docs/engineering/direct-fs-inventory.json (committed oracle rows)",
+        "pnpm direct-fs:check (CLI wiring of runGuard)"
+      ],
+      "consumers": [
+        "pnpm direct-fs:check pre-push gate",
+        "sealed direct-fs-guard-run.test.ts (imports fs at line 4)"
+      ],
+      "classes": [
+        "tracked file with direct fs import and no registry row -> FAIL (current: sealed direct-fs-guard-run.test.ts:4)",
+        "tracked file with direct fs import and registry row -> PASS"
+      ],
+      "interactions": [
+        "sealed test file byte-frozen -> only a registry row can resolve it; fixScope must include the registry path"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "packages/dev-tools/src/quality-gates/direct-fs-guard.ts",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/dev-tools/src/quality-gates/direct-fs-guard.ts",
+      "docs/engineering/direct-fs-inventory.json"
+    ],
+    "widenedFor": {
+      "r1-g1-gap1": "docs/engineering/direct-fs-inventory.json"
+    }
+  },
+  "matrix": [
+    {
+      "id": "W-r0-3-build",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "tracked packages/x/src/build/helper.ts imports fs, empty registry",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"scans a tracked authored file under a nested build directory\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "one diagnostic containing packages/x/src/build/helper.ts:1 unlisted direct-fs import fs",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "W-r0-3-dist",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "same under nested dist",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"scans a tracked authored file under a nested dist directory\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "unlisted diagnostic for nested dist file",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "W-r0-3-coverage",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "same under nested coverage",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"scans a tracked authored file under a nested coverage directory\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "unlisted diagnostic",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "W-r0-3-next",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "same under nested .next",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"scans a tracked authored file under a nested .next directory\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "unlisted diagnostic",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "C-r0-3-root-dist",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "tracked packages/x/dist/out.js imports fs, empty registry (package-root output)",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"skips package-root dist output\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "[] (generated output stays excluded)",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "C-r0-3-root-build",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "tracked packages/x/build/out.js imports fs, empty registry (package-root output)",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"skips package-root build output\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "[] (generated output stays excluded)",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "C-r0-3-root-.next",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "tracked packages/x/.next/out.js imports fs, empty registry (package-root output)",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"skips package-root .next output\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "[] (generated output stays excluded)",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "C-r0-3-root-coverage",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "tracked packages/x/coverage/out.js imports fs, empty registry (package-root output)",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"skips package-root coverage output\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "[] (generated output stays excluded)",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "C-r0-2-unlisted",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "tracked packages/x/src/a.ts imports fs, empty registry",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"fails an unlisted direct-fs import with path, line and specifier\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "runGuard returns one diagnostic naming path:1 and import fs; fails under runGuard body mutated to return []",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "C-r0-2-listed",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "same file with reasoned os-guarantee row",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"passes a listed, reasoned entry\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "[]",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "C-r0-2-stale",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "row for a file that no longer imports fs",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"fails a stale entry whose file no longer imports fs\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "one stale registry entry diagnostic; fails under return [] mutation",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "C-r0-2-nonaudited",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "tracked docs/a.ts imports fs, empty registry",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"ignores a non-audited tracked path (outside apps|packages|scripts)\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "[] (outside apps|packages|scripts)",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "C-r0-3-nested-node_modules",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "tracked packages/x/node_modules/y/index.js imports fs, empty registry",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"skips tracked node_modules code under a package\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "[] (third-party stays excluded)",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "C-r0-2-main",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "main() run via ts-node from a temp repo (real guard sources copied) with unlisted packages/x/src/a.ts",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"exits 1 and prints FAIL when the registry misses an import\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "exit status 1, stdout contains FAIL and the unlisted diagnostic",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "C-r0-2-main-pass",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "same temp repo, every import listed",
+      "oracle": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts -t \"exits 0 and prints PASS when every import is listed\"",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "expected": "exit status 0, stdout contains PASS",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "W-gap1-registry",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "runGuard() over the real repo at head: sealed direct-fs-guard-run.test.ts imports fs and has no registry row",
+      "oracle": "pnpm --dir packages/dev-tools exec vitest run src/quality-gates/direct-fs-guard-registry.test.ts (packages/dev-tools/src/quality-gates/direct-fs-guard-registry.test.ts)",
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-registry.test.ts",
+      "expected": "runGuard() returns [] (registry lists every tracked direct-fs import)",
+      "covers": [
+        "r1-g1-gap1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:e5e038030834f3325bd33c16a00436a1ed05ba380c370dd5423b23ad7b779234",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/quality-gates/direct-fs-guard-run.test.ts",
+      "observed": "pass (reclassified: already green at head)"
+    },
+    {
+      "file": "packages/dev-tools/src/quality-gates/direct-fs-guard-registry.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:da2c1b4bf0549240fe19c5fbda72498f0d74fdeb918cfafbad689858f843220c",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/quality-gates/direct-fs-guard-registry.test.ts",
+      "observed": "1 failed: runGuard() expected [] to deeply equal [direct-fs-guard-run.test.ts:4 unlisted direct-fs import fs]"
+    }
+  ],
+  "testExempt": false,
+  "notes": {
+    "mutationProbe": "r0-2: isolated copy in packages/dev-tools/.probe (removed) with runGuard body = return []: 6 of 12 fail (unlisted, stale, 4 nested-dir); unchanged source: unlisted/listed/stale pass."
+  },
+  "revision": 2,
+  "predecessorContractHash": "sha256:f68372aae7c1ff3bdbd8dd3314b6b9920347fb228006b7630db939325138542a",
+  "changedRows": [
+    "W-gap1-registry"
+  ],
+  "reattest": {
+    "reason": "witness unchanged at head"
+  }
+}
