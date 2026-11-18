@@ -828,6 +828,7 @@ const isHaltOutcome = (o: CycleOutcome): boolean =>
   o.status === 'escalate' ||
   o.status === 'escalated' ||
   o.status === 'decision-conflict' ||
+  o.status === 'immutable-evidence-conflict' ||
   o.status === 'merged-closure-unfinished' ||
   (o.status === 'merge-parked' &&
     (o.merge as { parkKind?: unknown } | undefined)?.parkKind !== 'awaiting-human')
