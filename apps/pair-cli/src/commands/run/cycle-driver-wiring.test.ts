@@ -370,7 +370,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     expect(rounds.map(r => r.kind)).toEqual(['stage-retry'])
   }, 60_000)
 
-  it('#687: Codex prepare rejects a divergent Git worktree and dispatches after base-sync', async () => {
+  it('#605: Codex prepare recovers a divergent Git worktree with base-sync', async () => {
     const { runCycle: run } = await vi.importActual<typeof import('./cycle')>('./cycle')
     vi.mocked(runCycle).mockImplementationOnce(async input => {
       const tree = join(root, 'pair-worktrees', '7')
@@ -384,25 +384,15 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
       git('commit', '-q', '--allow-empty', '-m', 'story HEAD moved')
       const actual = git('rev-parse', 'HEAD')
       const prepare = { step: 'prepare', mode: 'remediation', phase: 'r1-g1', attempt: 1, base }
-      const blocked = await run({
-        ...input,
-        resolve: async () => ({ status: 'in-progress', next: prepare }),
-      })
-      expect(blocked).toMatchObject({ status: 'awaiting-human', stagesRun: 0 })
-      expect(blocked.reason).toContain(`expected ${base}, actual ${actual}`)
-      expect(calls()).toHaveLength(0)
-
-      const sync = await input.beforePrepare?.({ ...prepare, refusal: 'stale', attempt: 2 })
-      expect(sync?.head).toBe(actual)
-      const syncedPrepare = { ...prepare, base: actual }
       const resumed = await run({
         ...input,
         resolve: vi
           .fn(async () => ({ status: 'completed', next: { step: 'done' } }))
-          .mockResolvedValueOnce({ status: 'in-progress', next: syncedPrepare }),
+          .mockResolvedValueOnce({ status: 'in-progress', next: prepare }),
       })
       expect(resumed.stagesRun).toBe(1)
       expect(calls()).toHaveLength(1)
+      expect(git('rev-parse', 'HEAD')).toBe(actual)
       return resumed
     })
     await drive(ENGINES.codex)

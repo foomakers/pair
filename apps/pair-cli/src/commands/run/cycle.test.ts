@@ -722,6 +722,26 @@ describe('US-623 AC6 — stray files of a failed attempt are stashed before the 
     },
   )
 
+  it('#605: a moved prepare HEAD runs stale recovery before dispatch', async () => {
+    const expected = 'a'.repeat(40)
+    const actual = 'b'.repeat(40)
+    const prepare = { ...PREPARE_A0, mode: 'remediation', phase: 'r1-g1', base: expected }
+    const beforePrepare = vi.fn(async () => ({ head: actual }))
+    const sent: string[] = []
+    const outcome = await runCycle({
+      resolve: scriptedResolve([{ status: 'in-progress', next: prepare }, { status: 'completed', next: DONE }]),
+      worktree: async () => ({ path: '/fixture/story' }),
+      readWorktreeHead: async () => actual,
+      beforePrepare,
+      packet: async next => { sent.push(String(next['base'])); return packet(next) },
+      spawnStage: async () => ({ processOutcome: 'success' }) as CycleStageResult,
+      policy: {},
+    })
+    expect(beforePrepare).toHaveBeenCalledWith(expect.objectContaining({ refusal: 'stale' }))
+    expect(sent).toEqual([actual])
+    expect(outcome.status).toBe('ready-for-merge')
+  })
+
   it('beforePrepare runs before a prepare with attempt > 1, never before attempt 1 or other steps', async () => {
     const order: string[] = []
     const run = async (first: { step: string; [key: string]: unknown }) => {

@@ -183,6 +183,7 @@ interface LoopState {
   formatRetryUsed: boolean
   /** AO: the exact validation error to quote in the NEXT dispatch's prompt, once. */
   formatCorrection: string | undefined
+  resumeImplementation?: CycleNext
   reuseNoticeGiven: boolean
   /** The story worktree, once created: where `pre-<stage>`/`post-<stage>` hooks run. */
   worktreePath: string | undefined
@@ -324,6 +325,19 @@ function scheduleFormatRetry(
   return true
 }
 
+function rememberIncompleteImplementation(
+  state: LoopState,
+  next: CycleNext,
+  record: CycleStageRecord,
+): void {
+  if (
+    next.step === 'implement' &&
+    record.final?.status === 'failed' &&
+    record.final.reason === RESUMABLE_REASON
+  )
+    state.resumeImplementation = next
+}
+
 /**
  * Logs the PREVIOUS dispatch (now that `next` reveals whether it advanced) and applies the
  * dead-dispatch retry budget. Returns a terminal outcome only when that budget is spent.
@@ -351,6 +365,7 @@ function settlePreviousDispatch(
   if (scheduleFormatRetry(state, record, observers)) return null
   const deliberate = deliberateOutcome(state, next, record, observers)
   if (deliberate !== null) return deliberate
+  rememberIncompleteImplementation(state, next, record)
   if (state.retryCount >= deadDispatchRetries) {
     const fault = record.stalled === true ? 'idle-timeout' : 'dead-dispatch'
     return processPark(state, next, fault)
@@ -608,19 +623,8 @@ function announce(input: RunCycleInput, next: CycleNext): void {
   input.onDispatch?.(next)
 }
 
-async function prepareDispatch(
-  input: RunCycleInput,
-  state: LoopState,
-  next: CycleNext,
-): Promise<{ parked: CycleOutcome } | { dispatch: CycleNext }> {
-  const prepared = await cleanBeforePrepare(input, state, next)
-  if ('parked' in prepared) return prepared
-  const mismatch = await checkPrepareHead(input, state, prepared.dispatch)
-  return mismatch === undefined ? prepared : { parked: mismatch }
-}
-
 async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
-  const { resolve, packet, spawnStage, policy, onNotice, hooks } = input
+  const { resolve, policy, onNotice, hooks } = input
   const observers: StageObservers = {
     onStage: input.onStage,
     appendAudit: input.appendAudit,
@@ -660,14 +664,57 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
 
-    const prepared = await prepareDispatch(input, state, next)
-    if ('parked' in prepared) return prepared.parked
-    announce(input, next)
-    const stagePacket = await packet(prepared.dispatch)
-    state.dispatchedResult = await spawnStage(withFormatCorrection(stagePacket, state))
-    state.stagesRun += 1
-    state.dispatchedNext = next
+    const blocked = await dispatchStage(input, state, next)
+    if (blocked !== undefined) return blocked
   }
+}
+
+async function dispatchStage(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+): Promise<CycleOutcome | undefined> {
+  const prepared = await cleanBeforePrepare(input, state, next)
+  if ('parked' in prepared) return prepared.parked
+  const recovered = await recoverPrepareHead(input, state, prepared.dispatch)
+  if ('parked' in recovered) return recovered.parked
+  const dispatch = recovered.dispatch
+  announce(input, next)
+  const stagePacket = await input.packet(dispatch)
+  const corrected = withFormatCorrection(stagePacket, state)
+  const resume = sameNext(state.resumeImplementation ?? null, next)
+  delete state.resumeImplementation
+  state.dispatchedResult = await input.spawnStage(
+    resume
+      ? {
+          ...corrected,
+          prompt:
+            corrected.prompt +
+            '\n\nThis is a retry of incomplete implementation. Resume the first pending task from the checkpoint and story worktree. Complete its test, implementation and verification before moving to the next task. Continue the phase through publication. If blocked, report the specific failed command or missing prerequisite and what remains.',
+        }
+      : corrected,
+  )
+  state.stagesRun += 1
+  state.dispatchedNext = next
+  return undefined
+}
+
+async function recoverPrepareHead(
+  input: RunCycleInput,
+  state: LoopState,
+  dispatch: CycleNext,
+): Promise<{ parked: CycleOutcome } | { dispatch: CycleNext }> {
+  const mismatch = await checkPrepareHead(input, state, dispatch)
+  if (mismatch === undefined) return { dispatch }
+  if (input.beforePrepare === undefined || state.worktreePath === undefined) return { parked: mismatch }
+  const actual = await input.readWorktreeHead!(state.worktreePath)
+  if (actual === undefined) return { parked: mismatch }
+  const recovery = await input.beforePrepare({ ...dispatch, refusal: 'stale', attempt: 2 })
+  if (recovery?.park !== undefined)
+    return { parked: processPark(state, dispatch, 'prepare-head-mismatch', recovery.park) }
+  const synced = recovery?.head === undefined ? dispatch : { ...dispatch, base: recovery.head }
+  const stillMismatched = await checkPrepareHead(input, state, synced)
+  return stillMismatched === undefined ? { dispatch: synced } : { parked: stillMismatched }
 }
 
 async function checkPrepareHead(
