@@ -721,7 +721,7 @@ export function pushSnapshot({ snapshot, branch, cwd, remote = 'origin' }) {
   let removedManifest = false
   if (manifest && git(['ls-files', '--error-unmatch', '--', manifest], cwd, { allowFail: true }) !== null) {
     git(['rm', '-q', '--', manifest], cwd)
-    git(['commit', '-q', '--no-verify', '-m', `chore: remove the transient RED manifest (${trailer[2]}, phase ${trailer[3]})`], cwd)
+    git(['commit', '-q', '--no-verify', '-m', `chore: remove the transient RED manifest (${trailer[2]}, phase ${trailer[3]})`, '--', manifest], cwd)
     removedManifest = true
   }
   const outputHead = git(['rev-parse', 'HEAD'], cwd)
