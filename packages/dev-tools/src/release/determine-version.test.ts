@@ -1,7 +1,5 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { InMemoryFileSystemService } from '@pair/content-ops'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { parseArgv, resolveVersion, writeGithubEnv, writeGithubOutput } from './determine-version'
 
 describe('resolveVersion', () => {
@@ -123,34 +121,25 @@ describe('parseArgv', () => {
 })
 
 describe('writeGithubOutput / writeGithubEnv', () => {
-  let dir: string
+  let fs: InMemoryFileSystemService
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'dev-tools-release-test-'))
+    fs = new InMemoryFileSystemService({}, '/', '/')
   })
 
-  afterEach(() => {
-    rmSync(dir, { recursive: true, force: true })
+  it('appends "version=<value>" to the output file in GITHUB_OUTPUT format', async () => {
+    await writeGithubOutput('/output', 'v1.2.3', fs)
+    expect(fs.readFileSync('/output')).toBe('version=v1.2.3\n')
   })
 
-  it('appends "version=<value>" to the output file in GITHUB_OUTPUT format', () => {
-    const file = join(dir, 'output')
-    writeGithubOutput(file, 'v1.2.3')
-    expect(existsSync(file)).toBe(true)
-    expect(readFileSync(file, 'utf-8')).toBe('version=v1.2.3\n')
+  it('appends "VERSION=<value>" to the env file in GITHUB_ENV format', async () => {
+    await writeGithubEnv('/env', 'v1.2.3', fs)
+    expect(fs.readFileSync('/env')).toBe('VERSION=v1.2.3\n')
   })
 
-  it('appends "VERSION=<value>" to the env file in GITHUB_ENV format', () => {
-    const file = join(dir, 'env')
-    writeGithubEnv(file, 'v1.2.3')
-    expect(readFileSync(file, 'utf-8')).toBe('VERSION=v1.2.3\n')
-  })
-
-  it('appends rather than overwrites pre-existing content (real GITHUB_OUTPUT/ENV files accumulate across steps)', () => {
-    const file = join(dir, 'output')
-    // Two writes in sequence simulate a prior workflow step already having appended a line.
-    writeGithubOutput(file, 'v1.0.0')
-    writeGithubOutput(file, 'v2.0.0')
-    expect(readFileSync(file, 'utf-8')).toBe('version=v1.0.0\nversion=v2.0.0\n')
+  it('appends rather than overwrites pre-existing content (real GITHUB_OUTPUT/ENV files accumulate across steps)', async () => {
+    await writeGithubOutput('/output', 'v1.0.0', fs)
+    await writeGithubOutput('/output', 'v2.0.0', fs)
+    expect(fs.readFileSync('/output')).toBe('version=v1.0.0\nversion=v2.0.0\n')
   })
 })

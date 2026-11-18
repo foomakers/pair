@@ -95,3 +95,12 @@ link checks passed. `pnpm --filter @pair/pair-cli test` passed 278 files and
 and component suites (26 Chromium component tests). A repository-wide
 `pnpm test` baseline was interrupted after over two minutes without a final
 result. Its status is unknown.
+
+## Status at close of this PR
+
+All rows are now dispositioned; `pnpm direct-fs:check` (in `pnpm quality-gate`) passes.
+`determine-version.ts` and its test were migrated (`appendFile`) and left the registry.
+85 read-only tests are `repo-contract` (real checked-in files are the subject).
+**78 rows are `deferred-migration`: ordinary fs use NOT migrated in this PR** (AC2/AC3 only partially met);
+the guard stops growth and flags an entry stale once its file stops using `fs`.
+Earlier "T-1 is incomplete" / "remain `migration-candidate`" statements above are superseded.
