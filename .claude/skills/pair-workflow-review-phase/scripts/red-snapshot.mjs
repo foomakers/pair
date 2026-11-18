@@ -701,7 +701,13 @@ export function pushSnapshot({ snapshot, branch, cwd, remote = 'origin' }) {
   // A plain push — never `--no-verify`, never forced: the repository's own gates run.
   // The hook's output is unbounded (a full quality gate prints megabytes): the default 1 MB buffer would kill the push.
   const r = spawnSync('git', ['push', remote, `HEAD:refs/heads/${branch}`], { cwd, encoding: 'utf8', env: cleanGitEnv(), maxBuffer: 512 * 1024 * 1024 })
-  if (r.status !== 0) return { pushed: false, reason: 'push-rejected', snapshot, outputHead, removedManifest, detail: `${r.stdout ?? ''}\n${r.stderr ?? ''}`.trim().split('\n').filter(l => /fail|error|✖|×|ELIFECYCLE|rejected/i.test(l)).slice(-8).join(' | ') || r.stderr.trim().split('\n').slice(-3).join(' | ') }
+  if (r.status !== 0) {
+    const termination = r.error ? `git push: ${r.error.message}` : r.signal ? `git push terminated by ${r.signal}` : `git push exited with code ${r.status}`
+    const output = `${r.stdout ?? ''}\n${r.stderr ?? ''}`.trim().split('\n')
+    const errors = output.filter(line => /fail|error|✖|×|ELIFECYCLE|rejected/i.test(line))
+    const detail = [termination, ...(errors.length ? errors.slice(-8) : output.slice(-3))].filter(Boolean).join(' | ')
+    return { pushed: false, reason: 'push-rejected', snapshot, outputHead, removedManifest, detail }
+  }
   const remoteHead = remoteHeadOf()
   return remoteHead === outputHead ? { pushed: true, snapshot, outputHead, remoteHead, removedManifest } : { pushed: false, reason: 'push-not-confirmed', snapshot, outputHead, remoteHead, removedManifest }
 }
