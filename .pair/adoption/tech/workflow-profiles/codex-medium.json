@@ -16,7 +16,8 @@
       "model": "cheap"
     },
     "prepare": {
-      "model": "balanced"
+      "model": "balanced",
+      "effort": "high"
     },
     "validate": {
       "model": "balanced"
