@@ -1221,3 +1221,27 @@ for (const [row, body] of [
     assert.deepEqual(out.prerequisites, [])
   })
 }
+
+test('base-sync: after a sync the remediation prepare is based on the synced head, not the head the review named', () => {
+  const cwd = repo()
+  commit(cwd, '[#42] feat: own', { 'src/own.ts': 'b\n' })
+  const reviewed = git(cwd, 'rev-parse', 'HEAD')
+  const dir = runDir()
+  put(dir, 'r0', 'review-phase', {
+    pr: 7,
+    reviewedHead: reviewed,
+    verdict: 'changes-requested',
+    findings: [{ id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', kind: 'defect', location: 'a', description: 'd', recommendation: 'r' }],
+    custody: { contractBreach: false },
+    readiness: { ready: false },
+  })
+  assert.equal(go(dir, { head: reviewed }).next.base, reviewed, 'before any sync: the reviewed head')
+  git(cwd, 'checkout', '-q', 'main')
+  commit(cwd, 'base moved', { 'other.txt': 'x\n' })
+  git(cwd, 'checkout', '-q', 'story')
+  const out = baseSync({ cwd, base: 'main', story: '42', dir })
+  assert.equal(out.synced, true)
+  assert.notEqual(out.head, reviewed)
+  assert.equal(go(dir, { head: out.head }).next.base, out.head, 'dispatch head')
+  assert.equal(go(dir).next.base, out.head, 'a stage-local resolve (no --head) agrees')
+})

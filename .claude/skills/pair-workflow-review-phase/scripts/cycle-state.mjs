@@ -2744,7 +2744,12 @@ export function baseSync({ cwd, base, story, owned, snapshot, dir }) {
   if (snapshot && (!SHA_RE.test(String(snapshot)) || run(['merge-base', '--is-ancestor', snapshot, 'HEAD']).status !== 0))
     return { synced: false, reason: 'sealed-history-rewritten', detail: `base-sync refused: sealed snapshot ${snapshot} is not an ancestor of HEAD — a rebase rewrote sealed history. Sync the base only by merge (\`cycle-state.mjs base-sync\`), never rebase; restore the sealed history or post a maintainer reset comment`, base: baseSha, conflicts: [] }
   // `head`: the worktree HEAD a `stale` preparation's retry must be dispatched on (r2-3), synced or not.
-  if (run(['merge-base', '--is-ancestor', baseSha, 'HEAD']).status === 0) return { synced: false, reason: 'up-to-date', base: baseSha, head: g(['rev-parse', 'HEAD']), conflicts: [] }
+  // The head a later `prepare` is based on: recorded for the run, so a stage-local resolve (no --head) agrees with the dispatch.
+  const noteHead = head => {
+    if (dir && existsSync(dir)) writeRecovery(dir, { ...readRecovery(dir), baseSynced: { head, at: new Date().toISOString() } })
+    return head
+  }
+  if (run(['merge-base', '--is-ancestor', baseSha, 'HEAD']).status === 0) return { synced: false, reason: 'up-to-date', base: baseSha, head: noteHead(g(['rev-parse', 'HEAD'])), conflicts: [] }
   if (g(['status', '--porcelain', '--untracked-files=no'])) return { synced: false, reason: 'dirty-worktree', base: baseSha, conflicts: [] }
   const fork = g(['merge-base', 'HEAD', baseSha])
   const sealed = new Set()
@@ -2773,7 +2778,7 @@ export function baseSync({ cwd, base, story, owned, snapshot, dir }) {
   const side = s => conflicts.filter(c => c.side === s).map(c => c.path)
   const trailer = `Pair-Base-Sync: base=${baseSha}${side('ours').length ? `; ours=${side('ours').join(',')}` : ''}${side('theirs').length ? `; theirs=${side('theirs').join(',')}` : ''}`
   g(['commit', '-q', '--no-verify', '-m', `[#${story}] chore: sync base ${base}`, '-m', trailer])
-  return { synced: true, base: baseSha, head: g(['rev-parse', 'HEAD']), conflicts, ...sealIds }
+  return { synced: true, base: baseSha, head: noteHead(g(['rev-parse', 'HEAD'])), conflicts, ...sealIds }
 }
 /** Preserve dirty tracked and untracked work at a durable ref before a preparation retry. */
 export function worktreeClean({ cwd, dir, story }) {
@@ -3929,6 +3934,10 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
     const waived = new Set(waiver.findings)
     next = withActiveGuards({ step: 'verify', mode: 're-review', phase: `r${round}`, round, attempt: 1, base: priorReview.data.reviewedHead, prior: priorReview.name, openIds: priorBlocking.map(f => f.id).filter(id => !waived.has(id)), priorFindings: [...new Map(handoffs.filter(h => h.skill === 'review-phase').flatMap(r => (r.data.findings ?? []).filter(f => f?.id).map(f => [f.id, { id: f.id, severity: f.severity }]))).values()], waived: waiver.findings.map(id => ({ id, decisionRef: waiver.decisionRef, actor: waiver.actor, reason: waiver.reason })), ...(next.headMoved ? { headMoved: true } : {}) }, ledger.filter(r => r.state === 'active'))
   }
+  // A base-sync moved the worktree head after the review named its own: the preparation is based on the synced head
+  // (a handoff published after the sync is newer and wins — the override then stops).
+  const synced = recovery.baseSynced
+  if (next.step === 'prepare' && SHA_RE.test(String(synced?.head ?? '')) && next.base !== synced.head && String(last.data.createdAt ?? '') <= synced.at) next = { ...next, base: synced.head }
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated
   // from the last reviewed head. Sealed contracts and GREEN commits stay trusted.
