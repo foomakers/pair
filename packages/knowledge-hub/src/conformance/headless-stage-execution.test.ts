@@ -65,3 +65,12 @@ describe('red-verify role permits its required writes', () => {
     expect(text).not.toMatch(/never[^.;\n]*\b(?:publish|push)\b/i)
   })
 })
+
+// #605: a moved worktree head is a recoverable stale refusal, never generic partial progress.
+describe('red-spec reports a moved HEAD', () => {
+  it('requires the stale refusal with both expected and actual HEAD before incomplete', () => {
+    const text = readFileSync(join(DATASET, '.skills/workflow/red-spec/SKILL.md'), 'utf8')
+    expect(text).toMatch(/HEAD mismatch takes precedence over.*incomplete/i)
+    expect(text).toMatch(/expected and actual HEAD/i)
+  })
+})
