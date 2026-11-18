@@ -1,5 +1,5 @@
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parseArgv, resolveVersion, writeGithubEnv, writeGithubOutput } from './determine-version'
 
 describe('resolveVersion', () => {
@@ -141,5 +141,19 @@ describe('writeGithubOutput / writeGithubEnv', () => {
     await writeGithubOutput('/output', 'v1.0.0', fs)
     await writeGithubOutput('/output', 'v2.0.0', fs)
     expect(fs.readFileSync('/output')).toBe('version=v1.0.0\nversion=v2.0.0\n')
+  })
+
+  describe('platform-injected line endings (darwin, linux, win32)', () => {
+    const real = process.platform
+    afterEach(() => Object.defineProperty(process, 'platform', { value: real }))
+
+    it.each(['darwin', 'linux', 'win32'] as const)(
+      'writes LF-terminated lines when platform is %s (GITHUB_OUTPUT is LF on every runner)',
+      async platform => {
+        Object.defineProperty(process, 'platform', { value: platform })
+        await writeGithubOutput('/output', 'v1.2.3', fs)
+        expect(fs.readFileSync('/output')).toBe('version=v1.2.3\n')
+      },
+    )
   })
 })
