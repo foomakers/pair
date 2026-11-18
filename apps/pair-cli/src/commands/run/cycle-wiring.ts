@@ -1775,6 +1775,10 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
         hooks,
         resolve: resolveFor(ctx, input, co),
         worktree: worktreeFor(ctx, input, co),
+        readWorktreeHead: async cwd => {
+          const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' })
+          return result.status === 0 ? result.stdout.trim() : undefined
+        },
         packet: packetFor(ctx, input, co) as never,
         spawnStage: spawnStageFor(ctx, co, progress, pending),
         mergeStage: mergeWithTelemetry(ctx, co, merge),

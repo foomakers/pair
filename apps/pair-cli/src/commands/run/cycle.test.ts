@@ -691,6 +691,37 @@ describe('US-573: onDispatch announces each stage BEFORE it runs (live progress)
 })
 
 describe('US-623 AC6 — stray files of a failed attempt are stashed before the next prepare', () => {
+  it.each([false, true])(
+    '#687: remediation dispatch requires the expected worktree HEAD (match: %s)',
+    async matches => {
+      const expected = 'a'.repeat(40)
+      const actual = matches ? expected : 'b'.repeat(40)
+      const prepare = { ...PREPARE_A0, mode: 'remediation', phase: 'r1-g1', base: expected }
+      const spawn = vi.fn(async () => ({ processOutcome: 'success' }) as CycleStageResult)
+      const result = await runCycle({
+        resolve: scriptedResolve([
+          { status: 'in-progress', next: prepare },
+          { status: 'completed', next: DONE },
+        ]),
+        worktree: async () => ({ path: '/fixture/story' }),
+        readWorktreeHead: async path => {
+          expect(path).toBe('/fixture/story')
+          return actual
+        },
+        packet,
+        spawnStage: spawn,
+        policy: {},
+      })
+      expect(spawn).toHaveBeenCalledTimes(matches ? 1 : 0)
+      if (!matches) {
+        expect(result.status).toBe('awaiting-human')
+        expect(result.resumeToken).toBe('prepare:r1-g1:prepare-head-mismatch')
+        expect(result.reason).toContain(`expected ${expected}, actual ${actual}`)
+        expect(result.reason).toContain('base-sync')
+      }
+    },
+  )
+
   it('beforePrepare runs before a prepare with attempt > 1, never before attempt 1 or other steps', async () => {
     const order: string[] = []
     const run = async (first: { step: string; [key: string]: unknown }) => {
