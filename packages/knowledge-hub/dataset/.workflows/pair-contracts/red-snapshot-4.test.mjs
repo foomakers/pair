@@ -521,6 +521,33 @@ test('#687 AC3: retry refuses an unrelated staged ignore change', t => {
   assert.equal(git(cwd, 'show', ':.prettierignore'), 'user-owned-entry')
 })
 
+test('#687 AC3: a locked seal retries with a CRLF checkout', t => {
+  const { cwd } = repo()
+  t.after(() => rmSync(cwd, { recursive: true, force: true }))
+  git(cwd, 'config', 'core.autocrlf', 'true')
+  write(cwd, '.prettierignore', 'dist\r\n')
+  git(cwd, 'add', '.prettierignore')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'ignore')
+  const base = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const args = { pr: PR, phase: PHASE, base, contractPath, cwd }
+  const hook = join(cwd, '.git/hooks/prepare-commit-msg')
+  writeFileSync(hook, '#!/bin/sh\ntouch .git/index.lock\nexit 1\n', { mode: 0o755 })
+  assert.throws(() => seal(args))
+  rmSync(join(cwd, '.git/index.lock'))
+  rmSync(hook)
+  assert.equal(seal(args).sealed, true)
+})
+
+test('#687 AC3: a directory at the ignore path is refused as dirty', t => {
+  const { cwd, base } = repo()
+  t.after(() => rmSync(cwd, { recursive: true, force: true }))
+  const { contractPath } = redContract(cwd)
+  write(cwd, '.prettierignore/unrelated', 'keep')
+  const result = seal({ pr: PR, phase: PHASE, base, contractPath, cwd })
+  assert.equal(result.reason, 'dirty-outside-contract')
+})
+
 test('US-623 AC7: a seal in a repo without the ignore entry adds it in the snapshot, once, and verify accepts it', () => {
   const { cwd, base } = repo()
   write(cwd, '.prettierignore', 'dist')

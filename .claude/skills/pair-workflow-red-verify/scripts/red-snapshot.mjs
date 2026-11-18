@@ -39,7 +39,7 @@
 // A rebase is never repaired (US-479 c1): a snapshot that is no longer an ancestor is simply
 // `snapshot-missing`, and the attempt fails closed.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -593,8 +593,11 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
   const baseIgnore = spawnSync('git', ['show', `${base}:${FORMAT_IGNORE}`], { cwd, encoding: 'utf8', env: cleanGitEnv() })
   const originalIgnore = baseIgnore.status === 0 ? baseIgnore.stdout : ''
   const generatedIgnore = `${originalIgnore}${originalIgnore && !originalIgnore.endsWith('\n') ? '\n' : ''}${dirname(manifest)}/\n`
-  const currentIgnore = existsSync(join(cwd, FORMAT_IGNORE)) ? readFileSync(join(cwd, FORMAT_IGNORE), 'utf8') : ''
-  if (stagedManifest && stagedIgnore.status === 0 && stagedIgnore.stdout === generatedIgnore && currentIgnore === originalIgnore) {
+  const ignorePath = join(cwd, FORMAT_IGNORE)
+  const ignoreIsFile = existsSync(ignorePath) && statSync(ignorePath).isFile()
+  const currentIgnore = ignoreIsFile ? git(['hash-object', '--path', FORMAT_IGNORE, '--', FORMAT_IGNORE], cwd) : null
+  const originalIgnoreHash = git(['rev-parse', '--verify', '-q', `${base}:${FORMAT_IGNORE}`], cwd, { allowFail: true })
+  if (stagedManifest && stagedIgnore.status === 0 && stagedIgnore.stdout === generatedIgnore && currentIgnore === originalIgnoreHash) {
     let saved
     try { saved = JSON.parse(stagedManifest) } catch { saved = null }
     if (saved?.$meta?.pr === pr && saved.$meta.phase === phase && saved.$meta.base === base && contractHash(saved) === contractHash(contract)) {
