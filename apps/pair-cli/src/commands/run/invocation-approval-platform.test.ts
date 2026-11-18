@@ -1,5 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { APPROVAL_DECLARING_SKILLS, buildSkillArgs, describeApprovalPosture } from './invocation'
+import {
+  APPROVAL_DECLARING_SKILLS,
+  buildSkillArgs,
+  buildPromptText,
+  describeApprovalPosture,
+} from './invocation'
+import { ENGINES } from './engines'
 
 const realPlatform = process.platform
 const DECLARING = ['pair-process-refine-story', 'pair-process-plan-tasks'] as const
@@ -49,4 +55,19 @@ describe('$approval forwarding under --autonomous (US-523), per platform', () =>
     expect(argvOn('linux', OUTSIDE)).not.toContain('--approval')
     expect(argvOn('darwin', OUTSIDE)).toEqual(argvOn('linux', OUTSIDE))
   })
+  it.each(['darwin', 'linux'] as const)(
+    'preserves the autonomous Draft exception on %s only during preparation',
+    platform => {
+      Object.defineProperty(process, 'platform', { value: platform })
+      const skill = { kind: 'skill', name: 'pair-process-plan-tasks' } as never
+      const autonomous = buildPromptText(ENGINES['codex'], skill, {
+        root: '304',
+        approval: 'auto',
+        prepare: 'hold-never',
+      })
+      const ordinary = buildPromptText(ENGINES['codex'], skill, { root: '304', approval: 'auto' })
+      expect(autonomous).toMatch(/autonomous prepare phase.*Draft/i)
+      expect(ordinary).not.toMatch(/autonomous prepare phase/i)
+    },
+  )
 })

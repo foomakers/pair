@@ -1626,7 +1626,8 @@ export function finalPart(record: CycleStageRecord): string {
     const reason = final.reason ? ` reason=${final.reason}` : ''
     const verdict = final.verdict ? ` verdict=${final.verdict}` : ''
     const next = final.next?.step ? ` next=${final.next.step}` : ''
-    return ` — final: status=${final.status ?? '?'}${reason}${verdict}${next}`
+    const detail = final.detail ? ` detail=${JSON.stringify(final.detail.slice(0, 600))}` : ''
+    return ` — final: status=${final.status ?? '?'}${reason}${verdict}${next}${detail}`
   }
   if (record.processOutcome !== 'success' || record.handoffAdvanced) return ''
   return ` — no final result (the stage ended without its structured JSON; the retry resumes from the commits already on the branch)${noResultWhy(record)}`

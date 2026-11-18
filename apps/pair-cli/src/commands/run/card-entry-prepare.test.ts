@@ -256,7 +256,7 @@ describe('AC4/AC5/AC8: never and when proceed alone, Ready once, until decides w
     expect(r.code).toBe(0)
     expect(r.prompts).toEqual([
       '/pair-process-refine-story --story 523 --approval auto --prepare hold-never',
-      '/pair-process-plan-tasks --story 523 --approval auto',
+      "/pair-process-plan-tasks --story 523 --approval auto\nThis is an autonomous prepare phase; plan the refined Draft story under the skill's Draft exception.",
     ])
     expect(r.calls).toEqual([
       'decide:B0',
@@ -296,7 +296,9 @@ describe('AC4/AC5/AC8: never and when proceed alone, Ready once, until decides w
       prepare: selection(gate('never')),
       autonomous: true,
     })
-    expect(r.prompts).toEqual(['/pair-process-plan-tasks --story 523 --approval auto'])
+    expect(r.prompts).toEqual([
+      "/pair-process-plan-tasks --story 523 --approval auto\nThis is an autonomous prepare phase; plan the refined Draft story under the skill's Draft exception.",
+    ])
     expect(r.calls[0]).toBe('decide:B1')
   })
 
