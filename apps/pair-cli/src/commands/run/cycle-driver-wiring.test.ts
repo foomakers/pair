@@ -370,6 +370,44 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     expect(rounds.map(r => r.kind)).toEqual(['stage-retry'])
   }, 60_000)
 
+  it('#687: Codex prepare rejects a divergent Git worktree and dispatches after base-sync', async () => {
+    const run = vi.mocked(runCycle).getMockImplementation()!
+    vi.mocked(runCycle).mockImplementationOnce(async input => {
+      const tree = join(root, 'pair-worktrees', '7')
+      const git = (...args: string[]) =>
+        execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+          cwd: tree,
+          encoding: 'utf8',
+        }).trim()
+      await input.worktree()
+      const base = git('rev-parse', 'HEAD')
+      git('commit', '-q', '--allow-empty', '-m', 'story HEAD moved')
+      const actual = git('rev-parse', 'HEAD')
+      const prepare = { step: 'prepare', mode: 'remediation', phase: 'r1-g1', attempt: 1, base }
+      const blocked = await run({
+        ...input,
+        resolve: async () => ({ status: 'in-progress', next: prepare }),
+      })
+      expect(blocked).toMatchObject({ status: 'awaiting-human', stagesRun: 0 })
+      expect(blocked.reason).toContain(`expected ${base}, actual ${actual}`)
+      expect(calls()).toHaveLength(0)
+
+      const sync = await input.beforePrepare?.({ ...prepare, refusal: 'stale', attempt: 2 })
+      expect(sync?.head).toBe(actual)
+      const syncedPrepare = { ...prepare, base: actual }
+      const resumed = await run({
+        ...input,
+        resolve: vi
+          .fn(async () => ({ status: 'completed', next: { step: 'done' } }))
+          .mockResolvedValueOnce({ status: 'in-progress', next: syncedPrepare }),
+      })
+      expect(resumed.stagesRun).toBe(1)
+      expect(calls()).toHaveLength(1)
+      return resumed
+    })
+    await drive(ENGINES.codex)
+  }, 60_000)
+
   // #646 round 2 — r1-2, the class: each process refusal a preparation retry follows runs ITS recovery before the
   // dispatch, under a recorded round — dirty ⇒ worktree-clean (saved at a recorded ref), stale ⇒ base-sync (a merge).
   it.each([
