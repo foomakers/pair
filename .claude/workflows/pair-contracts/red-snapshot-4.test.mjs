@@ -485,6 +485,42 @@ test('#687 AC3: an unchanged contract seals after a transient Git commit failure
   assert.equal(verify({ pr: PR, phase: PHASE, base, cwd }).verified, true)
 })
 
+test('#687 AC3: seal retries after a lock prevents cleanup of the index', t => {
+  const { cwd, base } = repo()
+  t.after(() => rmSync(cwd, { recursive: true, force: true }))
+  const { contractPath } = redContract(cwd)
+  const command = { pr: PR, phase: PHASE, base, contractPath, cwd }
+  const witness = readFileSync(join(cwd, 'test/a.test.js'))
+  const hook = join(cwd, '.git/hooks/prepare-commit-msg')
+  const lock = join(cwd, '.git/index.lock')
+  writeFileSync(hook, '#!/bin/sh\ntouch .git/index.lock\nexit 1\n', { mode: 0o755 })
+  assert.throws(() => seal(command))
+  rmSync(lock)
+  rmSync(hook)
+  const retried = seal(command)
+  assert.equal(retried.sealed, true, JSON.stringify(retried))
+  assert.equal(git(cwd, 'rev-parse', 'HEAD^'), base)
+  assert.deepEqual(readFileSync(join(cwd, 'test/a.test.js')), witness)
+  assert.equal(verify({ pr: PR, phase: PHASE, base, cwd }).verified, true)
+})
+
+test('#687 AC3: retry refuses an unrelated staged ignore change', t => {
+  const { cwd, base } = repo()
+  t.after(() => rmSync(cwd, { recursive: true, force: true }))
+  const { contractPath } = redContract(cwd)
+  const command = { pr: PR, phase: PHASE, base, contractPath, cwd }
+  const hook = join(cwd, '.git/hooks/prepare-commit-msg')
+  writeFileSync(hook, '#!/bin/sh\ntouch .git/index.lock\nexit 1\n', { mode: 0o755 })
+  assert.throws(() => seal(command))
+  rmSync(join(cwd, '.git/index.lock'))
+  rmSync(hook)
+  write(cwd, '.prettierignore', 'user-owned-entry\n')
+  git(cwd, 'add', '--', '.prettierignore')
+  const out = seal(command)
+  assert.equal(out.reason, 'dirty-outside-contract')
+  assert.equal(git(cwd, 'show', ':.prettierignore'), 'user-owned-entry')
+})
+
 test('US-623 AC7: a seal in a repo without the ignore entry adds it in the snapshot, once, and verify accepts it', () => {
   const { cwd, base } = repo()
   write(cwd, '.prettierignore', 'dist')
