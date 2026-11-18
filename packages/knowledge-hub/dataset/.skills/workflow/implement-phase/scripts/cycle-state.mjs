@@ -854,7 +854,7 @@ export function envelopeErrors(data, { phase, skill }) {
   // the exit code and the observed output; a witness (`baseline: red`) needs a run that FAILED — at
   // the unfixed base, or on the injected regression a `mode: test` guard is proven against — and a
   // control (`baseline: pass`) a run that PASSED. A test that cannot fail, or cannot pass, is refused.
-  // A rejection may carry its audited rows too; when it does they are held to the same shape.
+  // Rejections retain observed failures; only accepted contracts must meet the expected baselines.
   if (skill === 'red-verify') {
     const rows = data.reproduced
     // AE (`mode: doc`): a prose contract has no test to reproduce. The validator proves it checked the CHECKLIST: it names
@@ -879,8 +879,8 @@ export function envelopeErrors(data, { phase, skill }) {
       }
       for (const [rowId, runs] of byRow) {
         const baseline = runs[0].baseline
-        if (baseline === 'red' && !runs.some(x => x.exitCode !== 0)) errs.push(`witness-cannot-fail:${rowId}`)
-        if (baseline === 'pass' && !runs.some(x => x.exitCode === 0)) errs.push(`control-cannot-pass:${rowId}`)
+        if (data.verified === true && baseline === 'red' && !runs.some(x => x.exitCode !== 0)) errs.push(`witness-cannot-fail:${rowId}`)
+        if (data.verified === true && baseline === 'pass' && !runs.some(x => x.exitCode === 0)) errs.push(`control-cannot-pass:${rowId}`)
       }
     }
   }

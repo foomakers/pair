@@ -5495,6 +5495,20 @@ test('US-506 T-6 c2 (control, AC10): an executed, discriminating witness and a p
   assert.equal(publish({ dir, file: verdictDraft(dir, { verified: false, sealed: false, snapshot: undefined, findings: [{ rowId: 'row-1', location: 'a', severity: 'Major', description: 'd', recommendation: 'r' }] }), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' }).published, true)
 })
 
+test('US-687 T-1: rejected executions publish their observed failures and route to repair', () => {
+  for (const row of [ran('row-1', { exitCode: 0, observed: 'unexpected pass' }), ran('row-2', { baseline: 'pass', exitCode: 1, observed: 'unexpected failure' })]) {
+    const { dir } = runDir()
+    redSpec(dir, 'r1-g1')
+    const findings = [{ rowId: row.rowId, location: 'test/a.test.ts:1', severity: 'Major', description: row.observed, recommendation: 'repair test' }]
+    const result = publish({ dir, file: verdictDraft(dir, { verified: false, sealed: false, snapshot: undefined, reproduced: [row], findings }), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' })
+    assert.equal(result.published, true, JSON.stringify(result))
+    const next = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
+    assert.equal(next.step, 'prepare')
+    assert.equal(next.mode, 'repair')
+    assert.deepEqual(next.rejection, findings)
+  }
+})
+
 // ── US-506 F-4 (AC5 × AC7): a run started before the attempt-file rule wrote EVERY attempt over
 // `<phase>-red-contract.json`, as the old red-spec skill said to. Its next repair must still publish.
 test('US-506 F-4 (AC5 × AC7): an in-flight run whose pre-#506 repair overwrote the shared contract file publishes its next repair; a new-rule overwrite is still refused', () => {
