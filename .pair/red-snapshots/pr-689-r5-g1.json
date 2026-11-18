@@ -1,0 +1,610 @@
+{
+  "$meta": {
+    "pr": "689",
+    "phase": "r5-g1",
+    "base": "9f4a8884c55b8ec15831e8359920e6798262d489",
+    "trailer": "Pair-RED-Snapshot: pr=689; phase=r5-g1; base=9f4a8884c55b8ec15831e8359920e6798262d489; manifest=.pair/red-snapshots/pr-689-r5-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs",
+      "packages/knowledge-hub/src/conformance/red-snapshot-r5.test.ts"
+    ]
+  },
+  "sourceOfTruth": "review findings r0-1, r4-6 and canonical red-snapshot seal implementation",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "red-snapshot.mjs seal and seal CLI",
+      "inputs": [
+        "unchanged contract and witness",
+        "base ignore content and Git attributes",
+        "staged retry manifest and generated ignore",
+        "commit hook failure and index lock"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+        "seal CLI"
+      ],
+      "consumers": [
+        "red-verify",
+        "verify"
+      ],
+      "classes": [
+        "tracked CRLF ignore after interrupted rollback",
+        "tracked LF ignore after interrupted rollback",
+        "missing ignore after interrupted rollback",
+        "nonmatching staged ignore",
+        "clean initial seal"
+      ],
+      "interactions": [
+        "dataset and installed function and CLI with CRLF, LF and missing ignore; Git normalization affects retry comparison"
+      ]
+    },
+    {
+      "id": "r4-6",
+      "producer": "red-snapshot.mjs seal and seal CLI",
+      "inputs": [
+        "ignore path type",
+        "staged retry evidence",
+        "unrelated untracked content"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+        "seal CLI"
+      ],
+      "consumers": [
+        "red-verify caller"
+      ],
+      "classes": [
+        "directory containing unrelated file with no staged retry evidence",
+        "regular tracked ignore",
+        "missing ignore"
+      ],
+      "interactions": [
+        "dataset and installed function and CLI with directory path; dirty scan must precede any unsafe read"
+      ]
+    },
+    {
+      "id": "r2-5",
+      "producer": "red-snapshot.mjs pushSnapshot and push CLI",
+      "inputs": [
+        "test-only seal",
+        "manifest deletion staged after failed commit",
+        "remote head"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+        "push CLI"
+      ],
+      "consumers": [
+        "remote tip",
+        "verify-chain"
+      ],
+      "classes": [
+        "failed cleanup then retry",
+        "normal cleanup",
+        "already removed manifest"
+      ],
+      "interactions": [
+        "staged index versus committed HEAD and remote tree"
+      ]
+    },
+    {
+      "id": "r4-7",
+      "producer": "red-snapshot.mjs pushSnapshot and push CLI",
+      "inputs": [
+        "test-only seal",
+        "staged unrelated production edit",
+        "remote head"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+        "push CLI"
+      ],
+      "consumers": [
+        "remote tip",
+        "index",
+        "verify-chain"
+      ],
+      "classes": [
+        "unrelated staged production edit",
+        "clean index",
+        "push refusal"
+      ],
+      "interactions": [
+        "manifest cleanup commit and unrelated staged content"
+      ]
+    },
+    {
+      "id": "r0-3",
+      "producer": "live Codex validation handoffs and cycle-state resolve",
+      "inputs": [
+        "accepted and rejected live executions"
+      ],
+      "representations": [
+        "PR 689 Testing",
+        "bound run handoffs"
+      ],
+      "consumers": [
+        "reviewer",
+        "cycle-state resolve"
+      ],
+      "classes": [
+        "accepted execution and sealed transition",
+        "published rejection and repair transition"
+      ],
+      "interactions": [
+        "live engine dispatch and durable transitions"
+      ]
+    },
+    {
+      "id": "r0-4",
+      "producer": "quality-gate executions on final candidate",
+      "inputs": [
+        "final head",
+        "per-run exit and elapsed seconds"
+      ],
+      "representations": [
+        "PR 689 Testing"
+      ],
+      "consumers": [
+        "reviewer"
+      ],
+      "classes": [
+        "three completed runs compared with 300 seconds"
+      ],
+      "interactions": [
+        "candidate head and timing evidence"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "red-snapshot.mjs seal",
+    "mode": "test",
+    "allowedPaths": []
+  },
+  "matrix": [
+    {
+      "id": "r0-1-dataset-function-crlf",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "dataset function: interrupted rollback, crlf ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS current source with exact Git status; corresponding isolated mutation is detected by each function and CLI witness"
+    },
+    {
+      "id": "r0-1-dataset-function-lf",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset function: interrupted rollback, lf ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS on current source"
+    },
+    {
+      "id": "r0-1-dataset-function-missing",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset function: interrupted rollback, missing ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS on current source"
+    },
+    {
+      "id": "r4-6-dataset-function-directory",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "dataset function: unrelated file in ignore directory without retry evidence",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "dirty-outside-contract names file; HEAD, witness and directory remain unchanged",
+      "covers": [
+        "r4-6"
+      ],
+      "observed": "PASS on current source; unsafe path regression detected by isolated mutation probe"
+    },
+    {
+      "id": "r0-1-dataset-cli-crlf",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "dataset cli: interrupted rollback, crlf ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS on current source; CRLF regression detected by isolated mutation probe"
+    },
+    {
+      "id": "r0-1-dataset-cli-lf",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset cli: interrupted rollback, lf ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS on current source"
+    },
+    {
+      "id": "r0-1-dataset-cli-missing",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset cli: interrupted rollback, missing ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS on current source"
+    },
+    {
+      "id": "r4-6-dataset-cli-directory",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "dataset cli: unrelated file in ignore directory without retry evidence",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "dirty-outside-contract names file; HEAD, witness and directory remain unchanged",
+      "covers": [
+        "r4-6"
+      ],
+      "observed": "PASS on current source; unsafe path regression detected by isolated mutation probe"
+    },
+    {
+      "id": "r0-1-installed-function-crlf",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "installed function: interrupted rollback, crlf ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS current source with exact Git status; corresponding isolated mutation is detected by each function and CLI witness"
+    },
+    {
+      "id": "r0-1-installed-function-lf",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed function: interrupted rollback, lf ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS on current source"
+    },
+    {
+      "id": "r0-1-installed-function-missing",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed function: interrupted rollback, missing ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS on current source"
+    },
+    {
+      "id": "r4-6-installed-function-directory",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "installed function: unrelated file in ignore directory without retry evidence",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "dirty-outside-contract names file; HEAD, witness and directory remain unchanged",
+      "covers": [
+        "r4-6"
+      ],
+      "observed": "PASS on current source; unsafe path regression detected by isolated mutation probe"
+    },
+    {
+      "id": "r0-1-installed-cli-crlf",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "installed cli: interrupted rollback, crlf ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS on current source; CRLF regression detected by isolated mutation probe"
+    },
+    {
+      "id": "r0-1-installed-cli-lf",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed cli: interrupted rollback, lf ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS on current source"
+    },
+    {
+      "id": "r0-1-installed-cli-missing",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed cli: interrupted rollback, missing ignore, unchanged retry",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "one seal directly above base, witness unchanged and verify succeeds",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "PASS on current source"
+    },
+    {
+      "id": "r4-6-installed-cli-directory",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "installed cli: unrelated file in ignore directory without retry evidence",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "dirty-outside-contract names file; HEAD, witness and directory remain unchanged",
+      "covers": [
+        "r4-6"
+      ],
+      "observed": "PASS current source; corresponding directory mutation is detected by each function and CLI witness"
+    },
+    {
+      "id": "r2-5-outside-g1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "first group seal contract",
+      "oracle": "assigned in round plan",
+      "expected": "remains blocking until its owner supplies evidence",
+      "covers": [
+        "r2-5"
+      ],
+      "rationale": "Independent pushSnapshot group r5-g2"
+    },
+    {
+      "id": "r4-7-outside-g1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "first group seal contract",
+      "oracle": "assigned in round plan",
+      "expected": "remains blocking until its owner supplies evidence",
+      "covers": [
+        "r4-7"
+      ],
+      "rationale": "Independent pushSnapshot group r5-g2"
+    },
+    {
+      "id": "r0-3-outside-g1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "first group seal contract",
+      "oracle": "assigned in round plan",
+      "expected": "remains blocking until its owner supplies evidence",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "External PR or live execution evidence"
+    },
+    {
+      "id": "r0-4-outside-g1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "first group seal contract",
+      "oracle": "assigned in round plan",
+      "expected": "remains blocking until its owner supplies evidence",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "External PR or live execution evidence"
+    },
+    {
+      "id": "r0-1-dataset-function-clean",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset function clean",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "clean seal verifies",
+      "covers": [
+        "r0-1",
+        "r4-6"
+      ]
+    },
+    {
+      "id": "r0-1-dataset-function-unrelated-staged",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset function unrelated-staged",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "dirty refusal preserves HEAD and unrelated staged ignore",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-dataset-cli-clean",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset cli clean",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "clean seal verifies",
+      "covers": [
+        "r0-1",
+        "r4-6"
+      ]
+    },
+    {
+      "id": "r0-1-dataset-cli-unrelated-staged",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset cli unrelated-staged",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "dirty refusal preserves HEAD and unrelated staged ignore",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-installed-function-clean",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed function clean",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "clean seal verifies",
+      "covers": [
+        "r0-1",
+        "r4-6"
+      ]
+    },
+    {
+      "id": "r0-1-installed-function-unrelated-staged",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed function unrelated-staged",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "dirty refusal preserves HEAD and unrelated staged ignore",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-installed-cli-clean",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed cli clean",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "clean seal verifies",
+      "covers": [
+        "r0-1",
+        "r4-6"
+      ]
+    },
+    {
+      "id": "r0-1-installed-cli-unrelated-staged",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed cli unrelated-staged",
+      "oracle": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "expected": "dirty refusal preserves HEAD and unrelated staged ignore",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:511bd09f673e3b8706fc0242cd32072a0e0cb3e12ee006c880016533420368dd",
+      "command": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "observed": "PASS 24 tests"
+    },
+    {
+      "file": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:d7917eddf721aec0e29baef8a09e34d1e0bc900929a5ebae14c6843b8433f2b3",
+      "command": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs",
+      "observed": "PASS 8 isolated regression probes"
+    },
+    {
+      "file": "packages/knowledge-hub/src/conformance/red-snapshot-r5.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:c78fa4a843dde1d7b86dd8faa368171c5a18a968ac2e0762975340a09aa99af3",
+      "command": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/red-snapshot-r5.test.ts",
+      "observed": "PASS 1 test"
+    }
+  ],
+  "testExempt": false,
+  "regressionProbe": {
+    "command": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs",
+    "observed": "PASS 8 probes: each dataset and installed function and CLI witness detects its own injected CRLF or directory regression; clean controls pass",
+    "environment": "temporary Git repository; gh stub exits 99"
+  },
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r5-g1",
+        "owner": "red-snapshot.mjs seal",
+        "mode": "test",
+        "allowedPaths": [],
+        "oracle": "Git fixtures, seal function and CLI, verify, and isolated injected regressions",
+        "findings": [
+          "r0-1",
+          "r4-6"
+        ],
+        "dependsOn": []
+      },
+      {
+        "groupId": "r5-g2",
+        "owner": "red-snapshot.mjs pushSnapshot",
+        "mode": "test",
+        "allowedPaths": [],
+        "oracle": "Git fixtures, bare remote, pushSnapshot and CLI, remote tree and verify-chain",
+        "findings": [
+          "r2-5",
+          "r4-7"
+        ],
+        "dependsOn": []
+      }
+    ],
+    "carried": [
+      {
+        "id": "r0-3",
+        "disposition": "Maintainer supplies live Codex acceptance and rejection handoffs and records their transitions in PR 689."
+      },
+      {
+        "id": "r0-4",
+        "disposition": "Three completed final-head quality-gate timings must be recorded in PR 689 after remediation."
+      }
+    ]
+  },
+  "repairEvidence": {
+    "priorContractHash": "sha256:ab3c71cba1f6c28451ee8d682a1641636e19049aaeaa2436d73ef4a65fcb0137",
+    "statusOracle": "Each retry asserts porcelain status is exactly ?? .pair/working/red-draft.json after seal and verify; no staged or other unstaged paths.",
+    "regressionProbe": "node --test packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs"
+  },
+  "changedRows": [
+    "contract-hash-field",
+    "r0-1-dataset-function-crlf",
+    "r0-1-installed-function-crlf",
+    "r4-6-installed-cli-directory"
+  ],
+  "contractHash": "sha256:e55fa1e29ccbea2148f3d89fac1be0671e99e9e94b67f2be24f90c32951c54c6"
+}
