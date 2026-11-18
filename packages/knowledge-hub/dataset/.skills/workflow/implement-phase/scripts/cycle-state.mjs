@@ -133,6 +133,7 @@ export const STOP_CATALOG = [
   { status: 'failed-hook', class: 'decision', resume: 'fix the blocking hook the detail names; pair run --card <card>' },
   { status: 'failed-contract', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-seal', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'immutable-evidence-conflict', class: 'decision', resume: 'restore the recorded evidence or cycle-state.mjs reset-group --phase <phase>; pair run --card <card>' },
   { status: 'failed-implement', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-fix', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-verify', class: 'process', resume: 'pair run --card <card>' },
@@ -3253,6 +3254,9 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       return blocked('failed-contract', { budget: 'redRepairs', phase: last.phase, findings: d.findings ?? [] })
     }
     if (d.sealed !== true) {
+      const contract = contractOf(last.phase)
+      if (contractBytesChanged(contract?.path, contract?.hash))
+        return blocked('immutable-evidence-conflict', { phase: last.phase, detail: `Prepared contract ${contract.path} no longer matches ${contract.hash}. Restore the recorded evidence or use reset-group for this phase before retrying.` })
       const failed = byPhase('red-verify', last.phase).filter(h => h.data.verified === true && h.data.sealed !== true)
       const spent = !answered && processBudgetSpent(failed, last.phase, 'failed-seal')
       if (spent) return spent

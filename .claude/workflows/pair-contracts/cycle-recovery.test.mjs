@@ -25,6 +25,8 @@ import {
   prereqState,
   supersede,
   POLICY_DEFAULTS,
+  blockIdOf,
+  contractHash,
 } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(
@@ -1261,4 +1263,31 @@ test('#605: failed seal retries the unchanged contract within autoRecoveryRounds
   assert.deepEqual(pick(go(dir).next, 'step', 'reason', 'budget'), {
     step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds',
   })
+})
+
+test('#687: a maintainer decision retries a failed seal only while the prepared evidence matches', () => {
+  const dir = runDir()
+  const path = join(dir, 'contract.json')
+  const original = { rows: ['first'] }
+  writeFileSync(path, JSON.stringify(original))
+  put(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: path, contractHash: contractHash(original) })
+  for (let attempt = 1; attempt <= 6; attempt++)
+    put(dir, 'r1-g1', 'red-verify', { verified: true, sealed: false, reason: 'git commit failed' }, attempt)
+  const file = join(dir, 'r1-g1-red-verify.attempt-6.json')
+  const prior = readFileSync(file, 'utf8')
+  assert.equal(go(dir).next.step, 'blocked')
+  writeFileSync(join(dir, 'maintainer-decisions.json'), JSON.stringify([
+    { status: 'accepted', commentId: 1, value: { choice: 'decide', block: blockIdOf({ file }) } },
+  ]))
+  assert.equal(go(dir).next.step, 'validate')
+  const changed = JSON.stringify({ rows: ['changed'] })
+  writeFileSync(path, changed)
+  const next = go(dir).next
+  assert.equal(next.step, 'blocked')
+  assert.equal(next.reason, 'immutable-evidence-conflict')
+  assert.match(next.detail, /restore.*reset-group/i)
+  assert.equal(readFileSync(path, 'utf8'), changed)
+  assert.equal(readFileSync(file, 'utf8'), prior)
+  writeFileSync(path, JSON.stringify(original))
+  assert.equal(go(dir).next.step, 'validate')
 })
