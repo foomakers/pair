@@ -706,7 +706,8 @@ async function recoverPrepareHead(
 ): Promise<{ parked: CycleOutcome } | { dispatch: CycleNext }> {
   const mismatch = await checkPrepareHead(input, state, dispatch)
   if (mismatch === undefined) return { dispatch }
-  if (input.beforePrepare === undefined || state.worktreePath === undefined) return { parked: mismatch }
+  if (input.beforePrepare === undefined || state.worktreePath === undefined)
+    return { parked: mismatch }
   const actual = await input.readWorktreeHead!(state.worktreePath)
   if (actual === undefined) return { parked: mismatch }
   const recovery = await input.beforePrepare({ ...dispatch, refusal: 'stale', attempt: 2 })

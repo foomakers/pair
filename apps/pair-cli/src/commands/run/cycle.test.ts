@@ -729,11 +729,17 @@ describe('US-623 AC6 — stray files of a failed attempt are stashed before the 
     const beforePrepare = vi.fn(async () => ({ head: actual }))
     const sent: string[] = []
     const outcome = await runCycle({
-      resolve: scriptedResolve([{ status: 'in-progress', next: prepare }, { status: 'completed', next: DONE }]),
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: prepare },
+        { status: 'completed', next: DONE },
+      ]),
       worktree: async () => ({ path: '/fixture/story' }),
       readWorktreeHead: async () => actual,
       beforePrepare,
-      packet: async next => { sent.push(String(next['base'])); return packet(next) },
+      packet: async next => {
+        sent.push(String(next['base']))
+        return packet(next)
+      },
       spawnStage: async () => ({ processOutcome: 'success' }) as CycleStageResult,
       policy: {},
     })
