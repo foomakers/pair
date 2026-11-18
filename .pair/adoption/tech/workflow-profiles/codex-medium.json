@@ -16,7 +16,7 @@
       "model": "cheap"
     },
     "prepare": {
-      "model": "frontier"
+      "model": "balanced"
     },
     "validate": {
       "model": "balanced"
