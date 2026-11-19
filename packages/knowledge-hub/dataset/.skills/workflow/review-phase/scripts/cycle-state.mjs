@@ -1994,7 +1994,13 @@ export function discoverDecisions({ dir, story, pr, repo, now = new Date(), lock
       fresh.push({ decisionRef, source: c.source, id: c.id, author: String(c.authorLogin ?? ''), status: reason ? 'ignored' : 'accepted', ...(reason ? { reason } : { value: parsed.value }), recordedAt: at })
     }
     if (fresh.length || revoked) writeFileSync(join(dir, DECISIONS_FILE), JSON.stringify([...all, ...fresh], null, 2) + '\n')
-    writeCustodyOverrides(dir, acceptedDecisions(dir), new Set(handoffs.map(blockIdOf)))
+    // #691 AC1: a block a reset epoch set aside (`reset-<date>-<name>`, bytes unchanged) still anchors the override that
+    // answered it — the waiver is per (code, path, segment), so it covers the same breaches re-listed after the reset, nothing else.
+    const archived = readdirSync(dir).flatMap(f => {
+      const name = RESET_ASIDE.exec(f)?.[1]
+      return name && NAME_RE.test(name) ? [`${name}@${sha256(readFileSync(join(dir, f))).slice(7, 19)}`] : []
+    })
+    writeCustodyOverrides(dir, acceptedDecisions(dir), new Set([...handoffs.map(blockIdOf), ...archived]))
     const last = handoffs[handoffs.length - 1]
     const block = last ? blockIdOf(last) : null
     for (const r of fresh.filter(x => x.status === 'accepted')) {

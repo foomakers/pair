@@ -3,7 +3,7 @@
 // RUNS FROM `.claude/workflows` ONLY: execute via `pnpm workflows:test`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -206,6 +206,20 @@ test('AC-11: a custody override comment writes the attributed override and re-ve
   assert.deepEqual(file.overrides.map(o => [o.code, o.path, o.segment, o.authorizedBy, o.decisionRef, o.reason]), [['out-of-scope', 'src/x.ts', 'a0', 'rucka', c.url, 'engine fix, tracked']])
   const next = go(dir).next
   assert.deepEqual([next.step, next.mode, next.phase], ['verify', 're-review', 'r1'])
+})
+
+test('#691 AC1: an accepted override survives a reset epoch — its block archived as reset-<date>-*, the same breaches stay waived, others do not', () => {
+  const dir = runDir()
+  const B = { code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }
+  custodyStuck(dir, [B])
+  const c = comment(decisionBody({ block: go(dir).next.block, choice: 'override', reason: 'accepted', overrides: [B] }))
+  pick(dir, { pr: [c] })
+  // a reset epoch sets the answered review aside; the re-run review lists B again plus a breach nobody waived
+  renameSync(join(dir, 'r0-review-phase.json'), join(dir, 'reset-2026-11-19-r0-review-phase.json'))
+  review(dir, 'r0', { custody: { contractBreach: true, breaches: [B, { code: 'out-of-scope', path: 'src/y.ts', segment: 'a0' }] } })
+  pick(dir, { pr: [c] })
+  const file = JSON.parse(readFileSync(join(dir, 'custody-overrides.json'), 'utf8'))
+  assert.deepEqual(file.overrides.map(o => [o.code, o.path, o.segment, o.decisionRef]), [[B.code, B.path, B.segment, c.url]])
 })
 
 test('AC-11 security: a hand-written override entry (no verified decision) is dropped at the next pickup', () => {
