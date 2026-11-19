@@ -1837,7 +1837,7 @@ async function driveResolved(
       hooks,
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),
-    readWorktreeHead,
+      readWorktreeHead,
       packet: packetFor(ctx, input, co) as never,
       spawnStage: spawnStageFor(ctx, co, progress, pending),
       mergeStage: mergeWithTelemetry(ctx, co, merge),
