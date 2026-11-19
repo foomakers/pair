@@ -221,6 +221,7 @@
 - [Decision: `FileSystemService.appendFile` added; atomicity leaves stay on `node:fs`](.pair/adoption/decision-log/2026-11-18-file-system-service-append-file.md)
 - [Decision: overrides survive a reset epoch, `manual-infra-commit` is overridable, superseded handoffs are archived by resolve, one driver per run dir, a remote gate failure beats `unprovable`](.pair/adoption/decision-log/2026-11-19-cycle-reset-persistence-manual-infra-commit-and-run-lock.md)
 - [Decision: `FileSystemService` grows the sync primitives migrated code needs; direct `node:fs` stays a rare, jointly decided exception](.pair/adoption/decision-log/2026-11-19-file-system-service-sync-primitives.md)
+- [Decision: Order Recovery Budgets by Durable Events](.pair/adoption/decision-log/2026-11-19-recovery-budget-event-identity.md)
 
 ## How-To Guides
 
