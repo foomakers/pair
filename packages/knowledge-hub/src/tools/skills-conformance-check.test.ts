@@ -246,7 +246,7 @@ describe('checkCategoryLabelCounts', () => {
 
 describe('runChecks (fixture corpus)', () => {
   const fs = new InMemoryFileSystemService({}, '/module', '/')
-  const root = fs.mkdtempSync(join(tmpdir(), 'skills-conformance-'))
+  const root = '/virtual-skills-conformance'
 
   const skill = (dir: string, frontmatter: string, body = '') => {
     fs.mkdirSync(join(root, dir), { recursive: true })
@@ -281,7 +281,7 @@ describe('runChecks (fixture corpus)', () => {
 
 describe('runChecks — block-scalar size-gate cannot be bypassed (finding 1)', () => {
   const fs = new InMemoryFileSystemService({}, '/module', '/')
-  const root = fs.mkdtempSync(join(tmpdir(), 'skills-conformance-block-'))
+  const root = '/virtual-skills-conformance-block'
 
   it('an over-1024 `>` block-scalar description is a violation (drives CLI exit 1)', () => {
     const longLine = 'x'.repeat(1100)
