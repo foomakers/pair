@@ -9,7 +9,7 @@
  *   pnpm changelog-version -- <computed-version> <override-version>
  */
 import { execFileSync } from 'child_process'
-import { fileSystemService as fs } from '@pair/content-ops'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
@@ -30,7 +30,12 @@ export function rewriteChangelog(content: string, from: string, to: string): str
   return content.slice(0, start) + section + content.slice(end)
 }
 
-export function applyChangelogVersion(files: string[], from: string, to: string): string[] {
+export function applyChangelogVersion(
+  files: string[],
+  from: string,
+  to: string,
+  fs: FileSystemService = fileSystemService,
+): string[] {
   return files.filter(f => {
     const before = fs.readFileSync(f)
     const after = rewriteChangelog(before, from, to)

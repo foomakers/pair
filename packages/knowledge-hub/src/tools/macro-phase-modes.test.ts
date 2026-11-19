@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fileSystemService } from '@pair/content-ops'
-import { tmpdir } from 'os'
+import { fileSystemService, InMemoryFileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 import {
   MACRO_PHASE_MODES,
@@ -518,17 +517,16 @@ describe('skills:conformance binds the mode table to the corpus', () => {
     '| 1 `/a` | `a` |',
   ].join('\n')
 
-  const corpus = (next: string, table?: string): { skills: string; root: string } => {
-    const root = fileSystemService.mkdtempSync(join(tmpdir(), 'modes-'))
+  const corpus = (
+    next: string,
+    table?: string,
+  ): { skills: string; root: string; fs: InMemoryFileSystemService } => {
+    const root = '/corpus'
     const skills = join(root, 'dataset', '.skills')
-    fileSystemService.mkdirSync(join(skills, 'next'), { recursive: true })
-    fileSystemService.writeFileSync(join(skills, 'next', 'SKILL.md'), next)
-    if (table !== undefined) {
-      const file = join(root, MODES_REL)
-      fileSystemService.mkdirSync(join(file, '..'), { recursive: true })
-      fileSystemService.writeFileSync(file, table)
-    }
-    return { skills, root }
+    const fs = new InMemoryFileSystemService({}, '/module', root)
+    fs.writeFileSync(join(skills, 'next', 'SKILL.md'), next)
+    if (table !== undefined) fs.writeFileSync(join(root, MODES_REL), table)
+    return { skills, root, fs }
   }
 
   it('the real corpus passes the mode checks', () => {
@@ -537,25 +535,23 @@ describe('skills:conformance binds the mode table to the corpus', () => {
   })
 
   it('a /next that documents --mode without a mode table fails closed', () => {
-    const { skills, root } = corpus(NEXT_WITH_MODES)
-    expect(checkModesInCorpus(skills, root, ['a']).join('\n')).toMatch(/missing/)
+    const { skills, root, fs } = corpus(NEXT_WITH_MODES)
+    expect(checkModesInCorpus(skills, root, ['a'], fs).join('\n')).toMatch(/missing/)
   })
 
   it('a /next without --mode and without a table has nothing to bind (an adopter on an older corpus)', () => {
-    const { skills, root } = corpus('# /next\n')
-    expect(checkModesInCorpus(skills, root, ['a'])).toEqual([])
+    const { skills, root, fs } = corpus('# /next\n')
+    expect(checkModesInCorpus(skills, root, ['a'], fs)).toEqual([])
   })
 
   it('a catalogue step placed in no mode fails the gate', () => {
-    const { skills, root } = corpus(NEXT_WITH_MODES, MODE_DOC)
-    const errors = checkModesInCorpus(skills, root, [
-      'a',
-      'specify-prd',
-      'refine-story',
-      'implement',
-      'review',
-      'plan-tasks',
-    ])
+    const { skills, root, fs } = corpus(NEXT_WITH_MODES, MODE_DOC)
+    const errors = checkModesInCorpus(
+      skills,
+      root,
+      ['a', 'specify-prd', 'refine-story', 'implement', 'review', 'plan-tasks'],
+      fs,
+    )
     expect(errors.join('\n')).toMatch(/plan-tasks/)
   })
 })

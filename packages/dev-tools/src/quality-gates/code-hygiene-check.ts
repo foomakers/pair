@@ -13,7 +13,7 @@
  * the package dir, not the repo root).
  */
 import { execSync } from 'child_process'
-import { fileSystemService } from '@pair/content-ops'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
 import { REPO_ROOT } from './repo-root'
@@ -54,11 +54,12 @@ export function buildGitGrepCommand(
  * Titles of quarantined (U6) tests from the test policy: the one sanctioned reason to leave a skip in
  * the tree (US-613). Absent or unreadable config ⇒ no exemption.
  */
-export function quarantinedTitles(root: string = REPO_ROOT): string[] {
+export function quarantinedTitles(
+  root: string = REPO_ROOT,
+  fs: FileSystemService = fileSystemService,
+): string[] {
   try {
-    const cfg = JSON.parse(
-      fileSystemService.readFileSync(join(root, 'docs/testing/test-policy.config.json')),
-    )
+    const cfg = JSON.parse(fs.readFileSync(join(root, 'docs/testing/test-policy.config.json')))
     return (cfg.quarantine ?? []).map((q: { id: string }) => q.id.split(' > ').pop() ?? '')
   } catch {
     return []

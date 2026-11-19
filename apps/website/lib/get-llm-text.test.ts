@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { fileSystemService as fs } from '@pair/content-ops'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { InMemoryFileSystemService } from '@pair/content-ops'
 import path from 'node:path'
-import os from 'node:os'
 import {
   parseFrontmatter,
   stripJsx,
@@ -130,20 +129,16 @@ describe('getUrlFromFilePath', () => {
 })
 
 describe('getLlmPages', () => {
-  let tmpDir: string
+  const tmpDir = '/content/docs'
+  let fs: InMemoryFileSystemService
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'llm-test-'))
-  })
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true })
+    fs = new InMemoryFileSystemService({}, '/module', '/work')
+    fs.mkdirSync(tmpDir, { recursive: true })
   })
 
   function writeFile(relativePath: string, content: string) {
-    const fullPath = path.join(tmpDir, relativePath)
-    fs.mkdirSync(path.dirname(fullPath), { recursive: true })
-    fs.writeFileSync(fullPath, content)
+    fs.writeFileSync(path.join(tmpDir, relativePath), content)
   }
 
   it('extracts pages from MDX files', () => {
@@ -166,7 +161,7 @@ description: KB docs
 KB content here.`,
     )
 
-    const pages = getLlmPages(tmpDir)
+    const pages = getLlmPages(tmpDir, fs)
 
     expect(pages).toHaveLength(2)
     expect(pages[0]).toEqual({
@@ -200,7 +195,7 @@ draft: true
 Draft content.`,
     )
 
-    const pages = getLlmPages(tmpDir)
+    const pages = getLlmPages(tmpDir, fs)
     expect(pages).toHaveLength(1)
     expect(pages[0].title).toBe('Published')
   })
@@ -225,7 +220,7 @@ Draft content.`,
     )
 
     // Simulate a parser that returns boolean true (future gray-matter compat)
-    const pages = getLlmPages(tmpDir)
+    const pages = getLlmPages(tmpDir, fs)
     expect(pages).toHaveLength(1)
     expect(pages[0].title).toBe('Published')
   })
@@ -244,7 +239,7 @@ Text before.
 Text after.`,
     )
 
-    const pages = getLlmPages(tmpDir)
+    const pages = getLlmPages(tmpDir, fs)
     expect(pages).toHaveLength(1)
     expect(pages[0].content).not.toContain('PairLogo')
     expect(pages[0].content).toContain('Text before.')
@@ -252,12 +247,12 @@ Text after.`,
   })
 
   it('returns empty array for nonexistent directory', () => {
-    const pages = getLlmPages('/nonexistent/path')
+    const pages = getLlmPages('/nonexistent/path', fs)
     expect(pages).toEqual([])
   })
 
   it('returns empty array for empty directory', () => {
-    const pages = getLlmPages(tmpDir)
+    const pages = getLlmPages(tmpDir, fs)
     expect(pages).toEqual([])
   })
 
@@ -266,7 +261,7 @@ Text after.`,
     writeFile('a-page.mdx', '---\ntitle: A Page\n---\nA.')
     writeFile('m-page.mdx', '---\ntitle: M Page\n---\nM.')
 
-    const pages = getLlmPages(tmpDir)
+    const pages = getLlmPages(tmpDir, fs)
     const urls = pages.map(p => p.url)
     expect(urls).toEqual([...urls].sort())
   })

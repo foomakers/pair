@@ -26,7 +26,7 @@
  * earlier ignore the extra argument" becomes a factual inversion the moment it is synced.
  * Point at the CHANGELOG instead; wording without a literal version cannot be rewritten.
  */
-import { fileSystemService } from '@pair/content-ops'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import { join, relative } from 'path'
 
 import { REPO_ROOT } from './repo-root'
@@ -62,10 +62,13 @@ export function parseGitignoreExcludes(content: string): string[] {
 }
 
 /** Read and parse `<root>/.gitignore`; [] if the file doesn't exist (e.g. test fixtures). */
-export function readGitignoreExcludes(root: string): string[] {
+export function readGitignoreExcludes(
+  root: string,
+  fs: FileSystemService = fileSystemService,
+): string[] {
   const gitignorePath = join(root, '.gitignore')
-  if (!fileSystemService.existsSync(gitignorePath)) return []
-  return parseGitignoreExcludes(fileSystemService.readFileSync(gitignorePath))
+  if (!fs.existsSync(gitignorePath)) return []
+  return parseGitignoreExcludes(fs.readFileSync(gitignorePath))
 }
 
 // Patterns that indicate an external version (not ours) — skip these lines.
@@ -110,14 +113,19 @@ export function shouldExclude(relPath: string, excludePatterns: string[]): boole
 }
 
 /** Walk a directory tree collecting .md/.mdx files, skipping excluded paths (files or dirs). */
-export function walkDocFiles(dir: string, root: string, excludePatterns: string[]): string[] {
+export function walkDocFiles(
+  dir: string,
+  root: string,
+  excludePatterns: string[],
+  fs: FileSystemService = fileSystemService,
+): string[] {
   const out: string[] = []
-  for (const entry of fileSystemService.readdirSync(dir)) {
+  for (const entry of fs.readdirSync(dir)) {
     const full = join(dir, entry.name)
     const rel = relative(root, full)
     if (shouldExclude(rel, excludePatterns)) continue
     if (entry.isDirectory()) {
-      out.push(...walkDocFiles(full, root, excludePatterns))
+      out.push(...walkDocFiles(full, root, excludePatterns, fs))
     } else if (/\.(md|mdx)$/.test(entry.name)) {
       out.push(full)
     }
@@ -130,9 +138,10 @@ export function findFilesWithVersion(
   root: string,
   oldVersion: string,
   excludePatterns: string[],
+  fs: FileSystemService = fileSystemService,
 ): string[] {
-  return walkDocFiles(root, root, excludePatterns).filter(f =>
-    fileSystemService.readFileSync(f).includes(oldVersion),
+  return walkDocFiles(root, root, excludePatterns, fs).filter(f =>
+    fs.readFileSync(f).includes(oldVersion),
   )
 }
 
@@ -154,19 +163,20 @@ export function syncVersionInDocs(
   oldVersion: string,
   newVersion: string,
   opts: SyncOptions,
+  fs: FileSystemService = fileSystemService,
 ): SyncResult {
   const excludePatterns = [
     ...DEFAULT_EXCLUDES,
-    ...readGitignoreExcludes(root),
+    ...readGitignoreExcludes(root, fs),
     ...(opts.excludePatterns ?? []),
   ]
-  const files = findFilesWithVersion(root, oldVersion, excludePatterns)
+  const files = findFilesWithVersion(root, oldVersion, excludePatterns, fs)
   const result: SyncResult = { scanned: [], fixed: [], drifted: [], unchanged: [] }
 
   for (const abs of files) {
     const rel = relative(root, abs)
     result.scanned.push(rel)
-    const original = fileSystemService.readFileSync(abs)
+    const original = fs.readFileSync(abs)
     const { updated, changed } = rewriteContent(original, oldVersion, newVersion)
 
     if (!changed) {
@@ -176,7 +186,7 @@ export function syncVersionInDocs(
     if (opts.check) {
       result.drifted.push(rel)
     } else {
-      fileSystemService.writeFileSync(abs, updated)
+      fs.writeFileSync(abs, updated)
       result.fixed.push(rel)
     }
   }

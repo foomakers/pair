@@ -105,3 +105,21 @@ Registry: 373 exact-path rows (331 distinct contents), all dispositioned; `pnpm 
 Ordinary fs use was migrated to `FileSystemService`; the guard stops growth and flags an entry
 stale once its file stops using `fs`. The scan figures above (1,051 / 438 / 403, "144 remaining",
 "T-1 is incomplete", `migration-candidate`) describe the base scan and are superseded by this section.
+
+## Real-service tests (real OS is the subject)
+
+Tests below keep the real `fileSystemService` on purpose; they are not in the registry because they no
+longer import `fs` (the guard is import-based). Every other former `deferred-migration` test seeds an
+`InMemoryFileSystemService` and injects it into the system under test.
+
+- `os-guarantee` (real process, git, symlink, chmod or shell over a tmp tree):
+  `packages/dev-tools/src/quality-gates/{dev-scripts-gate,format-paths,regenerate-mirrors,run-format}.test.ts`,
+  `packages/dev-tools/src/release/{release-origin,release-publish,release-remediation}.test.ts`,
+  `packages/dev-tools/src/test-audit/{suites,suites-junit,suites-junit-attr,suites-junit-attr-control,suites-junit-control}.test.ts`,
+  `packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts` (case w-r0-4e only),
+  `apps/pair-cli/src/commands/kb-verify/handler.test.ts` (real zip archive parsed by AdmZip).
+- `repo-contract` (real checked-in files or the real git history are the subject):
+  `apps/website/lib/skills-catalog-merge-coherence.test.ts`,
+  `packages/knowledge-hub/src/tools/{workflow-mirror,skills-conformance-check}.test.ts`.
+  Known gap: the synthetic-corpus cases of `skills-conformance-check.test.ts` still use real tmp trees;
+  `skills-conformance-check.ts` has ~39 direct fs calls and needs a service parameter (follow-up).

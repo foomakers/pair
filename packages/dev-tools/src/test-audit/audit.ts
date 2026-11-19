@@ -4,7 +4,7 @@
  * A signal without a supported tool is `not measured`: it never classifies and never justifies removal.
  */
 import { execFileSync } from 'child_process'
-import { fileSystemService } from '@pair/content-ops'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
@@ -38,8 +38,8 @@ export interface Config {
   quarantine: { id: string; class: 'U6'; evidence: string; issue: string | null }[]
 }
 
-export function loadConfig(file: string): Config {
-  const c = JSON.parse(readFileSync(file))
+export function loadConfig(file: string, fs: FileSystemService = fileSystemService): Config {
+  const c = JSON.parse(fs.readFileSync(file))
   for (const k of [
     'maxLevelGrowthPct',
     'minMutationScoreOnDiffPct',

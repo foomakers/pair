@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { fileSystemService } from '@pair/content-ops'
+import { fileSystemService, InMemoryFileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, it, expect, vi } from 'vitest'
@@ -9,7 +9,7 @@ const { mkdirSync, mkdtempSync, readFileSync, writeFileSync } = fileSystemServic
 
 type Policy = { maxMockAssertionRatio: number }
 type Api = {
-  loadPolicy: (file: string) => Policy
+  loadPolicy: (file: string, fs: InMemoryFileSystemService) => Policy
   gateViolations: (r: inv.TestRecord[], p: Policy) => { G1: string[]; U4: string[] }
 }
 const api = inv as unknown as Api
@@ -18,6 +18,7 @@ const TEST_REL = 'packages/a/src/x.test.ts'
 // 3 mocks / 1 assertion => ratio 3
 const SRC = `it('three mocks', () => { vi.fn(); vi.fn(); vi.fn(); expect(1).toBe(1) })`
 
+// real tmp tree: only w-r0-4e, whose subject is main() over real `git ls-files`
 const makeRoot = (config: unknown): string => {
   const root = mkdtempSync(join(tmpdir(), 'tpc-'))
   mkdirSync(join(root, 'docs/testing'), { recursive: true })
@@ -26,7 +27,15 @@ const makeRoot = (config: unknown): string => {
   writeFileSync(join(root, TEST_REL), SRC)
   return root
 }
-const cfgFile = (config: unknown): string => join(makeRoot(config), POLICY_REL)
+// in-memory root for every case whose subject is not real git / the checked-in source
+const ROOT = '/r'
+const POLICY = `${ROOT}/${POLICY_REL}`
+const memRoot = (config: unknown) =>
+  new InMemoryFileSystemService(
+    { [POLICY]: JSON.stringify(config), [`${ROOT}/${TEST_REL}`]: SRC },
+    '/',
+    '/',
+  )
 const rec = (mocks: number, assertions: number, skipped = false): inv.TestRecord => ({
   ...inv.parseTests(TEST_REL, SRC)[0],
   mocks,
@@ -34,12 +43,12 @@ const rec = (mocks: number, assertions: number, skipped = false): inv.TestRecord
   skipped,
 })
 const u4 = (ratio: number, r: inv.TestRecord): string[] =>
-  api.gateViolations([r], api.loadPolicy(cfgFile({ maxMockAssertionRatio: ratio }))).U4
+  api.gateViolations([r], api.loadPolicy(POLICY, memRoot({ maxMockAssertionRatio: ratio }))).U4
 
 describe('policy config on the audit path (r0-4)', () => {
   it('w-r0-4d buildInventory(root) reads <root>/docs/testing/test-policy.config.json: U4 flips with the threshold', () => {
-    const lo = inv.buildInventory(makeRoot({ maxMockAssertionRatio: 1 }), [TEST_REL])
-    const hi = inv.buildInventory(makeRoot({ maxMockAssertionRatio: 5 }), [TEST_REL])
+    const lo = inv.buildInventory(ROOT, [TEST_REL], memRoot({ maxMockAssertionRatio: 1 }))
+    const hi = inv.buildInventory(ROOT, [TEST_REL], memRoot({ maxMockAssertionRatio: 5 }))
     expect((lo.gates as { U4?: string[] }).U4).toEqual([lo.tests[0].test_id])
     expect((hi.gates as { U4?: string[] }).U4).toEqual([])
   })
@@ -66,13 +75,12 @@ describe('policy config on the audit path (r0-4)', () => {
   })
   it('w-r0-4g loadPolicy throws on a missing file and on a non-numeric ratio', () => {
     expect(typeof api.loadPolicy).toBe('function')
-    const missing = join(makeRoot({}), 'absent.json')
-    expect(() => api.loadPolicy(missing)).toThrow(Error)
-    expect(() => api.loadPolicy(cfgFile({ maxMockAssertionRatio: '2' }))).toThrow(Error)
-    expect(() => api.loadPolicy(cfgFile({}))).toThrow(Error)
+    expect(() => api.loadPolicy(`${ROOT}/absent.json`, memRoot({}))).toThrow(Error)
+    expect(() => api.loadPolicy(POLICY, memRoot({ maxMockAssertionRatio: '2' }))).toThrow(Error)
+    expect(() => api.loadPolicy(POLICY, memRoot({}))).toThrow(Error)
   })
   it('w-r0-4i U4 ignores skip: skipped mocks>assertions is U4, not G1; unskipped zero-assertion mocks are both', () => {
-    const p = api.loadPolicy(cfgFile({ maxMockAssertionRatio: 2 }))
+    const p = api.loadPolicy(POLICY, memRoot({ maxMockAssertionRatio: 2 }))
     const skipped = rec(3, 0, true)
     const live = rec(3, 0)
     const g = api.gateViolations([skipped, live], p)
