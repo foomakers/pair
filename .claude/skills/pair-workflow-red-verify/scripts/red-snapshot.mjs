@@ -124,7 +124,7 @@ function trailerBlockOf(body, cwd) {
 // checklist, never executable tests: every allowedPaths entry is a Markdown/text file or a directory of them, the
 // checklist quotes what the text must state per finding against its authority, and the snapshot is the contract alone.
 const PROSE_RE = /\.(md|mdx|markdown|txt|rst|adoc)$/i
-// #691 AC2: a manual CI/infra commit is not code a doc fixer wrote — its own overridable code `manual-infra-commit`, never `doc-code-change`.
+// #691: a manual CI/infra commit is not code a doc fixer wrote — its own overridable code `manual-infra-commit`, never `doc-code-change`.
 const INFRA_RE = /^\.github\/workflows\//
 const docPathErrors = scope => {
   const errs = []

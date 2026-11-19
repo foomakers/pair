@@ -1994,7 +1994,7 @@ export function discoverDecisions({ dir, story, pr, repo, now = new Date(), lock
       fresh.push({ decisionRef, source: c.source, id: c.id, author: String(c.authorLogin ?? ''), status: reason ? 'ignored' : 'accepted', ...(reason ? { reason } : { value: parsed.value }), recordedAt: at })
     }
     if (fresh.length || revoked) writeFileSync(join(dir, DECISIONS_FILE), JSON.stringify([...all, ...fresh], null, 2) + '\n')
-    // #691 AC1: a block a reset epoch set aside (`reset-<date>-<name>`, bytes unchanged) still anchors the override that
+    // #691: a block a reset epoch set aside (`reset-<date>-<name>`, bytes unchanged) still anchors the override that
     // answered it — the waiver is per (code, path, segment), so it covers the same breaches re-listed after the reset, nothing else.
     const archived = readdirSync(dir).flatMap(f => {
       const name = RESET_ASIDE.exec(f)?.[1]
@@ -3811,7 +3811,7 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
 }
 
-// #691 AC4: the gate an obligation rests on — a finding's `gate`, else the `gate:<name>` location the merge-time gate
+// #691: the gate an obligation rests on — a finding's `gate`, else the `gate:<name>` location the merge-time gate
 // findings already use. A failing remote check of that name on the PR head (the refused attempt's inputHead when no head
 // is given) is the cause; no gate, no failing match, or an unreadable remote ⇒ null (the refusal stands, fail-closed).
 function remoteGateFailure({ dir, head, host }) {
@@ -4178,7 +4178,7 @@ export function resetGroup({ dir, phase, reason, by, now = new Date(), workflowV
     return { reset: true, group, removed: names, index, status: out.status, next: out.next }
   })
 }
-// #691 AC3: a handoff (or contract residue) of the phase `next` is about to write, older than the latest accepted reset
+// #691: a handoff (or contract residue) of the phase `next` is about to write, older than the latest accepted reset
 // decision, belongs to a superseded epoch — left in place it turns the dispatch into `stale-write` /
 // `contract-attempt-overwritten`. It is moved (never deleted) to `reset-<date>-*` and logged; the block the reset
 // answered, earlier attempts and the current epoch are never touched. Returns how many files moved.

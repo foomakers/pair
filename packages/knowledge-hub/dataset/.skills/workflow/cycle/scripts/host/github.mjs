@@ -121,7 +121,7 @@ export default defineAdapter({
         const name = String(st.context)
         if (!byName.has(name)) byName.set(name, { conclusion: st.state === 'success' ? 'success' : st.state === 'pending' ? 'pending' : 'failure', url: st.target_url ?? null })
       }
-      // #691 AC4: the url travels with the conclusion, so a remote failure can be reported where it can be read.
+      // #691: the url travels with the conclusion, so a remote failure can be reported where it can be read.
       return [...byName].map(([name, c]) => ({ name, ...c }))
     }
     const readLabels = ({ pr, repo }) => JSON.parse(gh(['api', `${apiRepo(repo)}/issues/${pr}/labels`])).map(l => String(l.name))
