@@ -4,11 +4,13 @@
  * Signals needing a runner (duration, coverage, mutation, flakiness) are `not measured`.
  */
 import { execFileSync } from 'child_process'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import { join, dirname } from 'path'
 import ts from 'typescript'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
+
+const { writeFileSync, mkdirSync } = fileSystemService
 
 export type Level = 'unit' | 'integration' | 'e2e'
 export const NOT_MEASURED = 'not measured' as const
@@ -181,8 +183,8 @@ export interface Policy {
 }
 
 /** Policy is mandatory: missing file or non-numeric ratio throws. */
-export function loadPolicy(file: string): Policy {
-  const { maxMockAssertionRatio } = JSON.parse(readFileSync(file, 'utf8'))
+export function loadPolicy(file: string, fs: FileSystemService = fileSystemService): Policy {
+  const { maxMockAssertionRatio } = JSON.parse(fs.readFileSync(file))
   if (typeof maxMockAssertionRatio !== 'number' || !Number.isFinite(maxMockAssertionRatio))
     throw new Error(
       `${file}: maxMockAssertionRatio must be a number, got ${JSON.stringify(maxMockAssertionRatio)}`,
@@ -207,16 +209,23 @@ export function gateViolations(
 
 export const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx|js|jsx|mjs)$/
 
-export function buildInventory(root: string, files: string[]) {
+export function buildInventory(
+  root: string,
+  files: string[],
+  fs: FileSystemService = fileSystemService,
+) {
   const records = files
     .filter(f => TEST_FILE_RE.test(f))
-    .flatMap(f => parseTests(f, readFileSync(join(root, f), 'utf8')))
+    .flatMap(f => parseTests(f, fs.readFileSync(join(root, f))))
   // ponytail: no config under root => U4 not evaluated (legacy roots/tests); main() runs on the repo root where it exists
   const policyFile = join(root, 'docs/testing/test-policy.config.json')
   return {
     total: records.length,
     byModuleLevel: summarize(records),
-    gates: gateViolations(records, existsSync(policyFile) ? loadPolicy(policyFile) : undefined),
+    gates: gateViolations(
+      records,
+      fs.existsSync(policyFile) ? loadPolicy(policyFile, fs) : undefined,
+    ),
     tests: records,
   }
 }

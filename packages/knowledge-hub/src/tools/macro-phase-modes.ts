@@ -21,7 +21,7 @@
  * always comes from the parsed table.
  */
 
-import { existsSync, readFileSync } from 'fs'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
 export const MACRO_PHASE_MODES = ['analysis', 'implementation', 'review'] as const
@@ -260,17 +260,18 @@ export function checkModesInCorpus(
   skillsDir: string,
   proseRoot: string,
   catalogueIds: string[],
+  fs: FileSystemService = fileSystemService,
 ): string[] {
   const nextFile = join(skillsDir, 'next', 'SKILL.md')
-  const next = existsSync(nextFile) ? readFileSync(nextFile, 'utf-8') : ''
+  const next = fs.existsSync(nextFile) ? fs.readFileSync(nextFile) : ''
   const modesPath = join(proseRoot, MODES_FILE)
-  if (!existsSync(modesPath)) {
+  if (!fs.existsSync(modesPath)) {
     return /`--mode`/.test(next)
       ? [`${MODES_FILE}: missing — /next documents \`--mode\` but no mode ↔ step table exists`]
       : []
   }
   return checkModeTable(
-    parseModeTable(readFileSync(modesPath, 'utf-8')),
+    parseModeTable(fs.readFileSync(modesPath)),
     catalogueIds,
     parseCascadeRowMap(next),
   )

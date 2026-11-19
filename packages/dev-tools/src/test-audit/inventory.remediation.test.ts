@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { InMemoryFileSystemService } from '@pair/content-ops'
 import { parseTests, gateViolations, buildInventory } from './inventory'
 
 const F = 'packages/a/src/x.test.ts'
@@ -136,19 +134,16 @@ describe('r0-3 more test.describe forms and buildInventory', () => {
     expect(r[0].test_id).toBe(`${F}::suite > t`)
   })
   it('w-r0-3f buildInventory reconciles tagged each + timeout + describe skip', () => {
-    const root = mkdtempSync(join(tmpdir(), 'inv-'))
-    try {
-      mkdirSync(join(root, 'p'))
-      writeFileSync(
-        join(root, 'p', 'a.test.ts'),
-        `describe.${SKIP}('s', () => {\n  it.each\`a\n\${1}\`('t', ({ a }) => { expect(a).toBe(1) }, 5000)\n})\n`,
-      )
-      const inv = buildInventory(root, ['p/a.test.ts'])
-      expect(inv.total).toBe(1)
-      expect(inv.gates.G1).toEqual([])
-      expect(inv.gates.G2).toHaveLength(1)
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
+    const fs = new InMemoryFileSystemService(
+      {
+        '/r/p/a.test.ts': `describe.${SKIP}('s', () => {\n  it.each\`a\n\${1}\`('t', ({ a }) => { expect(a).toBe(1) }, 5000)\n})\n`,
+      },
+      '/',
+      '/',
+    )
+    const inv = buildInventory('/r', ['p/a.test.ts'], fs)
+    expect(inv.total).toBe(1)
+    expect(inv.gates.G1).toEqual([])
+    expect(inv.gates.G2).toHaveLength(1)
   })
 })

@@ -5,13 +5,15 @@
  * `node:test` has no shuffle: the recorded seed is a run label, not an order.
  */
 import { execFileSync, spawnSync } from 'child_process'
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join, relative } from 'path'
 
 import type { CompactBaseline, Run, RunTest } from './baseline'
 import { levelOf, TEST_FILE_RE } from './inventory'
 import { TARGETS, runTarget, type RunRow } from './playwright-run'
+
+const { mkdtempSync, readFileSync, realpathSync, rmSync } = fileSystemService
 
 export interface NodeTestSuite {
   name: string
@@ -117,7 +119,7 @@ function junitOf(cwd: string, out: string, files: string[]): string {
       timeout: 590_000,
     },
   )
-  return readFileSync(out, 'utf8')
+  return readFileSync(out)
 }
 
 export function runNodeTest(root: string, suite: NodeTestSuite, seed: number): Run {

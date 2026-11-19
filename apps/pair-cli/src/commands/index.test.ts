@@ -1,5 +1,5 @@
-import { readFileSync } from 'fs'
 import { join } from 'path'
+import { fileSystemService } from '@pair/content-ops'
 import { describe, it, expect } from 'vitest'
 import { commandRegistry } from './index'
 
@@ -14,7 +14,7 @@ import { commandRegistry } from './index'
  * asserts there is none.
  */
 function publishedBin(): string {
-  const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8')) as {
+  const pkg = JSON.parse(fileSystemService.readFileSync(join(__dirname, '../../package.json'))) as {
     bin: Record<string, string>
   }
   const [name, ...rest] = Object.keys(pkg.bin)

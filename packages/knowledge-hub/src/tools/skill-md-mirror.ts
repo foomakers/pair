@@ -48,7 +48,6 @@
  * this guard, whose contract is "every dataset artifact is faithfully
  * mirrored". Regenerating deletions belongs to `pair update`, not here.
  */
-import { readdirSync, readFileSync } from 'fs'
 import { join, relative, sep, posix } from 'path'
 // Dataset/root artifact paths are ALWAYS posix (they are content identities, not
 // host paths), hence `posix.dirname`/`posix.basename`. The platform-native
@@ -57,6 +56,7 @@ import { join, relative, sep, posix } from 'path'
 // `producedMarkdownPaths` normalises `walkMarkdownFiles`' platform-joined output
 // back to posix.
 import {
+  fileSystemService,
   InMemoryFileSystemService,
   copyDirectoryWithTransforms,
   transformPath,
@@ -131,13 +131,13 @@ export function readSkillsDatasetFromDisk(skillsDir: string): DatasetTree {
   const tree: DatasetTree = {}
 
   const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    for (const entry of fileSystemService.readdirSync(dir)) {
       const full = join(dir, entry.name)
       if (entry.isDirectory()) {
         walk(full)
       } else {
         const rel = relative(skillsDir, full).split(sep).join('/')
-        tree[rel] = readFileSync(full, 'utf-8')
+        tree[rel] = fileSystemService.readFileSync(full)
       }
     }
   }

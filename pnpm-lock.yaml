@@ -294,6 +294,9 @@ importers:
       '@pair/brand':
         specifier: workspace:*
         version: link:../../packages/brand
+      '@pair/content-ops':
+        specifier: workspace:*
+        version: link:../../packages/content-ops
       '@types/mdx':
         specifier: 'catalog:'
         version: 2.0.13

@@ -28,7 +28,8 @@ export function readFileSync(state: InMemoryFsState, path: string): string {
  * latin1-encoded by `writeFileBinary`, so latin1 is what reverses it byte-for-byte.
  */
 export function readFileBytes(state: InMemoryFsState, path: string): Buffer {
-  return Buffer.from(readFileSync(state, path), 'latin1')
+  const content = readFileSync(state, path)
+  return Buffer.from(content, state.binary.has(physicalPath(state, path)) ? 'latin1' : 'utf8')
 }
 
 export function existsSync(state: InMemoryFsState, path: string): boolean {
@@ -36,7 +37,7 @@ export function existsSync(state: InMemoryFsState, path: string): boolean {
   return state.files.has(resolvedPath) || state.dirs.has(resolvedPath)
 }
 
-export async function stat(state: InMemoryFsState, path: string): Promise<Stats> {
+export function statSync(state: InMemoryFsState, path: string): Stats {
   const resolvedPath = physicalPath(state, path)
   if (state.dirs.has(resolvedPath)) {
     return { isDirectory: () => true, isFile: () => false } as Stats
@@ -53,6 +54,10 @@ export async function stat(state: InMemoryFsState, path: string): Promise<Stats>
  * Throws when the path does not exist, exactly as `fs.realpath` does — callers bounding
  * untrusted content read that as "nothing to dereference", not as "contained".
  */
+export async function stat(state: InMemoryFsState, path: string): Promise<Stats> {
+  return statSync(state, path)
+}
+
 export function realpathSync(state: InMemoryFsState, path: string): string {
   const resolvedPath = state.resolvePath(path)
   const seen = new Set<string>()
@@ -88,7 +93,7 @@ function firstSymlinkedAncestor(
   return null
 }
 
-export async function readdir(state: InMemoryFsState, path: string): Promise<Dirent[]> {
+export function readdirSync(state: InMemoryFsState, path: string): Dirent[] {
   // Dereferenced like every other read: `fs.readdir` follows a link (leaf or ancestor)
   // and lists the TARGET's entries. Resolving lexically here left a walk that reached a
   // directory through a link with `no such file or directory` — behaviour production does
@@ -130,6 +135,10 @@ export async function readdir(state: InMemoryFsState, path: string): Promise<Dir
   }
 
   return entries
+}
+
+export async function readdir(state: InMemoryFsState, path: string): Promise<Dirent[]> {
+  return readdirSync(state, path)
 }
 
 export function getContent(state: InMemoryFsState, path: string): string | undefined {

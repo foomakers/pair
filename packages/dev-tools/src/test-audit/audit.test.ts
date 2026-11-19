@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { InMemoryFileSystemService } from '@pair/content-ops'
 
 import {
   applyRenames,
@@ -182,20 +183,14 @@ describe('render', () => {
 })
 
 describe('loadConfig', () => {
-  it('rejects a non-numeric threshold and an unknown rollout', async () => {
-    const { mkdtempSync, writeFileSync } = await import('fs')
-    const { tmpdir } = await import('os')
-    const { join } = await import('path')
-    const dir = mkdtempSync(join(tmpdir(), 'cfg-'))
-    const w = (o: object) => {
-      writeFileSync(join(dir, 'c.json'), JSON.stringify({ ...cfg, ...o }))
-      return join(dir, 'c.json')
-    }
-    expect(() => loadConfig(w({ maxSnapshotLines: 'x' }))).toThrow(
+  it('rejects a non-numeric threshold and an unknown rollout', () => {
+    const w = (o: object) =>
+      new InMemoryFileSystemService({ '/c.json': JSON.stringify({ ...cfg, ...o }) }, '/', '/')
+    expect(() => loadConfig('/c.json', w({ maxSnapshotLines: 'x' }))).toThrow(
       'maxSnapshotLines must be a number, got "x"',
     )
-    expect(() => loadConfig(w({ rollout: 'now' }))).toThrow('rollout must be')
-    expect(loadConfig(w({})).rollout).toBe('report-only')
+    expect(() => loadConfig('/c.json', w({ rollout: 'now' }))).toThrow('rollout must be')
+    expect(loadConfig('/c.json', w({})).rollout).toBe('report-only')
   })
 })
 

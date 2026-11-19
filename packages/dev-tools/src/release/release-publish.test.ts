@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { fileSystemService as fs } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,25 +7,26 @@ import { REPO_ROOT } from '../quality-gates/repo-root'
 
 // Found by the throwaway-repo release run (AC10): pre/rc went out under dist-tag `latest`.
 let dir = ''
-afterEach(() => rmSync(dir, { recursive: true, force: true }))
+afterEach(() => fs.rmSync(dir, { recursive: true, force: true }))
 
 function publishArgs(version: string): string {
-  dir = mkdtempSync(join(tmpdir(), 'publish-npm-'))
-  mkdirSync(join(dir, 'package'))
-  writeFileSync(
+  dir = fs.mkdtempSync(join(tmpdir(), 'publish-npm-'))
+  fs.mkdirSync(join(dir, 'package'))
+  fs.writeFileSync(
     join(dir, 'package/package.json'),
     JSON.stringify({ name: '@foomakers/pair-cli', version }),
   )
   execFileSync('tar', ['czf', 'pkg.tgz', 'package'], { cwd: dir })
-  mkdirSync(join(dir, 'bin'))
-  writeFileSync(join(dir, 'bin/npm'), `#!/bin/sh\necho "$@" >> "${dir}/npm.log"\n`)
-  chmodSync(join(dir, 'bin/npm'), 0o755)
+  fs.mkdirSync(join(dir, 'bin'))
+  fs.writeFileSync(join(dir, 'bin/npm'), `#!/bin/sh\necho "$@" >> "${dir}/npm.log"\n`)
+  fs.chmodSync(join(dir, 'bin/npm'), 0o755)
   execFileSync(
     join(REPO_ROOT, 'scripts/workflows/release/publish-npm.sh'),
     [join(dir, 'pkg.tgz'), '--dry-run'],
     { env: { ...process.env, PATH: `${dir}/bin:${process.env.PATH}`, NPM_TOKEN: 't' } },
   )
-  return readFileSync(join(dir, 'npm.log'), 'utf8')
+  return fs
+    .readFileSync(join(dir, 'npm.log'))
     .split('\n')
     .find(l => l.startsWith('publish')) as string
 }

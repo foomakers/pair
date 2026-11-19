@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
+import { fileSystemService as fs, InMemoryFileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
@@ -45,21 +44,20 @@ describe('changelog-version (B12)', () => {
     expect(rewriteChangelog(CHANGELOG, '0.5.0', '0.5.0')).toBe(CHANGELOG)
   })
   it('applies to every CHANGELOG.md under the given paths', () => {
-    const root = mkdtempSync(join(tmpdir(), 'clv-'))
-    for (const d of ['a', 'b']) {
-      mkdirSync(join(root, d))
-      writeFileSync(join(root, d, 'CHANGELOG.md'), CHANGELOG)
-    }
+    const mem = new InMemoryFileSystemService({}, '/', '/')
+    const root = '/clv'
+    for (const d of ['a', 'b']) mem.writeFileSync(join(root, d, 'CHANGELOG.md'), CHANGELOG)
     const changed = applyChangelogVersion(
       ['a/CHANGELOG.md', 'b/CHANGELOG.md'].map(f => join(root, f)),
       '0.5.0',
       '0.5.1',
+      mem,
     )
     expect(changed).toHaveLength(2)
-    expect(readFileSync(join(root, 'b', 'CHANGELOG.md'), 'utf8')).toContain('## 0.5.1\n')
+    expect(mem.readFileSync(join(root, 'b', 'CHANGELOG.md'))).toContain('## 0.5.1\n')
   })
   it('version.yml applies the override to CHANGELOGs after changeset version', () => {
-    const steps = parse(readFileSync(join(REPO_ROOT, '.github/workflows/version.yml'), 'utf8')).jobs
+    const steps = parse(fs.readFileSync(join(REPO_ROOT, '.github/workflows/version.yml'))).jobs
       .version.steps as { name?: string; run?: string }[]
     const run = steps.find(s => s.name === 'Version packages')?.run ?? ''
     const cv = run.indexOf('pnpm changeset version')

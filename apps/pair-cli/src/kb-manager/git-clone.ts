@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 import { execFileSync } from 'child_process'
-import { rmSync } from 'fs'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 
 /** Placeholder written over any credential removed from a surfaced git message. */
 const REDACTED = '***'
@@ -193,7 +193,11 @@ function throwCloneError(err: unknown, repoUrl: string): never {
  * of a `Username for 'https://…':` prompt git would open on /dev/tty, so a private repo
  * without credentials degrades to a reported reason instead of hanging.
  */
-export function cloneGitRepo(source: string, destDir: string): void {
+export function cloneGitRepo(
+  source: string,
+  destDir: string,
+  fs: FileSystemService = fileSystemService,
+): void {
   const { repoUrl, ref } = parseGitRef(source)
 
   const args = ['clone', '--depth', '1']
@@ -209,7 +213,7 @@ export function cloneGitRepo(source: string, destDir: string): void {
   } catch (err) {
     // Clean up partial clone on failure
     try {
-      rmSync(destDir, { recursive: true, force: true })
+      fs.rmSync(destDir, { recursive: true, force: true })
     } catch {
       // best-effort
     }

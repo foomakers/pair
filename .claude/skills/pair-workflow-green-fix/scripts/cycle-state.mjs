@@ -1015,8 +1015,12 @@ export function inspectLock(lock, { now = Date.now(), staleMs = LOCK_STALE_MS } 
   if (ageMs >= staleMs) return { state: owner ? 'stale-lock' : 'orphan-stale', owner, ageMs }
   return { state: 'held', owner, ageMs }
 }
+// Locks THIS process holds: a nested withLock on the same dir (resetGroup/supersede → resolve → archiveSuperseded)
+// runs under the held lock instead of waiting on itself.
+const HELD_LOCKS = new Set()
 export function withLock(dir, waitMs, fn, { staleMs = LOCK_STALE_MS } = {}) {
   const lock = join(dir, '.lock')
+  if (HELD_LOCKS.has(lock)) return fn()
   const deadline = Date.now() + waitMs
   let brokeStaleLock
   for (;;) {
@@ -1039,10 +1043,12 @@ export function withLock(dir, waitMs, fn, { staleMs = LOCK_STALE_MS } = {}) {
   try {
     writeFileSync(join(lock, LOCK_OWNER_FILE), JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }))
   } catch {}
+  HELD_LOCKS.add(lock)
   try {
     const out = fn()
     return brokeStaleLock && out && typeof out === 'object' && !Array.isArray(out) ? { ...out, brokeStaleLock } : out
   } finally {
+    HELD_LOCKS.delete(lock)
     rmSync(lock, { recursive: true, force: true })
   }
 }
@@ -1857,7 +1863,7 @@ export const DECISIONS_FILE = 'maintainer-decisions.json'
 export const DECISION_CHOICES = ['decide', 'amend', 'override', 'reset']
 // A deliberate copy of `red-snapshot.mjs` OVERRIDABLE_BREACH_CODES (pinned equal by a test): an override comment may
 // name only a code custody already lets a human waive (decision-log 2026-09-18).
-export const DECISION_OVERRIDABLE_CODES = ['out-of-scope', 'unlisted-test-changed', 'test-mode-production-change', 'behavioral-adds-or-moves-module', 'test-blob-changed']
+export const DECISION_OVERRIDABLE_CODES = ['out-of-scope', 'unlisted-test-changed', 'test-mode-production-change', 'behavioral-adds-or-moves-module', 'test-blob-changed', 'manual-infra-commit']
 const DECISION_KEYS = new Set(['schemaVersion', 'kind', 'story', 'block', 'choice', 'reason', 'scope', 'withdraws', 'overturns', 'overrides'])
 const OVERRIDE_KEYS = new Set(['code', 'path', 'segment', 'verifyAgainst'])
 const BLOCK_RE = /^[a-z0-9][a-z0-9.-]*\.json@[0-9a-f]{12}$/
@@ -1995,7 +2001,13 @@ export function discoverDecisions({ dir, story, pr, repo, now = new Date(), lock
       fresh.push({ decisionRef, source: c.source, id: c.id, author: String(c.authorLogin ?? ''), status: reason ? 'ignored' : 'accepted', ...(reason ? { reason } : { value: parsed.value }), recordedAt: at })
     }
     if (fresh.length || revoked) writeFileSync(join(dir, DECISIONS_FILE), JSON.stringify([...all, ...fresh], null, 2) + '\n')
-    writeCustodyOverrides(dir, acceptedDecisions(dir), new Set(handoffs.map(blockIdOf)))
+    // #691: a block a reset epoch set aside (`reset-<date>-<name>`, bytes unchanged) still anchors the override that
+    // answered it — the waiver is per (code, path, segment), so it covers the same breaches re-listed after the reset, nothing else.
+    const archived = readdirSync(dir).flatMap(f => {
+      const name = RESET_ASIDE.exec(f)?.[1]
+      return name && NAME_RE.test(name) ? [`${name}@${sha256(readFileSync(join(dir, f))).slice(7, 19)}`] : []
+    })
+    writeCustodyOverrides(dir, acceptedDecisions(dir), new Set([...handoffs.map(blockIdOf), ...archived]))
     const last = handoffs[handoffs.length - 1]
     const block = last ? blockIdOf(last) : null
     for (const r of fresh.filter(x => x.status === 'accepted')) {
@@ -3801,7 +3813,12 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   if (autoAdvanceError) return { status: 'invalid', reason: autoAdvanceError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
   const autonomyError = autonomyPolicyError(policy.autonomy)
   if (autonomyError) return { status: 'invalid', reason: autonomyError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
-  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
+  let out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
+  if (out.next?.phase && archiveSuperseded(dir, out.next)) out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
+  if (out.next?.reason === 'failed-preparation' && out.next.refusal === 'unprovable') {
+    const remoteFailure = remoteGateFailure({ dir, head, host })
+    if (remoteFailure) out = { ...out, next: { ...out.next, refusal: 'remote-check-failed', remoteFailure, detail: `the remote check ${remoteFailure.check} fails on ${remoteFailure.sha} (${remoteFailure.url ?? 'no url'}) — the local pass behind 'unprovable' is not proof` } }
+  }
   // US-597: live guard — implementation never starts on a stale selection; prerequisites are reread through the ONE grammar.
   if (out.next?.step === 'implement' && story) {
     const g = prereqState({ story, dir, host })
@@ -3812,6 +3829,26 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   }
   // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
+}
+
+// #691: the gate an obligation rests on — a finding's `gate`, else the `gate:<name>` location the merge-time gate
+// findings already use. A failing remote check of that name on the PR head (the refused attempt's inputHead when no head
+// is given) is the cause; no gate, no failing match, or an unreadable remote ⇒ null (the refusal stands, fail-closed).
+function remoteGateFailure({ dir, head, host }) {
+  const hs = readHandoffs(dir)
+  const last = hs[hs.length - 1]
+  if (last?.skill !== 'red-spec' || last.data?.status !== 'unprovable') return null
+  const received = new Set(last.data.findings?.received ?? [])
+  const findings = hs.filter(h => h.skill === 'review-phase').pop()?.data.findings ?? []
+  const gates = new Set(findings.filter(f => !received.size || received.has(f?.id)).map(f => f?.gate ?? /^gate:(.+)$/.exec(String(f?.location ?? ''))?.[1]).filter(Boolean))
+  if (!gates.size) return null
+  const sha = SHA_RE.test(String(head ?? '')) ? head : last.data.inputHead
+  try {
+    const hit = ((host ?? bindHosts({ dir })).code.readCiChecks({ sha }) ?? []).find(c => c?.conclusion === 'failure' && gates.has(c.name))
+    return hit ? { check: hit.name, sha, url: hit.url ?? null } : null
+  } catch {
+    return null
+  }
 }
 
 function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels }) {
@@ -4176,7 +4213,34 @@ export function resetGroup({ dir, phase, reason, by, now = new Date(), workflowV
     return { reset: true, group, removed: names, index, status: out.status, next: out.next }
   })
 }
-const INTERVENTIONS_HEADER = '| file | what it is | why it was set aside | set aside by | what supersedes it |'
+// #691: a handoff (or contract residue) of the phase `next` is about to write, older than the latest accepted reset
+// decision, belongs to a superseded epoch — left in place it turns the dispatch into `stale-write` /
+// `contract-attempt-overwritten`. It is moved (never deleted) to `reset-<date>-*` and logged; the block the reset
+// answered, earlier attempts and the current epoch are never touched. Returns how many files moved.
+function archiveSuperseded(dir, next, now = new Date()) {
+  const resets = acceptedDecisions(dir).filter(r => r.value.choice === 'reset')
+  if (!resets.length) return 0
+  const resetAt = Math.max(...resets.map(r => Date.parse(r.recordedAt) || 0))
+  const answered = new Set(resets.map(r => r.value.block))
+  const ts = h => Date.parse(h.data?.createdAt ?? '') || statSync(h.file).mtimeMs
+  const moved = withLock(dir, 5000, () => {
+    const all = readHandoffs(dir)
+    const stale = all.filter(h => h.phase === next.phase && h.attempt >= (next.attempt ?? 1) && ts(h) < resetAt && !answered.has(blockIdOf(h)))
+    const contract = join(dir, `${next.phase}-red-contract.json`)
+    const files = stale.map(h => h.file)
+    if (existsSync(contract) && statSync(contract).mtimeMs < resetAt && !all.some(h => !stale.includes(h) && resolvePath(String(h.data?.contractPath ?? '')) === resolvePath(contract))) files.push(contract)
+    for (const file of files) {
+      const from = basename(file)
+      let to = `reset-${dayOf(now)}-${from}`
+      for (let n = 2; existsSync(join(dir, to)); n++) to = `reset-${dayOf(now)}-${n}-${from}`
+      renameSync(file, join(dir, to))
+      appendIntervention(dir, [`\`${to}\``, `${from} of a superseded epoch`, `older than the latest accepted reset decision; would block ${next.step} ${next.phase}`, `cycle-state resolve, ${dayOf(now)}`, `${next.step} ${next.phase}`])
+    }
+    return files.length
+  })
+  return typeof moved === 'number' ? moved : 0 // a held lock moves nothing; the dispatch reports what it meets
+}
+const INTERVENTIONS_HEADER ='| file | what it is | why it was set aside | set aside by | what supersedes it |'
 const dayOf = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10)
 const cell = v => String(v ?? '').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim()
 const describeNext = n => (n?.step === 'blocked' ? `blocked (${n.reason})` : n?.step === 'done' ? 'done' : n?.step === 'merge' ? 'merge' : `${n?.step} ${n?.mode ?? ''} ${n?.phase ?? ''} attempt ${n?.attempt ?? 1}`.replace(/\s+/g, ' ').trim())

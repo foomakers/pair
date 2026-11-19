@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { fileSystemService } from '@pair/content-ops'
 import { join, dirname } from 'node:path'
 import ts from 'typescript'
 
@@ -54,11 +54,11 @@ export function compileRealignAsset(sourceText: string): string {
 }
 
 function main(): void {
-  const source = readFileSync(SOURCE, 'utf8')
+  const source = fileSystemService.readFileSync(SOURCE)
   const compiled = compileRealignAsset(source)
   for (const target of TARGETS) {
-    mkdirSync(dirname(target), { recursive: true })
-    writeFileSync(target, compiled)
+    fileSystemService.mkdirSync(dirname(target), { recursive: true })
+    fileSystemService.writeFileSync(target, compiled)
     console.log(`realign:asset → ${target}`)
   }
 }

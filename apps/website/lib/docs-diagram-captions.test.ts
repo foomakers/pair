@@ -1,17 +1,14 @@
+import { fileSystemService } from '@pair/content-ops'
 import { describe, it, expect, vi } from 'vitest'
 import { resolve } from 'node:path'
 import { findUncaptionedDiagrams, runAllChecks } from './docs-staleness-check'
 
-vi.mock('node:fs', async importOriginal => {
-  const real = await importOriginal<typeof import('node:fs')>()
-  const readFileSync = ((p: unknown, ...rest: unknown[]) => {
-    const out = (real.readFileSync as (...a: unknown[]) => unknown)(p, ...rest)
-    if (process.env['STRIP_CAPTIONS'] && String(p).endsWith('.mdx') && typeof out === 'string') {
-      return out.replace(/^\*Figure:.*$/gm, '')
-    }
-    return out
-  }) as typeof real.readFileSync
-  return { ...real, readFileSync, default: { ...real, readFileSync } }
+const realRead = fileSystemService.readFileSync.bind(fileSystemService)
+vi.spyOn(fileSystemService, 'readFileSync').mockImplementation(p => {
+  const out = realRead(p)
+  return process.env['STRIP_CAPTIONS'] && p.endsWith('.mdx')
+    ? out.replace(/^\*Figure:.*$/gm, '')
+    : out
 })
 
 const IMG = '![alt](/diagrams/x.svg)'

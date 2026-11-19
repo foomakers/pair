@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { fileSystemService as fs } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -27,15 +27,15 @@ function setup(name: string) {
   const origin = join(dir, 'origin.git')
   const seed = join(dir, 'seed')
   const clone = join(dir, 'clone')
-  mkdirSync(seed, { recursive: true })
+  fs.mkdirSync(seed, { recursive: true })
   git(dir, 'init', '--bare', '-b', 'main', origin)
   git(seed, 'init', '-b', 'main')
-  writeFileSync(join(seed, 'f'), '1')
+  fs.writeFileSync(join(seed, 'f'), '1')
   git(seed, 'add', 'f')
   git(seed, 'commit', '-m', 'c1')
   git(seed, 'remote', 'add', 'origin', origin)
   git(seed, 'tag', 'v0.1.0-pre.1')
-  writeFileSync(join(seed, 'f'), '2')
+  fs.writeFileSync(join(seed, 'f'), '2')
   git(seed, 'commit', '-am', 'c2') // tag must not sit at head
   git(seed, 'push', 'origin', 'main', 'v0.1.0-pre.1')
   git(dir, 'clone', origin, clone)
@@ -62,9 +62,9 @@ function cleanup(clone: string, version: string): string[] {
 }
 
 beforeAll(() => {
-  root = mkdtempSync(join(tmpdir(), 'release-origin-'))
+  root = fs.mkdtempSync(join(tmpdir(), 'release-origin-'))
 })
-afterAll(() => rmSync(root, { recursive: true, force: true }))
+afterAll(() => fs.rmSync(root, { recursive: true, force: true }))
 
 describe('release plan vs a real origin', () => {
   it('WITNESS: a tag deleted on origin is absent from the release plan', () => {

@@ -1836,3 +1836,19 @@ process.exit(3)
   const out = Object.fromEntries(github.instantiate({ ghBin: bin }).readCiChecks({ sha: 'a'.repeat(40), repo: 'o/r' }).map(c => [c.name, c.conclusion]))
   assert.deepEqual(out, { build: 'failure', lint: 'success', docs: 'success', e2e: 'pending', unit: 'failure', 'ci/legacy': 'success', 'ci/other': 'failure', 'ci/queued': 'pending' })
 })
+test('#691 AC4 github readCiChecks: each check carries the url it is read at (check run html_url, status target_url)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-ci-url-'))
+  const bin = join(dir, 'gh')
+  writeFileSync(bin, `#!/usr/bin/env node
+const a = process.argv.slice(2)
+const url = a.find(x => /[/]commits[/]/.test(x)) || ''
+if (/check-runs/.test(url)) { process.stdout.write(JSON.stringify({ check_runs: [{ name: 'build', status: 'completed', conclusion: 'failure', html_url: 'https://ci/run/1' }] })); process.exit(0) }
+if (/[/]status([?]|$)/.test(url)) { process.stdout.write(JSON.stringify({ statuses: [{ context: 'ci/legacy', state: 'error', target_url: 'https://ci/legacy/2' }] })); process.exit(0) }
+process.exit(3)
+`)
+  chmodSync(bin, 0o755)
+  assert.deepEqual(github.instantiate({ ghBin: bin }).readCiChecks({ sha: 'a'.repeat(40), repo: 'o/r' }), [
+    { name: 'build', conclusion: 'failure', url: 'https://ci/run/1' },
+    { name: 'ci/legacy', conclusion: 'failure', url: 'https://ci/legacy/2' },
+  ])
+})

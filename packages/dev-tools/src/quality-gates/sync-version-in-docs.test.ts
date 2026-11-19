@@ -1,6 +1,5 @@
-import { describe, it, expect, afterAll } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { describe, it, expect } from 'vitest'
+import { InMemoryFileSystemService } from '@pair/content-ops'
 import { join } from 'node:path'
 import {
   isExternalLine,
@@ -14,6 +13,12 @@ import {
   parseGitignoreExcludes,
   readGitignoreExcludes,
 } from './sync-version-in-docs'
+
+const mem = new InMemoryFileSystemService({}, '/', '/')
+let rootCount = 0
+const newRoot = () => `/sync-version-${rootCount++}`
+const writeFileSync = (p: string, c: string) => mem.writeFileSync(p, c)
+const readFileSync = (p: string) => mem.readFileSync(p)
 
 describe('isExternalLine', () => {
   it('flags a GitHub Actions "uses:" pin', () => {
@@ -89,27 +94,24 @@ describe('parseGitignoreExcludes', () => {
 })
 
 describe('readGitignoreExcludes', () => {
-  const root = mkdtempSync(join(tmpdir(), 'gitignore-read-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = newRoot()
 
   // QUARANTINE U6 (#613): fails when the sibling test that writes .gitignore into the shared `root` runs first (random order). Tracking: docs/testing/test-policy.config.json `quarantine`.
   it.skip('returns [] when no .gitignore exists at root', () => {
-    expect(readGitignoreExcludes(root)).toEqual([])
+    expect(readGitignoreExcludes(root, mem)).toEqual([])
   })
 
   it('reads and parses a real .gitignore at root', () => {
     writeFileSync(join(root, '.gitignore'), 'release/\ncoverage/\n')
-    expect(readGitignoreExcludes(root)).toEqual(['release', 'coverage'])
+    expect(readGitignoreExcludes(root, mem)).toEqual(['release', 'coverage'])
   })
 })
 
 describe('walkDocFiles / findFilesWithVersion (fixture tree)', () => {
-  const root = mkdtempSync(join(tmpdir(), 'sync-version-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = newRoot()
 
   const write = (rel: string, content: string) => {
     const abs = join(root, rel)
-    mkdirSync(join(abs, '..'), { recursive: true })
     writeFileSync(abs, content)
   }
 
@@ -121,13 +123,13 @@ describe('walkDocFiles / findFilesWithVersion (fixture tree)', () => {
   write('notes.txt', 'pair v0.4.3 — not a doc file, must be skipped')
 
   it('walkDocFiles collects only .md/.mdx outside excluded paths', () => {
-    const files = walkDocFiles(root, root, ['node_modules', 'CHANGELOG.md'])
+    const files = walkDocFiles(root, root, ['node_modules', 'CHANGELOG.md'], mem)
     const rels = files.map(f => f.replace(root + '/', '')).sort()
     expect(rels).toEqual(['docs/action.mdx', 'docs/guide.md', 'docs/other.md'])
   })
 
   it('findFilesWithVersion further filters to files whose content contains oldVersion', () => {
-    const files = findFilesWithVersion(root, '0.4.3', ['node_modules', 'CHANGELOG.md'])
+    const files = findFilesWithVersion(root, '0.4.3', ['node_modules', 'CHANGELOG.md'], mem)
     const rels = files.map(f => f.replace(root + '/', '')).sort()
     expect(rels).toEqual(['docs/action.mdx', 'docs/guide.md'])
   })
@@ -135,10 +137,9 @@ describe('walkDocFiles / findFilesWithVersion (fixture tree)', () => {
 
 describe('syncVersionInDocs', () => {
   const setup = () => {
-    const root = mkdtempSync(join(tmpdir(), 'sync-version-run-'))
+    const root = newRoot()
     const write = (rel: string, content: string) => {
       const abs = join(root, rel)
-      mkdirSync(join(abs, '..'), { recursive: true })
       writeFileSync(abs, content)
     }
     write('docs/guide.md', 'pair v0.4.3 install guide')
@@ -150,7 +151,7 @@ describe('syncVersionInDocs', () => {
   it('check mode: reports drift without writing files', () => {
     const { root } = setup()
     const before = readFile(join(root, 'docs/guide.md'))
-    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true })
+    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true, fs: mem })
     expect(result.drifted).toEqual(['docs/guide.md'])
     expect(result.unchanged).toEqual(['docs/action.mdx'])
     expect(result.fixed).toEqual([])
@@ -159,7 +160,7 @@ describe('syncVersionInDocs', () => {
 
   it('apply mode: rewrites drifted files in place', () => {
     const { root } = setup()
-    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: false })
+    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: false, fs: mem })
     expect(result.fixed).toEqual(['docs/guide.md'])
     expect(result.drifted).toEqual([])
     expect(readFile(join(root, 'docs/guide.md'))).toBe('pair v0.5.0 install guide')
@@ -169,7 +170,7 @@ describe('syncVersionInDocs', () => {
 
   it('excludes CHANGELOG.md from the scan entirely', () => {
     const { root } = setup()
-    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true })
+    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true, fs: mem })
     expect(result.scanned).not.toContain('CHANGELOG.md')
   })
 
@@ -182,7 +183,7 @@ describe('syncVersionInDocs', () => {
     write('.gitignore', 'release/\n')
     write('release/pair-cli-manual-0.4.3/README.md', 'pair v0.4.3 packaged build')
 
-    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true })
+    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true, fs: mem })
 
     expect(result.scanned.some(f => f.startsWith('release/'))).toBe(false)
     expect(readFile(join(root, 'release/pair-cli-manual-0.4.3/README.md'))).toContain('0.4.3')
@@ -190,7 +191,7 @@ describe('syncVersionInDocs', () => {
 })
 
 function readFile(path: string): string {
-  return readFileSync(path, 'utf-8')
+  return readFileSync(path)
 }
 
 describe('parseArgv', () => {

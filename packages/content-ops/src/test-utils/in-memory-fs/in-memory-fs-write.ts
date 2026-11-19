@@ -1,13 +1,10 @@
 import { dirname, resolve, isAbsolute } from 'path'
 import { InMemoryFsState } from './in-memory-fs-state'
 
-export async function writeFile(
-  state: InMemoryFsState,
-  path: string,
-  content: string,
-): Promise<void> {
+export function writeFileSync(state: InMemoryFsState, path: string, content: string): void {
   const resolvedPath = state.resolvePath(path)
   state.files.set(resolvedPath, content)
+  state.binary.delete(resolvedPath)
   // Create all parent directories recursively
   let p = dirname(resolvedPath)
   while (p && p !== dirname(p)) {
@@ -18,6 +15,23 @@ export async function writeFile(
   }
 }
 
+export async function writeFile(
+  state: InMemoryFsState,
+  path: string,
+  content: string,
+): Promise<void> {
+  writeFileSync(state, path, content)
+}
+
+export async function appendFile(
+  state: InMemoryFsState,
+  path: string,
+  content: string,
+): Promise<void> {
+  const resolvedPath = state.resolvePath(path)
+  await writeFile(state, path, (state.files.get(resolvedPath) ?? '') + content)
+}
+
 export async function writeFileBinary(
   state: InMemoryFsState,
   path: string,
@@ -25,14 +39,19 @@ export async function writeFileBinary(
 ): Promise<void> {
   // Store binary data using latin1 encoding to preserve byte values
   await writeFile(state, path, content.toString('latin1'))
+  state.binary.add(state.resolvePath(path))
 }
 
-export async function chmod(state: InMemoryFsState, path: string, mode: number): Promise<void> {
+export function chmodSync(state: InMemoryFsState, path: string, mode: number): void {
   const resolvedPath = state.resolvePath(path)
   if (!state.files.has(resolvedPath) && !state.dirs.has(resolvedPath)) {
     throw new Error(`File not found: ${path}`)
   }
   state.modes.set(resolvedPath, mode)
+}
+
+export async function chmod(state: InMemoryFsState, path: string, mode: number): Promise<void> {
+  chmodSync(state, path, mode)
 }
 
 export async function unlink(state: InMemoryFsState, path: string): Promise<void> {
@@ -44,6 +63,7 @@ export async function unlink(state: InMemoryFsState, path: string): Promise<void
     throw new Error(`File not found: ${path}`)
   }
   state.files.delete(resolvedPath)
+  state.forgetBinary(resolvedPath)
 }
 
 export function mkdirImpl(
@@ -90,11 +110,13 @@ export async function rename(
     const content = state.files.get(resolvedOldPath)!
     state.files.set(resolvedNewPath, content)
     state.files.delete(resolvedOldPath)
+    state.moveBinary(resolvedOldPath, resolvedNewPath)
     state.dirs.add(dirname(resolvedNewPath))
     return
   }
 
   renameDirectory(state, resolvedOldPath, resolvedNewPath)
+  state.moveBinary(resolvedOldPath, resolvedNewPath)
 }
 
 /** Moves a directory's whole subtree — its files and every registered directory under it. */
@@ -135,6 +157,7 @@ export function copyImpl(state: InMemoryFsState, oldPath: string, newPath: strin
     // copy directory recursively
     state.dirs.add(resolvedNewPath)
     const prefix = resolvedOldPath.endsWith('/') ? resolvedOldPath : resolvedOldPath + '/'
+    state.moveBinary(resolvedOldPath, resolvedNewPath, true)
     for (const key of state.files.keys()) {
       if (key.startsWith(prefix)) {
         const relative = key.slice(prefix.length)
@@ -146,17 +169,18 @@ export function copyImpl(state: InMemoryFsState, oldPath: string, newPath: strin
   } else if (state.files.has(resolvedOldPath)) {
     const content = state.files.get(resolvedOldPath)!
     state.files.set(resolvedNewPath, content)
+    state.moveBinary(resolvedOldPath, resolvedNewPath, true)
     state.addParentDirectories(resolvedNewPath)
   } else {
     throw new Error(`Path not found: ${oldPath}`)
   }
 }
 
-export async function rm(
+export function rmSync(
   state: InMemoryFsState,
   path: string,
   options?: { recursive?: boolean; force?: boolean },
-): Promise<void> {
+): void {
   const resolvedPath = state.resolvePath(path)
   const prefix = resolvedPath.endsWith('/') ? resolvedPath : resolvedPath + '/'
 
@@ -169,11 +193,13 @@ export async function rm(
     }
     state.dirs.delete(resolvedPath)
     state.files.delete(resolvedPath)
+    state.forgetBinary(resolvedPath)
   }
 
   const deleteNonRecursive = () => {
     if (state.files.has(resolvedPath)) {
       state.files.delete(resolvedPath)
+      state.forgetBinary(resolvedPath)
       return
     }
     if (state.dirs.has(resolvedPath)) {
@@ -197,7 +223,15 @@ export async function rm(
   deleteNonRecursive()
 }
 
-export async function symlink(state: InMemoryFsState, target: string, path: string): Promise<void> {
+export async function rm(
+  state: InMemoryFsState,
+  path: string,
+  options?: { recursive?: boolean; force?: boolean },
+): Promise<void> {
+  rmSync(state, path, options)
+}
+
+export function symlinkSync(state: InMemoryFsState, target: string, path: string): void {
   const resolvedPath = state.resolvePath(path)
   // Resolve relative targets from the symlink's parent directory (matching OS behavior)
   const resolvedTarget = isAbsolute(target)
@@ -208,6 +242,16 @@ export async function symlink(state: InMemoryFsState, target: string, path: stri
   }
   state.symlinks.set(resolvedPath, resolvedTarget)
   state.addParentDirectories(resolvedPath)
+}
+
+export async function symlink(state: InMemoryFsState, target: string, path: string): Promise<void> {
+  symlinkSync(state, target, path)
+}
+
+export function mkdtempSync(state: InMemoryFsState, prefix: string): string {
+  const dir = state.resolvePath(prefix + Math.random().toString(36).slice(2, 8))
+  mkdirImpl(state, dir, { recursive: true })
+  return dir
 }
 
 export function chdir(state: InMemoryFsState, path: string): void {

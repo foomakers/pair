@@ -5,9 +5,11 @@
  * The e2e suite builds and starts the website itself (its config's webServer): minutes, not seconds.
  */
 import { spawnSync } from 'child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
+
+const { mkdtempSync, readFileSync, rmSync } = fileSystemService
 
 export interface Target {
   name: string
@@ -121,7 +123,7 @@ export function runTarget(root: string, target: Target, repeatEach: number): Run
       env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: out },
       stdio: ['ignore', 'ignore', 'inherit'],
     })
-    return parseReport(target, JSON.parse(readFileSync(out, 'utf8')) as PwSuite)
+    return parseReport(target, JSON.parse(readFileSync(out)) as PwSuite)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

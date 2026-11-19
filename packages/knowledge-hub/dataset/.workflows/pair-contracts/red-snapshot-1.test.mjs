@@ -589,6 +589,38 @@ test('C1 doc custody: a DIRECTORY in allowedPaths admits only PROSE files — co
   assert.ok(chain.breaches.some(b => b.code === 'doc-code-change'), JSON.stringify(chain.breaches))
 })
 
+test('#691 AC2: a manual CI/infra commit (.github/workflows/**) above a doc seal is the OVERRIDABLE manual-infra-commit; the code half of a mixed commit stays doc-code-change', () => {
+  const { cwd } = repo()
+  write(cwd, 'skills/x/SKILL.md', 'old\n')
+  git(cwd, 'add', '-A'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'skill')
+  const docBase = git(cwd, 'rev-parse', 'HEAD')
+  write(cwd, '.pair/working/doc-draft.json', JSON.stringify(docContract({ fixScope: { owner: 'x', mode: 'doc', allowedPaths: ['skills/x/'] } })))
+  assert.equal(seal({ pr: PR, phase: PHASE, base: docBase, contractPath: '.pair/working/doc-draft.json', cwd }).sealed, true)
+  write(cwd, '.github/workflows/ci.yml', 'jobs: {}\n')
+  write(cwd, 'skills/x/scripts/run.mjs', 'x\n')
+  git(cwd, 'add', '-A'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'manual CI fix + code')
+  for (const out of [verify({ pr: PR, phase: PHASE, base: docBase, cwd }), verifyChain({ pr: PR, base: docBase, cwd, expectContract: true })]) {
+    const codeOf = p => out.breaches.filter(x => x.path === p).map(x => x.code)
+    assert.deepEqual(codeOf('.github/workflows/ci.yml'), ['manual-infra-commit'], JSON.stringify(out.breaches))
+    assert.deepEqual(codeOf('skills/x/scripts/run.mjs'), ['doc-code-change'], JSON.stringify(out.breaches))
+  }
+  assert.ok(OVERRIDABLE_BREACH_CODES.includes('manual-infra-commit'))
+  assert.ok(!OVERRIDABLE_BREACH_CODES.includes('doc-code-change'))
+})
+
+test('#691 AC2 × in-scope prose (PR #692 r0-5): a doc file under .github/workflows listed in allowedPaths is a clean doc change, never manual-infra-commit', () => {
+  const { cwd } = repo()
+  write(cwd, '.github/workflows/README.md', 'old\n')
+  git(cwd, 'add', '-A'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'workflows readme')
+  const docBase = git(cwd, 'rev-parse', 'HEAD')
+  write(cwd, '.pair/working/doc-draft.json', JSON.stringify(docContract({ fixScope: { owner: 'x', mode: 'doc', allowedPaths: ['.github/workflows/README.md'] } })))
+  assert.equal(seal({ pr: PR, phase: PHASE, base: docBase, contractPath: '.pair/working/doc-draft.json', cwd }).sealed, true)
+  write(cwd, '.github/workflows/README.md', 'new\n')
+  git(cwd, 'add', '.github/workflows/README.md'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'doc fix')
+  for (const out of [verify({ pr: PR, phase: PHASE, base: docBase, cwd }), verifyChain({ pr: PR, base: docBase, cwd, expectContract: true })])
+    assert.deepEqual(out.breaches, [], JSON.stringify(out.breaches))
+})
+
 test('AN w1: a path BOTH sides edited (different hunks) merges clean — the recomputed merge is not the agent`s change; verified, reported under mergedBase', () => {
   const { cwd, head1, runDir } = movedBaseStory()
   const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })

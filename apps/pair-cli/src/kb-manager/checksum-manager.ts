@@ -33,7 +33,7 @@ export async function validateFileWithRemoteChecksum(
   downloadUrl: string,
   filePath: string,
   httpClient: HttpClientService,
-  fs?: FileSystemService,
+  fs: FileSystemService,
 ): Promise<{ isValid: boolean; expectedChecksum?: string; actualChecksum?: string }> {
   const checksumUrl = `${downloadUrl}.sha256`
 

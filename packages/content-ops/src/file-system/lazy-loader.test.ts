@@ -20,7 +20,7 @@ describe('Dynamic Imports', () => {
 
   it('should get fs instance', async () => {
     const instance = await getFsInstance()
-    expect(instance).toBeDefined()
+    expect(instance.readFileBytes).toBeTypeOf('function')
   })
 
   it('should get path instance', async () => {
