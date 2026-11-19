@@ -40,6 +40,29 @@ const readNote = (file: string): { pid?: number; host?: string } => {
   }
 }
 
+const isExists = (error: unknown) => (error as NodeJS.ErrnoException).code === 'EEXIST'
+
+/**
+ * Takeover under card-lock's exclusive sidecar guard: reclaimers are serialized, and the note is re-read inside
+ * it — a lock that changed since it was read dead (another taker already took it) is never removed.
+ */
+function takeOver(file: string, seen: string | undefined, create: () => void): boolean {
+  const guard = `${file}.reclaim`
+  if (!takeGuard(guard)) return false
+  try {
+    const now = readRaw(file)
+    if (now !== undefined && now !== seen) return false
+    if (now !== undefined) unlinkSync(file)
+    create()
+    return true
+  } catch (error) {
+    if (!isExists(error)) throw error
+    return false
+  } finally {
+    rmSync(guard, { recursive: true, force: true })
+  }
+}
+
 export function acquireRunLock(
   runDir: string,
   isAlive: (pid: number) => boolean = pidIsAlive,
@@ -62,31 +85,16 @@ export function acquireRunLock(
     create()
     return { kind: 'acquired', release }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    if (!isExists(error)) throw error
   }
   const seen = readRaw(file)
   const { pid, host } = readNote(file)
-  const locked = (): RunLockOutcome => ({ kind: 'run-locked', ...readNote(file) })
   if (pid === undefined || host !== hostname() || isAlive(pid))
     return {
       kind: 'run-locked',
       ...(pid !== undefined && { pid }),
       ...(host !== undefined && { host }),
     }
-  // Takeover under card-lock's exclusive sidecar guard: reclaimers are serialized, and the note is re-read inside
-  // it — a lock that changed since it was read dead (another taker already took it) is never removed.
-  const guard = `${file}.reclaim`
-  if (!takeGuard(guard)) return locked()
-  try {
-    const now = readRaw(file)
-    if (now !== undefined && now !== seen) return locked()
-    if (now !== undefined) unlinkSync(file)
-    create()
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-    return locked()
-  } finally {
-    rmSync(guard, { recursive: true, force: true })
-  }
+  if (!takeOver(file, seen, create)) return { kind: 'run-locked', ...readNote(file) }
   return { kind: 'acquired', release, takenOver: { pid, host } }
 }
