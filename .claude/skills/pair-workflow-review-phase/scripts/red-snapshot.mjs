@@ -776,7 +776,7 @@ export function verify({ pr, phase, base, cwd }) {
       if (mode === 'test') breach('test-mode-production-change', { path, status })
       // A doc segment admits PROSE only, by extension — whatever directory its scope names (a directory entry would otherwise let
       // `skills/x/scripts/run.mjs` change without a breach).
-      else if (mode === 'doc' && INFRA_RE.test(path)) breach('manual-infra-commit', { path, status })
+      else if (mode === 'doc' && INFRA_RE.test(path) && !PROSE_RE.test(path)) breach('manual-infra-commit', { path, status })
       else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path })
       else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status })
@@ -1235,7 +1235,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
       if (!c.contract?.fixScope || CHANGESET_RE.test(path)) continue
       const { allowedPaths, mode } = c.contract.fixScope
       if (mode === 'test') breach('test-mode-production-change', { path, status, segment: c.phase, ...hint })
-      else if (mode === 'doc' && INFRA_RE.test(path)) breach('manual-infra-commit', { path, status, segment: c.phase, ...hint })
+      else if (mode === 'doc' && INFRA_RE.test(path) && !PROSE_RE.test(path)) breach('manual-infra-commit', { path, status, segment: c.phase, ...hint })
       else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status, segment: c.phase, ...hint })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path, segment: c.phase, ...hint })
       else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status, segment: c.phase, ...hint })
