@@ -1,7 +1,8 @@
 import { execFileSync, spawn, spawnSync } from 'child_process'
 import { RUN_EVENTS_ENV, runEventLine, stageLabel, type RunEvent } from './run-events'
 import { cardProgress, todoInProgress, type CardProgress } from './card-progress'
-import { existsSync, readFileSync, rmSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs'
+import { acquireRunLock, RUN_LOCK_FILE } from './run-lock'
 import { dirname, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { EngineDefinition } from './engines'
@@ -1750,51 +1751,97 @@ const traced = async (runTrace: { finish(): void }, run: () => Promise<CycleOutc
 
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
-    let input = requested
-    let co = coordinatesFor(ctx, input)
-    // The budgets are `cycle-state`'s, never this driver's: AC5 says the dead-dispatch retry is
-    // "read from cycle-state, never defined in pair-cli". Its own `resolve` output carries them,
-    // so they are read once here and handed to the loop — passing `{}` silently set every budget
-    // to zero, which the opencode leg showed as a stage that was never retried.
-    let first: unknown = await resolveFor(ctx, input, co)()
-    const adopted = adoptOtherRun(input, co, first)
-    if (adopted !== undefined) {
-      ;({ input, co } = adopted)
-      first = await resolveFor(ctx, input, co)()
-    }
-    const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
-    recordRunProfile(ctx, co)
-    const hooks = loadCycleHooks(ctx, co)
-    const progress = progressFor(input.card, policy, co.title, input.onRunEvent)
-    const startedAt = Date.now()
-    const runTrace = startTrace(ctx, input, co, () => shasOf(ctx, co))
-    const pending: PendingStages = []
-    const merge = mergeFor(ctx, input, co, progress)
-    const outcome = await traced(runTrace, () =>
-      runCycle({
-        hooks,
-        resolve: resolveFor(ctx, input, co),
-        worktree: worktreeFor(ctx, input, co),
-        packet: packetFor(ctx, input, co) as never,
-        spawnStage: spawnStageFor(ctx, co, progress, pending),
-        mergeStage: mergeWithTelemetry(ctx, co, merge),
-        escalate: escalateFor(input, co),
-        ...recoveryHooks(ctx, input, co),
-        policy,
-        ...(input.rounds !== undefined && { rounds: input.rounds }),
-        onNotice: note => console.log(`  ${note}`),
-        ...(progress !== undefined && { onDispatch: progress.dispatch }),
-        // One line per stage, the moment the NEXT resolve reveals whether it advanced (else a long
-        // unattended run prints one terminal status and a silently misplaced handoff looks like a failure).
-        onStage: record => {
-          pending.shift()?.(record.handoffAdvanced)
-          logStage(record)
-        },
-      }),
-    )
-    pending.splice(0).forEach(settle => settle(true))
-    runTrace.finish(outcome)
-    if (ctx.telemetryEnabled === true) recordCardTelemetry({ ctx, input, co, outcome, startedAt })
-    return outcome
+    const co = coordinatesFor(ctx, requested)
+    return await withRunLock(co.runDir, () => driveLocked(ctx, requested, co))
   }
+}
+
+/** #691 AC5: taken before the first resolve (which may archive) — a second driver on this card touches no handoff. */
+async function withRunLock(
+  runDir: string,
+  drive: () => Promise<CycleOutcome>,
+): Promise<CycleOutcome> {
+  mkdirSync(runDir, { recursive: true })
+  const lock = acquireRunLock(runDir)
+  if (lock.kind === 'run-locked') {
+    const reason = `run-locked: pid ${lock.pid ?? '?'} on host ${lock.host ?? '?'} holds ${runDir}/${RUN_LOCK_FILE}`
+    console.log(`  ${reason}`)
+    return { status: 'run-locked', stagesRun: 0, reason }
+  }
+  if (lock.takenOver !== undefined)
+    console.log(
+      `  Took over ${runDir}/${RUN_LOCK_FILE}: pid ${lock.takenOver.pid} on ${lock.takenOver.host} is dead`,
+    )
+  try {
+    return await drive()
+  } finally {
+    lock.release()
+  }
+}
+
+/**
+ * The budgets are `cycle-state`'s, never this driver's: AC5 says the dead-dispatch retry is
+ * "read from cycle-state, never defined in pair-cli". Its own `resolve` output carries them,
+ * so they are read once here and handed to the loop — passing `{}` silently set every budget
+ * to zero, which the opencode leg showed as a stage that was never retried.
+ */
+async function driveLocked(
+  ctx: CycleDriverContext,
+  requested: CycleDriverRequest,
+  coordinates: ReturnType<typeof coordinatesFor>,
+): Promise<CycleOutcome> {
+  const first: unknown = await resolveFor(ctx, requested, coordinates)()
+  const adopted = adoptOtherRun(requested, coordinates, first)
+  if (adopted === undefined) return driveResolved(ctx, requested, coordinates, first)
+  // The adopted run dir is the one this driver writes: it needs its own lock (before its resolve, which may archive).
+  return withRunLock(adopted.co.runDir, async () =>
+    driveResolved(
+      ctx,
+      adopted.input,
+      adopted.co,
+      await resolveFor(ctx, adopted.input, adopted.co)(),
+    ),
+  )
+}
+
+async function driveResolved(
+  ctx: CycleDriverContext,
+  input: CycleDriverRequest,
+  co: Coordinates,
+  first: unknown,
+): Promise<CycleOutcome> {
+  const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
+  recordRunProfile(ctx, co)
+  const hooks = loadCycleHooks(ctx, co)
+  const progress = progressFor(input.card, policy, co.title, input.onRunEvent)
+  const startedAt = Date.now()
+  const runTrace = startTrace(ctx, input, co, () => shasOf(ctx, co))
+  const pending: PendingStages = []
+  const merge = mergeFor(ctx, input, co, progress)
+  const outcome = await traced(runTrace, () =>
+    runCycle({
+      hooks,
+      resolve: resolveFor(ctx, input, co),
+      worktree: worktreeFor(ctx, input, co),
+      packet: packetFor(ctx, input, co) as never,
+      spawnStage: spawnStageFor(ctx, co, progress, pending),
+      mergeStage: mergeWithTelemetry(ctx, co, merge),
+      escalate: escalateFor(input, co),
+      ...recoveryHooks(ctx, input, co),
+      policy,
+      ...(input.rounds !== undefined && { rounds: input.rounds }),
+      onNotice: note => console.log(`  ${note}`),
+      ...(progress !== undefined && { onDispatch: progress.dispatch }),
+      // One line per stage, the moment the NEXT resolve reveals whether it advanced (else a long
+      // unattended run prints one terminal status and a silently misplaced handoff looks like a failure).
+      onStage: record => {
+        pending.shift()?.(record.handoffAdvanced)
+        logStage(record)
+      },
+    }),
+  )
+  pending.splice(0).forEach(settle => settle(true))
+  runTrace.finish(outcome)
+  if (ctx.telemetryEnabled === true) recordCardTelemetry({ ctx, input, co, outcome, startedAt })
+  return outcome
 }

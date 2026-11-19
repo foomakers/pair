@@ -3,12 +3,12 @@
 // RUNS FROM `.claude/workflows` ONLY: execute via `pnpm workflows:test`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { resolve, discoverDecisions, readDecisions, parseDecisionComment, publish, recover, cycleCounters, readHandoffs, STOP_CATALOG, DECISION_OVERRIDABLE_CODES, blockIdOf } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+import { resolve, withLock, discoverDecisions, readDecisions, parseDecisionComment, publish, recover, cycleCounters, readHandoffs, STOP_CATALOG, DECISION_OVERRIDABLE_CODES, blockIdOf } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 import { OVERRIDABLE_BREACH_CODES, verifyChain } from '../../skills/pair-workflow-review-phase/scripts/red-snapshot.mjs'
 import { chainRepo, write, git, PR } from './red-snapshot-lib.mjs'
 
@@ -208,6 +208,52 @@ test('AC-11: a custody override comment writes the attributed override and re-ve
   assert.deepEqual([next.step, next.mode, next.phase], ['verify', 're-review', 'r1'])
 })
 
+test('#691 AC1: an accepted override survives a reset epoch — its block archived as reset-<date>-*, the same breaches stay waived, others do not', () => {
+  const dir = runDir()
+  const B = { code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }
+  custodyStuck(dir, [B])
+  const c = comment(decisionBody({ block: go(dir).next.block, choice: 'override', reason: 'accepted', overrides: [B] }))
+  pick(dir, { pr: [c] })
+  // a reset epoch sets the answered review aside; the re-run review lists B again plus a breach nobody waived
+  renameSync(join(dir, 'r0-review-phase.json'), join(dir, 'reset-2026-11-19-r0-review-phase.json'))
+  review(dir, 'r0', { custody: { contractBreach: true, breaches: [B, { code: 'out-of-scope', path: 'src/y.ts', segment: 'a0' }] } })
+  pick(dir, { pr: [c] })
+  const file = JSON.parse(readFileSync(join(dir, 'custody-overrides.json'), 'utf8'))
+  assert.deepEqual(file.overrides.map(o => [o.code, o.path, o.segment, o.decisionRef]), [[B.code, B.path, B.segment, c.url]])
+})
+
+// PR #692 r0-6: the AC1 negatives — an archived block only anchors a waiver in ITS run dir, and only for the same segment.
+const resetEpoch = (dir, B) => {
+  custodyStuck(dir, [B])
+  const block = go(dir).next.block
+  renameSync(join(dir, 'r0-review-phase.json'), join(dir, 'reset-2026-11-19-r0-review-phase.json'))
+  review(dir, 'r0', { custody: { contractBreach: true, breaches: [B] } })
+  return block
+}
+
+test('#691 AC1 negative: a decision whose block was archived in ANOTHER run dir (same file name) waives nothing here', () => {
+  const B = { code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }
+  const foreign = resetEpoch(runDir(), B)
+  const dir = runDir()
+  resetEpoch(dir, B)
+  pick(dir, { pr: [comment(decisionBody({ block: foreign, choice: 'override', reason: 'accepted', overrides: [B] }))] })
+  assert.deepEqual(existsSync(join(dir, 'custody-overrides.json')) ? JSON.parse(readFileSync(join(dir, 'custody-overrides.json'), 'utf8')).overrides : [], [])
+})
+
+test('#691 AC1 negative (integration): an override for another segment waives nothing after the reset epoch', () => {
+  const { cwd, base } = chainRepo()
+  write(cwd, 'src/other.js', 'export const o = 1\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'engine fix outside the sealed scope')
+  const dir = runDir()
+  const B = { code: 'out-of-scope', path: 'src/other.js', segment: 'r1-g1' }
+  const block = resetEpoch(dir, B)
+  pick(dir, { pr: [comment(decisionBody({ block, choice: 'override', reason: 'accepted', overrides: [{ ...B, segment: 'r2-g1' }] }))] })
+  assert.equal(verifyChain({ pr: PR, base, cwd, runDir: dir }).verified, false)
+  pick(dir, { pr: [comment(decisionBody({ block, choice: 'override', reason: 'accepted', overrides: [B] }))] })
+  assert.equal(verifyChain({ pr: PR, base, cwd, runDir: dir }).verified, true, 'control: the same segment is waived')
+})
+
 test('AC-11 security: a hand-written override entry (no verified decision) is dropped at the next pickup', () => {
   const dir = runDir()
   custodyStuck(dir, [{ code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }])
@@ -241,6 +287,76 @@ test('AC-5: a reset with no sealed contract (a fresh card) runs a fresh review o
   pick(dir, { pr: [comment(decisionBody({ block: parked.block, choice: 'reset' }))] })
   const next = go(dir).next
   assert.deepEqual([next.step, next.mode, next.phase], ['verify', 're-review', 'r1'])
+})
+
+test('#691 AC3: a superseded-epoch handoff of the phase a reset re-dispatches is moved to reset-<date>-* and logged; the dispatch is clean; the current epoch is untouched', () => {
+  const dir = runDir()
+  fresh(dir)
+  // pre-reset epoch residue: an r1 review (and its attempt) the reset supersedes, and a contract residue of the same phase
+  review(dir, 'r1', { verdict: 'approved' })
+  review(dir, 'r1', { verdict: 'approved' }, 2)
+  writeFileSync(join(dir, 'r1-red-contract.json'), '{}')
+  review(dir, 'r0', { custody: { contractBreach: true, breaches: [{ code: 'contract-expected-refused' }] } })
+  const day = new Date().toISOString().slice(0, 10)
+  writeFileSync(join(dir, `reset-${day}-r1-review-phase.json`), '{}') // a prior archive of the same name: never overwritten
+  const parked = go(dir).next
+  pick(dir, { pr: [comment(decisionBody({ block: parked.block, choice: 'reset' }))] }, { now: new Date(Date.now() + 60_000) })
+  const out = go(dir)
+  assert.deepEqual([out.next.step, out.next.mode, out.next.phase], ['verify', 're-review', 'r1'])
+  assert.ok(!['stale-write', 'contract-attempt-overwritten'].includes(out.next.reason))
+  for (const f of ['r1-review-phase.json', 'r1-review-phase.attempt-2.json', 'r1-red-contract.json']) assert.ok(!existsSync(join(dir, f)), f)
+  for (const f of [`reset-${day}-2-r1-review-phase.json`, `reset-${day}-r1-review-phase.attempt-2.json`, `reset-${day}-r1-red-contract.json`]) assert.ok(existsSync(join(dir, f)), f)
+  assert.equal(readFileSync(join(dir, `reset-${day}-r1-review-phase.json`), 'utf8'), '{}')
+  assert.ok(existsSync(join(dir, 'r0-review-phase.json')), 'another phase is never swept')
+  const log = readFileSync(join(dir, 'maintainer-interventions.md'), 'utf8')
+  for (const f of [`reset-${day}-2-r1-review-phase.json`, `reset-${day}-r1-review-phase.attempt-2.json`, `reset-${day}-r1-red-contract.json`]) assert.equal(log.split('\n').filter(l => l.includes(f)).length, 1, f)
+  // the current epoch: a review of the same phase written after the reset stays where it is
+  review(dir, 'r1', { verdict: 'approved', createdAt: new Date(Date.now() + 120_000).toISOString() })
+  go(dir)
+  assert.ok(existsSync(join(dir, 'r1-review-phase.json')))
+})
+
+test('#691 AC3 × held run-dir lock (PR #692 r0-4): resolve called under withLock (as resetGroup/supersede do) still archives the superseded epoch', () => {
+  const dir = runDir()
+  fresh(dir)
+  review(dir, 'r1', { verdict: 'approved' })
+  review(dir, 'r0', { custody: { contractBreach: true, breaches: [{ code: 'contract-expected-refused' }] } })
+  const parked = go(dir).next
+  pick(dir, { pr: [comment(decisionBody({ block: parked.block, choice: 'reset' }))] }, { now: new Date(Date.now() + 60_000) })
+  const out = withLock(dir, 0, () => go(dir))
+  assert.deepEqual([out.next.step, out.next.phase], ['verify', 'r1'])
+  assert.ok(!existsSync(join(dir, 'r1-review-phase.json')), 'archived, not left for the dispatch to trip on')
+})
+
+// #691 AC4: a local pass is not proof — a failing REMOTE check of the obligation's own gate on the PR head is the cause.
+const unprovableOnGate = (dir, gateField) => {
+  fresh(dir)
+  review(dir, 'r0', { findings: [finding('r0-1', gateField)] })
+  put(dir, 'r1-g1', 'red-spec', { status: 'unprovable', reason: 'passes locally', findings: { received: ['r0-1'] } })
+}
+const ciHost = checks => ({ code: { readCiChecks: ({ sha }) => (typeof checks === 'function' ? checks() : checks.map(c => ({ ...c, sha }))) } })
+test('#691 AC4: a failing remote check matching the obligation gate on the PR head withholds unprovable and reports check, sha, url', () => {
+  for (const gateField of [{ gate: 'Changeset present' }, { location: 'gate:Changeset present' }]) {
+    const dir = runDir()
+    unprovableOnGate(dir, gateField)
+    const next = go(dir, { head: SHA('a'), host: ciHost([{ name: 'lint', conclusion: 'success' }, { name: 'Changeset present', conclusion: 'failure', url: 'https://ci.example/run/1' }]) }).next
+    assert.equal(next.reason, 'failed-preparation')
+    assert.notEqual(next.refusal, 'unprovable', JSON.stringify(gateField))
+    assert.deepEqual(next.remoteFailure, { check: 'Changeset present', sha: SHA('a'), url: 'https://ci.example/run/1' })
+  }
+})
+test('#691 AC4 fail-closed: no failing matching remote check, no gate recorded, or an unreadable remote ⇒ the unprovable refusal is unchanged', () => {
+  for (const [gateField, checks] of [
+    [{ gate: 'Changeset present' }, [{ name: 'Changeset present', conclusion: 'success' }]],
+    [{ gate: 'Changeset present' }, [{ name: 'other', conclusion: 'failure' }]],
+    [{}, [{ name: 'Changeset present', conclusion: 'failure' }]],
+    [{ gate: 'Changeset present' }, () => { throw new Error('api down') }],
+  ]) {
+    const dir = runDir()
+    unprovableOnGate(dir, gateField)
+    const next = go(dir, { head: SHA('a'), host: ciHost(checks) }).next
+    assert.deepEqual([next.reason, next.refusal, next.remoteFailure], ['failed-preparation', 'unprovable', undefined])
+  }
 })
 
 test('AC-6: a reset on a spent process budget restarts autoRecoveryRounds explicitly and records it', () => {

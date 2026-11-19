@@ -7,11 +7,12 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from 'fs'
-import { tmpdir } from 'os'
+import { hostname, tmpdir } from 'os'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { InMemoryFileSystemService } from '@pair/content-ops'
@@ -323,6 +324,27 @@ else process.exit(1)
     }))
 
     expect(outcome.status).not.toMatch(/card-status-unreadable/)
+  }, 60_000)
+
+  it('#691 AC5: a live run already holds the card run dir ⇒ run-locked naming its pid and host, no handoff touched, nothing spawned', async () => {
+    await converge(scriptDigest())
+    const lock = { pid: process.pid, host: hostname(), startedAt: '2026-11-19T00:00:00Z' }
+    writeFileSync(join(runDir(), 'run.lock'), JSON.stringify(lock))
+    // the host binding (`.host-binding.json`) is resolved before the lock; handoffs are what must not move
+    const handoffs = () =>
+      readdirSync(runDir())
+        .filter(f => !f.startsWith('.'))
+        .sort()
+    const before = handoffs()
+
+    const outcome = await drive()
+
+    expect(outcome.status).toBe('run-locked')
+    expect(outcome.reason).toContain(`pid ${process.pid}`)
+    expect(outcome.reason).toContain(hostname())
+    expect(handoffs()).toEqual(before)
+    expect(JSON.parse(readFileSync(join(runDir(), 'run.lock'), 'utf8'))).toEqual(lock)
+    expect(spawnedPrompts()).toHaveLength(0)
   }, 60_000)
 
   it('R3-W3: the remote head moved past the reviewed head ⇒ a re-review is dispatched, never ready-for-merge', async () => {

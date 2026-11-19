@@ -114,14 +114,15 @@ export default defineAdapter({
       const runs = pagesOf(`${apiRepo(repo)}/commits/${sha}/check-runs?per_page=100`).flatMap(page => page.check_runs ?? [])
       for (const r of [...runs].sort((a, b) => String(a.started_at ?? '').localeCompare(String(b.started_at ?? '')))) {
         const conclusion = r.status !== 'completed' ? 'pending' : ['success', 'neutral', 'skipped'].includes(r.conclusion) ? 'success' : 'failure'
-        byName.set(String(r.name), conclusion)
+        byName.set(String(r.name), { conclusion, url: r.html_url ?? r.details_url ?? null })
       }
       const statuses = pagesOf(`${apiRepo(repo)}/commits/${sha}/status?per_page=100`).flatMap(page => page.statuses ?? [])
       for (const st of statuses) {
         const name = String(st.context)
-        if (!byName.has(name)) byName.set(name, st.state === 'success' ? 'success' : st.state === 'pending' ? 'pending' : 'failure')
+        if (!byName.has(name)) byName.set(name, { conclusion: st.state === 'success' ? 'success' : st.state === 'pending' ? 'pending' : 'failure', url: st.target_url ?? null })
       }
-      return [...byName].map(([name, conclusion]) => ({ name, conclusion }))
+      // #691: the url travels with the conclusion, so a remote failure can be reported where it can be read.
+      return [...byName].map(([name, c]) => ({ name, ...c }))
     }
     const readLabels = ({ pr, repo }) => JSON.parse(gh(['api', `${apiRepo(repo)}/issues/${pr}/labels`])).map(l => String(l.name))
     // True only on a host-confirmed merge (`mergedAt` set): closed-unmerged and unreadable are false / thrown.

@@ -151,7 +151,7 @@ export const acquireCardLock: LockAcquirer = createCardLockAcquirer()
  * when THIS caller reclaimed it, else `undefined` (alive, unknown, or lost the race: the normal flow decides).
  */
 /** The sidecar guard; one a crashed reclaimer left behind (older than a minute) is cleared once, never trusted forever. */
-function takeGuard(guard: string): boolean {
+export function takeGuard(guard: string): boolean {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       mkdirSync(guard)
