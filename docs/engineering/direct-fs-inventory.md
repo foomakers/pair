@@ -120,6 +120,4 @@ longer import `fs` (the guard is import-based). Every other former `deferred-mig
   `apps/pair-cli/src/commands/kb-verify/handler.test.ts` (real zip archive parsed by AdmZip).
 - `repo-contract` (real checked-in files or the real git history are the subject):
   `apps/website/lib/skills-catalog-merge-coherence.test.ts`,
-  `packages/knowledge-hub/src/tools/{workflow-mirror,skills-conformance-check}.test.ts`.
-  Known gap: the synthetic-corpus cases of `skills-conformance-check.test.ts` still use real tmp trees;
-  `skills-conformance-check.ts` has ~39 direct fs calls and needs a service parameter (follow-up).
+  `packages/knowledge-hub/src/tools/{workflow-mirror,skills-conformance-check}.test.ts` (real-corpus cases only).
