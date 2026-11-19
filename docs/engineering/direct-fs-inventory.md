@@ -98,9 +98,10 @@ result. Its status is unknown.
 
 ## Status at close of this PR
 
-All rows are now dispositioned; `pnpm direct-fs:check` (in `pnpm quality-gate`) passes.
-`determine-version.ts` and its test were migrated (`appendFile`) and left the registry.
-85 read-only tests are `repo-contract` (real checked-in files are the subject).
-**78 rows are `deferred-migration`: ordinary fs use NOT migrated in this PR** (AC2/AC3 only partially met);
-the guard stops growth and flags an entry stale once its file stops using `fs`.
-Earlier "T-1 is incomplete" / "remain `migration-candidate`" statements above are superseded.
+Registry: 373 exact-path rows (331 distinct contents), all dispositioned; `pnpm direct-fs:check`
+(in `pnpm quality-gate`) passes. 0 `deferred-migration`, 0 `migration-candidate`.
+226 `in-flight-churn` (Scope Limit zones), 95 `repo-contract`, 25 `os-guarantee`,
+13 `standalone-script`, 13 `type-contract`, 1 `boundary-adapter`.
+Ordinary fs use was migrated to `FileSystemService`; the guard stops growth and flags an entry
+stale once its file stops using `fs`. The scan figures above (1,051 / 438 / 403, "144 remaining",
+"T-1 is incomplete", `migration-candidate`) describe the base scan and are superseded by this section.

@@ -1,8 +1,8 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1051,
-  "files": 440,
-  "distinctContents": 403,
+  "files": 373,
+  "distinctContents": 331,
   "dispositionCounts": {
     "standalone-script": 13,
     "os-guarantee": 25,
