@@ -1,10 +1,10 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1051,
-  "files": 381,
-  "distinctContents": 346,
+  "files": 382,
+  "distinctContents": 347,
   "dispositionCounts": {
-    "standalone-script": 13,
+    "standalone-script": 14,
     "os-guarantee": 25,
     "type-contract": 13,
     "in-flight-churn": 228,
@@ -6644,6 +6644,22 @@
       "reason": "Proves OS permission bits, real process execution or installed-artifact layout; the double cannot.",
       "decision": "Exact-path exception; keep isolated temp dir with cleanup.",
       "testCategory": "real-os-integration"
+    },
+    {
+      "path": "scripts/workflow-test-runner.mjs",
+      "hash": "67b39e709df2225195b76b3cba71e4ea44f22e6d1ba4f62611cea85ec46ede1c",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 3
+        }
+      ],
+      "disposition": "standalone-script",
+      "producer": "scripts/workflow-test-runner.mjs",
+      "reason": "Standalone test runner discovers real files before package builds and falls back to native Node discovery.",
+      "decision": "Exact-path exception for bootstrap test runner.",
+      "testCategory": "real-filesystem-boundary"
     }
   ]
 }

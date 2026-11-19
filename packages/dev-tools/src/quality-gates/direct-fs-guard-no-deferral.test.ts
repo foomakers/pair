@@ -92,6 +92,7 @@ const EXCEPTION_TESTS = new Set([
 // Reviewed, pinned set of OUT-of-SCOPE paths (not editable by this story) that may keep an exception row.
 // A path outside migration SCOPE cannot be migrated here, so it may only be relabeled by being listed.
 const EXCEPTION_OUT_OF_SCOPE = new Set([
+  'scripts/workflow-test-runner.mjs',
   'packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs',
   'packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs',
   'packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs',
