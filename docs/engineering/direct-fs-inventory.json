@@ -1,14 +1,14 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1051,
-  "files": 375,
-  "distinctContents": 340,
+  "files": 381,
+  "distinctContents": 346,
   "dispositionCounts": {
     "standalone-script": 13,
     "os-guarantee": 25,
     "type-contract": 13,
     "in-flight-churn": 228,
-    "repo-contract": 95,
+    "repo-contract": 101,
     "boundary-adapter": 1
   },
   "limits": [
@@ -1071,6 +1071,22 @@
       "testCategory": "root import guard"
     },
     {
+      "path": "apps/pair-cli/src/commands/run/cycle-recovered-custody-authority.test.ts",
+      "hash": "2708e859b45692b432406d9863d0a6e57025c1578faf32c063c0018e25d8778b",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "apps/pair-cli/src/commands/run/cycle-recovered-custody-authority.test.ts",
+      "reason": "Exercises real Git repositories and filesystem behavior in isolated temporary test fixtures.",
+      "decision": "Exact-path exception for real filesystem test boundary.",
+      "testCategory": "repo-file-contract"
+    },
+    {
       "path": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
       "hash": "b9aaecfa9950f01121f30b6a1c6c5e34b8927a9c1dc9af48c9cc916295354597",
       "dependencies": [
@@ -1117,6 +1133,22 @@
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/cycle-sibling-recovery.test.ts",
+      "hash": "1b04894edf7904885cc63798d540225bb7dbf435ffecc08e3fbfb939989dd30e",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "apps/pair-cli/src/commands/run/cycle-sibling-recovery.test.ts",
+      "reason": "Exercises real Git repositories and filesystem behavior in isolated temporary test fixtures.",
+      "decision": "Exact-path exception for real filesystem test boundary.",
+      "testCategory": "repo-file-contract"
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-wiring.test.ts",
@@ -1213,6 +1245,22 @@
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/fixtures/recovered-custody.ts",
+      "hash": "b29338b2507d140b42495510f582773bd242704c062880351659e1087c82cf55",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 12
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "apps/pair-cli/src/commands/run/fixtures/recovered-custody.ts",
+      "reason": "Exercises real Git repositories and filesystem behavior in isolated temporary test fixtures.",
+      "decision": "Exact-path exception for real filesystem test boundary.",
+      "testCategory": "repo-file-contract"
     },
     {
       "path": "apps/pair-cli/src/commands/run/handler.test.ts",
@@ -5434,6 +5482,54 @@
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
+    },
+    {
+      "path": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs",
+      "hash": "d7917eddf721aec0e29baef8a09e34d1e0bc900929a5ebae14c6843b8433f2b3",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 3
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs",
+      "reason": "Exercises real Git repositories and filesystem behavior in isolated temporary test fixtures.",
+      "decision": "Exact-path exception for real filesystem test boundary.",
+      "testCategory": "repo-file-contract"
+    },
+    {
+      "path": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "hash": "511bd09f673e3b8706fc0242cd32072a0e0cb3e12ee006c880016533420368dd",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 3
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs",
+      "reason": "Exercises real Git repositories and filesystem behavior in isolated temporary test fixtures.",
+      "decision": "Exact-path exception for real filesystem test boundary.",
+      "testCategory": "repo-file-contract"
+    },
+    {
+      "path": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs",
+      "hash": "06efe40c302c19a60c7fbb4b94f87022543022bce433ee04a8e31e9a0bfa2494",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs",
+      "reason": "Exercises real Git repositories and filesystem behavior in isolated temporary test fixtures.",
+      "decision": "Exact-path exception for real filesystem test boundary.",
       "testCategory": "repo-file-contract"
     },
     {
