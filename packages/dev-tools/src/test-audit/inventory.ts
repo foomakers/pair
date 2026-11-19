@@ -222,7 +222,10 @@ export function buildInventory(
   return {
     total: records.length,
     byModuleLevel: summarize(records),
-    gates: gateViolations(records, fs.existsSync(policyFile) ? loadPolicy(policyFile, fs) : undefined),
+    gates: gateViolations(
+      records,
+      fs.existsSync(policyFile) ? loadPolicy(policyFile, fs) : undefined,
+    ),
     tests: records,
   }
 }

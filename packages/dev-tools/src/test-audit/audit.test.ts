@@ -184,7 +184,8 @@ describe('render', () => {
 
 describe('loadConfig', () => {
   it('rejects a non-numeric threshold and an unknown rollout', () => {
-    const w = (o: object) => new InMemoryFileSystemService({ '/c.json': JSON.stringify({ ...cfg, ...o }) }, '/', '/')
+    const w = (o: object) =>
+      new InMemoryFileSystemService({ '/c.json': JSON.stringify({ ...cfg, ...o }) }, '/', '/')
     expect(() => loadConfig('/c.json', w({ maxSnapshotLines: 'x' }))).toThrow(
       'maxSnapshotLines must be a number, got "x"',
     )

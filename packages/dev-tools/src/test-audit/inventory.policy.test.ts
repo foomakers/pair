@@ -10,7 +10,11 @@ const api = inv as unknown as Api
 
 const FILE = '/test-policy.config.json'
 const cfg = (ratio: number) =>
-  new InMemoryFileSystemService({ [FILE]: JSON.stringify({ maxMockAssertionRatio: ratio }) }, '/', '/')
+  new InMemoryFileSystemService(
+    { [FILE]: JSON.stringify({ maxMockAssertionRatio: ratio }) },
+    '/',
+    '/',
+  )
 const rec = (mocks: number, assertions: number): inv.TestRecord => ({
   ...inv.parseTests('packages/a/src/x.test.ts', `it('t', () => { expect(1).toBe(1) })`)[0],
   mocks,
