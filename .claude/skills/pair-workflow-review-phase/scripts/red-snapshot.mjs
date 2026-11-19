@@ -124,6 +124,8 @@ function trailerBlockOf(body, cwd) {
 // checklist, never executable tests: every allowedPaths entry is a Markdown/text file or a directory of them, the
 // checklist quotes what the text must state per finding against its authority, and the snapshot is the contract alone.
 const PROSE_RE = /\.(md|mdx|markdown|txt|rst|adoc)$/i
+// #691 AC2: a manual CI/infra commit is not code a doc fixer wrote — judged as `out-of-scope` (overridable), never `doc-code-change`.
+const INFRA_RE = /^\.github\/workflows\//
 const docPathErrors = scope => {
   const errs = []
   if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) return ['fixScope.allowedPaths must be a non-empty array']
@@ -774,7 +776,7 @@ export function verify({ pr, phase, base, cwd }) {
       if (mode === 'test') breach('test-mode-production-change', { path, status })
       // A doc segment admits PROSE only, by extension — whatever directory its scope names (a directory entry would otherwise let
       // `skills/x/scripts/run.mjs` change without a breach).
-      else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status })
+      else if (mode === 'doc' && !PROSE_RE.test(path) && !INFRA_RE.test(path)) breach('doc-code-change', { path, status })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path })
       else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status })
     }
@@ -1232,7 +1234,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
       if (!c.contract?.fixScope || CHANGESET_RE.test(path)) continue
       const { allowedPaths, mode } = c.contract.fixScope
       if (mode === 'test') breach('test-mode-production-change', { path, status, segment: c.phase, ...hint })
-      else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status, segment: c.phase, ...hint })
+      else if (mode === 'doc' && !PROSE_RE.test(path) && !INFRA_RE.test(path)) breach('doc-code-change', { path, status, segment: c.phase, ...hint })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path, segment: c.phase, ...hint })
       else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status, segment: c.phase, ...hint })
     }
