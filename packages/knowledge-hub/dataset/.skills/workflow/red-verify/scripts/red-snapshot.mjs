@@ -421,8 +421,12 @@ export function runStaticGates({ gates, contract, cwd, timeoutMs = 300000 }) {
     const groups = perFile ? files.map(f => [f]) : [files]
     for (const group of groups) {
       if (!group.length) continue
-      const argv = g.command.flatMap(a => (a === '{file}' ? group : a === '{files}' ? group : [a]))
-      const r = runBounded(argv, cwd, timeoutMs)
+      // a per-file gate runs in the file's OWNING package dir with a package-relative path (per-package lint config)
+      const pkg = perFile ? owningPackage(group[0], cwd) : null
+      const dir = pkg ?? cwd
+      const shown = group.map(f => (pkg ? relative(pkg, join(cwd, f)) : f))
+      const argv = g.command.flatMap(a => (a === '{file}' ? shown : a === '{files}' ? group : [a]))
+      const r = runBounded(argv, dir, timeoutMs)
       const output = tail(`${r.stdout ?? ''}\n${r.stderr ?? ''}`)
       const exitCode = r.status
       if (exitCode !== 0) {
