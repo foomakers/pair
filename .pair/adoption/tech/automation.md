@@ -9,6 +9,10 @@ complete default schema).
 
 preset: full
 
+## Recovery Budget Ordering
+
+Recovery budgets use durable handoff publication identities and accepted maintainer reset references, not timestamp order. Archiving is not progress; unreadable evidence does not reopen a spent budget. Legacy records use conservative timestamp comparison. See [decision](../decision-log/2026-11-19-recovery-budget-event-identity.md).
+
 ## Blocking Severities
 
 Minor

@@ -146,7 +146,7 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
 }
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, rmdirSync, utimesSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, rmdirSync, utimesSync, symlinkSync, renameSync } from 'node:fs'
 import { tmpdir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -249,6 +249,30 @@ const review = (dir, phase, extra = {}, opts) =>
 const finding = (id, extra = {}) => ({ id, severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', kind: 'defect', reproducer: { command: 'node --test test/a.test.mjs' }, ...extra })
 
 // ── publish: atomic, sequenced, predecessor-checked, never overwrites a newer handoff ────────
+test('#687: publish stamps its own durable recovery progress identity', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { recoveryProgressId: 'forged' })
+  const written = JSON.parse(readFileSync(join(dir, 'a0-red-spec.json'), 'utf8'))
+  assert.match(written.recoveryProgressId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  assert.notEqual(written.recoveryProgressId, 'forged')
+  const verify = redVerify(dir, 'a0', { recoveryProgressId: 'forged' }, { predecessor: 'a0-red-spec' })
+  assert.equal(verify.published, true)
+  const second = JSON.parse(readFileSync(join(dir, 'a0-red-verify.json'), 'utf8'))
+  assert.notEqual(second.recoveryProgressId, written.recoveryProgressId)
+  redSpec(dir, 'a0', { recoveryProgressId: 'forged' }, { attempt: 2 })
+  const retry = JSON.parse(readFileSync(join(dir, 'a0-red-spec.attempt-2.json'), 'utf8'))
+  assert.equal(retry.recoveryProgressId, undefined)
+})
+
+test('#687: a fault recreated after reset cannot claim recovery progress', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0')
+  renameSync(join(dir, 'a0-red-spec.json'), join(dir, 'reset-2026-11-19-a0-red-spec.json'))
+  redSpec(dir, 'a0', { processFault: 'failed-seal', recoveryProgressId: 'forged' })
+  const retry = JSON.parse(readFileSync(join(dir, 'a0-red-spec.json'), 'utf8'))
+  assert.equal(retry.recoveryProgressId, undefined)
+})
+
 test('publish: writes <phase>-<skill>.json atomically with a monotonic seq and the envelope stamped', () => {
   const { dir } = runDir()
   const a = redSpec(dir, 'a0')
