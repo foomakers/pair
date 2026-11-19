@@ -1245,12 +1245,17 @@ export function stashStrayFiles(worktree: string, message: string): boolean {
   return stash.status === 0 && (git(worktree, ['status', '--porcelain']).stdout ?? '').trim() === ''
 }
 
+const descendsFromExpected = (worktree: string, expected: unknown): boolean =>
+  typeof expected !== 'string' ||
+  !/^[a-f0-9]{40}$/i.test(expected) ||
+  git(worktree, ['merge-base', '--is-ancestor', expected, 'HEAD']).status === 0
+
 /** AC-13 (r1-2): a `stale` preparation — one `base-sync` round, the base MERGED (never rebased), custody re-verified. */
 function syncStaleBase(
   ctx: CycleDriverContext,
   input: CycleDriverRequest,
   co: Coordinates,
-  worktree: string,
+  { worktree, expected }: { worktree: string; expected: unknown },
 ): { park?: string; head?: string } {
   const round = co.bridge.recover({
     dir: co.runDir,
@@ -1259,6 +1264,8 @@ function syncStaleBase(
     policy: budgetsOf(input),
   })
   if (!round.allowed) return { park: round.next?.detail ?? 'autoRecoveryRounds spent' }
+  if (!descendsFromExpected(worktree, expected))
+    return { park: 'base-sync refused: worktree HEAD does not descend from the dispatched head' }
   git(worktree, ['fetch', '-q', 'origin'])
   const sync = co.bridge.baseSync({
     cwd: worktree,
@@ -1362,7 +1369,8 @@ const stashBeforePrepareFor =
     )
     if (stashed) console.log('  Recovery: stray files of the failed attempt stashed before prepare')
     // AC-13 (r1-2): a stale refusal merges the base (never a rebase) under a base-sync round, custody re-verified.
-    if (next['refusal'] === 'stale') return syncStaleBase(ctx, input, co, worktree)
+    if (next['refusal'] === 'stale')
+      return syncStaleBase(ctx, input, co, { worktree, expected: next['base'] })
   }
 
 /** The contract-identity faults whose recovery resets the group (`STOP_CATALOG` resume: `reset-group`). */

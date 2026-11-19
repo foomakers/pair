@@ -614,8 +614,20 @@ async function cleanBeforePrepare(
     return { dispatch: next }
   const out = await input.beforePrepare?.(next)
   if (out?.park !== undefined)
-    return { parked: processPark(state, next, String(next['refusal'] ?? 'stale'), out.park) }
+    return { parked: await parkPreparation(input, state, next, out.park) }
   return { dispatch: out?.head !== undefined ? { ...next, base: out.head } : next }
+}
+
+async function parkPreparation(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+  detail: string,
+): Promise<CycleOutcome> {
+  const mismatch = await checkPrepareHead(input, state, next)
+  return mismatch === undefined
+    ? processPark(state, next, String(next['refusal'] ?? 'stale'), detail)
+    : processPark(state, mismatch.next!, 'prepare-head-mismatch', `${mismatch.reason} ${detail}`)
 }
 
 /** US-573: tells the live-progress observer, if any, which stage is about to run. */
@@ -712,7 +724,14 @@ async function recoverPrepareHead(
   if (actual === undefined) return { parked: mismatch }
   const recovery = await input.beforePrepare({ ...dispatch, refusal: 'stale', attempt: 2 })
   if (recovery?.park !== undefined)
-    return { parked: processPark(state, dispatch, 'prepare-head-mismatch', recovery.park) }
+    return {
+      parked: processPark(
+        state,
+        mismatch.next!,
+        'prepare-head-mismatch',
+        `${mismatch.reason} ${recovery.park}`,
+      ),
+    }
   const synced = recovery?.head === undefined ? dispatch : { ...dispatch, base: recovery.head }
   const stillMismatched = await checkPrepareHead(input, state, synced)
   return stillMismatched === undefined ? { dispatch: synced } : { parked: stillMismatched }

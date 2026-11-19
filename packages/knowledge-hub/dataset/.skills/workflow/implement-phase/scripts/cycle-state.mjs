@@ -2747,7 +2747,7 @@ export function baseSync({ cwd, base, story, owned, snapshot, dir }) {
   // `head`: the worktree HEAD a `stale` preparation's retry must be dispatched on (r2-3), synced or not.
   // The head a later `prepare` is based on: recorded for the run, so a stage-local resolve (no --head) agrees with the dispatch.
   const noteHead = head => {
-    if (dir && existsSync(dir)) writeRecovery(dir, { ...readRecovery(dir), baseSynced: { head, at: new Date().toISOString() } })
+    if (dir && existsSync(dir)) writeRecovery(dir, { ...readRecovery(dir), baseSynced: { head, cwd, at: new Date().toISOString() } })
     return head
   }
   if (run(['merge-base', '--is-ancestor', baseSha, 'HEAD']).status === 0) return { synced: false, reason: 'up-to-date', base: baseSha, head: noteHead(g(['rev-parse', 'HEAD'])), conflicts: [] }
@@ -3946,7 +3946,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // A base-sync moved the worktree head after the review named its own: the preparation is based on the synced head
   // (a handoff published after the sync is newer and wins — the override then stops).
   const synced = recovery.baseSynced
-  if (next.step === 'prepare' && SHA_RE.test(String(synced?.head ?? '')) && next.base !== synced.head && String(last.data.createdAt ?? '') <= synced.at) next = { ...next, base: synced.head }
+  if (next.step === 'prepare' && SHA_RE.test(String(synced?.head ?? '')) && SHA_RE.test(String(next.base ?? '')) && next.base !== synced.head && String(last.data.createdAt ?? '') <= synced.at && spawnSync('git', ['merge-base', '--is-ancestor', next.base, synced.head], { cwd: synced.cwd, encoding: 'utf8', env: cleanGitEnv() }).status === 0) next = { ...next, base: synced.head }
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated
   // from the last reviewed head. Sealed contracts and GREEN commits stay trusted.
