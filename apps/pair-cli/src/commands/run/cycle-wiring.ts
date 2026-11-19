@@ -1293,7 +1293,7 @@ function verifyAfterSync(
   sync: BaseSyncResult,
   { pr, baseRef }: { pr: number | undefined; baseRef: string },
 ): string | undefined {
-  if (sync.synced !== true || sync.cycleBase === undefined || pr === undefined) return undefined
+  if (sync.cycleBase === undefined || pr === undefined) return undefined
   const failed = 'base-sync verify-chain failed: custody does not hold on the merged head'
   try {
     const chain = co.bridge.verifyChain({
