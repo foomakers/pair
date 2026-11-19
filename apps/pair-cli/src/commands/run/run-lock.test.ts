@@ -51,4 +51,12 @@ describe('acquireRunLock — #691 AC5 per-card run lock', () => {
     expect(out.kind === 'acquired' && out.takenOver).toEqual({ pid, host: hostname() })
     expect(JSON.parse(readFileSync(join(runDir, RUN_LOCK_FILE), 'utf8')).pid).toBe(process.pid)
   })
+
+  it('liveness is the injected probe, not a platform guess (platform linux/darwin: kill(pid, 0); any other: the seam)', () => {
+    holder(4242)
+    const probed: number[] = []
+    const out = acquireRunLock(runDir, pid => (probed.push(pid), false))
+    expect(probed).toEqual([4242])
+    expect(out.kind === 'acquired' && out.takenOver).toEqual({ pid: 4242, host: hostname() })
+  })
 })
