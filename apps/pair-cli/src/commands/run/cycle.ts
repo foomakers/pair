@@ -750,7 +750,7 @@ async function checkPrepareHead(
   if (actual === expected) return
   const reason = 'prepare-head-mismatch'
   const detail = actual
-    ? `Worktree HEAD differs from dispatch: expected ${expected}, actual ${actual}. If the heads diverge, the maintainer must decide how to preserve local commits and restore reviewed ancestry before resuming. For an integration-base update, use cycle-state.mjs base-sync, then re-run.`
+    ? `Worktree HEAD differs from dispatch: expected ${expected}, actual ${actual}. Use cycle-state.mjs base-sync for this story, then re-run.`
     : `Cannot read worktree HEAD: expected ${expected}. Restore access to the story worktree, then re-run.`
   return processPark(state, { ...next, reason, detail }, reason, detail)
 }
