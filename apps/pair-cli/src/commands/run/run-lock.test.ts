@@ -56,19 +56,22 @@ describe('acquireRunLock — #691 AC5 per-card run lock', () => {
   it.each([
     ['A still holds', false],
     ['A already released', true],
-  ])('two takers of one dead lock (%s) ⇒ never both acquire, never a raw fs error', (_, aReleases) => {
-    holder(999_999)
-    let a: ReturnType<typeof acquireRunLock> | undefined
-    const b = acquireRunLock(runDir, pid => {
-      if (pid === 999_999 && a === undefined) {
-        a = acquireRunLock(runDir, () => false)
-        if (aReleases && a.kind === 'acquired') a.release()
-      }
-      return false
-    })
-    expect(a?.kind).toBe('acquired')
-    expect(b.kind).toBe(aReleases ? 'acquired' : 'run-locked')
-  })
+  ])(
+    'two takers of one dead lock (%s) ⇒ never both acquire, never a raw fs error',
+    (_, aReleases) => {
+      holder(999_999)
+      let a: ReturnType<typeof acquireRunLock> | undefined
+      const b = acquireRunLock(runDir, pid => {
+        if (pid === 999_999 && a === undefined) {
+          a = acquireRunLock(runDir, () => false)
+          if (aReleases && a.kind === 'acquired') a.release()
+        }
+        return false
+      })
+      expect(a?.kind).toBe('acquired')
+      expect(b.kind).toBe(aReleases ? 'acquired' : 'run-locked')
+    },
+  )
 
   it('liveness is the injected probe, not a platform guess (platform linux/darwin: kill(pid, 0); any other: the seam)', () => {
     holder(4242)

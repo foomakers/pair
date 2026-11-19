@@ -1795,7 +1795,12 @@ async function driveLocked(
   if (adopted === undefined) return driveResolved(ctx, requested, coordinates, first)
   // The adopted run dir is the one this driver writes: it needs its own lock (before its resolve, which may archive).
   return withRunLock(adopted.co.runDir, async () =>
-    driveResolved(ctx, adopted.input, adopted.co, await resolveFor(ctx, adopted.input, adopted.co)()),
+    driveResolved(
+      ctx,
+      adopted.input,
+      adopted.co,
+      await resolveFor(ctx, adopted.input, adopted.co)(),
+    ),
   )
 }
 

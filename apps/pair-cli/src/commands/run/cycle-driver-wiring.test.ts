@@ -642,53 +642,53 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
 
   /** The batch engine published a0-red-spec under ITS run id ⇒ resolve on story-7 answers `other-run`. */
   const publishBatchRunA0 = () => {
-  const draft = join(root, 'a0-draft.json')
-  writeFileSync(
-    draft,
-    JSON.stringify({
-      run: 'batch-run-7',
-      story: '7',
-      branch: 'feature/US-7-a-story',
-      phase: 'a0',
-      skill: 'red-spec',
-      inputHead: 'a'.repeat(40),
-      inputsDigest: 'x',
-      acHash: `sha256:${'0'.repeat(64)}`,
-      attempt: 1,
-      mode: 'initial',
-      status: 'red',
-      contractPath: '/x.json',
-      contractHash: `sha256:${'1'.repeat(64)}`,
-      reconciled: [],
-      preserved: [],
-      findings: { received: [], covered: [] },
-      elapsedMs: 1,
-    }),
-  )
-  const published = JSON.parse(
-    execFileSync(
-      'node',
-      [
-        join(scriptsDir(), 'cycle-state.mjs'),
-        'publish',
-        '--dir',
-        runDirOf('batch-run-7'),
-        '--file',
-        draft,
-        '--phase',
-        'a0',
-        '--skill',
-        'red-spec',
-        '--workflowVersion',
-        CYCLE_WORKFLOW_VERSION,
-        '--attempt',
-        '1',
-      ],
-      { encoding: 'utf8' },
-    ),
-  ) as Record<string, unknown>
-  expect(published).toMatchObject({ published: true })
-  expect(realResolve('story-7')).toMatchObject({ status: 'other-run', runId: 'batch-run-7' })
+    const draft = join(root, 'a0-draft.json')
+    writeFileSync(
+      draft,
+      JSON.stringify({
+        run: 'batch-run-7',
+        story: '7',
+        branch: 'feature/US-7-a-story',
+        phase: 'a0',
+        skill: 'red-spec',
+        inputHead: 'a'.repeat(40),
+        inputsDigest: 'x',
+        acHash: `sha256:${'0'.repeat(64)}`,
+        attempt: 1,
+        mode: 'initial',
+        status: 'red',
+        contractPath: '/x.json',
+        contractHash: `sha256:${'1'.repeat(64)}`,
+        reconciled: [],
+        preserved: [],
+        findings: { received: [], covered: [] },
+        elapsedMs: 1,
+      }),
+    )
+    const published = JSON.parse(
+      execFileSync(
+        'node',
+        [
+          join(scriptsDir(), 'cycle-state.mjs'),
+          'publish',
+          '--dir',
+          runDirOf('batch-run-7'),
+          '--file',
+          draft,
+          '--phase',
+          'a0',
+          '--skill',
+          'red-spec',
+          '--workflowVersion',
+          CYCLE_WORKFLOW_VERSION,
+          '--attempt',
+          '1',
+        ],
+        { encoding: 'utf8' },
+      ),
+    ) as Record<string, unknown>
+    expect(published).toMatchObject({ published: true })
+    expect(realResolve('story-7')).toMatchObject({ status: 'other-run', runId: 'batch-run-7' })
   }
 
   it('AC9/AC12 (resolve status other-run): a cycle another realization started under another runId is CONTINUED on that runId, never crashed on and never restarted', async () => {
