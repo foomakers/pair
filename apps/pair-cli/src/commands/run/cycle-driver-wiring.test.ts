@@ -12,7 +12,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'fs'
-import { tmpdir } from 'os'
+import { hostname, tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { createDefaultCycleDriver } from './cycle-wiring'
@@ -640,57 +640,62 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     expect(calls()).toHaveLength(0)
   }, 60_000)
 
+  /** The batch engine published a0-red-spec under ITS run id ⇒ resolve on story-7 answers `other-run`. */
+  const publishBatchRunA0 = () => {
+  const draft = join(root, 'a0-draft.json')
+  writeFileSync(
+    draft,
+    JSON.stringify({
+      run: 'batch-run-7',
+      story: '7',
+      branch: 'feature/US-7-a-story',
+      phase: 'a0',
+      skill: 'red-spec',
+      inputHead: 'a'.repeat(40),
+      inputsDigest: 'x',
+      acHash: `sha256:${'0'.repeat(64)}`,
+      attempt: 1,
+      mode: 'initial',
+      status: 'red',
+      contractPath: '/x.json',
+      contractHash: `sha256:${'1'.repeat(64)}`,
+      reconciled: [],
+      preserved: [],
+      findings: { received: [], covered: [] },
+      elapsedMs: 1,
+    }),
+  )
+  const published = JSON.parse(
+    execFileSync(
+      'node',
+      [
+        join(scriptsDir(), 'cycle-state.mjs'),
+        'publish',
+        '--dir',
+        runDirOf('batch-run-7'),
+        '--file',
+        draft,
+        '--phase',
+        'a0',
+        '--skill',
+        'red-spec',
+        '--workflowVersion',
+        CYCLE_WORKFLOW_VERSION,
+        '--attempt',
+        '1',
+      ],
+      { encoding: 'utf8' },
+    ),
+  ) as Record<string, unknown>
+  expect(published).toMatchObject({ published: true })
+  expect(realResolve('story-7')).toMatchObject({ status: 'other-run', runId: 'batch-run-7' })
+  }
+
   it('AC9/AC12 (resolve status other-run): a cycle another realization started under another runId is CONTINUED on that runId, never crashed on and never restarted', async () => {
     // The batch engine published a0-red-spec under its own run id; this invocation asks for
     // story-7. resolve answers `other-run` (no `next`) — the in-session coordinator's rule, the
     // one this realization must share: adopt that run id and resolve again.
-    const draft = join(root, 'a0-draft.json')
-    writeFileSync(
-      draft,
-      JSON.stringify({
-        run: 'batch-run-7',
-        story: '7',
-        branch: 'feature/US-7-a-story',
-        phase: 'a0',
-        skill: 'red-spec',
-        inputHead: 'a'.repeat(40),
-        inputsDigest: 'x',
-        acHash: `sha256:${'0'.repeat(64)}`,
-        attempt: 1,
-        mode: 'initial',
-        status: 'red',
-        contractPath: '/x.json',
-        contractHash: `sha256:${'1'.repeat(64)}`,
-        reconciled: [],
-        preserved: [],
-        findings: { received: [], covered: [] },
-        elapsedMs: 1,
-      }),
-    )
-    const published = JSON.parse(
-      execFileSync(
-        'node',
-        [
-          join(scriptsDir(), 'cycle-state.mjs'),
-          'publish',
-          '--dir',
-          runDirOf('batch-run-7'),
-          '--file',
-          draft,
-          '--phase',
-          'a0',
-          '--skill',
-          'red-spec',
-          '--workflowVersion',
-          CYCLE_WORKFLOW_VERSION,
-          '--attempt',
-          '1',
-        ],
-        { encoding: 'utf8' },
-      ),
-    ) as Record<string, unknown>
-    expect(published).toMatchObject({ published: true })
-    expect(realResolve('story-7')).toMatchObject({ status: 'other-run', runId: 'batch-run-7' })
+    publishBatchRunA0()
 
     const outcome = await settle(drive(ENGINES.claude))
 
@@ -704,6 +709,18 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     expect(prompt).not.toContain('$run=story-7 ')
     // Nothing was started beside it under the requested id.
     expect(existsSync(join(runDirOf('story-7'), 'a0-red-spec.json'))).toBe(false)
+  }, 60_000)
+
+  it('#691 AC5 × other-run (PR #692 r0-2): a live run holding the ADOPTED run dir ⇒ run-locked, nothing spawned', async () => {
+    publishBatchRunA0()
+    const lock = { pid: process.pid, host: hostname(), startedAt: '2026-11-19T00:00:00Z' }
+    writeFileSync(join(runDirOf('batch-run-7'), 'run.lock'), JSON.stringify(lock))
+
+    const outcome = await settle(drive(ENGINES.claude))
+
+    expect(outcome).toContain('run-locked')
+    expect(outcome).toContain('batch-run-7')
+    expect(calls()).toHaveLength(0)
   }, 60_000)
 
   it('AC1/AC11 (worktree-conflict): the story worktree path checked out on ANOTHER branch HALTs the run with the halt verbatim, before any spawn', async () => {

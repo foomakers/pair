@@ -1790,14 +1790,21 @@ async function driveLocked(
   requested: CycleDriverRequest,
   coordinates: ReturnType<typeof coordinatesFor>,
 ): Promise<CycleOutcome> {
-  let input = requested
-  let co = coordinates
-  let first: unknown = await resolveFor(ctx, input, co)()
-  const adopted = adoptOtherRun(input, co, first)
-  if (adopted !== undefined) {
-    ;({ input, co } = adopted)
-    first = await resolveFor(ctx, input, co)()
-  }
+  const first: unknown = await resolveFor(ctx, requested, coordinates)()
+  const adopted = adoptOtherRun(requested, coordinates, first)
+  if (adopted === undefined) return driveResolved(ctx, requested, coordinates, first)
+  // The adopted run dir is the one this driver writes: it needs its own lock (before its resolve, which may archive).
+  return withRunLock(adopted.co.runDir, async () =>
+    driveResolved(ctx, adopted.input, adopted.co, await resolveFor(ctx, adopted.input, adopted.co)()),
+  )
+}
+
+async function driveResolved(
+  ctx: CycleDriverContext,
+  input: CycleDriverRequest,
+  co: Coordinates,
+  first: unknown,
+): Promise<CycleOutcome> {
   const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
   recordRunProfile(ctx, co)
   const hooks = loadCycleHooks(ctx, co)
