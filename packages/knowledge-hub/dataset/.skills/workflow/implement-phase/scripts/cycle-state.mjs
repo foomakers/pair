@@ -3793,7 +3793,8 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   if (autoAdvanceError) return { status: 'invalid', reason: autoAdvanceError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
   const autonomyError = autonomyPolicyError(policy.autonomy)
   if (autonomyError) return { status: 'invalid', reason: autonomyError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
-  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
+  let out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
+  if (out.next?.phase && archiveSuperseded(dir, out.next)) out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
   // US-597: live guard — implementation never starts on a stale selection; prerequisites are reread through the ONE grammar.
   if (out.next?.step === 'implement' && story) {
     const g = prereqState({ story, dir, host })
@@ -4153,7 +4154,34 @@ export function resetGroup({ dir, phase, reason, by, now = new Date(), workflowV
     return { reset: true, group, removed: names, index, status: out.status, next: out.next }
   })
 }
-const INTERVENTIONS_HEADER = '| file | what it is | why it was set aside | set aside by | what supersedes it |'
+// #691 AC3: a handoff (or contract residue) of the phase `next` is about to write, older than the latest accepted reset
+// decision, belongs to a superseded epoch — left in place it turns the dispatch into `stale-write` /
+// `contract-attempt-overwritten`. It is moved (never deleted) to `reset-<date>-*` and logged; the block the reset
+// answered, earlier attempts and the current epoch are never touched. Returns how many files moved.
+function archiveSuperseded(dir, next, now = new Date()) {
+  const resets = acceptedDecisions(dir).filter(r => r.value.choice === 'reset')
+  if (!resets.length) return 0
+  const resetAt = Math.max(...resets.map(r => Date.parse(r.recordedAt) || 0))
+  const answered = new Set(resets.map(r => r.value.block))
+  const ts = h => Date.parse(h.data?.createdAt ?? '') || statSync(h.file).mtimeMs
+  const moved = withLock(dir, 5000, () => {
+    const all = readHandoffs(dir)
+    const stale = all.filter(h => h.phase === next.phase && h.attempt >= (next.attempt ?? 1) && ts(h) < resetAt && !answered.has(blockIdOf(h)))
+    const contract = join(dir, `${next.phase}-red-contract.json`)
+    const files = stale.map(h => h.file)
+    if (existsSync(contract) && statSync(contract).mtimeMs < resetAt && !all.some(h => !stale.includes(h) && resolvePath(String(h.data?.contractPath ?? '')) === resolvePath(contract))) files.push(contract)
+    for (const file of files) {
+      const from = basename(file)
+      let to = `reset-${dayOf(now)}-${from}`
+      for (let n = 2; existsSync(join(dir, to)); n++) to = `reset-${dayOf(now)}-${n}-${from}`
+      renameSync(file, join(dir, to))
+      appendIntervention(dir, [`\`${to}\``, `${from} of a superseded epoch`, `older than the latest accepted reset decision; would block ${next.step} ${next.phase}`, `cycle-state resolve, ${dayOf(now)}`, `${next.step} ${next.phase}`])
+    }
+    return files.length
+  })
+  return typeof moved === 'number' ? moved : 0 // a held lock moves nothing; the dispatch reports what it meets
+}
+const INTERVENTIONS_HEADER ='| file | what it is | why it was set aside | set aside by | what supersedes it |'
 const dayOf = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10)
 const cell = v => String(v ?? '').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim()
 const describeNext = n => (n?.step === 'blocked' ? `blocked (${n.reason})` : n?.step === 'done' ? 'done' : n?.step === 'merge' ? 'merge' : `${n?.step} ${n?.mode ?? ''} ${n?.phase ?? ''} attempt ${n?.attempt ?? 1}`.replace(/\s+/g, ' ').trim())

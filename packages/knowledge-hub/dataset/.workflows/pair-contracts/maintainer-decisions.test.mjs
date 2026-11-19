@@ -257,6 +257,33 @@ test('AC-5: a reset with no sealed contract (a fresh card) runs a fresh review o
   assert.deepEqual([next.step, next.mode, next.phase], ['verify', 're-review', 'r1'])
 })
 
+test('#691 AC3: a superseded-epoch handoff of the phase a reset re-dispatches is moved to reset-<date>-* and logged; the dispatch is clean; the current epoch is untouched', () => {
+  const dir = runDir()
+  fresh(dir)
+  // pre-reset epoch residue: an r1 review (and its attempt) the reset supersedes, and a contract residue of the same phase
+  review(dir, 'r1', { verdict: 'approved' })
+  review(dir, 'r1', { verdict: 'approved' }, 2)
+  writeFileSync(join(dir, 'r1-red-contract.json'), '{}')
+  review(dir, 'r0', { custody: { contractBreach: true, breaches: [{ code: 'contract-expected-refused' }] } })
+  const day = new Date().toISOString().slice(0, 10)
+  writeFileSync(join(dir, `reset-${day}-r1-review-phase.json`), '{}') // a prior archive of the same name: never overwritten
+  const parked = go(dir).next
+  pick(dir, { pr: [comment(decisionBody({ block: parked.block, choice: 'reset' }))] }, { now: new Date(Date.now() + 60_000) })
+  const out = go(dir)
+  assert.deepEqual([out.next.step, out.next.mode, out.next.phase], ['verify', 're-review', 'r1'])
+  assert.ok(!['stale-write', 'contract-attempt-overwritten'].includes(out.next.reason))
+  for (const f of ['r1-review-phase.json', 'r1-review-phase.attempt-2.json', 'r1-red-contract.json']) assert.ok(!existsSync(join(dir, f)), f)
+  for (const f of [`reset-${day}-2-r1-review-phase.json`, `reset-${day}-r1-review-phase.attempt-2.json`, `reset-${day}-r1-red-contract.json`]) assert.ok(existsSync(join(dir, f)), f)
+  assert.equal(readFileSync(join(dir, `reset-${day}-r1-review-phase.json`), 'utf8'), '{}')
+  assert.ok(existsSync(join(dir, 'r0-review-phase.json')), 'another phase is never swept')
+  const log = readFileSync(join(dir, 'maintainer-interventions.md'), 'utf8')
+  for (const f of [`reset-${day}-2-r1-review-phase.json`, `reset-${day}-r1-review-phase.attempt-2.json`, `reset-${day}-r1-red-contract.json`]) assert.equal(log.split('\n').filter(l => l.includes(f)).length, 1, f)
+  // the current epoch: a review of the same phase written after the reset stays where it is
+  review(dir, 'r1', { verdict: 'approved', createdAt: new Date(Date.now() + 120_000).toISOString() })
+  go(dir)
+  assert.ok(existsSync(join(dir, 'r1-review-phase.json')))
+})
+
 test('AC-6: a reset on a spent process budget restarts autoRecoveryRounds explicitly and records it', () => {
   const dir = runDir()
   fresh(dir)
