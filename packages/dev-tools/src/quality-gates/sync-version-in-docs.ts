@@ -148,6 +148,7 @@ export function findFilesWithVersion(
 export interface SyncOptions {
   check: boolean
   excludePatterns?: string[]
+  fs?: FileSystemService
 }
 
 export interface SyncResult {
@@ -163,8 +164,8 @@ export function syncVersionInDocs(
   oldVersion: string,
   newVersion: string,
   opts: SyncOptions,
-  fs: FileSystemService = fileSystemService,
 ): SyncResult {
+  const fs = opts.fs ?? fileSystemService
   const excludePatterns = [
     ...DEFAULT_EXCLUDES,
     ...readGitignoreExcludes(root, fs),

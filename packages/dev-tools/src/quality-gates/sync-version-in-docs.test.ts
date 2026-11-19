@@ -151,7 +151,7 @@ describe('syncVersionInDocs', () => {
   it('check mode: reports drift without writing files', () => {
     const { root } = setup()
     const before = readFile(join(root, 'docs/guide.md'))
-    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true }, mem)
+    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true, fs: mem })
     expect(result.drifted).toEqual(['docs/guide.md'])
     expect(result.unchanged).toEqual(['docs/action.mdx'])
     expect(result.fixed).toEqual([])
@@ -160,7 +160,7 @@ describe('syncVersionInDocs', () => {
 
   it('apply mode: rewrites drifted files in place', () => {
     const { root } = setup()
-    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: false }, mem)
+    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: false, fs: mem })
     expect(result.fixed).toEqual(['docs/guide.md'])
     expect(result.drifted).toEqual([])
     expect(readFile(join(root, 'docs/guide.md'))).toBe('pair v0.5.0 install guide')
@@ -170,7 +170,7 @@ describe('syncVersionInDocs', () => {
 
   it('excludes CHANGELOG.md from the scan entirely', () => {
     const { root } = setup()
-    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true }, mem)
+    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true, fs: mem })
     expect(result.scanned).not.toContain('CHANGELOG.md')
   })
 
@@ -183,7 +183,7 @@ describe('syncVersionInDocs', () => {
     write('.gitignore', 'release/\n')
     write('release/pair-cli-manual-0.4.3/README.md', 'pair v0.4.3 packaged build')
 
-    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true }, mem)
+    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true, fs: mem })
 
     expect(result.scanned.some(f => f.startsWith('release/'))).toBe(false)
     expect(readFile(join(root, 'release/pair-cli-manual-0.4.3/README.md'))).toContain('0.4.3')
