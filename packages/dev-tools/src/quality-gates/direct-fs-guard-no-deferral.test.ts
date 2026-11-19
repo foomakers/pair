@@ -40,6 +40,8 @@ const EXCEPTION_PRODUCTION = new Set([
   'packages/dev-tools/src/quality-gates/direct-fs-guard.ts', // repo-contract: the root guard reads real disk
   'apps/pair-cli/src/registry/llms-generation.ts', // type-contract: types only
   'apps/pair-cli/scripts/postbuild.js', // standalone-script: runs before the package is built
+  'packages/knowledge-hub/src/tools/mirror-realign.ts', // standalone-script: shipped node-builtins-only .cjs asset (build-realign-asset.ts)
+  'packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts', // standalone-script: shipped node-builtins-only .cjs asset (build-ratchet-asset.ts)
 ])
 // Reviewed, pinned set of in-scope TEST paths that may keep a registry row (real process/OS/repo-contract
 // boundaries, type-only fs). Every other in-scope test must use InMemoryFileSystemService and carry no row.
