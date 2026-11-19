@@ -213,6 +213,21 @@ describe.each([
     }
   })
 
+  it('non-ASCII text written as text reads back as UTF-8 bytes; binary written as binary keeps its bytes', async () => {
+    const { fs, dir, cleanup } = await setup()
+    try {
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(`${dir}/t.txt`, 'héllo €')
+      await fs.writeFileBinary(`${dir}/b.bin`, Buffer.from([0xc3, 0x28, 0xff, 0x00]))
+      expect(fs.readFileBytesSync(`${dir}/t.txt`).toString('hex')).toBe('68c3a96c6c6f20e282ac')
+      expect(fs.readFileBytesSync(`${dir}/b.bin`).toString('hex')).toBe('c328ff00')
+      fs.cpSync(`${dir}/b.bin`, `${dir}/c.bin`)
+      expect(fs.readFileBytesSync(`${dir}/c.bin`).toString('hex')).toBe('c328ff00')
+    } finally {
+      cleanup()
+    }
+  })
+
   it('rmSync: missing path throws unless force', async () => {
     const { fs, dir, cleanup } = await setup()
     try {
