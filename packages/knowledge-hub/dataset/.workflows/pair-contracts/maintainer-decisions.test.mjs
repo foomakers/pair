@@ -284,6 +284,37 @@ test('#691 AC3: a superseded-epoch handoff of the phase a reset re-dispatches is
   assert.ok(existsSync(join(dir, 'r1-review-phase.json')))
 })
 
+// #691 AC4: a local pass is not proof — a failing REMOTE check of the obligation's own gate on the PR head is the cause.
+const unprovableOnGate = (dir, gateField) => {
+  fresh(dir)
+  review(dir, 'r0', { findings: [finding('r0-1', gateField)] })
+  put(dir, 'r1-g1', 'red-spec', { status: 'unprovable', reason: 'passes locally', findings: { received: ['r0-1'] } })
+}
+const ciHost = checks => ({ code: { readCiChecks: ({ sha }) => (typeof checks === 'function' ? checks() : checks.map(c => ({ ...c, sha }))) } })
+test('#691 AC4: a failing remote check matching the obligation gate on the PR head withholds unprovable and reports check, sha, url', () => {
+  for (const gateField of [{ gate: 'Changeset present' }, { location: 'gate:Changeset present' }]) {
+    const dir = runDir()
+    unprovableOnGate(dir, gateField)
+    const next = go(dir, { head: SHA('a'), host: ciHost([{ name: 'lint', conclusion: 'success' }, { name: 'Changeset present', conclusion: 'failure', url: 'https://ci.example/run/1' }]) }).next
+    assert.equal(next.reason, 'failed-preparation')
+    assert.notEqual(next.refusal, 'unprovable', JSON.stringify(gateField))
+    assert.deepEqual(next.remoteFailure, { check: 'Changeset present', sha: SHA('a'), url: 'https://ci.example/run/1' })
+  }
+})
+test('#691 AC4 fail-closed: no failing matching remote check, no gate recorded, or an unreadable remote ⇒ the unprovable refusal is unchanged', () => {
+  for (const [gateField, checks] of [
+    [{ gate: 'Changeset present' }, [{ name: 'Changeset present', conclusion: 'success' }]],
+    [{ gate: 'Changeset present' }, [{ name: 'other', conclusion: 'failure' }]],
+    [{}, [{ name: 'Changeset present', conclusion: 'failure' }]],
+    [{ gate: 'Changeset present' }, () => { throw new Error('api down') }],
+  ]) {
+    const dir = runDir()
+    unprovableOnGate(dir, gateField)
+    const next = go(dir, { head: SHA('a'), host: ciHost(checks) }).next
+    assert.deepEqual([next.reason, next.refusal, next.remoteFailure], ['failed-preparation', 'unprovable', undefined])
+  }
+})
+
 test('AC-6: a reset on a spent process budget restarts autoRecoveryRounds explicitly and records it', () => {
   const dir = runDir()
   fresh(dir)

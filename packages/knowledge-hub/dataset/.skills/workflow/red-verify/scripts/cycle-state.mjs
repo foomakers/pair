@@ -3795,6 +3795,10 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   if (autonomyError) return { status: 'invalid', reason: autonomyError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
   let out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
   if (out.next?.phase && archiveSuperseded(dir, out.next)) out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
+  if (out.next?.reason === 'failed-preparation' && out.next.refusal === 'unprovable') {
+    const remoteFailure = remoteGateFailure({ dir, head, host })
+    if (remoteFailure) out = { ...out, next: { ...out.next, refusal: 'remote-check-failed', remoteFailure, detail: `the remote check ${remoteFailure.check} fails on ${remoteFailure.sha} (${remoteFailure.url ?? 'no url'}) — the local pass behind 'unprovable' is not proof` } }
+  }
   // US-597: live guard — implementation never starts on a stale selection; prerequisites are reread through the ONE grammar.
   if (out.next?.step === 'implement' && story) {
     const g = prereqState({ story, dir, host })
@@ -3805,6 +3809,26 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   }
   // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
+}
+
+// #691 AC4: the gate an obligation rests on — a finding's `gate`, else the `gate:<name>` location the merge-time gate
+// findings already use. A failing remote check of that name on the PR head (the refused attempt's inputHead when no head
+// is given) is the cause; no gate, no failing match, or an unreadable remote ⇒ null (the refusal stands, fail-closed).
+function remoteGateFailure({ dir, head, host }) {
+  const hs = readHandoffs(dir)
+  const last = hs[hs.length - 1]
+  if (last?.skill !== 'red-spec' || last.data?.status !== 'unprovable') return null
+  const received = new Set(last.data.findings?.received ?? [])
+  const findings = hs.filter(h => h.skill === 'review-phase').pop()?.data.findings ?? []
+  const gates = new Set(findings.filter(f => !received.size || received.has(f?.id)).map(f => f?.gate ?? /^gate:(.+)$/.exec(String(f?.location ?? ''))?.[1]).filter(Boolean))
+  if (!gates.size) return null
+  const sha = SHA_RE.test(String(head ?? '')) ? head : last.data.inputHead
+  try {
+    const hit = ((host ?? bindHosts({ dir })).code.readCiChecks({ sha }) ?? []).find(c => c?.conclusion === 'failure' && gates.has(c.name))
+    return hit ? { check: hit.name, sha, url: hit.url ?? null } : null
+  } catch {
+    return null
+  }
 }
 
 function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels }) {
