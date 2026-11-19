@@ -4,11 +4,13 @@
  * Signals needing a runner (duration, coverage, mutation, flakiness) are `not measured`.
  */
 import { execFileSync } from 'child_process'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { join, dirname } from 'path'
 import ts from 'typescript'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
+
+const { existsSync, readFileSync, writeFileSync, mkdirSync } = fileSystemService
 
 export type Level = 'unit' | 'integration' | 'e2e'
 export const NOT_MEASURED = 'not measured' as const
@@ -182,7 +184,7 @@ export interface Policy {
 
 /** Policy is mandatory: missing file or non-numeric ratio throws. */
 export function loadPolicy(file: string): Policy {
-  const { maxMockAssertionRatio } = JSON.parse(readFileSync(file, 'utf8'))
+  const { maxMockAssertionRatio } = JSON.parse(readFileSync(file))
   if (typeof maxMockAssertionRatio !== 'number' || !Number.isFinite(maxMockAssertionRatio))
     throw new Error(
       `${file}: maxMockAssertionRatio must be a number, got ${JSON.stringify(maxMockAssertionRatio)}`,
@@ -210,7 +212,7 @@ export const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx|js|jsx|mjs)$/
 export function buildInventory(root: string, files: string[]) {
   const records = files
     .filter(f => TEST_FILE_RE.test(f))
-    .flatMap(f => parseTests(f, readFileSync(join(root, f), 'utf8')))
+    .flatMap(f => parseTests(f, readFileSync(join(root, f))))
   // ponytail: no config under root => U4 not evaluated (legacy roots/tests); main() runs on the repo root where it exists
   const policyFile = join(root, 'docs/testing/test-policy.config.json')
   return {

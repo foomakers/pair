@@ -13,7 +13,7 @@
  * fixture tree). Absent, the repo root is resolved from this file's location:
  * apps/website/lib -> apps/website -> apps -> <repo root> (up 3).
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { fileSystemService } from '@pair/content-ops'
 import { execFileSync } from 'node:child_process'
 import { compileSync } from '@mdx-js/mdx'
 import remarkGfm from 'remark-gfm'
@@ -72,16 +72,16 @@ export const HREF_RE = /href="(\/docs[^"]*)"/g
 
 /** Skill names under a category dir: its subdirs, or the category itself if it's a meta skill (SKILL.md at the category root). */
 export function getSkillNames(categoryDir: string): string[] {
-  const entries = readdirSync(categoryDir, { withFileTypes: true })
+  const entries = fileSystemService.readdirSync(categoryDir)
   const subdirs = entries.filter(d => d.isDirectory()).map(d => d.name)
   if (subdirs.length > 0) return subdirs
-  if (existsSync(join(categoryDir, 'SKILL.md'))) return [basename(categoryDir)]
+  if (fileSystemService.existsSync(join(categoryDir, 'SKILL.md'))) return [basename(categoryDir)]
   return []
 }
 
 /** Every skill name across all category dirs under skillsDir. */
 export function collectSkills(skillsDir: string): string[] {
-  const categories = readdirSync(skillsDir, { withFileTypes: true }).filter(d => d.isDirectory())
+  const categories = fileSystemService.readdirSync(skillsDir).filter(d => d.isDirectory())
   const all: string[] = []
   for (const cat of categories) all.push(...getSkillNames(join(skillsDir, cat.name)))
   return all
@@ -90,7 +90,7 @@ export function collectSkills(skillsDir: string): string[] {
 /** All .mdx files under dir, recursively. */
 export function walkMdx(dir: string): string[] {
   const out: string[] = []
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  for (const entry of fileSystemService.readdirSync(dir)) {
     const full = join(dir, entry.name)
     if (entry.isDirectory()) out.push(...walkMdx(full))
     else if (entry.name.endsWith('.mdx')) out.push(full)
@@ -103,8 +103,8 @@ export function walkMdx(dir: string): string[] {
  * the caller then skips the probe check rather than pinning every transcript to 0.
  */
 export function countDeclaredPluginSkills(manifestPath: string): number | null {
-  if (!existsSync(manifestPath)) return null
-  const raw: unknown = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+  if (!fileSystemService.existsSync(manifestPath)) return null
+  const raw: unknown = JSON.parse(fileSystemService.readFileSync(manifestPath))
   const skills = (raw as { skills?: unknown }).skills
   if (Array.isArray(skills)) return skills.length
   return typeof skills === 'string' ? 1 : 0
@@ -112,8 +112,11 @@ export function countDeclaredPluginSkills(manifestPath: string): number | null {
 
 /** Count of how-to guide files (NN-how-to-*.md) in a KB how-to dir. `null` if the dir is missing. */
 export function countHowToGuides(howToDir: string): number | null {
-  if (!existsSync(howToDir)) return null
-  return readdirSync(howToDir).filter(f => /^\d+-how-to-.*\.md$/.test(f)).length
+  if (!fileSystemService.existsSync(howToDir)) return null
+  return fileSystemService
+    .readdirSync(howToDir)
+    .map(d => d.name)
+    .filter(f => /^\d+-how-to-.*\.md$/.test(f)).length
 }
 
 // --- Pure per-content checks (return error strings; no I/O) ---
@@ -535,7 +538,7 @@ export function readTracked(repoRoot: string): TargetSource {
   return path => {
     if (!cache.has(path)) {
       try {
-        cache.set(path, readFileSync(join(repoRoot, path), 'utf8'))
+        cache.set(path, fileSystemService.readFileSync(join(repoRoot, path)))
       } catch {
         cache.set(path, undefined)
       }
@@ -594,7 +597,7 @@ export function deriveSkillCommand(category: string, name: string): string {
 
 /** Enumerate every dataset skill as {category, name} (categories × getSkillNames). */
 export function collectSkillEntries(skillsDir: string): SkillEntry[] {
-  const categories = readdirSync(skillsDir, { withFileTypes: true }).filter(d => d.isDirectory())
+  const categories = fileSystemService.readdirSync(skillsDir).filter(d => d.isDirectory())
   const out: SkillEntry[] = []
   for (const cat of categories) {
     for (const name of getSkillNames(join(skillsDir, cat.name))) {
@@ -670,7 +673,7 @@ export function generateCatalogRows(skillsDir: string): Map<string, ExpectedRow>
   const commandByName = new Map(entries.map(e => [e.name, deriveSkillCommand(e.category, e.name)]))
   const rows = new Map<string, ExpectedRow>()
   for (const e of entries) {
-    const desc = readSkillDescription(readFileSync(skillMdPath(skillsDir, e), 'utf-8'))
+    const desc = readSkillDescription(fileSystemService.readFileSync(skillMdPath(skillsDir, e)))
     rows.set(e.name, {
       command: deriveSkillCommand(e.category, e.name),
       description: deriveCatalogDescription(desc, commandByName),
@@ -1091,10 +1094,11 @@ export function checkCliCommands(
   docs: { rel: string; content: string }[],
 ): { errors: string[]; commandCount: number } {
   const errors: string[] = []
-  const commandDirs = readdirSync(commandsDir, { withFileTypes: true })
+  const commandDirs = fileSystemService
+    .readdirSync(commandsDir)
     .filter(d => d.isDirectory())
     .map(d => d.name)
-  errors.push(...checkCommandAnchors(commandDirs, readFileSync(commandsFile, 'utf-8')))
+  errors.push(...checkCommandAnchors(commandDirs, fileSystemService.readFileSync(commandsFile)))
   errors.push(...checkDocsCommands(docs, commandDirs))
   return { errors, commandCount: commandDirs.length }
 }
@@ -1128,7 +1132,7 @@ function perFileErrors(params: {
   const targetSource = readTracked(repoRoot)
   const errors: string[] = []
   for (const file of docsFiles) {
-    const content = readFileSync(file, 'utf-8')
+    const content = fileSystemService.readFileSync(file)
     const rel = relative(docsDir, file)
     errors.push(...findEmDashes(content, rel))
     errors.push(...findUncaptionedDiagrams(content, rel))
@@ -1152,8 +1156,8 @@ function perFileErrors(params: {
  * checks apply, and nothing else about the gate's docs-site focus changes.
  */
 function readmeErrors(path: string, skillCount: number, howToCount: number | null): string[] {
-  if (!existsSync(path)) return []
-  const content = readFileSync(path, 'utf-8')
+  if (!fileSystemService.existsSync(path)) return []
+  const content = fileSystemService.readFileSync(path)
   const errors = findSkillCountMismatches(content, 'README.md', skillCount)
   if (howToCount !== null) {
     errors.push(...findGuideCountMismatches(content, 'README.md', howToCount))
@@ -1204,12 +1208,14 @@ function checkPaths(root: string) {
 
 /** `name:` and `tools:` from an agent definition's YAML frontmatter. */
 function readAgentFrontmatter(dir: string): { name: string; tools: string }[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir)
+  if (!fileSystemService.existsSync(dir)) return []
+  return fileSystemService
+    .readdirSync(dir)
+    .map(d => d.name)
     .filter(f => f.endsWith('.md'))
     .sort()
     .map(f => {
-      const src = readFileSync(join(dir, f), 'utf-8')
+      const src = fileSystemService.readFileSync(join(dir, f))
       return {
         name: /^name:\s*(.+)$/m.exec(src)?.[1]?.trim() ?? f.replace(/\.md$/, ''),
         tools: /^tools:\s*(.+)$/m.exec(src)?.[1]?.trim() ?? '',
@@ -1220,8 +1226,10 @@ function readAgentFrontmatter(dir: string): { name: string; tools: string }[] {
 /** The shipped workflow NAMES: every `.js` at the root of the dataset workflows dir, minus the
  * dry-run suites the registry excludes. Names, not paths — the page's table is keyed by name. */
 function readShippedWorkflowNames(dir: string, exclude: string[] = []): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir)
+  if (!fileSystemService.existsSync(dir)) return []
+  return fileSystemService
+    .readdirSync(dir)
+    .map(d => d.name)
     .filter(f => f.endsWith('.js') && !exclude.includes(f))
     .map(f => f.replace(/\.js$/, ''))
     .sort()
@@ -1299,14 +1307,14 @@ export function batchEngineErrors(paths: {
   // `batch-engine.mdx` turned its own gate green — the page whose existence AC8 requires
   // disabling the checks that hold it honest, which is the one failure direction a staleness
   // gate must never have.
-  if (!existsSync(paths.BATCH_ENGINE_FILE))
+  if (!fileSystemService.existsSync(paths.BATCH_ENGINE_FILE))
     return [
       `Batch engine page not found: ${paths.BATCH_ENGINE_FILE} — the batch-engine checks cannot run`,
     ]
-  const cliConfig = JSON.parse(readFileSync(paths.CLI_CONFIG, 'utf-8')) as {
+  const cliConfig = JSON.parse(fileSystemService.readFileSync(paths.CLI_CONFIG)) as {
     asset_registries: Record<string, { targets: { path: string }[]; exclude?: string[] }>
   }
-  const doc = readFileSync(paths.BATCH_ENGINE_FILE, 'utf-8')
+  const doc = fileSystemService.readFileSync(paths.BATCH_ENGINE_FILE)
   return [
     ...checkBatchEnginePaths(cliConfig.asset_registries, doc),
     ...checkBatchEngineAgents(readAgentFrontmatter(paths.AGENTS_DIR), doc),
@@ -1381,11 +1389,11 @@ export function checkListTargetsSamples(
 
 /** Read the registries and the sample pages, then compare. LOUD if a page is gone. */
 export function listTargetsSampleErrors(paths: { CLI_CONFIG: string; DOCS_DIR: string }): string[] {
-  const { asset_registries } = JSON.parse(readFileSync(paths.CLI_CONFIG, 'utf-8')) as {
+  const { asset_registries } = JSON.parse(fileSystemService.readFileSync(paths.CLI_CONFIG)) as {
     asset_registries: Record<string, ListTargetsRegistry>
   }
   const files = LIST_TARGETS_PAGES.map(rel => ({ rel, file: join(paths.DOCS_DIR, rel) }))
-  const missing = files.filter(f => !existsSync(f.file))
+  const missing = files.filter(f => !fileSystemService.existsSync(f.file))
   if (missing.length > 0) {
     return missing.map(
       f => `--list-targets sample page not found: ${f.rel} — the sample check cannot run`,
@@ -1393,7 +1401,7 @@ export function listTargetsSampleErrors(paths: { CLI_CONFIG: string; DOCS_DIR: s
   }
   return checkListTargetsSamples(
     asset_registries,
-    files.map(f => ({ rel: f.rel, content: readFileSync(f.file, 'utf-8') })),
+    files.map(f => ({ rel: f.rel, content: fileSystemService.readFileSync(f.file) })),
   )
 }
 
@@ -1504,17 +1512,18 @@ function docSlugs(docsFiles: string[], docsDir: string): Map<string, Set<string>
   const contents = new Map<string, string>()
   for (const f of docsFiles) {
     const route = [...buildValidRoutes([f], docsDir)][0] as string
-    contents.set(route, readFileSync(f, 'utf-8'))
+    contents.set(route, fileSystemService.readFileSync(f))
   }
   return buildDocSlugs(contents)
 }
 
 function viaErrors(paths: ReturnType<typeof checkPaths>): string[] {
-  const commands = readdirSync(paths.COMMANDS_DIR, { withFileTypes: true })
+  const commands = fileSystemService
+    .readdirSync(paths.COMMANDS_DIR)
     .filter(d => d.isDirectory())
     .map(d => d.name)
-  const doc = readFileSync(paths.COMMANDS_FILE, 'utf-8')
-  return checkViaLines(commands, doc, readFileSync(paths.ASSISTANT_SKILL, 'utf-8'))
+  const doc = fileSystemService.readFileSync(paths.COMMANDS_FILE)
+  return checkViaLines(commands, doc, fileSystemService.readFileSync(paths.ASSISTANT_SKILL))
 }
 
 export function runAllChecks(
@@ -1553,13 +1562,13 @@ export function runAllChecks(
   // header-date check, 2d, was removed — it failed on a content-correct skill change whenever the
   // header's own date was not also bumped in the same commit, which the content checks above
   // already catch independently)
-  const catalog = readFileSync(paths.CATALOG_FILE, 'utf-8')
+  const catalog = fileSystemService.readFileSync(paths.CATALOG_FILE)
   errors.push(...cliConfigDerivedErrors(paths), ...catalogErrors(catalog, allSkills, SKILLS_DIR))
 
   // Checks 3 & 4: CLI command anchors + tutorial references; 6: planned-capability markers
   const docs = docsFiles.map(file => ({
     rel: relative(DOCS_DIR, file),
-    content: readFileSync(file, 'utf-8'),
+    content: fileSystemService.readFileSync(file),
   }))
   const cli = checkCliCommands(paths.COMMANDS_DIR, paths.COMMANDS_FILE, docs)
   errors.push(...cli.errors, ...liveMarkerErrors(docs, issueState), ...viaErrors(paths))

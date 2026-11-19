@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { Command, Option } from 'commander'
-import { readFileSync } from 'fs'
 import { join } from 'path'
 import chalk from 'chalk'
 
@@ -25,7 +24,7 @@ function onlyStrings(arr: unknown[]): string[] {
   return arr.filter((x): x is string => typeof x === 'string')
 }
 
-const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
+const pkg = JSON.parse(fileSystemService.readFileSync(join(__dirname, '..', 'package.json')))
 
 /**
  * The name npm actually links into `node_modules/.bin` — the sole `bin` KEY of the manifest,

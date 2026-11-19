@@ -1,20 +1,19 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
 import { execFileSync } from 'child_process'
-import { rmSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { randomUUID } from 'crypto'
 import { join } from 'path'
 import { gitCacheKey, redactGitCredentials, cloneGitRepo } from './git-clone'
 
 vi.mock('child_process', () => ({ execFileSync: vi.fn() }))
-// `rmSync` MUST be mocked: cloneGitRepo deletes destDir on every failure path, with
+// `fileSystemService.rmSync` MUST be mocked: cloneGitRepo deletes destDir on every failure path, with
 // `force: true`, so an unmocked run silently recursive-deletes whatever real directory a
 // test names — verified by planting /tmp/pair-git-clone-test/dest/user-file.txt and finding
 // it gone after the suite. Mocked, the deletion is asserted instead of performed.
-vi.mock('fs', () => ({ rmSync: vi.fn() }))
 
 const execFileSyncMock = vi.mocked(execFileSync)
-const rmSyncMock = vi.mocked(rmSync)
+const rmSyncMock = vi.spyOn(fileSystemService, 'rmSync').mockImplementation(() => {})
 
 describe('gitCacheKey', () => {
   it('returns git- prefixed 12-char hex hash', () => {
@@ -45,7 +44,7 @@ describe('gitCacheKey', () => {
 describe('cloneGitRepo — auth', () => {
   beforeEach(() => {
     execFileSyncMock.mockReset()
-    rmSyncMock.mockReset()
+    rmSyncMock.mockReset().mockImplementation(() => {})
     delete process.env['PAIR_GIT_TOKEN']
   })
   afterEach(() => {
@@ -121,7 +120,7 @@ describe('cloneGitRepo', () => {
 
   beforeEach(() => {
     execFileSyncMock.mockReset()
-    rmSyncMock.mockReset()
+    rmSyncMock.mockReset().mockImplementation(() => {})
     destDir = join(tmpdir(), `pair-git-clone-test-${randomUUID()}`, 'dest')
     delete process.env['PAIR_GIT_TOKEN']
   })

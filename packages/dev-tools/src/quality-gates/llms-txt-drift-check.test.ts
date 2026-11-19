@@ -10,7 +10,7 @@
  * `generateLlmsTxt` actually emits for that fixture. Per AC-6 the trailing-newline
  * form is #393's, consumed here and not re-litigated.
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -30,6 +30,9 @@ import {
   type LlmsSourceFs,
 } from '../../../../apps/pair-cli/src/registry/llms-generation'
 
+const { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSync } =
+  fileSystemService
+
 const fixtures: string[] = []
 
 afterEach(() => {
@@ -46,7 +49,7 @@ function makeTree(files: Record<string, string>): string {
   for (const [relative, content] of Object.entries(files)) {
     const target = join(root, relative)
     mkdirSync(dirname(target), { recursive: true })
-    writeFileSync(target, content, 'utf-8')
+    writeFileSync(target, content)
   }
   return root
 }
@@ -61,7 +64,7 @@ const KB_FILES: Record<string, string> = {
 async function makeInSyncTree(extra: Record<string, string> = {}): Promise<string> {
   const root = makeTree({ ...KB_FILES, ...extra })
   const generated = await generateLlmsTxt(readOnlyFileSystem, root)
-  writeFileSync(join(root, TRACKED_INDEX_PATH), generated, 'utf-8')
+  writeFileSync(join(root, TRACKED_INDEX_PATH), generated)
   return root
 }
 
@@ -76,7 +79,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     expect(runnerForm?.groups?.script).toBeDefined()
 
     const rootScripts = (
-      JSON.parse(readFileSync(ROOT_PACKAGE_JSON, 'utf-8')) as {
+      JSON.parse(readFileSync(ROOT_PACKAGE_JSON)) as {
         scripts: Record<string, string>
       }
     ).scripts
@@ -94,8 +97,8 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
 
   it('reports an EMPTY tracked file as drift with the full missing list, not a crash', async () => {
     const root = await makeInSyncTree()
-    const expected = readFileSync(join(root, TRACKED_INDEX_PATH), 'utf-8')
-    writeFileSync(join(root, TRACKED_INDEX_PATH), '', 'utf-8')
+    const expected = readFileSync(join(root, TRACKED_INDEX_PATH))
+    writeFileSync(join(root, TRACKED_INDEX_PATH), '')
 
     const result = await checkLlmsIndexDrift(root)
 
@@ -154,7 +157,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   it('still names the real content delta when the tracked file is ALSO CRLF', async () => {
     const root = await makeInSyncTree()
     const tracked = join(root, TRACKED_INDEX_PATH)
-    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(/\n/g, '\r\n'), 'utf-8')
+    writeFileSync(tracked, readFileSync(tracked).replace(/\n/g, '\r\n'))
     mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration'), { recursive: true })
     writeFileSync(
       join(root, '.pair/knowledge/guidelines/collaboration/story-local-markers.md'),
@@ -186,7 +189,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   it('names a leading byte-order mark, and renders the two look-alike lines escaped', async () => {
     const root = await makeInSyncTree()
     const tracked = join(root, TRACKED_INDEX_PATH)
-    writeFileSync(tracked, '﻿' + readFileSync(tracked, 'utf-8'), 'utf-8')
+    writeFileSync(tracked, '﻿' + readFileSync(tracked))
 
     const result = await checkLlmsIndexDrift(root)
 
@@ -213,7 +216,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     const root = await makeInSyncTree()
     const tracked = join(root, TRACKED_INDEX_PATH)
     const prd = '- [Product Requirements](.pair/adoption/product/PRD.md)'
-    writeFileSync(tracked, '﻿' + readFileSync(tracked, 'utf-8').replace(prd, `${prd} `), 'utf-8')
+    writeFileSync(tracked, '﻿' + readFileSync(tracked).replace(prd, `${prd} `))
     mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration'), { recursive: true })
     writeFileSync(
       join(root, '.pair/knowledge/guidelines/collaboration/story-local-markers.md'),
@@ -283,7 +286,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     const tracked = join(root, TRACKED_INDEX_PATH)
     const line = '- [How to start](.pair/knowledge/how-to/01-how-to-start.md)'
     const doubled = line.replace('How to start', 'How to  start')
-    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(line, doubled), 'utf-8')
+    writeFileSync(tracked, readFileSync(tracked).replace(line, doubled))
 
     const result = await checkLlmsIndexDrift(root)
 

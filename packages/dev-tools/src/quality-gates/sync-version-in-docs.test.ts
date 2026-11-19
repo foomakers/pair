@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -14,6 +14,8 @@ import {
   parseGitignoreExcludes,
   readGitignoreExcludes,
 } from './sync-version-in-docs'
+
+const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } = fileSystemService
 
 describe('isExternalLine', () => {
   it('flags a GitHub Actions "uses:" pin', () => {
@@ -190,7 +192,7 @@ describe('syncVersionInDocs', () => {
 })
 
 function readFile(path: string): string {
-  return readFileSync(path, 'utf-8')
+  return readFileSync(path)
 }
 
 describe('parseArgv', () => {

@@ -4,13 +4,15 @@
  * The decoder must stay the exact inverse of node's escaping. Real node, real git; stay green after the fix.
  */
 import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
 import { describe, it, expect } from 'vitest'
 
 import { runNodeTest } from './suites'
+
+const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = fileSystemService
 
 const SLOW = 'await new Promise(r => setTimeout(r, 30))'
 

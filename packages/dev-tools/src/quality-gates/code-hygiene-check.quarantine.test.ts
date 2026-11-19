@@ -1,9 +1,11 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, it, expect } from 'vitest'
 
 import { parseGrepOutput, quarantinedTitles } from './code-hygiene-check'
+
+const { mkdtempSync, mkdirSync, writeFileSync } = fileSystemService
 
 const SKIP = 'it.' + 'skip'
 const hit = (title: string) => `a.test.ts:3:  ${SKIP}('${title}', () => {})`

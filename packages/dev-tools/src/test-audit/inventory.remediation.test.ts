@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseTests, gateViolations, buildInventory } from './inventory'
+
+const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = fileSystemService
 
 const F = 'packages/a/src/x.test.ts'
 const SKIP = 'skip'

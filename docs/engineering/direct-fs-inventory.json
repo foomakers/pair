@@ -4,12 +4,11 @@
   "files": 440,
   "distinctContents": 403,
   "dispositionCounts": {
-    "deferred-migration": 78,
-    "os-guarantee": 19,
-    "type-contract": 12,
+    "standalone-script": 13,
+    "os-guarantee": 25,
+    "type-contract": 13,
     "in-flight-churn": 226,
-    "repo-contract": 94,
-    "standalone-script": 10,
+    "repo-contract": 95,
     "boundary-adapter": 1
   },
   "limits": [
@@ -28,66 +27,14 @@
           "line": 9
         }
       ],
-      "disposition": "deferred-migration",
+      "disposition": "standalone-script",
       "producer": "apps/pair-cli/scripts/postbuild.js",
       "sourceSymbols": ["fs"],
       "observedOperations": ["copyFileSync", "mkdirSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "postbuild copies the package manifest and bundled control-state script into dist/; invoked by apps/pair-cli/package.json postbuild",
-      "reason": "Build-time manifest and asset generation currently use Node fs directly.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Migrate build-time file operations through the service during the CLI wave.",
+      "operationConsumer": "Runs at package build time before @pair/content-ops is built; it cannot import the service.",
+      "reason": "Runs at package build time before @pair/content-ops is built; it cannot import the service.",
+      "decision": "Exact-path exception.",
       "testCategory": "package-build"
-    },
-    {
-      "path": "apps/pair-cli/src/cli.e2e.test.ts",
-      "hash": "e91fb6bd76496e4501cd7b52f6cecfe74ee9303e442ee104c92f10a05a8206b6",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/cli.e2e.test.ts",
-      "sourceSymbols": [
-        "existsSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "observedOperations": [
-        "existsSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "CLI end-to-end test exercises in-memory package operations and a run-zone dispatch scenario.",
-      "reason": "CLI end-to-end test exercises in-memory package operations and a run-zone dispatch scenario.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Route ordinary package assertions and setup through the injected service; retain the run-zone lock proof on real temporary files.",
-      "testCategory": "package-e2e-and-lock-integration"
-    },
-    {
-      "path": "apps/pair-cli/src/cli.ts",
-      "hash": "2b767b852be83314fce4b2f4d3a13bb3ae52f2b338ba0f6734dfbbf9ded0043f",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 3
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/cli.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "CLI startup reads package.json for Commander name, description and version; cli.test.ts exercises the public command entry",
-      "reason": "Startup manifest reading is ordinary filesystem IO before runCli receives its injected service.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Move the manifest read behind an injectable service without changing CLI metadata.",
-      "testCategory": "unit-memory"
     },
     {
       "path": "apps/pair-cli/src/commands/dispatcher.test.ts",
@@ -107,25 +54,6 @@
       "reason": "The test writes an executable stub and invokes a child process; executable permissions and process launch require the OS.",
       "decision": "Keep a temp-directory process integration witness, with cleanup; ordinary dispatcher cases already use the in-memory service.",
       "testCategory": "real-process"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/index.test.ts",
-      "hash": "80568d5335973c09169d703ca39fc607f8fe2f301eb15514dec8a87e10f88458",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/commands/index.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "The test reads the checked-in package manifest to assert command metadata.",
-      "reason": "The test reads the checked-in package manifest to assert command metadata.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Seed the manifest through the service or extract the metadata assertion from the disk read.",
-      "testCategory": "unit"
     },
     {
       "path": "apps/pair-cli/src/commands/install/workflow-presets.test.ts",
@@ -161,44 +89,6 @@
       "reason": "Installs and verifies workflow profiles through spawned CLI processes using real temporary projects.",
       "decision": "Keep the subprocess round-trip in isolated temporary directories; route unit-level project setup through the service where separable.",
       "testCategory": "installed-cli-integration"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/kb-info/handler.test.ts",
-      "hash": "eca440112f98d7fbf85fbcf7ba3b4b6655638ee8d9e05810762a878b94fd4c55",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 13
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/commands/kb-info/handler.test.ts",
-      "sourceSymbols": ["fs"],
-      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "Creates ZIP packages for the kb-info handler and tests invalid archive input.",
-      "reason": "Creates ZIP packages for the kb-info handler and tests invalid archive input.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Seed ordinary project files through the service; retain only real ZIP interoperability cases.",
-      "testCategory": "zip-interoperability"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/kb-verify/handler.test.ts",
-      "hash": "a7bad36dd13816dc9d3d60209a59345642d1d1bd502d8a327d8c7e8dd541c0fe",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 7
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/commands/kb-verify/handler.test.ts",
-      "sourceSymbols": ["fs"],
-      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "Creates ZIP packages for the kb-verify handler and tests invalid archive input.",
-      "reason": "Creates ZIP packages for the kb-verify handler and tests invalid archive input.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Seed ordinary project files through the service; retain only real ZIP interoperability cases.",
-      "testCategory": "zip-interoperability"
     },
     {
       "path": "apps/pair-cli/src/commands/package/link-rewriter.test.ts",
@@ -251,25 +141,6 @@
       "reason": "Installs the shipped dataset, packages it, verifies it, and reinstalls it in real temporary projects.",
       "decision": "Keep the distribution and archive round-trip as an isolated real-OS integration test.",
       "testCategory": "distribution-integration"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/package/zip-creator.test.ts",
-      "hash": "7fb626956d4af100bca69e60ff4d9821a4079841d58e8c4ca82c01730802d1e1",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 6
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/commands/package/zip-creator.test.ts",
-      "sourceSymbols": ["fs"],
-      "observedOperations": ["existsSync", "mkdirSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "Most cases exercise ZIP creator content and links through the service; trailing cases use real archives.",
-      "reason": "Most cases exercise ZIP creator content and links through the service; trailing cases use real archives.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Move ordinary setup and assertions to the seeded in-memory service; keep only archive interoperability cases on disk.",
-      "testCategory": "unit-and-zip-interoperability"
     },
     {
       "path": "apps/pair-cli/src/commands/run/__fixtures__/cards-cross-completion.cjs",
@@ -2311,63 +2182,6 @@
       "testCategory": "real-process"
     },
     {
-      "path": "apps/pair-cli/src/config/loader-project-shape.test.ts",
-      "hash": "262f74138e86e81bcfd7826b1b83676e8631f826f85696acf41896d77e07393f",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 4
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/config/loader-project-shape.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "The checked-in config is read to seed in-memory package-shape cases.",
-      "reason": "The checked-in config is read to seed in-memory package-shape cases.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Seed the config without a runtime disk read while retaining package-shape assertions.",
-      "testCategory": "unit"
-    },
-    {
-      "path": "apps/pair-cli/src/config/loader.test.ts",
-      "hash": "b658a03ba6e2b51efa092ea48ea7b74227a8f2e10087f5463cea9ac5e6424fb0",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 4
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/config/loader.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "The checked-in config is read once to seed otherwise in-memory loader tests.",
-      "reason": "The checked-in config is read once to seed otherwise in-memory loader tests.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Seed the config without a runtime disk read while retaining the config-shape contract.",
-      "testCategory": "unit"
-    },
-    {
-      "path": "apps/pair-cli/src/index.ts",
-      "hash": "86ae41eb25f4e21c610ff107e62c6a5845dbec4349982e03827ad58663e6a458",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/index.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "version export is read by commands/run/cycle-trace.ts and cycle-wiring.ts",
-      "reason": "Module initialization reads package.json for its version export.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Remove the direct read while preserving the version consumed by run-zone modules.",
-      "testCategory": "unit-memory"
-    },
-    {
       "path": "apps/pair-cli/src/kb-manager/git-clone.integration.test.ts",
       "hash": "da0dd80ac780160bacde736273a7d9fd902597b252e7695b4c5a351c7436b9b4",
       "dependencies": [
@@ -2382,82 +2196,6 @@
       "reason": "Real git clone process and destination semantics",
       "decision": "Keep isolated local-git integration test",
       "testCategory": "real-git-process"
-    },
-    {
-      "path": "apps/pair-cli/src/kb-manager/git-clone.test.ts",
-      "hash": "a51a9759d3823eb6cacf056525dd65692b5a19a0e61c5ab18349075cc7f0362f",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 3
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/kb-manager/git-clone.test.ts",
-      "sourceSymbols": ["rmSync"],
-      "observedOperations": ["rmSync (mock assertion)"],
-      "operationConsumer": "The global fs mock asserts best-effort clone cleanup after a mocked git failure.",
-      "reason": "The global fs mock asserts best-effort clone cleanup after a mocked git failure.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Inject an in-memory filesystem for cleanup assertions; retain real git integration separately.",
-      "testCategory": "unit"
-    },
-    {
-      "path": "apps/pair-cli/src/kb-manager/git-clone.ts",
-      "hash": "5cfa0ec7797a2fc23822c8e92974735ade3d431e95ef6c8b12156d2c0aa83100",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 3
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/kb-manager/git-clone.ts",
-      "sourceSymbols": ["rmSync"],
-      "observedOperations": ["rmSync"],
-      "operationConsumer": "cloneGitRepo removes a destination after a failed git child process; kb-installer.ts calls the cloner",
-      "reason": "Cleanup is ordinary filesystem IO adjacent to the real git process boundary.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Inject the service for cleanup; retain the real git integration test for clone semantics.",
-      "testCategory": "unit-memory-and-real-git"
-    },
-    {
-      "path": "apps/pair-cli/src/kb-manager/official-kb-name.test.ts",
-      "hash": "16053ac844218d7cd3bb2bf572a26de55713ed78a9464c0d3d7a90bbf97c87b0",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/kb-manager/official-kb-name.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "Reads the checked-in release packaging script to compare its official KB name with the exported constant.",
-      "reason": "Reads the checked-in release packaging script to compare its official KB name with the exported constant.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Read the authored fixture through the injected service; preserve the checked-in artifact assertion.",
-      "testCategory": "source-contract"
-    },
-    {
-      "path": "apps/pair-cli/src/registry/adoption-risk-matrix.test.ts",
-      "hash": "23e482b7ad2802a6ea34e86f76b0ad7f1c8a1facfdc8edcf6931044ec659c1be",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/registry/adoption-risk-matrix.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "The checked-in config is read to seed risk-matrix assertions.",
-      "reason": "The checked-in config is read to seed risk-matrix assertions.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Seed the expected config independently of runtime disk access.",
-      "testCategory": "unit"
     },
     {
       "path": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
@@ -2607,25 +2345,6 @@
       "testCategory": "real-os-containment"
     },
     {
-      "path": "apps/pair-cli/src/registry/validation.test.ts",
-      "hash": "b4bcce563196777a9a274b8f222643aad117103ac7df32535b51da3c1aa5e51b",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/pair-cli/src/registry/validation.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "Reads the checked-in CLI registry config for validation contract cases.",
-      "reason": "Reads the checked-in CLI registry config for validation contract cases.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Read the config through the injected service and preserve registry validation assertions.",
-      "testCategory": "registry-unit"
-    },
-    {
       "path": "apps/pair-cli/src/test-utils/cli-entry.ts",
       "hash": "ad3422f44eb4d618817ceae2684b4d42f2c59d0c266b114f8a3a016960f70ffc",
       "dependencies": [
@@ -2743,88 +2462,6 @@
       "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
       "decision": "Exact-path exception; no migration.",
       "testCategory": "repo-file-contract"
-    },
-    {
-      "path": "apps/website/lib/docs-staleness-check.ts",
-      "hash": "dd8fb24aa34f895fbdc48e2e77543fcdb017ea5aee8774b4d06eab5d6bb5d29b",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 16
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/website/lib/docs-staleness-check.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
-      "operationConsumer": "website docs generation / staleness check reads docs tree (existsSync, readFileSync, readdirSync)",
-      "reason": "Ordinary read-only docs IO.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Migrate behind injected FileSystemService in the website wave.",
-      "testCategory": "unit-in-memory"
-    },
-    {
-      "path": "apps/website/lib/get-llm-text.test.ts",
-      "hash": "02c304e9300dc4a74a27f5f3c4c58f1f31d3eb0925dff0d5be0da798420da2e1",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/website/lib/get-llm-text.test.ts",
-      "sourceSymbols": ["fs"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "test builds a temporary docs tree on disk for the production reader",
-      "reason": "Ordinary temp-dir fixture setup/cleanup.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Seed InMemoryFileSystemService once its production consumer is migrated.",
-      "testCategory": "unit-in-memory"
-    },
-    {
-      "path": "apps/website/lib/get-llm-text.ts",
-      "hash": "05ab9e547095fd94045368c4936507a229753d3a01ae91cd711d8eff4d20b542",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 1
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/website/lib/get-llm-text.ts",
-      "sourceSymbols": ["fs"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
-      "operationConsumer": "website docs generation / staleness check reads docs tree (existsSync, readFileSync, readdirSync)",
-      "reason": "Ordinary read-only docs IO.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Migrate behind injected FileSystemService in the website wave.",
-      "testCategory": "unit-in-memory"
-    },
-    {
-      "path": "apps/website/lib/skills-catalog-merge-coherence.test.ts",
-      "hash": "d3cba4c7787a619fa2ea32ec0532b7df203f4eb11a82aca7889a9e37fad606b4",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 3
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "apps/website/lib/skills-catalog-merge-coherence.test.ts",
-      "sourceSymbols": ["existsSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
-      "observedOperations": [
-        "existsSync",
-        "mkdtempSync",
-        "readFileSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "test builds a temporary docs tree on disk for the production reader",
-      "reason": "Ordinary temp-dir fixture setup/cleanup.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage. Original intent: Seed InMemoryFileSystemService once its production consumer is migrated.",
-      "testCategory": "unit-in-memory"
     },
     {
       "path": "apps/website/lib/source.test.ts",
@@ -2988,6 +2625,24 @@
       "testCategory": "service-contract"
     },
     {
+      "path": "packages/content-ops/src/file-system/file-system-sync-parity.test.ts",
+      "hash": "4bf0976e40677061438c6fd5302ba28ac597a88a6f3d804aeffebbd13daaf341",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "fs",
+          "line": 2
+        }
+      ],
+      "disposition": "type-contract",
+      "producer": "packages/content-ops/src/file-system/file-validations.ts",
+      "reason": "Type-only import of Dirent/Stats from fs; no runtime fs dependency.",
+      "decision": "Exact-path exception; types only.",
+      "testCategory": "type-only",
+      "operationConsumer": "Stats type for validateSourceExists",
+      "observedOperations": []
+    },
+    {
       "path": "packages/content-ops/src/file-system/file-validations.ts",
       "hash": "4bf0976e40677061438c6fd5302ba28ac597a88a6f3d804aeffebbd13daaf341",
       "dependencies": [
@@ -3140,25 +2795,6 @@
       "testCategory": "typecheck"
     },
     {
-      "path": "packages/dev-tools/src/quality-gates/benchmark-update-link.ts",
-      "hash": "c875347345949f4c5027412f18305966a3606e88c8a523bc5c0755dc053a2097",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 22
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/benchmark-update-link.ts",
-      "sourceSymbols": ["existsSync", "mkdirSync", "readdirSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["existsSync", "mkdirSync", "readdirSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (existsSync, mkdirSync, readdirSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
       "path": "packages/dev-tools/src/quality-gates/ci-staleness-checkout-depth.test.ts",
       "hash": "cb6e9b7a77ef21f608e9f322bb2a58205cff8d2eb869ad9c5c33ada215d8b6c2",
       "dependencies": [
@@ -3176,44 +2812,6 @@
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
       "testCategory": "repo-file-contract"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/code-hygiene-check.quarantine.test.ts",
-      "hash": "d1c35d36e7f5e9f81b1b24187102263bcea7c3e48b186b0595aae6d91a946fd0",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/code-hygiene-check.quarantine.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/code-hygiene-check.ts",
-      "hash": "38f6d5266602d2ae77bb7912a18745d37b12357295d9add85518de332c71958d",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 16
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/code-hygiene-check.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
     },
     {
       "path": "packages/dev-tools/src/quality-gates/delivery-process-docs.test.ts",
@@ -3235,41 +2833,6 @@
       "testCategory": "repo-file-contract"
     },
     {
-      "path": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
-      "hash": "163e18843d60939918729f3c2aaba0f5bc3d3c8d45db49667d44386232283d13",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 7
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
-      "sourceSymbols": [
-        "cpSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "readdirSync",
-        "symlinkSync",
-        "writeFileSync"
-      ],
-      "observedOperations": [
-        "cpSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "readdirSync",
-        "symlinkSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
       "path": "packages/dev-tools/src/quality-gates/direct-fs-guard-run.test.ts",
       "dependencies": [],
       "disposition": "repo-contract",
@@ -3284,25 +2847,6 @@
       "reason": "The guard reads the tracked repository files and registry from real disk; it is the root gate itself.",
       "decision": "Keep real reads in the gate entrypoint; logic is unit-tested on in-memory strings.",
       "testCategory": "root-guard"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/format-paths.test.ts",
-      "hash": "0c522d2a69615ba581d710c030b8497d985b839dbfbe2f61dc66fb2be1374cf8",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 3
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/format-paths.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
     },
     {
       "path": "packages/dev-tools/src/quality-gates/format-workflow-composition.test.ts",
@@ -3324,133 +2868,6 @@
       "testCategory": "repo-file-contract"
     },
     {
-      "path": "packages/dev-tools/src/quality-gates/format-workflow-composition.ts",
-      "hash": "c7e9d8f13f25588d80e4cccb9a70cef208114fcf4331602059a1babed562cddf",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 210
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/format-workflow-composition.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.test.ts",
-      "hash": "a908b521a47917b723e6693c649a72601fa0e3b49429cee465a8c7776ef38e37",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 13
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.test.ts",
-      "sourceSymbols": [
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "rmSync",
-        "symlinkSync",
-        "writeFileSync"
-      ],
-      "observedOperations": [
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "rmSync",
-        "symlinkSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.ts",
-      "hash": "3207d9da4fc61068b700a753ee38c72973c9a88ba1df68648f656bd700236484",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs/promises",
-          "line": 57
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.ts",
-      "sourceSymbols": ["readFile", "readdir", "stat"],
-      "observedOperations": ["readFile", "readdir", "stat"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFile, readdir, stat) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.test.ts",
-      "hash": "297455a0d2a92460b98d8331bf3e488f2182a63968f087b5ab610339c7fd6fc4",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 21
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.test.ts",
-      "sourceSymbols": [
-        "chmodSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "readdirSync",
-        "rmSync",
-        "statSync",
-        "writeFileSync"
-      ],
-      "observedOperations": [
-        "chmodSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "readdirSync",
-        "rmSync",
-        "statSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.ts",
-      "hash": "38deeffe82d614e1100f113cdccd1629dc9ae58b97ac5dbd6f7b275a547665ee",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs/promises",
-          "line": 52
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/llms-txt-regenerate.ts",
-      "sourceSymbols": ["mkdir", "writeFile"],
-      "observedOperations": ["mkdir", "writeFile"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (mkdir, writeFile) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
       "path": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.test.ts",
       "hash": "9c9b4ece9ed9fa1f52862feda262241fe9199557e007ed17554f4dace42cd1a5",
       "dependencies": [
@@ -3468,91 +2885,6 @@
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
       "testCategory": "repo-file-contract"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.ts",
-      "hash": "f706feed3a769d7998b2f2639f93ebc47063e4bea04df9d577b554d3e7917318",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 39
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts",
-      "hash": "6202946af1f5b38dacfc12a8886b9c3692a93788ab885428c7ad991c2f4e7031",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 3
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts",
-      "sourceSymbols": [
-        "chmodSync",
-        "copyFileSync",
-        "cpSync",
-        "existsSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "readdirSync",
-        "realpathSync",
-        "rmSync",
-        "statSync",
-        "symlinkSync",
-        "writeFileSync"
-      ],
-      "observedOperations": [
-        "chmodSync",
-        "copyFileSync",
-        "cpSync",
-        "existsSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "readdirSync",
-        "realpathSync",
-        "rmSync",
-        "statSync",
-        "symlinkSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/run-format.test.ts",
-      "hash": "4966f8220ffe53f3a3701c7e10c0e02cdd1ef6c97e2f7b70ad55fbeea722caa5",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 3
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/run-format.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
     },
     {
       "path": "packages/dev-tools/src/quality-gates/smoke-ci-platform.test.ts",
@@ -3593,101 +2925,6 @@
       "testCategory": "repo-file-contract"
     },
     {
-      "path": "packages/dev-tools/src/quality-gates/sync-version-in-docs.test.ts",
-      "hash": "3eef6393ce8fbfb076431dbaf5b7c3191b0618c5ea0de6c2f967ec710210ed8c",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/sync-version-in-docs.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/quality-gates/sync-version-in-docs.ts",
-      "hash": "05f401c43c8c903d25ce148df8bbf29358b41fbadf0c98af778b3f0a5e2ced55",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 29
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/quality-gates/sync-version-in-docs.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "writeFileSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (existsSync, readFileSync, readdirSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/release/changelog-version.test.ts",
-      "hash": "b94de8c6341ab6880a0418320fc31f457faa48ea8376515f683bf46c657b6067",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/release/changelog-version.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/release/changelog-version.ts",
-      "hash": "7982876a73ed1462e42cf7475967123012d13bbb804c8e0a235c98efa12d42b6",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 12
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/release/changelog-version.ts",
-      "sourceSymbols": ["readFileSync", "writeFileSync"],
-      "observedOperations": ["readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/release/changeset-check.ts",
-      "hash": "d9981a7500c9c78926a98c15fe7772deb0baeb95e3c81252a2b866f015fefd33",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/release/changeset-check.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
       "path": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
       "hash": "e01a035f17e6d27b8743bc8278eeaf3ec14d1120295bc35f3ab4bb5c8da0e5d8",
       "dependencies": [
@@ -3707,25 +2944,6 @@
       "testCategory": "repo-file-contract"
     },
     {
-      "path": "packages/dev-tools/src/release/release-cli.ts",
-      "hash": "dcd6e6fd67bfe373583171166d8a5243094f7b8a545c6943fcc600441b2c5f7c",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 7
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/release/release-cli.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFileSync, readdirSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
       "path": "packages/dev-tools/src/release/release-concurrency.test.ts",
       "hash": "32438b368617172b29e4dac5ed5a2bb59d79c1f11ad8c8f64f177decf36f2073",
       "dependencies": [
@@ -3743,77 +2961,6 @@
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
       "testCategory": "repo-file-contract"
-    },
-    {
-      "path": "packages/dev-tools/src/release/release-origin.test.ts",
-      "hash": "2b69d0182327d3779dcadc63a9904bfdeff23fb72863df23a7dcaa76651cc728",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/release/release-origin.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/release/release-publish.test.ts",
-      "hash": "cf42f18ea700385e5e9f930cbb02aeb68cc4348af5c9ed6d9697138eceef90f1",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/release/release-publish.test.ts",
-      "sourceSymbols": [
-        "chmodSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "observedOperations": [
-        "chmodSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/release/release-remediation.test.ts",
-      "hash": "164975ec460b3b69a37a71407b0ea1883fd2fb7759734988b5efc6bcfc2735ae",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/release/release-remediation.test.ts",
-      "sourceSymbols": ["mkdtempSync", "rmSync"],
-      "observedOperations": ["mkdtempSync", "rmSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdtempSync, rmSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
     },
     {
       "path": "packages/dev-tools/src/release/release-sandbox.test.ts",
@@ -3854,101 +3001,6 @@
       "testCategory": "repo-file-contract"
     },
     {
-      "path": "packages/dev-tools/src/test-audit/audit.test.ts",
-      "hash": "6b98e3d7fcf4fb795da9a1e759c54fe3458edc382ec1e1c64d8df91e8727dd29",
-      "dependencies": [
-        {
-          "form": "dynamic-import",
-          "specifier": "fs",
-          "line": 186
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/audit.test.ts",
-      "sourceSymbols": ["mkdtempSync", "writeFileSync"],
-      "observedOperations": ["mkdtempSync", "writeFileSync"],
-      "operationConsumer": "loadConfig rejection test writes invalid JSON configuration in a temporary directory",
-      "reason": "Test fs use (mkdtempSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/audit.ts",
-      "hash": "6ca57f2d3d7e8b18732673275b88893f2b128573611ce3ba23b300c3ff3aca87",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 7
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/audit.ts",
-      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"],
-      "observedOperations": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (existsSync, mkdirSync, readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/baseline.ts",
-      "hash": "d2986fc611ead709b5d901b6cd7781ce0474690bb81fe6ff1dd69157f49fe9d2",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 7
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/baseline.ts",
-      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["existsSync", "mkdirSync", "readFileSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (existsSync, mkdirSync, readFileSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/gates.ts",
-      "hash": "f44a8905a48e5eb30ea819edf73e344a9307ed34a694edea2ea70c4d4c102ab1",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 7
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/gates.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
-      "hash": "828d60ee399c0cc3d6cb01e75bd91ecf61064612ab0cd0c0bf28a5f0d73c9c43",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
       "path": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts",
       "hash": "fbcd0fc7a10685b8d2374db82a3bc03ae1b50b12a79cb2523f7162f3f5749edc",
       "dependencies": [
@@ -3966,300 +3018,6 @@
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
       "testCategory": "repo-file-contract"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
-      "hash": "64d836fdc6e930c663c13e6ed83a275e205ccd96946ab534d9aac85d9650da74",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
-      "sourceSymbols": ["mkdtempSync", "writeFileSync"],
-      "observedOperations": ["mkdtempSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdtempSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
-      "hash": "f9bb487319e9dc773647804725820a9a568f50b5366d5927a6307b83dd808f5d",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/inventory.ts",
-      "hash": "8895ba5779b4c6665f161ea8edcc040bbae7504c1ff1165d192521b303910bb6",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 7
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/inventory.ts",
-      "sourceSymbols": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"],
-      "observedOperations": ["existsSync", "mkdirSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (existsSync, mkdirSync, readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/mutation.ts",
-      "hash": "3facecee186649280541103af3eaee63895be5f3c44e22047de047bbda316f35",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 8
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/mutation.ts",
-      "sourceSymbols": ["mkdirSync", "readFileSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "readFileSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (mkdirSync, readFileSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/playwright-overlap.ts",
-      "hash": "b208b0ab35b52dd05b02848ffe5d0d438af29929390c4b74b3655b78b2348bdf",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 9
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/playwright-overlap.ts",
-      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (mkdirSync, readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/playwright-run.ts",
-      "hash": "1081d316fe88cfd289e968d0e9588664460d4253b8f620c04920524f38e4c3eb",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 8
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/playwright-run.ts",
-      "sourceSymbols": ["mkdtempSync", "readFileSync", "rmSync"],
-      "observedOperations": ["mkdtempSync", "readFileSync", "rmSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (mkdtempSync, readFileSync, rmSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/profile.ts",
-      "hash": "c997b6633fdff12e7e39564b6ab64e5d94cf8042d2996b7a0c7e40fa75dfbc2e",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 7
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/profile.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/redundancy.ts",
-      "hash": "36bfdc7fd29ef37dd7dbf6339ba0058aa62337d96cba7630e61896674b84545e",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 9
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/redundancy.ts",
-      "sourceSymbols": ["mkdirSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (mkdirSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/suites-junit-attr-control.test.ts",
-      "hash": "80d41c60041994c16ecb50fb17afa6b834c59b1638643b48f80b9963299f85a2",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 10
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/suites-junit-attr-control.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/suites-junit-attr.test.ts",
-      "hash": "b37c2161cbca188048b55097cf980b580ba5d0262010e48b3a64c2fab86333f0",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 8
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/suites-junit-attr.test.ts",
-      "sourceSymbols": [
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "realpathSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "observedOperations": [
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "realpathSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts",
-      "hash": "852ff7b2adb12896be1f05d302dff3347861f568d28cc34a0831b28237fc4c88",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 7
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/suites-junit-control.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
-      "hash": "1a4ebaa50214ff0b3075ae3179d403df2713f311079f2a1e331eece1622b3db6",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 7
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/suites-junit.test.ts",
-      "sourceSymbols": [
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "realpathSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "observedOperations": [
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "realpathSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/suites.test.ts",
-      "hash": "8855019b2dadd1abbf4bde44ec41950ac8d517f07c32c0252ddb16293ade3502",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/suites.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/dev-tools/src/test-audit/suites.ts",
-      "hash": "780aa17c970cef108d41638b542eaa551f021214bede515fa475b736292ace75",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 8
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/dev-tools/src/test-audit/suites.ts",
-      "sourceSymbols": ["mkdtempSync", "readFileSync", "realpathSync", "rmSync"],
-      "observedOperations": ["mkdtempSync", "readFileSync", "realpathSync", "rmSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (mkdtempSync, readFileSync, realpathSync, rmSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
     },
     {
       "path": "packages/knowledge-hub/dataset/.pair/knowledge/assets/coverage-ratchet.cjs",
@@ -6460,14 +5218,14 @@
           "line": 2
         }
       ],
-      "disposition": "deferred-migration",
+      "disposition": "os-guarantee",
       "producer": "packages/knowledge-hub/src/conformance/cycle-autonomy-active.test.ts",
       "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
       "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
+      "operationConsumer": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "reason": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "decision": "Exact-path exception; out of the story migration scope.",
+      "testCategory": "real-process"
     },
     {
       "path": "packages/knowledge-hub/src/conformance/cycle-hooks-cwd.test.ts",
@@ -6650,7 +5408,7 @@
           "line": 3
         }
       ],
-      "disposition": "deferred-migration",
+      "disposition": "os-guarantee",
       "producer": "packages/knowledge-hub/src/conformance/github-automation.test.ts",
       "sourceSymbols": [
         "chmodSync",
@@ -6670,10 +5428,10 @@
         "rmSync",
         "writeFileSync"
       ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
+      "operationConsumer": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "reason": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "decision": "Exact-path exception; out of the story migration scope.",
+      "testCategory": "real-process"
     },
     {
       "path": "packages/knowledge-hub/src/conformance/headless-stage-execution.test.ts",
@@ -6761,7 +5519,7 @@
           "line": 3
         }
       ],
-      "disposition": "deferred-migration",
+      "disposition": "os-guarantee",
       "producer": "packages/knowledge-hub/src/conformance/macro-phase-modes.test.ts",
       "sourceSymbols": [
         "existsSync",
@@ -6777,10 +5535,10 @@
         "readdirSync",
         "writeFileSync"
       ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
+      "operationConsumer": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "reason": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "decision": "Exact-path exception; out of the story migration scope.",
+      "testCategory": "real-process"
     },
     {
       "path": "packages/knowledge-hub/src/conformance/mirror-realign-asset.test.ts",
@@ -7400,44 +6158,6 @@
       "testCategory": "repo-file-contract"
     },
     {
-      "path": "packages/knowledge-hub/src/tools/build-ratchet-asset.ts",
-      "hash": "9c67d048c2d5895c964dad18df1f285f2e17153b8af9447366a0e3ebe1ca5ea0",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 1
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/knowledge-hub/src/tools/build-ratchet-asset.ts",
-      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (mkdirSync, readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/knowledge-hub/src/tools/build-realign-asset.ts",
-      "hash": "4cbcaf01260ba32e60ac557adefef9fc3cfd7662ed3a6ce7a8ffe182a4f58858",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 1
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/knowledge-hub/src/tools/build-realign-asset.ts",
-      "sourceSymbols": ["mkdirSync", "readFileSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (mkdirSync, readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
       "path": "packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts",
       "hash": "e878edae0a6d25ff164160d007a46d58727b896e92e5f2132f4969e04dcc7b94",
       "dependencies": [
@@ -7471,52 +6191,14 @@
           "line": 38
         }
       ],
-      "disposition": "deferred-migration",
+      "disposition": "standalone-script",
       "producer": "packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts",
       "sourceSymbols": ["readFileSync", "writeFileSync"],
       "observedOperations": ["readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/knowledge-hub/src/tools/macro-phase-modes.test.ts",
-      "hash": "8e186d26c720e14a9fa7579397af93e42054b6185f8d92dbcb8339e7ea1e8349",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/knowledge-hub/src/tools/macro-phase-modes.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/knowledge-hub/src/tools/macro-phase-modes.ts",
-      "hash": "a213c3c393902090e65f757a7e6f4698c69e974ed45ea5a95efb4ac5deb85583",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 24
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/knowledge-hub/src/tools/macro-phase-modes.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (existsSync, readFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
+      "operationConsumer": "Shipped node-builtins-only .cjs asset built from this file; it runs in adopter repos with no workspace package available.",
+      "reason": "Shipped node-builtins-only .cjs asset built from this file; it runs in adopter repos with no workspace package available.",
+      "decision": "Exact-path exception; node builtins only (build-ratchet-asset.ts).",
+      "testCategory": "none"
     },
     {
       "path": "packages/knowledge-hub/src/tools/mirror-guard.test.ts",
@@ -7538,25 +6220,6 @@
       "testCategory": "repo-file-contract"
     },
     {
-      "path": "packages/knowledge-hub/src/tools/mirror-guard.ts",
-      "hash": "29a3911d59f9729614e733636d4d7cdfbc33f47ce04e322b8437e0ced2029dbb",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 69
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/knowledge-hub/src/tools/mirror-guard.ts",
-      "sourceSymbols": ["existsSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readdirSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (existsSync, readdirSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
       "path": "packages/knowledge-hub/src/tools/mirror-realign.ts",
       "hash": "12241ea2615f3496fe360c77337e1f342772354c85648b07378064656544f832",
       "dependencies": [
@@ -7566,14 +6229,14 @@
           "line": 1
         }
       ],
-      "disposition": "deferred-migration",
+      "disposition": "standalone-script",
       "producer": "packages/knowledge-hub/src/tools/mirror-realign.ts",
       "sourceSymbols": ["existsSync"],
       "observedOperations": ["existsSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (existsSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
+      "operationConsumer": "Shipped node-builtins-only .cjs asset built from this file; it runs in adopter repos with no workspace package available.",
+      "reason": "Shipped node-builtins-only .cjs asset built from this file; it runs in adopter repos with no workspace package available.",
+      "decision": "Exact-path exception; node builtins only (build-realign-asset.ts).",
+      "testCategory": "none"
     },
     {
       "path": "packages/knowledge-hub/src/tools/skill-md-mirror.test.ts",
@@ -7595,79 +6258,6 @@
       "testCategory": "repo-file-contract"
     },
     {
-      "path": "packages/knowledge-hub/src/tools/skill-md-mirror.ts",
-      "hash": "c414941334b78de579778a1e977dcf61f9e000742cb29e1de6a18824ea6b50b7",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 51
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/knowledge-hub/src/tools/skill-md-mirror.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readFileSync, readdirSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts",
-      "hash": "8392a84f687e04c5bd19403b6af00fad28a3c1de9534d1469299418f9ef62703",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts",
-      "sourceSymbols": [
-        "chmodSync",
-        "existsSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "observedOperations": [
-        "chmodSync",
-        "existsSync",
-        "mkdirSync",
-        "mkdtempSync",
-        "readFileSync",
-        "rmSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/knowledge-hub/src/tools/skills-conformance-check.ts",
-      "hash": "f6563534e4dc6aea1245c1a63277e329d0a508a64860219c244067047facac47",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 54
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/knowledge-hub/src/tools/skills-conformance-check.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (existsSync, readFileSync, readdirSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
       "path": "packages/knowledge-hub/src/tools/skills-guide-mirror.test.ts",
       "hash": "fe54071ff3adb1f25d3ac42882a5e8a414d78b3ef11e34c5c1aa07235b2a8862",
       "dependencies": [
@@ -7687,62 +6277,6 @@
       "testCategory": "repo-file-contract"
     },
     {
-      "path": "packages/knowledge-hub/src/tools/skills-guide-mirror.ts",
-      "hash": "71e3331f8ede4bf5beb951d71bab339a01986b11015df1283f82ec31663bb554",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 22
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/knowledge-hub/src/tools/skills-guide-mirror.ts",
-      "sourceSymbols": ["readdirSync"],
-      "observedOperations": ["readdirSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Production fs use (readdirSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
-      "path": "packages/knowledge-hub/src/tools/workflow-mirror.test.ts",
-      "hash": "de4fc96173ebfbc2412391661c36a3208d360bbdd1b20fcd5bd8d5ca94b71edc",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "deferred-migration",
-      "producer": "packages/knowledge-hub/src/tools/workflow-mirror.test.ts",
-      "sourceSymbols": [
-        "cpSync",
-        "existsSync",
-        "mkdtempSync",
-        "readFileSync",
-        "readdirSync",
-        "rmSync",
-        "statSync",
-        "writeFileSync"
-      ],
-      "observedOperations": [
-        "cpSync",
-        "existsSync",
-        "mkdtempSync",
-        "readFileSync",
-        "readdirSync",
-        "rmSync",
-        "statSync",
-        "writeFileSync"
-      ],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
-    },
-    {
       "path": "scripts/dev/delivery-process-overwrite.test.mjs",
       "hash": "8c841ca57240aa14f4e1f007f51d619b33a8a11cb7a4c02e140f9b0d5fa186c7",
       "dependencies": [
@@ -7752,14 +6286,14 @@
           "line": 5
         }
       ],
-      "disposition": "deferred-migration",
+      "disposition": "os-guarantee",
       "producer": "scripts/dev/delivery-process-overwrite.test.mjs",
       "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
       "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
+      "operationConsumer": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "reason": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "decision": "Exact-path exception; out of the story migration scope.",
+      "testCategory": "real-process"
     },
     {
       "path": "scripts/dev/hook-git-env.test.mjs",
@@ -7896,14 +6430,14 @@
           "line": 8
         }
       ],
-      "disposition": "deferred-migration",
+      "disposition": "os-guarantee",
       "producer": "scripts/dev/sealed-manifest-format.test.mjs",
       "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
       "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdirSync, mkdtempSync, readFileSync, writeFileSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
+      "operationConsumer": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "reason": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "decision": "Exact-path exception; out of the story migration scope.",
+      "testCategory": "real-process"
     },
     {
       "path": "scripts/smoke-tests/lib/run-card-omission.test.js",
@@ -7915,14 +6449,14 @@
           "line": 3
         }
       ],
-      "disposition": "deferred-migration",
+      "disposition": "os-guarantee",
       "producer": "scripts/smoke-tests/lib/run-card-omission.test.js",
       "sourceSymbols": ["mkdtempSync", "rmSync"],
       "observedOperations": ["mkdtempSync", "rmSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Test fs use (mkdtempSync, rmSync) not yet routed through FileSystemService.",
-      "decision": "Not migrated in this PR: effort exceeded the delivery stage; exact-path entry keeps the guard enforcing no growth.",
-      "testCategory": "unit-in-memory-pending"
+      "operationConsumer": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "reason": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
+      "decision": "Exact-path exception; out of the story migration scope.",
+      "testCategory": "real-process"
     },
     {
       "path": "scripts/smoke-tests/witnesses/packaged-control-state-615.mjs",

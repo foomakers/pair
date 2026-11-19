@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import { fileSystemService as fs } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { parse } from 'yaml'
@@ -45,10 +45,10 @@ describe('changelog-version (B12)', () => {
     expect(rewriteChangelog(CHANGELOG, '0.5.0', '0.5.0')).toBe(CHANGELOG)
   })
   it('applies to every CHANGELOG.md under the given paths', () => {
-    const root = mkdtempSync(join(tmpdir(), 'clv-'))
+    const root = fs.mkdtempSync(join(tmpdir(), 'clv-'))
     for (const d of ['a', 'b']) {
-      mkdirSync(join(root, d))
-      writeFileSync(join(root, d, 'CHANGELOG.md'), CHANGELOG)
+      fs.mkdirSync(join(root, d))
+      fs.writeFileSync(join(root, d, 'CHANGELOG.md'), CHANGELOG)
     }
     const changed = applyChangelogVersion(
       ['a/CHANGELOG.md', 'b/CHANGELOG.md'].map(f => join(root, f)),
@@ -56,10 +56,10 @@ describe('changelog-version (B12)', () => {
       '0.5.1',
     )
     expect(changed).toHaveLength(2)
-    expect(readFileSync(join(root, 'b', 'CHANGELOG.md'), 'utf8')).toContain('## 0.5.1\n')
+    expect(fs.readFileSync(join(root, 'b', 'CHANGELOG.md'))).toContain('## 0.5.1\n')
   })
   it('version.yml applies the override to CHANGELOGs after changeset version', () => {
-    const steps = parse(readFileSync(join(REPO_ROOT, '.github/workflows/version.yml'), 'utf8')).jobs
+    const steps = parse(fs.readFileSync(join(REPO_ROOT, '.github/workflows/version.yml'))).jobs
       .version.steps as { name?: string; run?: string }[]
     const run = steps.find(s => s.name === 'Version packages')?.run ?? ''
     const cv = run.indexOf('pnpm changeset version')

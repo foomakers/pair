@@ -1,10 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { execFileSync } from 'child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
 import { REPO_ROOT } from './repo-root'
+
+const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = fileSystemService
 
 // #414: the shared git-delegated path derivation both formatter wrappers source,
 // so "gitignored => never checked" is delegated to git (never re-implemented),

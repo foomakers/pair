@@ -1,9 +1,11 @@
 import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, it, expect, vi } from 'vitest'
 import * as inv from './inventory'
+
+const { mkdirSync, mkdtempSync, readFileSync, writeFileSync } = fileSystemService
 
 type Policy = { maxMockAssertionRatio: number }
 type Api = {
@@ -52,7 +54,7 @@ describe('policy config on the audit path (r0-4)', () => {
       } finally {
         log.mockRestore()
       }
-      return JSON.parse(readFileSync(join(root, 'test-audit/inventory.json'), 'utf8')).gates
+      return JSON.parse(readFileSync(join(root, 'test-audit/inventory.json'))).gates
     }
     expect(run(1).U4).toHaveLength(1)
     expect(run(5).U4).toEqual([])
@@ -78,7 +80,7 @@ describe('policy config on the audit path (r0-4)', () => {
     expect(g.G1).toEqual([live.test_id])
   })
   it('w-r0-4h the consumer module names the same config file the doc names', () => {
-    const src = readFileSync(join(__dirname, 'inventory.ts'), 'utf8')
+    const src = readFileSync(join(__dirname, 'inventory.ts'))
     expect(src).toContain('test-policy.config.json')
   })
 })

@@ -54,7 +54,7 @@
  * that makes it correct. A gate that dies with a compiler error instead of a verdict
  * is how a gate teaches contributors to distrust it.
  */
-import { readFile, readdir, stat } from 'fs/promises'
+import { fileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
 import {
@@ -95,14 +95,14 @@ export const REGENERATION_COMMAND = 'pnpm llms-index:regen'
 export const readOnlyFileSystem: LlmsSourceFs = {
   exists: async path => {
     try {
-      await stat(path)
+      await fileSystemService.stat(path)
       return true
     } catch {
       return false
     }
   },
-  readdir: path => readdir(path, { withFileTypes: true }),
-  readFile: file => readFile(file, 'utf-8'),
+  readdir: path => fileSystemService.readdir(path),
+  readFile: file => fileSystemService.readFile(file),
 }
 
 /**

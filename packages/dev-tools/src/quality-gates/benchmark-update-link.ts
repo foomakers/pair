@@ -19,7 +19,7 @@
  * once for this folder, not per tool.
  */
 import { execSync } from 'child_process'
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
 import { REPO_ROOT } from './repo-root'
@@ -59,12 +59,12 @@ export interface BenchmarkResult {
 export function generateTestKB(size: KBSize, benchmarkDir: string = BENCHMARK_DIR): string {
   const testDir = join(benchmarkDir, `test-${size.name}`)
   const kbDir = join(testDir, '.pair')
-  mkdirSync(kbDir, { recursive: true })
+  fileSystemService.mkdirSync(kbDir, { recursive: true })
 
   // Create mock dataset structure to satisfy KB detection.
   const datasetDir = join(testDir, 'node_modules', '@pair', 'knowledge-hub', 'dataset')
-  mkdirSync(datasetDir, { recursive: true })
-  writeFileSync(join(datasetDir, '.gitkeep'), '')
+  fileSystemService.mkdirSync(datasetDir, { recursive: true })
+  fileSystemService.writeFileSync(join(datasetDir, '.gitkeep'), '')
 
   for (let i = 0; i < size.files; i++) {
     const fileName = `doc-${i.toString().padStart(4, '0')}.md`
@@ -75,7 +75,7 @@ export function generateTestKB(size: KBSize, benchmarkDir: string = BENCHMARK_DI
       const targetDoc = Math.floor(Math.random() * size.files)
       content += `- [Link ${j}](./doc-${targetDoc.toString().padStart(4, '0')}.md)\n`
     }
-    writeFileSync(filePath, content)
+    fileSystemService.writeFileSync(filePath, content)
   }
 
   return testDir
@@ -103,7 +103,7 @@ export function runBenchmark(
   const duration = Date.now() - startTime
 
   const kbDir = join(testDir, '.pair')
-  const files = readdirSync(kbDir).filter(f => f.endsWith('.md')).length
+  const files = fileSystemService.readdirSync(kbDir).filter(f => f.name.endsWith('.md')).length
   const linksProcessed = files * size.linksPerFile
 
   return {
@@ -192,7 +192,7 @@ export function buildReport(results: BenchmarkResult[]): BenchmarkReport {
 
 /** Build the CLI dist bundle if it isn't already present. */
 function ensureCliBuilt(): void {
-  if (!existsSync(CLI_DIST_PATH)) {
+  if (!fileSystemService.existsSync(CLI_DIST_PATH)) {
     console.log('Building CLI...')
     execSync('pnpm --filter @pair/pair-cli build', { cwd: REPO_ROOT, stdio: 'inherit' })
   } else {
@@ -240,16 +240,17 @@ function reportVerdict(verdict: BenchmarkVerdict, report: BenchmarkReport): void
 export function main(): void {
   console.log('Starting update-link performance benchmark\n')
 
-  if (existsSync(BENCHMARK_DIR)) rmSync(BENCHMARK_DIR, { recursive: true })
-  mkdirSync(BENCHMARK_DIR, { recursive: true })
+  if (fileSystemService.existsSync(BENCHMARK_DIR))
+    fileSystemService.rmSync(BENCHMARK_DIR, { recursive: true })
+  fileSystemService.mkdirSync(BENCHMARK_DIR, { recursive: true })
 
   ensureCliBuilt()
   const results = runAllBenchmarks()
-  rmSync(BENCHMARK_DIR, { recursive: true })
+  fileSystemService.rmSync(BENCHMARK_DIR, { recursive: true })
 
   const report = buildReport(results)
-  mkdirSync(join(REPO_ROOT, 'reports/performance'), { recursive: true })
-  writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2))
+  fileSystemService.mkdirSync(join(REPO_ROOT, 'reports/performance'), { recursive: true })
+  fileSystemService.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2))
 
   console.log('\nBenchmark complete!')
   console.log(`Report: ${REPORT_PATH}`)

@@ -4,7 +4,7 @@
  * Every case runs real node and real git; titles are generated, never hand-written XML.
  */
 import { execFileSync, spawnSync } from 'child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -12,6 +12,9 @@ import { describe, it, expect } from 'vitest'
 
 import { compact, recordRun, type Run, type RunTest } from './baseline'
 import { parseJunit, runNodeTest, summarize } from './suites'
+
+const { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } =
+  fileSystemService
 
 const QA = { name: 'qa', cwd: '.', dir: 'qa' }
 const SLOW = 'await new Promise(r => setTimeout(r, 30))'
@@ -32,7 +35,7 @@ const junitRun = (
         stdio: 'ignore',
       },
     )
-    return readFileSync(out, 'utf8')
+    return readFileSync(out)
   }
   const xml = run(names)
   if (/classname="[^"]*" file="/.test(xml))
@@ -202,7 +205,7 @@ describe('r0-1 parseJunit on the real node:test producer', () => {
     })
     try {
       for (const seed of [101, 102, 103]) recordRun(root, 'qa', seed, false)
-      const raw = JSON.parse(readFileSync(join(root, 'test-audit', '.tmp', 'raw.json'), 'utf8'))
+      const raw = JSON.parse(readFileSync(join(root, 'test-audit', '.tmp', 'raw.json')))
       const s = summarize(compact(raw.packages, 'rev'))
       expect(Object.keys(s.files).sort()).toEqual(['qa/a.test.mjs', 'qa/b.test.mjs'])
       expect(s.files['qa/a.test.mjs']).toBeGreaterThanOrEqual(2 * MIN_MS)

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import fs from 'node:fs'
+import { fileSystemService as fs } from '@pair/content-ops'
 import path from 'node:path'
 import os from 'node:os'
 import {
@@ -143,7 +143,7 @@ describe('getLlmPages', () => {
   function writeFile(relativePath: string, content: string) {
     const fullPath = path.join(tmpDir, relativePath)
     fs.mkdirSync(path.dirname(fullPath), { recursive: true })
-    fs.writeFileSync(fullPath, content, 'utf-8')
+    fs.writeFileSync(fullPath, content)
   }
 
   it('extracts pages from MDX files', () => {

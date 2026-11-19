@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
@@ -27,7 +27,7 @@ const CATALOGUE_FILE = join(
 )
 const NEXT_FILE = join(DATASET, '.skills/next/SKILL.md')
 
-const read = (p: string): string => readFileSync(p, 'utf-8')
+const read = (p: string): string => fileSystemService.readFileSync(p)
 
 const MODE_DOC = `# Macro-phase modes
 
@@ -519,14 +519,14 @@ describe('skills:conformance binds the mode table to the corpus', () => {
   ].join('\n')
 
   const corpus = (next: string, table?: string): { skills: string; root: string } => {
-    const root = mkdtempSync(join(tmpdir(), 'modes-'))
+    const root = fileSystemService.mkdtempSync(join(tmpdir(), 'modes-'))
     const skills = join(root, 'dataset', '.skills')
-    mkdirSync(join(skills, 'next'), { recursive: true })
-    writeFileSync(join(skills, 'next', 'SKILL.md'), next)
+    fileSystemService.mkdirSync(join(skills, 'next'), { recursive: true })
+    fileSystemService.writeFileSync(join(skills, 'next', 'SKILL.md'), next)
     if (table !== undefined) {
       const file = join(root, MODES_REL)
-      mkdirSync(join(file, '..'), { recursive: true })
-      writeFileSync(file, table)
+      fileSystemService.mkdirSync(join(file, '..'), { recursive: true })
+      fileSystemService.writeFileSync(file, table)
     }
     return { skills, root }
   }

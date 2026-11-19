@@ -13,7 +13,7 @@
  * the package dir, not the repo root).
  */
 import { execSync } from 'child_process'
-import { readFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
 import { REPO_ROOT } from './repo-root'
@@ -56,7 +56,9 @@ export function buildGitGrepCommand(
  */
 export function quarantinedTitles(root: string = REPO_ROOT): string[] {
   try {
-    const cfg = JSON.parse(readFileSync(join(root, 'docs/testing/test-policy.config.json'), 'utf8'))
+    const cfg = JSON.parse(
+      fileSystemService.readFileSync(join(root, 'docs/testing/test-policy.config.json')),
+    )
     return (cfg.quarantine ?? []).map((q: { id: string }) => q.id.split(' > ').pop() ?? '')
   } catch {
     return []

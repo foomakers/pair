@@ -1,8 +1,10 @@
-import { mkdtempSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, it, expect } from 'vitest'
 import * as inv from './inventory'
+
+const { mkdtempSync, writeFileSync } = fileSystemService
 
 type Api = {
   loadPolicy: (file: string) => { maxMockAssertionRatio: number }

@@ -1,13 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  rmSync,
-  readFileSync,
-  existsSync,
-  chmodSync,
-} from 'node:fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -252,12 +244,15 @@ describe('checkCategoryLabelCounts', () => {
 })
 
 describe('runChecks (fixture corpus)', () => {
-  const root = mkdtempSync(join(tmpdir(), 'skills-conformance-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = fileSystemService.mkdtempSync(join(tmpdir(), 'skills-conformance-'))
+  afterAll(() => fileSystemService.rmSync(root, { recursive: true, force: true }))
 
   const skill = (dir: string, frontmatter: string, body = '') => {
-    mkdirSync(join(root, dir), { recursive: true })
-    writeFileSync(join(root, dir, 'SKILL.md'), `---\n${frontmatter}\n---\n${body}`)
+    fileSystemService.mkdirSync(join(root, dir), { recursive: true })
+    fileSystemService.writeFileSync(
+      join(root, dir, 'SKILL.md'),
+      `---\n${frontmatter}\n---\n${body}`,
+    )
   }
 
   skill('capability/good', 'name: good\ndescription: "Fine."\nversion: 0.1.0\nauthor: Foomakers')
@@ -287,13 +282,13 @@ describe('runChecks (fixture corpus)', () => {
 })
 
 describe('runChecks — block-scalar size-gate cannot be bypassed (finding 1)', () => {
-  const root = mkdtempSync(join(tmpdir(), 'skills-conformance-block-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = fileSystemService.mkdtempSync(join(tmpdir(), 'skills-conformance-block-'))
+  afterAll(() => fileSystemService.rmSync(root, { recursive: true, force: true }))
 
   it('an over-1024 `>` block-scalar description is a violation (drives CLI exit 1)', () => {
     const longLine = 'x'.repeat(1100)
-    mkdirSync(join(root, 'capability/blocky'), { recursive: true })
-    writeFileSync(
+    fileSystemService.mkdirSync(join(root, 'capability/blocky'), { recursive: true })
+    fileSystemService.writeFileSync(
       join(root, 'capability/blocky', 'SKILL.md'),
       `---\nname: blocky\ndescription: >\n  ${longLine}\n---\nbody`,
     )
@@ -365,16 +360,16 @@ describe('checkEntrypointDepth (#411 round 4)', () => {
 })
 
 describe('runChecks — a too-deep SKILL.md fails the gate (#411 round 4)', () => {
-  const root = mkdtempSync(join(tmpdir(), 'skills-conformance-depth-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = fileSystemService.mkdtempSync(join(tmpdir(), 'skills-conformance-depth-'))
+  afterAll(() => fileSystemService.rmSync(root, { recursive: true, force: true }))
 
   it('reads a SKILL.md the entry walk never reaches, and reports it (drives CLI exit 1)', () => {
-    mkdirSync(join(root, 'process/review/references'), { recursive: true })
-    writeFileSync(
+    fileSystemService.mkdirSync(join(root, 'process/review/references'), { recursive: true })
+    fileSystemService.writeFileSync(
       join(root, 'process/review', 'SKILL.md'),
       '---\nname: review\ndescription: "Reviews."\n---\nbody',
     )
-    writeFileSync(
+    fileSystemService.writeFileSync(
       join(root, 'process/review/references', 'SKILL.md'),
       '---\nname: bogus\ndescription: "Would install silently non-invocable."\n---\nbody',
     )
@@ -623,12 +618,12 @@ describe('findGuidedDrift — auto-only text must not leak into the guided half'
 })
 
 describe('runChecks — the approval-round signal is enforced by the gate itself', () => {
-  const root = mkdtempSync(join(tmpdir(), 'skills-conformance-approval-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = fileSystemService.mkdtempSync(join(tmpdir(), 'skills-conformance-approval-'))
+  afterAll(() => fileSystemService.rmSync(root, { recursive: true, force: true }))
 
   it('an unqualified round in a family member drives CLI exit 1', () => {
-    mkdirSync(join(root, 'capability/assess-thing'), { recursive: true })
-    writeFileSync(
+    fileSystemService.mkdirSync(join(root, 'capability/assess-thing'), { recursive: true })
+    fileSystemService.writeFileSync(
       join(root, 'capability/assess-thing', 'SKILL.md'),
       '---\nname: assess-thing\ndescription: "Assesses."\n---\n' +
         '4. **Verify**: Developer approves the choice.\n',
@@ -639,17 +634,17 @@ describe('runChecks — the approval-round signal is enforced by the gate itself
 })
 
 describe('runChecks — a family sub-doc is in scope too (round 1, Minor 5)', () => {
-  const root = mkdtempSync(join(tmpdir(), 'skills-conformance-approval-subdoc-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = fileSystemService.mkdtempSync(join(tmpdir(), 'skills-conformance-approval-subdoc-'))
+  afterAll(() => fileSystemService.rmSync(root, { recursive: true, force: true }))
 
   it('reads a round in references/*.md and reports it against the sub-doc path', () => {
-    mkdirSync(join(root, 'capability/map-thing/references'), { recursive: true })
-    writeFileSync(
+    fileSystemService.mkdirSync(join(root, 'capability/map-thing/references'), { recursive: true })
+    fileSystemService.writeFileSync(
       join(root, 'capability/map-thing', 'SKILL.md'),
       '---\nname: map-thing\ndescription: "Maps."\n---\n' +
         '| `$approval` | No | Mode. See [approval rounds](approval-rounds.md). |\n',
     )
-    writeFileSync(
+    fileSystemService.writeFileSync(
       join(root, 'capability/map-thing/references', 'deep.md'),
       '3. **Act**: Present the delta:\n\n   > Approve or adjust?\n',
     )
@@ -751,12 +746,12 @@ describe('checkStepCatalogue — bidirectional corpus binding', () => {
 })
 
 describe('checkStepMarkers', () => {
-  const root = mkdtempSync(join(tmpdir(), 'step-markers-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = fileSystemService.mkdtempSync(join(tmpdir(), 'step-markers-'))
+  afterAll(() => fileSystemService.rmSync(root, { recursive: true, force: true }))
 
   const writeSkill = (dir: string, body: string): void => {
-    mkdirSync(join(root, dir), { recursive: true })
-    writeFileSync(
+    fileSystemService.mkdirSync(join(root, dir), { recursive: true })
+    fileSystemService.writeFileSync(
       join(root, dir, 'SKILL.md'),
       `---\nname: ${dir.split('/').pop()}\ndescription: "x"\n---\n${body}`,
     )
@@ -789,7 +784,7 @@ describe('checkStepMarkers', () => {
     // A skill under a byte budget keeps the marker in its entrypoint and discloses
     // its half of the convention to the sibling that already owns that topic.
     writeSkill('process/review', delta('review', 'See [more](more.md).'))
-    writeFileSync(
+    fileSystemService.writeFileSync(
       join(root, 'process/review', 'more.md'),
       `${CLAUSES} See [gate](process-profile-gate.md).\n`,
     )
@@ -813,8 +808,8 @@ describe('checkStepMarkers', () => {
   it('does NOT let the linked CONVENTION itself satisfy the clauses (it is one level up)', () => {
     // `../../../.pair/knowledge/**/process-profile-gate.md` states both clauses;
     // resolving through it would make every delta pass by carrying a link.
-    mkdirSync(join(root, 'conv'), { recursive: true })
-    writeFileSync(join(root, 'conv', 'process-profile-gate.md'), `${CLAUSES}\n`)
+    fileSystemService.mkdirSync(join(root, 'conv'), { recursive: true })
+    fileSystemService.writeFileSync(join(root, 'conv', 'process-profile-gate.md'), `${CLAUSES}\n`)
     writeSkill('process/review', delta('review', 'See [gate](../../conv/process-profile-gate.md).'))
     expect(checkStepMarkers(entries, root).join('\n')).toContain('never states the DIRECT')
   })
@@ -826,15 +821,15 @@ describe('checkStepMarkers', () => {
 // left every gate green: that skill can no longer tell which step it is, its profile
 // gate never fires under `poc`, and nothing reports it.
 describe('checkStepMarkersInMirror', () => {
-  const root = mkdtempSync(join(tmpdir(), 'step-markers-mirror-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = fileSystemService.mkdtempSync(join(tmpdir(), 'step-markers-mirror-'))
+  afterAll(() => fileSystemService.rmSync(root, { recursive: true, force: true }))
 
   const dataset = join(root, 'dataset')
   const mirror = join(root, 'mirror')
 
   const write = (base: string, dir: string, file: string, body: string): void => {
-    mkdirSync(join(base, dir), { recursive: true })
-    writeFileSync(join(base, dir, file), body)
+    fileSystemService.mkdirSync(join(base, dir), { recursive: true })
+    fileSystemService.writeFileSync(join(base, dir, file), body)
   }
   const skill = (base: string, dir: string, body: string): void =>
     write(base, dir, 'SKILL.md', `---\nname: x\ndescription: "x"\n---\n${body}`)
@@ -860,7 +855,7 @@ describe('checkStepMarkersInMirror', () => {
 
   it('fails when the mirrored skill is missing entirely', () => {
     skill(dataset, 'process/review', good)
-    rmSync(join(mirror, 'pair-process-review'), { recursive: true, force: true })
+    fileSystemService.rmSync(join(mirror, 'pair-process-review'), { recursive: true, force: true })
     expect(checkStepMarkersInMirror(entries, dataset, mirror).join('\n')).toContain('not installed')
   })
 })
@@ -923,20 +918,22 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
     default: '*' as const,
     poc: ['brainstorm', 'plan-stories', 'refine-story', 'plan-tasks', 'implement'],
   }
-  const shippedTemplate = readFileSync(join(__dirname, '../..', WOW_TEMPLATE_FILE), 'utf-8')
+  const shippedTemplate = fileSystemService.readFileSync(
+    join(__dirname, '../..', WOW_TEMPLATE_FILE),
+  )
 
   const roots: string[] = []
   // The prose root sits two levels DOWN inside the temp box: the sweep reaches
   // outside the package (`../../apps/website/…`, `../../.pair/…`) exactly as the
   // mirror check does, and those writes must stay inside the box.
   const proseRootWithFiles = (files: Record<string, string>): string => {
-    const box = mkdtempSync(join(tmpdir(), 'wow-template-'))
+    const box = fileSystemService.mkdtempSync(join(tmpdir(), 'wow-template-'))
     roots.push(box)
     const root = join(box, 'repo', 'packages', 'knowledge-hub')
     for (const [rel, content] of Object.entries(files)) {
       const path = join(root, rel)
-      mkdirSync(dirname(path), { recursive: true })
-      writeFileSync(path, content)
+      fileSystemService.mkdirSync(dirname(path), { recursive: true })
+      fileSystemService.writeFileSync(path, content)
     }
     return root
   }
@@ -958,10 +955,10 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
     )
   const check = (template: string): string[] => checkFiles({ [WOW_TEMPLATE_FILE]: template })
   afterAll(() => {
-    for (const r of roots) rmSync(r, { recursive: true, force: true })
+    for (const r of roots) fileSystemService.rmSync(r, { recursive: true, force: true })
   })
 
-  // Round 10 Minor: both loops did `if (!existsSync(path)) continue`, so a governed
+  // Round 10 Minor: both loops did `if (!fileSystemService.existsSync(path)) continue`, so a governed
   // file that was MISSING or RENAMED was silently not checked while the CLI printed
   // a PASS banner naming it as validated — zero errors being the same observable
   // result as "all five validated clean". Two of the five reach outside the package
@@ -1004,8 +1001,8 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
 
   it('passes on this repo’s own way-of-working as committed', () => {
     const repoWow = join(__dirname, '../..', REPO_WOW_FILE)
-    expect(existsSync(repoWow)).toBe(true)
-    expect(checkFiles({ [REPO_WOW_FILE]: readFileSync(repoWow, 'utf-8') })).toEqual([])
+    expect(fileSystemService.existsSync(repoWow)).toBe(true)
+    expect(checkFiles({ [REPO_WOW_FILE]: fileSystemService.readFileSync(repoWow) })).toEqual([])
   })
 })
 
@@ -1054,7 +1051,7 @@ describe('checkInstalledProfileCorpus — the copies a reader resolves', () => {
   const INSTALLED_KB = '.pair/knowledge/guidelines/technical-standards/ai-development'
   const DATASET_KB = `dataset/${INSTALLED_KB}`
 
-  const real = (rel: string): string => readFileSync(join(REPO, rel), 'utf-8')
+  const real = (rel: string): string => fileSystemService.readFileSync(join(REPO, rel))
   const datasetCatalogue = real(`${DATASET_KB}/step-catalogue.md`)
   const datasetProfiles = real(`${DATASET_KB}/process-profiles.md`)
   const entries = parseStepCatalogue(datasetCatalogue)
@@ -1076,18 +1073,18 @@ describe('checkInstalledProfileCorpus — the copies a reader resolves', () => {
 
   const boxes: string[] = []
   afterAll(() => {
-    for (const b of boxes) rmSync(b, { recursive: true, force: true })
+    for (const b of boxes) fileSystemService.rmSync(b, { recursive: true, force: true })
   })
 
   const check = (overrides: Record<string, string | null>): string[] => {
-    const box = mkdtempSync(join(tmpdir(), 'installed-corpus-'))
+    const box = fileSystemService.mkdtempSync(join(tmpdir(), 'installed-corpus-'))
     boxes.push(box)
     const root = join(box, 'repo', 'packages', 'knowledge-hub')
     for (const [rel, content] of Object.entries({ ...DEFAULTS, ...overrides })) {
       if (content === null) continue
       const path = join(root, rel)
-      mkdirSync(dirname(path), { recursive: true })
-      writeFileSync(path, content)
+      fileSystemService.mkdirSync(dirname(path), { recursive: true })
+      fileSystemService.writeFileSync(path, content)
     }
     return checkInstalledProfileCorpus(SKILLS, root, entries, builtIns)
   }
@@ -1205,12 +1202,12 @@ describe('checkInstalledProfileCorpus — the copies a reader resolves', () => {
 })
 
 describe('runChecks — the catalogue is required, not optional', () => {
-  const root = mkdtempSync(join(tmpdir(), 'no-catalogue-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = fileSystemService.mkdtempSync(join(tmpdir(), 'no-catalogue-'))
+  afterAll(() => fileSystemService.rmSync(root, { recursive: true, force: true }))
 
   it('reports a missing step catalogue instead of skipping the check', () => {
-    mkdirSync(join(root, 'process/thing'), { recursive: true })
-    writeFileSync(
+    fileSystemService.mkdirSync(join(root, 'process/thing'), { recursive: true })
+    fileSystemService.writeFileSync(
       join(root, 'process/thing', 'SKILL.md'),
       '---\nname: thing\ndescription: "x"\n---\nbody\n',
     )
@@ -1683,12 +1680,12 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
 })
 
 describe('checkSkillLocalScripts — scripts ship with their skill and mirror byte-identically', () => {
-  const root = mkdtempSync(join(tmpdir(), 'skills-local-scripts-'))
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const root = fileSystemService.mkdtempSync(join(tmpdir(), 'skills-local-scripts-'))
+  afterAll(() => fileSystemService.rmSync(root, { recursive: true, force: true }))
 
   const write = (base: string, rel: string, content: string) => {
-    mkdirSync(dirname(join(base, rel)), { recursive: true })
-    writeFileSync(join(base, rel), content)
+    fileSystemService.mkdirSync(dirname(join(base, rel)), { recursive: true })
+    fileSystemService.writeFileSync(join(base, rel), content)
   }
   const fixture = (name: string, body: string) => {
     const skills = join(root, name, 'skills')
@@ -1732,7 +1729,7 @@ describe('checkSkillLocalScripts — scripts ship with their skill and mirror by
     write(skills, 'workflow/demo/scripts/a.mjs', 'same')
     write(installed, 'pair-workflow-demo/scripts/a.mjs', 'same')
     const locked = join(skills, 'workflow/demo/scripts/a.mjs')
-    chmodSync(locked, 0o000)
+    fileSystemService.chmodSync(locked, 0o000)
     try {
       const errors = checkSkillLocalScripts(skills, installed)
       expect(errors).toHaveLength(1)
@@ -1740,15 +1737,15 @@ describe('checkSkillLocalScripts — scripts ship with their skill and mirror by
       expect(errors[0]).toContain('workflow/demo/scripts/a.mjs')
       expect(errors[0]).toContain('pair-workflow-demo/scripts/a.mjs')
     } finally {
-      chmodSync(locked, 0o644)
+      fileSystemService.chmodSync(locked, 0o644)
     }
   })
 
   it('AC3: the real corpus passes and the summary names the check', () => {
     const { errors } = runChecks(join(__dirname, '..', '..', 'dataset', '.skills'))
     expect(errors.filter(e => e.includes('scripts'))).toEqual([])
-    expect(readFileSync(join(__dirname, 'skills-conformance-check.ts'), 'utf-8')).toContain(
-      'skill-local scripts shipped and mirrored',
-    )
+    expect(
+      fileSystemService.readFileSync(join(__dirname, 'skills-conformance-check.ts')),
+    ).toContain('skill-local scripts shipped and mirrored')
   })
 })

@@ -1,4 +1,4 @@
-import fs from 'node:fs'
+import { fileSystemService as fs } from '@pair/content-ops'
 import path from 'node:path'
 
 export interface LlmPage {
@@ -64,7 +64,7 @@ export function getUrlFromFilePath(filePath: string, contentDir: string): string
 function getAllMdxFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) return []
   const files: string[] = []
-  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  const entries = fs.readdirSync(dir)
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name)
     if (entry.isDirectory()) {
@@ -84,7 +84,7 @@ export function getLlmPages(contentDir?: string): LlmPage[] {
   for (const file of files) {
     if (path.basename(file) === 'meta.json') continue
 
-    const raw = fs.readFileSync(file, 'utf-8')
+    const raw = fs.readFileSync(file)
     const { data, content } = parseFrontmatter(raw)
 
     const draft = data['draft']

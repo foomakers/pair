@@ -1,12 +1,18 @@
 import { describe, it, expect, afterEach, afterAll } from 'vitest'
 import { execFileSync, spawn, spawnSync } from 'child_process'
-import {
+import { fileSystemService } from '@pair/content-ops'
+import { tmpdir } from 'os'
+import { join, resolve, dirname } from 'path'
+
+import { REPO_ROOT } from './repo-root'
+
+const {
   mkdtempSync,
   mkdirSync,
   writeFileSync,
   readFileSync,
   readdirSync,
-  copyFileSync,
+  copySync: copyFileSync,
   cpSync,
   chmodSync,
   existsSync,
@@ -14,11 +20,7 @@ import {
   realpathSync,
   statSync,
   symlinkSync,
-} from 'fs'
-import { tmpdir } from 'os'
-import { join, resolve, dirname } from 'path'
-
-import { REPO_ROOT } from './repo-root'
+} = fileSystemService
 
 // #419: the mirror-equality guard's remedy is THIS script — a local, deterministic
 // realignment of the generated mirrors from the working tree's dataset. `pair update`
@@ -302,7 +304,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       const result = run(tmp, isolatedHome(tmp))
 
       expect(result.status).toBe(0)
-      expect(readFileSync(mirror, 'utf-8')).toBe(KB_INDEX)
+      expect(readFileSync(mirror)).toBe(KB_INDEX)
     },
     SCRIPT_RUN_TIMEOUT_MS,
   )
@@ -326,12 +328,10 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
         const result = run(tmp, isolatedHome(tmp))
 
         expect(result.status).toBe(0)
-        expect(readFileSync(join(tmp, '.claude/workflows', suite), 'utf-8')).toBe(
-          'export const v = 2\n',
+        expect(readFileSync(join(tmp, '.claude/workflows', suite))).toBe('export const v = 2\n')
+        expect(readFileSync(join(tmp, '.claude/workflows/pair-contracts/new.test.mjs'))).toBe(
+          'export const n = 1\n',
         )
-        expect(
-          readFileSync(join(tmp, '.claude/workflows/pair-contracts/new.test.mjs'), 'utf-8'),
-        ).toBe('export const n = 1\n')
       } finally {
         Object.defineProperty(process, 'platform', original)
       }
@@ -416,7 +416,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       const result = run(tmp, isolatedHome(tmp))
 
       expect(result.status).toBe(0)
-      expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')
+      expect(readFileSync(authored)).toBe('export const authored = 2\n')
     },
     SCRIPT_RUN_TIMEOUT_MS,
   )
@@ -473,10 +473,10 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       expect(after).toBe(before)
       // ...yet the hand-edit is gone, replaced by what the dataset generates.
       expect(git(tmp, ['hash-object', mirror]).trim()).not.toBe(mirrorBefore)
-      expect(readFileSync(mirror, 'utf-8')).toBe(KB_INDEX)
+      expect(readFileSync(mirror)).toBe(KB_INDEX)
       // ...and the authored file, whose entry is identically unchanged, really is untouched.
       expect(git(tmp, ['hash-object', authored]).trim()).toBe(authoredBefore)
-      expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')
+      expect(readFileSync(authored)).toBe('export const authored = 2\n')
     },
     SCRIPT_RUN_TIMEOUT_MS,
   )
@@ -509,7 +509,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       // untracked-directory case, and it has to stay uncommitted to be one.
       expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
       const nested = join(tmp, '.pair/knowledge/sub/note.md')
-      expect(readFileSync(nested, 'utf-8')).toBe(NESTED)
+      expect(readFileSync(nested)).toBe(NESTED)
       write(join(tmp, '.gitignore'), '.pair/.kb-version.json\n.pair/working/\n')
       git(tmp, ['add', '-A', '--', ':!.pair/knowledge/sub'])
       git(tmp, ['commit', '-q', '-m', 'converged, nested install left uncommitted'])
@@ -570,8 +570,8 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       expect(after.digests.get('.pair/knowledge/sub/note.md')).not.toBe(
         before.digests.get('.pair/knowledge/sub/note.md'),
       )
-      expect(readFileSync(mirror, 'utf-8')).toBe(KB_INDEX)
-      expect(readFileSync(nested, 'utf-8')).toBe(NESTED)
+      expect(readFileSync(mirror)).toBe(KB_INDEX)
+      expect(readFileSync(nested)).toBe(NESTED)
 
       // The deletion is untouched by the run, and its survival is carried by the entry —
       // the Verify's on-disk qualifier is sound because status DOES move on a recreated path.
@@ -622,8 +622,8 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
       const spaced = join(tmp, '.pair/knowledge/con spazio.md')
       const accented = join(tmp, '.pair/knowledge/caffè.md')
-      expect(readFileSync(spaced, 'utf-8')).toBe(SPACED)
-      expect(readFileSync(accented, 'utf-8')).toBe(ACCENTED)
+      expect(readFileSync(spaced)).toBe(SPACED)
+      expect(readFileSync(accented)).toBe(ACCENTED)
       git(tmp, ['add', '-A'])
       git(tmp, ['commit', '-q', '-m', 'converged'])
 
@@ -680,8 +680,8 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
         expect(after.digests.get(rel)).not.toBe(before.digests.get(rel))
         expect(git(tmp, ['cat-file', '-p', before.digests.get(rel) ?? ''])).toBe(edit)
       }
-      expect(readFileSync(spaced, 'utf-8')).toBe(SPACED)
-      expect(readFileSync(accented, 'utf-8')).toBe(ACCENTED)
+      expect(readFileSync(spaced)).toBe(SPACED)
+      expect(readFileSync(accented)).toBe(ACCENTED)
 
       // Second shape from the same finding: a NEW generated file with a space appears only in
       // the after snapshot, so status DOES catch it — but under the default parse the agent
@@ -740,7 +740,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       expect(parsePorcelainZ(git(tmp, ['status', '--porcelain', '-z']))).toEqual([
         { xy: 'M ', path: 'src/authored.ts' },
       ])
-      expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')
+      expect(readFileSync(authored)).toBe('export const authored = 2\n')
     },
     SCRIPT_RUN_TIMEOUT_MS,
   )
@@ -786,7 +786,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       const CREATED = '.pair/knowledge/new-guide.md'
       const MSG = '[#419] chore: regenerate mirrors from local dataset'
       // The run created the new mirror from the LOCAL dataset (no release carries it)...
-      expect(readFileSync(join(tmp, CREATED), 'utf-8')).toBe(NEW_GUIDE)
+      expect(readFileSync(join(tmp, CREATED))).toBe(NEW_GUIDE)
       // ...and it is untracked, which is the whole defect.
       expect(parsePorcelainZ(git(tmp, ['status', '--porcelain', '-z', '-uall']))).toContainEqual({
         xy: '??',
@@ -819,7 +819,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       expect(parsePorcelainZ(git(tmp, ['status', '--porcelain', '-z', '-uall']))).toEqual([
         { xy: 'M ', path: 'src/authored.ts' },
       ])
-      expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')
+      expect(readFileSync(authored)).toBe('export const authored = 2\n')
     },
     SCRIPT_RUN_TIMEOUT_MS,
   )
@@ -924,7 +924,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
         expect(sha).toBeDefined()
         expect(git(tmp, ['cat-file', '-p', sha ?? ''])).toBe(content)
         writeFileSync(join(tmp, rel), git(tmp, ['cat-file', '-p', sha ?? '']))
-        expect(readFileSync(join(tmp, rel), 'utf-8')).toBe(content)
+        expect(readFileSync(join(tmp, rel))).toBe(content)
       }
     },
     SCRIPT_RUN_TIMEOUT_MS,
@@ -1055,7 +1055,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       const LLMS = '.pair/llms.txt'
       const NOTE = '.pair/adoption/tech/wip-note.md'
       const LINK = '- [adoption note](.pair/adoption/tech/wip-note.md)'
-      expect(readFileSync(join(tmp, LLMS), 'utf-8')).not.toContain('wip-note')
+      expect(readFileSync(join(tmp, LLMS))).not.toContain('wip-note')
 
       write(join(tmp, NOTE), '# adoption note\n')
       const before = snapshotTree(tmp, {
@@ -1068,8 +1068,8 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
 
       // THE EFFECT, measured: the note survives (add behaviour) and the index now links it.
-      expect(readFileSync(join(tmp, NOTE), 'utf-8')).toBe('# adoption note\n')
-      expect(readFileSync(join(tmp, LLMS), 'utf-8')).toContain(LINK)
+      expect(readFileSync(join(tmp, NOTE))).toBe('# adoption note\n')
+      expect(readFileSync(join(tmp, LLMS))).toContain(LINK)
       const afterEntries = parsePorcelainZ(
         git(tmp, ['status', '--porcelain', '-z', '--untracked-files=all']),
       )
@@ -1088,14 +1088,14 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
 
       // THE DOCUMENTED REMEDY, applied to its postcondition: stash the untracked path, run, pop.
       git(tmp, ['reset', '-q', '--hard', 'HEAD~1'])
-      expect(readFileSync(join(tmp, LLMS), 'utf-8')).not.toContain('wip-note')
+      expect(readFileSync(join(tmp, LLMS))).not.toContain('wip-note')
       git(tmp, ['stash', 'push', '-u', '-q', '--', NOTE])
       expect(existsSync(join(tmp, NOTE))).toBe(false)
       expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
       expect(git(tmp, ['status', '--porcelain', '-z', '--untracked-files=all'])).toBe('')
-      expect(readFileSync(join(tmp, LLMS), 'utf-8')).not.toContain('wip-note')
+      expect(readFileSync(join(tmp, LLMS))).not.toContain('wip-note')
       git(tmp, ['stash', 'pop', '-q'])
-      expect(readFileSync(join(tmp, NOTE), 'utf-8')).toBe('# adoption note\n')
+      expect(readFileSync(join(tmp, NOTE))).toBe('# adoption note\n')
       expect(parsePorcelainZ(git(tmp, ['status', '--porcelain', '-z', '-uall']))).toEqual([
         { xy: '??', path: NOTE },
       ])
@@ -1179,14 +1179,14 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
         [...DELETED, INDEXED, OVERWRITTEN, ...UNTOUCHED, VIA_SYMLINK.resolved].sort(),
       )
       expect(beforeEntries.every(entry => entry.xy === '??')).toBe(true)
-      expect(readFileSync(join(tmp, LLMS), 'utf-8')).not.toContain('wip')
+      expect(readFileSync(join(tmp, LLMS))).not.toContain('wip')
 
       expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
 
       const afterEntries = parsePorcelainZ(
         git(tmp, ['status', '--porcelain', '-z', '--untracked-files=all']),
       )
-      const llms = readFileSync(join(tmp, LLMS), 'utf-8')
+      const llms = readFileSync(join(tmp, LLMS))
 
       // DELETED rows: gone from disk and from the porcelain — and NOT indexed, because the mirror
       // cleanup runs before the index is generated (the `how-to` row is under an llms section).
@@ -1206,7 +1206,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       expect(git(tmp, ['hash-object', OVERWRITTEN]).trim()).not.toBe(
         before.digests.get(OVERWRITTEN),
       )
-      expect(readFileSync(join(tmp, OVERWRITTEN), 'utf-8')).toBe('# AGENTS\n')
+      expect(readFileSync(join(tmp, OVERWRITTEN))).toBe('# AGENTS\n')
       expect(afterEntries).toContainEqual({ xy: '??', path: OVERWRITTEN })
       // UNTOUCHED rows: same bytes, same porcelain entry, not in the index. These are the files
       // the round-6 scope HALTed on; a HALT here blocks a routine state for a loss that does not
@@ -1312,11 +1312,20 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
         env: { ...process.env, ...isolatedHome(tmp), TMPDIR: tmpEnvDir },
       })
       const exited = new Promise<void>(resolve => child.on('close', () => resolve()))
-      await waitUntil(() => readdirSync(tmpEnvDir).length === 1)
+      await waitUntil(
+        () =>
+          readdirSync(tmpEnvDir)
+            .map(d => d.name)
+            .map(d => d.name).length === 1,
+      )
       process.kill(-(child.pid as number), 'SIGTERM')
       await exited
 
-      expect(readdirSync(tmpEnvDir)).toEqual([])
+      expect(
+        readdirSync(tmpEnvDir)
+          .map(d => d.name)
+          .map(d => d.name),
+      ).toEqual([])
     },
     SCRIPT_RUN_TIMEOUT_MS,
   )
@@ -1344,11 +1353,21 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
           // Poll close to mktemp, but yield 1ms per check: a setImmediate spin pins a CPU and, on a
           // loaded CI runner, starved the very script it observes until the test timed out.
           const deadline = Date.now() + EARLY_INTERRUPT_POLL_MS
-          while (readdirSync(tmpEnvDir).length === 0 && Date.now() < deadline)
+          while (
+            readdirSync(tmpEnvDir)
+              .map(d => d.name)
+              .map(d => d.name).length === 0 &&
+            Date.now() < deadline
+          )
             await new Promise(r => setTimeout(r, 1))
           process.kill(-(child.pid as number), 'SIGTERM')
           await exited
-          expect(readdirSync(tmpEnvDir), `run ${i}`).toEqual([])
+          expect(
+            readdirSync(tmpEnvDir)
+              .map(d => d.name)
+              .map(d => d.name),
+            `run ${i}`,
+          ).toEqual([])
         }),
       )
     },
@@ -1381,7 +1400,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
   )
 
   it('has no check mode — one writer, one checker (AC8)', () => {
-    const source = readFileSync(REGENERATE, 'utf-8')
+    const source = readFileSync(REGENERATE)
     expect(source).not.toMatch(/--check\b/)
     expect(source).not.toMatch(/--dry-run\b/)
   })
@@ -1443,7 +1462,7 @@ describe('the shipped mirror-realign asset drives the real writer (#419, /publis
       expect(halted.stderr).toContain("git stash push -u -- '.pair/knowledge/wip-draft.md'")
       // The writer did not run: the new mirror was not created, the hand-edit is intact.
       expect(existsSync(join(tmp, '.pair/knowledge/new-guide.md'))).toBe(false)
-      expect(readFileSync(join(tmp, '.pair/knowledge/index.md'), 'utf-8')).toBe('# my hand edit\n')
+      expect(readFileSync(join(tmp, '.pair/knowledge/index.md'))).toBe('# my hand edit\n')
       expect(git(tmp, ['rev-parse', 'HEAD']).trim()).toBe(head)
 
       git(tmp, ['stash', 'push', '-u', '-q', '--', '.pair/knowledge/wip-draft.md'])
@@ -1475,14 +1494,14 @@ describe('the shipped mirror-realign asset drives the real writer (#419, /publis
       expect(committed).not.toContain('src/authored.ts')
       expect(committed).not.toContain('notes.md')
       expect(committed.every(path => !path.startsWith('packages/'))).toBe(true)
-      expect(readFileSync(join(tmp, '.pair/knowledge/index.md'), 'utf-8')).toBe(KB_INDEX)
-      expect(readFileSync(join(tmp, '.pair/knowledge/new-guide.md'), 'utf-8')).toBe(NEW_GUIDE)
+      expect(readFileSync(join(tmp, '.pair/knowledge/index.md'))).toBe(KB_INDEX)
+      expect(readFileSync(join(tmp, '.pair/knowledge/new-guide.md'))).toBe(NEW_GUIDE)
       expect(git(tmp, ['cat-file', '-p', row?.[3] ?? ''])).toBe('# my hand edit\n')
       expect(git(tmp, ['diff', '--cached', '--name-only']).trim()).toBe('src/authored.ts')
-      expect(readFileSync(join(tmp, 'notes.md'), 'utf-8')).toBe('v2 unstaged\n')
+      expect(readFileSync(join(tmp, 'notes.md'))).toBe('v2 unstaged\n')
 
       git(tmp, ['stash', 'pop', '-q'])
-      expect(readFileSync(join(tmp, '.pair/knowledge/wip-draft.md'), 'utf-8')).toBe('# wip\n')
+      expect(readFileSync(join(tmp, '.pair/knowledge/wip-draft.md'))).toBe('# wip\n')
       // And the second run is the silent no-op: nothing written, nothing reported.
       const again = realignViaAsset(tmp, env, [])
       expect(again).toEqual({ status: 0, stdout: 'no-op\n', stderr: '' })

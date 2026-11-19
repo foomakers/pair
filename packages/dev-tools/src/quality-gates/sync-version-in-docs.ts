@@ -26,7 +26,7 @@
  * earlier ignore the extra argument" becomes a factual inversion the moment it is synced.
  * Point at the CHANGELOG instead; wording without a literal version cannot be rewritten.
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { join, relative } from 'path'
 
 import { REPO_ROOT } from './repo-root'
@@ -64,8 +64,8 @@ export function parseGitignoreExcludes(content: string): string[] {
 /** Read and parse `<root>/.gitignore`; [] if the file doesn't exist (e.g. test fixtures). */
 export function readGitignoreExcludes(root: string): string[] {
   const gitignorePath = join(root, '.gitignore')
-  if (!existsSync(gitignorePath)) return []
-  return parseGitignoreExcludes(readFileSync(gitignorePath, 'utf-8'))
+  if (!fileSystemService.existsSync(gitignorePath)) return []
+  return parseGitignoreExcludes(fileSystemService.readFileSync(gitignorePath))
 }
 
 // Patterns that indicate an external version (not ours) — skip these lines.
@@ -112,7 +112,7 @@ export function shouldExclude(relPath: string, excludePatterns: string[]): boole
 /** Walk a directory tree collecting .md/.mdx files, skipping excluded paths (files or dirs). */
 export function walkDocFiles(dir: string, root: string, excludePatterns: string[]): string[] {
   const out: string[] = []
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  for (const entry of fileSystemService.readdirSync(dir)) {
     const full = join(dir, entry.name)
     const rel = relative(root, full)
     if (shouldExclude(rel, excludePatterns)) continue
@@ -132,7 +132,7 @@ export function findFilesWithVersion(
   excludePatterns: string[],
 ): string[] {
   return walkDocFiles(root, root, excludePatterns).filter(f =>
-    readFileSync(f, 'utf-8').includes(oldVersion),
+    fileSystemService.readFileSync(f).includes(oldVersion),
   )
 }
 
@@ -166,7 +166,7 @@ export function syncVersionInDocs(
   for (const abs of files) {
     const rel = relative(root, abs)
     result.scanned.push(rel)
-    const original = readFileSync(abs, 'utf-8')
+    const original = fileSystemService.readFileSync(abs)
     const { updated, changed } = rewriteContent(original, oldVersion, newVersion)
 
     if (!changed) {
@@ -176,7 +176,7 @@ export function syncVersionInDocs(
     if (opts.check) {
       result.drifted.push(rel)
     } else {
-      writeFileSync(abs, updated)
+      fileSystemService.writeFileSync(abs, updated)
       result.fixed.push(rel)
     }
   }
@@ -203,7 +203,7 @@ export function main(argv: string[] = process.argv.slice(2)): void {
   const { check, oldVersionArg } = parseArgv(argv)
 
   const newVersion = JSON.parse(
-    readFileSync(join(REPO_ROOT, 'apps/pair-cli/package.json'), 'utf-8'),
+    fileSystemService.readFileSync(join(REPO_ROOT, 'apps/pair-cli/package.json')),
   ).version as string
   const oldVersion = oldVersionArg || newVersion
 

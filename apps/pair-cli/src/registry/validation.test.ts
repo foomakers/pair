@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
 import { join } from 'path'
+import { fileSystemService } from '@pair/content-ops'
 import {
   validateRegistry,
   detectOverlappingTargets,
@@ -497,7 +497,9 @@ describe('registry validation - targets', () => {
 })
 
 describe('US-219 — the workflow + agent registries are installable and reserved-path safe', () => {
-  const config = JSON.parse(readFileSync(join(__dirname, '../../config.json'), 'utf-8')) as {
+  const config = JSON.parse(
+    fileSystemService.readFileSync(join(__dirname, '../../config.json')),
+  ) as {
     asset_registries: Record<string, RegistryConfig>
   }
 

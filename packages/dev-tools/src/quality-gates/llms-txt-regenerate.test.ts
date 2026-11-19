@@ -18,7 +18,16 @@
  *
  * Fixture trees only; the real `.pair` corpus is never read and never written.
  */
-import {
+import { fileSystemService } from '@pair/content-ops'
+import { tmpdir } from 'os'
+import { dirname, join, relative } from 'path'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import { TRACKED_INDEX_PATH, checkLlmsIndexDrift, readOnlyFileSystem } from './llms-txt-drift-check'
+import { regenerateLlmsIndex } from './llms-txt-regenerate'
+import { generateLlmsTxt } from '../../../../apps/pair-cli/src/registry/llms-generation'
+
+const {
   chmodSync,
   mkdirSync,
   mkdtempSync,
@@ -27,14 +36,7 @@ import {
   rmSync,
   statSync,
   writeFileSync,
-} from 'fs'
-import { tmpdir } from 'os'
-import { dirname, join, relative } from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
-
-import { TRACKED_INDEX_PATH, checkLlmsIndexDrift, readOnlyFileSystem } from './llms-txt-drift-check'
-import { regenerateLlmsIndex } from './llms-txt-regenerate'
-import { generateLlmsTxt } from '../../../../apps/pair-cli/src/registry/llms-generation'
+} = fileSystemService
 
 const fixtures: string[] = []
 
@@ -59,7 +61,7 @@ function makeTree(files: Record<string, string>): string {
   for (const [relativePath, content] of Object.entries(files)) {
     const target = join(root, relativePath)
     mkdirSync(dirname(target), { recursive: true })
-    writeFileSync(target, content, 'utf-8')
+    writeFileSync(target, content)
   }
   return root
 }
@@ -87,10 +89,10 @@ async function makeInSyncTree(extra: Record<string, string> = {}): Promise<strin
 function snapshot(root: string): Record<string, string> {
   const out: Record<string, string> = {}
   const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    for (const entry of readdirSync(dir)) {
       const full = join(dir, entry.name)
       if (entry.isDirectory()) walk(full)
-      else out[relative(root, full)] = readFileSync(full, 'utf-8')
+      else out[relative(root, full)] = readFileSync(full)
     }
   }
   walk(root)
@@ -112,14 +114,14 @@ describe('regenerateLlmsIndex — the command the gate names', () => {
     expect(outcome.kind).toBe('written')
     // The postcondition the story's success metric names: the gate is green afterwards.
     expect((await checkLlmsIndexDrift(root)).ok).toBe(true)
-    expect(readFileSync(join(root, TRACKED_INDEX_PATH), 'utf-8')).toContain(
+    expect(readFileSync(join(root, TRACKED_INDEX_PATH))).toContain(
       '- [Story Local Markers](.pair/knowledge/guidelines/story-local-markers.md)',
     )
   })
 
   it('writes EXACTLY the one file it advertises and touches nothing else', async () => {
     const root = await makeInSyncTree()
-    writeFileSync(join(root, TRACKED_INDEX_PATH), 'hand-edited garbage\n', 'utf-8')
+    writeFileSync(join(root, TRACKED_INDEX_PATH), 'hand-edited garbage\n')
     const before = snapshot(root)
 
     await regenerateLlmsIndex(root)
@@ -153,39 +155,39 @@ describe('regenerateLlmsIndex — the command the gate names', () => {
   it('STRIPS a byte-order mark — the one invisible difference regeneration does fix', async () => {
     const root = await makeInSyncTree()
     const tracked = join(root, TRACKED_INDEX_PATH)
-    writeFileSync(tracked, `${BYTE_ORDER_MARK}${readFileSync(tracked, 'utf-8')}`, 'utf-8')
+    writeFileSync(tracked, `${BYTE_ORDER_MARK}${readFileSync(tracked)}`)
 
     const outcome = await regenerateLlmsIndex(root)
 
     expect(outcome.kind).toBe('written')
-    expect(readFileSync(tracked, 'utf-8').startsWith(BYTE_ORDER_MARK)).toBe(false)
+    expect(readFileSync(tracked).startsWith(BYTE_ORDER_MARK)).toBe(false)
     expect((await checkLlmsIndexDrift(root)).ok).toBe(true)
   })
 
   it('REFUSES on a carriage-return checkout: the write lands as LF and git puts the CRs back', async () => {
     const root = await makeInSyncTree()
     const tracked = join(root, TRACKED_INDEX_PATH)
-    const asCrlf = readFileSync(tracked, 'utf-8').replace(/\n/g, '\r\n')
-    writeFileSync(tracked, asCrlf, 'utf-8')
+    const asCrlf = readFileSync(tracked).replace(/\n/g, '\r\n')
+    writeFileSync(tracked, asCrlf)
 
     const outcome = await regenerateLlmsIndex(root)
 
     expect(outcome.kind).toBe('refused')
     // Untouched: a "successful" regeneration here is a loop, not a fix.
-    expect(readFileSync(tracked, 'utf-8')).toBe(asCrlf)
+    expect(readFileSync(tracked)).toBe(asCrlf)
     expect(outcome.kind === 'refused' && outcome.message).toContain('git checkout --')
   })
 
   it('REFUSES on a bare-CR file too — the same cause, the same exit', async () => {
     const root = await makeInSyncTree()
     const tracked = join(root, TRACKED_INDEX_PATH)
-    const asBareCr = readFileSync(tracked, 'utf-8').replace(/\n/g, '\r')
-    writeFileSync(tracked, asBareCr, 'utf-8')
+    const asBareCr = readFileSync(tracked).replace(/\n/g, '\r')
+    writeFileSync(tracked, asBareCr)
 
     const outcome = await regenerateLlmsIndex(root)
 
     expect(outcome.kind).toBe('refused')
-    expect(readFileSync(tracked, 'utf-8')).toBe(asBareCr)
+    expect(readFileSync(tracked)).toBe(asBareCr)
   })
 
   it('REFUSES on a sparse tree instead of committing the deletion of a whole section', async () => {
@@ -194,13 +196,13 @@ describe('regenerateLlmsIndex — the command the gate names', () => {
     // gone — the exact loss `sparseTreeCaution` exists to prevent, delivered by
     // obeying the advice that caution is printed next to.
     const root = await makeInSyncTree()
-    const before = readFileSync(join(root, TRACKED_INDEX_PATH), 'utf-8')
+    const before = readFileSync(join(root, TRACKED_INDEX_PATH))
     rmSync(join(root, '.pair/knowledge/how-to'), { recursive: true, force: true })
 
     const outcome = await regenerateLlmsIndex(root)
 
     expect(outcome.kind).toBe('refused')
-    expect(readFileSync(join(root, TRACKED_INDEX_PATH), 'utf-8')).toBe(before)
+    expect(readFileSync(join(root, TRACKED_INDEX_PATH))).toBe(before)
     expect(outcome.kind === 'refused' && outcome.message).toContain('How-To Guides')
   })
 
@@ -211,7 +213,7 @@ describe('regenerateLlmsIndex — the command the gate names', () => {
 
     expect(outcome.kind).toBe('refused')
     // A 4-line preamble written over a real index would be the worst outcome available.
-    expect(readFileSync(join(root, TRACKED_INDEX_PATH), 'utf-8')).toContain('- [X](x.md)')
+    expect(readFileSync(join(root, TRACKED_INDEX_PATH))).toContain('- [X](x.md)')
   })
 
   it('REFUSES when the tracked file itself cannot be read', async () => {

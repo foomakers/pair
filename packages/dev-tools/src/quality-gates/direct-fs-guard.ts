@@ -31,8 +31,17 @@ const ROOTS = /^(?:apps|packages|scripts)\//
 // third-party at any depth; generated output only at the package root (nested `build/` dirs are authored code)
 const EXCLUDED =
   /(?:^|\/)node_modules\/|^(?:apps|packages)\/[^/]+\/(?:dist|build|\.next|coverage)\//
-/** Dispositions that are not a reviewed exception: `migrate` must stop using fs, candidates are unresolved. */
-const UNRESOLVED = new Set(['migrate', 'migration-candidate', 'to-evaluate'])
+/** Dispositions that are not a reviewed exception: `migrate`/`deferred-migration` must stop using fs, candidates are unresolved. */
+const UNRESOLVED = new Set(['migrate', 'migration-candidate', 'to-evaluate', 'deferred-migration'])
+
+const ALLOWED = new Set([
+  'os-guarantee',
+  'standalone-script',
+  'type-contract',
+  'boundary-adapter',
+  'repo-contract',
+  'in-flight-churn',
+])
 
 export function isAuditedPath(path: string): boolean {
   return EXTENSIONS.test(path) && ROOTS.test(path) && !EXCLUDED.test(path)
@@ -83,6 +92,10 @@ export function checkRegistry(scanned: Map<string, FsDependency[]>, rows: Regist
       )
     else if (!row.reason || !row.decision || !row.testCategory)
       errors.push(`${path}:${d.line} registry entry lacks reason, decision or testCategory`)
+    else if (!ALLOWED.has(row.disposition))
+      errors.push(
+        `${path}:${d.line} '${d.specifier}' disposition '${row.disposition}' is not a reviewed exception`,
+      )
   }
   for (const row of rows)
     if (!scanned.has(row.path))

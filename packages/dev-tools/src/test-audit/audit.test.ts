@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { fileSystemService } from '@pair/content-ops'
 
 import {
   applyRenames,
@@ -183,7 +184,7 @@ describe('render', () => {
 
 describe('loadConfig', () => {
   it('rejects a non-numeric threshold and an unknown rollout', async () => {
-    const { mkdtempSync, writeFileSync } = await import('fs')
+    const { mkdtempSync, writeFileSync } = fileSystemService
     const { tmpdir } = await import('os')
     const { join } = await import('path')
     const dir = mkdtempSync(join(tmpdir(), 'cfg-'))

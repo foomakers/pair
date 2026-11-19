@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { InMemoryFileSystemService } from '@pair/content-ops'
+import { InMemoryFileSystemService, fileSystemService } from '@pair/content-ops'
 import { createPackageZip, unflattenEntry } from './zip-creator'
 import type { ManifestMetadata } from './metadata'
 import type { RegistryConfig } from '#registry'
-import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
@@ -42,15 +41,15 @@ function setupTest() {
   fsService = new InMemoryFileSystemService({}, '/test-module', '/test-project')
   tempDir = path.join(os.tmpdir(), `test-zip-${Date.now()}`)
   outputPath = path.join(tempDir, 'test-package.zip')
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true })
+  if (!fileSystemService.existsSync(tempDir)) {
+    fileSystemService.mkdirSync(tempDir, { recursive: true })
   }
 }
 
 async function cleanupTest() {
   await new Promise(resolve => setTimeout(resolve, 50))
-  if (fs.existsSync(tempDir)) {
-    fs.rmSync(tempDir, { recursive: true, force: true })
+  if (fileSystemService.existsSync(tempDir)) {
+    fileSystemService.rmSync(tempDir, { recursive: true, force: true })
   }
 }
 
@@ -439,10 +438,12 @@ describe('createPackageZip - content checksum', () => {
 
     try {
       // Setup
-      fs.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
-      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/file.md'), 'test content')
+      fileSystemService.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
+      fileSystemService.writeFileSync(
+        path.join(projectRoot, '.pair/knowledge/file.md'),
+        'test content',
+      )
 
-      const { fileSystemService } = await import('@pair/content-ops')
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
@@ -451,7 +452,7 @@ describe('createPackageZip - content checksum', () => {
       await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
 
       // Verify ZIP was created
-      expect(fs.existsSync(outputPath)).toBe(true)
+      expect(fileSystemService.existsSync(outputPath)).toBe(true)
 
       // Extract and verify manifest contains contentChecksum
       const AdmZip = (await import('adm-zip')).default
@@ -467,8 +468,8 @@ describe('createPackageZip - content checksum', () => {
       expect(parsedManifest.contentChecksum).toMatch(/^[a-f0-9]{64}$/)
     } finally {
       // Cleanup
-      if (fs.existsSync(testDir)) {
-        fs.rmSync(testDir, { recursive: true, force: true })
+      if (fileSystemService.existsSync(testDir)) {
+        fileSystemService.rmSync(testDir, { recursive: true, force: true })
       }
     }
   })
@@ -482,14 +483,19 @@ describe('createPackageZip - content checksum', () => {
 
     try {
       // Setup project 1
-      fs.mkdirSync(path.join(projectRoot1, '.pair/knowledge'), { recursive: true })
-      fs.writeFileSync(path.join(projectRoot1, '.pair/knowledge/file.md'), 'deterministic')
+      fileSystemService.mkdirSync(path.join(projectRoot1, '.pair/knowledge'), { recursive: true })
+      fileSystemService.writeFileSync(
+        path.join(projectRoot1, '.pair/knowledge/file.md'),
+        'deterministic',
+      )
 
       // Setup project 2 with same content
-      fs.mkdirSync(path.join(projectRoot2, '.pair/knowledge'), { recursive: true })
-      fs.writeFileSync(path.join(projectRoot2, '.pair/knowledge/file.md'), 'deterministic')
+      fileSystemService.mkdirSync(path.join(projectRoot2, '.pair/knowledge'), { recursive: true })
+      fileSystemService.writeFileSync(
+        path.join(projectRoot2, '.pair/knowledge/file.md'),
+        'deterministic',
+      )
 
-      const { fileSystemService } = await import('@pair/content-ops')
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
@@ -514,8 +520,8 @@ describe('createPackageZip - content checksum', () => {
 
       expect(manifest1.contentChecksum).toBe(manifest2.contentChecksum)
     } finally {
-      if (fs.existsSync(testDir)) {
-        fs.rmSync(testDir, { recursive: true, force: true })
+      if (fileSystemService.existsSync(testDir)) {
+        fileSystemService.rmSync(testDir, { recursive: true, force: true })
       }
     }
   })
@@ -529,14 +535,19 @@ describe('createPackageZip - content checksum', () => {
 
     try {
       // Setup project 1
-      fs.mkdirSync(path.join(projectRoot1, '.pair/knowledge'), { recursive: true })
-      fs.writeFileSync(path.join(projectRoot1, '.pair/knowledge/file.md'), 'original content')
+      fileSystemService.mkdirSync(path.join(projectRoot1, '.pair/knowledge'), { recursive: true })
+      fileSystemService.writeFileSync(
+        path.join(projectRoot1, '.pair/knowledge/file.md'),
+        'original content',
+      )
 
       // Setup project 2 with different content
-      fs.mkdirSync(path.join(projectRoot2, '.pair/knowledge'), { recursive: true })
-      fs.writeFileSync(path.join(projectRoot2, '.pair/knowledge/file.md'), 'modified content')
+      fileSystemService.mkdirSync(path.join(projectRoot2, '.pair/knowledge'), { recursive: true })
+      fileSystemService.writeFileSync(
+        path.join(projectRoot2, '.pair/knowledge/file.md'),
+        'modified content',
+      )
 
-      const { fileSystemService } = await import('@pair/content-ops')
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
@@ -561,8 +572,8 @@ describe('createPackageZip - content checksum', () => {
 
       expect(manifest1.contentChecksum).not.toBe(manifest2.contentChecksum)
     } finally {
-      if (fs.existsSync(testDir)) {
-        fs.rmSync(testDir, { recursive: true, force: true })
+      if (fileSystemService.existsSync(testDir)) {
+        fileSystemService.rmSync(testDir, { recursive: true, force: true })
       }
     }
   })
@@ -574,10 +585,12 @@ describe('createPackageZip - content checksum', () => {
 
     try {
       // Setup
-      fs.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
-      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/doc.md'), 'smoke test content')
+      fileSystemService.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
+      fileSystemService.writeFileSync(
+        path.join(projectRoot, '.pair/knowledge/doc.md'),
+        'smoke test content',
+      )
 
-      const { fileSystemService } = await import('@pair/content-ops')
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
@@ -585,7 +598,7 @@ describe('createPackageZip - content checksum', () => {
 
       // Create package
       await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
-      expect(fs.existsSync(outputPath)).toBe(true)
+      expect(fileSystemService.existsSync(outputPath)).toBe(true)
 
       // Verify package passes verification
       const { verifyPackage } = await import('../kb-verify/verify-package.js')
@@ -594,8 +607,8 @@ describe('createPackageZip - content checksum', () => {
       expect(result.valid).toBe(true)
       expect(result.errors).toEqual([])
     } finally {
-      if (fs.existsSync(testDir)) {
-        fs.rmSync(testDir, { recursive: true, force: true })
+      if (fileSystemService.existsSync(testDir)) {
+        fileSystemService.rmSync(testDir, { recursive: true, force: true })
       }
     }
   })
@@ -609,12 +622,19 @@ describe('createPackageZip - content checksum', () => {
 
     try {
       // Setup - create multiple files in nested structure to test path handling
-      fs.mkdirSync(path.join(projectRoot, '.pair/knowledge/sub'), { recursive: true })
-      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/doc.md'), 'content 1')
-      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/sub/nested.md'), 'content 2')
-      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/README.md'), 'content 3')
+      fileSystemService.mkdirSync(path.join(projectRoot, '.pair/knowledge/sub'), {
+        recursive: true,
+      })
+      fileSystemService.writeFileSync(path.join(projectRoot, '.pair/knowledge/doc.md'), 'content 1')
+      fileSystemService.writeFileSync(
+        path.join(projectRoot, '.pair/knowledge/sub/nested.md'),
+        'content 2',
+      )
+      fileSystemService.writeFileSync(
+        path.join(projectRoot, '.pair/knowledge/README.md'),
+        'content 3',
+      )
 
-      const { fileSystemService } = await import('@pair/content-ops')
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
@@ -622,7 +642,7 @@ describe('createPackageZip - content checksum', () => {
 
       // Create package (this embeds contentChecksum in manifest)
       await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
-      expect(fs.existsSync(outputPath)).toBe(true)
+      expect(fileSystemService.existsSync(outputPath)).toBe(true)
 
       // Verify package - this must recalculate checksum and match
       const { verifyPackage } = await import('../kb-verify/verify-package.js')
@@ -632,8 +652,8 @@ describe('createPackageZip - content checksum', () => {
       expect(result.valid).toBe(true)
       expect(result.errors).toEqual([])
     } finally {
-      if (fs.existsSync(testDir)) {
-        fs.rmSync(testDir, { recursive: true, force: true })
+      if (fileSystemService.existsSync(testDir)) {
+        fileSystemService.rmSync(testDir, { recursive: true, force: true })
       }
     }
   })
@@ -646,15 +666,15 @@ describe('createPackageZip - content checksum', () => {
     try {
       // Setup target-layout structure with skills registry
       const skillsTargetDir = path.join(projectRoot, '.claude/skills/pair-test')
-      fs.mkdirSync(skillsTargetDir, { recursive: true })
+      fileSystemService.mkdirSync(skillsTargetDir, { recursive: true })
 
       // Create .pair structure for link targets to exist
       const adoptionDir = path.join(projectRoot, '.pair/adoption/tech')
-      fs.mkdirSync(adoptionDir, { recursive: true })
-      fs.writeFileSync(path.join(adoptionDir, 'tech-stack.md'), '# Tech Stack')
+      fileSystemService.mkdirSync(adoptionDir, { recursive: true })
+      fileSystemService.writeFileSync(path.join(adoptionDir, 'tech-stack.md'), '# Tech Stack')
 
       // Skill file with target-depth links (3 levels: .claude/skills/pair-test)
-      fs.writeFileSync(
+      fileSystemService.writeFileSync(
         path.join(skillsTargetDir, 'SKILL.md'),
         [
           '# Test Skill',
@@ -666,7 +686,6 @@ describe('createPackageZip - content checksum', () => {
         ].join('\n'),
       )
 
-      const { fileSystemService } = await import('@pair/content-ops')
       const realFs = fileSystemService
 
       const registries: RegistryConfig[] = [
@@ -690,7 +709,7 @@ describe('createPackageZip - content checksum', () => {
         realFs,
       )
 
-      expect(fs.existsSync(outputPath)).toBe(true)
+      expect(fileSystemService.existsSync(outputPath)).toBe(true)
 
       // Extract and verify link depth was adjusted
       const AdmZip = (await import('adm-zip')).default
@@ -712,8 +731,8 @@ describe('createPackageZip - content checksum', () => {
       expect(result.valid).toBe(true)
       expect(result.errors).toEqual([])
     } finally {
-      if (fs.existsSync(testDir)) {
-        fs.rmSync(testDir, { recursive: true, force: true })
+      if (fileSystemService.existsSync(testDir)) {
+        fileSystemService.rmSync(testDir, { recursive: true, force: true })
       }
     }
   })
@@ -725,10 +744,12 @@ describe('createPackageZip - content checksum', () => {
 
     try {
       // Setup and create valid package
-      fs.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
-      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/doc.md'), 'original content')
+      fileSystemService.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
+      fileSystemService.writeFileSync(
+        path.join(projectRoot, '.pair/knowledge/doc.md'),
+        'original content',
+      )
 
-      const { fileSystemService } = await import('@pair/content-ops')
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
@@ -753,8 +774,8 @@ describe('createPackageZip - content checksum', () => {
       expect(result.errors.length).toBeGreaterThan(0)
       expect(result.errors.join('\n')).toContain('checksum')
     } finally {
-      if (fs.existsSync(testDir)) {
-        fs.rmSync(testDir, { recursive: true, force: true })
+      if (fileSystemService.existsSync(testDir)) {
+        fileSystemService.rmSync(testDir, { recursive: true, force: true })
       }
     }
   })

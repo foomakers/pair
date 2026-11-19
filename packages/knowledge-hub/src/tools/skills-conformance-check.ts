@@ -51,7 +51,7 @@
  * Runnable as a CLI via `ts-node src/tools/skills-conformance-check.ts`
  * (package script `skills:conformance`). Exit 0 = conformant, Exit 1 = violations.
  */
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { basename, dirname, join, relative, resolve, sep } from 'path'
 // The real `pair update` dataset→`.claude/skills/**` name transform: the mirror
 // check below maps names through the production path, never a copy of it.
@@ -296,7 +296,7 @@ export function checkLinks(filePath: string, body: string): string[] {
   for (const target of extractLinkTargets(body)) {
     if (!isCheckableTarget(target)) continue
     const resolved = resolve(dir, target.split('#')[0]!)
-    if (!existsSync(resolved)) {
+    if (!fileSystemService.existsSync(resolved)) {
       errors.push(`broken relative reference "${target}"`)
     }
   }
@@ -948,9 +948,13 @@ export function checkApprovalSignalInSubDocs(skillsDir: string, markdownFiles: s
     if (!isApprovalSignalFamily(rel)) continue
     const parts = rel.split('/')
     const owner = join(skillsDir, parts[0] as string, parts[1] as string, 'SKILL.md')
-    if (!existsSync(owner)) continue // an orphan sub-doc: the depth check owns that
+    if (!fileSystemService.existsSync(owner)) continue // an orphan sub-doc: the depth check owns that
     errors.push(
-      ...checkApprovalSignal(rel, readFileSync(file, 'utf-8'), readFileSync(owner, 'utf-8')),
+      ...checkApprovalSignal(
+        rel,
+        fileSystemService.readFileSync(file),
+        fileSystemService.readFileSync(owner),
+      ),
     )
   }
   return errors
@@ -1010,7 +1014,7 @@ const SCRIPT_LINK = /^(?:\.\/)?scripts\/[^#?]+/
 /** Every file under `dir`, recursive, as posix paths relative to `dir`. */
 function walkFiles(dir: string, prefix = ''): string[] {
   const out: string[] = []
-  for (const e of readdirSync(join(dir, prefix), { withFileTypes: true })) {
+  for (const e of fileSystemService.readdirSync(join(dir, prefix))) {
     const rel = prefix ? `${prefix}/${e.name}` : e.name
     if (e.isDirectory()) out.push(...walkFiles(dir, rel))
     else out.push(rel)
@@ -1020,11 +1024,11 @@ function walkFiles(dir: string, prefix = ''): string[] {
 
 function checkLinkedScripts(skillFile: string, skillRel: string): string[] {
   const errors: string[] = []
-  const body = parseFrontmatter(readFileSync(skillFile, 'utf-8'))?.body ?? ''
+  const body = parseFrontmatter(fileSystemService.readFileSync(skillFile))?.body ?? ''
   for (const target of extractLinkTargets(body)) {
     if (!SCRIPT_LINK.test(target)) continue
     const scriptRel = target.replace(/^\.\//, '').split(/[#?]/)[0]!
-    if (!existsSync(join(dirname(skillFile), scriptRel))) {
+    if (!fileSystemService.existsSync(join(dirname(skillFile), scriptRel))) {
       errors.push(
         `${skillRel}: linked script "${scriptRel}" is missing from the skill's scripts/ directory`,
       )
@@ -1036,11 +1040,16 @@ function checkLinkedScripts(skillFile: string, skillRel: string): string[] {
 /** One dataset script against its installed twin: `undefined` when byte-identical. */
 function compareScriptTwin(datasetFile: string, twin: string, labels: string): string | undefined {
   const [datasetPath, twinPath] = labels.split('\n') as [string, string]
-  if (!existsSync(twin)) {
+  if (!fileSystemService.existsSync(twin)) {
     return `${datasetPath}: installed twin missing — ${twinPath} (run \`pair update\`)`
   }
   try {
-    if (readFileSync(datasetFile).equals(readFileSync(twin))) return undefined
+    if (
+      fileSystemService
+        .readFileBytesSync(datasetFile)
+        .equals(fileSystemService.readFileBytesSync(twin))
+    )
+      return undefined
     return `${datasetPath}: installed twin drifted — ${twinPath} differs from the dataset copy`
   } catch (err) {
     return `${datasetPath}: unreadable, cannot compare with ${twinPath} (${(err as Error).message})`
@@ -1053,7 +1062,7 @@ function checkScriptTwins(
   installedSkillsDir: string,
 ): string[] {
   const scriptsDir = join(skillDir, 'scripts')
-  if (!existsSync(scriptsDir)) return []
+  if (!fileSystemService.existsSync(scriptsDir)) return []
   const datasetBase = dirname(skillRel)
   const installed = installedSkillDir(datasetBase)
   const errors: string[] = []
@@ -1272,8 +1281,10 @@ export function parseProcessProfiles(content: string): Record<string, ProfileWhi
 
 /** The how-to guides actually on disk, as filenames. */
 export function collectHowToGuides(howToDir: string): string[] {
-  if (!existsSync(howToDir)) return []
-  return readdirSync(howToDir)
+  if (!fileSystemService.existsSync(howToDir)) return []
+  return fileSystemService
+    .readdirSync(howToDir)
+    .map(d => d.name)
     .filter(f => f.endsWith('.md') && f !== 'README.md')
     .sort()
 }
@@ -1441,7 +1452,7 @@ function pointsAtGateConvention(skillsDir: string, dir: string): boolean {
   // "a composition is missing". Resolving the obligation over the skill's whole
   // directory is the rule `checkApprovalSignalInSubDocs` applies in reverse.
   return collectSkillMarkdownFiles(join(skillsDir, ...dir.split('/'))).some(f =>
-    readFileSync(f, 'utf-8').includes(STEP_GATE_CONVENTION),
+    fileSystemService.readFileSync(f).includes(STEP_GATE_CONVENTION),
   )
 }
 
@@ -1484,8 +1495,8 @@ function deltaText(skillsDir: string, dir: string, content: string): string | nu
     .map(m => m[1] as string)
     .filter(p => !p.startsWith('/') && !p.split('/').includes('..'))
     .map(p => join(skillsDir, ...dir.split('/'), ...p.split('/')))
-    .filter(existsSync)
-    .map(p => readFileSync(p, 'utf-8'))
+    .filter(p => fileSystemService.existsSync(p))
+    .map(p => fileSystemService.readFileSync(p))
   return [section, ...disclosed].join('\n')
 }
 
@@ -1616,7 +1627,7 @@ export function checkStepMarkers(entries: StepEntry[], skillsDir: string): strin
       ...checkOneStepMarker(
         skillsDir,
         dir,
-        readFileSync(file, 'utf-8'),
+        fileSystemService.readFileSync(file),
         byCommand.get(commandOf(dir)),
       ),
     )
@@ -1653,7 +1664,7 @@ export function checkStepMarkersInMirror(
 
     const installed = installedSkillDir(datasetDir)
     const file = join(mirrorDir, ...installed.split('/'), 'SKILL.md')
-    if (!existsSync(file)) {
+    if (!fileSystemService.existsSync(file)) {
       errors.push(
         `${installed}/SKILL.md: step \`${entry.id}\` is not installed in the skills mirror — ` +
           `the copy assistants load carries no representation of it (run \`pair update\`)`,
@@ -1661,7 +1672,7 @@ export function checkStepMarkersInMirror(
       continue
     }
     errors.push(
-      ...checkOneStepMarker(mirrorDir, installed, readFileSync(file, 'utf-8'), entry).map(
+      ...checkOneStepMarker(mirrorDir, installed, fileSystemService.readFileSync(file), entry).map(
         e => `mirror: ${e}`,
       ),
     )
@@ -2623,7 +2634,7 @@ function prerequisiteWarnings(enabled: string[], entries: StepEntry[]): string[]
 export function collectSkillMarkdownFiles(skillsDir: string): string[] {
   const files: string[] = []
   const walk = (dir: string): void => {
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
+    for (const e of fileSystemService.readdirSync(dir)) {
       const p = join(dir, e.name)
       if (e.isDirectory()) walk(p)
       else if (e.name.endsWith('.md')) files.push(p)
@@ -2635,18 +2646,19 @@ export function collectSkillMarkdownFiles(skillsDir: string): string[] {
 
 export function collectSkillFiles(skillsDir: string): string[] {
   const files: string[] = []
-  const categories = readdirSync(skillsDir, { withFileTypes: true }).filter(d => d.isDirectory())
+  const categories = fileSystemService.readdirSync(skillsDir).filter(d => d.isDirectory())
   for (const cat of categories) {
     const catDir = join(skillsDir, cat.name)
-    const subdirs = readdirSync(catDir, { withFileTypes: true })
+    const subdirs = fileSystemService
+      .readdirSync(catDir)
       .filter(d => d.isDirectory())
       .map(d => d.name)
     if (subdirs.length > 0) {
       for (const sub of subdirs) {
         const f = join(catDir, sub, 'SKILL.md')
-        if (existsSync(f)) files.push(f)
+        if (fileSystemService.existsSync(f)) files.push(f)
       }
-    } else if (existsSync(join(catDir, 'SKILL.md'))) {
+    } else if (fileSystemService.existsSync(join(catDir, 'SKILL.md'))) {
       // Meta skill: category dir itself contains SKILL.md (e.g. next)
       files.push(join(catDir, 'SKILL.md'))
     }
@@ -2664,13 +2676,13 @@ export function collectSkillFiles(skillsDir: string): string[] {
  */
 export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): string[] {
   const cataloguePath = join(proseRoot, STEP_CATALOGUE_FILE)
-  if (!existsSync(cataloguePath)) {
+  if (!fileSystemService.existsSync(cataloguePath)) {
     return [
       `${STEP_CATALOGUE_FILE}: missing — every process step is ungoverned and no profile can name one`,
     ]
   }
 
-  const entries = parseStepCatalogue(readFileSync(cataloguePath, 'utf-8'))
+  const entries = parseStepCatalogue(fileSystemService.readFileSync(cataloguePath))
   const errors = [
     ...checkStepCatalogue(entries, {
       howToGuides: collectHowToGuides(join(proseRoot, HOW_TO_DIR)),
@@ -2689,20 +2701,21 @@ export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): st
   // no dataset to check in the first place, and `runChecks` is also driven over
   // synthetic corpora in unit tests). Present ⇒ checked; absent ⇒ nothing to bind.
   const mirrorDir = join(proseRoot, MIRROR_SKILLS_DIR)
-  if (existsSync(mirrorDir)) errors.push(...checkStepMarkersInMirror(entries, skillsDir, mirrorDir))
+  if (fileSystemService.existsSync(mirrorDir))
+    errors.push(...checkStepMarkersInMirror(entries, skillsDir, mirrorDir))
 
   const agentsPath = join(proseRoot, AGENTS_FILE)
-  if (existsSync(agentsPath)) {
-    errors.push(...checkManualPathEntrypoint(readFileSync(agentsPath, 'utf-8')))
+  if (fileSystemService.existsSync(agentsPath)) {
+    errors.push(...checkManualPathEntrypoint(fileSystemService.readFileSync(agentsPath)))
   }
 
   const profilesPath = join(proseRoot, PROCESS_PROFILES_FILE)
-  if (!existsSync(profilesPath)) {
+  if (!fileSystemService.existsSync(profilesPath)) {
     errors.push(`${PROCESS_PROFILES_FILE}: missing — the catalogue has no profile schema to serve`)
     return errors
   }
 
-  const builtIns = parseProcessProfiles(readFileSync(profilesPath, 'utf-8'))
+  const builtIns = parseProcessProfiles(fileSystemService.readFileSync(profilesPath))
   errors.push(...checkProcessProfiles(builtIns, entries))
   errors.push(...checkShippedProfileProse(proseRoot, entries, builtIns))
   errors.push(...checkInstalledProfileCorpus(skillsDir, proseRoot, entries, builtIns))
@@ -2801,12 +2814,12 @@ export function checkInstalledProfileCorpus(
   entries: StepEntry[],
   builtIns: Record<string, ProfileWhitelist>,
 ): string[] {
-  if (!existsSync(join(proseRoot, INSTALLED_KB_ROOT))) return []
+  if (!fileSystemService.existsSync(join(proseRoot, INSTALLED_KB_ROOT))) return []
 
   const errors: string[] = []
   const read = (file: string): string | null => {
     const path = join(proseRoot, file)
-    if (existsSync(path)) return readFileSync(path, 'utf-8')
+    if (fileSystemService.existsSync(path)) return fileSystemService.readFileSync(path)
     errors.push(missingInstalledFile(file))
     return null
   }
@@ -2899,12 +2912,12 @@ export function checkShippedProfileProse(
   const errors: string[] = []
   for (const file of PROFILE_DECLARATION_FILES) {
     const path = join(proseRoot, file)
-    if (!existsSync(path)) {
+    if (!fileSystemService.existsSync(path)) {
       errors.push(missingGovernedFile(file))
       continue
     }
     const wow = resolveProcessProfile(
-      parseWowProfileSection(readFileSync(path, 'utf-8')),
+      parseWowProfileSection(fileSystemService.readFileSync(path)),
       entries,
       builtIns,
     )
@@ -2913,12 +2926,14 @@ export function checkShippedProfileProse(
 
   for (const file of PROFILE_PROSE_FILES) {
     const path = join(proseRoot, file)
-    if (!existsSync(path)) {
+    if (!fileSystemService.existsSync(path)) {
       // A file already reported by the declaration loop is not reported twice.
       if (!PROFILE_DECLARATION_FILES.includes(file)) errors.push(missingGovernedFile(file))
       continue
     }
-    errors.push(...profileExampleErrors(file, readFileSync(path, 'utf-8'), entries, builtIns))
+    errors.push(
+      ...profileExampleErrors(file, fileSystemService.readFileSync(path), entries, builtIns),
+    )
   }
   return errors
 }
@@ -2929,7 +2944,7 @@ export function runChecks(skillsDir: string): RunResult {
 
   for (const file of files) {
     const rel = relative(skillsDir, file)
-    const content = readFileSync(file, 'utf-8')
+    const content = fileSystemService.readFileSync(file)
     const fm = parseFrontmatter(content)
     if (!fm) {
       errors.push(`${rel}: missing or malformed YAML frontmatter`)
@@ -2948,13 +2963,12 @@ export function runChecks(skillsDir: string): RunResult {
   errors.push(...checkApprovalSignalInSubDocs(skillsDir, collectSkillMarkdownFiles(skillsDir)))
 
   const mirrorSkillsDir = join(resolve(skillsDir, '..', '..'), MIRROR_SKILLS_DIR)
-  errors.push(
-    ...checkSkillLocalScripts(skillsDir, existsSync(mirrorSkillsDir) ? mirrorSkillsDir : undefined),
-  )
+  const mirror = fileSystemService.existsSync(mirrorSkillsDir) ? mirrorSkillsDir : undefined
+  errors.push(...checkSkillLocalScripts(skillsDir, mirror))
 
   const nextFile = files.find(f => basename(dirname(f)) === 'next')
   if (nextFile) {
-    errors.push(...checkCatalogCounts(readFileSync(nextFile, 'utf-8'), files.length))
+    errors.push(...checkCatalogCounts(fileSystemService.readFileSync(nextFile), files.length))
   }
 
   const counts = countByCategory(files, skillsDir)
@@ -2964,8 +2978,8 @@ export function runChecks(skillsDir: string): RunResult {
 
   for (const rel of KB_PROSE_FILES) {
     const abs = join(proseRoot, rel)
-    if (existsSync(abs)) {
-      const proseContent = readFileSync(abs, 'utf-8')
+    if (fileSystemService.existsSync(abs)) {
+      const proseContent = fileSystemService.readFileSync(abs)
       errors.push(...checkProseCounts(rel, proseContent, counts))
       errors.push(...checkCategoryLabelCounts(rel, proseContent, counts))
     }

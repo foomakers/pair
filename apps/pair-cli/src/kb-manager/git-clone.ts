@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 import { execFileSync } from 'child_process'
-import { rmSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 
 /** Placeholder written over any credential removed from a surfaced git message. */
 const REDACTED = '***'
@@ -209,7 +209,7 @@ export function cloneGitRepo(source: string, destDir: string): void {
   } catch (err) {
     // Clean up partial clone on failure
     try {
-      rmSync(destDir, { recursive: true, force: true })
+      fileSystemService.rmSync(destDir, { recursive: true, force: true })
     } catch {
       // best-effort
     }

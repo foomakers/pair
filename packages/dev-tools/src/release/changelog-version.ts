@@ -9,7 +9,7 @@
  *   pnpm changelog-version -- <computed-version> <override-version>
  */
 import { execFileSync } from 'child_process'
-import { readFileSync, writeFileSync } from 'fs'
+import { fileSystemService as fs } from '@pair/content-ops'
 import { join } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
@@ -32,9 +32,9 @@ export function rewriteChangelog(content: string, from: string, to: string): str
 
 export function applyChangelogVersion(files: string[], from: string, to: string): string[] {
   return files.filter(f => {
-    const before = readFileSync(f, 'utf8')
+    const before = fs.readFileSync(f)
     const after = rewriteChangelog(before, from, to)
-    if (after !== before) writeFileSync(f, after)
+    if (after !== before) fs.writeFileSync(f, after)
     return after !== before
   })
 }
