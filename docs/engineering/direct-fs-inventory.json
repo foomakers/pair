@@ -1,13 +1,13 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1051,
-  "files": 373,
-  "distinctContents": 338,
+  "files": 375,
+  "distinctContents": 340,
   "dispositionCounts": {
     "standalone-script": 13,
     "os-guarantee": 25,
     "type-contract": 13,
-    "in-flight-churn": 226,
+    "in-flight-churn": 228,
     "repo-contract": 95,
     "boundary-adapter": 1
   },
@@ -384,7 +384,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/card-lock.ts",
-      "hash": "3746d740f8cd7a705547d1f969d05035a2d013ace7e9a3a271ca1d5a0c546e25",
+      "hash": "9dd859271a06ac95ee6de6259e3839101bc4be84ea16ab85039e55ca4759f0b8",
       "dependencies": [
         {
           "form": "import",
@@ -1706,6 +1706,38 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/run-lock.test.ts",
+      "hash": "905ccb612240739d82fd817a2ef98bde21589005c1c25ec7d7fe38c4735391f7",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "fs",
+          "line": 3
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/run-lock.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/run-lock.ts",
+      "hash": "4d3223ff7e0bc139d5e11cb6583ccf2f566d69670200d182ae28bc306bf885aa",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/run-lock.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
