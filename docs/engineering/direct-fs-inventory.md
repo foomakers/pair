@@ -98,7 +98,7 @@ result. Its status is unknown.
 
 ## Status at close of this PR
 
-Registry: 373 exact-path rows (331 distinct contents), all dispositioned; `pnpm direct-fs:check`
+Registry: 373 exact-path rows (338 distinct contents), all dispositioned; `pnpm direct-fs:check`
 (in `pnpm quality-gate`) passes. 0 `deferred-migration`, 0 `migration-candidate`.
 226 `in-flight-churn` (Scope Limit zones), 95 `repo-contract`, 25 `os-guarantee`,
 13 `standalone-script`, 13 `type-contract`, 1 `boundary-adapter`.

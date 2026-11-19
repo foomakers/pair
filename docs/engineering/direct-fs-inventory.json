@@ -2,7 +2,7 @@
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1051,
   "files": 373,
-  "distinctContents": 331,
+  "distinctContents": 338,
   "dispositionCounts": {
     "standalone-script": 13,
     "os-guarantee": 25,
@@ -57,7 +57,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/install/workflow-presets.test.ts",
-      "hash": "1ff5dac112592551e208aed2e9a894cdf4db7955859024ff5e5af19f5607f6e1",
+      "hash": "3834d0af78a179c9a7241d9e5c59cae3515986fdda9bc46fc6a13e8ed63f34ae",
       "dependencies": [
         {
           "form": "import",
@@ -832,7 +832,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
-      "hash": "99d336d2d0935852ddfe3d38475662455e800aaf3bf8a8ffbad59542c84bc80e",
+      "hash": "fdfdbdc6cffa9321e751ef6d2fd3e657a833a16e8dbffe717998f3307b20bcc1",
       "dependencies": [
         {
           "form": "import",
@@ -1456,7 +1456,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/parallel.test.ts",
-      "hash": "bd9128c8dca2f87a461ab64bc7f26b0dd3e3a330fc5f62e2c298b0a3c858fb4c",
+      "hash": "0c19efdd2b87318a3015491cdf001b802291c6427e0a4d856a255a3e5c8f0cbb",
       "dependencies": [
         {
           "form": "import",
@@ -1764,7 +1764,8 @@
       "reason": "File is in the declared Scope Limit zone being rewritten by in-flight cards.",
       "decision": "Registered, not migrated here (issue #621 Scope Limit).",
       "testCategory": "root-guard",
-      "disposition": "in-flight-churn"
+      "disposition": "in-flight-churn",
+      "hash": "e4fcca575d219fb923b1a4ec364305657f17243201cc070c2a1c494bc6a85251"
     },
     {
       "path": "apps/pair-cli/src/commands/run/spawn.test.ts",
@@ -1784,7 +1785,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/spawn.ts",
-      "hash": "8897f8b09c7e3c9fabcdcb19195671b7324e8f84297aad010dc699a187557f56",
+      "hash": "441a9eb732dc474696d5cd19c368952ab0cd2759472381cac0e7273aa88a4537",
       "dependencies": [
         {
           "form": "import",
@@ -1852,7 +1853,8 @@
       "reason": "File is in the declared Scope Limit zone being rewritten by in-flight cards.",
       "decision": "Registered, not migrated here (issue #621 Scope Limit).",
       "testCategory": "root-guard",
-      "disposition": "in-flight-churn"
+      "disposition": "in-flight-churn",
+      "hash": "45f100ce255000b2d468979fc38bae62366e058893d436c1a8ba8b6abc21a22d"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-manual.test.ts",
@@ -1860,7 +1862,8 @@
       "reason": "File is in the declared Scope Limit zone being rewritten by in-flight cards.",
       "decision": "Registered, not migrated here (issue #621 Scope Limit).",
       "testCategory": "root-guard",
-      "disposition": "in-flight-churn"
+      "disposition": "in-flight-churn",
+      "hash": "ec22c6c78b36f1728df2bdd2ac7f524e48db6d611a7b3d16ee08319efbb9d2d2"
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-policy.test.ts",
@@ -1912,7 +1915,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-report.ts",
-      "hash": "f57279a6c8e658fb3b35e4fbe6950c8f0df5f7fd0c497db68793df3a8d6e8204",
+      "hash": "d73d747542e8bd249d1830ecec9a4b56fa2b327e28d55219628d3ff10a867a0f",
       "dependencies": [
         {
           "form": "import",
@@ -1960,7 +1963,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry-trace.ts",
-      "hash": "22f70dbc8642ca465059fed1b9b3dcb96ecabf3009114cf2a1e027095f39307e",
+      "hash": "43ad045acf676ed2a014e55f36b9706114b8e99339bb5f743383182657c3e4e9",
       "dependencies": [
         {
           "form": "import",
@@ -2008,7 +2011,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/telemetry.ts",
-      "hash": "bbf74756422a2a6f0cf05d2d3e3cb9955dc1f73c79d7872d0079d448d4e65e86",
+      "hash": "17f309fba2e31eece038586eeb02b4e6abbd7537d47db196baa4d4a2c1d42c79",
       "dependencies": [
         {
           "form": "import",
@@ -2125,7 +2128,8 @@
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
-      "testCategory": "repo-file-contract"
+      "testCategory": "repo-file-contract",
+      "hash": "729da1cea9ddf0cbed7cb5cc5b4fc96dc6d62cdba0458ad72ea9b987947d4f1b"
     },
     {
       "path": "apps/pair-cli/src/commands/tokens/tokens.acceptance.test.ts",
@@ -2274,7 +2278,7 @@
     },
     {
       "path": "apps/pair-cli/src/registry/layout.test.ts",
-      "hash": "1b95d7eb4da996ecbea986945012d7bf109af87e0b763077bb1dda5cbec6e0bc",
+      "hash": "43b7f8472d00bc8397ff1852e0be0c98730a7db10735caecc4d5a01f3c0c08cd",
       "dependencies": [
         {
           "form": "import",
@@ -2588,7 +2592,7 @@
     },
     {
       "path": "packages/content-ops/src/file-system/file-system-service.test.ts",
-      "hash": "ed196f66447a680a762a799bde5ab67f7e20e0acfe7e79fb60343597bd067e2b",
+      "hash": "6f4747581498d0d0543aa0a31d0a10ff56163d24f919df89ea3aacae0edb898b",
       "dependencies": [
         {
           "form": "dynamic-import",
@@ -2605,7 +2609,7 @@
     },
     {
       "path": "packages/content-ops/src/file-system/file-system-service.ts",
-      "hash": "ddad93642913ad016fa2f9b4c30aab9101f0ae44ba971477dbcfd08aa2af5c6b",
+      "hash": "4cad9c873ebdf85190882cf6b75fcbadcbd5d68a0d2fd892be49b583236b07ca",
       "dependencies": [
         {
           "form": "import",
@@ -2626,7 +2630,7 @@
     },
     {
       "path": "packages/content-ops/src/file-system/file-system-sync-parity.test.ts",
-      "hash": "4bf0976e40677061438c6fd5302ba28ac597a88a6f3d804aeffebbd13daaf341",
+      "hash": "71d871ea2fdbc9b7dc09f9a2ed538194f4f1f00d9c730569b7bf408fdcdf271b",
       "dependencies": [
         {
           "form": "import",
@@ -2644,7 +2648,7 @@
     },
     {
       "path": "packages/content-ops/src/file-system/file-validations.ts",
-      "hash": "4bf0976e40677061438c6fd5302ba28ac597a88a6f3d804aeffebbd13daaf341",
+      "hash": "9ff5388cd3b176a838136f2c3789429adae47d0f11b783fe62e425aebfa03dd8",
       "dependencies": [
         {
           "form": "import",
@@ -2698,7 +2702,7 @@
     },
     {
       "path": "packages/content-ops/src/ops/copy/copyPathOps.ts",
-      "hash": "1254d115f004071247aa8f5e961243dca9fbd725503407dcda7ac9e28f0ad92a",
+      "hash": "88438f736395afe7916df52e1b8d0e70c0b528fcb2276865028c9e1952b5de81",
       "dependencies": [
         {
           "form": "import",
@@ -2715,7 +2719,7 @@
     },
     {
       "path": "packages/content-ops/src/ops/movePathOps.ts",
-      "hash": "9263941800dffebcc86c12563eb0441ae4beac9738eb91aa2dadc6579ac11021",
+      "hash": "8872b32eadebd1052651cd6b9bf2279ebcec13cf57e0021b2692d5ca4f039e3d",
       "dependencies": [
         {
           "form": "import",
@@ -2748,7 +2752,7 @@
     },
     {
       "path": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs-read.ts",
-      "hash": "60ee98c89580d3d61a334c717fda74b86a35ba08bdac2644feb18838f4a6367b",
+      "hash": "f929f6d266290c5c718289b5d2ab4a5d58c01d61b3336bcd22ce1894722487eb",
       "dependencies": [
         {
           "form": "import",
@@ -2764,7 +2768,7 @@
     },
     {
       "path": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs-state.ts",
-      "hash": "35724f3d16537f5036bf32c0ee2d467d7573b6cdd09e112ab4068a8ed2327418",
+      "hash": "7b4a8864c47a4d40d27c3becb0e00cb798b4ea0d1071991c5ee207ceabc6a515",
       "dependencies": [
         {
           "form": "import",
@@ -2780,7 +2784,7 @@
     },
     {
       "path": "packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs.ts",
-      "hash": "4640a73d5eab196bef123a722e946daf055883bfa078fd194a94d970052ce5ee",
+      "hash": "9ae4602c421214193d9480852d2deb6493dbfa76fd054cf87e031e2f561a339f",
       "dependencies": [
         {
           "form": "import",
@@ -2838,7 +2842,8 @@
       "disposition": "repo-contract",
       "reason": "Runs the root gate on temp git repos: needs real fs and git (readFileSync, symlinkSync) to exercise runGuard end to end.",
       "decision": "Keep real fs: the test verifies the gate entrypoint against real disk, in-memory doubles cannot.",
-      "testCategory": "root-guard"
+      "testCategory": "root-guard",
+      "hash": "e5e038030834f3325bd33c16a00436a1ed05ba380c370dd5423b23ad7b779234"
     },
     {
       "path": "packages/dev-tools/src/quality-gates/direct-fs-guard.ts",
@@ -2846,7 +2851,8 @@
       "disposition": "repo-contract",
       "reason": "The guard reads the tracked repository files and registry from real disk; it is the root gate itself.",
       "decision": "Keep real reads in the gate entrypoint; logic is unit-tested on in-memory strings.",
-      "testCategory": "root-guard"
+      "testCategory": "root-guard",
+      "hash": "ae420650c3e19fc89607e2d72af5ddd744e8e4935a6c2d0c8363b20a4f24346e"
     },
     {
       "path": "packages/dev-tools/src/quality-gates/format-workflow-composition.test.ts",
@@ -3826,7 +3832,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
-      "hash": "ffc889f4f1ee267fabd005339ae1377266373c4b3a3182eed9e2019e36409dbc",
+      "hash": "d386a400125fe147f4828e48355c832b9af78bbb04c298650d60cdd07cdd37ae",
       "dependencies": [
         {
           "form": "import",
@@ -4007,7 +4013,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
-      "hash": "ffc889f4f1ee267fabd005339ae1377266373c4b3a3182eed9e2019e36409dbc",
+      "hash": "d386a400125fe147f4828e48355c832b9af78bbb04c298650d60cdd07cdd37ae",
       "dependencies": [
         {
           "form": "import",
@@ -5922,7 +5928,7 @@
     },
     {
       "path": "packages/knowledge-hub/src/conformance/skills-defects-b.test.ts",
-      "hash": "98fff7d6d1ff7167d277ec0fbfbb3d79faa060fadf7416d18235123840c0574a",
+      "hash": "88d60fac6223a1f787ea55ced0fa4b9decdafad72fb1069202710e18d5c00946",
       "dependencies": [
         {
           "form": "import",
@@ -5984,7 +5990,8 @@
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
-      "testCategory": "repo-file-contract"
+      "testCategory": "repo-file-contract",
+      "hash": "71813e9b90fa0ce9c608343d551dee19e9a08a06a5814d483b8f1ee60adc6a00"
     },
     {
       "path": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
@@ -6297,7 +6304,7 @@
     },
     {
       "path": "scripts/dev/hook-git-env.test.mjs",
-      "hash": "6ce655cff6d07f41efef83c8a04f6709fe6a84f9d35764c3df77d259ad315db9",
+      "hash": "03ba4fb25c7d6f36ff173c7330e9e2137821e48ca1f367e9626119ed8003a90b",
       "dependencies": [
         {
           "form": "import",

@@ -44,15 +44,13 @@
  * `llms-index:check`, delegated from the repo-root script of the same name).
  * Exit 0 = in sync, exit 1 = drift, broken setup, or an index file that cannot be read.
  *
- * WHY `-T` (transpile-only). Unlike its siblings this gate compiles a source file
- * from ANOTHER package, and that file's first line imports `@pair/content-ops` types
- * that only exist in `dist/`. Type-checking here therefore made the gate's verdict
- * depend on whether someone had run a build: on a fresh `pnpm install` the gate
- * produced NONE of its three outcomes, it died with
- * `TS2307: Cannot find module '@pair/content-ops'`. Type-checking that source is
- * `ts:check`'s job in both packages, and `turbo ts:check` carries the `^build` edge
- * that makes it correct. A gate that dies with a compiler error instead of a verdict
- * is how a gate teaches contributors to distrust it.
+ * WHY `-T` (transpile-only). This gate compiles a source file from ANOTHER package;
+ * type-checking it here made the verdict depend on whether `@pair/content-ops` types
+ * were built. Type-checking that source is `ts:check`'s job in both packages, and
+ * `turbo ts:check` carries the `^build` edge.
+ *
+ * Requires `@pair/content-ops` built (`dist/`): the file system service is imported at
+ * runtime. Without a build the gate dies on module resolution, not with a verdict.
  */
 import { fileSystemService } from '@pair/content-ops'
 import { join } from 'path'
