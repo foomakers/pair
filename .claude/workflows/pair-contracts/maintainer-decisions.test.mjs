@@ -222,6 +222,38 @@ test('#691 AC1: an accepted override survives a reset epoch — its block archiv
   assert.deepEqual(file.overrides.map(o => [o.code, o.path, o.segment, o.decisionRef]), [[B.code, B.path, B.segment, c.url]])
 })
 
+// PR #692 r0-6: the AC1 negatives — an archived block only anchors a waiver in ITS run dir, and only for the same segment.
+const resetEpoch = (dir, B) => {
+  custodyStuck(dir, [B])
+  const block = go(dir).next.block
+  renameSync(join(dir, 'r0-review-phase.json'), join(dir, 'reset-2026-11-19-r0-review-phase.json'))
+  review(dir, 'r0', { custody: { contractBreach: true, breaches: [B] } })
+  return block
+}
+
+test('#691 AC1 negative: a decision whose block was archived in ANOTHER run dir (same file name) waives nothing here', () => {
+  const B = { code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }
+  const foreign = resetEpoch(runDir(), B)
+  const dir = runDir()
+  resetEpoch(dir, B)
+  pick(dir, { pr: [comment(decisionBody({ block: foreign, choice: 'override', reason: 'accepted', overrides: [B] }))] })
+  assert.deepEqual(existsSync(join(dir, 'custody-overrides.json')) ? JSON.parse(readFileSync(join(dir, 'custody-overrides.json'), 'utf8')).overrides : [], [])
+})
+
+test('#691 AC1 negative (integration): an override for another segment waives nothing after the reset epoch', () => {
+  const { cwd, base } = chainRepo()
+  write(cwd, 'src/other.js', 'export const o = 1\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'engine fix outside the sealed scope')
+  const dir = runDir()
+  const B = { code: 'out-of-scope', path: 'src/other.js', segment: 'r1-g1' }
+  const block = resetEpoch(dir, B)
+  pick(dir, { pr: [comment(decisionBody({ block, choice: 'override', reason: 'accepted', overrides: [{ ...B, segment: 'r2-g1' }] }))] })
+  assert.equal(verifyChain({ pr: PR, base, cwd, runDir: dir }).verified, false)
+  pick(dir, { pr: [comment(decisionBody({ block, choice: 'override', reason: 'accepted', overrides: [B] }))] })
+  assert.equal(verifyChain({ pr: PR, base, cwd, runDir: dir }).verified, true, 'control: the same segment is waived')
+})
+
 test('AC-11 security: a hand-written override entry (no verified decision) is dropped at the next pickup', () => {
   const dir = runDir()
   custodyStuck(dir, [{ code: 'out-of-scope', path: 'src/x.ts', segment: 'a0' }])
