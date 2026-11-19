@@ -93,6 +93,7 @@ const EXCEPTION_OUT_OF_SCOPE = new Set([
   'apps/website/scripts/landing-video/login-closing.mjs',
   'packages/content-ops/src/file-system/file-operations.ts',
   'packages/content-ops/src/file-system/file-system-service.test.ts',
+  'packages/content-ops/src/file-system/file-system-sync-parity.test.ts',
   'packages/content-ops/src/file-system/file-validations.ts',
   'packages/content-ops/src/file-system/path-containment.test.ts',
   'packages/content-ops/src/ops/copy/copy-symlink-containment.test.ts',
