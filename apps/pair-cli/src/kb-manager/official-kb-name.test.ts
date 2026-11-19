@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
 import { join } from 'path'
+import { fileSystemService } from '@pair/content-ops'
 import { OFFICIAL_KB_NAME } from './cache-slot-key'
 
 /**
@@ -17,9 +17,8 @@ import { OFFICIAL_KB_NAME } from './cache-slot-key'
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..')
 
 function releasePackagedName(): string {
-  const script = readFileSync(
+  const script = fileSystemService.readFileSync(
     join(REPO_ROOT, 'scripts/workflows/release/package-kb-dataset.sh'),
-    'utf-8',
   )
   const matches = [...script.matchAll(/--name "([^"]+)"/g)]
   expect(matches.length, 'package-kb-dataset.sh must pass --name exactly once').toBe(1)

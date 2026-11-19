@@ -33,6 +33,17 @@ describe('in-memory-fs-write', () => {
     })
   })
 
+  describe('appendFile', () => {
+    it.each([
+      ['existing', { '/output.txt': 'first\n' }, 'first\nsecond\n'],
+      ['missing', {}, 'second\n'],
+    ])('appends with %s file state', async (_kind, initial, expected) => {
+      const output = createFs(initial, '/', '/')
+      await output.appendFile('/output.txt', 'second\n')
+      expect(await output.readFile('/output.txt')).toBe(expected)
+    })
+  })
+
   describe('unlink', () => {
     it('should remove files', async () => {
       await fs.writeFile('/test.txt', 'content')

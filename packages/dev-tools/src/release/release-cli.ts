@@ -4,7 +4,7 @@
  * `--cleanup-for X.Y.Z[-ch.N]` prints the tags that publishing it obsoletes.
  */
 import { execFileSync } from 'child_process'
-import { readdirSync, readFileSync } from 'fs'
+import { fileSystemService as fs } from '@pair/content-ops'
 import { join } from 'path'
 import { REPO_ROOT } from '../quality-gates/repo-root'
 import {
@@ -47,9 +47,11 @@ export function readTagParents(): Record<string, string> {
 }
 
 export function readBumps(dir = join(REPO_ROOT, '.changeset')): Bump[] {
-  return readdirSync(dir)
+  return fs
+    .readdirSync(dir)
+    .map(d => d.name)
     .filter(f => f.endsWith('.md') && f !== 'README.md')
-    .map(f => parseChangesetBump(readFileSync(join(dir, f), 'utf8')))
+    .map(f => parseChangesetBump(fs.readFileSync(join(dir, f))))
     .filter((b): b is Bump => b !== null)
 }
 

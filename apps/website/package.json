@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@pair/brand": "workspace:*",
+    "@pair/content-ops": "workspace:*",
     "@types/mdx": "catalog:",
     "fumadocs-core": "catalog:",
     "fumadocs-mdx": "catalog:",

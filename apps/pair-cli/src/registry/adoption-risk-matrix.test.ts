@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
 import { join } from 'path'
+import { fileSystemService } from '@pair/content-ops'
 import { pathsOverlap } from './working-area'
 import { getReservedPaths, detectReservedPathOverlap } from './reserved-paths'
 import { DEFAULT_WORKING_PATH } from './working-area'
@@ -14,7 +14,9 @@ import type { RegistryConfig } from './resolver'
 // lives under the `adoption` registry (source `.pair/adoption`, behavior `add`); these
 // tests pin that invariant so a future config change can't silently start clobbering it.
 
-const SHIPPED_CONFIG = JSON.parse(readFileSync(join(__dirname, '../../config.json'), 'utf-8')) as {
+const SHIPPED_CONFIG = JSON.parse(
+  fileSystemService.readFileSync(join(__dirname, '../../config.json')),
+) as {
   asset_registries: Record<string, RegistryConfig & { behavior: string }>
 }
 

@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { InMemoryFileSystemService } from '@pair/content-ops'
+import { InMemoryFileSystemService, fileSystemService } from '@pair/content-ops'
 import { loadConfigWithOverrides, validateConfig } from './loader'
-import { readFileSync } from 'fs'
 import { join } from 'path'
 
-const REAL_CONFIG = readFileSync(join(__dirname, '..', '..', 'config.json'), 'utf-8')
+const REAL_CONFIG = fileSystemService.readFileSync(join(__dirname, '..', '..', 'config.json'))
 
 describe('config loader - skills registry', () => {
   it('loads skills registry from config.json', () => {

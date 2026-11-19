@@ -1,4 +1,4 @@
-import fs from 'node:fs'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import path from 'node:path'
 
 export interface LlmPage {
@@ -61,14 +61,14 @@ export function getUrlFromFilePath(filePath: string, contentDir: string): string
   return `/docs/${withoutIndex}`
 }
 
-function getAllMdxFiles(dir: string): string[] {
+function getAllMdxFiles(dir: string, fs: FileSystemService): string[] {
   if (!fs.existsSync(dir)) return []
   const files: string[] = []
-  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  const entries = fs.readdirSync(dir)
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name)
     if (entry.isDirectory()) {
-      files.push(...getAllMdxFiles(fullPath))
+      files.push(...getAllMdxFiles(fullPath, fs))
     } else if (entry.name.endsWith('.mdx')) {
       files.push(fullPath)
     }
@@ -76,15 +76,18 @@ function getAllMdxFiles(dir: string): string[] {
   return files
 }
 
-export function getLlmPages(contentDir?: string): LlmPage[] {
+export function getLlmPages(
+  contentDir?: string,
+  fs: FileSystemService = fileSystemService,
+): LlmPage[] {
   const dir = contentDir ?? path.join(process.cwd(), 'content', 'docs')
-  const files = getAllMdxFiles(dir)
+  const files = getAllMdxFiles(dir, fs)
   const pages: LlmPage[] = []
 
   for (const file of files) {
     if (path.basename(file) === 'meta.json') continue
 
-    const raw = fs.readFileSync(file, 'utf-8')
+    const raw = fs.readFileSync(file)
     const { data, content } = parseFrontmatter(raw)
 
     const draft = data['draft']

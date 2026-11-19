@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import fs from 'node:fs'
+import type fs from 'node:fs'
 import type { TargetConfig, FileSystemService } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 import {

@@ -5,10 +5,12 @@
  * Only mutants inside `--mutate` are judged: a test covering none of them is `out-of-scope`.
  */
 import { execFileSync } from 'child_process'
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { basename, dirname, join, relative, resolve } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
+
+const { mkdirSync, readFileSync, rmSync, writeFileSync } = fileSystemService
 
 export interface StrykerMutant {
   status: string
@@ -251,7 +253,7 @@ export function run(o: Options, root: string): MutationSummary {
       restore(root, o.module)
     }
   }
-  const summary = analyze(JSON.parse(readFileSync(raw, 'utf8')), o.module, o.mutate)
+  const summary = analyze(JSON.parse(readFileSync(raw)), o.module, o.mutate)
   writeFileSync(o.out, JSON.stringify(summary, null, 2) + '\n')
   return summary
 }

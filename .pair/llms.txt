@@ -218,6 +218,8 @@
 - [Decision: an unprovable preparation is left by a verified waiver or a moved head, never by custody](.pair/adoption/decision-log/2026-11-15-unprovable-preparation-waiver-and-moved-head.md)
 - [Decision: telemetry price table lives in `automation.md` `## Telemetry`, USD per million tokens](.pair/adoption/decision-log/2026-11-16-telemetry-price-table-in-automation-md.md)
 - [Decision: Full quality gate once at closing; independent tasks run in parallel](.pair/adoption/decision-log/2026-11-17-gate-at-closing-and-parallel-tasks.md)
+- [Decision: `FileSystemService.appendFile` added; atomicity leaves stay on `node:fs`](.pair/adoption/decision-log/2026-11-18-file-system-service-append-file.md)
+- [Decision: `FileSystemService` grows the sync primitives migrated code needs; direct `node:fs` stays a rare, jointly decided exception](.pair/adoption/decision-log/2026-11-19-file-system-service-sync-primitives.md)
 
 ## How-To Guides
 

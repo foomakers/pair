@@ -49,7 +49,7 @@
  *
  * Decision: `.pair/adoption/decision-log/2026-09-03-a-gate-names-a-remedy-it-can-run.md`.
  */
-import { mkdir, writeFile } from 'fs/promises'
+import { fileSystemService } from '@pair/content-ops'
 import { dirname, join } from 'path'
 
 import {
@@ -76,9 +76,9 @@ export interface LlmsIndexSink {
 
 export const fileSystemSink: LlmsIndexSink = {
   mkdir: async path => {
-    await mkdir(path, { recursive: true })
+    await fileSystemService.mkdir(path, { recursive: true })
   },
-  writeFile: (file, content) => writeFile(file, content, 'utf-8'),
+  writeFile: (file, content) => fileSystemService.writeFile(file, content),
 }
 
 /**

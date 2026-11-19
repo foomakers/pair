@@ -7,13 +7,15 @@
  * read as those attributes either. Real node, real git.
  */
 import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
 import { describe, it, expect } from 'vitest'
 
 import { runNodeTest } from './suites'
+
+const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = fileSystemService
 
 const SLOW = 'await new Promise(r => setTimeout(r, 30))'
 const tc = (title: string, body = ''): string =>

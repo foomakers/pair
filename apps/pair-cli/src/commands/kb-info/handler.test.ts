@@ -10,7 +10,6 @@ import { handleKbInfoCommand } from './handler'
 import { createPackageZip } from '../package/zip-creator'
 import type { ManifestMetadata } from '../package/metadata'
 import type { RegistryConfig } from '#registry'
-import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import AdmZip from 'adm-zip'
@@ -37,15 +36,15 @@ describe('handleKbInfoCommand', () => {
     testDir = path.join(os.tmpdir(), `test-info-${Date.now()}`)
     projectRoot = path.join(testDir, 'project')
     packagePath = path.join(testDir, 'test.zip')
-    fs.mkdirSync(projectRoot, { recursive: true })
+    fileSystemService.mkdirSync(projectRoot, { recursive: true })
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
-    if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true })
+    if (fileSystemService.existsSync(testDir)) {
+      fileSystemService.rmSync(testDir, { recursive: true, force: true })
     }
   })
 
@@ -61,8 +60,11 @@ describe('handleKbInfoCommand', () => {
   }
 
   async function createTestPackage(manifest: ManifestMetadata) {
-    fs.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
-    fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/test.md'), 'test content')
+    fileSystemService.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
+    fileSystemService.writeFileSync(
+      path.join(projectRoot, '.pair/knowledge/test.md'),
+      'test content',
+    )
 
     await createPackageZip(
       {
@@ -153,7 +155,7 @@ describe('handleKbInfoCommand', () => {
   })
 
   it('returns 1 for invalid ZIP', async () => {
-    fs.writeFileSync(packagePath, 'not a zip file')
+    fileSystemService.writeFileSync(packagePath, 'not a zip file')
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const exitCode = await handleKbInfoCommand(

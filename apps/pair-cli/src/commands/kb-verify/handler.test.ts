@@ -4,7 +4,6 @@ import { handleKbVerifyCommand } from './handler'
 import { createPackageZip } from '../package/zip-creator'
 import type { ManifestMetadata } from '../package/metadata'
 import type { RegistryConfig } from '#registry'
-import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
@@ -28,19 +27,22 @@ describe('handleKbVerifyCommand', () => {
     testDir = path.join(os.tmpdir(), `test-verify-${Date.now()}`)
     projectRoot = path.join(testDir, 'project')
     packagePath = path.join(testDir, 'test.zip')
-    fs.mkdirSync(projectRoot, { recursive: true })
+    fileSystemService.mkdirSync(projectRoot, { recursive: true })
   })
 
   afterEach(() => {
-    if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true })
+    if (fileSystemService.existsSync(testDir)) {
+      fileSystemService.rmSync(testDir, { recursive: true, force: true })
     }
   })
 
   it('returns 0 for valid package', async () => {
     // Create a valid package
-    fs.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
-    fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/test.md'), 'test content')
+    fileSystemService.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
+    fileSystemService.writeFileSync(
+      path.join(projectRoot, '.pair/knowledge/test.md'),
+      'test content',
+    )
 
     const manifest: ManifestMetadata = {
       name: 'test-kb',
@@ -82,7 +84,7 @@ describe('handleKbVerifyCommand', () => {
 
   it('returns 1 for invalid ZIP', async () => {
     // Create a non-ZIP file
-    fs.writeFileSync(packagePath, 'not a zip file')
+    fileSystemService.writeFileSync(packagePath, 'not a zip file')
 
     const exitCode = await handleKbVerifyCommand(
       { command: 'kb-verify', packagePath, json: false },
@@ -94,8 +96,11 @@ describe('handleKbVerifyCommand', () => {
 
   it('outputs JSON when --json flag is set', async () => {
     // Create a valid package
-    fs.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
-    fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/test.md'), 'test content')
+    fileSystemService.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
+    fileSystemService.writeFileSync(
+      path.join(projectRoot, '.pair/knowledge/test.md'),
+      'test content',
+    )
 
     const manifest: ManifestMetadata = {
       name: 'test-kb',

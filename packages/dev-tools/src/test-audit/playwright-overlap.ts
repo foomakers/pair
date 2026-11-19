@@ -6,12 +6,14 @@
  * so every row needs a human read before a card removes anything.
  */
 import { execFileSync } from 'child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { dirname, join, relative, resolve } from 'path'
 
 import ts from 'typescript'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
+
+const { mkdirSync, readFileSync, writeFileSync } = fileSystemService
 
 export type PwClass = 'redundant' | 'effective' | 'no-signal'
 export interface PwRow {
@@ -129,7 +131,7 @@ export function rowsFor(root: string): PwRow[] {
   const listed = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' })
     .split('\n')
     .filter(f => FILE_RE.test(f))
-  return analyze(Object.fromEntries(listed.map(f => [f, readFileSync(join(root, f), 'utf8')])))
+  return analyze(Object.fromEntries(listed.map(f => [f, readFileSync(join(root, f))])))
 }
 
 export function run(root: string, out: string): PwRow[] {

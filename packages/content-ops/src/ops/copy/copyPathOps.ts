@@ -1,4 +1,4 @@
-import { Stats } from 'fs'
+import type { Stats } from 'fs'
 import { logger, createError } from '../../observability'
 import { validateSourceExists, validateSourceContained } from '../../file-system/file-validations'
 import { SyncOptions } from '../SyncOptions'

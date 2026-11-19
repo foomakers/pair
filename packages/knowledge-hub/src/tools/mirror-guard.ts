@@ -66,9 +66,8 @@
  * rule this one does not — `knowledge` and `github` install into targets the
  * dataset fully owns.
  */
-import { existsSync, readdirSync } from 'fs'
 import { basename, join, relative, sep } from 'path'
-import { stripAllMarkers, applyTransformCommands } from '@pair/content-ops'
+import { fileSystemService, stripAllMarkers, applyTransformCommands } from '@pair/content-ops'
 import {
   buildDatasetSkillNameMap,
   buildSkillLinkPathMap,
@@ -268,7 +267,7 @@ export function treePaths(root: string): string[] {
   const paths: string[] = []
 
   const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    for (const entry of fileSystemService.readdirSync(dir)) {
       const full = join(dir, entry.name)
       if (entry.isDirectory()) walk(full)
       else paths.push(relative(root, full).split(sep).join('/'))
@@ -311,7 +310,7 @@ export function mirrorEntries(mirror: GuardedMirror, repoRoot: string): string[]
  */
 export function installedEntries(mirror: GuardedMirror, repoRoot: string): string[] {
   const target = join(repoRoot, mirror.mirrorRel)
-  if (!existsSync(target)) return []
+  if (!fileSystemService.existsSync(target)) return []
   return mirror.sourceKind === 'file' ? [basename(mirror.datasetRel)] : treePaths(target)
 }
 

@@ -1,10 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { InMemoryFileSystemService } from '@pair/content-ops'
+import { InMemoryFileSystemService, fileSystemService } from '@pair/content-ops'
 import { loadConfigWithOverrides } from './loader'
-import { readFileSync } from 'fs'
 import { join } from 'path'
 
-const REAL_CONFIG = readFileSync(join(__dirname, '../../config.json'), 'utf8')
+const REAL_CONFIG = fileSystemService.readFileSync(join(__dirname, '../../config.json'))
 
 const load = (project: string, projectConfigOnly = true) =>
   loadConfigWithOverrides(

@@ -4,7 +4,7 @@
  * Mutation / per-test coverage: no supported tool installed ⇒ `not measured` (never estimated).
  */
 import { execFileSync } from 'child_process'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { dirname, join, relative } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
@@ -17,6 +17,8 @@ import {
   runPlaywrightSuite,
   summarize,
 } from './suites'
+
+const { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } = fileSystemService
 
 export interface RunTest {
   status: string
@@ -93,11 +95,11 @@ export function runPackage(root: string, pkg: string, seed: number, withCoverage
   const run: Run = {
     seed,
     wall_ms,
-    tests: parseVitestJson(root, JSON.parse(readFileSync(out, 'utf8'))),
+    tests: parseVitestJson(root, JSON.parse(readFileSync(out))),
   }
   const cov = join(dir, 'cov', 'coverage-summary.json')
   if (withCoverage && existsSync(cov)) {
-    const { total } = JSON.parse(readFileSync(cov, 'utf8'))
+    const { total } = JSON.parse(readFileSync(cov))
     run.coverage = { lines: total.lines.pct, branches: total.branches.pct }
   }
   return run
@@ -139,9 +141,7 @@ const RAW = (root: string) => join(root, 'test-audit', '.tmp', 'raw.json')
 export function recordRun(root: string, pkg: string, seed: number, withCoverage: boolean): void {
   const file = RAW(root)
   mkdirSync(dirname(file), { recursive: true })
-  const raw: Record<string, Run[]> = existsSync(file)
-    ? JSON.parse(readFileSync(file, 'utf8')).packages
-    : {}
+  const raw: Record<string, Run[]> = existsSync(file) ? JSON.parse(readFileSync(file)).packages : {}
   ;(raw[pkg] ??= []).push(runSuite(root, pkg, seed, withCoverage))
   writeFileSync(file, JSON.stringify({ packages: raw }))
 }
@@ -197,7 +197,7 @@ export function rerunBaseline(root: string): void {
 }
 
 export function finalize(root: string): void {
-  const raw = JSON.parse(readFileSync(RAW(root), 'utf8')).packages
+  const raw = JSON.parse(readFileSync(RAW(root))).packages
   const rev = execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], {
     cwd: root,
     encoding: 'utf8',
@@ -214,7 +214,7 @@ if (require.main === module) {
   else if (cmd === 'summary')
     console.log(
       JSON.stringify(
-        summarize(JSON.parse(readFileSync(join(REPO_ROOT, 'test-audit', 'baseline.json'), 'utf8'))),
+        summarize(JSON.parse(readFileSync(join(REPO_ROOT, 'test-audit', 'baseline.json')))),
         null,
         2,
       ),

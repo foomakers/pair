@@ -26,7 +26,7 @@
  * earlier ignore the extra argument" becomes a factual inversion the moment it is synced.
  * Point at the CHANGELOG instead; wording without a literal version cannot be rewritten.
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import { join, relative } from 'path'
 
 import { REPO_ROOT } from './repo-root'
@@ -62,10 +62,13 @@ export function parseGitignoreExcludes(content: string): string[] {
 }
 
 /** Read and parse `<root>/.gitignore`; [] if the file doesn't exist (e.g. test fixtures). */
-export function readGitignoreExcludes(root: string): string[] {
+export function readGitignoreExcludes(
+  root: string,
+  fs: FileSystemService = fileSystemService,
+): string[] {
   const gitignorePath = join(root, '.gitignore')
-  if (!existsSync(gitignorePath)) return []
-  return parseGitignoreExcludes(readFileSync(gitignorePath, 'utf-8'))
+  if (!fs.existsSync(gitignorePath)) return []
+  return parseGitignoreExcludes(fs.readFileSync(gitignorePath))
 }
 
 // Patterns that indicate an external version (not ours) — skip these lines.
@@ -110,14 +113,19 @@ export function shouldExclude(relPath: string, excludePatterns: string[]): boole
 }
 
 /** Walk a directory tree collecting .md/.mdx files, skipping excluded paths (files or dirs). */
-export function walkDocFiles(dir: string, root: string, excludePatterns: string[]): string[] {
+export function walkDocFiles(
+  dir: string,
+  root: string,
+  excludePatterns: string[],
+  fs: FileSystemService = fileSystemService,
+): string[] {
   const out: string[] = []
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  for (const entry of fs.readdirSync(dir)) {
     const full = join(dir, entry.name)
     const rel = relative(root, full)
     if (shouldExclude(rel, excludePatterns)) continue
     if (entry.isDirectory()) {
-      out.push(...walkDocFiles(full, root, excludePatterns))
+      out.push(...walkDocFiles(full, root, excludePatterns, fs))
     } else if (/\.(md|mdx)$/.test(entry.name)) {
       out.push(full)
     }
@@ -130,15 +138,17 @@ export function findFilesWithVersion(
   root: string,
   oldVersion: string,
   excludePatterns: string[],
+  fs: FileSystemService = fileSystemService,
 ): string[] {
-  return walkDocFiles(root, root, excludePatterns).filter(f =>
-    readFileSync(f, 'utf-8').includes(oldVersion),
+  return walkDocFiles(root, root, excludePatterns, fs).filter(f =>
+    fs.readFileSync(f).includes(oldVersion),
   )
 }
 
 export interface SyncOptions {
   check: boolean
   excludePatterns?: string[]
+  fs?: FileSystemService
 }
 
 export interface SyncResult {
@@ -155,18 +165,19 @@ export function syncVersionInDocs(
   newVersion: string,
   opts: SyncOptions,
 ): SyncResult {
+  const fs = opts.fs ?? fileSystemService
   const excludePatterns = [
     ...DEFAULT_EXCLUDES,
-    ...readGitignoreExcludes(root),
+    ...readGitignoreExcludes(root, fs),
     ...(opts.excludePatterns ?? []),
   ]
-  const files = findFilesWithVersion(root, oldVersion, excludePatterns)
+  const files = findFilesWithVersion(root, oldVersion, excludePatterns, fs)
   const result: SyncResult = { scanned: [], fixed: [], drifted: [], unchanged: [] }
 
   for (const abs of files) {
     const rel = relative(root, abs)
     result.scanned.push(rel)
-    const original = readFileSync(abs, 'utf-8')
+    const original = fs.readFileSync(abs)
     const { updated, changed } = rewriteContent(original, oldVersion, newVersion)
 
     if (!changed) {
@@ -176,7 +187,7 @@ export function syncVersionInDocs(
     if (opts.check) {
       result.drifted.push(rel)
     } else {
-      writeFileSync(abs, updated)
+      fs.writeFileSync(abs, updated)
       result.fixed.push(rel)
     }
   }
@@ -203,7 +214,7 @@ export function main(argv: string[] = process.argv.slice(2)): void {
   const { check, oldVersionArg } = parseArgv(argv)
 
   const newVersion = JSON.parse(
-    readFileSync(join(REPO_ROOT, 'apps/pair-cli/package.json'), 'utf-8'),
+    fileSystemService.readFileSync(join(REPO_ROOT, 'apps/pair-cli/package.json')),
   ).version as string
   const oldVersion = oldVersionArg || newVersion
 

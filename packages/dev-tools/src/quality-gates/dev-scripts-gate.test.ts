@@ -4,15 +4,7 @@
 // reimplemented here: its `node --test` invocation is read from package.json / ci.yml, then RUN
 // against an isolated copy of scripts/dev with an injected regression.
 import { spawnSync } from 'child_process'
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  symlinkSync,
-  writeFileSync,
-} from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { describe, expect, it } from 'vitest'
@@ -20,13 +12,16 @@ import { parse } from 'yaml'
 
 import { REPO_ROOT } from './repo-root'
 
+const { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } =
+  fileSystemService
+
 type Invocation = { cwd: string; args: string[]; from: string }
 type Step = { run?: unknown; ['continue-on-error']?: unknown }
 type Job = { steps?: Step[]; ['continue-on-error']?: unknown }
 
 const DEV = join(REPO_ROOT, 'scripts/dev')
 const SCRIPTS: Record<string, string> = JSON.parse(
-  readFileSync(join(REPO_ROOT, 'package.json'), 'utf-8'),
+  readFileSync(join(REPO_ROOT, 'package.json')),
 ).scripts
 const GUARD = "JSON.parse(stdin).agent_type !== 'pair-reviewer' || "
 
@@ -68,7 +63,7 @@ const gateInvocations = (): Invocation[] =>
   devInvocations(invocations(SCRIPTS['quality-gate'] ?? '', 'quality-gate'))
 
 const ciInvocations = (): Invocation[] => {
-  const wf = parse(readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf-8')) as {
+  const wf = parse(readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'))) as {
     jobs?: Record<string, Job>
   }
   const runs = Object.entries(wf.jobs ?? {})
@@ -113,7 +108,7 @@ const sandbox = (mutate?: (root: string) => void): string => {
 }
 const rewrite = (root: string, file: string, from: string, to: string): void => {
   const path = join(root, 'scripts/dev', file)
-  const src = readFileSync(path, 'utf-8')
+  const src = readFileSync(path)
   expect(src.includes(from), `${file}: injection anchor not found`).toBe(true)
   writeFileSync(path, src.replace(from, to))
 }
@@ -170,7 +165,9 @@ describe('root gate runs the scripts/dev suites (r0-1)', () => {
   it('r0-1-w5 the gate invocation passes on the unmodified suites and runs every test file', () => {
     const r = runGate(requireOne(gateInvocations(), 'quality-gate'), sandbox())
     expect(r.status, r.stdout + r.stderr).toBe(0)
-    const files = readdirSync(DEV).filter(f => f.endsWith('.test.mjs'))
+    const files = readdirSync(DEV)
+      .map(d => d.name)
+      .filter(f => f.endsWith('.test.mjs'))
     expect(files.length).toBeGreaterThanOrEqual(2)
     const direct = files.map(f => passCount(runFile(sandbox(), f).stdout))
     expect(passCount(r.stdout)).toBe(direct.reduce((a, b) => a + b, 0))

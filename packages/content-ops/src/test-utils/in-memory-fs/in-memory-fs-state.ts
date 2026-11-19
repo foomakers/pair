@@ -15,12 +15,31 @@ export class InMemoryFsState {
   readonly symlinks = new Map<string, string>()
   /** Permission bits set through `chmod`; absent means "default mode" */
   readonly modes = new Map<string, number>()
+  /** Paths whose content was written as binary (stored latin1); every other file is UTF-8 text */
+  readonly binary = new Set<string>()
   moduleDirectory: string
   workingDirectory: string
 
   constructor(moduleDirectory: string, workingDirectory: string) {
     this.moduleDirectory = moduleDirectory
     this.workingDirectory = workingDirectory
+  }
+
+  /** Carry the binary flag from `from` (a file or a directory prefix) to `to`; `keep` leaves the source flagged */
+  moveBinary(from: string, to: string, keep = false): void {
+    const prefix = from.endsWith('/') ? from : `${from}/`
+    for (const p of Array.from(this.binary)) {
+      if (p !== from && !p.startsWith(prefix)) continue
+      this.binary.add(to + p.slice(from.length))
+      if (!keep) this.binary.delete(p)
+    }
+  }
+
+  forgetBinary(path: string): void {
+    const prefix = path.endsWith('/') ? path : `${path}/`
+    for (const p of Array.from(this.binary)) {
+      if (p === path || p.startsWith(prefix)) this.binary.delete(p)
+    }
   }
 
   resolvePath(path: string): string {

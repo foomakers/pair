@@ -1,5 +1,5 @@
 import { isAbsolute, join } from 'path/posix'
-import { Dirent } from 'fs'
+import type { Dirent } from 'fs'
 import { logger, createError } from '../observability'
 import { validateSourceExists } from '../file-system/file-validations'
 import { FileSystemService } from '../file-system'

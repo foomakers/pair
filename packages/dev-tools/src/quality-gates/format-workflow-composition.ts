@@ -207,7 +207,7 @@
  * `@pair/knowledge-hub#test` already uses for repo-wide artifacts — so `pnpm test` is the
  * other enforcement point and is never a stale PASS.
  */
-import { readFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { resolve } from 'path'
 
 import { parseDocument } from 'yaml'
@@ -431,7 +431,7 @@ function runsOf(step: Mapping): string[] {
 
 /** The root scripts a `pnpm <script>` step delegates through. */
 export function readRootScripts(): Record<string, string> {
-  const pkg = JSON.parse(readFileSync(ROOT_PACKAGE_JSON, 'utf-8')) as {
+  const pkg = JSON.parse(fileSystemService.readFileSync(ROOT_PACKAGE_JSON)) as {
     scripts?: Record<string, string>
   }
   return pkg.scripts ?? {}
@@ -1937,7 +1937,7 @@ function parseWorkflow(yamlText: string): { root?: Mapping; problem?: string } {
 export function checkThisRepoFormatWorkflow(): GateCheckResult {
   let text: string
   try {
-    text = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    text = fileSystemService.readFileSync(FORMAT_WORKFLOW)
   } catch {
     text = ''
   }

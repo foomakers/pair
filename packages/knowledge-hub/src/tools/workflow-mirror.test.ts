@@ -1,14 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  cpSync,
-  existsSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -225,12 +216,15 @@ const PAIRS: MirrorPair[] = [
  * run a batch must not read as drifted.
  */
 const listFiles = (dir: string, prefix = ''): string[] =>
-  existsSync(dir)
-    ? readdirSync(dir)
+  fileSystemService.existsSync(dir)
+    ? fileSystemService
+        .readdirSync(dir)
+        .map(d => d.name)
         .flatMap(f => {
           const full = join(dir, f)
           const rel = prefix ? `${prefix}/${f}` : f
-          if (statSync(full).isDirectory()) return f.startsWith('.') ? [] : listFiles(full, rel)
+          if (fileSystemService.statSync(full).isDirectory())
+            return f.startsWith('.') ? [] : listFiles(full, rel)
           return /\.(contract|draft)\.json$/.test(f) ? [] : [rel]
         })
         .sort()
@@ -305,8 +299,8 @@ describe.each(PAIRS)(
       // executed where they live — this byte check is the only thing that keeps them equal to the
       // suites that do run. Exempting them turns the dataset copy into unexecuted, unverified text.
       for (const name of listFiles(datasetDir)) {
-        const source = readFileSync(join(datasetDir, name), 'utf-8')
-        const live = readFileSync(join(installedDir, name), 'utf-8')
+        const source = fileSystemService.readFileSync(join(datasetDir, name))
+        const live = fileSystemService.readFileSync(join(installedDir, name))
         expect(
           live,
           `${installed}/${name} differs from its dataset copy — reconcile the two (a sealed installed file is the truth: sync the dataset to it)`,
@@ -334,8 +328,9 @@ describe('US-219 — the root-only exclusion policy is executable, not folklore'
     for (const [pair, file, spec] of claims) {
       const here = join(REPO_ROOT, pair.installed, file, '..', spec)
       const mirrored = join(REPO_ROOT, pair.dataset, file, '..', spec)
-      if (!existsSync(here)) wrong.push(`${file}: ${spec} does not resolve where the file runs`)
-      if (existsSync(mirrored))
+      if (!fileSystemService.existsSync(here))
+        wrong.push(`${file}: ${spec} does not resolve where the file runs`)
+      if (fileSystemService.existsSync(mirrored))
         wrong.push(`${file}: ${spec} WOULD resolve from the dataset — the stated reason is stale`)
     }
     expect(wrong, wrong.join('\n  ')).toEqual([])
@@ -348,19 +343,19 @@ describe('US-219 — the root-only exclusion policy is executable, not folklore'
     // the dataset copy resolves none of its imports. Run on COPIES, so proving it costs nothing.
     const pair = PAIRS.find(p => p.what === 'workflows')!
     const file = 'pair-contracts/cycle-coordinator.test.mjs'
-    const tmp = mkdtempSync(join(tmpdir(), 'workflow-mirror-mirrored-'))
+    const tmp = fileSystemService.mkdtempSync(join(tmpdir(), 'workflow-mirror-mirrored-'))
     try {
       const datasetCopy = join(tmp, 'dataset')
       const installedCopy = join(tmp, 'installed')
-      cpSync(join(REPO_ROOT, pair.dataset), datasetCopy, { recursive: true })
-      cpSync(join(REPO_ROOT, pair.installed), installedCopy, { recursive: true })
-      cpSync(join(installedCopy, file), join(datasetCopy, file))
+      fileSystemService.cpSync(join(REPO_ROOT, pair.dataset), datasetCopy, { recursive: true })
+      fileSystemService.cpSync(join(REPO_ROOT, pair.installed), installedCopy, { recursive: true })
+      fileSystemService.cpSync(join(installedCopy, file), join(datasetCopy, file))
 
       const shipped = listFiles(datasetCopy)
       const live = new Set(listFiles(installedCopy))
       expect(shipped.filter(f => !live.has(f))).toEqual([])
-      expect(readFileSync(join(datasetCopy, file), 'utf-8')).toBe(
-        readFileSync(join(installedCopy, file), 'utf-8'),
+      expect(fileSystemService.readFileSync(join(datasetCopy, file))).toBe(
+        fileSystemService.readFileSync(join(installedCopy, file)),
       )
 
       expect(rootOnlyFiles(datasetCopy, installedCopy)).not.toContain(file)
@@ -370,7 +365,7 @@ describe('US-219 — the root-only exclusion policy is executable, not folklore'
         ),
       ).toThrow()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      fileSystemService.rmSync(tmp, { recursive: true, force: true })
     }
   })
 
@@ -379,17 +374,20 @@ describe('US-219 — the root-only exclusion policy is executable, not folklore'
     // without it, "the enumeration equals reality" is satisfied by any list that happens to match
     // today, and nothing proves it would object tomorrow.
     const pair = PAIRS.find(p => p.what === 'workflows')!
-    const tmp = mkdtempSync(join(tmpdir(), 'workflow-mirror-root-only-'))
+    const tmp = fileSystemService.mkdtempSync(join(tmpdir(), 'workflow-mirror-root-only-'))
     try {
       const datasetCopy = join(tmp, 'dataset')
       const installedCopy = join(tmp, 'installed')
-      cpSync(join(REPO_ROOT, pair.dataset), datasetCopy, { recursive: true })
-      cpSync(join(REPO_ROOT, pair.installed), installedCopy, { recursive: true })
+      fileSystemService.cpSync(join(REPO_ROOT, pair.dataset), datasetCopy, { recursive: true })
+      fileSystemService.cpSync(join(REPO_ROOT, pair.installed), installedCopy, { recursive: true })
 
       // The copy reproduces the real verdict — otherwise the injection below proves nothing.
       expect(rootOnlyFiles(datasetCopy, installedCopy)).toEqual(Object.keys(pair.rootOnly).sort())
 
-      writeFileSync(join(installedCopy, 'pair-contracts', 'injected-regression.test.mjs'), '// x\n')
+      fileSystemService.writeFileSync(
+        join(installedCopy, 'pair-contracts', 'injected-regression.test.mjs'),
+        '// x\n',
+      )
 
       expect(rootOnlyFiles(datasetCopy, installedCopy).filter(f => !(f in pair.rootOnly))).toEqual([
         'pair-contracts/injected-regression.test.mjs',
@@ -400,7 +398,7 @@ describe('US-219 — the root-only exclusion policy is executable, not folklore'
         ),
       ).toThrow()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      fileSystemService.rmSync(tmp, { recursive: true, force: true })
     }
   })
 })
@@ -418,7 +416,7 @@ describe('US-219 AC3 — a workflow ships with the agents it dispatches to', () 
 
     const spawned = new Set<string>()
     for (const file of listFiles(workflowsDir).filter(f => f.endsWith('.js'))) {
-      const src = readFileSync(join(workflowsDir, file), 'utf-8')
+      const src = fileSystemService.readFileSync(join(workflowsDir, file))
       for (const m of src.matchAll(/agentType:\s*'([a-z-]+)'/g)) spawned.add(m[1]!)
     }
     expect(spawned.size, 'no agentType found — the scan pattern stopped matching').toBeGreaterThan(
@@ -445,7 +443,7 @@ describe('US-219 AC3 — a workflow ships with the agents it dispatches to', () 
     const skillsRoot = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
     const shipped = new Set<string>()
     const walk = (dir: string): void => {
-      for (const e of readdirSync(dir, { withFileTypes: true })) {
+      for (const e of fileSystemService.readdirSync(dir)) {
         if (e.name.startsWith('.')) continue
         if (e.isDirectory()) {
           shipped.add(e.name)
@@ -461,7 +459,7 @@ describe('US-219 AC3 — a workflow ships with the agents it dispatches to', () 
     // guard noise instead of signal.
     const invoked = new Set<string>()
     for (const file of listFiles(workflowsDir).filter(f => f.endsWith('.js'))) {
-      const src = readFileSync(join(workflowsDir, file), 'utf-8')
+      const src = fileSystemService.readFileSync(join(workflowsDir, file))
       // TWO forms, because the corpus uses both and covering only one is how `/analyze-pr`
       // got through: bolded `**/name**` and backticked `` `/name` ``. A bare `/word` stays
       // out — it is usually a path fragment, and matching it would make this guard noise.
@@ -493,7 +491,7 @@ describe('US-219 — development artifacts do not install', () => {
    */
   it('every dataset workflow test file is excluded from the install', () => {
     const config = JSON.parse(
-      readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8'),
+      fileSystemService.readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json')),
     ) as { asset_registries: Record<string, { exclude?: string[] }> }
     const exclude = config.asset_registries['workflows']?.exclude ?? []
 
@@ -509,7 +507,7 @@ describe('US-219 — development artifacts do not install', () => {
 
   it('excludes nothing that is not there — a stale entry silently protects nothing', () => {
     const config = JSON.parse(
-      readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8'),
+      fileSystemService.readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json')),
     ) as { asset_registries: Record<string, { exclude?: string[] }> }
     const exclude = config.asset_registries['workflows']?.exclude ?? []
     const shipped = new Set(listFiles(join(REPO_ROOT, 'packages/knowledge-hub/dataset/.workflows')))
@@ -544,7 +542,7 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
   // complete and free of stale entries by the two checks in the section above.
   const workflowExcludes: string[] =
     (
-      JSON.parse(readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8')) as {
+      JSON.parse(fileSystemService.readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'))) as {
         asset_registries: Record<string, { exclude?: string[] }>
       }
     ).asset_registries['workflows']?.exclude ?? []
@@ -558,7 +556,7 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
   it('every dataset-relative path a shipped artifact names exists in the dataset', () => {
     const missing: string[] = []
     for (const [dir, file] of shippedArtifacts()) {
-      const src = readFileSync(join(dir, file), 'utf-8')
+      const src = fileSystemService.readFileSync(join(dir, file))
       // Backticked paths rooted at a dataset directory — the shape these files use to point
       // a reader at a document.
       for (const m of src.matchAll(/`((?:\.pair|\.claude|\.github)\/[^`\s]+\.[a-z]{2,4})`/g)) {
@@ -569,7 +567,7 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
         // `.claude/**` is INSTALLED output, not dataset content: it exists in an adopter's
         // repo after install, so it is resolved against this repo's root instead.
         const base = rel.startsWith('.claude/') ? REPO_ROOT : datasetRoot
-        if (!existsSync(join(base, rel))) missing.push(`${file} -> ${rel}`)
+        if (!fileSystemService.existsSync(join(base, rel))) missing.push(`${file} -> ${rel}`)
       }
     }
     expect(
@@ -586,7 +584,7 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
     // stands on its own for a reader who has never seen this repo's decision log.
     const cited: string[] = []
     for (const [dir, file] of shippedArtifacts()) {
-      const src = readFileSync(join(dir, file), 'utf-8')
+      const src = fileSystemService.readFileSync(join(dir, file))
       for (const m of src.matchAll(
         /\b(\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md|adr-\d{3}-[a-z0-9-]+\.md)/g,
       ))
@@ -617,7 +615,7 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
     const inComment = (line: string) => /^\s*(?:\/\/|\*|\/\*)/.test(line)
     const cited: string[] = []
     for (const [dir, file] of shippedArtifacts()) {
-      const src = readFileSync(join(dir, file), 'utf-8')
+      const src = fileSystemService.readFileSync(join(dir, file))
       src.split('\n').forEach((line, i) => {
         if (file.endsWith('.js') || file.endsWith('.mjs')) {
           if (inComment(line)) return

@@ -4,7 +4,7 @@
  * A signal without a supported tool is `not measured`: it never classifies and never justifies removal.
  */
 import { execFileSync } from 'child_process'
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
@@ -18,6 +18,8 @@ import {
   type Level,
   type TestRecord,
 } from './inventory'
+
+const { readFileSync, writeFileSync, mkdirSync, existsSync } = fileSystemService
 
 export interface Config {
   budgets: Record<Level, { maxTestMs: number; totalMs: number }>
@@ -36,8 +38,8 @@ export interface Config {
   quarantine: { id: string; class: 'U6'; evidence: string; issue: string | null }[]
 }
 
-export function loadConfig(file: string): Config {
-  const c = JSON.parse(readFileSync(file, 'utf8'))
+export function loadConfig(file: string, fs: FileSystemService = fileSystemService): Config {
+  const c = JSON.parse(fs.readFileSync(file))
   for (const k of [
     'maxLevelGrowthPct',
     'minMutationScoreOnDiffPct',
@@ -478,17 +480,17 @@ export function main(root = REPO_ROOT, rebaseline = false): void {
   const cfg = loadConfig(join(root, 'docs/testing/test-policy.config.json'))
   const bf = join(dir, 'baseline.json')
   const baseline: CompactBaseline | undefined = existsSync(bf)
-    ? JSON.parse(readFileSync(bf, 'utf8'))
+    ? JSON.parse(readFileSync(bf))
     : undefined
   const baseRev = baseline?.base_rev ?? git(root, 'merge-base', 'origin/main', 'HEAD').trim()
   const files = git(root, 'ls-files').split('\n').filter(Boolean)
   const rf = join(dir, 'renamed.json')
-  const renames: Record<string, string> = existsSync(rf) ? JSON.parse(readFileSync(rf, 'utf8')) : {}
+  const renames: Record<string, string> = existsSync(rf) ? JSON.parse(readFileSync(rf)) : {}
   const current = applyRenames(buildInventory(root, files).tests, renames)
   const mf = join(dir, 'rewritten.json')
-  const rewritten: string[] = existsSync(mf) ? JSON.parse(readFileSync(mf, 'utf8')) : []
+  const rewritten: string[] = existsSync(mf) ? JSON.parse(readFileSync(mf)) : []
   const cf = join(dir, 'confirmations.json')
-  const confirmations: Confirmations = existsSync(cf) ? JSON.parse(readFileSync(cf, 'utf8')) : {}
+  const confirmations: Confirmations = existsSync(cf) ? JSON.parse(readFileSync(cf)) : {}
   const rep = buildReport({
     baseRev,
     before: inventoryAt(root, baseRev),

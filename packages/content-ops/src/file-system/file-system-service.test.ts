@@ -142,3 +142,109 @@ describe('fileSystemService.readFileBytes — byte-mode read (US-395/#429)', () 
     }
   })
 })
+
+describe('fileSystemService.appendFile', () => {
+  it('preserves existing output and creates a missing file', async () => {
+    const { mkdtemp, rm } = await import('fs/promises')
+    const { tmpdir } = await import('os')
+    const { join } = await import('path')
+    const { fileSystemService } = await import('./file-system-service')
+    const dir = await mkdtemp(join(tmpdir(), 'pair-append-'))
+    try {
+      const existing = join(dir, 'existing.txt')
+      const missing = join(dir, 'missing.txt')
+      await fileSystemService.writeFile(existing, 'first\n')
+      await fileSystemService.appendFile(existing, 'second\n')
+      await fileSystemService.appendFile(missing, 'third\n')
+      expect(await fileSystemService.readFile(existing)).toBe('first\nsecond\n')
+      expect(await fileSystemService.readFile(missing)).toBe('third\n')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe.each([
+  [
+    'real service',
+    async () => {
+      const { mkdtempSync, rmSync } = await import('fs')
+      const { tmpdir } = await import('os')
+      const { join } = await import('path')
+      const { fileSystemService } = await import('./file-system-service')
+      const dir = mkdtempSync(join(tmpdir(), 'pair-sync-'))
+      return {
+        fs: fileSystemService,
+        dir,
+        cleanup: () => rmSync(dir, { recursive: true, force: true }),
+      }
+    },
+  ],
+  [
+    'in-memory double',
+    async () => ({
+      fs: new InMemoryFileSystemService({}, '/', '/'),
+      dir: '/work',
+      cleanup: () => {},
+    }),
+  ],
+])('sync write/list/remove contract: %s', (_name, setup) => {
+  it('writeFileSync overwrites, readdirSync lists entries with types, rmSync removes a tree', async () => {
+    const { fs, dir, cleanup } = await setup()
+    try {
+      fs.mkdirSync(`${dir}/sub`, { recursive: true })
+      fs.writeFileSync(`${dir}/a.txt`, 'one')
+      fs.writeFileSync(`${dir}/a.txt`, 'two')
+      fs.writeFileSync(`${dir}/sub/b.txt`, 'b')
+      expect(fs.readFileSync(`${dir}/a.txt`)).toBe('two')
+      const listed = fs
+        .readdirSync(dir)
+        .map(e => [e.name, e.isDirectory()])
+        .sort()
+      expect(listed).toEqual([
+        ['a.txt', false],
+        ['sub', true],
+      ])
+      fs.rmSync(`${dir}/sub`, { recursive: true })
+      expect(fs.existsSync(`${dir}/sub/b.txt`)).toBe(false)
+      expect(fs.existsSync(`${dir}/a.txt`)).toBe(true)
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('non-ASCII text written as text reads back as UTF-8 bytes; binary written as binary keeps its bytes', async () => {
+    const { fs, dir, cleanup } = await setup()
+    try {
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(`${dir}/t.txt`, 'héllo €')
+      await fs.writeFileBinary(`${dir}/b.bin`, Buffer.from([0xc3, 0x28, 0xff, 0x00]))
+      expect(fs.readFileBytesSync(`${dir}/t.txt`).toString('hex')).toBe('68c3a96c6c6f20e282ac')
+      expect(fs.readFileBytesSync(`${dir}/b.bin`).toString('hex')).toBe('c328ff00')
+      fs.cpSync(`${dir}/b.bin`, `${dir}/c.bin`)
+      expect(fs.readFileBytesSync(`${dir}/c.bin`).toString('hex')).toBe('c328ff00')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('rmSync: missing path throws unless force', async () => {
+    const { fs, dir, cleanup } = await setup()
+    try {
+      fs.mkdirSync(dir, { recursive: true })
+      expect(() => fs.rmSync(`${dir}/missing`)).toThrow()
+      expect(() => fs.rmSync(`${dir}/missing`, { force: true })).not.toThrow()
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('readdirSync: missing directory throws ENOENT', async () => {
+    const { fs, dir, cleanup } = await setup()
+    try {
+      expect(() => fs.readdirSync(`${dir}/missing`)).toThrow(/no such file|ENOENT/)
+    } finally {
+      cleanup()
+    }
+  })
+})

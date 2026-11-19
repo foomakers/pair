@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
@@ -112,19 +112,19 @@ function skillsOfTree(treeish: string): string[] {
 
 /** Extract a tree-ish's `.skills/` subtree into a temp dir; returns that skills dir. */
 function materializeSkills(treeish: string): { skillsDir: string; cleanup: () => void } {
-  const dir = mkdtempSync(join(tmpdir(), 'pair-merge-skills-'))
-  const tar = join(dir, 'skills.tar')
-  writeFileSync(
-    tar,
-    execFileSync('git', ['archive', '--format=tar', treeish, '--', `${SKILLS_SOURCE_REL}/`], {
+  const dir = fileSystemService.mkdtempSync(join(tmpdir(), 'pair-merge-skills-'))
+  const archive = execFileSync(
+    'git',
+    ['archive', '--format=tar', treeish, '--', `${SKILLS_SOURCE_REL}/`],
+    {
       cwd: REPO_ROOT,
       maxBuffer: 512 * 1024 * 1024,
-    }),
+    },
   )
-  execFileSync('tar', ['-xf', tar, '-C', dir])
+  execFileSync('tar', ['-xf', '-', '-C', dir], { input: archive })
   return {
     skillsDir: join(dir, SKILLS_SOURCE_REL),
-    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+    cleanup: () => fileSystemService.rmSync(dir, { recursive: true, force: true }),
   }
 }
 
@@ -206,8 +206,8 @@ describe('r0-6 — the branch merges into its base and the merged catalog stays 
 
   it('r0-6 c1 (control): HEAD alone is catalog-coherent — the branch is not the broken side', () => {
     const skillsDir = join(REPO_ROOT, SKILLS_SOURCE_REL)
-    expect(existsSync(skillsDir)).toBe(true)
-    const catalog = readFileSync(join(REPO_ROOT, CATALOG_REL), 'utf-8')
+    expect(fileSystemService.existsSync(skillsDir)).toBe(true)
+    const catalog = fileSystemService.readFileSync(join(REPO_ROOT, CATALOG_REL))
     const skills = collectSkills(skillsDir)
     expect(checkCatalogSync(skills, catalog)).toEqual([])
     expect(checkCatalogContent(generateCatalogRows(skillsDir), catalog)).toEqual([])

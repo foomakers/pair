@@ -4,7 +4,7 @@
  * A signal with no supported tool is `unsupported` (named, never green, never blocking).
  */
 import { execFileSync } from 'child_process'
-import { readFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 import ts from 'typescript'
 
@@ -20,6 +20,8 @@ import {
   type Level,
   type TestRecord,
 } from './inventory'
+
+const { readFileSync } = fileSystemService
 
 export type GateId = 'G1' | 'G2' | 'G3' | 'G4' | 'G5' | 'G6' | 'G7' | 'G8'
 export type Status = 'pass' | 'fail' | 'unsupported'
@@ -377,9 +379,7 @@ export function runShuffled(root: string, files: string[], cfg: Config): Record<
       } catch {
         // failing tests still write the JSON
       }
-      for (const [id, t] of Object.entries(
-        parseVitestJson(root, JSON.parse(readFileSync(out, 'utf8'))),
-      ))
+      for (const [id, t] of Object.entries(parseVitestJson(root, JSON.parse(readFileSync(out)))))
         run[id] = t.status
     }
     return run
@@ -395,7 +395,7 @@ export const optValue = (argv: string[], key: string): string | undefined => {
   return i < 0 ? undefined : argv[i + 1]
 }
 
-const readJson = <T>(file: string): T => JSON.parse(readFileSync(file, 'utf8')) as T
+const readJson = <T>(file: string): T => JSON.parse(readFileSync(file)) as T
 
 /** Test ids present at HEAD in `files` but absent from the same file at `base` (all of them for a new file). */
 function addedTestIds(root: string, base: string, files: string[]): string[] {
@@ -406,7 +406,7 @@ function addedTestIds(root: string, base: string, files: string[]): string[] {
     } catch {
       // file is new on this branch
     }
-    return parseTests(f, readFileSync(join(root, f), 'utf8'))
+    return parseTests(f, readFileSync(join(root, f)))
       .map(r => r.test_id)
       .filter(id => !was.has(id))
   })
@@ -425,7 +425,7 @@ function collect(root: string, base: string): Inputs {
   const changed = git(root, 'diff', '--name-only', '--diff-filter=AM', `${base}...HEAD`)
     .split('\n')
     .filter(f => TEST_FILE_RE.test(f))
-  const sources = Object.fromEntries(changed.map(f => [f, readFileSync(join(root, f), 'utf8')]))
+  const sources = Object.fromEntries(changed.map(f => [f, readFileSync(join(root, f))]))
   return {
     recs: changed.flatMap(f => parseTests(f, sources[f]!)),
     sources,
