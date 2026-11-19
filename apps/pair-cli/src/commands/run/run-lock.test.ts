@@ -52,6 +52,24 @@ describe('acquireRunLock — #691 AC5 per-card run lock', () => {
     expect(JSON.parse(readFileSync(join(runDir, RUN_LOCK_FILE), 'utf8')).pid).toBe(process.pid)
   })
 
+  // PR #692 r0-1: B read the holder as dead; before B acts, A completes its own takeover (or takes over and releases).
+  it.each([
+    ['A still holds', false],
+    ['A already released', true],
+  ])('two takers of one dead lock (%s) ⇒ never both acquire, never a raw fs error', (_, aReleases) => {
+    holder(999_999)
+    let a: ReturnType<typeof acquireRunLock> | undefined
+    const b = acquireRunLock(runDir, pid => {
+      if (pid === 999_999 && a === undefined) {
+        a = acquireRunLock(runDir, () => false)
+        if (aReleases && a.kind === 'acquired') a.release()
+      }
+      return false
+    })
+    expect(a?.kind).toBe('acquired')
+    expect(b.kind).toBe(aReleases ? 'acquired' : 'run-locked')
+  })
+
   it('liveness is the injected probe, not a platform guess (platform linux/darwin: kill(pid, 0); any other: the seam)', () => {
     holder(4242)
     const probed: number[] = []

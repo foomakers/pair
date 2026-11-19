@@ -1,4 +1,5 @@
-import { readFileSync, unlinkSync, writeFileSync } from 'fs'
+import { readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
+import { takeGuard } from './card-lock'
 import { hostname } from 'os'
 import { join } from 'path'
 import { pidIsAlive } from './lock-holder'
@@ -18,6 +19,14 @@ export type RunLockOutcome =
       readonly takenOver?: { readonly pid: number; readonly host: string }
     }
   | { readonly kind: 'run-locked'; readonly pid?: number; readonly host?: string }
+
+const readRaw = (file: string): string | undefined => {
+  try {
+    return readFileSync(file, 'utf8')
+  } catch {
+    return undefined
+  }
+}
 
 const readNote = (file: string): { pid?: number; host?: string } => {
   try {
@@ -55,19 +64,29 @@ export function acquireRunLock(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
   }
+  const seen = readRaw(file)
   const { pid, host } = readNote(file)
+  const locked = (): RunLockOutcome => ({ kind: 'run-locked', ...readNote(file) })
   if (pid === undefined || host !== hostname() || isAlive(pid))
     return {
       kind: 'run-locked',
       ...(pid !== undefined && { pid }),
       ...(host !== undefined && { host }),
     }
-  // ponytail: unlink + wx retry; two takers racing the same dead lock ⇒ one wins, the other reports run-locked.
-  unlinkSync(file)
+  // Takeover under card-lock's exclusive sidecar guard: reclaimers are serialized, and the note is re-read inside
+  // it — a lock that changed since it was read dead (another taker already took it) is never removed.
+  const guard = `${file}.reclaim`
+  if (!takeGuard(guard)) return locked()
   try {
+    const now = readRaw(file)
+    if (now !== undefined && now !== seen) return locked()
+    if (now !== undefined) unlinkSync(file)
     create()
-  } catch {
-    return { kind: 'run-locked', ...readNote(file) }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    return locked()
+  } finally {
+    rmSync(guard, { recursive: true, force: true })
   }
   return { kind: 'acquired', release, takenOver: { pid, host } }
 }
