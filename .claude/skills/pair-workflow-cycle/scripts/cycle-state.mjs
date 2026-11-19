@@ -1856,7 +1856,7 @@ export const DECISIONS_FILE = 'maintainer-decisions.json'
 export const DECISION_CHOICES = ['decide', 'amend', 'override', 'reset']
 // A deliberate copy of `red-snapshot.mjs` OVERRIDABLE_BREACH_CODES (pinned equal by a test): an override comment may
 // name only a code custody already lets a human waive (decision-log 2026-09-18).
-export const DECISION_OVERRIDABLE_CODES = ['out-of-scope', 'unlisted-test-changed', 'test-mode-production-change', 'behavioral-adds-or-moves-module', 'test-blob-changed']
+export const DECISION_OVERRIDABLE_CODES = ['out-of-scope', 'unlisted-test-changed', 'test-mode-production-change', 'behavioral-adds-or-moves-module', 'test-blob-changed', 'manual-infra-commit']
 const DECISION_KEYS = new Set(['schemaVersion', 'kind', 'story', 'block', 'choice', 'reason', 'scope', 'withdraws', 'overturns', 'overrides'])
 const OVERRIDE_KEYS = new Set(['code', 'path', 'segment', 'verifyAgainst'])
 const BLOCK_RE = /^[a-z0-9][a-z0-9.-]*\.json@[0-9a-f]{12}$/

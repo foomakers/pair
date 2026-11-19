@@ -124,7 +124,7 @@ function trailerBlockOf(body, cwd) {
 // checklist, never executable tests: every allowedPaths entry is a Markdown/text file or a directory of them, the
 // checklist quotes what the text must state per finding against its authority, and the snapshot is the contract alone.
 const PROSE_RE = /\.(md|mdx|markdown|txt|rst|adoc)$/i
-// #691 AC2: a manual CI/infra commit is not code a doc fixer wrote — judged as `out-of-scope` (overridable), never `doc-code-change`.
+// #691 AC2: a manual CI/infra commit is not code a doc fixer wrote — its own overridable code `manual-infra-commit`, never `doc-code-change`.
 const INFRA_RE = /^\.github\/workflows\//
 const docPathErrors = scope => {
   const errs = []
@@ -776,7 +776,8 @@ export function verify({ pr, phase, base, cwd }) {
       if (mode === 'test') breach('test-mode-production-change', { path, status })
       // A doc segment admits PROSE only, by extension — whatever directory its scope names (a directory entry would otherwise let
       // `skills/x/scripts/run.mjs` change without a breach).
-      else if (mode === 'doc' && !PROSE_RE.test(path) && !INFRA_RE.test(path)) breach('doc-code-change', { path, status })
+      else if (mode === 'doc' && INFRA_RE.test(path)) breach('manual-infra-commit', { path, status })
+      else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path })
       else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status })
     }
@@ -842,7 +843,7 @@ export function sealedHandoffsIn(runDir) {
 // override. A future breach code that happens to carry `path` + `segment` for an unrelated reason
 // does NOT become overridable by growing those fields; it becomes overridable by being added here,
 // deliberately, with the decision that says why.
-export const OVERRIDABLE_BREACH_CODES = Object.freeze(['out-of-scope', 'unlisted-test-changed', 'test-mode-production-change', 'behavioral-adds-or-moves-module', 'test-blob-changed'])
+export const OVERRIDABLE_BREACH_CODES = Object.freeze(['out-of-scope', 'unlisted-test-changed', 'test-mode-production-change', 'behavioral-adds-or-moves-module', 'test-blob-changed', 'manual-infra-commit'])
 // A human-authorized custody exception for a SEGMENT breach (`out-of-scope`, `unlisted-test-changed`,
 // `test-mode-production-change`, `behavioral-adds-or-moves-module`, a segment-scoped `test-blob-changed`)
 // on an ALREADY-SEALED segment — never inferred, never self-granted by an agent, and never a field on
@@ -1234,7 +1235,8 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
       if (!c.contract?.fixScope || CHANGESET_RE.test(path)) continue
       const { allowedPaths, mode } = c.contract.fixScope
       if (mode === 'test') breach('test-mode-production-change', { path, status, segment: c.phase, ...hint })
-      else if (mode === 'doc' && !PROSE_RE.test(path) && !INFRA_RE.test(path)) breach('doc-code-change', { path, status, segment: c.phase, ...hint })
+      else if (mode === 'doc' && INFRA_RE.test(path)) breach('manual-infra-commit', { path, status, segment: c.phase, ...hint })
+      else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status, segment: c.phase, ...hint })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path, segment: c.phase, ...hint })
       else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status, segment: c.phase, ...hint })
     }
