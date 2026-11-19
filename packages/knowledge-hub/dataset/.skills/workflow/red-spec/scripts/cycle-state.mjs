@@ -1014,8 +1014,12 @@ export function inspectLock(lock, { now = Date.now(), staleMs = LOCK_STALE_MS } 
   if (ageMs >= staleMs) return { state: owner ? 'stale-lock' : 'orphan-stale', owner, ageMs }
   return { state: 'held', owner, ageMs }
 }
+// Locks THIS process holds: a nested withLock on the same dir (resetGroup/supersede → resolve → archiveSuperseded)
+// runs under the held lock instead of waiting on itself.
+const HELD_LOCKS = new Set()
 export function withLock(dir, waitMs, fn, { staleMs = LOCK_STALE_MS } = {}) {
   const lock = join(dir, '.lock')
+  if (HELD_LOCKS.has(lock)) return fn()
   const deadline = Date.now() + waitMs
   let brokeStaleLock
   for (;;) {
@@ -1038,10 +1042,12 @@ export function withLock(dir, waitMs, fn, { staleMs = LOCK_STALE_MS } = {}) {
   try {
     writeFileSync(join(lock, LOCK_OWNER_FILE), JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }))
   } catch {}
+  HELD_LOCKS.add(lock)
   try {
     const out = fn()
     return brokeStaleLock && out && typeof out === 'object' && !Array.isArray(out) ? { ...out, brokeStaleLock } : out
   } finally {
+    HELD_LOCKS.delete(lock)
     rmSync(lock, { recursive: true, force: true })
   }
 }

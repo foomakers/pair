@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { resolve, discoverDecisions, readDecisions, parseDecisionComment, publish, recover, cycleCounters, readHandoffs, STOP_CATALOG, DECISION_OVERRIDABLE_CODES, blockIdOf } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+import { resolve, withLock, discoverDecisions, readDecisions, parseDecisionComment, publish, recover, cycleCounters, readHandoffs, STOP_CATALOG, DECISION_OVERRIDABLE_CODES, blockIdOf } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 import { OVERRIDABLE_BREACH_CODES, verifyChain } from '../../skills/pair-workflow-review-phase/scripts/red-snapshot.mjs'
 import { chainRepo, write, git, PR } from './red-snapshot-lib.mjs'
 
@@ -282,6 +282,18 @@ test('#691 AC3: a superseded-epoch handoff of the phase a reset re-dispatches is
   review(dir, 'r1', { verdict: 'approved', createdAt: new Date(Date.now() + 120_000).toISOString() })
   go(dir)
   assert.ok(existsSync(join(dir, 'r1-review-phase.json')))
+})
+
+test('#691 AC3 × held run-dir lock (PR #692 r0-4): resolve called under withLock (as resetGroup/supersede do) still archives the superseded epoch', () => {
+  const dir = runDir()
+  fresh(dir)
+  review(dir, 'r1', { verdict: 'approved' })
+  review(dir, 'r0', { custody: { contractBreach: true, breaches: [{ code: 'contract-expected-refused' }] } })
+  const parked = go(dir).next
+  pick(dir, { pr: [comment(decisionBody({ block: parked.block, choice: 'reset' }))] }, { now: new Date(Date.now() + 60_000) })
+  const out = withLock(dir, 0, () => go(dir))
+  assert.deepEqual([out.next.step, out.next.phase], ['verify', 'r1'])
+  assert.ok(!existsSync(join(dir, 'r1-review-phase.json')), 'archived, not left for the dispatch to trip on')
 })
 
 // #691 AC4: a local pass is not proof — a failing REMOTE check of the obligation's own gate on the PR head is the cause.
