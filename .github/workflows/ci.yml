@@ -38,6 +38,8 @@ jobs:
         with:
           node-version: '20'
       - run: pnpm install --frozen-lockfile
+      # changeset-check imports @pair/content-ops (FileSystemService): its types/JS come from dist
+      - run: pnpm --filter @pair/content-ops build
       - name: Require .changeset/*.md (or label no-changeset)
         env:
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
