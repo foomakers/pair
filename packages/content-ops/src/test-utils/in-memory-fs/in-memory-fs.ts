@@ -48,6 +48,14 @@ export class InMemoryFileSystemService implements FileSystemService {
     return read.stat(this.state, path)
   }
 
+  statSync(path: string): Stats {
+    return read.statSync(this.state, path)
+  }
+
+  readFileBytesSync(path: string): Buffer {
+    return read.readFileBytes(this.state, path)
+  }
+
   async realpath(path: string): Promise<string> {
     return read.realpathSync(this.state, path)
   }
@@ -58,6 +66,10 @@ export class InMemoryFileSystemService implements FileSystemService {
 
   async readdir(path: string): Promise<Dirent[]> {
     return read.readdir(this.state, path)
+  }
+
+  readdirSync(path: string): Dirent[] {
+    return read.readdirSync(this.state, path)
   }
 
   getContent(path: string): string | undefined {
@@ -76,6 +88,10 @@ export class InMemoryFileSystemService implements FileSystemService {
     return write.writeFile(this.state, path, content)
   }
 
+  writeFileSync(path: string, content: string): void {
+    write.writeFileSync(this.state, path, content)
+  }
+
   async appendFile(path: string, content: string): Promise<void> {
     return write.appendFile(this.state, path, content)
   }
@@ -86,6 +102,21 @@ export class InMemoryFileSystemService implements FileSystemService {
 
   async chmod(path: string, mode: number): Promise<void> {
     return write.chmod(this.state, path, mode)
+  }
+
+  chmodSync(path: string, mode: number): void {
+    write.chmodSync(this.state, path, mode)
+  }
+
+  mkdtempSync(prefix: string): string {
+    return write.mkdtempSync(this.state, prefix)
+  }
+
+  cpSync(src: string, dest: string, options?: { recursive?: boolean }): void {
+    if (this.state.dirs.has(this.state.resolvePath(src)) && !options?.recursive) {
+      throw new Error(`Recursive copy required for directory: ${src}`)
+    }
+    write.copyImpl(this.state, src, dest)
   }
 
   /** Permission bits recorded by `chmod`, so tests can assert an executable file */
@@ -121,8 +152,16 @@ export class InMemoryFileSystemService implements FileSystemService {
     return write.rm(this.state, path, options)
   }
 
+  rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void {
+    write.rmSync(this.state, path, options)
+  }
+
   async symlink(target: string, path: string): Promise<void> {
     return write.symlink(this.state, target, path)
+  }
+
+  symlinkSync(target: string, path: string): void {
+    write.symlinkSync(this.state, target, path)
   }
 
   async readlink(path: string): Promise<string> {

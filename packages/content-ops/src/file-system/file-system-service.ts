@@ -1,5 +1,18 @@
 import { constants, Dirent, promises as fs, Stats, copyFileSync, mkdirSync } from 'fs'
-import { readFileSync, existsSync, accessSync, realpathSync } from 'fs'
+import {
+  readFileSync,
+  existsSync,
+  accessSync,
+  realpathSync,
+  writeFileSync,
+  rmSync,
+  readdirSync,
+  statSync,
+  chmodSync,
+  mkdtempSync,
+  cpSync,
+  symlinkSync,
+} from 'fs'
 import { dirname, resolve as pathResolve } from 'path'
 import AdmZip from 'adm-zip'
 
@@ -7,6 +20,7 @@ import AdmZip from 'adm-zip'
 export interface FileSystemService {
   accessSync: (path: string) => void
   readdir: (path: string) => Promise<Dirent[]>
+  readdirSync: (path: string) => Dirent[]
   readFile: (file: string) => Promise<string>
   /**
    * Byte-mode read. `readFile` decodes as utf-8, which is LOSSY on binary content —
@@ -17,6 +31,13 @@ export interface FileSystemService {
   readFileSync: (file: string) => string
   existsSync: (file: string) => boolean
   writeFile: (file: string, content: string) => Promise<void>
+  writeFileSync: (file: string, content: string) => void
+  readFileBytesSync: (file: string) => Buffer
+  statSync: (path: string) => Stats
+  chmodSync: (file: string, mode: number) => void
+  mkdtempSync: (prefix: string) => string
+  cpSync: (src: string, dest: string, options?: { recursive?: boolean }) => void
+  symlinkSync: (target: string, path: string) => void
   appendFile: (file: string, content: string) => Promise<void>
   writeFileBinary: (file: string, content: Buffer) => Promise<void>
   /** Set a file's permission bits (e.g. `0o755` for a generated shell script) */
@@ -27,6 +48,7 @@ export interface FileSystemService {
   mkdirSync: (path: string, options?: { recursive?: boolean }) => void
   rename: (oldPath: string, newPath: string) => Promise<void>
   rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => Promise<void>
+  rmSync: (path: string, options?: { recursive?: boolean; force?: boolean }) => void
   stat: (path: string) => Promise<Stats>
   /**
    * The PHYSICAL path, every symlink component resolved. Rejects/throws when the path
@@ -59,11 +81,19 @@ export interface FileSystemService {
 export const fileSystemService: FileSystemService = {
   accessSync: path => accessSync(path, constants.R_OK),
   readdir: path => fs.readdir(path, { withFileTypes: true }),
+  readdirSync: path => readdirSync(path, { withFileTypes: true }),
   readFile: file => fs.readFile(file, 'utf-8'),
   readFileBytes: file => fs.readFile(file),
   existsSync: file => existsSync(file),
   readFileSync: file => readFileSync(file, 'utf-8'),
   writeFile: (file, content) => fs.writeFile(file, content, 'utf-8'),
+  writeFileSync: (file, content) => writeFileSync(file, content, 'utf-8'),
+  readFileBytesSync: file => readFileSync(file),
+  statSync: path => statSync(path),
+  chmodSync: (file, mode) => chmodSync(file, mode),
+  mkdtempSync: prefix => mkdtempSync(prefix),
+  cpSync: (src, dest, options) => cpSync(src, dest, options),
+  symlinkSync: (target, path) => symlinkSync(target, path, 'dir'),
   appendFile: (file, content) => fs.appendFile(file, content, 'utf-8'),
   writeFileBinary: (file, content) => fs.writeFile(file, content),
   chmod: (file, mode) => fs.chmod(file, mode),
@@ -88,6 +118,7 @@ export const fileSystemService: FileSystemService = {
   rm: async (path, options) => {
     await fs.rm(path, options)
   },
+  rmSync: (path, options) => rmSync(path, options),
   stat: path => fs.stat(path),
   realpath: path => fs.realpath(path),
   realpathSync: path => realpathSync(path),

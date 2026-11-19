@@ -163,3 +163,73 @@ describe('fileSystemService.appendFile', () => {
     }
   })
 })
+
+describe.each([
+  [
+    'real service',
+    async () => {
+      const { mkdtempSync, rmSync } = await import('fs')
+      const { tmpdir } = await import('os')
+      const { join } = await import('path')
+      const { fileSystemService } = await import('./file-system-service')
+      const dir = mkdtempSync(join(tmpdir(), 'pair-sync-'))
+      return {
+        fs: fileSystemService,
+        dir,
+        cleanup: () => rmSync(dir, { recursive: true, force: true }),
+      }
+    },
+  ],
+  [
+    'in-memory double',
+    async () => ({
+      fs: new InMemoryFileSystemService({}, '/', '/'),
+      dir: '/work',
+      cleanup: () => {},
+    }),
+  ],
+])('sync write/list/remove contract: %s', (_name, setup) => {
+  it('writeFileSync overwrites, readdirSync lists entries with types, rmSync removes a tree', async () => {
+    const { fs, dir, cleanup } = await setup()
+    try {
+      fs.mkdirSync(`${dir}/sub`, { recursive: true })
+      fs.writeFileSync(`${dir}/a.txt`, 'one')
+      fs.writeFileSync(`${dir}/a.txt`, 'two')
+      fs.writeFileSync(`${dir}/sub/b.txt`, 'b')
+      expect(fs.readFileSync(`${dir}/a.txt`)).toBe('two')
+      const listed = fs
+        .readdirSync(dir)
+        .map(e => [e.name, e.isDirectory()])
+        .sort()
+      expect(listed).toEqual([
+        ['a.txt', false],
+        ['sub', true],
+      ])
+      fs.rmSync(`${dir}/sub`, { recursive: true })
+      expect(fs.existsSync(`${dir}/sub/b.txt`)).toBe(false)
+      expect(fs.existsSync(`${dir}/a.txt`)).toBe(true)
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('rmSync: missing path throws unless force', async () => {
+    const { fs, dir, cleanup } = await setup()
+    try {
+      fs.mkdirSync(dir, { recursive: true })
+      expect(() => fs.rmSync(`${dir}/missing`)).toThrow()
+      expect(() => fs.rmSync(`${dir}/missing`, { force: true })).not.toThrow()
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('readdirSync: missing directory throws ENOENT', async () => {
+    const { fs, dir, cleanup } = await setup()
+    try {
+      expect(() => fs.readdirSync(`${dir}/missing`)).toThrow(/no such file|ENOENT/)
+    } finally {
+      cleanup()
+    }
+  })
+})
