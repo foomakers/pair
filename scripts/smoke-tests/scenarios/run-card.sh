@@ -24,6 +24,7 @@ ensure_tmp_dir
 
 WORK="$(setup_workspace "run-card")"
 MAIN="$WORK/main"
+STORY_WT="$WORK/pair-worktrees/main/12"
 STUB="$WORK/bin"
 CARDS="$WORK/cards"
 ENGINE_LOG="$WORK/engine.log"
@@ -154,13 +155,13 @@ rm -rf "$MAIN/profiles" "$MAIN/pair.config.json"
 log_info "Test 4: Ready card, --autonomous ⇒ transparency block, real scripts, dead dispatch parks awaiting-human"
 : >"$ENGINE_LOG"
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
-assert_output_contains "Worktree root: ../pair-worktrees" || FAILED=1
+assert_output_contains "Worktree root: $WORK/pair-worktrees/main" || FAILED=1
 assert_output_contains "Dispatch ceiling: none" || FAILED=1
 assert_output_contains "Cycle status: awaiting-human" || FAILED=1
 assert_output_contains "resume token implement:a0:dead-dispatch" || FAILED=1
 grep -q "/pair-workflow-implement-phase" "$ENGINE_LOG" || fail "the implement stage was never dispatched"
 if grep -q "/pair-workflow-red-spec" "$ENGINE_LOG"; then fail "a fresh card dispatched a preparation before any code"; fi
-[ -d "$WORK/pair-worktrees/12" ] || fail "the story worktree was not created under the script's root"
+[ -d "$STORY_WT" ] || fail "the story worktree was not created under the script's root"
 
 # ── 4b. #543 AC7: the v0.5.0 run flags, each asserted at its shipped outcome (stub engine, no spawn
 #    that matters). A mismatch with these is a product bug card, never a reason to edit the assertion. ──
@@ -286,8 +287,8 @@ mv "$WORK/role.md" "$MAIN/.claude/agents/pair-implementer.md"
 
 # ── 6. Edge case: the story worktree exists on another branch ⇒ worktree-conflict ──────────────
 log_info "Test 6: story worktree on another branch HALTs worktree-conflict before any spawn"
-git -C "$MAIN" worktree remove --force "$WORK/pair-worktrees/12"
-git -C "$MAIN" worktree add -q -b other "$WORK/pair-worktrees/12" origin/main
+git -C "$MAIN" worktree remove --force "$STORY_WT"
+git -C "$MAIN" worktree add -q -b other "$STORY_WT" origin/main
 : >"$ENGINE_LOG"
 if run_pair run --card 12 --autonomous; then fail "worktree conflict was accepted"; fi
 assert_output_contains "worktree-conflict" || FAILED=1

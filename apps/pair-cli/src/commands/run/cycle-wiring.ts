@@ -431,6 +431,7 @@ export interface CycleDriverContext {
   readonly idleTimeoutOf?: ((engine: string) => number) | undefined
   readonly workflowVersion: string
   readonly baseBranch: string
+  readonly worktreeRoot?: string
   /** The model pinned for this engine, if the project declared one. */
   readonly model?: string | undefined
   /**
@@ -716,7 +717,7 @@ const worktreeFor =
       story: input.card,
       branch: co.branch,
       base: ctx.baseBranch,
-      // No `--worktree-root`: `cycle-dispatch worktree`'s own default applies (r0-10).
+      ...(ctx.worktreeRoot !== undefined && { worktreeRoot: ctx.worktreeRoot }),
     })
 
 const packetFor =
@@ -728,6 +729,7 @@ const packetFor =
     // re-derives it from the SAME source (`resolveBlockingSeverities`), never a second value.
     const blocking = resolveBlockingSeverities(ctx.fs, co.main)
     return co.bridge.packet({
+      main: co.main,
       next: next as never,
       policy: {
         ...budgetsOf(input),
@@ -748,6 +750,7 @@ const packetFor =
       // The stage's OWN engine decides the rendering (a profile may run `verify` on another engine).
       style: styleFor(stageSpawnFor(ctx, (next as { step?: string }).step ?? '').engine),
       workflowVersion: ctx.workflowVersion,
+      ...(ctx.worktreeRoot !== undefined && { pipeline: { worktreeRoot: ctx.worktreeRoot } }),
     }) as never
   }
 

@@ -236,8 +236,8 @@ describe('pair-cli run --card reaches the merge stage (US-490 r1-g2, finding r0-
       lastLines: expect.stringMatching(/worktree-setup-command .* exited 3/),
     })
     expect(printed.join('\n')).toMatch(/worktree-setup-command .* exited 3/)
-    expect(readFileSync(join(root, 'pair-worktrees/7/setup.log'), 'utf8')).toContain(
-      'pair-worktrees/7',
+    expect(readFileSync(join(root, 'pair-worktrees/main/7/setup.log'), 'utf8')).toContain(
+      'pair-worktrees/main/7',
     )
     expect(gatePrompts()).toHaveLength(1)
     expect(outcome).toContain('stub-fix-stage')

@@ -796,7 +796,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
   it('#605: Codex prepare recovers a divergent Git worktree with base-sync', async () => {
     const { runCycle: run } = await vi.importActual<typeof import('./cycle')>('./cycle')
     vi.mocked(runCycle).mockImplementationOnce(async input => {
-      const tree = join(root, 'pair-worktrees', '7')
+      const tree = join(root, 'pair-worktrees', 'main', '7')
       const git = (...args: string[]) =>
         execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
           cwd: tree,
@@ -832,7 +832,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
       vi.mocked(runCycle).mockClear()
       await drive(ENGINES.claude)
       const input = vi.mocked(runCycle).mock.calls[0]?.[0]
-      const tree = join(root, 'pair-worktrees', '7')
+      const tree = join(root, 'pair-worktrees', 'main', '7')
       const sh = (cwd: string, ...args: string[]) =>
         execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
           cwd,
@@ -879,7 +879,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     vi.mocked(runCycle).mockClear()
     await drive(ENGINES.claude, 42)
     const input = vi.mocked(runCycle).mock.calls[0]?.[0]
-    const tree = join(root, 'pair-worktrees', '7')
+    const tree = join(root, 'pair-worktrees', 'main', '7')
     const sh = (cwd: string, ...args: string[]) =>
       execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
         cwd,
@@ -963,7 +963,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
   it('creates the story worktree through the real cycle-dispatch, and starts the stage in the MAIN checkout (AC1)', async () => {
     await drive(ENGINES.claude)
 
-    expect(existsSync(join(root, 'pair-worktrees', '7'))).toBe(true)
+    expect(existsSync(join(root, 'pair-worktrees', 'main', '7'))).toBe(true)
     for (const call of calls()) expect(realpathSync(call.cwd)).toBe(main)
   }, 60_000)
 
@@ -1179,7 +1179,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     // spawn". A real conflicting worktree, so the halt is the real script's own.
     execFileSync(
       'git',
-      ['worktree', 'add', '-q', '-b', 'someone-else', join(root, 'pair-worktrees', '7')],
+      ['worktree', 'add', '-q', '-b', 'someone-else', join(root, 'pair-worktrees', 'main', '7')],
       {
         cwd: main,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -1204,7 +1204,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     const prompt = first!.argv[first!.argv.length - 1]!
     expect(prompt.startsWith('/pair-workflow-review-phase ')).toBe(true)
     expect(realpathSync(first!.cwd)).toBe(main)
-    expect(prompt).toMatch(/\$worktree=\S*pair-worktrees\/7-review(\s|$)/)
+    expect(prompt).toMatch(/\$worktree=\S*pair-worktrees\/main\/7-review(\s|$)/)
     // (The packet's shared argument prefix also names the story worktree — the batch-identical
     // argument set is cycle-dispatch's, AC3; what this driver owes is to START the process in main.)
   }, 60_000)

@@ -37,6 +37,27 @@ const DONE = { step: 'done', verdict: 'APPROVED' }
 const BLOCKED_ESCALATE = { step: 'blocked', reason: 'escalate', detail: 'a human decision is owed' }
 
 describe('runCycle (US-487 T-4)', () => {
+  it('US-602 AC6: ownership conflict stops before stage or recovery', async () => {
+    const spawnStage = vi.fn()
+    const recoverStop = vi.fn()
+    const result = await runCycle({
+      resolve: scriptedResolve([{ status: 'empty', next: IMPLEMENT_A0 }]),
+      worktree: async () => {
+        throw new Error('worktree-conflict: /foreign/55 expected /a/.git actual /b/.git')
+      },
+      packet,
+      spawnStage,
+      recoverStop,
+      policy: { deadDispatchRetries: 1 },
+    })
+    expect(result).toMatchObject({
+      status: 'worktree-conflict',
+      stagesRun: 0,
+      reason: expect.stringContaining('/foreign/55'),
+    })
+    expect(spawnStage).not.toHaveBeenCalled()
+    expect(recoverStop).not.toHaveBeenCalled()
+  })
   const EPIPE: CycleStageResult = { processOutcome: 'failed', detail: 'pi: write EPIPE' }
 
   it('US-594 AC-2: an EPIPE after a valid handoff advances once and records the transport failure', async () => {

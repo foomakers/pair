@@ -21,9 +21,17 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
-import { dirname, isAbsolute, join, resolve as resolvePath } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { CAPS, CONTEXT_TABLE, PIPELINE_DEFAULTS, DEFAULT_SEVERITY_FLOOR, WORKFLOW_VERSION, effectiveInputs, isWorkflowVersion } from './cycle-state.mjs'
+import {
+  CAPS,
+  CONTEXT_TABLE,
+  PIPELINE_DEFAULTS,
+  DEFAULT_SEVERITY_FLOOR,
+  WORKFLOW_VERSION,
+  effectiveInputs,
+  isWorkflowVersion,
+} from './cycle-state.mjs'
 
 // ── the realization table, as DATA (AC-6) ───────────────────────────────────────────────────
 // A row is bound by the PRIMITIVE the host actually exposes, never by a product name or a version
@@ -112,7 +120,13 @@ const SAFE_SEGMENT = /^[A-Za-z0-9._-]+$/
 const SAFE_REF = /^[A-Za-z0-9._\-/]+$/
 const UNSAFE = /(^-)|(^\.)|(\.\.)|(\/\/)|(@\{)|([\s~^:?*[\\])/
 const isSegment = v => typeof v === 'string' && SAFE_SEGMENT.test(v) && !v.includes('..')
-const isRef = v => typeof v === 'string' && v.length > 0 && SAFE_REF.test(v) && !UNSAFE.test(v) && !v.endsWith('/') && !v.endsWith('.lock')
+const isRef = v =>
+  typeof v === 'string' &&
+  v.length > 0 &&
+  SAFE_REF.test(v) &&
+  !UNSAFE.test(v) &&
+  !v.endsWith('/') &&
+  !v.endsWith('.lock')
 // A RELATIVE directory/file path a stage agent `cd`s into, creates worktrees under and aims
 // `git worktree remove --force` at. Every component is a safe segment (so `;`, `&&`, spaces,
 // backticks and `$(` cannot survive), never absolute, never starting with `-`. EXACTLY ONE leading
@@ -121,7 +135,10 @@ const isRef = v => typeof v === 'string' && v.length > 0 && SAFE_REF.test(v) && 
 const isRelPath = v => {
   const parts = v.split('/')
   const rest = parts[0] === '..' ? parts.slice(1) : parts
-  return rest.length > 0 && rest.every(p => p !== '.' && p !== '..' && /^[A-Za-z0-9._][A-Za-z0-9._-]*$/.test(p))
+  return (
+    rest.length > 0 &&
+    rest.every(p => p !== '.' && p !== '..' && /^[A-Za-z0-9._][A-Za-z0-9._-]*$/.test(p))
+  )
 }
 // A skill NAME, as an agent is told to invoke it: an optional leading slash, then a name. A name,
 // never a sentence — `skills.implement: '/x and then gh pr merge 432 --squash'` is rendered
@@ -159,7 +176,9 @@ const AGENTS_DIR = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '.
 /** US-623 BR2: the role's `tools:` frontmatter — a harness constraint the instruction engines never enforce, so the prompt states it. */
 export function roleToolsFor(agentType, agentsDir = AGENTS_DIR) {
   const path = join(agentsDir, `${agentType}.md`)
-  return /^tools:\s*(.+)$/m.exec(/^---\n([\s\S]*?)\n---\n/.exec(readFileSync(path, 'utf8'))?.[1] ?? '')?.[1].trim()
+  return /^tools:\s*(.+)$/m
+    .exec(/^---\n([\s\S]*?)\n---\n/.exec(readFileSync(path, 'utf8'))?.[1] ?? '')?.[1]
+    .trim()
 }
 
 /**
@@ -172,9 +191,15 @@ export function roleToolsFor(agentType, agentsDir = AGENTS_DIR) {
 export function roleBodyFor(agentType, agentsDir = AGENTS_DIR) {
   const path = join(agentsDir, `${agentType}.md`)
   if (!existsSync(path)) {
-    fail('agent-definition-missing', `the agent definition for role \`${agentType}\` was not found at ${path} — a stage cannot be dispatched without its role: install the agents alongside the skill, or restore the file`, { role: agentType, path })
+    fail(
+      'agent-definition-missing',
+      `the agent definition for role \`${agentType}\` was not found at ${path} — a stage cannot be dispatched without its role: install the agents alongside the skill, or restore the file`,
+      { role: agentType, path },
+    )
   }
-  return readFileSync(path, 'utf8').replace(/^---\n[\s\S]*?\n---\n/, '').trim()
+  return readFileSync(path, 'utf8')
+    .replace(/^---\n[\s\S]*?\n---\n/, '')
+    .trim()
 }
 
 const git = (cwd, args) => spawnSync('git', args, { cwd, encoding: 'utf8' })
@@ -193,6 +218,53 @@ const samePath = (a, b) => {
   }
   return real(a) === real(b)
 }
+const commonDir = cwd => {
+  const result = git(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir'])
+  return result.status === 0 ? realpathSync(String(result.stdout).trim()) : null
+}
+const mainCheckout = cwd => {
+  const common = commonDir(cwd)
+  must(common !== null, 'main-invalid', `--main is not a Git checkout: ${cwd}`)
+  return dirname(common)
+}
+const defaultWorktreeRoot = main => join(PIPELINE_DEFAULTS.worktreeRoot, basename(main))
+const validWorktreeRoot = value =>
+  value.length > 0 &&
+  (isRelPath(value) ||
+    (isAbsolute(value) &&
+      value !== '/' &&
+      !/[\x00-\x1f\x7f`$;&|<>'"\\]/.test(value) &&
+      value.split('/').every(part => part !== '.' && part !== '..')))
+function configuredRoot(main) {
+  const path = join(main, 'pair.config.json')
+  if (!existsSync(path)) return undefined
+  let config
+  try {
+    config = JSON.parse(readFileSync(path, 'utf8'))
+  } catch (error) {
+    fail(
+      'worktree-root-invalid',
+      `${path} cannot be parsed: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+  return config?.worktreeRoot
+}
+function resolveWorktreeRoot(main, rawRoot) {
+  const canonicalMain = mainCheckout(main)
+  const declared = rawRoot === undefined ? configuredRoot(canonicalMain) : rawRoot
+  must(
+    declared === undefined || typeof declared === 'string',
+    'worktree-root-invalid',
+    `worktreeRoot must be a string; received ${typeof declared}`,
+  )
+  const value = declared === undefined ? defaultWorktreeRoot(canonicalMain) : declared.trim()
+  must(
+    declared === undefined || validWorktreeRoot(value),
+    'worktree-root-invalid',
+    `worktreeRoot must be an absolute path, or a relative one built from safe segments with at most one leading \`..\`: ${JSON.stringify(value)} — refused before any worktree operation`,
+  )
+  return isAbsolute(value) ? value : resolvePath(canonicalMain, value)
+}
 
 // ── worktree (AC-1, AC-9) ───────────────────────────────────────────────────────────────────
 // `<worktreeRoot>/<story>` is the batch's own convention, so a cycle started by the engine and
@@ -207,29 +279,49 @@ function worktreeCommand(opts) {
   // arrives after the `add` has already escaped is a report, not a validation. An ABSOLUTE root is
   // a caller naming a place and stays legal (spaces included); the RELATIVE form is the traversal
   // rule, and it is the engine's `isRelPath`, not a second, looser spelling of it.
-  const rawRoot = opts['worktree-root']
-  must(rawRoot === undefined || typeof rawRoot === 'string', 'worktree-root-invalid', '--worktree-root requires a value')
-  const worktreeRoot = rawRoot === undefined ? PIPELINE_DEFAULTS.worktreeRoot : rawRoot.trim()
-  must(worktreeRoot.length > 0 && (isAbsolute(worktreeRoot) || isRelPath(worktreeRoot)), 'worktree-root-invalid', `--worktree-root must be an absolute path, or a relative one built from safe segments with at most one leading \`..\`: ${JSON.stringify(worktreeRoot)} — it is the root a \`git worktree remove --force\` is aimed at, so it is refused, never normalised`)
   must(isSegment(String(story)), 'story-invalid', `--story must be one safe path segment: ${story}`)
   must(isRef(branch), 'branch-invalid', `--branch must be a git ref: ${branch}`)
   must(isRef(base), 'base-invalid', `--base must be a git ref: ${base}`)
+  const root = resolveWorktreeRoot(main, opts['worktree-root'])
   must(existsSync(main), 'main-missing', `--main does not exist: ${main}`)
-  const root = isAbsolute(worktreeRoot) ? worktreeRoot : resolvePath(main, worktreeRoot)
+  const canonicalMain = mainCheckout(main)
   const path = join(root, String(story))
 
   const registered = listWorktrees(main)
   const found = registered.find(w => samePath(w.path, path))
   if (found) {
+    const expectedIdentity = commonDir(canonicalMain)
+    const actualIdentity = commonDir(path)
+    const top = actualIdentity ? git(path, ['rev-parse', '--show-toplevel']) : null
+    const actualBranch = actualIdentity ? git(path, ['symbolic-ref', '--quiet', 'HEAD']) : null
+    if (!expectedIdentity || !actualIdentity || !samePath(expectedIdentity, actualIdentity) || top?.status !== 0 || !samePath(top.stdout.trim(), path) || actualBranch?.status !== 0 || actualBranch.stdout.trim() !== `refs/heads/${branch}`) {
+      fail('worktree-conflict', `the registered worktree at ${path} does not match its repository, root, or branch; expected Git common dir ${expectedIdentity}, actual ${actualIdentity ?? '(not a Git worktree)'}; expected branch ${branch}, actual ${actualBranch?.status === 0 ? actualBranch.stdout.trim().replace(/^refs\/heads\//, '') : actualIdentity ? '(detached)' : '(unavailable)'}`, {
+        path, expected: branch, actual: actualBranch?.status === 0 ? actualBranch.stdout.trim().replace(/^refs\/heads\//, '') : null, expectedIdentity, actualIdentity,
+      })
+    }
     if (found.branch === branch) return emit({ path, created: false, reused: true, branch })
-    fail('worktree-conflict', `the worktree at ${path} is checked out on ${found.branch ?? '(detached)'}, not on ${branch} — resolve it by hand; this never forces or switches a checkout`, {
-      path,
-      expected: branch,
-      actual: found.branch ?? null,
-    })
+    fail(
+      'worktree-conflict',
+      `the worktree at ${path} is checked out on ${found.branch ?? '(detached)'}, not on ${branch}; expected Git common dir ${expectedIdentity}, actual ${actualIdentity} — resolve it by hand; this never forces or switches a checkout`,
+      {
+        path,
+        expected: branch,
+        actual: found.branch ?? null,
+        expectedIdentity,
+        actualIdentity,
+      },
+    )
   }
   // A path that exists but is not a registered worktree is somebody else's directory.
-  if (existsSync(path)) fail('worktree-conflict', `${path} exists but is not a registered worktree of ${main} — resolve it by hand`, { path, expected: branch, actual: null })
+  if (existsSync(path)) {
+    const expectedIdentity = commonDir(canonicalMain)
+    const actualIdentity = commonDir(path)
+    fail(
+      'worktree-conflict',
+      `${path} is not a registered worktree of ${canonicalMain}; expected Git common dir ${expectedIdentity}, actual ${actualIdentity ?? '(not a Git worktree)'} — resolve it by hand`,
+      { path, expected: branch, actual: null, expectedIdentity, actualIdentity },
+    )
+  }
 
   mkdirSync(dirname(path), { recursive: true })
   // An existing card branch is the work in progress: check it out as it is, never `-B` it back to
@@ -238,14 +330,35 @@ function worktreeCommand(opts) {
   // Ask origin itself, not a remote-tracking ref of unknown age: a branch pushed from elsewhere is
   // fetched, one deleted upstream loses its stale tracking ref. Offline (or no origin) ⇒ local refs as they are.
   // Never prompt, never hang: a credential prompt or a dead network leaves the local refs as they are.
-  const net = args => spawnSync('git', args, { cwd: main, encoding: 'utf8', timeout: 30_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? 'ssh -o BatchMode=yes -o ConnectTimeout=10' } })
+  const net = args =>
+    spawnSync('git', args, {
+      cwd: main,
+      encoding: 'utf8',
+      timeout: 30_000,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+        GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? 'ssh -o BatchMode=yes -o ConnectTimeout=10',
+      },
+    })
   const remote = net(['ls-remote', '--exit-code', '--heads', 'origin', `refs/heads/${branch}`])
   if (remote.status === 0) {
-    const fetched = net(['fetch', '-q', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`])
-    if (fetched.status !== 0) fail('git-failed', `origin has ${branch} but fetching it failed — refusing to cut a second branch of the same name: ${String(fetched.stderr ?? '').trim()}`, { branch })
+    const fetched = net([
+      'fetch',
+      '-q',
+      'origin',
+      `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+    ])
+    if (fetched.status !== 0)
+      fail(
+        'git-failed',
+        `origin has ${branch} but fetching it failed — refusing to cut a second branch of the same name: ${String(fetched.stderr ?? '').trim()}`,
+        { branch },
+      )
   } else if (remote.status === 2) git(main, ['update-ref', '-d', `refs/remotes/origin/${branch}`])
   if (has(`refs/heads/${branch}`)) gitOk(main, ['worktree', 'add', '-q', path, branch])
-  else if (has(`refs/remotes/origin/${branch}`)) gitOk(main, ['worktree', 'add', '-q', '--track', '-b', branch, path, `origin/${branch}`])
+  else if (has(`refs/remotes/origin/${branch}`))
+    gitOk(main, ['worktree', 'add', '-q', '--track', '-b', branch, path, `origin/${branch}`])
   else gitOk(main, ['worktree', 'add', '-q', '-b', branch, path, base])
   return emit({ path, created: true, reused: false, branch })
 }
@@ -258,7 +371,8 @@ function listWorktrees(main) {
     if (line.startsWith('worktree ')) {
       cur = { path: line.slice('worktree '.length), branch: null, detached: false }
       entries.push(cur)
-    } else if (cur && line.startsWith('branch ')) cur.branch = line.slice('branch '.length).replace(/^refs\/heads\//, '')
+    } else if (cur && line.startsWith('branch '))
+      cur.branch = line.slice('branch '.length).replace(/^refs\/heads\//, '')
     else if (cur && line === 'detached') cur.detached = true
   }
   return entries
@@ -271,7 +385,16 @@ function listWorktrees(main) {
 const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor', 'Questions']
 const DEFAULT_VERDICTS = ['APPROVED', 'CHANGES-REQUESTED', 'TECH-DEBT']
 // pair's own severity ranks, the fallback until a review resolves the template contract.
-const DEFAULT_RANKS = { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1, question: 1, nit: 1, info: 1 }
+const DEFAULT_RANKS = {
+  critical: 4,
+  blocker: 4,
+  major: 3,
+  minor: 2,
+  questions: 1,
+  question: 1,
+  nit: 1,
+  info: 1,
+}
 const LOOSE_REVIEW_SCHEMA = {
   type: 'object',
   properties: {
@@ -311,7 +434,8 @@ const CONTRACT_MIRRORS =
 // to stop an implementer stubbing its own required publish. Stated here instead: only the STAGE's
 // own EXPERIMENTAL probes stub `gh`/an engine; the skill's own read/publish/finalize/conclude
 // steps always run for real.
-export const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. Only the stage\'s own experimental probes stub a real engine or a real `gh` — the skill\'s own read/publish/finalize/conclude steps run for real. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
+export const BOUNDED_COMMANDS =
+  'Run only foreground, time-bounded commands: never start a background process and never wait on one. Only the stage\'s own experimental probes stub a real engine or a real `gh` — the skill\'s own read/publish/finalize/conclude steps run for real. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
 const templateLabel = p => String(p).split('/').filter(Boolean).pop() || String(p)
 const compactFinding = f => ({
   id: f.id,
@@ -335,26 +459,43 @@ const isPosInt = v => Number.isInteger(v) && v > 0
 // accepted it would be the looser of the two, and `$profile` (#488) is designed to feed this flag.
 // The engine is a sandboxed workflow script this file cannot import, so the grammar is stated in
 // the same spellings here and held equal to its source by `engine-boundaries.test.mjs`.
-const PIPELINE_KEYS = ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds', 'reviewers']
+const PIPELINE_KEYS = [
+  'skills',
+  'worktreeRoot',
+  'auditLogDir',
+  'baseBranch',
+  'reviewTemplate',
+  'maxFixRounds',
+  'reviewers',
+]
 // Retired by engine 3.0.0 (ADR-024 amendment b): named, never mapped silently, never re-added.
 const RETIRED_SKILL_KEYS = {
   remediationPlan: 'redSpec (grouping is a step of preparation)',
   redSeal: 'redVerify (the seal runs in the validation execution)',
   p3Verify: "reviewPhase (custody + evidence are the final verifier's first steps)",
-  cycleComments: 'reviewPhase / greenFix (probe, synthesis and flush are scripts inside those stages)',
+  cycleComments:
+    'reviewPhase / greenFix (probe, synthesis and flush are scripts inside those stages)',
   prPhase: 'implementPhase (the implementer publishes the PR)',
 }
 const rejectUnknownKeys = (obj, allowed, where) => {
+  // An unrecognised key is an unvalidated value by another name: dropped in silence, it leaves
+  // the caller believing they overrode something while pair's own default runs.
   for (const k of Object.keys(obj ?? {}))
-    // An unrecognised key is an unvalidated value by another name: dropped in silence, it leaves
-    // the caller believing they overrode something while pair's own default runs.
-    if (!allowed.includes(k)) fail('pipeline-invalid', `unknown \`${where}.${k}\`; expected one of ${allowed.join(', ')}. An unrecognised key would be dropped in silence and the cycle would run pair's default while the caller believed otherwise.`)
+    if (!allowed.includes(k))
+      fail(
+        'pipeline-invalid',
+        `unknown \`${where}.${k}\`; expected one of ${allowed.join(', ')}. An unrecognised key would be dropped in silence and the cycle would run pair's default while the caller believed otherwise.`,
+      )
 }
 function resolvePipeline(raw) {
   // `undefined`/`null` is ABSENT, not a bad value — one spelling for an unset optional key across
   // the whole contract, and the engine takes its default here rather than refusing.
   if (raw === undefined || raw === null) return PIPELINE_DEFAULTS
-  if (typeof raw !== 'object' || Array.isArray(raw)) fail('pipeline-invalid', `--pipeline must be an object; received ${JSON.stringify(raw).slice(0, 60)}. Omit it entirely to run on pair's defaults.`)
+  if (typeof raw !== 'object' || Array.isArray(raw))
+    fail(
+      'pipeline-invalid',
+      `--pipeline must be an object; received ${JSON.stringify(raw).slice(0, 60)}. Omit it entirely to run on pair's defaults.`,
+    )
   rejectUnknownKeys(raw, PIPELINE_KEYS, 'pipeline')
   const str = (v, key, fallback, ok, what) => {
     if (v === undefined || v === null) return fallback
@@ -362,12 +503,21 @@ function resolvePipeline(raw) {
     // of which interpolates into a prompt as a name no agent can follow — and a predicate applied
     // to a raw value is unsound anyway (`isRelPath(5)` throws, `isSkillRef(5)` passes by coercion).
     // The TYPE is rejected first, never coerced.
-    if (typeof v !== 'string') fail('pipeline-invalid', `\`pipeline.${key}\` must be a string; received ${typeof v}.`)
+    if (typeof v !== 'string')
+      fail('pipeline-invalid', `\`pipeline.${key}\` must be a string; received ${typeof v}.`)
     const t = v.trim()
     // Trimmed, exactly as the engine's `str()` trims: '  main  ' is a value the engine ACCEPTS and
     // normalises, so halting on it would refuse what the other realization renders.
-    if (!t) fail('pipeline-invalid', `\`pipeline.${key}\` is empty — omit the key to keep the default (${fallback}).`)
-    if (!ok(t)) fail('pipeline-invalid', `\`pipeline.${key}\` is ${JSON.stringify(t)}, which is not ${what}. Pipeline values are interpolated verbatim into the prompts and command lines the agents run, so a value carrying shell syntax or a path escape would EXECUTE rather than name a ${key}. Rejected, never quoted.`)
+    if (!t)
+      fail(
+        'pipeline-invalid',
+        `\`pipeline.${key}\` is empty — omit the key to keep the default (${fallback}).`,
+      )
+    if (!ok(t))
+      fail(
+        'pipeline-invalid',
+        `\`pipeline.${key}\` is ${JSON.stringify(t)}, which is not ${what}. Pipeline values are interpolated verbatim into the prompts and command lines the agents run, so a value carrying shell syntax or a path escape would EXECUTE rather than name a ${key}. Rejected, never quoted.`,
+      )
     return t
   }
   // The NUMERIC keys, rejected rather than coerced: a cap that cannot be honoured must not silently
@@ -375,22 +525,68 @@ function resolvePipeline(raw) {
   // happens before a human is asked. `'2'` is the shape a hand-written JSON arg produces.
   const posInt = (v, key, fallback) => {
     if (v === undefined || v === null) return fallback
-    if (!isPosInt(v)) fail('pipeline-invalid', `\`pipeline.${key}\` must be an integer >= 1; received ${JSON.stringify(v)}. Omit the key to keep pair's default (${fallback}) — it is never inferred from a bad value.`)
+    if (!isPosInt(v))
+      fail(
+        'pipeline-invalid',
+        `\`pipeline.${key}\` must be an integer >= 1; received ${JSON.stringify(v)}. Omit the key to keep pair's default (${fallback}) — it is never inferred from a bad value.`,
+      )
     return v
   }
-  if (raw.skills !== undefined && raw.skills !== null && (typeof raw.skills !== 'object' || Array.isArray(raw.skills)))
-    fail('pipeline-invalid', `\`pipeline.skills\` must be an object; received ${Array.isArray(raw.skills) ? 'array' : typeof raw.skills}. A non-object would be silently ignored and pair's own skill names would run instead. Omit the key to keep them deliberately.`)
+  if (
+    raw.skills !== undefined &&
+    raw.skills !== null &&
+    (typeof raw.skills !== 'object' || Array.isArray(raw.skills))
+  )
+    fail(
+      'pipeline-invalid',
+      `\`pipeline.skills\` must be an object; received ${Array.isArray(raw.skills) ? 'array' : typeof raw.skills}. A non-object would be silently ignored and pair's own skill names would run instead. Omit the key to keep them deliberately.`,
+    )
   for (const k of Object.keys(raw.skills ?? {}))
-    if (RETIRED_SKILL_KEYS[k]) fail('pipeline-invalid', `\`pipeline.skills.${k}\` was retired by engine 3.0.0 (ADR-024 amendment b) — its work now runs inside ${RETIRED_SKILL_KEYS[k]}. Remove the key; a retired dispatch is never mapped silently and never re-added.`)
+    if (RETIRED_SKILL_KEYS[k])
+      fail(
+        'pipeline-invalid',
+        `\`pipeline.skills.${k}\` was retired by engine 3.0.0 (ADR-024 amendment b) — its work now runs inside ${RETIRED_SKILL_KEYS[k]}. Remove the key; a retired dispatch is never mapped silently and never re-added.`,
+      )
   rejectUnknownKeys(raw.skills, Object.keys(PIPELINE_DEFAULTS.skills), 'pipeline.skills')
   const skills = { ...PIPELINE_DEFAULTS.skills }
-  for (const [k, v] of Object.entries(raw.skills ?? {})) skills[k] = str(v, `skills.${k}`, PIPELINE_DEFAULTS.skills[k], isSkillRef, 'a skill name as an agent invokes one — no spaces, no shell syntax, no `..`')
+  for (const [k, v] of Object.entries(raw.skills ?? {}))
+    skills[k] = str(
+      v,
+      `skills.${k}`,
+      PIPELINE_DEFAULTS.skills[k],
+      isSkillRef,
+      'a skill name as an agent invokes one — no spaces, no shell syntax, no `..`',
+    )
   return {
     skills,
-    worktreeRoot: str(raw.worktreeRoot, 'worktreeRoot', PIPELINE_DEFAULTS.worktreeRoot, isRelPath, 'a relative path built from safe segments (at most one leading `..`; it is the root a `--force` worktree remove is aimed at)'),
-    auditLogDir: str(raw.auditLogDir, 'auditLogDir', PIPELINE_DEFAULTS.auditLogDir, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
-    baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch, isRef, "a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card's `base`)"),
-    reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
+    worktreeRoot: str(
+      raw.worktreeRoot,
+      'worktreeRoot',
+      PIPELINE_DEFAULTS.worktreeRoot,
+      validWorktreeRoot,
+      'an absolute path or relative safe path (at most one leading `..`)',
+    ),
+    auditLogDir: str(
+      raw.auditLogDir,
+      'auditLogDir',
+      PIPELINE_DEFAULTS.auditLogDir,
+      isRelPath,
+      'a relative path built from safe segments (at most one leading `..`)',
+    ),
+    baseBranch: str(
+      raw.baseBranch,
+      'baseBranch',
+      PIPELINE_DEFAULTS.baseBranch,
+      isRef,
+      "a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card's `base`)",
+    ),
+    reviewTemplate: str(
+      raw.reviewTemplate,
+      'reviewTemplate',
+      PIPELINE_DEFAULTS.reviewTemplate,
+      isRelPath,
+      'a relative path built from safe segments (at most one leading `..`)',
+    ),
     maxFixRounds: posInt(raw.maxFixRounds, 'maxFixRounds', PIPELINE_DEFAULTS.maxFixRounds),
     reviewers: posInt(raw.reviewers, 'reviewers', PIPELINE_DEFAULTS.reviewers),
   }
@@ -400,7 +596,14 @@ function resolvePipeline(raw) {
 // `feature/US-<id>-<slug>`. No `#` — a valid ref, but the strict validators (SAFE_REF here, the host adapter-kit's
 // assertBranchName, cycle-merge's closure) refuse it, which stranded a merged PR's branch cleanup.
 function deriveBranch({ id, title }) {
-  const slug = String(title ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').split('-').filter(Boolean).slice(0, 6).join('-')
+  const slug = String(title ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .split('-')
+    .filter(Boolean)
+    .slice(0, 6)
+    .join('-')
   return `feature/US-${id}${slug ? `-${slug}` : ''}`
 }
 
@@ -408,7 +611,11 @@ function packetCommand(opts) {
   const next = JSON.parse(opts.next)
   const card = JSON.parse(opts.card)
   if (card.branch === undefined || card.branch === null || card.branch === '') {
-    must(isSegment(String(card.id)), 'branch-underivable', `no card.branch and card.id ${JSON.stringify(card.id)} is not one safe path segment: cannot derive a feature/US-<id>-<slug> branch`)
+    must(
+      isSegment(String(card.id)),
+      'branch-underivable',
+      `no card.branch and card.id ${JSON.stringify(card.id)} is not one safe path segment: cannot derive a feature/US-<id>-<slug> branch`,
+    )
     card.branch = deriveBranch(card)
   }
   // US-514 r1-g1 g1-w2/g1-w10b/g1-c4 (the #514/AC1 revision): `--severity-floor F` writes `blockingFloor: F`
@@ -421,13 +628,23 @@ function packetCommand(opts) {
   const { autonomy: _coordinatorOnly, ...declaredPolicy } = JSON.parse(opts.policy ?? '{}')
   // r1-4: the retired `policy.blockingSeverities` (a severity LIST) is refused HERE too — the same
   // reason `publish` refuses it — never silently rendered into a stage's own `$policy`.
-  must(!Object.prototype.hasOwnProperty.call(declaredPolicy, 'blockingSeverities'), 'policy-legacy-blocking-severities', '`policy.blockingSeverities` is retired — declare `policy.blockingFloor` (a single severity), never a list')
-  const policy = opts['severity-floor'] !== undefined ? { ...declaredPolicy, blockingFloor: opts['severity-floor'] } : declaredPolicy
+  must(
+    !Object.prototype.hasOwnProperty.call(declaredPolicy, 'blockingSeverities'),
+    'policy-legacy-blocking-severities',
+    '`policy.blockingSeverities` is retired — declare `policy.blockingFloor` (a single severity), never a list',
+  )
+  const policy =
+    opts['severity-floor'] !== undefined
+      ? { ...declaredPolicy, blockingFloor: opts['severity-floor'] }
+      : declaredPolicy
   // Omitted ⇒ the ONE pin, imported from cycle-state (never a literal here: a second spelling of
   // the state machine's identity is a fork of it — AC-12). The coordinator is an agent session, and
   // a value it has no producer for is a value it invents.
   const workflowVersion = opts['workflow-version'] ?? WORKFLOW_VERSION
-  const pipeline = resolvePipeline(opts.pipeline === undefined ? undefined : JSON.parse(opts.pipeline))
+  const declaredPipeline = opts.pipeline === undefined ? undefined : JSON.parse(opts.pipeline)
+  const pipeline = { ...resolvePipeline(declaredPipeline) }
+  if (opts.main !== undefined)
+    pipeline.worktreeRoot = resolveWorktreeRoot(opts.main, declaredPipeline?.worktreeRoot)
   const SK = pipeline.skills
   // `$profile` (SKILL.md's reserved argument): absent ⇒ no override, exactly today's behavior.
   // Present but its `effort` unknown ⇒ HALT `profile-unresolved`, never a silent default — the
@@ -435,20 +652,39 @@ function packetCommand(opts) {
   const profile = opts.profile === undefined ? {} : JSON.parse(opts.profile)
   const agentsDir = opts['agents-dir'] ?? AGENTS_DIR
   if (typeof agentsDir !== 'string' || !isAbsolute(agentsDir))
-    fail('agents-dir-invalid', `--agents-dir must be an absolute directory; received ${JSON.stringify(opts['agents-dir'])}`)
+    fail(
+      'agents-dir-invalid',
+      `--agents-dir must be an absolute directory; received ${JSON.stringify(opts['agents-dir'])}`,
+    )
   if (profile.effort !== undefined && !KNOWN_EFFORTS.includes(profile.effort))
-    fail('profile-unresolved', `$profile.effort ${JSON.stringify(profile.effort)} is not one of ${KNOWN_EFFORTS.join(' | ')}`, { profile })
+    fail(
+      'profile-unresolved',
+      `$profile.effort ${JSON.stringify(profile.effort)} is not one of ${KNOWN_EFFORTS.join(' | ')}`,
+      { profile },
+    )
   const effort = profile.effort
   const runId = opts.run ?? `story-${card.id}`
-  must(isSegment(String(card.id)), 'card-invalid', `card.id must be one safe path segment: ${card.id}`)
+  must(
+    isSegment(String(card.id)),
+    'card-invalid',
+    `card.id must be one safe path segment: ${card.id}`,
+  )
   must(isSegment(runId), 'run-invalid', `--run must be one safe path segment: ${runId}`)
   must(isRef(card.branch), 'card-invalid', `card.branch must be a git ref: ${card.branch}`)
-  must(typeof workflowVersion === 'string' && workflowVersion.length > 0, 'workflow-version-missing', '--workflow-version is required')
+  must(
+    typeof workflowVersion === 'string' && workflowVersion.length > 0,
+    'workflow-version-missing',
+    '--workflow-version is required',
+  )
   // Held to the grammar its own state machine owns, HERE — where the value enters. It is rendered
   // verbatim into the stage prompt an agent reads as its process of record AND keys the `$inputs`
   // digest both realizations must agree on, so `publish` would refuse it at the END of that whole
   // stage, with a contract written and no handoff recorded. Refused before a packet exists instead.
-  must(isWorkflowVersion(workflowVersion), 'workflow-version-invalid', `--workflow-version must be <major>.<minor>.<patch>; received ${JSON.stringify(workflowVersion)}. Rejected, never rendered: no argument packet and no prompt are built from a version \`publish\` will refuse one agent dispatch from now.`)
+  must(
+    isWorkflowVersion(workflowVersion),
+    'workflow-version-invalid',
+    `--workflow-version must be <major>.<minor>.<patch>; received ${JSON.stringify(workflowVersion)}. Rejected, never rendered: no argument packet and no prompt are built from a version \`publish\` will refuse one agent dispatch from now.`,
+  )
 
   const tag = `#${card.id}`
   const worktreePath = `${pipeline.worktreeRoot}/${card.id}`
@@ -460,14 +696,21 @@ function packetCommand(opts) {
   const pr = isPosInt(next.pr) ? next.pr : isPosInt(card.prNumber) ? card.prNumber : null
   const firstReviewMarker = `<!-- pair:first-review #${card.id} PR#${pr} run:${runId} -->`
   const synthesisMarker = `<!-- pair:synthesis #${card.id} PR#${pr} run:${runId} -->`
-  const inputs = effectiveInputs(card, { workflowVersion, pipeline, severityFloor: opts['severity-floor'] ?? DEFAULT_SEVERITY_FLOOR })
+  const inputs = effectiveInputs(card, {
+    workflowVersion,
+    pipeline,
+    severityFloor: opts['severity-floor'] ?? DEFAULT_SEVERITY_FLOOR,
+  })
   // US-514 r1-g1 g1-w10b: `$floor` rendered to the reviewer is the ONE floor the policy carries —
   // an explicit flag (already folded into `policy.blockingFloor` above), else the declared floor,
   // else the KB default — never a second, disagreeing default.
   const severityFloor = policy.blockingFloor ?? DEFAULT_SEVERITY_FLOOR
-  const blindPaths = [...new Set(['.pair/working/', pipeline.auditLogDir])].map(p => `\`${p}\``).join(' or ')
+  const blindPaths = [...new Set(['.pair/working/', pipeline.auditLogDir])]
+    .map(p => `\`${p}\``)
+    .join(' or ')
 
-  const common = `$run=${runId} $story=${card.id} $branch=${card.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
+  const promptPath = path => /\s/.test(path) ? JSON.stringify(path) : path
+  const common = `$run=${runId} $story=${card.id} $branch=${card.branch} $worktree=${promptPath(worktreePath)} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
   // Best-effort only: an enforced dial exists for Codex (`-c model_reasoning_effort=<value>` on
   // the realization's own dispatch call, never rendered into the prompt text itself) but NOT for
   // Claude (the `Agent` tool the coordinator dispatches through has no effort parameter at all) —
@@ -478,7 +721,9 @@ function packetCommand(opts) {
   // cut corners and correlated with a Claude-bound run producing a contract with real schema
   // defects a Codex-free comparable run did not have (US-486 canary, 2026-09-19) — every other
   // requirement in this prompt (Check/Act/Verify, never improvise) still applies at every level.
-  const effortNote = effort ? ` Requested reasoning effort for this dispatch: **${effort}**. This is a request, not an enforced setting: honour it as best you can within your own harness's controls — it changes how much you think, never what you are required to produce or verify.` : ''
+  const effortNote = effort
+    ? ` Requested reasoning effort for this dispatch: **${effort}**. This is a request, not an enforced setting: honour it as best you can within your own harness's controls — it changes how much you think, never what you are required to produce or verify.`
+    : ''
   // The rules every dispatch carries, whichever realization renders it. Shared, not duplicated:
   // the styled rendering below used to drop this whole paragraph, so a process realization got the
   // bare invocation line and NONE of it — no reviewer blindness, no "the run directory lives in the
@@ -512,23 +757,32 @@ function packetCommand(opts) {
   // this one does not regress the engine the canary proved.
   const renderPrompt = (skill, args, style, agentType) => {
     if (style === undefined) return invoke(skill, args)
-    if (!KNOWN_STYLES.includes(style)) fail('style-invalid', `--style must be one of ${KNOWN_STYLES.join(' | ')}; received ${JSON.stringify(style)}`)
+    if (!KNOWN_STYLES.includes(style))
+      fail(
+        'style-invalid',
+        `--style must be one of ${KNOWN_STYLES.join(' | ')}; received ${JSON.stringify(style)}`,
+      )
     const bare = skill.replace(/^\//, '')
     const body = `${args} $workflowVersion=${workflowVersion}`
     const role = roleBodyFor(agentType, agentsDir)
     const toolsNote = type => {
       const tools = roleToolsFor(type, agentsDir)
-      return tools ? `\n\nTool allowlist for this role (this engine does not enforce it — stay within it): ${tools}.` : ''
+      return tools
+        ? `\n\nTool allowlist for this role (this engine does not enforce it — stay within it): ${tools}.`
+        : ''
     }
     return style === 'slash'
       ? `/${bare} ${body}\n\n${role}\n\n${guardrails}`
       : `${role}${toolsNote(agentType)}\n\nRun the ${bare} skill with these arguments: ${body}\n\n${guardrails}`
   }
   const notesArg = card.notes ? ` $notes=${JSON.stringify(card.notes)}` : ''
-  const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
+  const findingsArg = list =>
+    list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : ''
   const n = next
   // US-647: the maintainer decision that resumed this block travels to the stage that answers it, verbatim.
-  const decisionArg = n.maintainerDecision ? ` $maintainerDecision=${JSON.stringify(n.maintainerDecision)}` : ''
+  const decisionArg = n.maintainerDecision
+    ? ` $maintainerDecision=${JSON.stringify(n.maintainerDecision)}`
+    : ''
 
   let skill
   let agentType
@@ -571,7 +825,8 @@ function packetCommand(opts) {
     const verdicts = opts.verdicts ?? DEFAULT_VERDICTS.join(', ')
     // The template contract is resolved BY the first review dispatch (no generator-only dispatch):
     // until the coordinator has seen one come back, every verify packet carries `$contractSpec`.
-    const contractResolved = opts['contract-resolved'] === true || opts['contract-resolved'] === 'true'
+    const contractResolved =
+      opts['contract-resolved'] === true || opts['contract-resolved'] === 'true'
     const contractSpec = {
       name: 'code-review',
       template: pipeline.reviewTemplate,
@@ -581,9 +836,13 @@ function packetCommand(opts) {
       contractSkill: SK.contractPhase,
       workflowVersion,
     }
-    args = `${common} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker)} $synthesisMarker=${JSON.stringify(synthesisMarker)} $template=${templateLabel(pipeline.reviewTemplate)} $severities=${JSON.stringify(severities)} $verdicts=${JSON.stringify(verdicts)}${severityFloor ? ` $floor=${severityFloor}` : ''} $ranks=${ranksArg} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${pipeline.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.waived?.length ? ` $waived=${JSON.stringify(n.waived)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${decisionArg}${contractResolved ? '' : ` $contractSpec=${JSON.stringify(contractSpec)}`}`
+    args = `${common} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${promptPath(reviewWorktreePath)} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker)} $synthesisMarker=${JSON.stringify(synthesisMarker)} $template=${templateLabel(pipeline.reviewTemplate)} $severities=${JSON.stringify(severities)} $verdicts=${JSON.stringify(verdicts)}${severityFloor ? ` $floor=${severityFloor}` : ''} $ranks=${ranksArg} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${pipeline.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.waived?.length ? ` $waived=${JSON.stringify(n.waived)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${decisionArg}${contractResolved ? '' : ` $contractSpec=${JSON.stringify(contractSpec)}`}`
   } else {
-    fail('step-not-dispatchable', `\`${n.step}\` is a terminal state, not a stage — the coordinator reports it, it never dispatches it`, { step: n.step })
+    fail(
+      'step-not-dispatchable',
+      `\`${n.step}\` is a terminal state, not a stage — the coordinator reports it, it never dispatches it`,
+      { step: n.step },
+    )
   }
 
   return emit({
@@ -596,7 +855,9 @@ function packetCommand(opts) {
     // `next.context` is the cycle state's decision, carried through untouched: the coordinator
     // honours it (fresh ⇒ spawn, reuse ⇒ resume the named source context), never decides it.
     context: n.context ?? CONTEXT_TABLE.default,
-    ...(n.context === 'reuse' && n.contextSource ? { contextSource: n.contextSource, contextAgentType: n.contextAgentType } : {}),
+    ...(n.context === 'reuse' && n.contextSource
+      ? { contextSource: n.contextSource, contextAgentType: n.contextAgentType }
+      : {}),
     label: `${n.step}:${tag} ${n.phase}`,
     worktree,
     runDir,
@@ -619,14 +880,22 @@ function realizationsCommand(opts) {
   // can say what claimed to be there, and it can never bind a row on its own. Checked against
   // EVERY known dispatch alias for the row, not just its canonical `dispatch` field — a namespace
   // this row's host has renamed to (US-486 canary: Codex, twice in one day) is still a match.
-  const bound = rows.find(r => (DISPATCH_ALIASES[r.id] ?? [r.dispatch]).some(t => tools.has(t)) || (r.activation !== undefined && tools.has(r.activation)))
+  const bound = rows.find(
+    r =>
+      (DISPATCH_ALIASES[r.id] ?? [r.dispatch]).some(t => tools.has(t)) ||
+      (r.activation !== undefined && tools.has(r.activation)),
+  )
   if (!bound) {
     // AC-6's fallback command. The `--pr` half of `pair-cli run --card N [--pr P]` is OPTIONAL and
     // omitted when there is no PR: a line reading `--pr undefined` hands the operator a command
     // that does not run, which is the whole remedy this HALT owes them.
     const story = opts.story ?? '<card>'
     const fallback = `pair-cli run --card ${story}${opts.pr === undefined ? '' : ` --pr ${opts.pr}`}`
-    fail('realization-unavailable', `no subagent primitive is present in this session (probed: ${[...tools].join(', ') || 'none'}${opts.product ? `; the host names itself "${opts.product}", which is not evidence` : ''}). Run the cycle from the command line instead: ${fallback}`, { fallback })
+    fail(
+      'realization-unavailable',
+      `no subagent primitive is present in this session (probed: ${[...tools].join(', ') || 'none'}${opts.product ? `; the host names itself "${opts.product}", which is not evidence` : ''}). Run the cycle from the command line instead: ${fallback}`,
+      { fallback },
+    )
   }
   const dispatchCandidates = DISPATCH_ALIASES[bound.id] ?? [bound.dispatch]
   const dispatch = dispatchCandidates.find(t => tools.has(t)) ?? bound.dispatch
@@ -634,14 +903,40 @@ function realizationsCommand(opts) {
   const resume = resumeCandidates.find(t => tools.has(t)) ?? bound.resume
   // Bound through its loader alone ⇒ the dispatch tool is not callable YET: say which call makes it
   // so, rather than reporting a primitive this session cannot invoke.
-  const activationRequired = bound.activation !== undefined && !dispatchCandidates.some(t => tools.has(t)) ? bound.activation : undefined
-  return emit({ bound: bound.id, realization: { ...bound, dispatch, resume }, ...(activationRequired ? { activationRequired } : {}), realizations: rows })
+  const activationRequired =
+    bound.activation !== undefined && !dispatchCandidates.some(t => tools.has(t))
+      ? bound.activation
+      : undefined
+  return emit({
+    bound: bound.id,
+    realization: { ...bound, dispatch, resume },
+    ...(activationRequired ? { activationRequired } : {}),
+    realizations: rows,
+  })
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────
 const FLAGS = {
   worktree: ['main', 'story', 'branch', 'base', 'worktree-root'],
-  packet: ['next', 'card', 'policy', 'run', 'workflow-version', 'pipeline', 'profile', 'contract-resolved', 'required', 'severity-floor', 'severities', 'verdicts', 'ranks', 'style', 'agents-dir'],
+  root: ['main', 'worktree-root'],
+  packet: [
+    'next',
+    'card',
+    'main',
+    'policy',
+    'run',
+    'workflow-version',
+    'pipeline',
+    'profile',
+    'contract-resolved',
+    'required',
+    'severity-floor',
+    'severities',
+    'verdicts',
+    'ranks',
+    'style',
+    'agents-dir',
+  ],
   realizations: ['tools', 'product', 'story', 'pr'],
   'context-table': [],
   branch: ['id', 'title'],
@@ -665,15 +960,22 @@ function parseCli(argv) {
 
 try {
   const { cmd, opts } = parseCli(process.argv.slice(2))
-  if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected worktree | packet | realizations | context-table)`)
+  if (!FLAGS[cmd])
+    throw new Error(
+      `unknown command: ${cmd} (expected worktree | packet | realizations | context-table)`,
+    )
   const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
-  if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
+  if (unknown.length)
+    throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
   const need = (...ks) => {
     for (const k of ks) if (opts[k] === undefined) throw new Error(`--${k} is required`)
   }
   if (cmd === 'worktree') {
     need('main', 'story', 'branch', 'base')
     OUT = worktreeCommand(opts)
+  } else if (cmd === 'root') {
+    need('main')
+    OUT = emit({ root: resolveWorktreeRoot(opts.main, opts['worktree-root']) })
   } else if (cmd === 'packet') {
     need('next', 'card')
     OUT = packetCommand(opts)
@@ -681,7 +983,11 @@ try {
     OUT = realizationsCommand(opts)
   } else if (cmd === 'branch') {
     need('id')
-    must(isSegment(String(opts.id)), 'card-invalid', `--id must be one safe path segment: ${opts.id}`)
+    must(
+      isSegment(String(opts.id)),
+      'card-invalid',
+      `--id must be one safe path segment: ${opts.id}`,
+    )
     OUT = emit({ branch: deriveBranch({ id: opts.id, title: opts.title }) })
   } else if (cmd === 'context-table') {
     // Exposed, never copied: this prints cycle-state's own table (AC-12).

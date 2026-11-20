@@ -46,8 +46,8 @@ describe('r0-1: stage hooks run in the stage worktree, never in the main checkou
     execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
   const commit = (message: string) =>
     git(main, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', message)
-  const storyTree = () => join(root, 'pair-worktrees', '7')
-  const reviewTree = () => join(root, 'pair-worktrees', '7-review')
+  const storyTree = () => join(root, 'pair-worktrees', 'main', '7')
+  const reviewTree = () => join(root, 'pair-worktrees', 'main', '7-review')
   const scriptsDir = () => join(main, '.claude/skills/pair-workflow-cycle/scripts')
   const runDir = () => join(main, '.pair/working/runs/story-7/7')
   const engineCalls = () =>

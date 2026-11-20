@@ -90,6 +90,12 @@ async function emitted(): Promise<Set<string>> {
 }
 
 describe('AC-9 (r1-4): the pair run driver is inside the stop catalogue', () => {
+  it('US-602 AC6: worktree conflict is one manual decision, outside process recovery', () => {
+    expect(CATALOG.filter(row => row.status === 'worktree-conflict')).toEqual([
+      expect.objectContaining({ class: 'decision', resume: expect.stringContaining('by hand') }),
+    ])
+    expect(PROCESS_STOPS.has('worktree-conflict')).toBe(false)
+  })
   it('every stop status the driver emits has exactly one row with a class and a scripted resume', async () => {
     const statuses = await emitted()
     expect([...statuses].filter(s => !covered(CATALOG, s))).toEqual([])

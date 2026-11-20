@@ -3,7 +3,7 @@
 // agent_type guard of the rtk review hook turns the gate red. The gate command is not
 // reimplemented here: its `node --test` invocation is read from package.json / ci.yml, then RUN
 // against an isolated copy of scripts/dev with an injected regression.
-import { spawnSync } from 'child_process'
+import { spawn } from 'child_process'
 import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
@@ -119,21 +119,30 @@ const noopSessionPath = (root: string): void =>
 const mapPath = (root: string, p: string): string => join(root, relative(REPO_ROOT, p))
 // run the gate's own invocation in the sandbox, under /bin/sh as pnpm runs it (a shell glob
 // expands there); positional paths outside scripts/dev are dropped
+const run = (command: string, args: string[], cwd: string) =>
+  new Promise<{ status: number | null; stdout: string; stderr: string }>(resolve => {
+    const child = spawn(command, args, {
+      cwd,
+      env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '' },
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', chunk => (stdout += chunk))
+    child.stderr.on('data', chunk => (stderr += chunk))
+    child.on('close', status => resolve({ status, stdout, stderr }))
+  })
 const runGate = (inv: Invocation, root: string) => {
   const args = inv.args
     .filter(a => a.startsWith('-') || insideDev(resolve(inv.cwd, a)))
     .map(a => (isAbsolute(a) ? mapPath(root, a) : a))
-  return spawnSync('/bin/sh', ['-c', `"${process.execPath}" --test ${args.join(' ')}`], {
-    cwd: mapPath(root, inv.cwd),
-    encoding: 'utf-8',
-    env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '' },
-  })
+  return run(
+    '/bin/sh',
+    ['-c', `"${process.execPath}" --test ${args.join(' ')}`],
+    mapPath(root, inv.cwd),
+  )
 }
 const runFile = (root: string, file: string) =>
-  spawnSync(process.execPath, ['--test', join(root, 'scripts/dev', file)], {
-    encoding: 'utf-8',
-    env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '' },
-  })
+  run(process.execPath, ['--test', join(root, 'scripts/dev', file)], root)
 // node --test summary lines: `# pass N` (TAP reporter) or `ℹ pass N` (spec reporter)
 const summary = (out: string, key: string): number =>
   Number(new RegExp(`^(?:#|ℹ) ${key} (\\d+)$`, 'm').exec(out)?.[1] ?? NaN)
@@ -153,25 +162,29 @@ describe('root gate runs the scripts/dev suites (r0-1)', () => {
     requireOne(ciInvocations(), '.github/workflows/ci.yml')
   })
 
-  it('r0-1-w3 the gate invocation fails when the agent_type guard is removed', () => {
-    assertTestsFailed(runGate(requireOne(gateInvocations(), 'quality-gate'), sandbox(dropGuard)))
-  })
+  it('r0-1-w3 the gate invocation fails when the agent_type guard is removed', async () => {
+    assertTestsFailed(
+      await runGate(requireOne(gateInvocations(), 'quality-gate'), sandbox(dropGuard)),
+    )
+  }, 60_000)
 
-  it('r0-1-w4 the gate invocation fails when the SessionStart PATH hook is a no-op', () => {
+  it('r0-1-w4 the gate invocation fails when the SessionStart PATH hook is a no-op', async () => {
     const inv = requireOne(gateInvocations(), 'quality-gate')
-    assertTestsFailed(runGate(inv, sandbox(noopSessionPath)))
-  })
+    assertTestsFailed(await runGate(inv, sandbox(noopSessionPath)))
+  }, 60_000)
 
-  it('r0-1-w5 the gate invocation passes on the unmodified suites and runs every test file', () => {
-    const r = runGate(requireOne(gateInvocations(), 'quality-gate'), sandbox())
+  it('r0-1-w5 the gate invocation passes on the unmodified suites and runs every test file', async () => {
+    const r = await runGate(requireOne(gateInvocations(), 'quality-gate'), sandbox())
     expect(r.status, r.stdout + r.stderr).toBe(0)
     const files = readdirSync(DEV)
       .map(d => d.name)
       .filter(f => f.endsWith('.test.mjs'))
     expect(files.length).toBeGreaterThanOrEqual(2)
-    const direct = files.map(f => passCount(runFile(sandbox(), f).stdout))
+    const direct = await Promise.all(
+      files.map(async f => passCount((await runFile(sandbox(), f)).stdout)),
+    )
     expect(passCount(r.stdout)).toBe(direct.reduce((a, b) => a + b, 0))
-  })
+  }, 60_000)
 
   // a QUOTED glob is expanded by node --test itself, a Node 21+ feature: engines.node is >=20.19
   // and ci.yml pins Node 20 (the #219 workflows:test break). A shell glob is expanded by /bin/sh.
@@ -181,13 +194,13 @@ describe('root gate runs the scripts/dev suites (r0-1)', () => {
       expect(inv.args.join(' '), inv.from).not.toMatch(/(['"])[^'"]*[*?[{][^'"]*\1/)
   })
 
-  it('r0-1-c1 the hook suite itself fails when the agent_type guard is removed', () => {
-    expect(runFile(sandbox(), 'rtk-review-hook.test.mjs').status).toBe(0)
-    assertTestsFailed(runFile(sandbox(dropGuard), 'rtk-review-hook.test.mjs'))
-  })
+  it('r0-1-c1 the hook suite itself fails when the agent_type guard is removed', async () => {
+    expect((await runFile(sandbox(), 'rtk-review-hook.test.mjs')).status).toBe(0)
+    assertTestsFailed(await runFile(sandbox(dropGuard), 'rtk-review-hook.test.mjs'))
+  }, 60_000)
 
-  it('r0-1-c2 the session-path suite itself fails when the SessionStart hook is a no-op', () => {
-    expect(runFile(sandbox(), 'rtk-session-path.test.mjs').status).toBe(0)
-    assertTestsFailed(runFile(sandbox(noopSessionPath), 'rtk-session-path.test.mjs'))
-  })
+  it('r0-1-c2 the session-path suite itself fails when the SessionStart hook is a no-op', async () => {
+    expect((await runFile(sandbox(), 'rtk-session-path.test.mjs')).status).toBe(0)
+    assertTestsFailed(await runFile(sandbox(noopSessionPath), 'rtk-session-path.test.mjs'))
+  }, 60_000)
 })

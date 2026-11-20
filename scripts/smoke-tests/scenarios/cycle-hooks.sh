@@ -80,11 +80,11 @@ fail() { log_fail "$1"; FAILED=1; }
 policy() { printf '# Automation\n\n%s\n' "$1" >"$MAIN/.pair/adoption/tech/automation.md"; }
 main_real="$(pwd -P)"
 # The story worktree, derived as the real CLI does: the main checkout (git common dir's parent),
-# `cycle-dispatch worktree`'s own default root (`PIPELINE_DEFAULTS.worktreeRoot`, no
-# `--worktree-root` passed) resolved against it, then `/<story>`.
+# `cycle-dispatch worktree`'s own default root resolved against it, then
+# `/<main-checkout-name>/<story>`.
 common_main="$(cd "$(git rev-parse --git-common-dir)/.." && pwd -P)"
 WT_ROOT_DEFAULT="$(node --input-type=module -e "import { PIPELINE_DEFAULTS } from '$MAIN/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs'; process.stdout.write(PIPELINE_DEFAULTS.worktreeRoot)")"
-story_wt="$(node -e "process.stdout.write(require('path').join(require('path').resolve(process.argv[1], process.argv[2]), '12'))" "$common_main" "$WT_ROOT_DEFAULT")"
+story_wt="$(node -e "const p = require('path'); process.stdout.write(p.join(p.resolve(process.argv[1], process.argv[2]), p.basename(process.argv[1]), '12'))" "$common_main" "$WT_ROOT_DEFAULT")"
 reset_run() { rm -rf "$MAIN/.pair/working/runs" "$MAIN"/*.ran "$story_wt"/*.ran; : >"$ENGINE_LOG"; }
 # every line of a hook's `pwd -P` record is the main checkout, and there are exactly $2 of them
 ran_in_main() { [ -f "$1" ] && [ "$(wc -l <"$1" | tr -d ' ')" = "$2" ] && ! grep -vxF "$main_real" "$1" >/dev/null; }

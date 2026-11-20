@@ -123,6 +123,7 @@ async function route(
   let prepares = 0
   const agent = async (prompt, opts) => {
     if (opts.label === 'profile:resolve') return { source: 'KB default', stages: Object.fromEntries(['prepare', 'validate', 'implement', 'green', 'verify'].map(stage => [stage, { engine: { value: 'default' }, model: { resolved: { id: null } }, effort: { value: 'default' } }])) }
+    if (opts.label === 'root:resolve') return { root: '/tmp/pair-worktrees' }
     calls.push({ prompt, label: opts.label, type: opts.agentType })
     assert.ok(calls.length < 25, 'bounded probe dispatches')
     if (opts.agentType === 'pair-reviewer') return { status: 'redirect', next: due }

@@ -105,6 +105,7 @@ By default no configuration merges: the engine stops at a review-approved PR and
 The engine ships with pair's own values as defaults, so it runs in a pair-shaped project with no
 configuration. A project whose skills, worktree root or base branch differ passes
 `args.pipeline` to override them per key; anything left unmentioned keeps its default.
+The root resolver anchors the default at `../pair-worktrees/<main-checkout-name>` and reads top-level `pair.config.json.worktreeRoot`. An explicit `pipeline.worktreeRoot` takes precedence and names the root directly, including an absolute path with spaces. The batch uses the resolved root for story and review paths.
 
 An unknown key, an empty override, a retired key or a `maxParallelism` below 1 is rejected loudly
 rather than ignored: a discarded setting would run the batch on values you did not choose while

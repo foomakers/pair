@@ -232,6 +232,11 @@ const isRelPath = v => {
   const rest = parts[0] === '..' ? parts.slice(1) : parts
   return rest.length > 0 && rest.every(p => p !== '.' && p !== '..' && /^[A-Za-z0-9._][A-Za-z0-9._-]*$/.test(p))
 }
+const validWorktreeRoot = value =>
+  isRelPath(value) ||
+  (value.startsWith('/') && value !== '/' &&
+    !/[\x00-\x1f\x7f`$;&|<>'"\\]/.test(value) &&
+    value.split('/').every(part => part !== '.' && part !== '..'))
 // A skill NAME, as an agent is told to invoke it: an optional leading slash, then a name.
 // A name, never a sentence: `skills.implement: '/x and then gh pr merge 432 --squash'` is
 // rendered verbatim into the implement prompt as the process the agent must follow, so the
@@ -646,7 +651,7 @@ function resolvePipeline(raw) {
     skills[k] = str(v, `skills.${k}`, PIPELINE_DEFAULTS.skills[k], isSkillRef, 'a skill name as an agent invokes one — no spaces, no shell syntax, no `..`')
   return {
     skills,
-    worktreeRoot: str(raw.worktreeRoot, 'worktreeRoot', PIPELINE_DEFAULTS.worktreeRoot, isRelPath, 'a relative path built from safe segments (at most one leading `..`; it is the root a `--force` worktree remove is aimed at)'),
+    worktreeRoot: str(raw.worktreeRoot, 'worktreeRoot', PIPELINE_DEFAULTS.worktreeRoot, validWorktreeRoot, 'an absolute path or relative safe path (at most one leading `..`)'),
     auditLogDir: str(raw.auditLogDir, 'auditLogDir', PIPELINE_DEFAULTS.auditLogDir, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
     baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch, isRef, 'a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card\'s `base`)'),
     reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
@@ -709,7 +714,7 @@ async function boundedParallel(thunks, cap) {
   return results
 }
 
-const PIPELINE = resolvePipeline(PARSED.pipeline)
+let PIPELINE = resolvePipeline(PARSED.pipeline)
 const SK = PIPELINE.skills
 // The reviewer prompt names the template TWICE as prose ("using the … vocabulary", "… structure").
 // Interpolating the configured PATH there produced a sentence like "using the
@@ -941,6 +946,17 @@ const withModel = (role, opts) => {
   const model = relay ? (ROLE_MODELS.relay ?? RELAY_DEFAULT_MODEL) : (ROLE_MODELS[role] ?? BATCH_MODEL ?? profile?.model?.resolved?.id)
   const effort = relay ? (ROLE_EFFORTS.relay ?? opts.effort) : (ROLE_EFFORTS[role] ?? BATCH_EFFORT ?? (profile?.effort?.value !== 'default' ? profile?.effort?.value : undefined) ?? opts.effort)
   return { ...opts, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+}
+const shellQuote = value => `'${value.replaceAll("'", "'\\''")}'`
+if (PARSED.stories.length) {
+  const explicitRoot = PARSED.pipeline?.worktreeRoot
+  const rootResult = await boundedAgent('root:resolve',
+    `Run exactly this read-only command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs root --main "$PWD"${explicitRoot == null ? '' : ` --worktree-root ${shellQuote(explicitRoot)}`}. Do not create a worktree or dispatch a stage.`,
+    withModel('relay', { agentType: 'general-purpose', phase: 'Contracts', label: 'root:resolve', effort: 'low', schema: { type: 'object', properties: { root: { type: 'string' } }, required: ['root'] } }),
+  )
+  if (typeof rootResult?.root !== 'string' || !rootResult.root.startsWith('/'))
+    throw new Error('implement-batch: root:resolve returned no absolute effective worktree root; no story dispatched')
+  PIPELINE = { ...PIPELINE, worktreeRoot: rootResult.root }
 }
 // Rounds of autonomous fix<->re-review before escalating to a human. Beyond 3 the loop is
 // usually not converging for a reason a fourth round won't fix either (a design disagreement),
@@ -1798,6 +1814,7 @@ async function driveStoryInner(story) {
   const tag = `#${story.id}`
   const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
   const reviewWorktreePath = `${PIPELINE.worktreeRoot}/${story.id}-review`
+  const promptPath = path => /\s/.test(path) ? JSON.stringify(path) : path
   const storyBase = baseOf(story)
   const stacked = storyBase !== PIPELINE.baseBranch
   // One run directory per story for every phase: `args.runId` when the caller names the run, else
@@ -1834,7 +1851,7 @@ async function driveStoryInner(story) {
   const cardTier = !story.tier && (AUTONOMY.merging || Object.values(PROFILE.stages).some(s => s.model?.value === 'by-tier')) ? await readTier(story) : story.tier
   CARD_TIERS.set(story.id, cardTier)
   const common = () =>
-    `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
+    `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${promptPath(worktreePath)} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
   // AO: set for the ONE re-dispatch that follows a format-validation failure (see `formatDefect`); never else.
   let formatNote = ''
   const invoke = (skill, args) =>
@@ -1923,8 +1940,8 @@ async function driveStoryInner(story) {
     }
     if (fault === 'dirty' || fault === 'stale') {
       const command = fault === 'dirty'
-        ? `node ${script} worktree-clean --cwd ${worktreePath} --dir ${runDir()} --story ${story.id}`
-        : `node ${script} base-sync --cwd ${worktreePath} --base ${storyBase} --story ${story.id} --dir ${runDir()}`
+        ? `node ${script} worktree-clean --cwd ${shellQuote(worktreePath)} --dir ${runDir()} --story ${story.id}`
+        : `node ${script} base-sync --cwd ${shellQuote(worktreePath)} --base ${storyBase} --story ${story.id} --dir ${runDir()}`
       const action = await dispatch(`Run exactly this command from the main checkout and return its JSON verbatim: ${command}`,
         withModel('relay', { phase: 'Recovery', label: `recover:${fault}:${tag}`, effort: 'low' }))
       if (!(action?.cleaned === true || action?.synced === true || action?.reason === 'up-to-date')) return { park: park(action?.detail ?? action?.reason ?? `${fault}: recovery failed`) }
@@ -1932,7 +1949,7 @@ async function driveStoryInner(story) {
       // every merge on a sealed cycle — whatever step was due.
       if (fault === 'stale' && action?.synced === true && SHA40.test(String(action.cycleBase ?? '')) && isPosInt(pr)) {
         const verify = await dispatch(
-          `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs verify-chain --pr ${pr} --base ${action.cycleBase} --base-ref ${storyBase} --run-dir ${runDir()} --cwd ${worktreePath}`,
+          `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs verify-chain --pr ${pr} --base ${action.cycleBase} --base-ref ${storyBase} --run-dir ${runDir()} --cwd ${shellQuote(worktreePath)}`,
           withModel('relay', { phase: 'Recovery', label: `recover:verify-chain:${tag}`, effort: 'low' }),
         )
         if (verify?.verified !== true) return { park: park('base-sync verify-chain failed') }
@@ -1975,7 +1992,7 @@ async function driveStoryInner(story) {
     agentRetry(
       invoke(
         SK.reviewPhase,
-        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.waived?.length ? ` $waived=${JSON.stringify(n.waived)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${decisionArg(n)}${CONTRACT.status === 'unresolved' ? ` $contractSpec=${JSON.stringify(contractSpecArg())}` : ''}`,
+        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${promptPath(reviewWorktreePath)} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.waived?.length ? ` $waived=${JSON.stringify(n.waived)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${decisionArg(n)}${CONTRACT.status === 'unresolved' ? ` $contractSpec=${JSON.stringify(contractSpecArg())}` : ''}`,
       ),
       withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Verify', label: `verify:${tag} ${n.phase}${n.reviewer > 1 ? ` reviewer ${n.reviewer}` : ''}`, effort: 'xhigh', schema: VERIFY_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasReviewEvidence(r),

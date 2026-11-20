@@ -1,13 +1,13 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1051,
-  "files": 382,
-  "distinctContents": 347,
+  "files": 383,
+  "distinctContents": 348,
   "dispositionCounts": {
     "standalone-script": 14,
     "os-guarantee": 25,
     "type-contract": 13,
-    "in-flight-churn": 228,
+    "in-flight-churn": 229,
     "repo-contract": 101,
     "boundary-adapter": 1
   },
@@ -768,7 +768,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-catalogue.test.ts",
-      "hash": "65e45649c07c2c3287d7514488035dd9abb831d52d3fcb59474c9d77a9f56e9d",
+      "hash": "deb719938799b44c33f8d180ffacf3ec692142c9e6153b4ca3a397af93f7355f",
       "dependencies": [
         {
           "form": "import",
@@ -831,8 +831,24 @@
       "testCategory": "root import guard"
     },
     {
+      "path": "apps/pair-cli/src/commands/run/cycle-dispatch-worktree.test.ts",
+      "hash": "fe6020d481a862934e6a55cd5b8b0aacc93c331b97bc3b88d79dab54c5966e3a",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 11
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/cycle-dispatch-worktree.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
+    },
+    {
       "path": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
-      "hash": "fdfdbdc6cffa9321e751ef6d2fd3e657a833a16e8dbffe717998f3307b20bcc1",
+      "hash": "442466b0dfef29f486ff80ac39f6c843fbb9ed15bf7630a0bba463a323d84943",
       "dependencies": [
         {
           "form": "import",
@@ -880,7 +896,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
-      "hash": "13f29c608ff9c2d0e9192956ab6a3475dd19c91097d8a1b758556e5741eb8921",
+      "hash": "9102f1389abb862863abfad2d538b7e92d81b2574f9d90fc0ddedd8f6f860fe5",
       "dependencies": [
         {
           "form": "import",
@@ -912,7 +928,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-installed-defaults.test.ts",
-      "hash": "9f783eeebcd9488ed03ac0b0314cb997f20404345056d5db9e9a07de48fa9f18",
+      "hash": "efc68234210504364aee1b8c514fce997eb3c86ddfab91268973cc8439bb0ebd",
       "dependencies": [
         {
           "form": "import",
@@ -944,7 +960,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-merge-stage-1.test.ts",
-      "hash": "229cadd518df0a3bfeebe6d30421af189eb1b4bf47d8352dbedc8336ca9762ec",
+      "hash": "c8c49a667e909bb6df1fa9489c0c186c8ef480fd0e91dc9608cfc444acfdbf0f",
       "dependencies": [
         {
           "form": "import",
@@ -976,7 +992,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-merge-stage-3.test.ts",
-      "hash": "ff656130a497ee977e7b724164a99b7241e80bef51af579c2d430c3bb2de8979",
+      "hash": "45e8e46dd3f2cf4ab8767cb400dbfbacdc659011b1136685cd71f2af873f522f",
       "dependencies": [
         {
           "form": "import",
@@ -1088,7 +1104,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-resolve-freshness.test.ts",
-      "hash": "b9aaecfa9950f01121f30b6a1c6c5e34b8927a9c1dc9af48c9cc916295354597",
+      "hash": "6242162c06bea7c723ea1f2160536e4ac8bd6a32ada0e102948b5487c1040f42",
       "dependencies": [
         {
           "form": "import",
@@ -1120,7 +1136,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-scripts.ts",
-      "hash": "13dd923876e1fd9c22febaa8d53f8ae911dbe8ee0ed51b3fe5d6840aaf36b778",
+      "hash": "46084bed4bdcb11a1840889f85e8e9ed05649175e1f2d8aacfa2555fcf0d5d24",
       "dependencies": [
         {
           "form": "import",
@@ -1168,7 +1184,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-wiring.ts",
-      "hash": "c289895d741649cb141c5db81b2f9f3e9e89f42616bd50d8038e777d5ebaa158",
+      "hash": "9cad58d65a4590f40e346f4ebaa3f449304602acf4bcca98a2a46874e4d6cd77",
       "dependencies": [
         {
           "form": "import",
@@ -1248,7 +1264,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/fixtures/recovered-custody.ts",
-      "hash": "b29338b2507d140b42495510f582773bd242704c062880351659e1087c82cf55",
+      "hash": "29dc83b70b3f04fa11e21bc5af87ef9cb8da9392a23add19c296567e8bba1b62",
       "dependencies": [
         {
           "form": "import",
@@ -3304,7 +3320,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
-      "hash": "fdebc795507a5555b2b4e02a6bf2257dc554ecba8bdec5952da8bc6894435770",
+      "hash": "f8a437122cfdc08003ea1c90c9b417a555bae318521fe43e1dcb1c02737a79b6",
       "dependencies": [
         {
           "form": "import",
@@ -3368,7 +3384,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
-      "hash": "49a2a547892225f037473fcab07c35309fc9abfc1799367166a4be3057c39002",
+      "hash": "6a3479def3a52ce7263b03a0f1bae6923b294d7298080bc6f9daec6227c82353",
       "dependencies": [
         {
           "form": "import",
@@ -3528,7 +3544,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
-      "hash": "49a2a547892225f037473fcab07c35309fc9abfc1799367166a4be3057c39002",
+      "hash": "6a3479def3a52ce7263b03a0f1bae6923b294d7298080bc6f9daec6227c82353",
       "dependencies": [
         {
           "form": "import",
@@ -3640,7 +3656,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
-      "hash": "49a2a547892225f037473fcab07c35309fc9abfc1799367166a4be3057c39002",
+      "hash": "6a3479def3a52ce7263b03a0f1bae6923b294d7298080bc6f9daec6227c82353",
       "dependencies": [
         {
           "form": "import",
@@ -3736,7 +3752,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
-      "hash": "49a2a547892225f037473fcab07c35309fc9abfc1799367166a4be3057c39002",
+      "hash": "6a3479def3a52ce7263b03a0f1bae6923b294d7298080bc6f9daec6227c82353",
       "dependencies": [
         {
           "form": "import",
@@ -3832,7 +3848,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
-      "hash": "49a2a547892225f037473fcab07c35309fc9abfc1799367166a4be3057c39002",
+      "hash": "6a3479def3a52ce7263b03a0f1bae6923b294d7298080bc6f9daec6227c82353",
       "dependencies": [
         {
           "form": "import",
@@ -3912,7 +3928,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
-      "hash": "d386a400125fe147f4828e48355c832b9af78bbb04c298650d60cdd07cdd37ae",
+      "hash": "3995f7e9868b8a14cf34a2acbbafbc690c6f11ef90deb5113fd8c5a135c8e309",
       "dependencies": [
         {
           "form": "import",
@@ -3981,7 +3997,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
-      "hash": "49a2a547892225f037473fcab07c35309fc9abfc1799367166a4be3057c39002",
+      "hash": "6a3479def3a52ce7263b03a0f1bae6923b294d7298080bc6f9daec6227c82353",
       "dependencies": [
         {
           "form": "import",
@@ -4093,7 +4109,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
-      "hash": "d386a400125fe147f4828e48355c832b9af78bbb04c298650d60cdd07cdd37ae",
+      "hash": "3995f7e9868b8a14cf34a2acbbafbc690c6f11ef90deb5113fd8c5a135c8e309",
       "dependencies": [
         {
           "form": "import",
@@ -4141,7 +4157,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/autonomy-parity.test.mjs",
-      "hash": "e70fdf8e3f52cb26af3ca087b3add61401b25f52d808ccb220d6a1ca07b8bb6c",
+      "hash": "43ca40ed3160f4e1d33b340ca70b4652b1dc1168c7933fee77f867a0b8da682e",
       "dependencies": [
         {
           "form": "import",
@@ -4327,7 +4343,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-recovery.test.mjs",
-      "hash": "0504c05be082c1ccc878887a138503a8b87d6c2125d48eca73ae946d542ce842",
+      "hash": "02df0e5d69248f58fb5e8b5ceaed8bc09e37d6ef49cd4c1659657e6d555428c0",
       "dependencies": [
         {
           "form": "import",
@@ -4433,7 +4449,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/engine-integration.test.mjs",
-      "hash": "e1d5a69daa36458222081437bcc0d9d307e749b5baaf843c451174ef32db570f",
+      "hash": "a0e9dcca61c7cefdc3beecad632d5fcb614206ab719f6505800349c84470ca14",
       "dependencies": [
         {
           "form": "import",
@@ -4550,7 +4566,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/host-adapter.test.mjs",
-      "hash": "ca41604c093a6233951afbf616a34d10f6514fc627779dc631ae1f68a16cec6b",
+      "hash": "8dd2cd4383cb669d5ec58996fd52e2ae61f407f795e0c0c9a4c78158cdf41e21",
       "dependencies": [
         {
           "form": "import",
@@ -4582,7 +4598,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/maintainer-decisions.test.mjs",
-      "hash": "8e3eec06468e9171be853803f440f72bd6885e886a70e7fa1705b17ac48142a3",
+      "hash": "3b1df78d8ff1b1c97e283cc78ac6fb93fa7133022ea5c6d7a8df4d76bfb272cf",
       "dependencies": [
         {
           "form": "import",
@@ -4790,7 +4806,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.test.mjs",
-      "hash": "ba981434a85860115b7ed2c8476a6a4107ae710ae7a1fb3e2c740ff9034e15fb",
+      "hash": "4194efe77b012efec425f9407fac019687510eb5948ff4f10cecb9d558418baf",
       "dependencies": [
         {
           "form": "import",
@@ -4827,7 +4843,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-profile-batch-regressions.test.mjs",
-      "hash": "66712bf92673342680e3bf998b27e01f3586e20f3e9081b4fd339f02a5ec582b",
+      "hash": "afe5ffbf98990ede6809d1fd07e15dba2e80bf0ddf92b84c17d7d853802a109f",
       "dependencies": [
         {
           "form": "import",
@@ -6413,7 +6429,7 @@
     },
     {
       "path": "scripts/dev/delivery-process-overwrite.test.mjs",
-      "hash": "8c841ca57240aa14f4e1f007f51d619b33a8a11cb7a4c02e140f9b0d5fa186c7",
+      "hash": "070f39a687050d1679959de31e15f0ee113c436583f1b7525a4bb383e523e3d2",
       "dependencies": [
         {
           "form": "import",
