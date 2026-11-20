@@ -116,10 +116,67 @@ describe('parseRunCommand', () => {
     )
   })
 
-  it('rejects positional arguments', () => {
-    expect(() => parseRunCommand({}, ['stray'])).toThrow(
-      "Command 'run' does not accept positional arguments: stray",
+  it('rejects more than one positional argument', () => {
+    expect(() => parseRunCommand({ card: '627' }, ['quick', 'stray'])).toThrow(
+      "Command 'run' accepts one positional argument, the workflow name: quick, stray",
     )
+  })
+})
+
+describe('parseRunCommand: a workflow name (US-652)', () => {
+  it('carries the workflow, its card and the flags of the run', () => {
+    expect(parseRunCommand({ card: '627' }, ['quick']).workflow).toEqual({
+      name: 'quick',
+      card: '627',
+      restart: false,
+    })
+    expect(
+      parseRunCommand({ card: '627', runId: 'mine', restart: true }, ['flows/quick.yaml']).workflow,
+    ).toEqual({ name: 'flows/quick.yaml', card: '627', runId: 'mine', restart: true })
+  })
+
+  it('AC-7: leaves `--card` alone on the delivery cycle, with no workflow', () => {
+    const config = parseRunCommand({ card: '627' })
+    expect(config.workflow).toBeUndefined()
+    expect(config.dispatch).toEqual({ card: '627', tags: [] })
+    expect(config.dispatch?.runId).toBe('story-627')
+  })
+
+  it.each([
+    [
+      '--profile',
+      { profile: 'cheap' },
+      /^--profile cannot be combined with a workflow name: .*#672/,
+    ],
+    [
+      '--workflow-config',
+      { workflowConfig: 'p.json' },
+      /^--workflow-config cannot be combined with a workflow name: .*#672/,
+    ],
+    ['a cycle flag', { pr: '12' }, /^--pr cannot be combined with a workflow name/],
+    ['a loop flag', { root: '641' }, /^--root cannot be combined with a workflow name/],
+  ])('refuses %s with a workflow name', (_name, options, message) => {
+    expect(() => parseRunCommand({ card: '627', ...options }, ['quick'])).toThrow(message)
+  })
+
+  it('needs a card', () => {
+    expect(() => parseRunCommand({}, ['quick'])).toThrow(
+      '`pair-cli run quick` needs --card <id>: a workflow runs on one card',
+    )
+  })
+
+  it('refuses --restart without a workflow name', () => {
+    expect(() => parseRunCommand({ card: '627', restart: true })).toThrow(
+      '--restart was passed without a workflow name',
+    )
+  })
+
+  it.each([
+    ['a workflow name', { card: '627' }, 'a`b', /the workflow name/],
+    ['a card id', { card: '62 7' }, 'quick', /--card/],
+    ['a run id', { card: '627', runId: '../x' }, 'quick', /--run-id/],
+  ])('refuses %s that is not safe', (_name, options, workflow, message) => {
+    expect(() => parseRunCommand(options, [workflow])).toThrow(message)
   })
 })
 

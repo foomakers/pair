@@ -266,6 +266,16 @@ export function agentMessageOf(engine: EngineDefinition, payload: unknown): stri
   return typeof text === 'string' ? text : undefined
 }
 
+/**
+ * US-652: the agent's final text as ONE decoded event carries it — a terminal event's `resultField`,
+ * else the engine's agent message. The last defined value over a stream is the agent's final message.
+ */
+export function finalTextOf(engine: EngineDefinition, payload: unknown): string | undefined {
+  const rule = engine.terminalEvents.find(candidate => matches(payload, candidate.match))
+  const text = rule?.resultField ? fieldAt(payload, rule.resultField) : undefined
+  return typeof text === 'string' ? text : agentMessageOf(engine, payload)
+}
+
 const TAIL_CHARS = 500
 
 /** The engine's last agent message so far: `undefined` for an engine with no message rule, `{}` before the first one. */
