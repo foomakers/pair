@@ -22,8 +22,8 @@ Command, per suite and seed, from `packages/dev-tools` of a disposable detached 
 | `packages/content-ops` | Vitest | 3856, 3558, 3863 | 3856 | 696 | yes (`MODULES`) |
 | `packages/dev-tools` | Vitest | 67844, 56514, 57657 | 57657 | 951 | yes (`MODULES`) |
 | `packages/knowledge-hub` | Vitest | 16224, 15295, 15094 | 15295 | 6884 | yes (`MODULES`) |
-| `.claude/workflows` (`workflows:test`) | `node:test` | 161799, 162291, 156970 | 161799 | 3171 | **not measured** |
-| `scripts` (`dev-scripts:test`) | `node:test` | 20331, 20759, 20518 | 20518 | 96 | **not measured** |
+| `.claude/workflows` | `node:test` | 161799, 162291, 156970 | 161799 | 3171 | **not measured** |
+| `scripts` | `node:test` | 20331, 20759, 20518 | 20518 | 96 | **not measured** |
 | `qa` | `node:test` | 139, 139, 137 | 139 | 6 | **not measured** |
 | `playwright:brand-ct` | Playwright | 5048, 3475, 3462 | 3475 | 43 | **not measured** (static fingerprint only) |
 | `playwright:website-ct` | Playwright | 4174, 3249, 3320 | 3320 | 26 | **not measured** (static fingerprint only) |
@@ -32,6 +32,8 @@ Command, per suite and seed, from `packages/dev-tools` of a disposable detached 
 Sum of medians: 322161 ms for the six Vitest `MODULES`, 537245 ms for all twelve suites (derived from the rows above, sequential, one plain pass).
 
 Caveats, kept with the numbers:
+
+- Baseline suites are not the gate commands. `.claude/workflows` runs `node --test` over the directory that `workflows:test` runs through its sharded runner; `scripts` is the whole `scripts` directory, a superset of `dev-scripts:test` (`scripts/dev/*.test.mjs`). Wall time of the two gate commands themselves is **not measured** here.
 
 - Load was not controlled. Other processes ran on the machine: load average was 11–12 during the `apps/website`, `packages/brand`, `packages/content-ops`, `packages/knowledge-hub` runs and the first `apps/pair-cli` run, and 2.7–4.4 for the rest.
 - `apps/pair-cli`: one test failed in runs 1 and 2 and passed in run 3 (`card-entry-r2.test.ts`, `R22-W1`).
