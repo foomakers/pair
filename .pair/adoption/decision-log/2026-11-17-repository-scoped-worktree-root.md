@@ -22,7 +22,7 @@ The default cycle root is `../pair-worktrees/<main-checkout-name>`, anchored to 
 
 For a linked worktree whose main checkout cannot be derived (including a separate Git directory), stop with `main-checkout-unresolved`. Set its absolute path with `git config pair.mainCheckout <path>`; validate that it is the primary checkout of the same Git common directory. Never guess an anchor.
 
-The batch performs an ownership relay before each stage and recovery budget. These security relays count in dispatch metrics, in addition to the judgment stages; a fresh clean path therefore costs four dispatches rather than two.
+The batch performs an ownership relay before each stage, recovery budget and terminal readiness. These security relays count in dispatch metrics, in addition to the judgment stages; a fresh clean path therefore costs five dispatches rather than two.
 
 The relay and the following agent run in separate processes: a concurrent actor can replace the path between inspection and use. The check detects changes at stage and recovery boundaries; it is not an atomic lock. Closing that window requires enforcement in the external workflow runner or a shared locking protocol.
 

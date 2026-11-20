@@ -306,6 +306,38 @@ test('#602 r0-2: a foreign worktree stops before stage dispatch or recovery spen
   assert.equal(git(beta, 'status', '--porcelain'), before)
 })
 
+for (const transition of ['done', 'blocked']) test(`#602 AC6: ownership is checked after verify before ${transition}`, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pair-602-done-'))
+  const alpha = join(root, 'alpha'), beta = join(root, 'beta'), trees = join(root, 'trees'), path = join(trees, '55'), foreign = join(root, 'foreign')
+  const branch = 'feature/US-55-example'
+  const git = (cwd, ...args) => assert.equal(spawnSync('git', args, { cwd }).status, 0)
+  for (const repo of [alpha, beta]) {
+    mkdirSync(repo)
+    git(repo, 'init', '-q', '-b', 'main')
+    git(repo, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'base')
+  }
+  mkdirSync(trees)
+  git(alpha, 'worktree', 'add', '-q', '-b', branch, path, 'main')
+  git(beta, 'worktree', 'add', '-q', '-b', branch, foreign, 'main')
+  writeFileSync(join(foreign, 'keep'), 'foreign')
+  const script = fileURLToPath(new URL('../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs', import.meta.url))
+  const { result, calls } = await runWorkflow({
+    args: { cards: [{ id: '55', branch, title: 'Example', prNumber: 7 }], pipeline: { worktreeRoot: trees } },
+    inspect: () => JSON.parse(spawnSync(process.execPath, [script, 'worktree-inspect', '--main', alpha, '--story', '55', '--branch', branch, '--base', 'main', '--worktree-root', trees], { encoding: 'utf8' }).stdout),
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-reviewer') {
+        renameSync(path, join(root, 'old-alpha'))
+        renameSync(foreign, path)
+        return { status: 'redirect', next: transition === 'done' ? { step: 'done', reviewedHead: HEAD, verdict: 'Approved', round: 0 } : { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds', phase: 'r0' } }
+      }
+      return stdDispatch()(prompt, opts)
+    },
+  })
+  assert.equal(result.batch[0].status, 'worktree-conflict')
+  assert.equal(calls.some(c => c.opts.label?.startsWith('recover:resume')), false)
+  assert.equal(readFileSync(join(path, 'keep'), 'utf8'), 'foreign')
+})
+
 for (const fault of ['dirty', 'stale', 'redirect', 'dead', 'budget-swap', 'timeout']) test(`#602 r0-2: ownership is rechecked after stage reports ${fault}`, async () => {
   const root = mkdtempSync(join(tmpdir(), 'pair-602-recovery-'))
   const alpha = join(root, 'alpha')
@@ -424,7 +456,7 @@ test('US-506 TC-11 golden trace: a FRESH story with a clean first verification i
   assert.doesNotMatch(calls[0].prompt, /\$snapshot=|\$contract=|\$head=/)
   assert.match(calls[0].prompt, /\$phase=a0 \$attempt=1 \$title="T" \$implementSkill=/)
   assert.match(calls[1].prompt, /\$contractSpec=\{/, 'the first review dispatch carries the contract spec')
-  assert.equal(result.metrics.dispatches, 4, 'two stages and two ownership relays')
+  assert.equal(result.metrics.dispatches, 5, 'two stages, two ownership relays and a final ownership check')
 })
 
 test('AC-10: dirty preparation invokes budgeted recovery, saves work, and resumes the same card', async () => {
@@ -739,7 +771,7 @@ test('TC-11 golden trace: one fix round on one group adds exactly four dispatche
   const all = labels(calls).join(' ')
   for (const gone of ['plan:', 'probe:', 'red-seal:', 'preflight:', 'synth:', 'flush:', 'pr:', 'red-spec:', 'red-verify:', 'fix:', 'rev:'])
     assert.ok(!all.includes(gone), `a retired dispatch label survives: ${gone}`)
-  assert.equal(result.metrics.dispatches, 18, 'nine stage dispatches and nine ownership relays')
+  assert.equal(result.metrics.dispatches, 19, 'nine stage dispatches, nine ownership relays and a final check')
   assert.equal(result.metrics.tokens, 'unknown', 'token counters are not exposed to the script — reported unknown, never zero')
 })
 
@@ -1548,19 +1580,19 @@ test('TC-14: the result carries workflowVersion 4.0.1 and every status row is on
 test('TC-16: fixed traces count each stage and its ownership relay', async () => {
   // #602: every stage is preceded by one ownership relay; judgment stages remain unchanged.
   const freshCold = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch(), entry: 'fresh' })
-  assert.equal(freshCold.result.metrics.dispatches, 4)
+  assert.equal(freshCold.result.metrics.dispatches, 5)
   const freshFix = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }), entry: 'fresh' })
-  assert.equal(freshFix.result.metrics.dispatches, 12)
+  assert.equal(freshFix.result.metrics.dispatches, 13)
   const cold = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
-  assert.equal(cold.result.metrics.dispatches, 10)
+  assert.equal(cold.result.metrics.dispatches, 11)
   const oneFix = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }) })
-  assert.equal(oneFix.result.metrics.dispatches, 18)
+  assert.equal(oneFix.result.metrics.dispatches, 19)
   const resume = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'redirect', next: { step: 'done', reviewedHead: HEAD, round: 1, verdict: 'Approved' } }) })
-  assert.equal(resume.result.metrics.dispatches, 2)
+  assert.equal(resume.result.metrics.dispatches, 3)
   assert.equal(resume.result.metrics.redirects, 1)
   assert.equal(resume.result.batch[0].status, 'ready-for-merge')
   for (const r of [freshCold, freshFix, cold, oneFix, resume]) {
-    assert.equal(r.result.metrics.perDispatch.filter(d => d.label.startsWith('worktree:inspect')).length, r.result.metrics.dispatches / 2)
+    assert.equal(r.result.metrics.perDispatch.filter(d => d.label.startsWith('worktree:inspect')).length, (r.result.metrics.dispatches + 1) / 2)
     assert.equal(r.result.metrics.tokens, 'unknown')
     assert.ok(Array.isArray(r.result.metrics.perDispatch) && r.result.metrics.perDispatch.every(d => typeof d.label === 'string' && typeof d.retry === 'boolean'))
     assert.equal(r.result.metrics.wallMs, 'unknown')

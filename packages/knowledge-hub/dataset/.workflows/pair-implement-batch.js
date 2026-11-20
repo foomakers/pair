@@ -2133,6 +2133,11 @@ async function driveStoryInner(story) {
     shownStage = label
   }
   while (true) {
+    if ((next.step === 'done' || (next.step === 'blocked' && next.budget === 'autoRecoveryRounds')) && !inspectedForStage) {
+      const refusal = await inspectWorktree()
+      if (refusal) return refusal
+      inspectedForStage = true
+    }
     if (next.step === 'done') {
       const ready = { reviewedHead: next.reviewedHead, verdict: next.verdict, round: next.round }
       if (!AUTONOMY.merging) return result('ready-for-merge', ready)
