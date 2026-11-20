@@ -1,6 +1,6 @@
 // #645 r0-8: real driver/runner/reader/storage; only host processes and engine output are stubbed.
 import * as childProcess from 'child_process'
-import { chmodSync, writeFileSync } from 'fs'
+import { chmodSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { vi } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
@@ -12,11 +12,13 @@ vi.mock('child_process', async importOriginal => ({
 }))
 
 function stubHost(root: string) {
+  mkdirSync(join(root, '.git'), { recursive: true })
   return vi.spyOn(childProcess, 'execFileSync').mockImplementation((command, args) => {
     const argv = args as readonly string[]
     if (command === 'gh' && argv[0] === 'issue' && argv[1] === 'view')
       return JSON.stringify({ title: 'Session telemetry', body: '', labels: [] })
-    if (command === 'git' && argv[0] === 'rev-parse') return join(root, '.git')
+    if (command === 'git' && argv[0] === 'rev-parse')
+      return argv.includes('--show-toplevel') ? root : join(root, '.git')
     if (command === 'git' && ['branch', 'ls-remote'].includes(argv[0]!)) return ''
     throw new Error(`Unexpected host process: ${command} ${argv.join(' ')}`)
   })
