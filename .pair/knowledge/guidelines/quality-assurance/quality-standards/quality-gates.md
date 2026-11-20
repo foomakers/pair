@@ -156,6 +156,7 @@ Projects can define additional quality gates beyond the standard ones (Lint, Typ
 | Column      | Description                                                                        |
 | ----------- | ---------------------------------------------------------------------------------- |
 | Order       | Execution sequence among custom gates (standard gates always run first)            |
+| Key         | Unique, stable id of the gate (kebab-case); a workflow step names its gates by it  |
 | Gate        | Human-readable gate name                                                           |
 | Command     | Shell command to execute (e.g., `pnpm format:check`) — a gate step must not WRITE   |
 | Scope Key   | Maps to `/pair-capability-verify-quality` `$scope` argument for selective execution                |
