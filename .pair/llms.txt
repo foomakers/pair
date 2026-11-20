@@ -219,7 +219,7 @@
 - [Decision: telemetry price table lives in `automation.md` `## Telemetry`, USD per million tokens](.pair/adoption/decision-log/2026-11-16-telemetry-price-table-in-automation-md.md)
 - [Decision: Full quality gate once at closing; independent tasks run in parallel](.pair/adoption/decision-log/2026-11-17-gate-at-closing-and-parallel-tasks.md)
 - [Decision: Repository-scoped cycle worktree root](.pair/adoption/decision-log/2026-11-17-repository-scoped-worktree-root.md)
-- [Decision: test-prune cadence — manual-only recommended (proposed)](.pair/adoption/decision-log/2026-11-17-test-prune-cadence.md)
+- [Decision: test-prune cadence — manual-only](.pair/adoption/decision-log/2026-11-17-test-prune-cadence.md)
 - [Decision: transient host recovery parks the cycle](.pair/adoption/decision-log/2026-11-17-transient-host-recovery.md)
 - [Decision: `FileSystemService.appendFile` added; atomicity leaves stay on `node:fs`](.pair/adoption/decision-log/2026-11-18-file-system-service-append-file.md)
 - [Decision: overrides survive a reset epoch, `manual-infra-commit` is overridable, superseded handoffs are archived by resolve, one driver per run dir, a remote gate failure beats `unprovable`](.pair/adoption/decision-log/2026-11-19-cycle-reset-persistence-manual-infra-commit-and-run-lock.md)

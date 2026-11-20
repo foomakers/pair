@@ -1,6 +1,6 @@
 # Test prune cadence — proposal for #627
 
-**Status:** proposed; no cadence adopted until the maintainer chooses an option. **Comparison revision:** `23d1fecb93526a10d903c80369df28d0d37add80` (`origin/main`, 2026-11-20). A fresh baseline was run at that revision in a disposable worktree; no mutation run was made. No production code or tests were changed, and the repository's `test-audit/baseline.json` was not rewritten.
+**Status:** decided — the maintainer adopted **manual-only** ([decision](https://github.com/foomakers/pair/issues/627#issuecomment-7039595471); [ADL](../../.pair/adoption/decision-log/2026-11-17-test-prune-cadence.md), Status Active). **Comparison revision:** `23d1fecb93526a10d903c80369df28d0d37add80` (`origin/main`, 2026-11-20). A fresh baseline was run at that revision in a disposable worktree; no mutation run was made. No production code or tests were changed, and the repository's `test-audit/baseline.json` was not rewritten.
 
 ## Evidence and limits
 
@@ -54,8 +54,8 @@ All time and effort predictions below are **extrapolated** unless marked otherwi
 
 ## Recommendation and decision boundary
 
-**Recommend manual-only initially.** The only measured mutation run is a noisy, 20m38s single-module sample; 457 signals in 49 files have not passed protection review. A recurring in-cycle run would consume time against #650 AC-19 without a measured payoff. A release or nightly cadence remains possible after a fresh, fixed-revision baseline and protected candidate review. This recommendation does not adopt a policy.
+**Recommend manual-only initially.** The only measured mutation run is a noisy, 20m38s single-module sample; 457 signals in 49 files have not passed protection review. A recurring in-cycle run would consume time against #650 AC-19 without a measured payoff. A release or nightly cadence remains possible after a fresh, fixed-revision baseline and protected candidate review. The maintainer adopted it: manual-only is the cadence ([decision](https://github.com/foomakers/pair/issues/627#issuecomment-7039595471)).
 
-The maintainer chooses one option, including manual-only, before an ADL and adoption delta are recorded. Revisit after a clean mutation run with reviewed protections and measured module/suite wall time, or when repeated manual audits show a stable benefit. Any candidate wave requires human approval and a protection check. Mutation runs use a disposable worktree; this analysis never deletes tests automatically.
+The decision is recorded in the [ADL](../../.pair/adoption/decision-log/2026-11-17-test-prune-cadence.md) — Status Active, manual-only chosen by the maintainer — with its constraints and revisit triggers; the adoption delta is the test-prune cadence line in [`way-of-working.md`](../../.pair/adoption/tech/way-of-working.md). Revisit after a clean mutation run with reviewed protections and measured module/suite wall time, or when repeated manual audits show a stable benefit. Any candidate wave requires human approval and a protection check. Mutation runs use a disposable worktree; this analysis never deletes tests automatically.
 
 An **in-cycle** option needs #652's closed step set extended before dispatch; an unknown step cannot be added by profile alone. It must reuse #648's affected-package selector without invalidating `testIdentity` gate reuse, and account for its time in #650 AC-19. An unattended choice wait uses #646's existing `escalated` stop; any new stop needs its own `STOP_CATALOG` row. Release, manual and scheduled post-merge options stay outside the cycle and need no new cycle step or stop.

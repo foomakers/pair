@@ -1,4 +1,4 @@
-# Decision: test-prune cadence — manual-only recommended (proposed)
+# Decision: test-prune cadence — manual-only
 
 ## Date
 
@@ -6,7 +6,7 @@
 
 ## Status
 
-Proposed — awaiting the maintainer's choice on #627 (AC3: unanswered stays proposed). Not adopted: no adoption file changes until a choice is recorded here.
+Active — chosen by the maintainer on #627 ([decision](https://github.com/foomakers/pair/issues/627#issuecomment-7039595471), 2026-11-20).
 
 ## Category
 
@@ -21,11 +21,11 @@ Evidence and limits:
 - Only measured run: #626 content-ops mutation, 20m38s at `21f14940`; 457 candidate signals in 49 files (451 zero unique kills, 6 never killed); two Stryker worker crashes, one mutant error. No candidate passed protection review.
 - Fresh baseline measured at `23d1fecb` in a disposable worktree (3 runs per suite, uncontrolled load, 3 failing tests noted in the comparison): one plain pass is 322 s for the six Vitest `MODULES` and 537 s for all twelve suites (sums of medians). It times plain test runs, not mutation. The checked-in `test-audit/baseline.json` (`base_rev f0799084`) is **stale** and unused. Mutation wall time beyond the 20m38s sample is `not measured`.
 - No changed-test selector exists: `analyze-test-prune` takes `$module`, `mutation.ts --module`, `redundancy.ts --modules`. The closest scope is #648 AC-17's affected-package `turbo --filter=...[<round base>]`, which a changed-tests option must reuse.
-- Audit covers Vitest `MODULES` only; `workflows:test` and `dev-scripts:test` (node `--test`) are `not measured` by the mutation audit under every option; their plain wall time is in the fresh baseline.
+- Audit covers Vitest `MODULES` only; `workflows:test` and `dev-scripts:test` (node `--test`) are `not measured` by the mutation audit under every option; the fresh baseline times the `.claude/workflows` and `scripts` suites, which are not those gate commands — the plain wall time of the two gate commands themselves is `not measured`.
 
 ## Decision
 
-Recommendation (not adopted): **manual-only** — the maintainer requests a module audit on demand, outside the delivery cycle. Rationale: one noisy single-module sample and 457 unreviewed signals do not justify recurring cost; an in-cycle run would spend #650 AC-19 in-run time with no measured payoff.
+**Manual-only** is the adopted cadence, chosen by the maintainer ([decision](https://github.com/foomakers/pair/issues/627#issuecomment-7039595471)): the maintainer requests a module audit on demand, outside the delivery cycle; no recurring job, no gate. Rationale: one noisy single-module sample and 457 unreviewed signals do not justify recurring cost; an in-cycle run would spend #650 AC-19 in-run time with no measured payoff.
 
 Constraints that hold for any option:
 
@@ -39,15 +39,14 @@ Constraints that hold for any option:
 
 - **Changed-tests-only (in-cycle)**: highest effort; blocked by #648 and #652; adds per-round cost against #650 AC-19; worker failures could stall delivery.
 - **Release**: plausible later; needs a fresh fixed-revision baseline and reviewed protections first.
-- **Nightly/CI**: plausible later; recurring compute and triage on noisy signals; output must never gate merges or delete tests.
+- **Nightly/CI**: not adopted now — recurring compute and triage on noisy signals; output must never gate merges or delete tests. The maintainer's preferred next step: revisit it after a clean mutation run with reviewed protections and measured wall time.
 
 ## Consequences
 
-- Until the maintainer chooses, no cadence is adopted and the card stays open.
-- If manual-only is chosen: decision only, no code/CI change, tests added/removed 0/0; set Status to Active and add the adoption delta below.
-- If an executable option is chosen: it ships in the #627 PR with behavior-first tests, re-sized and re-classified (in-cycle → `risk:red`, `Blocked by #648, #652`).
-- Revisit triggers: a clean mutation run with reviewed protections and measured module/suite wall time at a fixed revision; repeated manual audits showing stable benefit; a node:test mutation tool adopted.
+- Decision only: no code/CI change, tests added/removed 0/0; no follow-up issue.
+- No in-cycle step, gate, stop or CI job is added; #650 AC-19 in-run time is untouched.
+- Revisit triggers: a clean mutation run with reviewed protections and measured module/suite wall time at a fixed revision (then nightly/CI is reconsidered first); repeated manual audits showing stable benefit; a node:test mutation tool adopted.
 
 ## Adoption Impact
 
-None while Proposed. On acceptance: `adoption/tech/way-of-working.md` gains a test-prune cadence line naming the chosen option and the constraints above.
+[`adoption/tech/way-of-working.md`](../tech/way-of-working.md) `## Quality Gates` gains the test-prune cadence line: manual-only, with the constraints above. No other adoption file changes.
