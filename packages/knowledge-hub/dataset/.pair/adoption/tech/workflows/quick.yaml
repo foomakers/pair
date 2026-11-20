@@ -4,7 +4,5 @@ description: Implement a card and review the result.
 steps:
   implement:
     kind: implement
-    with:
-      gates: [quality-gate]
   review:
     kind: review

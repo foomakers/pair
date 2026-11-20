@@ -15,16 +15,14 @@ description: Implement a card and review the result.
 steps:
   implement:
     kind: implement
-    with:
-      gates: [quality-gate]
   review:
     kind: review
 ```
 
-| Step        | Kind        | Skill                    | What it does                                                    |
-| ----------- | ----------- | ------------------------ | --------------------------------------------------------------- |
-| `implement` | `implement` | `pair-process-implement` | Implements the card, runs the `quality-gate` gate, opens the PR. |
-| `review`    | `review`    | `pair-process-review`    | Reviews that PR at the head `implement` returned.               |
+| Step        | Kind        | Skill                    | What it does                                      |
+| ----------- | ----------- | ------------------------ | ------------------------------------------------- |
+| `implement` | `implement` | `pair-process-implement` | Implements the card, opens the PR.                |
+| `review`    | `review`    | `pair-process-review`    | Reviews that PR at the head `implement` returned. |
 
 The grammar is in [workflow-grammar.md](workflow-grammar.md), the kinds in [workflow-kinds.md](workflow-kinds.md).
 
@@ -32,9 +30,8 @@ The grammar is in [workflow-grammar.md](workflow-grammar.md), the kinds in [work
 
 - The card is Ready.
 - The skills `pair-process-implement` and `pair-process-review` are installed.
-- The Custom Gate Registry in `.pair/adoption/tech/way-of-working.md` has a row whose `Key` is `quality-gate`. Without it the workflow is refused, and the error names the key. Either add the key to your gate, or change `gates` in your copy of the file.
 
-Check all three without launching anything:
+Check both without launching anything:
 
 ```bash
 pair-cli run quick --card 627 --dry-run
@@ -53,3 +50,5 @@ pair-cli run quick --card 627 --dry-run
 ## Change it
 
 Copy the file to `.pair/adoption/tech/workflows/quick.yaml` and edit it there: the project copy wins over the shipped one. A copy under another name is another workflow: `name` must equal the file name.
+
+To run gates before the push, list them under `with.gates` of the `implement` step in your copy. Each one is a `Key` of the Custom Gate Registry in `.pair/adoption/tech/way-of-working.md`: a key the registry lacks is refused, and the error names the key.
