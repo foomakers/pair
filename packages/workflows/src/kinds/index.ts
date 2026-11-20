@@ -23,26 +23,36 @@ export interface StepResult {
   readonly [output: string]: unknown
 }
 
+/** The reasons of a failure the host or the validator wrote: the agent returned no result of the kind to hold to its outputs. */
+const HOST_REASONS: readonly string[] = ['no-result', 'unsafe-value', 'invalid-result']
+
+/** The outputs of `kind` as `result` must carry them: all required of an `ok` step and, when the kind has a `rule`, of a `failed` one the agent returned. */
+const outputsOf = (kind: StepKind, { status, reason }: StepResult): StepKind['outputs'] =>
+  status === 'ok' ||
+  (status === 'failed' && kind.rule !== undefined && !HOST_REASONS.includes(reason ?? ''))
+    ? kind.outputs
+    : { ...kind.outputs, required: [] }
+
 /**
  * `value` as the result of a step of `kind`, or — when it breaks the contract — a `failed` result with
- * reason `invalid-result` naming each field and its violation. A kind's outputs are required only of an `ok` step.
+ * reason `invalid-result` naming each field and its violation. An `ok` result that breaks the rule of
+ * its kind is `invalid-result` too, and keeps its outputs.
  */
 export function settle(kind: StepKind, value: unknown): StepResult {
   const common = violations(COMMON_RESULT, value)
-  const ok = common.length === 0 && (value as StepResult).status === 'ok'
-  const outputs =
-    common.length > 0
-      ? []
-      : violations(ok ? kind.outputs : { ...kind.outputs, required: [] }, value)
-  const found = [...common, ...outputs]
-  if (found.length === 0) return value as StepResult
-  const detail = found.map(one => `${one.path.join('.') || 'result'}: ${one.problem}`).join('; ')
-  return {
+  const result = value as StepResult
+  const found = common.length > 0 ? common : violations(outputsOf(kind, result), value)
+  const invalid = {
     status: 'failed',
     reason: 'invalid-result',
     summary: `the result does not match the ${kind.name} contract`,
-    detail,
+  } as const
+  if (found.length > 0) {
+    const detail = found.map(one => `${one.path.join('.') || 'result'}: ${one.problem}`).join('; ')
+    return { ...invalid, detail }
   }
+  const broken = result.status === 'ok' ? kind.rule?.broken(result) : undefined
+  return broken === undefined ? result : { ...result, ...invalid, detail: broken }
 }
 
 const cells = (row: string): string[] =>

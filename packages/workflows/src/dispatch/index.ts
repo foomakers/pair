@@ -39,8 +39,11 @@ export function resultBlock(kind: StepKind): string {
     ...common,
     ...outputs,
     ...(outputs.length > 0
-      ? [`Required when status is "ok": ${Object.keys(kind.outputs.properties ?? {}).join(', ')}.`]
+      ? [
+          `Required when status is "ok"${kind.rule === undefined ? '' : ' or "failed"'}: ${Object.keys(kind.outputs.properties ?? {}).join(', ')}.`,
+        ]
       : []),
+    ...(kind.rule === undefined ? [] : [kind.rule.text]),
   ].join('\n')
 }
 

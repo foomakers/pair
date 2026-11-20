@@ -56,4 +56,17 @@ export const review: StepKind = {
     'The verdict needs a decision only a person can take.',
     'The pull request head moved while it was under review.',
   ],
+  rule: {
+    text: 'The status is "failed", never "ok", when at least one finding is blocking or the verdict is "changes-requested".',
+    broken: ({ verdict, findings }) => {
+      const blocking = (findings as readonly { blocking: boolean }[]).filter(one => one.blocking)
+      const found = [
+        ...(blocking.length > 0 ? [`${blocking.length} blocking finding(s)`] : []),
+        ...(verdict === 'changes-requested' ? ['verdict "changes-requested"'] : []),
+      ]
+      return found.length === 0
+        ? undefined
+        : `status: "ok" with ${found.join(' and ')}, expected "failed"`
+    },
+  },
 }

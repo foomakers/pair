@@ -8,12 +8,24 @@ export interface StepKind {
   readonly defaultUses?: string
   /** What the step receives: launch arguments, or outputs of earlier steps with the same name. */
   readonly inputs: JsonSchema
-  /** What the step must return when it is `ok`, besides the common fields. */
+  /** What the step must return when it is `ok` — and, for a kind with a `rule`, when it is `failed` — besides the common fields. */
   readonly outputs: JsonSchema
   /** The options the step accepts under `with`. */
   readonly with: JsonSchema
   /** The documented cases in which the step returns `needs-human`. */
   readonly escalations: readonly string[]
+  /**
+   * The rule the kind sets on its own result, beyond the schema. It is judged from the outputs, so a
+   * `failed` result the agent returns carries them too.
+   */
+  readonly rule?: ResultRule
+}
+
+export interface ResultRule {
+  /** The rule, as the launch message and the kind reference state it. */
+  readonly text: string
+  /** How an `ok` result that matches the schema breaks the rule; `undefined` when it does not. */
+  readonly broken: (result: Readonly<Record<string, unknown>>) => string | undefined
 }
 
 export const STEP_STATUSES = ['ok', 'failed', 'needs-human'] as const
