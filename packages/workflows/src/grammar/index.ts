@@ -185,7 +185,9 @@ export function parseWorkflow(text: string, file: string): ParsedWorkflow {
   }
   const lines = collectLines(doc.contents, [], counter)
   const errors = [
-    ...violations(workflowSchemaV1, value).map(found => errorAt({ file, lines }, found.path, found)),
+    ...violations(workflowSchemaV1, value).map(found =>
+      errorAt({ file, lines }, found.path, found),
+    ),
     ...nameError(value, file, lines),
   ]
   if (errors.length > 0) return { errors }

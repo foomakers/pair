@@ -18,7 +18,9 @@ describe('kind `with` options (AC-5)', () => {
     ['implement', { gates: 'quality-gate' }, 'expected array, found string "quality-gate"'],
     ['review', { blocking: 'Trivial' }, 'unknown value "Trivial"'],
   ] as const)('%s refuses %j', (kind, options, problem) => {
-    expect(violations(kindByName[kind].with, options).map(found => found.problem)).toEqual([problem])
+    expect(violations(kindByName[kind].with, options).map(found => found.problem)).toEqual([
+      problem,
+    ])
   })
 })
 
@@ -41,9 +43,17 @@ describe('kind contracts (AC-4, design §3)', () => {
 
 describe('readGateRegistry', () => {
   const table = (header: string, rows: string[]) =>
-    ['## Quality Gates', '', '### Custom Gate Registry', '', header, '| --- |', ...rows, '', '## Next'].join(
-      '\n',
-    )
+    [
+      '## Quality Gates',
+      '',
+      '### Custom Gate Registry',
+      '',
+      header,
+      '| --- |',
+      ...rows,
+      '',
+      '## Next',
+    ].join('\n')
 
   it('maps each key to its command', () => {
     const text = table('| Order | Key | Gate | Command | Required |', [
@@ -57,8 +67,14 @@ describe('readGateRegistry', () => {
   })
 
   it.each([
-    ['a table with no Key column', table('| Order | Gate | Command |', ['| 1 | Quality Gate | `pnpm quality-gate` |'])],
-    ['a registry declared empty', '### Custom Gate Registry\n\nNo custom quality gates configured.\n'],
+    [
+      'a table with no Key column',
+      table('| Order | Gate | Command |', ['| 1 | Quality Gate | `pnpm quality-gate` |']),
+    ],
+    [
+      'a registry declared empty',
+      '### Custom Gate Registry\n\nNo custom quality gates configured.\n',
+    ],
     ['no registry section', '## Quality Gates\n'],
   ])('has no keys for %s', (_name, text) => {
     expect(readGateRegistry(text)).toEqual({})

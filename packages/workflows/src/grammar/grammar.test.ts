@@ -142,7 +142,9 @@ describe('parseWorkflow (AC-2)', () => {
 
   it('reports a missing required key on the document', () => {
     const { errors } = parseWorkflow('version: 1\nname: quick\n', 'quick.yaml')
-    expect(errors.map(formatError)).toEqual(["quick.yaml:1: missing key 'steps' — fix: add 'steps'"])
+    expect(errors.map(formatError)).toEqual([
+      "quick.yaml:1: missing key 'steps' — fix: add 'steps'",
+    ])
   })
 
   it('formats an error as file:line: key: problem — fix', () => {
