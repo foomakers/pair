@@ -246,6 +246,24 @@ async function runWorkflow({ args, dispatch, inspect, floor, maxFixRounds, entry
   return { result, calls, logs }
 }
 
+test('#602 AC2: a root with spaces and trailing slash is inspected and dispatched', async () => {
+  const main = mkdtempSync(join(tmpdir(), 'pair-602-root-'))
+  const trees = join(main, 'worktrees with spaces')
+  const git = (...args) => assert.equal(spawnSync('git', args, { cwd: main }).status, 0)
+  git('init', '-q', '-b', 'main')
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'base')
+  const script = fileURLToPath(new URL('../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs', import.meta.url))
+  const run = (...args) => JSON.parse(spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' }).stdout)
+  const standard = stdDispatch()
+  const { result, calls } = await runWorkflow({
+    args: { cards: [{ id: '55', branch: 'feature/US-55-example', title: 'Example' }], pipeline: { worktreeRoot: `${trees}/` } },
+    inspect: () => run('worktree-inspect', '--main', main, '--story', '55', '--branch', 'feature/US-55-example', '--base', 'main', '--worktree-root', `${trees}/`),
+    dispatch: (prompt, opts) => opts.label === 'root:resolve' ? run('root', '--main', main, '--worktree-root', `${trees}/`) : standard(prompt, opts),
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(calls.some(c => c.opts.agentType === 'pair-implementer'))
+})
+
 test('#602 r0-2: a foreign worktree stops before stage dispatch or recovery spend', async () => {
   const root = mkdtempSync(join(tmpdir(), 'pair-602-batch-'))
   const alpha = join(root, 'alpha')
@@ -288,7 +306,7 @@ test('#602 r0-2: a foreign worktree stops before stage dispatch or recovery spen
   assert.equal(git(beta, 'status', '--porcelain'), before)
 })
 
-for (const fault of ['dirty', 'stale', 'redirect', 'dead']) test(`#602 r0-2: ownership is rechecked after stage reports ${fault}`, async () => {
+for (const fault of ['dirty', 'stale', 'redirect', 'dead', 'budget-swap', 'timeout']) test(`#602 r0-2: ownership is rechecked after stage reports ${fault}`, async () => {
   const root = mkdtempSync(join(tmpdir(), 'pair-602-recovery-'))
   const alpha = join(root, 'alpha')
   const beta = join(root, 'beta')
@@ -327,9 +345,17 @@ for (const fault of ['dirty', 'stale', 'redirect', 'dead']) test(`#602 r0-2: own
     dispatch: (prompt, opts) => {
       if (opts.agentType === 'pair-fix-test-author' && !stageReached) {
         stageReached = true
+        if (fault !== 'budget-swap') {
+          renameSync(path, join(root, 'old-alpha'))
+          renameSync(foreign, path)
+        }
+        if (fault === 'timeout') throw Object.assign(new Error('idle timeout'), { stageTimeout: { label: opts.label, minutes: '30' } })
+        return fault === 'dead' ? null : { status: fault === 'budget-swap' ? 'dirty' : fault, reason: 'fixture', next: fault === 'redirect' ? { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 } : { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 2 } }
+      }
+      if (fault === 'budget-swap' && opts.label?.startsWith('recover:budget')) {
         renameSync(path, join(root, 'old-alpha'))
         renameSync(foreign, path)
-        return fault === 'dead' ? null : { status: fault, reason: 'fixture', next: fault === 'redirect' ? { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 } : { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 2 } }
+        return { allowed: true, round: 1, budget: 5 }
       }
       return standard(prompt, opts)
     },
@@ -337,7 +363,7 @@ for (const fault of ['dirty', 'stale', 'redirect', 'dead']) test(`#602 r0-2: own
   assert.equal(stageReached, true, 'same-owner control reached its stage')
   assert.equal(result.batch[0].status, 'worktree-conflict')
   assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 1, 'no later stage runs on the substituted worktree')
-  assert.equal(calls.some(c => c.opts.label?.startsWith('recover:budget') || c.opts.label?.startsWith('recover:dirty') || c.opts.label?.startsWith('recover:stale')), false)
+  assert.equal(calls.some(c => (fault !== 'budget-swap' && c.opts.label?.startsWith('recover:budget')) || c.opts.label?.startsWith('recover:dirty') || c.opts.label?.startsWith('recover:stale') || c.opts.label?.startsWith('recover:idle')), false)
   assert.equal(readFileSync(join(path, 'keep'), 'utf8'), 'foreign')
   assert.equal(git(beta, 'stash', 'list'), '')
   assert.equal(git(beta, 'for-each-ref', '--format=%(refname)', 'refs/pair/recovery'), '')
@@ -780,7 +806,7 @@ test('TC-11: the workflow source dispatches ONLY skill invocations — no free-f
   // the prepare phase (cycle-prepare.mjs). No rule lives in them.
   const scriptRunners = all.filter(d => /^`(Run (?:EXACTLY|exactly)|Card )/.test(d))
   const dispatches = all.filter(d => !scriptRunners.includes(d))
-  assert.equal(scriptRunners.length, 19, `expected existing relays plus ownership inspection, found ${scriptRunners.length}`)
+  assert.equal(scriptRunners.length, 20, `expected existing relays plus ownership inspections, found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)

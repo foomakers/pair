@@ -24,6 +24,8 @@ For a linked worktree whose main checkout cannot be derived (including a separat
 
 The batch performs an ownership relay before each stage and recovery budget. These security relays count in dispatch metrics, in addition to the judgment stages; a fresh clean path therefore costs four dispatches rather than two.
 
+The relay and the following agent run in separate processes: a concurrent actor can replace the path between inspection and use. The check detects changes at stage and recovery boundaries; it is not an atomic lock. Closing that window requires enforcement in the external workflow runner or a shared locking protocol.
+
 ## Alternatives Considered
 
 - **Remote URL namespace**: separate clones can share an origin and still own distinct worktrees.

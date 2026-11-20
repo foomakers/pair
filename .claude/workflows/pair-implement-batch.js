@@ -1801,11 +1801,17 @@ async function driveStory(story) {
     const runId = RUN_ID ?? `story-${story.id}`
     const token = `${runId}:${story.id}:${error.stageTimeout.label}:idle-timeout`
     try {
+      const inspected = await dispatch(
+        `Run exactly this read-only command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs worktree-inspect --main "$PWD" --story ${shellQuote(story.id)} --branch ${shellQuote(story.branch)} --base ${shellQuote(baseOf(story))} --worktree-root ${shellQuote(PIPELINE.worktreeRoot)}`,
+        withModel('relay', { phase: 'Recovery', label: `worktree:inspect:#${story.id}`, effort: 'low' }),
+      )
+      if (inspected?.halt === 'worktree-conflict') return { story, status: 'worktree-conflict', reason: inspected.detail, acceptedFindings: [], durable: true }
+      if (inspected?.path !== `${PIPELINE.worktreeRoot}/${story.id}` || inspected?.created !== false || (inspected?.reused !== true && inspected?.available !== true)) throw new Error('worktree inspection returned an incomplete result')
       await dispatch(
         `Run exactly this command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs recover --dir .pair/working/runs/${runId}/${story.id} --kind stage-retry --policy '${JSON.stringify({ autoRecoveryRounds: PIPELINE.autoRecoveryRounds })}'`,
         withModel('relay', { phase: 'Recovery', label: `recover:idle:#${story.id}`, effort: 'low' }),
       )
-    } catch {}
+    } catch { /* inspection failed: park without spending recovery budget */ }
     return { story, status: 'awaiting-human', reason: error.message, resumeToken: token, acceptedFindings: [], metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown' }, durable: true }
   }
 }
@@ -1958,6 +1964,8 @@ async function driveStoryInner(story) {
       return { park: park(reset?.reason ?? `${faultKind}: reset-group failed`) }
     }
     if (fault === 'dirty' || fault === 'stale') {
+      const refusal = await inspectWorktree()
+      if (refusal) return { park: refusal }
       const command = fault === 'dirty'
         ? `node ${script} worktree-clean --cwd ${shellQuote(worktreePath)} --dir ${runDir()} --story ${story.id}`
         : `node ${script} base-sync --cwd ${shellQuote(worktreePath)} --base ${storyBase} --story ${story.id} --dir ${runDir()}`

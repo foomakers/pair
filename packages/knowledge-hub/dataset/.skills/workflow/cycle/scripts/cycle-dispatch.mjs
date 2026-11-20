@@ -275,7 +275,7 @@ function resolveWorktreeRoot(main, rawRoot) {
     'worktree-root-invalid',
     `worktreeRoot must be an absolute path, or a relative one built from safe segments with at most one leading \`..\`: ${JSON.stringify(value)} — refused before any worktree operation`,
   )
-  return isAbsolute(value) ? value : resolvePath(canonicalMain, value)
+  return isAbsolute(value) ? resolvePath(value) : resolvePath(canonicalMain, value)
 }
 
 // ── worktree (AC-1, AC-9) ───────────────────────────────────────────────────────────────────

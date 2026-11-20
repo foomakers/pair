@@ -322,6 +322,10 @@ describe('US-602 real Git worktree ownership', () => {
     })
     const invalid = worktree(main, '56', '../../outside')
     expect(invalid).toMatchObject({ status: 1, data: { halt: 'worktree-root-invalid' } })
+    expect(worktree(main, '56', '/')).toMatchObject({
+      status: 1,
+      data: { halt: 'worktree-root-invalid' },
+    })
     expect(existsSync(join(parent, 'outside'))).toBe(false)
   })
 
