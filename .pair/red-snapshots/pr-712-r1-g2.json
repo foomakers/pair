@@ -1,0 +1,371 @@
+{
+  "$meta": {
+    "pr": "712",
+    "phase": "r1-g2",
+    "base": "5a1c71fd74613d108db77a039477513dba49cc43",
+    "trailer": "Pair-RED-Snapshot: pr=712; phase=r1-g2; base=5a1c71fd74613d108db77a039477513dba49cc43; manifest=.pair/red-snapshots/pr-712-r1-g2.json",
+    "artifacts": [
+      "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts",
+      "apps/pair-cli/src/commands/run/workflow-gate-registry-cells.test.ts"
+    ]
+  },
+  "run": "story-652",
+  "story": "652",
+  "phase": "r1-g2",
+  "mode": "remediation",
+  "groupId": "r1-g2",
+  "remediationBatchId": "r1",
+  "inputHead": "5a1c71fd74613d108db77a039477513dba49cc43",
+  "sourceOfTruth": [
+    "finding r0-4 (r0-review-phase): description, failureScenario, VERIFY / ORACLE / ASSERT",
+    "the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped",
+    "GFM spec, Tables (extension): \"It is possible to include a pipe in a cell's content by escaping it, including inside other inline spans\" — `\\|` is a pipe of the cell, never a cell boundary (https://github.github.com/gfm/#tables-extension-)",
+    "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-grammar.md:72 — \"Every key in `with.gates` is a `Key` of the Custom Gate Registry in `way-of-working.md`.\"",
+    "apps/pair-cli/src/commands/run/workflow-host.ts:151 — gateKeys: Object.keys(readGateRegistry(way-of-working.md)); packages/workflows/src/validate/index.ts:60-63 — the refusal and its fix text"
+  ],
+  "inventory": [
+    {
+      "id": "r0-4",
+      "producer": "readGateRegistry(text) and its row splitter cells(row) — packages/workflows/src/kinds/index.ts:58-86 (the one place a registry table becomes gate key → command)",
+      "inputs": [
+        "Key cell: plain | inline code | empty | empty inline code",
+        "Command cell: plain | inline code",
+        "escaped pipe `\\|`: absent | in an inline-code cell | in a plain cell | in a cell before the Key column | in a header cell",
+        "other backslash / inner backtick in a cell",
+        "table shape: unpadded | padded with columns after Command (the adopted file)"
+      ],
+      "representations": [
+        "pure function readGateRegistry (@pair/workflows)",
+        "CLI entry: pair run <workflow> [--dry-run] → resolveWorkflowRun (apps/pair-cli/src/commands/run/workflow-host.ts:151)",
+        "canonical source read: .pair/adoption/tech/way-of-working.md \"Custom Gate Registry\" (dataset template: packages/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md)"
+      ],
+      "consumers": [
+        "validate() gateErrors — known.includes(key) (packages/workflows/src/validate/index.ts:56)",
+        "validate() gateErrors fix text — `use one of ${known.join(', ')}` (index.ts:63)",
+        "the returned command values: no consumer at this head beyond the function's own return (the host reads Object.keys only)"
+      ],
+      "classes": [
+        "supported: inline-code key + inline-code command (w1)",
+        "supported: inline-code key + plain command (w2)",
+        "supported, already correct: plain key + inline-code command (c1); plain key + plain command (c2); adopted padded shape (c3)",
+        "boundary: key cell empty once stripped (b1); empty Key cell (c6, already correct)",
+        "supported: escaped pipe in an inline-code command (w3); in a plain command (w4); in a cell before the Key column (w5)",
+        "boundary: escaped pipe in a header cell (b2)",
+        "already correct: backtick inside a cell kept (c4); backslash that escapes no pipe kept (c5)",
+        "invalid, no row: an unbalanced backtick (`quality-gate) is not inline code — neither oracle states a result for it; an escaped pipe inside the Key cell is the same cell-splitting rule as w3-w5 (cells() is column-agnostic) and yields a key no gate-key grammar accepts"
+      ],
+      "interactions": [
+        "inline-code and plain keys in one table (i1)",
+        "inline-code key × escaped pipe on one row (i2)",
+        "CLI entry × inline-code key: with.gates coherence (i3)",
+        "CLI entry × escaped pipe before the Key column (i4)",
+        "CLI entry × inline-code key × refusal fix text (i5)",
+        "CLI entry × plain key (c7, already correct)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "readGateRegistry() in packages/workflows/src/kinds/index.ts",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/workflows/src/kinds/index.ts"
+    ]
+  },
+  "assumptions": [
+    {
+      "id": "A-1",
+      "policy": "what a Key cell that is empty once its inline-code backticks are stripped (``) yields",
+      "reading": "no key: the row is skipped like a row with an empty Key cell (index.ts:83) — never an entry \"\" or \"``\""
+    }
+  ],
+  "matrix": [
+    {
+      "id": "r0-4-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "condition": "readGateRegistry, row | 1 | `quality-gate` | Quality Gate | `pnpm quality-gate` | (the finding's own input)",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells.test.ts — the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped",
+      "expected": "{\"quality-gate\": \"pnpm quality-gate\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells.test.ts -t w1"
+    },
+    {
+      "id": "r0-4-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "condition": "readGateRegistry, key as inline code, command plain",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells.test.ts — the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped",
+      "expected": "{\"quality-gate\": \"pnpm quality-gate\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "the key is stripped on its own, not because the command cell of the row is inline code: not equivalent to w1",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells.test.ts -t w2"
+    },
+    {
+      "id": "r0-4-i1",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "condition": "readGateRegistry, three rows: inline-code key + inline-code command, plain key + inline-code command, inline-code key + plain command",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells.test.ts — the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped",
+      "expected": "{\"quality-gate\": \"pnpm quality-gate\", \"smoke-tests\": \"pnpm smoke-tests\", \"e2e-tests\": \"pnpm e2e\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "the rule is per cell: rows written both ways in one table give keys of one shape",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells.test.ts -t i1"
+    },
+    {
+      "id": "r0-4-b1",
+      "kind": "boundary",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "condition": "readGateRegistry, a row whose Key cell is `` (empty inline code) next to a valid row",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells.test.ts — the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped; index.ts:83 `.filter(row => row[key])` — a row with no key is no entry (control c6); assumption A-1",
+      "expected": "{\"quality-gate\": \"pnpm quality-gate\"} — no \"\" and no \"``\" entry",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "the stripped key is what counts as the key; at the base the entry \"``\" is produced",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells.test.ts -t b1"
+    },
+    {
+      "id": "r0-4-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "condition": "readGateRegistry, command cell `pnpm test \\| tee log` (inline code)",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells.test.ts — GFM spec, Tables (extension): \"It is possible to include a pipe in a cell's content by escaping it, including inside other inline spans\" — `\\|` is a pipe of the cell, never a cell boundary",
+      "expected": "{\"quality-gate\": \"pnpm test | tee log\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells.test.ts -t w3"
+    },
+    {
+      "id": "r0-4-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "condition": "readGateRegistry, command cell pnpm test \\| tee log (plain)",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells.test.ts — GFM spec, Tables (extension): \"It is possible to include a pipe in a cell's content by escaping it, including inside other inline spans\" — `\\|` is a pipe of the cell, never a cell boundary",
+      "expected": "{\"quality-gate\": \"pnpm test | tee log\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "the spec names the two forms apart (\"including inside other inline spans\"): plain cell and code span are two classes",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells.test.ts -t w4"
+    },
+    {
+      "id": "r0-4-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "condition": "readGateRegistry, header | Gate | Key | Command |, row | Build \\| test | quality-gate | `pnpm quality-gate` |",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells.test.ts — GFM spec, Tables (extension): \"It is possible to include a pipe in a cell's content by escaping it, including inside other inline spans\" — `\\|` is a pipe of the cell, never a cell boundary",
+      "expected": "{\"quality-gate\": \"pnpm quality-gate\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "an escaped pipe BEFORE the Key column shifts every later cell at the base: the key itself is misread (observed {test: \"quality-gate\"})",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells.test.ts -t w5"
+    },
+    {
+      "id": "r0-4-b2",
+      "kind": "boundary",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "condition": "readGateRegistry, header | Gate \\| Stage | Key | Command |, row without escaped pipe",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells.test.ts — GFM spec, Tables (extension): \"It is possible to include a pipe in a cell's content by escaping it, including inside other inline spans\" — `\\|` is a pipe of the cell, never a cell boundary",
+      "expected": "{\"quality-gate\": \"pnpm quality-gate\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "the header row is split by the same rule: the column indexes of Key and Command come from it",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells.test.ts -t b2"
+    },
+    {
+      "id": "r0-4-i2",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "condition": "readGateRegistry, inline-code key and an escaped pipe in the inline-code command of the same row",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells.test.ts — the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped; GFM spec, Tables (extension): \"It is possible to include a pipe in a cell's content by escaping it, including inside other inline spans\" — `\\|` is a pipe of the cell, never a cell boundary",
+      "expected": "{\"quality-gate\": \"pnpm test | tee log\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "the two rules of the finding on one row: neither undoes the other",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells.test.ts -t i2"
+    },
+    {
+      "id": "r0-4-i3",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/workflow-gate-registry-cells.test.ts",
+      "condition": "pair run quick --card 627 --dry-run through handleRunCommand; registry row | 1 | `quality-gate` | … |; quick.yaml gates: [quality-gate] (the finding's failure scenario)",
+      "oracle": "apps/pair-cli/src/commands/run/workflow-gate-registry-cells.test.ts — the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped; finding r0-4 failureScenario.expected \"key quality-gate is read from the cell, as the command is\"",
+      "expected": "exit 0; \"  Dry run: the workflow is valid; nothing was launched.\" printed; no \"unknown gate key\" line",
+      "covers": [
+        "r0-4"
+      ],
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/workflow-gate-registry-cells.test.ts -t i3"
+    },
+    {
+      "id": "r0-4-i4",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/workflow-gate-registry-cells.test.ts",
+      "condition": "pair run quick --dry-run; registry header | Gate | Key | Command |, row | Build \\| test | quality-gate | `pnpm quality-gate` |",
+      "oracle": "apps/pair-cli/src/commands/run/workflow-gate-registry-cells.test.ts — GFM spec, Tables (extension): \"It is possible to include a pipe in a cell's content by escaping it, including inside other inline spans\" — `\\|` is a pipe of the cell, never a cell boundary",
+      "expected": "exit 0; dry-run valid line printed; no \"unknown gate key\" line",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "CLI entry × escaped pipe: the only cell position that reaches the CLI consumer (gateKeys = Object.keys) is one before the Key column",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/workflow-gate-registry-cells.test.ts -t i4"
+    },
+    {
+      "id": "r0-4-i5",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/workflow-gate-registry-cells.test.ts",
+      "condition": "pair run quick --dry-run; registry key `quality-gate` (inline code); quick.yaml gates: [e2e]",
+      "oracle": "apps/pair-cli/src/commands/run/workflow-gate-registry-cells.test.ts — the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped; apps/pair-cli/src/commands/run/workflow-host.test.ts:175 the refusal format \"unknown gate key 'e2e' — fix: use one of quality-gate\"",
+      "expected": "exit 1; the refusal line ends with \"unknown gate key 'e2e' — fix: use one of quality-gate\" (no backticks around the key)",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "the second consumer of the keys: the fix text of validate() — \"a fix that reads like the value already written\" in the finding",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/workflow-gate-registry-cells.test.ts -t i5"
+    },
+    {
+      "id": "r0-4-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts",
+      "condition": "readGateRegistry, plain key, inline-code command",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts — the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped",
+      "expected": "{\"quality-gate\": \"pnpm quality-gate\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells-controls.test.ts -t c1"
+    },
+    {
+      "id": "r0-4-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts",
+      "condition": "readGateRegistry, plain key, plain command",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts — the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped",
+      "expected": "{\"quality-gate\": \"pnpm quality-gate\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells-controls.test.ts -t c2"
+    },
+    {
+      "id": "r0-4-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts",
+      "condition": "readGateRegistry, the adopted table shape (.pair/adoption/tech/way-of-working.md:140-144): padded cells, columns after Command, two rows",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts — unescaped pipes delimit cells; cells are trimmed (index.ts:58-63)",
+      "expected": "{\"quality-gate\": \"pnpm quality-gate\", \"smoke-tests\": \"pnpm smoke-tests\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells-controls.test.ts -t c3"
+    },
+    {
+      "id": "r0-4-c4",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts",
+      "condition": "readGateRegistry, plain command cell pnpm run `gate` now",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts — the Command cell handling of the same function — packages/workflows/src/kinds/index.ts:84 `(row[command] ?? '').replace(/^`|`$/g, '')`: inline-code backticks stripped",
+      "expected": "{\"quality-gate\": \"pnpm run `gate` now\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "only the cell edges are inline-code marks: guards a fix that drops every backtick",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells-controls.test.ts -t c4"
+    },
+    {
+      "id": "r0-4-c5",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts",
+      "condition": "readGateRegistry, command cell `printf a\\tb`",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts — GFM spec, Tables (extension): \"It is possible to include a pipe in a cell's content by escaping it, including inside other inline spans\" — `\\|` is a pipe of the cell, never a cell boundary",
+      "expected": "{\"quality-gate\": \"printf a\\\\tb\"} (the backslash kept)",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "only `\\|` is an escape of the table grammar: guards a fix that drops every backslash",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells-controls.test.ts -t c5"
+    },
+    {
+      "id": "r0-4-c6",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts",
+      "condition": "readGateRegistry, a row with an empty Key cell next to a valid row",
+      "oracle": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts — index.ts:83 `.filter(row => row[key])`",
+      "expected": "{\"quality-gate\": \"pnpm quality-gate\"}",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "the authority b1 extends to a key that is empty once stripped",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells-controls.test.ts -t c6"
+    },
+    {
+      "id": "r0-4-c7",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/workflow-gate-registry-cells.test.ts",
+      "condition": "pair run quick --dry-run; registry key plain; quick.yaml gates: [quality-gate]",
+      "oracle": "apps/pair-cli/src/commands/run/workflow-gate-registry-cells.test.ts — workflow-grammar.md:72 \"Every key in `with.gates` is a `Key` of the Custom Gate Registry in `way-of-working.md`.\"",
+      "expected": "exit 0; dry-run valid line printed",
+      "covers": [
+        "r0-4"
+      ],
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/workflow-gate-registry-cells.test.ts -t c7"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/workflows/src/kinds/gate-registry-cells.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:5e196706e08a169fbcbdb53edb3ce9467afca1e6a53f91ec342aa3fdb9bca560",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells.test.ts",
+      "observed": "Test Files 1 failed (1); Tests 9 failed (9) — w1/w2: expected { Object (`quality-gate`) } to deeply equal { 'quality-gate': 'pnpm quality-gate' }; b1: expected { '``': 'pnpm nothing', …(1) } to deeply equal { 'quality-gate': 'pnpm quality-gate' }; w3/w4: expected { 'quality-gate': 'pnpm test \\' } to deeply equal { Object (quality-gate) }; w5: expected { test: 'quality-gate' } to deeply equal { 'quality-gate': 'pnpm quality-gate' }; b2: expected { '`pnpm quality-gate`': '' } to deeply equal { 'quality-gate': 'pnpm quality-gate' }; i2: expected { '`quality-gate`': 'pnpm test \\' } to deeply equal { Object (quality-gate) }"
+    },
+    {
+      "file": "packages/workflows/src/kinds/gate-registry-cells-controls.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:e7dd067b81b5f13adc571a3d441d630dc5a4abcc6c8c7477004ce1ee6096143e",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/gate-registry-cells-controls.test.ts",
+      "observed": "Test Files 1 passed (1); Tests 6 passed (6)"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/workflow-gate-registry-cells.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:1af290b334339580eec9c4bcbe3decf3ddbbdbde48d56aaf9ecaf60becbc4090",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/workflow-gate-registry-cells.test.ts",
+      "observed": "Test Files 1 failed (1); Tests 3 failed | 1 passed (4) — i3, i4: AssertionError: expected 1 to be +0; i5: expected '  /var/folders/…' to match /unknown gate key 'e2e' — fix: use one of quality-gate$/"
+    }
+  ],
+  "testExempt": false,
+  "attempt": 1
+}
