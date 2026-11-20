@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@pair/content-ops': resolve(__dirname, '../../packages/content-ops/src'),
+      '@pair/workflows': resolve(__dirname, '../../packages/workflows/src'),
       '@pair/content-ops/http': resolve(__dirname, '../../packages/content-ops/src/http'),
       '@pair/content-ops/file-system': resolve(
         __dirname,

@@ -17,6 +17,7 @@ Projects only the `risk:green|yellow|red` tag family (the KB default). The full 
 | packages/content-ops | Low |
 | packages/dev-tools | Low |
 | packages/knowledge-hub | Low |
+| packages/workflows | Low |
 | packages/brand | Low |
 
 Every deployable in this monorepo, explicitly. None handles money, credentials or PII, and none is a live service whose outage is visible to every user (`pair-cli` is installed and run locally; `apps/website` is a docs/marketing site, not a production app) — per quality-model §3.1's "Choosing a value" criterion, that's Low across the board. Listing every deployable also removes the file-absent Medium default and the unlisted-service conservative-High default for this repo entirely: every touched path is explicitly `Low` on this dimension, not defaulted.

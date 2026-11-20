@@ -19,7 +19,8 @@
   },
   "references": [
     { "path": "../../packages/content-ops" },
-    { "path": "../../packages/knowledge-hub" }
+    { "path": "../../packages/knowledge-hub" },
+    { "path": "../../packages/workflows" }
   ],
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
