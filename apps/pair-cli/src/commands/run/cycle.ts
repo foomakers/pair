@@ -191,6 +191,7 @@ interface LoopState {
   resumedFrom?: CycleNext
   /** r0-3: this invocation already tried its one re-run resume. */
   resumeTried?: boolean
+  currentNext: CycleNext | undefined
 }
 
 function buildStageRecord(
@@ -640,13 +641,6 @@ function announce(input: RunCycleInput, next: CycleNext): void {
 }
 
 async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
-  const { resolve, policy, onNotice, hooks } = input
-  const observers: StageObservers = {
-    onStage: input.onStage,
-    appendAudit: input.appendAudit,
-    onNotice: input.onNotice,
-  }
-  const deadDispatchRetries = policy.deadDispatchRetries ?? 0
   const state: LoopState = {
     stagesRun: 0,
     dispatchedNext: null,
@@ -656,46 +650,57 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     formatCorrection: undefined,
     reuseNoticeGiven: false,
     worktreePath: undefined,
+    currentNext: undefined,
   }
 
-  let current: CycleNext | undefined
   try {
-    for (;;) {
-      const answer = await resolve()
-      const next = answer.next
-      current = next
-      relayWarnings(answer, onNotice)
-      if (next === undefined) return stopWithoutNext(state, answer as CycleResolveStop, observers)
-
-      const settled = settlePreviousDispatch(state, next, deadDispatchRetries, observers)
-      if (settled !== null) {
-        if (await recoveredStop(input, state, settled)) continue
-        return settled
-      }
-      await runPostStageHook(state, next, hooks, onNotice)
-
-      if (!DISPATCHABLE_STEPS.has(next.step)) {
-        const outcome = await terminalOrResume(input, state, next, answer)
-        if (outcome !== null) return outcome
-        continue
-      }
-      noticeReuseOnce(state, next, onNotice)
-      const gated = await gateDispatch(state, next, input)
-      if (gated !== null) return gated
-
-      const blocked = await dispatchStage(input, state, next)
-      if (blocked !== undefined) return blocked
-    }
+    return await runCycleIterations(input, state)
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
     if (detail.startsWith('worktree-conflict:'))
       return {
         status: 'worktree-conflict',
         stagesRun: state.stagesRun,
-        ...(current === undefined ? {} : { next: current }),
+        ...(state.currentNext === undefined ? {} : { next: state.currentNext }),
         reason: detail,
       }
     throw error
+  }
+}
+
+async function runCycleIterations(input: RunCycleInput, state: LoopState): Promise<CycleOutcome> {
+  const { resolve, policy, onNotice, hooks } = input
+  const observers: StageObservers = {
+    onStage: input.onStage,
+    appendAudit: input.appendAudit,
+    onNotice: input.onNotice,
+  }
+  const deadDispatchRetries = policy.deadDispatchRetries ?? 0
+  for (;;) {
+    const answer = await resolve()
+    const next = answer.next
+    state.currentNext = next
+    relayWarnings(answer, onNotice)
+    if (next === undefined) return stopWithoutNext(state, answer as CycleResolveStop, observers)
+
+    const settled = settlePreviousDispatch(state, next, deadDispatchRetries, observers)
+    if (settled !== null) {
+      if (await recoveredStop(input, state, settled)) continue
+      return settled
+    }
+    await runPostStageHook(state, next, hooks, onNotice)
+
+    if (!DISPATCHABLE_STEPS.has(next.step)) {
+      const outcome = await terminalOrResume(input, state, next, answer)
+      if (outcome !== null) return outcome
+      continue
+    }
+    noticeReuseOnce(state, next, onNotice)
+    const gated = await gateDispatch(state, next, input)
+    if (gated !== null) return gated
+
+    const blocked = await dispatchStage(input, state, next)
+    if (blocked !== undefined) return blocked
   }
 }
 
