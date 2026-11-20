@@ -380,9 +380,6 @@ export async function handleRunCommand(
   fs: FileSystemService,
   callerDeps: RunHandlerDependencies = {},
 ): Promise<number> {
-  // US-652: a workflow name selects the workflow path; `--card` alone is the cycle below, unchanged.
-  if (rawConfig.workflow !== undefined)
-    return await handleWorkflowRun(rawConfig, rawConfig.workflow, { fs, deps: callerDeps })
   if (
     plainConsole({
       isTTY: process.stdout.isTTY,
@@ -452,6 +449,9 @@ async function runCommand(
   fs: FileSystemService,
   callerDeps: RunHandlerDependencies,
 ): Promise<number> {
+  // US-652: a workflow name selects the workflow path; `--card` alone is the cycle below, unchanged.
+  if (rawConfig.workflow !== undefined)
+    return await handleWorkflowRun(rawConfig, rawConfig.workflow, { fs, deps: callerDeps })
   const dispatch = rawConfig.dispatch
   if (!dispatch || rawConfig.telemetry !== true)
     return await runCommandInner(rawConfig, fs, callerDeps)

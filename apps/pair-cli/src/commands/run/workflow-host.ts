@@ -89,9 +89,13 @@ interface Located {
 }
 
 /** A path if the argument is an existing file; else the adoption workflow; else the knowledge-base default. */
-export function locateWorkflow(fs: FileSystemService, at: string, name: string): Located {
-  const adopted = join(at, WORKFLOWS_DIR, `${name}.yaml`)
-  const candidates = [resolve(at, name), adopted]
+export function locateWorkflow(
+  fs: FileSystemService,
+  at: { readonly cwd: string; readonly main: string },
+  name: string,
+): Located {
+  const adopted = join(at.main, WORKFLOWS_DIR, `${name}.yaml`)
+  const candidates = [resolve(at.cwd, name), adopted]
   try {
     candidates.push(join(getKnowledgeHubDatasetPath(fs), WORKFLOWS_DIR, `${name}.yaml`))
   } catch {
@@ -139,7 +143,7 @@ function resolveWorkflowRun(
   const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
   const main = mainCheckoutOrCwd(cwd)
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
-  const source = locateWorkflow(fs, main, request.name)
+  const source = locateWorkflow(fs, { cwd, main }, request.name)
   const registry = join(main, WAY_OF_WORKING)
   const checked = validate(source.text, source.file, {
     skillExists: createSkillProbe(fs, project, cwd),
