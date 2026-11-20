@@ -1,5 +1,5 @@
 import * as cp from 'child_process'
-import { mkdtempSync, rmSync } from 'fs'
+import { fileSystemService as fs } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -110,7 +110,7 @@ describe('CLI path against a real temp git repo', () => {
   const err: string[] = []
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'rel-cli-'))
+    dir = fs.mkdtempSync(join(tmpdir(), 'rel-cli-'))
     git(dir, 'init', '-q')
     git(dir, 'commit', '--allow-empty', '-q', '-m', 'a')
     git(dir, 'tag', 'v0.4.3')
@@ -126,7 +126,7 @@ describe('CLI path against a real temp git repo', () => {
   afterEach(() => {
     repo.dir = ''
     vi.restoreAllMocks()
-    rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true })
   })
 
   it('r0-1-w2: readTags/plan wiring refuses pre when the pre tag commit parent is HEAD', () => {

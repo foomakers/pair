@@ -6,7 +6,7 @@
  * A level or module that fails is recorded under `errors` and the run goes on.
  */
 import { execFileSync } from 'child_process'
-import { mkdirSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { basename, dirname, join, relative, resolve } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
@@ -17,6 +17,8 @@ import { rowsFor } from './playwright-overlap'
 import { runSuites, totals } from './playwright-run'
 import type { RunRow, TargetTotals } from './playwright-run'
 import type { PwRow } from './playwright-overlap'
+
+const { mkdirSync, writeFileSync } = fileSystemService
 
 export const MODULES = [
   'packages/content-ops',

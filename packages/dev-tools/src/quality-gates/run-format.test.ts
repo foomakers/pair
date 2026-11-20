@@ -1,10 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { execFileSync } from 'child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
 import { REPO_ROOT } from './repo-root'
+
+const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } = fileSystemService
 
 // #414: root format:check/format invoke each wrapper ONCE from the repo root via
 // this composition, instead of turbo's per-workspace pass. Exercises the
@@ -93,7 +95,7 @@ describe('run-format.sh — prettier composition (#414)', () => {
 
     const after = run(tmp, ['check', 'prettier', 'json'])
     expect(after.status).toBe(0)
-    expect(readFileSync(join(tmp, 'bad.json'), 'utf-8')).toBe('{ "a": 1 }\n')
+    expect(readFileSync(join(tmp, 'bad.json'))).toBe('{ "a": 1 }\n')
   }, 15000)
 
   it('exits 2 when run outside a git work tree — never collapsed into 1 (violations)', () => {
@@ -197,7 +199,7 @@ describe('run-format.sh — markdownlint composition (#414)', () => {
 
     const after = run(tmp, ['check', 'markdownlint', 'md'])
     expect(after.status).toBe(0)
-    expect(readFileSync(join(tmp, 'bad.md'), 'utf-8')).toBe('# Title\n\nBody with trailing space\n')
+    expect(readFileSync(join(tmp, 'bad.md'))).toBe('# Title\n\nBody with trailing space\n')
   }, 15000)
 
   it('never emits a markdown file under a nested .gitignore', () => {

@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -16,6 +16,8 @@ import {
   suiteTypeOf,
   summarize,
 } from './suites'
+
+const { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = fileSystemService
 
 const xml = `<?xml version="1.0" encoding="utf-8"?>
 <testsuites>
@@ -152,7 +154,7 @@ describe('runNodeTest (real node:test, real git)', () => {
     const root = qaRepo()
     try {
       recordRun(root, 'qa', 101, false)
-      const raw = JSON.parse(readFileSync(join(root, 'test-audit', '.tmp', 'raw.json'), 'utf8'))
+      const raw = JSON.parse(readFileSync(join(root, 'test-audit', '.tmp', 'raw.json')))
       expect(Object.keys(raw.packages.qa[0].tests)).toHaveLength(2)
     } finally {
       rmSync(root, { recursive: true, force: true })

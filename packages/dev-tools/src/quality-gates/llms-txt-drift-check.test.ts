@@ -10,10 +10,9 @@
  * `generateLlmsTxt` actually emits for that fixture. Per AC-6 the trailing-newline
  * form is #393's, consumed here and not re-litigated.
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSync } from 'fs'
-import { tmpdir } from 'os'
+import { fileSystemService, InMemoryFileSystemService } from '@pair/content-ops'
 import { dirname, join } from 'path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ROOT_PACKAGE_JSON } from './pre-push-gate-composition'
 import {
@@ -23,30 +22,37 @@ import {
   compareIndex,
   formatReport,
   main,
-  readOnlyFileSystem,
 } from './llms-txt-drift-check'
 import {
   generateLlmsTxt,
   type LlmsSourceFs,
 } from '../../../../apps/pair-cli/src/registry/llms-generation'
 
-const fixtures: string[] = []
-
-afterEach(() => {
-  while (fixtures.length > 0) {
-    const dir = fixtures.pop()
-    if (dir) rmSync(dir, { recursive: true, force: true })
-  }
+let mem = new InMemoryFileSystemService({}, '/', '/')
+beforeEach(() => {
+  mem = new InMemoryFileSystemService({}, '/', '/')
 })
+const memFs: LlmsSourceFs = {
+  exists: p => mem.exists(p),
+  readdir: p => mem.readdir(p),
+  readFile: f => mem.readFile(f),
+}
+const { readFileSync: readRealFileSync } = fileSystemService
+const writeFileSync = (p: string, c: string) => mem.writeFileSync(p, c)
+const readFileSync = (p: string) => mem.readFileSync(p)
+const mkdirSync = (p: string, o?: { recursive?: boolean }) => mem.mkdirSync(p, o)
+const rmSync = (p: string, o?: { recursive?: boolean; force?: boolean }) => mem.rmSync(p, o)
+const symlinkSync = (t: string, p: string) => mem.symlinkSync(t, p)
 
-/** A temp KB tree. `files` are paths relative to the tree root, with their content. */
+let treeCount = 0
+
+/** An in-memory KB tree. `files` are paths relative to the tree root, with their content. */
 function makeTree(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'llms-drift-'))
-  fixtures.push(root)
+  const root = `/llms-drift-${treeCount++}`
   for (const [relative, content] of Object.entries(files)) {
     const target = join(root, relative)
     mkdirSync(dirname(target), { recursive: true })
-    writeFileSync(target, content, 'utf-8')
+    writeFileSync(target, content)
   }
   return root
 }
@@ -60,8 +66,8 @@ const KB_FILES: Record<string, string> = {
 /** A tree whose committed index is exactly what the generator emits for it. */
 async function makeInSyncTree(extra: Record<string, string> = {}): Promise<string> {
   const root = makeTree({ ...KB_FILES, ...extra })
-  const generated = await generateLlmsTxt(readOnlyFileSystem, root)
-  writeFileSync(join(root, TRACKED_INDEX_PATH), generated, 'utf-8')
+  const generated = await generateLlmsTxt(memFs, root)
+  writeFileSync(join(root, TRACKED_INDEX_PATH), generated)
   return root
 }
 
@@ -76,7 +82,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     expect(runnerForm?.groups?.script).toBeDefined()
 
     const rootScripts = (
-      JSON.parse(readFileSync(ROOT_PACKAGE_JSON, 'utf-8')) as {
+      JSON.parse(readRealFileSync(ROOT_PACKAGE_JSON)) as {
         scripts: Record<string, string>
       }
     ).scripts
@@ -94,10 +100,15 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
 
   it('reports an EMPTY tracked file as drift with the full missing list, not a crash', async () => {
     const root = await makeInSyncTree()
-    const expected = readFileSync(join(root, TRACKED_INDEX_PATH), 'utf-8')
-    writeFileSync(join(root, TRACKED_INDEX_PATH), '', 'utf-8')
+    const expected = readFileSync(join(root, TRACKED_INDEX_PATH))
+    const trackedPath = join(root, TRACKED_INDEX_PATH)
+    // the in-memory fake treats '' as "not found"; a real empty file reads back as ''
+    const emptyIndex: LlmsSourceFs = {
+      ...memFs,
+      readFile: file => (file === trackedPath ? Promise.resolve('') : memFs.readFile(file)),
+    }
 
-    const result = await checkLlmsIndexDrift(root)
+    const result = await checkLlmsIndexDrift(root, emptyIndex)
 
     expect(result.ok).toBe(false)
     expect(result.report.kind).toBe('drift')
@@ -108,7 +119,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   it('reports a MISSING KB tree as a broken setup, a distinct outcome from drift', async () => {
     const root = makeTree({ 'README.md': '# not a pair project\n' })
 
-    const result = await checkLlmsIndexDrift(root)
+    const result = await checkLlmsIndexDrift(root, memFs)
 
     expect(result.ok).toBe(false)
     expect(result.report.kind).toBe('broken-setup')
@@ -125,7 +136,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     const root = await makeInSyncTree()
     rmSync(join(root, '.pair/knowledge/guidelines'), { recursive: true, force: true })
 
-    const result = await checkLlmsIndexDrift(root)
+    const result = await checkLlmsIndexDrift(root, memFs)
 
     expect(result.report).toMatchObject({ kind: 'drift', emptiedSections: ['Guidelines'] })
     expect(result.message).toContain('Guidelines')
@@ -140,7 +151,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     const root = await makeInSyncTree()
     rmSync(join(root, '.pair/knowledge/guidelines'), { recursive: true, force: true })
 
-    const result = await checkLlmsIndexDrift(root)
+    const result = await checkLlmsIndexDrift(root, memFs)
 
     // Still names the command (AC5) — behind its precondition.
     expect(result.message).toContain(REGENERATION_COMMAND)
@@ -154,7 +165,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   it('still names the real content delta when the tracked file is ALSO CRLF', async () => {
     const root = await makeInSyncTree()
     const tracked = join(root, TRACKED_INDEX_PATH)
-    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(/\n/g, '\r\n'), 'utf-8')
+    writeFileSync(tracked, readFileSync(tracked).replace(/\n/g, '\r\n'))
     mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration'), { recursive: true })
     writeFileSync(
       join(root, '.pair/knowledge/guidelines/collaboration/story-local-markers.md'),
@@ -162,7 +173,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
       'utf-8',
     )
 
-    const result = await checkLlmsIndexDrift(root)
+    const result = await checkLlmsIndexDrift(root, memFs)
 
     const line =
       '- [Story Local Markers](.pair/knowledge/guidelines/collaboration/story-local-markers.md)'
@@ -186,9 +197,9 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   it('names a leading byte-order mark, and renders the two look-alike lines escaped', async () => {
     const root = await makeInSyncTree()
     const tracked = join(root, TRACKED_INDEX_PATH)
-    writeFileSync(tracked, '﻿' + readFileSync(tracked, 'utf-8'), 'utf-8')
+    writeFileSync(tracked, '﻿' + readFileSync(tracked))
 
-    const result = await checkLlmsIndexDrift(root)
+    const result = await checkLlmsIndexDrift(root, memFs)
 
     expect(result.ok).toBe(false)
     expect(result.report).toMatchObject({
@@ -213,7 +224,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     const root = await makeInSyncTree()
     const tracked = join(root, TRACKED_INDEX_PATH)
     const prd = '- [Product Requirements](.pair/adoption/product/PRD.md)'
-    writeFileSync(tracked, '﻿' + readFileSync(tracked, 'utf-8').replace(prd, `${prd} `), 'utf-8')
+    writeFileSync(tracked, '﻿' + readFileSync(tracked).replace(prd, `${prd} `))
     mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration'), { recursive: true })
     writeFileSync(
       join(root, '.pair/knowledge/guidelines/collaboration/story-local-markers.md'),
@@ -221,7 +232,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
       'utf-8',
     )
 
-    const result = await checkLlmsIndexDrift(root)
+    const result = await checkLlmsIndexDrift(root, memFs)
 
     const real =
       '- [Story Local Markers](.pair/knowledge/guidelines/collaboration/story-local-markers.md)'
@@ -283,9 +294,9 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     const tracked = join(root, TRACKED_INDEX_PATH)
     const line = '- [How to start](.pair/knowledge/how-to/01-how-to-start.md)'
     const doubled = line.replace('How to start', 'How to  start')
-    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(line, doubled), 'utf-8')
+    writeFileSync(tracked, readFileSync(tracked).replace(line, doubled))
 
-    const result = await checkLlmsIndexDrift(root)
+    const result = await checkLlmsIndexDrift(root, memFs)
 
     expect(result.report).toMatchObject({ missing: [line], extra: [doubled] })
     expect(result.message).toContain(
@@ -333,10 +344,10 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
       code: 'EACCES',
     })
     const lockedIndex: LlmsSourceFs = {
-      ...readOnlyFileSystem,
+      ...memFs,
       readFile: file => {
         if (file === trackedPath) throw denied
-        return readOnlyFileSystem.readFile(file)
+        return memFs.readFile(file)
       },
     }
 
@@ -366,7 +377,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     rmSync(trackedPath, { force: true })
     symlinkSync(join(root, 'nowhere.txt'), trackedPath)
 
-    const result = await checkLlmsIndexDrift(root)
+    const result = await checkLlmsIndexDrift(root, memFs)
 
     expect(result.report).toMatchObject({ kind: 'drift', trackedExists: false })
     expect(result.message).toContain('does not exist')
@@ -411,7 +422,7 @@ describe('main — the CLI wrapper', () => {
       { code: 'EACCES' },
     )
     const unreadableTree: LlmsSourceFs = {
-      ...readOnlyFileSystem,
+      ...memFs,
       readdir: () => {
         throw scandirDenied
       },
@@ -442,13 +453,19 @@ describe('main — the CLI wrapper', () => {
   it('exits 1 with the tracked-index diagnosis when the index file is a directory', async () => {
     const root = await makeInSyncTree()
     const trackedPath = join(root, TRACKED_INDEX_PATH)
-    rmSync(trackedPath, { force: true })
-    mkdirSync(trackedPath)
+    const isDir = Object.assign(new Error(`EISDIR: illegal operation on a directory, read`), {
+      code: 'EISDIR',
+    })
+    const dirIndex: LlmsSourceFs = {
+      ...memFs,
+      exists: file => (file === trackedPath ? Promise.resolve(true) : memFs.exists(file)),
+      readFile: file => (file === trackedPath ? Promise.reject(isDir) : memFs.readFile(file)),
+    }
 
     const previousExitCode = process.exitCode
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      await main(root)
+      await main(root, dirIndex)
 
       expect(process.exitCode).toBe(1)
       const printed = errors.mock.calls.map(call => String(call[0])).join('\n')
@@ -469,7 +486,7 @@ describe('main — the CLI wrapper', () => {
     const logs = vi.spyOn(console, 'log').mockImplementation(() => {})
     try {
       process.exitCode = undefined
-      await main(root)
+      await main(root, memFs)
 
       expect(process.exitCode).toBeUndefined()
       expect(String(logs.mock.calls[0]?.[0])).toContain('matches the generator')

@@ -1,5 +1,5 @@
 import { relative } from 'path'
-import { Stats } from 'fs'
+import type { Stats } from 'fs'
 import { FileSystemService } from '.'
 import { createError } from '../observability'
 import { resolvesWithin } from './path-containment'

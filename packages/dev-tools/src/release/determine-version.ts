@@ -17,7 +17,7 @@
  *     --input-version "$INPUT" --release-tag "$TAG" --github-ref "$GITHUB_REF" \
  *     --output-file $GITHUB_OUTPUT --env-file $GITHUB_ENV
  */
-import { appendFileSync } from 'fs'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 
 const TAG_REF_PREFIX = 'refs/tags/'
 
@@ -60,20 +60,28 @@ export function resolveVersion(input: ResolveVersionInput): ResolveVersionResult
 }
 
 /** Append `version=<value>` to outputFile (GITHUB_OUTPUT format), or print it if no file given. */
-export function writeGithubOutput(outputFile: string | undefined, version: string): void {
+export async function writeGithubOutput(
+  outputFile: string | undefined,
+  version: string,
+  fs: FileSystemService = fileSystemService,
+): Promise<void> {
   const line = `version=${version}`
   if (outputFile) {
-    appendFileSync(outputFile, `${line}\n`)
+    await fs.appendFile(outputFile, `${line}\n`)
   } else {
     console.log(line)
   }
 }
 
 /** Append `VERSION=<value>` to envFile (GITHUB_ENV format), or print it if no file given. */
-export function writeGithubEnv(envFile: string | undefined, version: string): void {
+export async function writeGithubEnv(
+  envFile: string | undefined,
+  version: string,
+  fs: FileSystemService = fileSystemService,
+): Promise<void> {
   const line = `VERSION=${version}`
   if (envFile) {
-    appendFileSync(envFile, `${line}\n`)
+    await fs.appendFile(envFile, `${line}\n`)
   } else {
     console.log(line)
   }
@@ -153,7 +161,7 @@ export function parseArgv(argv: string[]): ParsedArgs {
 }
 
 /** Thin CLI wrapper: parse argv, resolve version, write outputs, mirror the bash script's exit codes. */
-export function main(argv: string[] = process.argv.slice(2)): void {
+export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   let parsed: ParsedArgs
   try {
     parsed = parseArgv(argv)
@@ -182,10 +190,13 @@ export function main(argv: string[] = process.argv.slice(2)): void {
   }
 
   console.log(`Determined version: ${result.version}`)
-  writeGithubOutput(parsed.outputFile, result.version)
-  writeGithubEnv(parsed.envFile, result.version)
+  await writeGithubOutput(parsed.outputFile, result.version)
+  await writeGithubEnv(parsed.envFile, result.version)
 }
 
 if (require.main === module) {
-  main()
+  main().catch(err => {
+    console.error(err instanceof Error ? err.message : String(err))
+    process.exit(1)
+  })
 }

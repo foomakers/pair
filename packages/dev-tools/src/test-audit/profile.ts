@@ -4,10 +4,12 @@
  * not fatal: the profile needs every step's time. Output: JSON on stdout.
  */
 import { spawnSync } from 'child_process'
-import { readFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
+
+const { readFileSync } = fileSystemService
 
 export interface StepProfile {
   command: string
@@ -24,9 +26,7 @@ export function profileStep(cwd: string, command: string): StepProfile {
 }
 
 if (require.main === module) {
-  const gate = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).scripts[
-    'quality-gate'
-  ]
+  const gate = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'))).scripts['quality-gate']
   const only = process.argv[2]
   const steps = gateSteps(gate).filter((_, i) => only === undefined || i === Number(only))
   const profile = steps.map(s => profileStep(REPO_ROOT, s))

@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
@@ -373,12 +372,12 @@ Precedence: auto-plan, auto-dev
 
     const write = (relative: string, content: string): void => {
       const target = join(project, relative)
-      mkdirSync(join(target, '..'), { recursive: true })
-      writeFileSync(target, content)
+      fileSystemService.mkdirSync(join(target, '..'), { recursive: true })
+      fileSystemService.writeFileSync(target, content)
     }
 
     beforeEach(() => {
-      project = mkdtempSync(join(tmpdir(), 'pair-dispatch-e2e-'))
+      project = fileSystemService.mkdtempSync(join(tmpdir(), 'pair-dispatch-e2e-'))
       spawned = []
       printed = []
       readinessAsked = []
@@ -422,7 +421,7 @@ Precedence: auto-plan, auto-dev
     afterEach(() => {
       log.mockRestore()
       vi.unstubAllEnvs()
-      rmSync(project, { recursive: true, force: true })
+      fileSystemService.rmSync(project, { recursive: true, force: true })
     })
 
     /** One trigger event, through the registry the CLI dispatches on. */
@@ -468,7 +467,7 @@ Precedence: auto-plan, auto-dev
         },
       )
 
-    const auditTrail = (): string => readFileSync(join(project, AUDIT), 'utf-8')
+    const auditTrail = (): string => fileSystemService.readFileSync(join(project, AUDIT))
 
     it('runs exactly the two cards the mapping routes, and leaves the trail to prove the other three', async () => {
       for (const { card, tags } of BOARD) expect(await trigger(card, tags)).toBe(0)
@@ -504,7 +503,8 @@ Precedence: auto-plan, auto-dev
       expect(records).toEqual(routed.map(row => expect.stringContaining(`card=${row.card}`)))
 
       // Every lock was released: the board is left dispatchable, not parked.
-      for (const { card } of BOARD) expect(existsSync(join(project, LOCKS, card))).toBe(false)
+      for (const { card } of BOARD)
+        expect(fileSystemService.existsSync(join(project, LOCKS, card))).toBe(false)
     })
 
     /**
@@ -529,8 +529,8 @@ Precedence: auto-plan, auto-dev
       ).toThrow(/--card cannot be combined with --root/)
 
       expect(spawned).toHaveLength(0)
-      expect(existsSync(join(project, AUDIT))).toBe(false)
-      expect(existsSync(join(project, LOCKS, '301'))).toBe(false)
+      expect(fileSystemService.existsSync(join(project, AUDIT))).toBe(false)
+      expect(fileSystemService.existsSync(join(project, LOCKS, '301'))).toBe(false)
     })
 
     it('never starts a second run on a card a run already holds (trigger burst)', async () => {
@@ -548,7 +548,7 @@ Precedence: auto-plan, auto-dev
       expect(spawned).toHaveLength(1)
       expect(auditTrail()).toMatch(/event=skip card=301 reason=run-in-progress/)
       // ...and the burst did not leave the card locked for the next trigger.
-      expect(existsSync(join(project, LOCKS, '301'))).toBe(false)
+      expect(fileSystemService.existsSync(join(project, LOCKS, '301'))).toBe(false)
       // The skip names the REAL holder — the directory the run probed, and how long it has held it.
       // Nothing reaps a lock, so a killed run leaves one behind and every later trigger on the card
       // skips forever; the age is what tells an operator this skip is not a healthy burst.
@@ -598,7 +598,7 @@ Precedence: auto-plan, auto-dev
     })
 
     it('with NO automation.md at all — the shipped default — a READABLE Ready card starts the cycle on every trigger (AC14 stands as written)', async () => {
-      rmSync(join(project, '.pair/adoption/tech/automation.md'))
+      fileSystemService.rmSync(join(project, '.pair/adoption/tech/automation.md'))
 
       for (const { card, tags } of BOARD) expect(await trigger(card, tags)).toBe(0)
 
@@ -609,7 +609,7 @@ Precedence: auto-plan, auto-dev
     })
 
     it('with NO automation.md and NO readable card (no `gh` on PATH) — the github-dispatch-adapter smoke condition — every trigger is a clean skip: exit 0, the reason said, no DISPATCH-RECORD', async () => {
-      rmSync(join(project, '.pair/adoption/tech/automation.md'))
+      fileSystemService.rmSync(join(project, '.pair/adoption/tech/automation.md'))
 
       for (const { card, tags } of BOARD) {
         expect(await trigger(card, tags, undefined, { realReadiness: true })).toBe(0)

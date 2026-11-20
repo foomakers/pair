@@ -38,6 +38,8 @@ jobs:
         with:
           node-version: '20'
       - run: pnpm install --frozen-lockfile
+      # changeset-check imports @pair/content-ops (FileSystemService): its types/JS come from dist
+      - run: pnpm --filter @pair/content-ops build
       - name: Require .changeset/*.md (or label no-changeset)
         env:
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
@@ -151,9 +153,9 @@ jobs:
       # package `turbo test` hashes — it would replay a cached PASS and the drift would
       # ship. This step and the root `quality-gate` chain run the SAME command
       # unconditionally, which is the whole parity point. Position in the job is free:
-      # the script runs `ts-node -T`, so it needs no build of @pair/content-ops (whose
-      # types the imported generator source references). Type-checking that source is
-      # `turbo ts:check`'s job, and THAT task carries the `^build` edge.
+      # the script imports @pair/content-ops at runtime (FileSystemService), so it needs
+      # that package built: it runs after the build/test steps above. Type-checking that
+      # source is `turbo ts:check`'s job, and THAT task carries the `^build` edge.
       - name: Run llms-index drift check
         run: pnpm llms-index:check
       - name: Run duplication check

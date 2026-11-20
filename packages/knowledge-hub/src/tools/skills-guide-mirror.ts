@@ -19,9 +19,9 @@
  * copy pipeline uses). `buildSkillLinkPathMap` derives the SKILL.md link-path
  * map from `transformPath` as well — not a parallel name-guessing regex.
  */
-import { readdirSync } from 'fs'
 import { join, relative, sep } from 'path'
 import {
+  fileSystemService,
   buildSkillNameMap,
   buildSkillLinkPathMap as prodBuildSkillLinkPathMap,
   rewriteSkillReferences,
@@ -43,7 +43,7 @@ export function collectSkillDirs(root: string): string[] {
   const dirs: string[] = []
 
   const walk = (dir: string): void => {
-    const entries = readdirSync(dir, { withFileTypes: true })
+    const entries = fileSystemService.readdirSync(dir)
     let hasFile = false
     for (const entry of entries) {
       const full = join(dir, entry.name)

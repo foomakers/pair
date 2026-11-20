@@ -1,20 +1,14 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
 import { execFileSync } from 'child_process'
-import { rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { randomUUID } from 'crypto'
-import { join } from 'path'
+import { InMemoryFileSystemService } from '@pair/content-ops'
 import { gitCacheKey, redactGitCredentials, cloneGitRepo } from './git-clone'
 
 vi.mock('child_process', () => ({ execFileSync: vi.fn() }))
-// `rmSync` MUST be mocked: cloneGitRepo deletes destDir on every failure path, with
-// `force: true`, so an unmocked run silently recursive-deletes whatever real directory a
-// test names — verified by planting /tmp/pair-git-clone-test/dest/user-file.txt and finding
-// it gone after the suite. Mocked, the deletion is asserted instead of performed.
-vi.mock('fs', () => ({ rmSync: vi.fn() }))
+// cloneGitRepo deletes destDir on every failure path with `force: true`, so every call gets an
+// in-memory fs: the deletion is observed there instead of performed on a real directory.
 
 const execFileSyncMock = vi.mocked(execFileSync)
-const rmSyncMock = vi.mocked(rmSync)
+let fs: InMemoryFileSystemService
 
 describe('gitCacheKey', () => {
   it('returns git- prefixed 12-char hex hash', () => {
@@ -45,7 +39,7 @@ describe('gitCacheKey', () => {
 describe('cloneGitRepo — auth', () => {
   beforeEach(() => {
     execFileSyncMock.mockReset()
-    rmSyncMock.mockReset()
+    fs = new InMemoryFileSystemService({}, '/module', '/work')
     delete process.env['PAIR_GIT_TOKEN']
   })
   afterEach(() => {
@@ -58,7 +52,7 @@ describe('cloneGitRepo — auth', () => {
 
   it('carries an HTTPS token via env-backed git config, never in argv', () => {
     process.env['PAIR_GIT_TOKEN'] = 'ghp_abc123'
-    cloneGitRepo('https://github.com/org/repo.git', join(tmpdir(), `pgc-${randomUUID()}`))
+    cloneGitRepo('https://github.com/org/repo.git', '/cache/dest', fs)
 
     const args = execFileSyncMock.mock.calls[0]?.[1] as string[]
     expect(args.join(' ')).not.toContain('ghp_abc123')
@@ -77,7 +71,7 @@ describe('cloneGitRepo — auth', () => {
   it('falls back to no auth env at all on an unparseable URL — fails closed, never unscoped', () => {
     process.env['PAIR_GIT_TOKEN'] = 'ghp_abc123'
     // Passes the https:// prefix test but is not a valid URL (embedded whitespace).
-    cloneGitRepo('https://not a valid url', join(tmpdir(), `pgc-${randomUUID()}`))
+    cloneGitRepo('https://not a valid url', '/cache/dest', fs)
 
     expect(envOf()['GIT_CONFIG_COUNT']).toBeUndefined()
   })
@@ -115,19 +109,16 @@ describe('cloneGitRepo', () => {
     return Object.assign(err, { status: 128 })
   }
 
-  // Never a shared, predictable path: even with rmSync mocked, a destination two tests can
-  // both name is a directory a future unmocked run would delete out from under someone.
-  let destDir: string
+  const destDir = '/cache/dest'
 
   beforeEach(() => {
     execFileSyncMock.mockReset()
-    rmSyncMock.mockReset()
-    destDir = join(tmpdir(), `pair-git-clone-test-${randomUUID()}`, 'dest')
+    fs = new InMemoryFileSystemService({}, '/module', '/work')
     delete process.env['PAIR_GIT_TOKEN']
   })
 
   it('clones the requested ref', () => {
-    cloneGitRepo('https://github.com/org/kb.git#v1.0.0', destDir)
+    cloneGitRepo('https://github.com/org/kb.git#v1.0.0', destDir, fs)
 
     expect(execFileSyncMock).toHaveBeenCalledWith(
       'git',
@@ -137,7 +128,7 @@ describe('cloneGitRepo', () => {
   })
 
   it('never lets git prompt for credentials, and bounds the clone', () => {
-    cloneGitRepo('https://github.com/org/kb.git', destDir)
+    cloneGitRepo('https://github.com/org/kb.git', destDir, fs)
 
     const options = execFileSyncMock.mock.calls[0]?.[2] as {
       timeout?: number
@@ -153,7 +144,7 @@ describe('cloneGitRepo', () => {
       throw Object.assign(new Error('spawnSync git ENOENT'), { code: 'ENOENT', errno: -2 })
     })
 
-    expect(() => cloneGitRepo('https://github.com/org/kb.git', destDir)).toThrow(
+    expect(() => cloneGitRepo('https://github.com/org/kb.git', destDir, fs)).toThrow(
       'git executable not found',
     )
   })
@@ -168,7 +159,7 @@ describe('cloneGitRepo', () => {
 
     let message = ''
     try {
-      cloneGitRepo('https://github.com/acme/kb.git', destDir)
+      cloneGitRepo('https://github.com/acme/kb.git', destDir, fs)
     } catch (err) {
       message = err instanceof Error ? err.message : String(err)
     }
@@ -188,7 +179,7 @@ describe('cloneGitRepo', () => {
 
     let message = ''
     try {
-      cloneGitRepo('https://github.com/acme/kb.git', destDir)
+      cloneGitRepo('https://github.com/acme/kb.git', destDir, fs)
     } catch (err) {
       message = err instanceof Error ? err.message : String(err)
     }
@@ -204,16 +195,17 @@ describe('cloneGitRepo', () => {
     execFileSyncMock.mockImplementation(() => {
       throw Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' })
     })
+    fs.writeFileSync(`${destDir}/.git/partial.pack`, 'partial')
 
     let message = ''
     try {
-      cloneGitRepo('https://github.com/org/big-kb.git', destDir)
+      cloneGitRepo('https://github.com/org/big-kb.git', destDir, fs)
     } catch (err) {
       message = err instanceof Error ? err.message : String(err)
     }
     expect(message).toContain('5-minute')
     expect(message).not.toContain('PAIR_GIT_TOKEN')
     // The partial clone is still cleaned up on this path.
-    expect(rmSyncMock).toHaveBeenCalledWith(destDir, { recursive: true, force: true })
+    expect(fs.existsSync(destDir)).toBe(false)
   })
 })

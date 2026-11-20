@@ -1,3 +1,5 @@
+import { fileSystemService } from './file-system-service'
+
 // Lazy loading for heavy modules to improve startup performance
 let remarkParseInstance: unknown = null
 let unifiedInstance: unknown = null
@@ -33,18 +35,13 @@ export async function loadHeavyOperations() {
 }
 
 // Lazy loading for file system operations
-let fsInstance: typeof import('fs') | null = null
 let pathInstance: typeof import('path') | null = null
 
 /**
  * Gets the fs instance with lazy loading
  */
 export async function getFsInstance() {
-  if (!fsInstance) {
-    const fs = await import('fs')
-    fsInstance = fs
-  }
-  return fsInstance
+  return fileSystemService
 }
 
 /**

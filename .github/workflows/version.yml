@@ -41,6 +41,8 @@ jobs:
           node-version: '20'
 
       - run: pnpm install --frozen-lockfile
+      # changelog-version / sync-version import @pair/content-ops (FileSystemService): need dist
+      - run: pnpm --filter @pair/content-ops build
 
       # Same state module as `pnpm release` — CI is authoritative (stale local tags can't pass).
       - name: Validate and plan

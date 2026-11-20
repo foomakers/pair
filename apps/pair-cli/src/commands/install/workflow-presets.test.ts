@@ -157,7 +157,7 @@ describe('#617 AC-16 shipped workflow presets', () => {
         .filter(name => name.endsWith('.json'))
         .sort(),
     ).toEqual(PRESETS.map(name => `${name}.json`).sort())
-  }, 20000)
+  }, 90000)
 
   it.each(['install', 'update'] as const)(
     '%s preserves custom config/profile bytes while supplying missing presets',

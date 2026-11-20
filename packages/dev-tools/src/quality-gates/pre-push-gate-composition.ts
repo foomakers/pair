@@ -36,7 +36,7 @@
  * `main()` behind a `require.main` guard is the thin CLI — the ADR-014 shape
  * shared with the siblings in this folder.
  */
-import { readFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { resolve } from 'path'
 
 import { REPO_ROOT } from './repo-root'
@@ -311,7 +311,7 @@ export function checkRootGate(packageJsonText: string): GateCheckResult {
 
 /** Reads THIS repo's root package.json and checks its gate composition. */
 export function checkThisRepoGate(): GateCheckResult {
-  return checkRootGate(readFileSync(ROOT_PACKAGE_JSON, 'utf-8'))
+  return checkRootGate(fileSystemService.readFileSync(ROOT_PACKAGE_JSON))
 }
 
 /** Thin CLI wrapper: print the report and set the exit code. */

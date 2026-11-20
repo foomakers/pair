@@ -237,3 +237,10 @@ afterAll(() => server.close())
 - Keep mocks up-to-date with real implementations
 - Use TypeScript for better mock type safety
 - Consider using contract testing for critical integrations
+
+## Filesystem boundary (US-621)
+
+- Production code takes an injected `FileSystemService`; ordinary tests seed an `InMemoryFileSystemService` instead of touching disk or mocking `fs` globally.
+- Keep real-OS tests (isolated temp dir, cleanup in `finally`) only when the OS is the behavior: atomic create/rename, symlink containment, real git/process, binary/archive interoperability.
+- Direct `fs` imports are enforced by `pnpm direct-fs:check` (part of `pnpm quality-gate`): every file with a direct `fs`/`fs/promises` dependency needs an exact-path entry (no wildcards) in `docs/engineering/direct-fs-inventory.json`. Unlisted, stale or unresolved entries fail with file, import and reason. Non-literal dynamic imports are not seen.
+- Dispositions: `os-guarantee`, `standalone-script`, `type-contract`, `boundary-adapter`, `repo-contract` (real checked-in files are the subject), `in-flight-churn` (Scope Limit: `apps/pair-cli/src/commands/run/**` and knowledge-hub workflow zones, registered not migrated while concurrent cards rewrite them). Ordinary fs use is never an exception: migrate the file to `FileSystemService` (extend the service when an op is missing) instead of registering it.
