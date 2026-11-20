@@ -945,7 +945,9 @@ Process faults use a separate recovery budget and a recorded resume token. Re-ru
 
 The cycle's own values (the workflow version, the base branch, the worktree root and the dispatch cap) are read from the installed `pair-workflow-cycle` scripts and printed before the first stage, with the scripts path, the run directory, the `runId` and the `--rounds` bound.
 
-Missing pieces HALT: `skill-missing` (the skill is not installed) and `worktree-conflict` (the story worktree is checked out on another branch) before any spawn; `agent-definition-missing` (a stage's role, located through the `agent-definitions` registry) when the stage that needs that role is due, before any spawn for the first stage's role, later for a role only a later stage uses (e.g. the preparation role, first needed by a finding round).
+Worktrees default to `../pair-worktrees/<main-checkout-name>/<card>` relative to the canonical main checkout. Linked checkouts use that same anchor. Set top-level `pair.config.json` `worktreeRoot` to use another root directly: absolute paths may contain spaces; relative paths use safe segments and at most one leading `..`. An empty, non-string or traversing value stops before creation. Set `"worktreeRoot": "../pair-worktrees"` to reuse legacy trees; none are moved or removed. A destination owned by another Git repository stops as `worktree-conflict` with both Git identities for manual resolution.
+
+Missing pieces HALT: `skill-missing` (the skill is not installed) and `worktree-conflict` (an occupied destination or another branch) before any spawn; `agent-definition-missing` (a stage's role, located through the `agent-definitions` registry) when the stage that needs that role is due, before any spawn for the first stage's role, later for a role only a later stage uses (e.g. the preparation role, first needed by a finding round).
 
 ### Fan-out: `--parallel <n>` (`--root <id>` and/or `--filter <label>`)
 

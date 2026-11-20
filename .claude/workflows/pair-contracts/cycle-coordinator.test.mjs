@@ -23,7 +23,7 @@ for (const k of Object.keys(process.env))
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, cpSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, cpSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -129,6 +129,8 @@ async function batchPrompts(args) {
   const calls = []
   const agent = async (prompt, opts) => {
     if (opts.label === 'profile:resolve') return { source: 'KB default', stages: Object.fromEntries(['prepare', 'validate', 'implement', 'green', 'verify'].map(stage => [stage, { engine: { value: 'default' }, model: { resolved: { id: null } }, effort: { value: 'default' } }])) }
+    if (opts.label === 'root:resolve') return { root: '/tmp/pair-worktrees' }
+    if (opts.label?.startsWith('worktree:inspect')) return { path: `${'/tmp/pair-worktrees'}/${opts.label.split(':')[2].replace(/^#/, '')}`, created: false, available: true }
     calls.push({ prompt, opts })
     return null // a dead dispatch: the engine retries once, then ends the story
   }
@@ -536,6 +538,8 @@ test("AC3-w1 (US-506): the fresh card's first packet — `implement`, no contrac
     'story-42',
     '--workflow-version',
     WORKFLOW_VERSION,
+    '--pipeline',
+    JSON.stringify({ worktreeRoot: '/tmp/pair-worktrees' }),
   ])
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(r.json.prompt, fromBatch.prompt)
@@ -587,6 +591,8 @@ test('AC3-w1b: the `verify` packet is byte-identical to the prompt `pair-impleme
     'story-42',
     '--workflow-version',
     WORKFLOW_VERSION,
+    '--pipeline',
+    JSON.stringify({ worktreeRoot: '/tmp/pair-worktrees' }),
   ])
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(r.json.prompt, fromBatch.prompt)
@@ -1572,7 +1578,7 @@ test('r0-2 b2 (boundary): exactly ONE leading `..` stays legal — it is pair’
   const r = worktreeCall(main, '../pair-worktrees')
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(r.json.created, true)
-  assert.equal(r.json.path, join(main, '..', 'pair-worktrees', '42'))
+  assert.equal(r.json.path, realpathSync(join(main, '..', 'pair-worktrees', '42')))
 })
 
 test('r0-2 b3 (boundary): an ABSOLUTE worktree root keeps working, spaces included', () => {
@@ -2054,7 +2060,7 @@ function freshNext(version = WORKFLOW_VERSION) {
     'x',
   ]).json.next
 }
-const packetWith = version => {
+const packetWith = (version, root) => {
   const args = [
     'packet',
     '--next',
@@ -2067,6 +2073,7 @@ const packetWith = version => {
     'story-42',
   ]
   if (version !== undefined) args.push('--workflow-version', version)
+  if (root) args.push('--pipeline', JSON.stringify({ worktreeRoot: root }))
   return dispatch(args)
 }
 const resolveWith = version => {
@@ -2266,7 +2273,7 @@ test('r1-2 c1 (control): a well-formed version still renders the packet, byte-id
   const calls = await batchPrompts({ cards: [CARD] })
   const fromBatch = calls.find(c => c.opts.label?.startsWith('implement:'))
   assert.ok(fromBatch, 'the engine dispatched no implement')
-  const r = packetWith(WORKFLOW_VERSION)
+  const r = packetWith(WORKFLOW_VERSION, '/tmp/pair-worktrees')
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(r.json.halt, undefined)
   assert.match(

@@ -1,9 +1,9 @@
 import { execFileSync, spawn, spawnSync } from 'child_process'
 import { RUN_EVENTS_ENV, runEventLine, stageLabel, type RunEvent } from './run-events'
 import { cardProgress, todoInProgress, type CardProgress } from './card-progress'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'fs'
 import { acquireRunLock, RUN_LOCK_FILE } from './run-lock'
-import { dirname, join } from 'path'
+import { dirname, isAbsolute, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { EngineDefinition } from './engines'
 import {
@@ -395,16 +395,33 @@ function existingBranchFor(card: string, cwd: string): string | undefined {
  */
 export function mainCheckout(cwd: string): string {
   try {
-    const commonDir = execFileSync(
-      'git',
-      ['rev-parse', '--path-format=absolute', '--git-common-dir'],
-      { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
-    ).trim()
-    return dirname(commonDir)
+    const git = (at: string, ...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: at,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim()
+    const common = realpathSync(git(cwd, 'rev-parse', '--path-format=absolute', '--git-common-dir'))
+    const dir = realpathSync(git(cwd, 'rev-parse', '--absolute-git-dir'))
+    if (dir === common) return realpathSync(git(cwd, 'rev-parse', '--show-toplevel'))
+    let declared: string | undefined
+    try {
+      declared = git(cwd, 'config', '--path', '--get', 'pair.mainCheckout')
+    } catch {
+      /* unset */
+    }
+    const candidate = declared || dirname(common)
+    if (
+      !isAbsolute(candidate) ||
+      realpathSync(git(candidate, 'rev-parse', '--show-toplevel')) !== realpathSync(candidate) ||
+      realpathSync(git(candidate, 'rev-parse', '--absolute-git-dir')) !== common
+    )
+      throw new Error('configured checkout is not the main repository')
+    return realpathSync(candidate)
   } catch (error) {
     throw new Error(
       `main-checkout-unresolved: could not resolve this repository's main checkout from ${cwd} — ` +
-        `${error instanceof Error ? error.message : String(error)}`,
+        `${error instanceof Error ? error.message : String(error)}; configure its absolute path with git config pair.mainCheckout <path>`,
     )
   }
 }
@@ -413,7 +430,9 @@ export function mainCheckout(cwd: string): string {
 export function mainCheckoutOrCwd(cwd: string): string {
   try {
     return mainCheckout(cwd)
-  } catch {
+  } catch (error) {
+    if (spawnSync('git', ['rev-parse', '--git-common-dir'], { cwd, stdio: 'ignore' }).status === 0)
+      throw error
     return cwd
   }
 }
@@ -431,6 +450,7 @@ export interface CycleDriverContext {
   readonly idleTimeoutOf?: ((engine: string) => number) | undefined
   readonly workflowVersion: string
   readonly baseBranch: string
+  readonly worktreeRoot?: string
   /** The model pinned for this engine, if the project declared one. */
   readonly model?: string | undefined
   /**
@@ -709,15 +729,18 @@ const escalateFor = (input: CycleDriverRequest, co: Coordinates) => async (next:
   }
 }
 
+const checkedWorktree = (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
+  co.bridge.worktree({
+    main: co.main,
+    story: input.card,
+    branch: co.branch,
+    base: ctx.baseBranch,
+    ...(ctx.worktreeRoot !== undefined && { worktreeRoot: ctx.worktreeRoot }),
+  })
+
 const worktreeFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () =>
-    co.bridge.worktree({
-      main: co.main,
-      story: input.card,
-      branch: co.branch,
-      base: ctx.baseBranch,
-      // No `--worktree-root`: `cycle-dispatch worktree`'s own default applies (r0-10).
-    })
+    checkedWorktree(ctx, input, co)
 
 const packetFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
@@ -728,6 +751,7 @@ const packetFor =
     // re-derives it from the SAME source (`resolveBlockingSeverities`), never a second value.
     const blocking = resolveBlockingSeverities(ctx.fs, co.main)
     return co.bridge.packet({
+      main: co.main,
       next: next as never,
       policy: {
         ...budgetsOf(input),
@@ -748,6 +772,7 @@ const packetFor =
       // The stage's OWN engine decides the rendering (a profile may run `verify` on another engine).
       style: styleFor(stageSpawnFor(ctx, (next as { step?: string }).step ?? '').engine),
       workflowVersion: ctx.workflowVersion,
+      ...(ctx.worktreeRoot !== undefined && { pipeline: { worktreeRoot: ctx.worktreeRoot } }),
     }) as never
   }
 
@@ -1106,8 +1131,10 @@ async function gateWithRecovery(
   co: Coordinates,
   pins: MergePins,
 ): Promise<TierGate> {
+  checkedWorktree(ctx, input, co)
   const first = await runTierGate(ctx, co, pins)
   if (first.green) return first
+  checkedWorktree(ctx, input, co)
   const round = co.bridge.recover({
     dir: co.runDir,
     kind: 'gate-retry',
@@ -1258,6 +1285,7 @@ function syncStaleBase(
   co: Coordinates,
   { worktree, expected }: { worktree: string; expected: unknown },
 ): { park?: string; head?: string } {
+  checkedWorktree(ctx, input, co)
   const round = co.bridge.recover({
     dir: co.runDir,
     kind: 'base-sync',
@@ -1268,6 +1296,7 @@ function syncStaleBase(
   if (!descendsFromExpected(worktree, expected))
     return { park: 'base-sync refused: worktree HEAD does not descend from the dispatched head' }
   git(worktree, ['fetch', '-q', 'origin'])
+  checkedWorktree(ctx, input, co)
   const sync = co.bridge.baseSync({
     cwd: worktree,
     base: ctx.baseBranch,
@@ -1312,10 +1341,12 @@ function verifyAfterSync(
 
 /** A `dirty` preparation: one `worktree-clean` round, the stray work saved at a recorded ref (never deleted). */
 function cleanDirty(
+  ctx: CycleDriverContext,
   input: CycleDriverRequest,
   co: Coordinates,
   worktree: string,
 ): { park?: string } {
+  checkedWorktree(ctx, input, co)
   const round = co.bridge.recover({
     dir: co.runDir,
     kind: 'worktree-clean',
@@ -1323,6 +1354,7 @@ function cleanDirty(
     policy: budgetsOf(input),
   })
   if (!round.allowed) return { park: round.next?.detail ?? 'autoRecoveryRounds spent' }
+  checkedWorktree(ctx, input, co)
   const cleaned = co.bridge.worktreeClean({ cwd: worktree, dir: co.runDir, story: input.card })
   console.log(`  Recovery: dirty worktree — ${cleaned.ref ?? cleaned.detail ?? 'nothing to save'}`)
   return {}
@@ -1363,7 +1395,7 @@ const stashBeforePrepareFor =
     const worktree = worktreePathOf(await worktreeFor(ctx, input, co)())
     if (worktree === undefined) return
     // AC-10 (r1-2): a dirty refusal is saved at a recorded ref under a worktree-clean round, never a plain stash.
-    if (next['refusal'] === 'dirty') return cleanDirty(input, co, worktree)
+    if (next['refusal'] === 'dirty') return cleanDirty(ctx, input, co, worktree)
     const stashed = stashStrayFiles(
       worktree,
       `pair-recovery: story ${input.card} ${String(next['phase'] ?? '')} attempt ${String(next['attempt'])}`,
@@ -1429,6 +1461,7 @@ function syncBase(
   worktree: string | undefined,
 ): CycleMergeOutcome | undefined {
   if (worktree === undefined || !conflictsWithBase(worktree, ctx.baseBranch)) return undefined
+  checkedWorktree(ctx, input, co)
   const round = co.bridge.recover({
     dir: co.runDir,
     kind: 'base-sync',
@@ -1439,6 +1472,7 @@ function syncBase(
   console.log(
     `  Merge: ${co.branch} conflicts with ${ctx.baseBranch} — base sync (recovery round ${String(round.round)}/${String(round.budget)})`,
   )
+  checkedWorktree(ctx, input, co)
   const sync = co.bridge.baseSync({
     cwd: worktree,
     base: ctx.baseBranch,
@@ -1466,9 +1500,15 @@ function pushSynced(worktree: string, branch: string, sync: BaseSyncResult): Cyc
 }
 
 /** AC7 — a failed external CI run is re-run: once free per merge stage, then against `autoRecoveryRounds`. */
-function rerunFailedCi(input: CycleDriverRequest, co: Coordinates, head: string): () => boolean {
+function rerunFailedCi(
+  ctx: CycleDriverContext,
+  input: CycleDriverRequest,
+  co: Coordinates,
+  head: string,
+): () => boolean {
   let free = true
   return () => {
+    checkedWorktree(ctx, input, co)
     if (!free) {
       const round = co.bridge.recover({
         dir: co.runDir,
@@ -1537,7 +1577,7 @@ const mergeFor =
     const check = await checkWithCiWait(
       deferPark => co.bridge.mergeCheck({ ...pins, deferPark }),
       wait,
-      { ...ctx.ciWait, rerun: rerunFailedCi(input, co, pins.reviewedHead) },
+      { ...ctx.ciWait, rerun: rerunFailedCi(ctx, input, co, pins.reviewedHead) },
       message => console.log(message),
     )
     if (check.mergeAllowed !== true) return refusedCheck(co, pins, check)
@@ -1551,6 +1591,7 @@ const mergeFor =
         resume: true,
       }
     progress.merge('merging')
+    checkedWorktree(ctx, input, co)
     const run = co.bridge.mergeRun({
       ...pins,
       gate: gate.green ? 'green' : 'red',

@@ -1,5 +1,5 @@
 // #661 review r0 (r1-g1): production-path witnesses — real driver, reader and report; only host processes and engine output are stubbed.
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { hostname, tmpdir } from 'os'
 import { join } from 'path'
 import { spawnSync } from 'child_process'
@@ -64,6 +64,7 @@ async function launch(options: Options) {
   const { ENGINES } = await import('./engines.js')
   const { whileInterruptible } = await import('./interrupt.js')
   const root = options.root ?? mkdtempSync(join(tmpdir(), 'pair-661w-'))
+  mkdirSync(join(root, '.git'), { recursive: true })
   if (options.root === undefined) roots.push(root)
   options.setup?.(root)
   const seen = join(root, 'engine-saw.txt')
@@ -84,7 +85,8 @@ async function launch(options: Options) {
     const argv = args as readonly string[]
     if (command === 'gh' && argv[0] === 'issue')
       return JSON.stringify({ title: 'T', body: '', labels: [] })
-    if (command === 'git' && argv[0] === 'rev-parse') return join(root, '.git')
+    if (command === 'git' && argv[0] === 'rev-parse')
+      return argv.includes('--show-toplevel') ? root : join(root, '.git')
     if (command === 'git') {
       gitCalls.push([...argv])
       return ''

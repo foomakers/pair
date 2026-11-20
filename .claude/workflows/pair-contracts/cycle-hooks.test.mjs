@@ -146,6 +146,8 @@ test('AC8: pair-implement-batch reports once per run that cycle hooks are not ex
   const calls = []
   const agent = async (prompt, opts) => {
     if (opts?.label === 'profile:resolve') return { source: 'KB default', stages: Object.fromEntries(['prepare', 'validate', 'implement', 'green', 'verify'].map(stage => [stage, { engine: { value: 'default' }, model: { resolved: { id: null } }, effort: { value: 'default' } }])) }
+    if (opts?.label === 'root:resolve') return { root: '/tmp/pair-worktrees' }
+    if (opts?.label?.startsWith('worktree:inspect')) return { path: `${'/tmp/pair-worktrees'}/${opts.label.split(':')[2].replace(/^#/, '')}`, created: false, available: true }
     calls.push(opts?.label ?? '')
     return null
   }

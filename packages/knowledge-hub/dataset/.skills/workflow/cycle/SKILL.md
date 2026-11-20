@@ -169,6 +169,12 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" inputs --story '<card JSON>' --workflo
 
 **Check.** Run `pre-cycle` once (first pass of this invocation only). The authoring chain runs in the persistent story worktree; the final verifier gets a detached throwaway one.
 
+Resolve the effective root once from the main checkout. `root` reads its top-level `pair.config.json.worktreeRoot` and validates it before a worktree or stage runs; keep its absolute `root` value for both commands below. An explicit legacy root is passed as `--worktree-root` to this resolver.
+
+```bash
+node "$SKILL_DIR/scripts/cycle-dispatch.mjs" root --main "$MAIN" [--worktree-root <override>]
+```
+
 ```bash
 node "$SKILL_DIR/scripts/cycle-dispatch.mjs" worktree --main "$PWD" --story $card \
   --branch <card branch> --base <base ref> --worktree-root <root>
@@ -186,6 +192,7 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" worktree --main "$PWD" --story $car
 
 ```bash
 node "$SKILL_DIR/scripts/cycle-dispatch.mjs" packet --next '<next JSON>' --card '<card JSON>' \
+  --main "$MAIN" --pipeline '{"worktreeRoot":"<root from Step 2>"}' \
   --policy '<policy JSON>' --run "$runId" --workflow-version "$WV"
 ```
 
@@ -289,8 +296,8 @@ Local console commands, the maintainer's own, never this skill's to invoke on it
 | HALT                     | When                                                                                   | What you print                                                                             |
 | ------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `realization-unavailable`| No row's dispatch primitive is present — no subagent primitive, or nesting is forbidden | The probed toolset and the fallback command `pair-cli run --card N [--pr P]` (the `--pr` half only when a PR exists) |
-| `worktree-conflict`      | `<root>/<card>` exists on another branch, or is not a registered worktree               | Both branch names and the path; resolve it by hand — never `--force`, never a checkout switch |
-| `worktree-root-invalid`  | `--worktree-root` is not an absolute path nor a relative one of safe segments with at most one leading `..` | The value, refused verbatim — nothing is created and no worktree is registered |
+| `worktree-conflict`      | `<root>/<card>` exists on another branch, belongs to another Git common directory, or is unregistered | Path, expected/actual branch and Git identity; manual resolution, no retry, cleanup or `--force` |
+| `worktree-root-invalid`  | Configured or explicit root is not an absolute safe path nor a relative one of safe segments with at most one leading `..` | The value, refused verbatim — nothing is created and no worktree is registered |
 | `pipeline-invalid`       | A `--pipeline` key or value is outside the grammar the batch engine enforces on it      | The offending key and why — no argument packet and no prompt are rendered                   |
 | `pi-subagents-missing`   | Inside pi (Step 0b) with no `pi-subagents`, and the user said no to the install          | That the in-pi cycle cannot run without it, the pinned install line, and `pair-cli run --card N` |
 | `subagent-tool-mismatch` | The `subagent` tool's name or parameters differ from the pinned version's (Step 0b)     | The bridge's detail: expected tool, parameters and version, and the setup that aligns it   |

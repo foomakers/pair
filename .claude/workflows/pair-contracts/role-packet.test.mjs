@@ -147,7 +147,7 @@ test('US-506 T-8: every packet — each step, unstyled, slash and instruction �
 
 test('US-506 T-8: the batch engine spells the guardrail byte-identically — the sandbox cannot import it, so the two sources are held equal', async () => {
   const { readFileSync } = await import('node:fs')
-  const constOf = src => /const BOUNDED_COMMANDS = ('(?:[^'\\]|\\.)*')/.exec(src)?.[1]
+  const constOf = src => /const BOUNDED_COMMANDS\s*=\s*('(?:[^'\\]|\\.)*')/.exec(src)?.[1]
   const dispatchSrc = readFileSync(join(SCRIPTS, 'cycle-dispatch.mjs'), 'utf8')
   const batchSrc = readFileSync(join(REPO, '.claude', 'workflows', 'pair-implement-batch.js'), 'utf8')
   assert.ok(constOf(dispatchSrc), 'cycle-dispatch.mjs declares BOUNDED_COMMANDS')

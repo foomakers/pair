@@ -92,6 +92,8 @@ function batchRun(row, ids, maxParallelism) {
   const calls = []
   const agent = async (prompt, opts) => {
     if (opts.label === 'profile:resolve') return { source: 'KB default', stages: Object.fromEntries(['prepare', 'validate', 'implement', 'green', 'verify'].map(stage => [stage, { engine: { value: 'default' }, model: { resolved: { id: null } }, effort: { value: 'default' } }])) }
+    if (opts.label === 'root:resolve') return { root: join(p.root, 'pair-worktrees') }
+    if (opts.label?.startsWith('worktree:inspect')) return { path: `${join(p.root, 'pair-worktrees')}/${opts.label.split(':')[2].replace(/^#/, '')}`, created: false, available: true }
     calls.push(opts.label)
     const l = opts.label ?? ''
     if (l === 'autonomy:resolve' || l.startsWith('decide:') || l.startsWith('merge-check:') || l.startsWith('escalate:')) return runCommand(prompt, p, l.startsWith('merge-check:') && row.labelsAtMerge ? row.labelsAtMerge : row.labels, l.startsWith('merge-check:') ? (row.prLabelsAtMerge ?? row.labelsAtMerge ?? row.labels) : row.labels)

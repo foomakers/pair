@@ -47,6 +47,8 @@ for (const name of ['implement', 'refine']) {
     let resolutions = 0
     await evaluate(name, argsFor(name), async (_prompt, opts) => {
       if (opts.label === 'profile:resolve') { resolutions++; return snapshot }
+      if (opts.label === 'root:resolve') return { root: '/tmp/pair-worktrees' }
+    if (opts.label?.startsWith('worktree:inspect')) return { path: `${'/tmp/pair-worktrees'}/${opts.label.split(':')[2].replace(/^#/, '')}`, created: false, available: true }
       if (String(opts.label).startsWith('prepare:phase')) return { outcome: 'nothing-to-prepare' }
       if (opts.agentType === 'pair-implementer' || String(opts.label).startsWith('triage:#')) {
         work.push({ label: opts.label, model: opts.model })
@@ -111,6 +113,8 @@ for (const name of ['implement', 'refine']) test(`#617 engine default map: ${nam
     const work = []
     let resolutions = 0
     await evaluate(name, argsFor(name), async (prompt, opts) => {
+      if (opts.label === 'root:resolve') return { root: '/tmp/pair-worktrees' }
+    if (opts.label?.startsWith('worktree:inspect')) return { path: `${'/tmp/pair-worktrees'}/${opts.label.split(':')[2].replace(/^#/, '')}`, created: false, available: true }
       if (opts.label === 'profile:resolve') {
         resolutions++
         assert.match(prompt, /resolve --root \. --host claude/)

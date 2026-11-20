@@ -57,6 +57,7 @@ async function drive(options: {
   setup?: (root: string) => void
 }) {
   const root = mkdtempSync(join(tmpdir(), 'pair-645-'))
+  mkdirSync(join(root, '.git'))
   roots.push(root)
   options.setup?.(root)
   const executable = join(root, 'stub-engine')
@@ -73,7 +74,8 @@ async function drive(options: {
         body: '',
         labels: options.merge ? [{ name: 'risk:green' }] : [],
       })
-    if (command === 'git' && argv[0] === 'rev-parse') return join(root, '.git')
+    if (command === 'git' && argv[0] === 'rev-parse')
+      return argv.includes('--show-toplevel') ? root : join(root, '.git')
     if (command === 'git') return ''
     throw new Error(`Unexpected host process: ${String(command)}`)
   })

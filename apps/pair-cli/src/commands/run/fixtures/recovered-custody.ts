@@ -274,7 +274,7 @@ function configureOrigin(main: string, origin: string, moved: boolean) {
 export function recoveryFixture(root: string, sealed: boolean, moved: boolean, breach: boolean) {
   const { engine, readPackets } = stubTools(root)
   const main = join(root, 'main')
-  const tree = join(root, 'pair-worktrees', story)
+  const tree = join(root, 'pair-worktrees', 'main', story)
   const origin = join(root, 'origin.git')
   const dir = join(main, '.pair/working/runs', run, story)
   mkdirSync(dir, { recursive: true })

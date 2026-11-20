@@ -105,6 +105,7 @@ By default no configuration merges: the engine stops at a review-approved PR and
 The engine ships with pair's own values as defaults, so it runs in a pair-shaped project with no
 configuration. A project whose skills, worktree root or base branch differ passes
 `args.pipeline` to override them per key; anything left unmentioned keeps its default.
+The root resolver anchors the default at `../pair-worktrees/<main-checkout-name>` and reads top-level `pair.config.json.worktreeRoot`. An explicit `pipeline.worktreeRoot` takes precedence and names the root directly, including an absolute path with spaces. The batch uses the resolved root for story and review paths.
 
 An unknown key, an empty override, a retired key or a `maxParallelism` below 1 is rejected loudly
 rather than ignored: a discarded setting would run the batch on values you did not choose while
@@ -114,7 +115,7 @@ reporting success.
 
 A story's cycle is four judgment dispatches ([ADR-024](https://github.com/foomakers/pair/blob/main/.pair/adoption/tech/adr/adr-024-delivery-phases-are-skills.md)),
 each a skill invoked by name with typed arguments; the workflow file carries no phase policy of
-its own and dispatches nothing mechanical:
+its own. Script relays perform mechanical checks, including worktree ownership:
 
 | Stage | Skill | Who | What it owns |
 | ----- | ----- | --- | ------------ |
@@ -126,7 +127,7 @@ its own and dispatches nothing mechanical:
 **A fresh card has no up-front contract** (ADR-024, amendment of 2026-09-23). Its first stage is
 implementation (stage 3): tests and code are written together, test-first, above the base, and an informal self-review is fixed but never recorded. Its first final verification (stage 4) names, per acceptance criterion, the test that proves it. A weak or missing test is an ordinary finding, and every finding carries a reproducer or a concrete failure scenario.
 
-Stages 1 and 2 run for **review findings**, where the failing test is still written by someone other than the fixer. A run directory that already holds `a0` contract handoffs finishes on the old path. Cold path: 2 dispatches (implement, verify); one fix round adds 4.
+Stages 1 and 2 run for **review findings**, where the failing test is still written by someone other than the fixer. A run directory that already holds `a0` contract handoffs finishes on the old path. The cold path has 2 judgment dispatches (implement, verify); one fix round adds 4. Each stage and final readiness has an ownership relay, counted in metrics: the clean cold path costs 5 total dispatches. Recovery checks ownership again before spending its budget.
 
 Once per run and cache-by-hash, the review template's vocabulary contract is resolved by the **first review dispatch** (`$contractSpec` → the reviewer invokes `/pair-workflow-contract-phase`, whose `ensure-contract.mjs check` reads a fresh cache without generating anything, and returns `templateContract`): no generator-only dispatch (AC-06, S7).
 

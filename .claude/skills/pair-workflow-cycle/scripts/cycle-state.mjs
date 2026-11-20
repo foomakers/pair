@@ -131,6 +131,7 @@ export const STOP_CATALOG = [
   { status: 'failed-validate', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-green', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-hook', class: 'decision', resume: 'fix the blocking hook the detail names; pair run --card <card>' },
+  { status: 'worktree-conflict', class: 'decision', resume: 'resolve the named destination and Git ownership by hand; pair run --card <card>' },
   { status: 'failed-contract', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-seal', class: 'process', resume: 'pair run --card <card>' },
   { status: 'immutable-evidence-conflict', class: 'decision', resume: 'restore the recorded evidence or cycle-state.mjs reset-group --phase <phase>; pair run --card <card>' },

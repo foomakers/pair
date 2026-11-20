@@ -12,6 +12,7 @@ import {
   locateAgentDefinitions,
   locateCycleScripts,
   readCycleDefaults,
+  resolveCycleWorktreeRoot,
   CYCLE_WORKTREE_ROOT_DEFAULT,
   type CycleDefaults,
   type CycleScriptsLocation,
@@ -246,6 +247,7 @@ function productionCycleDriver(
   // has never seen, while the process it would have spawned was going to run somewhere trusted.
   const autonomyArgs = resolveAutonomyFor(driver.engineDef, config, mainCheckout(cwd), fs).args
   const defaults = readCycleDefaults(driver.location)
+  const worktreeRoot = resolveCycleWorktreeRoot(driver.location, mainCheckout(cwd), undefined)
   const driveCycle = createDefaultCycleDriver({
     engine: driver.engineDef,
     cwd,
@@ -257,6 +259,7 @@ function productionCycleDriver(
     idleTimeoutOf: id => idleTimeoutForEngine(context, config, id).seconds,
     workflowVersion: defaults.workflowVersion,
     baseBranch: defaults.baseBranch,
+    worktreeRoot,
     telemetryEnabled: telemetryEnabled(mainCheckout(cwd), config.telemetry),
     model: declaredEngineModel(context.config, driver.engineDef.id),
     ...(driver.profile !== undefined && {
@@ -276,7 +279,7 @@ function productionCycleDriver(
   return {
     driveCycle,
     shown: {
-      worktreeRoot: defaults.worktreeRoot,
+      worktreeRoot,
       maxDispatchesDisplay: maxDispatchesDisplayFor(fs, mainCheckout(cwd)),
     },
   }

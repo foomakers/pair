@@ -175,14 +175,14 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
   it("R10-W1: the transparency block prints the installed worktree root; the dispatch ceiling is adoption's, not the script's — `none` with no `## Blocking Severities` declared", async () => {
     const { output } = await run()
 
-    expect(output).toMatch(/^\s*Worktree root: \.\.\/elsewhere-worktrees\s*$/m)
+    expect(output).toContain(`Worktree root: ${join(root, 'elsewhere-worktrees', 'main')}`)
     expect(output).toMatch(/^\s*Dispatch ceiling: none\s*$/m)
   }, 60_000)
 
   it('R10-W2: the story worktree lands under the installed root, cut from the installed base', async () => {
     await run()
 
-    const worktree = join(root, 'elsewhere-worktrees', '7')
+    const worktree = join(root, 'elsewhere-worktrees', 'main', '7')
     expect(existsSync(worktree)).toBe(true)
     expect(existsSync(join(root, 'pair-worktrees', '7'))).toBe(false)
     expect(git(worktree, 'rev-parse', 'HEAD')).toBe(trunk)
@@ -194,5 +194,25 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     const first = readFileSync(log, 'utf8').split('\n').filter(Boolean)[0]!
     const argv = JSON.parse(first) as string[]
     expect(argv[argv.length - 1]).toContain('$workflowVersion=4.0.9')
+    expect(argv[argv.length - 1]).toContain(
+      `$worktree=${join(root, 'elsewhere-worktrees', 'main', '7')}`,
+    )
+  }, 60_000)
+
+  it('US-602 AC2: top-level project root controls display, creation and stage packet', async () => {
+    const custom = join(root, 'custom worktrees')
+    writeFileSync(join(main, 'pair.config.json'), JSON.stringify({ worktreeRoot: custom }))
+    const { output } = await run()
+    expect(output).toContain(`Worktree root: ${custom}`)
+    expect(existsSync(join(custom, '7'))).toBe(true)
+    const argv = JSON.parse(readFileSync(log, 'utf8').split('\n').filter(Boolean)[0]!) as string[]
+    expect(argv[argv.length - 1]).toContain(`$worktree="${join(custom, '7')}"`)
+  }, 60_000)
+
+  it('US-602 AC2: invalid project root stops before creating a worktree or stage', async () => {
+    writeFileSync(join(main, 'pair.config.json'), JSON.stringify({ worktreeRoot: '../../escape' }))
+    await expect(run()).rejects.toThrow('worktree-root-invalid')
+    expect(existsSync(join(root, 'escape'))).toBe(false)
+    expect(existsSync(log)).toBe(false)
   }, 60_000)
 })

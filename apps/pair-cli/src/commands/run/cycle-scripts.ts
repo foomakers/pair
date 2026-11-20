@@ -176,7 +176,25 @@ export interface CycleWorktreeResult {
   readonly branch: string
 }
 
+/** Resolve through the installed dispatch grammar before any worktree or stage side effect. */
+export function resolveCycleWorktreeRoot(
+  location: CycleScriptsLocation,
+  main: string,
+  declared: unknown,
+): string {
+  if (declared !== undefined && typeof declared !== 'string')
+    throw new Error(
+      `worktree-root-invalid: pair.config.json worktreeRoot must be a string; received ${typeof declared}`,
+    )
+  const result = runScriptIn(join(location.scriptsDir, 'cycle-dispatch.mjs'), 'root', [
+    ['main', main],
+    ...optional([['worktree-root', declared]]),
+  ]) as { root: string }
+  return result.root
+}
+
 export interface CyclePacketOptions {
+  readonly main?: string
   readonly next: unknown
   readonly card: unknown
   readonly policy?: Record<string, unknown>
@@ -542,6 +560,7 @@ function packetArgs(options: CyclePacketOptions, location: CycleScriptsLocation)
   return [
     ['next', JSON.stringify(options.next)],
     ['card', JSON.stringify(options.card)],
+    ...optional([['main', options.main]]),
     ...optional([
       ['policy', json(options.policy)],
       ['run', options.run],

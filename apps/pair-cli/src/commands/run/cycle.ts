@@ -191,6 +191,7 @@ interface LoopState {
   resumedFrom?: CycleNext
   /** r0-3: this invocation already tried its one re-run resume. */
   resumeTried?: boolean
+  currentNext: CycleNext | undefined
 }
 
 function buildStageRecord(
@@ -529,7 +530,9 @@ async function terminalStep(
     return terminalOutcome(next, state.stagesRun)
   // US-489 x US-490: `merge` is a stage like the others — `pre-merge` (blocking) runs in the story
   // worktree before `check`; `post-merge` (logged) after `run`, only when the merge executed, in the MAIN checkout (the story worktree is gone by then).
-  state.worktreePath = worktreePathOf(await input.worktree())
+  const tree = await guardedWorktree(input, state, next)
+  if ('status' in tree) return tree
+  state.worktreePath = tree.path
   const halted = await runHookPoint(hooks, 'pre-merge', onNotice, { cwd: state.worktreePath })
   if (halted !== null) return hookFailure(halted, state.stagesRun)
   const merged = await mergeStage(next, answer)
@@ -577,6 +580,7 @@ async function resumedPark(
   if (next.step !== 'blocked' || next['budget'] !== 'autoRecoveryRounds') return false
   if (state.stagesRun > 0 || state.resumeTried === true || input.resumePark === undefined)
     return false
+  await input.worktree()
   state.resumeTried = true
   const out = await input.resumePark(next)
   return out.resumed ? true : (out.detail ?? 'autoRecoveryRounds re-run resumes spent')
@@ -590,6 +594,7 @@ async function recoveredStop(
 ): Promise<boolean> {
   const { reason, next } = settled
   if (settled.resumeToken === undefined || reason === undefined || next === undefined) return false
+  if (input.recoverStop !== undefined) await input.worktree()
   if (input.recoverStop === undefined || !(await input.recoverStop(next, reason))) return false
   state.dispatchedNext = null
   state.retryCount = 0
@@ -636,13 +641,6 @@ function announce(input: RunCycleInput, next: CycleNext): void {
 }
 
 async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
-  const { resolve, policy, onNotice, hooks } = input
-  const observers: StageObservers = {
-    onStage: input.onStage,
-    appendAudit: input.appendAudit,
-    onNotice: input.onNotice,
-  }
-  const deadDispatchRetries = policy.deadDispatchRetries ?? 0
   const state: LoopState = {
     stagesRun: 0,
     dispatchedNext: null,
@@ -652,11 +650,36 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     formatCorrection: undefined,
     reuseNoticeGiven: false,
     worktreePath: undefined,
+    currentNext: undefined,
   }
 
+  try {
+    return await runCycleIterations(input, state)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    if (detail.startsWith('worktree-conflict:'))
+      return {
+        status: 'worktree-conflict',
+        stagesRun: state.stagesRun,
+        ...(state.currentNext === undefined ? {} : { next: state.currentNext }),
+        reason: detail,
+      }
+    throw error
+  }
+}
+
+async function runCycleIterations(input: RunCycleInput, state: LoopState): Promise<CycleOutcome> {
+  const { resolve, policy, onNotice, hooks } = input
+  const observers: StageObservers = {
+    onStage: input.onStage,
+    appendAudit: input.appendAudit,
+    onNotice: input.onNotice,
+  }
+  const deadDispatchRetries = policy.deadDispatchRetries ?? 0
   for (;;) {
     const answer = await resolve()
     const next = answer.next
+    state.currentNext = next
     relayWarnings(answer, onNotice)
     if (next === undefined) return stopWithoutNext(state, answer as CycleResolveStop, observers)
 
@@ -813,7 +836,9 @@ async function gateDispatch(
   }
   // The stage's worktree exists BEFORE its `pre-<stage>` hook: the hook gates the tree the stage
   // will judge (the story worktree), never the main checkout.
-  state.worktreePath = worktreePathOf(await input.worktree())
+  const tree = await guardedWorktree(input, state, next)
+  if ('status' in tree) return tree
+  state.worktreePath = tree.path
   const halted = await runHookPoint(hooks, `pre-${next.step}`, onNotice, {
     cwd: state.worktreePath,
   })
@@ -823,6 +848,21 @@ async function gateDispatch(
 const worktreePathOf = (created: unknown): string | undefined => {
   const path = (created as { path?: unknown } | null | undefined)?.path
   return typeof path === 'string' ? path : undefined
+}
+
+async function guardedWorktree(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+): Promise<{ path: string | undefined } | CycleOutcome> {
+  try {
+    return { path: worktreePathOf(await input.worktree()) }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    if (detail.startsWith('worktree-conflict:'))
+      return { status: 'worktree-conflict', stagesRun: state.stagesRun, next, reason: detail }
+    throw error
+  }
 }
 
 type HaltedHook = { point: string; command: string; exitCode: number; output: string }
