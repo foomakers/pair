@@ -14,8 +14,8 @@ const mirror = (name: string): string =>
 describe('defect 1: pre-commit runs docs:staleness', () => {
   it('hook runs ts:check and docs:staleness, with the measurement documented', () => {
     const hook = readFileSync(join(ROOT, '.husky/pre-commit'), 'utf-8')
-    expect(hook).toMatch(/^pnpm ts:check$/m)
-    expect(hook).toMatch(/^pnpm docs:staleness$/m)
+    expect(hook).toMatch(/pnpm ts:check \|\| exit 1/)
+    expect(hook).toMatch(/pnpm docs:staleness \|\| exit 1/)
     expect(hook).toMatch(/~3\.4s/)
   })
 })
