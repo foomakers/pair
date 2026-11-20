@@ -1,0 +1,703 @@
+{
+  "$meta": {
+    "pr": "712",
+    "phase": "r1-g1",
+    "base": "74e41aa7cddd7a9a52dba1ad512bea9cccf551a9",
+    "trailer": "Pair-RED-Snapshot: pr=712; phase=r1-g1; base=74e41aa7cddd7a9a52dba1ad512bea9cccf551a9; manifest=.pair/red-snapshots/pr-712-r1-g1.json",
+    "artifacts": [
+      "packages/workflows/src/kinds/review-blocking.test.ts",
+      "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "apps/pair-cli/src/commands/run/workflow-review-blocking.test.ts"
+    ]
+  },
+  "run": "story-652",
+  "story": "652",
+  "phase": "r1-g1",
+  "mode": "repair",
+  "groupId": "r1-g1",
+  "remediationBatchId": "r1",
+  "inputHead": "74e41aa7cddd7a9a52dba1ad512bea9cccf551a9",
+  "sourceOfTruth": [
+    "design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+    "design §4.3-4.4 (the last fenced json block is validated against common fields + kind outputs; invalid ⇒ failed, invalid-result)",
+    "design §8 outcome table (step failed ⇒ run failed, exit 1; re-launch resumes from that step)",
+    "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-quick.md \"How it ends\": `review` has a blocking finding → exit 1",
+    "finding r0-1 (r0-review-phase): VERIFY / ORACLE / ASSERT",
+    "packages/workflows/src/host/index.ts:59-80 (execute): the failures the host writes itself — unsafe-value, no-result — and dispatch/index.ts:77 (invalid): invalid-result with its detail",
+    "validator rejection r1-g1-red-verify (rows w6, w7, c4, i1, c7)"
+  ],
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "settle(kind, value) — packages/workflows/src/kinds/index.ts:30 (the one place a result becomes a step outcome); resultBlock(kind) — packages/workflows/src/dispatch/index.ts:34 (the generated text that tells the agent the contract)",
+      "inputs": [
+        "kind ∈ implement | review | generic",
+        "status ∈ ok | failed | needs-human",
+        "verdict ∈ approved | changes-requested | absent",
+        "findings: absent | [] | non-blocking only | ≥1 blocking (any position)",
+        "reviewedHead: present | absent",
+        "InvocationStyle ∈ slash | instruction",
+        "reason of a failed result ∈ absent | the agent's own | no-result | unsafe-value | invalid-result (the three the host and the validator write)",
+        "who wrote the result: the agent (last fenced json block) | the host (execute) | readResult/settle one call earlier"
+      ],
+      "representations": [
+        "kind object packages/workflows/src/kinds/review.ts",
+        "launch message (buildMessage → resultBlock)",
+        "generated reference page packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md and its mirror .pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md",
+        "state.json / steps/<id>/result.json of the run directory"
+      ],
+      "consumers": [
+        "readResult (dispatch/index.ts:97)",
+        "engine.record (engine/index.ts:229)",
+        "runSteps (host/index.ts)",
+        "handleWorkflowRun → exit code (apps/pair-cli/src/commands/run/workflow-host.ts ENDINGS)",
+        "execute (host/index.ts:59) → record with a result the host wrote",
+        "renderKindReference → section (kinds/reference.ts:18)"
+      ],
+      "classes": [
+        "ok × blocking finding × verdict changes-requested → failed (w1)",
+        "ok × blocking finding × verdict approved → failed (w2)",
+        "ok × blocking finding not first → failed (w3)",
+        "ok × no blocking finding × changes-requested → failed (w4, A-1)",
+        "ok × no blocking finding × approved → ok (c1, c2)",
+        "failed × complete → as given (c3)",
+        "ok × outputs missing → invalid-result (c5)",
+        "failed × an output missing × reason absent | the agent's own → invalid-result (w6, A-2)",
+        "failed × no output × reason no-result | unsafe-value | invalid-result → as given (c11, A-2)",
+        "failed × approved × no blocking finding × complete → as given (c10, A-4)",
+        "needs-human × no output → as given; needs-human × verdict + blocking finding → as given, run parked (c4, i7)",
+        "other kinds → untouched: settle (c6), message of implement and generic in each style (c7, c13, c14), reference sections (c15)",
+        "launch message × each style states the rule and requires the outputs of a failed review too (w7)",
+        "reference page × review section states the same (w8)"
+      ],
+      "interactions": [
+        "settle → readResult (w5)",
+        "settle → engine.record → runSteps outcome and state.json (i1)",
+        "refused result → resume → approved (i2)",
+        "runSteps → CLI exit code and printed ending (i3, c8)",
+        "kind objects → generated reference page (c9)",
+        "settle ∘ settle = settle on every refused input (c12): readResult → settle, then record → settle",
+        "host-written failure at the REVIEW step → record → state.json and outcome.last: no-result (i4), invalid-result + detail (i5), unsafe-value (i6)",
+        "needs-human + blocking finding → runSteps → parked (i7)",
+        "refused ok review → record → state.json outputs and result.json (i1, A-3)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "review kind result contract — settle() in packages/workflows/src/kinds/index.ts and resultBlock() in packages/workflows/src/dispatch/index.ts",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/workflows/src/kinds/index.ts",
+      "packages/workflows/src/kinds/kind.ts",
+      "packages/workflows/src/kinds/review.ts",
+      "packages/workflows/src/kinds/reference.ts",
+      "packages/workflows/src/dispatch/index.ts",
+      "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md",
+      ".pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md"
+    ]
+  },
+  "assumptions": [
+    {
+      "id": "A-1",
+      "policy": "Whether a review result may be `ok` with verdict `changes-requested` and no blocking finding: design §3 ties the status to blocking findings only (\"ok otherwise\") and does not say what a contradicting verdict does.",
+      "reading": "Most restrictive, as finding r0-1 recommends: a review whose verdict is `changes-requested` is never recorded `ok` (row r0-1-w4)."
+    },
+    {
+      "id": "A-2",
+      "policy": "Which outputs a `failed` review must carry: design §3 lists the outputs, the code requires them of an `ok` step only, and no rule says what a failed review returns.",
+      "reading": "Most restrictive, as finding r0-1 recommends: a `failed` review the AGENT returned without `verdict`, `reviewedHead` or `findings` is `failed` with reason `invalid-result` naming the field (row r0-1-w6) — whether it carries no `reason` or one of its own. The rule never applies to a failure the agent did not return: the host's `no-result` and `unsafe-value` (host/index.ts execute), and `invalid-result` (dispatch `invalid`, or settle's own refusal one call earlier). settle tells them apart, inside the allowed paths, by the `reason` alone: those three reasons are the ones the host and the validator write, and a `failed` result carrying one of them is returned as given (rows r0-1-c11, r0-1-c12, r0-1-i4..i6). Known limit, accepted: an agent that itself answers `failed` with one of those three reasons is not asked for its outputs — the step is failed either way. `needs-human` stays exempt (rows r0-1-c4, r0-1-i7)."
+    },
+    {
+      "id": "A-3",
+      "policy": "What is persisted for a review refused as `ok` (rows w1-w5, i1, i3): design §4.4 says an invalid result is `failed`, `invalid-result`; nothing says whether what the reviewer returned is kept.",
+      "reading": "Nothing the reviewer found is dropped: the step is recorded `failed` with reason `invalid-result`, and `verdict`, `reviewedHead` and `findings` stay as returned in `steps/review/result.json` and in `state.json` steps.review.outputs (row r0-1-i1)."
+    },
+    {
+      "id": "A-4",
+      "policy": "Whether a review may be `failed` with verdict `approved`, no blocking finding and complete outputs: design §3 says when a review MUST be failed, not that it may fail for nothing else.",
+      "reading": "settle never turns a `failed` into anything else and refuses only what a rule names: such a result is returned as given (row r0-1-c10). A review can fail for a cause that is not a finding."
+    }
+  ],
+  "transitions": [
+    {
+      "transition": "review step: running → ok | failed (state.json, steps/review/result.json)",
+      "sourceState": "steps.review.state = running, read by engine.record from state.json",
+      "acceptedEvent": "the result of the review launch (last fenced json block of the final message), settled by settle(review, value)",
+      "predecessorEvidence": "steps.implement.state = ok with outputs pr, head",
+      "nextState": "failed when the result has a blocking finding (or breaks the review contract), ok only with no blocking finding; run failed ⇒ exit 1. Persistent effects of a review refused as ok (A-3): state.json steps.review = { state failed, reason invalid-result, summary, detail, outputs { verdict, reviewedHead, findings as returned } }; steps/review/result.json = the same result (status failed, reason invalid-result, the three outputs kept). A failure the agent did not return keeps its own reason and detail in both files and in outcome.last (no-result, unsafe-value, invalid-result + 'no fenced json block in the final message'). needs-human ⇒ steps.review.state needs-human, run parked, whatever the findings.",
+      "immutable": "steps.implement stays ok and is not launched again",
+      "forbidden": "running → ok with a blocking finding (direct jump to the terminal `done` without an approved review): rows w1-w5, i1, i3",
+      "replay": "a new launch resumes at the failed review and runs it again (i2); an ok step is skipped (existing engine.test.ts / host.test.ts resume cases); settling a settled result changes nothing (c12): record settles again what readResult settled",
+      "terminal": "run done only when every step is ok (c1, c8)",
+      "families": {
+        "direct-jump-to-terminal": [
+          "r0-1-w1",
+          "r0-1-i1",
+          "r0-1-i3"
+        ],
+        "schema-valid-payload-disagreeing-with-itself": [
+          "r0-1-w2",
+          "r0-1-w4",
+          "r0-1-c10"
+        ],
+        "missing-evidence": [
+          "r0-1-w6",
+          "r0-1-c11"
+        ],
+        "replay-restart": [
+          "r0-1-i2"
+        ],
+        "guard-omitted-from-one-consumer": [
+          "r0-1-w5",
+          "r0-1-i1",
+          "r0-1-i3",
+          "r0-1-i4",
+          "r0-1-i5",
+          "r0-1-i6",
+          "r0-1-w8"
+        ],
+        "not-applicable": "other head/finding/batch/scope-epoch bindings, stale writer, multi-group remediation, regression risks: the workflows engine of this story has no such identities; the run lock (AC-7) already serializes writers and is untouched",
+        "duplicate-replayed-event": [
+          "r0-1-c12",
+          "r0-1-i2"
+        ],
+        "human-decision-escalation": [
+          "r0-1-c4",
+          "r0-1-i7"
+        ]
+      }
+    }
+  ],
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "condition": "settle(review, {status ok, verdict changes-requested, findings [blocking]})",
+      "oracle": "packages/workflows/src/kinds/review-blocking.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "status failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "condition": "settle(review, {status ok, verdict approved, findings [blocking]})",
+      "oracle": "packages/workflows/src/kinds/review-blocking.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "status failed",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "the rule is on the findings, not on the verdict: not equivalent to w1"
+    },
+    {
+      "id": "r0-1-w3",
+      "kind": "boundary",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "condition": "settle(review, {status ok, findings [non-blocking, blocking]}) — the blocking one is not the first",
+      "oracle": "packages/workflows/src/kinds/review-blocking.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "status failed",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "\"at least one\": any position"
+    },
+    {
+      "id": "r0-1-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "condition": "settle(review, {status ok, verdict changes-requested, findings []})",
+      "oracle": "packages/workflows/src/kinds/review-blocking.test.ts — finding r0-1 recommendation, under assumption A-1",
+      "expected": "status failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "condition": "readResult(final message with that fenced json, review) — the 4 classes of w1..w4 through the dispatch entry",
+      "oracle": "packages/workflows/src/kinds/review-blocking.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "status failed",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w6",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "condition": "settle(review, {status failed, verdict changes-requested, findings [blocking]} minus verdict | reviewedHead | findings) × reason absent | reason 'blocking-findings' (the agent's own)",
+      "oracle": "packages/workflows/src/kinds/review-blocking.test.ts — finding r0-1 recommendation, under assumption A-2",
+      "expected": "status failed, reason invalid-result, detail names the missing field",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "6 cases: each missing output × each reason class an agent can write; a reason of the agent's own does not lift the rule (A-2). The reasons that do are rows c11, c12, i4-i6"
+    },
+    {
+      "id": "r0-1-w7",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "condition": "buildMessage(review step, review kind) in style slash and in style instruction",
+      "oracle": "packages/workflows/src/kinds/review-blocking.test.ts — finding r0-1 ASSERT \"the review launch message contains the rule\"; the message is the generated output of resultBlock, not hand-written prose",
+      "expected": "(a) one line of the message ties a blocking finding to status \"failed\"; (b) every line that says verdict, reviewedHead, findings are required also names \"failed\", and there is one",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "both values of InvocationStyle, 4 cases; loose on wording by design. (b) is red today on 'Required when status is \"ok\": verdict, reviewedHead, findings.': the message must not ask less than settle requires (A-2)"
+    },
+    {
+      "id": "r0-1-i1",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "condition": "runSteps on quick (implement ok → review answers ok + changes-requested + blocking finding), through engine.record",
+      "oracle": "packages/workflows/src/kinds/review-blocking.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "outcome.run failed; state.json steps.review.state failed; outcome.last reason invalid-result; state.json steps.review = reason invalid-result, outputs { verdict changes-requested, reviewedHead, findings [the blocking one] }; steps/review/result.json status failed, reason invalid-result, the same three outputs (A-3)",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "two tests; the second fails for a fix that returns a bare invalid-result object (findings dropped) and for one that records another reason"
+    },
+    {
+      "id": "r0-1-i2",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "condition": "the same run launched again (start resumes), the review then answers approved with no finding",
+      "oracle": "packages/workflows/src/kinds/review-blocking.test.ts — design §8 \"Re-launch after failed: resumes from that step; ok steps are not executed again\"",
+      "expected": "launched implement, review, review; run done; review ok",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-i3",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/workflow-review-blocking.test.ts",
+      "condition": "pair run quick --card 627 through handleRunCommand, fake launcher, review answers ok + blocking finding",
+      "oracle": "apps/pair-cli/src/commands/run/workflow-review-blocking.test.ts — design §8 \"Step failed: run stops, exit 1\"; workflow-quick.md \"How it ends\": review has a blocking finding → exit 1",
+      "expected": "exit 1; state.json review failed; \"Run: done — every step is ok.\" not printed",
+      "covers": [
+        "r0-1"
+      ],
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/workflow-review-blocking.test.ts -t exit.1"
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "settle(review, ok + approved + findings [])",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "returned as given",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "settle(review, ok + approved + non-blocking findings only)",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "returned as given (ok)",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "\"ok otherwise\": a finding that is not blocking does not fail the step"
+    },
+    {
+      "id": "r0-1-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "settle(review, failed + changes-requested + reviewedHead + findings [non-blocking, blocking])",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "returned as given (failed, findings kept)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c4",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "settle(review, needs-human + summary, no output); settle(review, needs-human + summary + verdict changes-requested + reviewedHead + findings [blocking])",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — review.escalations (the head moved / a human decision): a parked review has no verdict to carry",
+      "expected": "each returned as given",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "both classes of needs-human × findings: a fix \"any blocking finding ⇒ failed\" fails the second. Through runSteps: row i7"
+    },
+    {
+      "id": "r0-1-c5",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "settle(review, ok + summary, no output)",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — design §4.4",
+      "expected": "failed, invalid-result",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c6",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "settle(implement, failed without outputs); settle(generic, failed); settle(generic, ok with a `findings` field holding a blocking one)",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "each returned as given",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "every other value of the kind dimension: the rule belongs to the review kind only"
+    },
+    {
+      "id": "r0-1-c7",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "buildMessage(implement step, implement kind) and buildMessage(generic step, generic kind), each in style slash and in style instruction",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "no line ties blocking to failed (4 cases)",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "every other value of the kind dimension × every InvocationStyle. Shared rule: buildMessage appends resultBlock(kind) whatever the style (dispatch/index.ts:66-72); the style changes the first line only"
+    },
+    {
+      "id": "r0-1-c8",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/workflow-review-blocking.test.ts",
+      "condition": "pair run quick through handleRunCommand, review answers ok + approved + one non-blocking finding",
+      "oracle": "apps/pair-cli/src/commands/run/workflow-review-blocking.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+      "expected": "exit 0; review ok; \"Run: done — every step is ok.\" printed",
+      "covers": [
+        "r0-1"
+      ],
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/workflow-review-blocking.test.ts -t exit.0"
+    },
+    {
+      "id": "r0-1-c9",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/reference.test.ts",
+      "condition": "the published kind reference page against renderKindReference()",
+      "oracle": "packages/workflows/src/kinds/reference.test.ts — AC-8, design §3 \"a test fails when the page is stale\"",
+      "expected": "identical (regenerate after the fix: pnpm --filter @pair/workflows kinds:reference, then the mirror)",
+      "covers": [
+        "r0-1"
+      ],
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/reference.test.ts"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-w8",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "condition": "renderKindReference(), the `## review` section, its one line starting `- **Outputs**`",
+      "oracle": "packages/workflows/src/kinds/review-blocking.test.ts — A-2: the reference page is the same contract in another representation (kinds/reference.ts:28)",
+      "expected": "that line names `failed`",
+      "rationale": "red today: \"- **Outputs**, required when `status` is `ok`\". c9 only checks page == renderKindReference()"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-c10",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "settle(review, failed + approved + reviewedHead + findings [non-blocking])",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\" — under assumption A-4",
+      "expected": "returned as given"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-c11",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "settle(review, {status failed, reason no-result, summary}); the same with reason unsafe-value; {status failed, reason invalid-result, summary, detail 'no fenced json block in the final message'} — none carries a review output",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — host/index.ts:70-78 and dispatch/index.ts:77: the exact objects engine.record hands to settle; A-2",
+      "expected": "each returned as given (reason, summary, detail untouched)",
+      "rationale": "one case per reason the host and the validator write"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-c12",
+      "kind": "interaction",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "settle(review, settle(review, v)) for v = each input of w1, w2, w3, w4 and of w6 (minus verdict | reviewedHead | findings)",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — engine/index.ts:229: record settles again what readResult settled (dispatch/index.ts:97)",
+      "expected": "equals settle(review, v) — 7 cases",
+      "rationale": "passes today (settle changes none of them yet); after the fix it fails when the second pass rewrites the reason or the detail of the first refusal"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-i4",
+      "kind": "interaction",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "runSteps on quick (implement ok), memory files, the REVIEW launch resolves undefined",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — host contract (host/index.ts:35-37): undefined = the agent died or timed out; execute records reason no-result",
+      "expected": "outcome.run failed; outcome.last { step review, state failed, reason no-result }; state.json steps.review { state failed, reason no-result }"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-i5",
+      "kind": "interaction",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "runSteps on quick (implement ok), memory files, the REVIEW final message is 'All done.' (no fenced json block)",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — design §4.4; dispatch/index.ts:90",
+      "expected": "outcome.last and state.json steps.review: reason invalid-result, detail 'no fenced json block in the final message'"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-i6",
+      "kind": "interaction",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "runSteps on quick (implement ok), memory files, host.isSafeText refuses the head the implement step returned, which is an input of the review step only",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — buildMessage throws unsafe-value (dispatch/index.ts:61-65); execute records it without launching (host/index.ts:66-71)",
+      "expected": "launched = [implement]; outcome.last { step review, state failed, reason unsafe-value }; state.json steps.review the same",
+      "rationale": "unsafe-value CAN occur at the review step (its inputs pr, head come from the previous step and the check is the host's), so it is a row, not not-applicable"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-i7",
+      "kind": "interaction",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "runSteps on quick (implement ok), memory files, the review answers needs-human + verdict changes-requested + reviewedHead + findings [blocking]",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — design §8 outcome table: needs-human ⇒ run parked, exit 0; review.escalations (kinds/review.ts:55)",
+      "expected": "outcome.run parked; state.json steps.review.state needs-human"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-c13",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "buildMessage(implement step, implement kind) in style slash and in style instruction",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — dispatch/index.ts:41-43, design §4.4: a kind's outputs are required of an ok step",
+      "expected": "the message has the line 'Required when status is \"ok\": branch, pr, head.'",
+      "rationale": "the widened requirement is the review kind's only"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-c14",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "buildMessage(generic step, generic kind) in style slash and in style instruction",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — kinds/generic.ts: no outputs",
+      "expected": "no line of the message matches /required/i"
+    },
+    {
+      "covers": [
+        "r0-1"
+      ],
+      "id": "r0-1-c15",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "condition": "renderKindReference(), the `## implement` and the `## generic` sections",
+      "oracle": "packages/workflows/src/kinds/review-blocking-controls.test.ts — kinds/reference.ts:28",
+      "expected": "each keeps the line \"- **Outputs**, required when `status` is `ok`\""
+    },
+    {
+      "id": "r0-1-na1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "review `with.blocking` (the floor) × the settle rule",
+      "oracle": "packages/workflows/src/kinds/review.ts:28-39",
+      "expected": "n/a",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "the floor is an option handed to the skill; the result carries a boolean `blocking` per finding, already decided by the reviewer. settle reads no severity, so no floor × severity class exists at this producer."
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/workflows/src/kinds/review-blocking.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:c3cf2f27d24d6486b97885b903567579c3567e20448338551d8fa095bd14ca1d",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/review-blocking.test.ts",
+      "observed": "Test Files 1 failed (1); Tests 22 failed (22) — settle/readResult: expected 'ok' to be 'failed'; a failed review without an output: expected { status: 'failed', …(3) } to match object { status: 'failed', …(1) }; launch message: expected [] to not deeply equal [], expected [ Array(1) ] to deeply equal []; reference: expected '- **Outputs**, required when `status`…' to match /failed/; runSteps: expected 'done' to be 'failed'; resume: expected [ 'implement', 'review' ] to deeply equal [ 'implement', 'review', 'review' ]"
+    },
+    {
+      "file": "packages/workflows/src/kinds/review-blocking-controls.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:475a2b10894da7715054f9ce094937e55fe2bb78f70f328240981bda5127c0b4",
+      "command": "pnpm --dir packages/workflows exec vitest run src/kinds/review-blocking-controls.test.ts",
+      "observed": "Test Files 1 passed (1); Tests 34 passed (34)"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/workflow-review-blocking.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:ba45b7ee8ad1f36d6ebd12e63406821c952830a10329d40ba64c750da201fdcb",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/workflow-review-blocking.test.ts",
+      "observed": "Test Files 1 failed (1); Tests 1 failed | 1 passed (2) — \"with a blocking finding: exit 1 …\": AssertionError: expected +0 to be 1"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "round": 1,
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "review kind result contract — settle() in packages/workflows/src/kinds/index.ts and resultBlock() in packages/workflows/src/dispatch/index.ts",
+        "oracle": "design §3 (https://github.com/foomakers/pair/issues/652#issuecomment-7038806293): \"`review` returns `status: failed` when it has at least one blocking finding, `ok` otherwise.\"",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/workflows/src/kinds/index.ts",
+          "packages/workflows/src/kinds/kind.ts",
+          "packages/workflows/src/kinds/review.ts",
+          "packages/workflows/src/kinds/reference.ts",
+          "packages/workflows/src/dispatch/index.ts",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md",
+          ".pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md"
+        ],
+        "dependsOn": [],
+        "findingPaths": {
+          "r0-1": [
+            "packages/workflows/src/kinds/index.ts",
+            "packages/workflows/src/dispatch/index.ts",
+            "packages/workflows/src/kinds/review.ts"
+          ]
+        }
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-4"
+        ],
+        "owner": "readGateRegistry() in packages/workflows/src/kinds/index.ts",
+        "oracle": "the Command cell handling of the same function (inline-code backticks stripped)",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/workflows/src/kinds/index.ts"
+        ],
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g3",
+        "findings": [
+          "r0-2"
+        ],
+        "owner": "the shipped quick workflow and the shipped adoption template registry (knowledge-hub dataset)",
+        "oracle": "workflow-quick.md line 3 (\"ships with pair and needs no configuration\") against validate(dataset quick.yaml, gate keys of the dataset way-of-working.md)",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.pair/adoption/tech/workflows/quick.yaml",
+          ".pair/adoption/tech/workflows/quick.yaml",
+          "packages/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-quick.md",
+          ".pair/knowledge/guidelines/collaboration/automation/workflow-quick.md"
+        ],
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g4",
+        "findings": [
+          "r0-5"
+        ],
+        "owner": "turbo.json — the cache inputs of the @pair/workflows test tasks",
+        "oracle": "the @pair/knowledge-hub#test entry and its comment in turbo.json; `turbo run test --filter @pair/workflows --dry=json` task inputs",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "turbo.json"
+        ],
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g5",
+        "findings": [
+          "r0-3"
+        ],
+        "owner": "workflow-quick.md \"Before the first run\" (dataset source, generated mirror)",
+        "oracle": "handleWorkflowRun returns on dryRun before preflight (apps/pair-cli/src/commands/run/workflow-host.ts:365, preflight at :369)",
+        "mode": "doc",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-quick.md",
+          ".pair/knowledge/guidelines/collaboration/automation/workflow-quick.md"
+        ],
+        "dependsOn": [
+          "r1-g3"
+        ]
+      }
+    ],
+    "carried": []
+  },
+  "attempt": 2,
+  "repairs": {
+    "contractPath": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-652/652/r1-g1-red-contract.json",
+    "contractHash": "sha256:9da6def4b7ba76f32e23117c1e11ac18cd5776b5b3368cafe762fa4293444c38"
+  },
+  "changedRows": [
+    "r0-1-w6",
+    "r0-1-w7",
+    "r0-1-c4",
+    "r0-1-i1",
+    "r0-1-c7",
+    "r0-1-w8",
+    "r0-1-c10",
+    "r0-1-c11",
+    "r0-1-c12",
+    "r0-1-i4",
+    "r0-1-i5",
+    "r0-1-i6",
+    "r0-1-i7",
+    "r0-1-c13",
+    "r0-1-c14",
+    "r0-1-c15"
+  ]
+}
