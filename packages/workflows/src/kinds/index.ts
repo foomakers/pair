@@ -1,7 +1,8 @@
 import type { KindName } from '../grammar'
+import { violations } from '../schema'
 import { generic } from './generic'
 import { implement } from './implement'
-import type { StepKind } from './kind'
+import { COMMON_RESULT, type StepKind, type StepStatus } from './kind'
 import { review } from './review'
 
 export { COMMON_RESULT, STEP_STATUSES, type StepKind, type StepStatus } from './kind'
@@ -12,6 +13,37 @@ export const kindByName: Readonly<Record<KindName, StepKind>> = { implement, rev
 /** The names of the fields a kind declares in `inputs` or `outputs`. */
 export const fieldsOf = (schema: StepKind['inputs']): readonly string[] =>
   Object.keys(schema.properties ?? {})
+
+/** A step's result: the common fields, then the outputs its kind declares. */
+export interface StepResult {
+  readonly status: StepStatus
+  readonly summary: string
+  readonly reason?: string
+  readonly detail?: string
+  readonly [output: string]: unknown
+}
+
+/**
+ * `value` as the result of a step of `kind`, or — when it breaks the contract — a `failed` result with
+ * reason `invalid-result` naming each field and its violation. A kind's outputs are required only of an `ok` step.
+ */
+export function settle(kind: StepKind, value: unknown): StepResult {
+  const common = violations(COMMON_RESULT, value)
+  const ok = common.length === 0 && (value as StepResult).status === 'ok'
+  const outputs =
+    common.length > 0
+      ? []
+      : violations(ok ? kind.outputs : { ...kind.outputs, required: [] }, value)
+  const found = [...common, ...outputs]
+  if (found.length === 0) return value as StepResult
+  const detail = found.map(one => `${one.path.join('.') || 'result'}: ${one.problem}`).join('; ')
+  return {
+    status: 'failed',
+    reason: 'invalid-result',
+    summary: `the result does not match the ${kind.name} contract`,
+    detail,
+  }
+}
 
 const cells = (row: string): string[] =>
   row
