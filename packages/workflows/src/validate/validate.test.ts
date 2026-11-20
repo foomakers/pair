@@ -79,6 +79,29 @@ describe('validate (AC-3, AC-5)', () => {
       },
     ],
     [
+      'a gate key in a list written one item per line',
+      QUICK.replace('gates: [quality-gate]', 'gates:\n        - quality-gate\n        - e2e'),
+      {
+        line: 9,
+        key: 'steps.implement.with.gates.1',
+        problem: "unknown gate key 'e2e'",
+        fix: 'use one of quality-gate, smoke-tests',
+      },
+    ],
+    [
+      'an unsafe text nested in a list of the options',
+      QUICK.replace(
+        'kind: review',
+        'kind: generic\n    uses: my-skill\n    with:\n      notes:\n        - fine\n        - text: "a`b"',
+      ),
+      {
+        line: 14,
+        key: 'steps.review.with.notes.1.text',
+        problem: '"a`b" is not safe to hand to an agent',
+        fix: 'write short plain text: no backtick, no $(, no line break',
+      },
+    ],
+    [
       'an option the kind does not declare',
       QUICK.replace('gates: [quality-gate]', 'gate: quality-gate'),
       {
@@ -102,8 +125,9 @@ describe('validate (AC-3, AC-5)', () => {
       },
     ],
   ])('refuses %s', (_name, text, expected) => {
-    const { workflow, errors } = check(text)
+    const { workflow, errors, warnings } = check(text)
     expect(workflow).toBeUndefined()
+    expect(warnings).toEqual([])
     expect(errors).toContainEqual({ file: 'quick.yaml', ...expected })
   })
 
@@ -112,6 +136,14 @@ describe('validate (AC-3, AC-5)', () => {
     expect(errors.map(error => error.fix)).toEqual([
       "give each gate a 'Key' in the Custom Gate Registry of way-of-working.md",
     ])
+  })
+
+  it('checks gate keys only where the kind declares gates: a generic `with` is free', () => {
+    const text = QUICK.replace(
+      'kind: review',
+      'kind: generic\n    uses: my-skill\n    with:\n      gates: [whatever]',
+    )
+    expect(check(text).errors).toEqual([])
   })
 
   it('lets a later step use an output of an earlier one', () => {

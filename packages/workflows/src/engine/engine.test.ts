@@ -105,6 +105,52 @@ describe('engine: a linear run (AC-1)', () => {
     })
   })
 
+  it('names the hash of the frozen workflow by its algorithm', () => {
+    expect(hashOf('')).toBe(
+      'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    )
+  })
+
+  it('archives nothing on a first start', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    expect(run.files.existsSync(`${DIR}/archive`)).toBe(false)
+  })
+
+  it('gives a generic step every scalar produced so far, and no list', async () => {
+    const run = open()
+    const text = `${QUICK}  notes:\n    kind: generic\n    uses: my-skill\n`
+    await start(run, { text, file: 'workflows/quick.yaml' }, { card: '627' })
+    await next(run)
+    await record(run, 'implement', IMPLEMENTED)
+    await next(run)
+    await record(run, 'review', REVIEWED)
+    expect((await next(run)).ready).toEqual([
+      {
+        id: 'notes',
+        kind: 'generic',
+        uses: 'my-skill',
+        with: {},
+        inputs: {
+          card: '627',
+          branch: 'feature/US-627-x',
+          pr: 12,
+          head: HEAD,
+          verdict: 'approved',
+          reviewedHead: HEAD,
+        },
+      },
+    ])
+  })
+
+  it('keeps no output.log for a step recorded without a final message', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    await next(run)
+    await record(run, 'implement', IMPLEMENTED)
+    expect(run.files.existsSync(`${DIR}/steps/implement/output.log`)).toBe(false)
+  })
+
   it('writes state.json through a temp file, never in place', async () => {
     const run = open()
     const written: string[] = []
@@ -140,6 +186,10 @@ describe('engine: outcomes and resume (AC-6)', () => {
     expect(statesOf(run)).toEqual({ implement: 'ok', review: state })
 
     expect(await start(run, SOURCE, { card: '627' })).toEqual({ status: 'resumed', warnings: [] })
+    expect(stateOf(run).steps).toMatchObject({
+      implement: { state: 'ok' },
+      review: { state: 'pending' },
+    })
     const resumed = await next(run)
     expect(resumed.ready.map(step => step.id)).toEqual(['review'])
     expect(resumed.ready[0]?.inputs).toEqual({ card: '627', pr: 12, head: HEAD })
@@ -157,6 +207,21 @@ describe('engine: outcomes and resume (AC-6)', () => {
       detail: 'pr: expected integer, found string "12"',
     })
     expect(await next(run)).toEqual({ run: 'failed', ready: [] })
+    expect(stateOf(run).steps['implement']).toEqual({
+      state: 'failed',
+      summary: 'the result does not match the implement contract',
+      reason: 'invalid-result',
+      detail: 'pr: expected integer, found string "12"',
+      outputs: {},
+    })
+  })
+
+  it('starts over a run that recorded no step yet', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    const now = new Date('2026-11-20T10:00:00.000Z')
+    expect((await start(run, SOURCE, { card: '627', restart: true, now })).status).toBe('started')
+    expect(run.files.existsSync(`${DIR}/archive/2026-11-20T10-00-00-000Z/state.json`)).toBe(true)
   })
 
   it('hands out again a step left running by an interrupted launch', async () => {
@@ -201,6 +266,46 @@ describe('engine: outcomes and resume (AC-6)', () => {
     })
     expect(run.files.readFileSync(`${DIR}/workflow.yaml`)).toBe(QUICK)
     expect(Object.keys(stateOf(run).steps)).toEqual(['implement', 'review'])
+  })
+
+  it.each([
+    [
+      'next before start',
+      (run: RunDirectory) => next(run),
+      `run-not-started: no state.json in ${DIR}`,
+    ],
+    [
+      'record before start',
+      (run: RunDirectory) => record(run, 'implement', IMPLEMENTED),
+      `run-not-started: no state.json in ${DIR}`,
+    ],
+  ])('refuses %s', async (_name, act, message) => {
+    await expect(act(open())).rejects.toThrow(message)
+  })
+
+  it('refuses a result for a step the workflow does not have', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    await expect(record(run, 'deploy', IMPLEMENTED)).rejects.toThrow(
+      `step-unknown: deploy is not a step of ${DIR}`,
+    )
+  })
+
+  it('refuses a state file written by another version', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    const state = { ...stateOf(run), schemaVersion: 2 }
+    await run.files.writeFile(`${DIR}/state.json`, JSON.stringify(state))
+    await expect(next(run)).rejects.toThrow(
+      `run-state-unreadable: ${DIR}/state.json has schema version 2, this version reads 1 — start over with --restart`,
+    )
+  })
+
+  it('refuses to start from a workflow that is not valid', async () => {
+    const text = QUICK.replace('version: 1', 'version: 2')
+    await expect(start(open(), { ...SOURCE, text }, { card: '627' })).rejects.toThrow(
+      'workflow-invalid: unknown value 2',
+    )
   })
 
   it('refuses to resume the run of another card', async () => {

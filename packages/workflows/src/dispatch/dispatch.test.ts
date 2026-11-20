@@ -59,6 +59,10 @@ describe('buildMessage (AC-4, AC-5)', () => {
       '- findings: array of { id: string, severity: string, title: string, blocking: boolean }',
     )
     expect(message).not.toContain('Options:')
+    expect(message.split('\n')[6]).toBe('')
+    expect(message.split('\n')[7]).toBe(
+      'End your turn with one JSON object in a fenced `json` block with these fields:',
+    )
   })
 
   it('runs the skill named by `uses` with the options as written, and asks generic for the common fields only', () => {
@@ -157,7 +161,11 @@ describe('readResult (AC-4)', () => {
     ],
   ])('fails the step on %s', (_name, message, detail) => {
     const result = readResult(message, kindByName.implement)
-    expect(result).toMatchObject({ status: 'failed', reason: 'invalid-result' })
+    expect(result).toMatchObject({
+      status: 'failed',
+      reason: 'invalid-result',
+      summary: 'the final message carries no implement result',
+    })
     expect(result.detail).toMatch(detail)
   })
 
@@ -186,6 +194,12 @@ describe('readResult (AC-4)', () => {
       'review',
       { ...reviewed, reviewedHead: 'main' },
       'reviewedHead: "main" does not match ^[0-9a-f]{40}$',
+    ],
+    [
+      'a finding with a field missing',
+      'review',
+      { ...reviewed, findings: [{ id: 'f1', severity: 'Major', title: 'missing test' }] },
+      "findings.0: missing key 'blocking'",
     ],
   ] as const)(
     'fails the step on %s, naming the field and the violation',

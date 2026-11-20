@@ -66,6 +66,25 @@ describe('readGateRegistry', () => {
     })
   })
 
+  it('reads the registry table only: not the prose around it, not the table of the next section', () => {
+    const text = [
+      '### Custom Gate Registry',
+      '',
+      'Gate 2 runs a subset in CI | see the list.',
+      '',
+      '| Order | Key | Gate | Command |',
+      '| --- | --- | --- | --- |',
+      '| 1 | quality-gate | Quality Gate | `pnpm quality-gate` |',
+      '',
+      '## Merge Strategy',
+      '',
+      '| Order | Key | Gate | Command |',
+      '| --- | --- | --- | --- |',
+      '| 1 | not-a-gate | Other | `other` |',
+    ].join('\n')
+    expect(readGateRegistry(text)).toEqual({ 'quality-gate': 'pnpm quality-gate' })
+  })
+
   it.each([
     [
       'a table with no Key column',

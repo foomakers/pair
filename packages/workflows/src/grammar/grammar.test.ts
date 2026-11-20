@@ -125,6 +125,61 @@ describe('parseWorkflow (AC-2)', () => {
       },
     ],
     [
+      'a step with no kind',
+      seeded('    kind: review\n', '    uses: my-skill\n'),
+      { line: 9, key: 'steps.review', problem: "missing key 'kind'", fix: "add 'kind'" },
+    ],
+    [
+      'a `uses` that is not a skill name',
+      seeded('kind: review', 'kind: review\n    uses: My Skill'),
+      {
+        line: 11,
+        key: 'steps.review.uses',
+        problem: '"My Skill" does not match ^[a-z0-9][a-z0-9:._-]*$',
+        fix: 'write a value matching ^[a-z0-9][a-z0-9:._-]*$',
+      },
+    ],
+    [
+      'a `with` that is not a map',
+      seeded('kind: review', 'kind: review\n    with: 3'),
+      {
+        line: 11,
+        key: 'steps.review.with',
+        problem: 'expected object, found integer 3',
+        fix: 'write a value of type object',
+      },
+    ],
+    [
+      'a name that is not text',
+      seeded('name: quick', 'name: 7'),
+      {
+        line: 2,
+        key: 'name',
+        problem: 'expected string, found integer 7',
+        fix: 'write a value of type string',
+      },
+    ],
+    [
+      'a description that is not text',
+      seeded('description: Implement a card and review the result.', 'description: [a]'),
+      {
+        line: 3,
+        key: 'description',
+        problem: 'expected string, found array ["a"]',
+        fix: 'write a value of type string',
+      },
+    ],
+    [
+      'two documents in one file',
+      `${QUICK}---\nversion: 1\n`,
+      {
+        line: 11,
+        key: '',
+        problem: 'Source contains multiple documents; please use YAML.parseAllDocuments()',
+        fix: 'keep one document per file',
+      },
+    ],
+    [
       'a document that is not a map',
       '- quick\n',
       {
@@ -138,6 +193,17 @@ describe('parseWorkflow (AC-2)', () => {
     const { workflow, errors } = parseWorkflow(text, 'workflows/quick.yaml')
     expect(workflow).toBeUndefined()
     expect(errors).toContainEqual({ file: 'workflows/quick.yaml', ...expected })
+  })
+
+  it('names the line of a YAML syntax error and tells to correct it', () => {
+    const { workflow, errors } = parseWorkflow(
+      seeded('gates: [quality-gate]', 'gates: [quality-gate'),
+      'quick.yaml',
+    )
+    expect(workflow).toBeUndefined()
+    expect(errors[0]).toMatchObject({ file: 'quick.yaml', key: '', fix: 'correct the YAML syntax' })
+    expect(errors[0]?.line).toBeGreaterThanOrEqual(8)
+    expect(errors[0]?.problem).not.toMatch(/ at line \d+/)
   })
 
   it('reports a missing required key on the document', () => {

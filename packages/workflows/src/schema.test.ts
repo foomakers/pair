@@ -101,4 +101,10 @@ describe('violations', () => {
   ])('reports %s', (_name, value, expected) => {
     expect(violations(schema, value)).toEqual([expected])
   })
+
+  it('tells to remove a key when the schema declares none', () => {
+    expect(violations({ type: 'object', additionalProperties: false }, { a: 1 })).toEqual([
+      { path: ['a'], problem: "unknown key 'a'", fix: 'remove it' },
+    ])
+  })
 })

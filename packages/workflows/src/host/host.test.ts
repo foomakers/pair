@@ -116,6 +116,35 @@ describe('runSteps: results and resume (AC-4, AC-6)', () => {
     expect(outcome.last).toMatchObject({ step: 'implement', state: 'failed', reason })
   })
 
+  it('reports the reason and the detail of a result that breaks the contract', async () => {
+    const { host, events } = fakeHost({ 'pair-process-implement': () => 'All done.' })
+    await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
+    await runSteps(host, DIR)
+    expect(events[1]).toEqual({
+      step: 'implement',
+      kind: 'implement',
+      state: 'failed',
+      summary: 'the final message carries no implement result',
+      reason: 'invalid-result',
+      detail: 'no fenced json block in the final message',
+    })
+  })
+
+  it('runs for a host that listens to no event', async () => {
+    const { host } = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => REVIEWED,
+    })
+    await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
+    const silent: WorkflowHost = {
+      files: host.files,
+      style: host.style,
+      isSafeText: host.isSafeText,
+      launch: host.launch,
+    }
+    expect((await runSteps(silent, DIR)).run).toBe('done')
+  })
+
   it('parks on needs-human, then resumes at that step without running the ok ones again', async () => {
     const answers = [fenced({ status: 'needs-human', summary: 'a decision is needed' }), REVIEWED]
     const { host, launched } = fakeHost({
