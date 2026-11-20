@@ -337,8 +337,8 @@ function printPlan(workflow: Workflow): void {
   )
 }
 
-/** Refusals that need the tracker and PATH: a card that cannot be run, an engine that is not installed. */
-async function cardTitle(resolved: Resolved, card: string, services: Services): Promise<string> {
+/** The refusals that need the tracker and PATH: a card that cannot be run, an engine that is not installed. Returns the card's title. */
+async function preflight(resolved: Resolved, card: string, services: Services): Promise<string> {
   const read = await (services.deps.workflow?.readCard ?? readRunnableCard)(card, resolved.cwd)
   if (read === 'missing')
     throw new Error(
@@ -366,7 +366,7 @@ export async function handleWorkflowRun(
     console.log('  Dry run: the workflow is valid; nothing was launched.')
     return 0
   }
-  const title = await cardTitle(resolved, request.card, services)
+  const title = await preflight(resolved, request.card, services)
   const runId = request.runId ?? `${resolved.workflow.name}-${request.card}`
   const runDir = join(resolved.main, '.pair/working/runs', runId)
   fs.mkdirSync(runDir, { recursive: true })

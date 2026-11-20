@@ -58,7 +58,7 @@ Validate before committing: `node .claude/skills/pair-workflow-cycle/scripts/aut
 | `format-check-command` | shell command | none | `publish-pr`, implement phase | formatting gate run before publishing | yes |
 | `worktree-setup-command` | shell command | none | implement and review phases | run once in a fresh worktree before any gate | yes |
 | Review Tier Matrix | `tier.<tier>.reviewers`, `tier.<tier>.sla_days`, … | KB defaults ([Quality model](/docs/reference/quality-model)) | review skills | per-tier reviewers, SLA, checklist depth (Definition of Ready/Done tier requirements) | yes |
-| Custom Gate Registry | table: order, gate, command, scope key, required | standard gates | `/pair-capability-verify-quality` | extra gates after lint, types, tests | no |
+| Custom Gate Registry | table: order, key, gate, command, scope key, required | standard gates | `/pair-capability-verify-quality`; `pair-cli run <workflow>` (the `key` a step names under `gates`) | extra gates after lint, types, tests | no |
 | Merge Strategy | `squash`; commit format; branch cleanup; `prompt`/`silent` confirmation | `squash`, `prompt` | `/pair-process-review` | how a PR ends | no |
 | `## Process Profile` `profile`, `whitelist` | `default`, `poc`, `custom` + step ids | `default` | `/pair-next` and every skill (process-profile gate) | which process steps the project runs | yes |
 | `## Manual Testing` | free text (paths, templates) | none | review skills | where manual test suites live | no |
