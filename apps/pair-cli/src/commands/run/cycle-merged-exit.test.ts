@@ -119,11 +119,12 @@ describe('merge park reporting', () => {
       chunk => (output.push(String(chunk)), true),
     )
     const { deps } = harness(parked(kind, 'gate', 'merge reason'))
-    await handleRunCommand(
+    const exitCode = await handleRunCommand(
       parseRunCommand({ card: '596', cardTags: '', json: true }),
       files(),
       deps,
     )
+    expect(exitCode).toBe(kind === 'awaiting-human' ? 0 : 1)
     const events = output
       .join('')
       .split('\n')
