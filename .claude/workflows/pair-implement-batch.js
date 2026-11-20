@@ -1908,11 +1908,11 @@ async function driveStoryInner(story) {
         withModel('relay', { phase: 'Worktree', label: `worktree:inspect:${tag}`, effort: 'low' }),
       )
     } catch (error) {
-      return result('failed', { reason: `worktree inspection failed: ${error.message}` })
+      return result('failed-resume', { reason: `worktree inspection failed: ${error.message}` })
     }
     if (inspected?.halt === 'worktree-conflict') return result('worktree-conflict', { reason: inspected.detail, worktree: inspected })
-    if (inspected?.halt) return result('failed', { reason: inspected.detail ?? inspected.halt })
-    if (inspected?.path !== worktreePath || inspected?.created !== false || (inspected?.reused !== true && inspected?.available !== true)) return result('failed', { reason: 'worktree inspection returned an incomplete result' })
+    if (inspected?.halt) return result('failed-resume', { reason: inspected.detail ?? inspected.halt })
+    if (inspected?.path !== worktreePath || inspected?.created !== false || (inspected?.reused !== true && inspected?.available !== true)) return result('failed-resume', { reason: 'worktree inspection returned an incomplete result' })
     return null
   }
   const blockedResult = n => {

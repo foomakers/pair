@@ -58,6 +58,98 @@ describe('runCycle (US-487 T-4)', () => {
     expect(spawnStage).not.toHaveBeenCalled()
     expect(recoverStop).not.toHaveBeenCalled()
   })
+
+  it.each(['retry', 'stale'] as const)(
+    'US-602 AC6: %s preparation conflict parks without dispatch',
+    async scenario => {
+      const spawnStage = vi.fn()
+      const next = {
+        ...PREPARE_A0,
+        mode: 'remediation',
+        phase: 'r1-g1',
+        attempt: scenario === 'retry' ? 2 : 1,
+        base: 'a'.repeat(40),
+      }
+      const outcome = await runCycle({
+        resolve: scriptedResolve([{ status: 'in-progress', next }]),
+        worktree,
+        readWorktreeHead: async () => 'b'.repeat(40),
+        beforePrepare: async () => {
+          throw new Error('worktree-conflict: foreign owner')
+        },
+        packet,
+        spawnStage,
+        policy: {},
+      })
+      expect(outcome).toMatchObject({
+        status: 'worktree-conflict',
+        reason: 'worktree-conflict: foreign owner',
+      })
+      expect(spawnStage).not.toHaveBeenCalled()
+    },
+  )
+
+  it('US-602 AC6: changed ownership stops before process recovery budget', async () => {
+    const recoverStop = vi.fn(async () => true)
+    const owned = vi
+      .fn()
+      .mockResolvedValueOnce({ path: '/worktrees/487' })
+      .mockRejectedValue(new Error('worktree-conflict: foreign owner'))
+    const outcome = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: VALIDATE_A0 },
+        { status: 'in-progress', next: VALIDATE_A0 },
+      ]),
+      worktree: owned,
+      packet,
+      spawnStage: async () => ({
+        processOutcome: 'success',
+        final: { status: 'failed', reason: 'failed-seal' },
+      }),
+      policy: {},
+      recoverStop,
+    })
+    expect(outcome.status).toBe('worktree-conflict')
+    expect(recoverStop).not.toHaveBeenCalled()
+  })
+
+  it('US-602 AC6: ownership conflict in merge is a catalogued stop', async () => {
+    const outcome = await runCycle({
+      resolve: scriptedResolve([{ status: 'in-progress', next: { step: 'merge' } }]),
+      worktree,
+      packet,
+      spawnStage: vi.fn(),
+      mergeStage: async () => {
+        throw new Error('worktree-conflict: foreign owner')
+      },
+      policy: {},
+    })
+    expect(outcome).toMatchObject({
+      status: 'worktree-conflict',
+      reason: 'worktree-conflict: foreign owner',
+    })
+  })
+
+  it('US-602 AC6: changed ownership stops before resume budget', async () => {
+    const resumePark = vi.fn(async () => ({ resumed: true }))
+    const outcome = await runCycle({
+      resolve: scriptedResolve([
+        {
+          status: 'blocked',
+          next: { step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds' },
+        },
+      ]),
+      worktree: async () => {
+        throw new Error('worktree-conflict: foreign owner')
+      },
+      packet,
+      spawnStage: vi.fn(),
+      resumePark,
+      policy: {},
+    })
+    expect(outcome.status).toBe('worktree-conflict')
+    expect(resumePark).not.toHaveBeenCalled()
+  })
   const EPIPE: CycleStageResult = { processOutcome: 'failed', detail: 'pi: write EPIPE' }
 
   it('US-594 AC-2: an EPIPE after a valid handoff advances once and records the transport failure', async () => {

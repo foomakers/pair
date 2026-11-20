@@ -579,6 +579,7 @@ async function resumedPark(
   if (next.step !== 'blocked' || next['budget'] !== 'autoRecoveryRounds') return false
   if (state.stagesRun > 0 || state.resumeTried === true || input.resumePark === undefined)
     return false
+  await input.worktree()
   state.resumeTried = true
   const out = await input.resumePark(next)
   return out.resumed ? true : (out.detail ?? 'autoRecoveryRounds re-run resumes spent')
@@ -592,6 +593,7 @@ async function recoveredStop(
 ): Promise<boolean> {
   const { reason, next } = settled
   if (settled.resumeToken === undefined || reason === undefined || next === undefined) return false
+  if (input.recoverStop !== undefined) await input.worktree()
   if (input.recoverStop === undefined || !(await input.recoverStop(next, reason))) return false
   state.dispatchedNext = null
   state.retryCount = 0
@@ -656,30 +658,44 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     worktreePath: undefined,
   }
 
-  for (;;) {
-    const answer = await resolve()
-    const next = answer.next
-    relayWarnings(answer, onNotice)
-    if (next === undefined) return stopWithoutNext(state, answer as CycleResolveStop, observers)
+  let current: CycleNext | undefined
+  try {
+    for (;;) {
+      const answer = await resolve()
+      const next = answer.next
+      current = next
+      relayWarnings(answer, onNotice)
+      if (next === undefined) return stopWithoutNext(state, answer as CycleResolveStop, observers)
 
-    const settled = settlePreviousDispatch(state, next, deadDispatchRetries, observers)
-    if (settled !== null) {
-      if (await recoveredStop(input, state, settled)) continue
-      return settled
+      const settled = settlePreviousDispatch(state, next, deadDispatchRetries, observers)
+      if (settled !== null) {
+        if (await recoveredStop(input, state, settled)) continue
+        return settled
+      }
+      await runPostStageHook(state, next, hooks, onNotice)
+
+      if (!DISPATCHABLE_STEPS.has(next.step)) {
+        const outcome = await terminalOrResume(input, state, next, answer)
+        if (outcome !== null) return outcome
+        continue
+      }
+      noticeReuseOnce(state, next, onNotice)
+      const gated = await gateDispatch(state, next, input)
+      if (gated !== null) return gated
+
+      const blocked = await dispatchStage(input, state, next)
+      if (blocked !== undefined) return blocked
     }
-    await runPostStageHook(state, next, hooks, onNotice)
-
-    if (!DISPATCHABLE_STEPS.has(next.step)) {
-      const outcome = await terminalOrResume(input, state, next, answer)
-      if (outcome !== null) return outcome
-      continue
-    }
-    noticeReuseOnce(state, next, onNotice)
-    const gated = await gateDispatch(state, next, input)
-    if (gated !== null) return gated
-
-    const blocked = await dispatchStage(input, state, next)
-    if (blocked !== undefined) return blocked
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    if (detail.startsWith('worktree-conflict:'))
+      return {
+        status: 'worktree-conflict',
+        stagesRun: state.stagesRun,
+        ...(current === undefined ? {} : { next: current }),
+        reason: detail,
+      }
+    throw error
   }
 }
 

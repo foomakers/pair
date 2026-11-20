@@ -729,15 +729,18 @@ const escalateFor = (input: CycleDriverRequest, co: Coordinates) => async (next:
   }
 }
 
+const checkedWorktree = (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
+  co.bridge.worktree({
+    main: co.main,
+    story: input.card,
+    branch: co.branch,
+    base: ctx.baseBranch,
+    ...(ctx.worktreeRoot !== undefined && { worktreeRoot: ctx.worktreeRoot }),
+  })
+
 const worktreeFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () =>
-    co.bridge.worktree({
-      main: co.main,
-      story: input.card,
-      branch: co.branch,
-      base: ctx.baseBranch,
-      ...(ctx.worktreeRoot !== undefined && { worktreeRoot: ctx.worktreeRoot }),
-    })
+    checkedWorktree(ctx, input, co)
 
 const packetFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
@@ -1128,8 +1131,10 @@ async function gateWithRecovery(
   co: Coordinates,
   pins: MergePins,
 ): Promise<TierGate> {
+  checkedWorktree(ctx, input, co)
   const first = await runTierGate(ctx, co, pins)
   if (first.green) return first
+  checkedWorktree(ctx, input, co)
   const round = co.bridge.recover({
     dir: co.runDir,
     kind: 'gate-retry',
@@ -1280,6 +1285,7 @@ function syncStaleBase(
   co: Coordinates,
   { worktree, expected }: { worktree: string; expected: unknown },
 ): { park?: string; head?: string } {
+  checkedWorktree(ctx, input, co)
   const round = co.bridge.recover({
     dir: co.runDir,
     kind: 'base-sync',
@@ -1290,6 +1296,7 @@ function syncStaleBase(
   if (!descendsFromExpected(worktree, expected))
     return { park: 'base-sync refused: worktree HEAD does not descend from the dispatched head' }
   git(worktree, ['fetch', '-q', 'origin'])
+  checkedWorktree(ctx, input, co)
   const sync = co.bridge.baseSync({
     cwd: worktree,
     base: ctx.baseBranch,
@@ -1334,10 +1341,12 @@ function verifyAfterSync(
 
 /** A `dirty` preparation: one `worktree-clean` round, the stray work saved at a recorded ref (never deleted). */
 function cleanDirty(
+  ctx: CycleDriverContext,
   input: CycleDriverRequest,
   co: Coordinates,
   worktree: string,
 ): { park?: string } {
+  checkedWorktree(ctx, input, co)
   const round = co.bridge.recover({
     dir: co.runDir,
     kind: 'worktree-clean',
@@ -1345,6 +1354,7 @@ function cleanDirty(
     policy: budgetsOf(input),
   })
   if (!round.allowed) return { park: round.next?.detail ?? 'autoRecoveryRounds spent' }
+  checkedWorktree(ctx, input, co)
   const cleaned = co.bridge.worktreeClean({ cwd: worktree, dir: co.runDir, story: input.card })
   console.log(`  Recovery: dirty worktree — ${cleaned.ref ?? cleaned.detail ?? 'nothing to save'}`)
   return {}
@@ -1385,7 +1395,7 @@ const stashBeforePrepareFor =
     const worktree = worktreePathOf(await worktreeFor(ctx, input, co)())
     if (worktree === undefined) return
     // AC-10 (r1-2): a dirty refusal is saved at a recorded ref under a worktree-clean round, never a plain stash.
-    if (next['refusal'] === 'dirty') return cleanDirty(input, co, worktree)
+    if (next['refusal'] === 'dirty') return cleanDirty(ctx, input, co, worktree)
     const stashed = stashStrayFiles(
       worktree,
       `pair-recovery: story ${input.card} ${String(next['phase'] ?? '')} attempt ${String(next['attempt'])}`,
@@ -1451,6 +1461,7 @@ function syncBase(
   worktree: string | undefined,
 ): CycleMergeOutcome | undefined {
   if (worktree === undefined || !conflictsWithBase(worktree, ctx.baseBranch)) return undefined
+  checkedWorktree(ctx, input, co)
   const round = co.bridge.recover({
     dir: co.runDir,
     kind: 'base-sync',
@@ -1461,6 +1472,7 @@ function syncBase(
   console.log(
     `  Merge: ${co.branch} conflicts with ${ctx.baseBranch} — base sync (recovery round ${String(round.round)}/${String(round.budget)})`,
   )
+  checkedWorktree(ctx, input, co)
   const sync = co.bridge.baseSync({
     cwd: worktree,
     base: ctx.baseBranch,
@@ -1488,9 +1500,15 @@ function pushSynced(worktree: string, branch: string, sync: BaseSyncResult): Cyc
 }
 
 /** AC7 — a failed external CI run is re-run: once free per merge stage, then against `autoRecoveryRounds`. */
-function rerunFailedCi(input: CycleDriverRequest, co: Coordinates, head: string): () => boolean {
+function rerunFailedCi(
+  ctx: CycleDriverContext,
+  input: CycleDriverRequest,
+  co: Coordinates,
+  head: string,
+): () => boolean {
   let free = true
   return () => {
+    checkedWorktree(ctx, input, co)
     if (!free) {
       const round = co.bridge.recover({
         dir: co.runDir,
@@ -1559,7 +1577,7 @@ const mergeFor =
     const check = await checkWithCiWait(
       deferPark => co.bridge.mergeCheck({ ...pins, deferPark }),
       wait,
-      { ...ctx.ciWait, rerun: rerunFailedCi(input, co, pins.reviewedHead) },
+      { ...ctx.ciWait, rerun: rerunFailedCi(ctx, input, co, pins.reviewedHead) },
       message => console.log(message),
     )
     if (check.mergeAllowed !== true) return refusedCheck(co, pins, check)
@@ -1573,6 +1591,7 @@ const mergeFor =
         resume: true,
       }
     progress.merge('merging')
+    checkedWorktree(ctx, input, co)
     const run = co.bridge.mergeRun({
       ...pins,
       gate: gate.green ? 'green' : 'red',
