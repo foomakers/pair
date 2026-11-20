@@ -1,0 +1,183 @@
+{
+  "$meta": {
+    "pr": "709",
+    "phase": "r1-g1",
+    "base": "91836611df36dc8aaf359d734195fb3163f84dfc",
+    "trailer": "Pair-RED-Snapshot: pr=709; phase=r1-g1; base=91836611df36dc8aaf359d734195fb3163f84dfc; manifest=.pair/red-snapshots/pr-709-r1-g1.json",
+    "artifacts": []
+  },
+  "run": "story-627",
+  "story": "627",
+  "pr": 709,
+  "phase": "r1-g1",
+  "groupId": "r1-g1",
+  "mode": "remediation",
+  "inputHead": "91836611df36dc8aaf359d734195fb3163f84dfc",
+  "sourceOfTruth": [
+    "card #627 (AC3, AC4, AC5, AC6, DoD)",
+    "maintainer decision https://github.com/foomakers/pair/issues/627#issuecomment-7039595471",
+    ".pair/knowledge/guidelines/collaboration/templates/adl-template.md",
+    "packages/dev-tools/src/test-audit/suites.ts",
+    "package.json scripts",
+    ".pair/knowledge/guidelines/collaboration/automation/doc-remediation-groups.md"
+  ],
+  "maintainerDecision": {
+    "decisionRef": "https://github.com/foomakers/pair/issues/627#issuecomment-7039595471",
+    "choice": "decide",
+    "by": "rucka",
+    "reason": "Cadence chosen: manual-only. Nightly/CI to be revisited after a clean mutation run with measured wall time. ADL becomes Active with this choice; adoption delta to be written."
+  },
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md (authored decision record, written per /pair-capability-record-decision) + its adoption delta in .pair/adoption/tech/way-of-working.md",
+      "inputs": [
+        "maintainer decision https://github.com/foomakers/pair/issues/627#issuecomment-7039595471 (by rucka): manual-only; nightly/CI revisited after a clean mutation run with measured wall time; ADL Active; adoption delta to be written",
+        "card #627 AC3, AC4, AC5, DoD line 2"
+      ],
+      "representations": [
+        ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md (canonical)",
+        ".pair/adoption/tech/way-of-working.md (adoption delta)",
+        "docs/testing/test-prune-cadence-options.md (status line + recommendation paragraph that restate the decision state)",
+        ".pair/llms.txt (generated index line = ADL H1 title)"
+      ],
+      "consumers": [
+        "agents reading adoption (way-of-working.md) to know the cadence",
+        "readers of the comparison doc",
+        "pnpm llms-index:check (quality gate)",
+        "PR #709 `Closes #627`"
+      ],
+      "classes": [
+        "ADL Status value (template vocabulary: Active | Superseded by …)",
+        "ADL body still conditional on a missing choice (title, Decision, Consequences, Adoption Impact)",
+        "maintainer revisit clause (nightly/CI)",
+        "adoption delta present and agreeing with the ADL",
+        "decision-only: no code/CI/tests (AC5 manual-only)",
+        "AC4 safety constraints preserved",
+        "comparison doc restating a stale decision state",
+        "generated index line vs ADL title"
+      ],
+      "interactions": [
+        "ADL title change × .pair/llms.txt index line (llms-index:check)",
+        "ADL Status × comparison doc status sentence (shared with r0-3)"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md Context bullet 4 (line 24)",
+      "inputs": [
+        "docs/testing/test-prune-cadence-options.md:36 caveat",
+        "packages/dev-tools/src/test-audit/suites.ts NODE_TEST_SUITES",
+        "package.json scripts workflows:test / dev-scripts:test"
+      ],
+      "representations": [
+        ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md (canonical; the comparison caveat at docs/testing/test-prune-cadence-options.md:36 is already correct)"
+      ],
+      "consumers": [
+        "a reader taking 161799 ms / 20518 ms as gate-command timings"
+      ],
+      "classes": [
+        "claim that gate-command plain wall time is in the baseline (wrong)",
+        "what the baseline does time (.claude/workflows, scripts suites)",
+        "mutation-audit `not measured` statement for the two gate commands (AC6, already correct — must survive)"
+      ],
+      "interactions": []
+    },
+    {
+      "id": "r0-3",
+      "producer": "docs/testing/test-prune-cadence-options.md \"Recommendation and decision boundary\" (line 59)",
+      "inputs": [
+        ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md existence and Status at the fixed head",
+        "maintainer decision https://github.com/foomakers/pair/issues/627#issuecomment-7039595471"
+      ],
+      "representations": [
+        "docs/testing/test-prune-cadence-options.md (canonical)"
+      ],
+      "consumers": [
+        "a reader of the comparison who must find the ADL constraints and revisit triggers"
+      ],
+      "classes": [
+        "sentence denies an ADL exists",
+        "no link to the ADL",
+        "stated Status disagrees with the ADL Status",
+        "link target resolves from docs/testing/"
+      ],
+      "interactions": [
+        "ADL Status after r0-1 (Active) × the Status this sentence states — the finding recommended \"Proposed\"; the maintainer decision supersedes that wording, the ASSERT (agrees with the ADL Status) stands"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "test-prune cadence decision record (ADL 2026-11-17) and its adoption delta",
+    "mode": "doc",
+    "allowedPaths": [
+      ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md",
+      "docs/testing/test-prune-cadence-options.md",
+      ".pair/adoption/tech/way-of-working.md",
+      ".pair/llms.txt"
+    ]
+  },
+  "checklist": [
+    {
+      "id": "C1",
+      "finding": "r0-1",
+      "requirement": ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md \"## Status\" reads `Active` (optionally followed by the decision reference) — no \"Proposed\", no \"awaiting the maintainer's choice\", no \"Not adopted\".",
+      "authority": ".pair/knowledge/guidelines/collaboration/templates/adl-template.md:9 `[Active | Superseded by ADL-YYYY-MM-DD-<topic>]`; maintainer decision: \"ADL becomes Active with this choice\""
+    },
+    {
+      "id": "C2",
+      "finding": "r0-1",
+      "requirement": ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md records the choice as made, not recommended: the H1 title drops \"recommended (proposed)\"; \"## Decision\" states that manual-only is the adopted cadence, chosen by the maintainer, and cites https://github.com/foomakers/pair/issues/627#issuecomment-7039595471; no \"Recommendation (not adopted)\" wording remains.",
+      "authority": "card #627 AC3 (\"when the maintainer chooses (manual-only included), then record via record-decision\") and DoD \"Maintainer choice recorded in ADL\"; https://github.com/foomakers/pair/issues/627#issuecomment-7039595471: \"Cadence chosen: manual-only.\""
+    },
+    {
+      "id": "C3",
+      "finding": "r0-1",
+      "requirement": ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md \"## Consequences\" and \"## Adoption Impact\" are unconditional: no \"Until the maintainer chooses…\", no \"If manual-only is chosen…\", no \"None while Proposed\"; they state decision only — no code/CI change, tests added/removed 0/0 — and name the adoption delta actually written in .pair/adoption/tech/way-of-working.md.",
+      "authority": "card #627 AC5 (\"manual-only is decision-only; no follow-up issue\") and DoD \"manual-only: decision only\""
+    },
+    {
+      "id": "C4",
+      "finding": "r0-1",
+      "requirement": ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md states that nightly/CI is to be revisited after a clean mutation run with measured wall time (in the revisit triggers or the nightly/CI alternative), keeping the existing revisit triggers.",
+      "authority": "https://github.com/foomakers/pair/issues/627#issuecomment-7039595471: \"Nightly/CI to be revisited after a clean mutation run with measured wall time.\"; card #627 DoD \"Safety constraints and revisit triggers explicit\""
+    },
+    {
+      "id": "C5",
+      "finding": "r0-1",
+      "requirement": ".pair/adoption/tech/way-of-working.md gains a test-prune cadence line: manual-only — the maintainer requests a module audit on demand, outside the delivery cycle; it carries the safety constraints (analysis changes no production code or tests; mutation runs in a disposable worktree; candidates are review signals needing protection review and human approval; no automatic deletion) or links to them, and links the ADL (../decision-log/2026-11-17-test-prune-cadence.md). It adopts no in-cycle step, gate or CI job.",
+      "authority": "card #627 DoD \"adoption delta agrees\", AC4; .pair/adoption/decision-log/2026-11-17-test-prune-cadence.md \"## Adoption Impact\": \"way-of-working.md gains a test-prune cadence line naming the chosen option and the constraints above\"; maintainer decision: \"adoption delta to be written\""
+    },
+    {
+      "id": "C6",
+      "finding": "r0-1",
+      "requirement": "docs/testing/test-prune-cadence-options.md no longer contradicts the ADL: the \"**Status:**\" line (line 3) and the recommendation paragraph (\"This recommendation does not adopt a policy\", line 57) state that manual-only was adopted by the maintainer decision. The Evidence, Fresh baseline table, caveats and Options table are unchanged.",
+      "authority": ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md Status after C1; card #627 DoD \"adoption delta agrees\"; rollback notes w-1, w-2, w-4 (baseline arithmetic, cited evidence and the scripts-suite caveat are known right)"
+    },
+    {
+      "id": "C7",
+      "finding": "r0-1",
+      "requirement": ".pair/llms.txt index line for .pair/adoption/decision-log/2026-11-17-test-prune-cadence.md equals the ADL's new H1 title (the line is regenerated, not hand-diverged); no other index line changes.",
+      "authority": "packages/dev-tools/src/quality-gates/llms-txt-drift-check.ts (`pnpm llms-index:check`, part of `pnpm quality-gate`); rollback note w-3"
+    },
+    {
+      "id": "C8",
+      "finding": "r0-2",
+      "requirement": ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md Context bullet 4 no longer says the plain wall time of `workflows:test` / `dev-scripts:test` \"is in the fresh baseline\". It states that the baseline times the `.claude/workflows` and `scripts` suites, which are not the gate commands, and that the wall time of the two gate commands themselves is `not measured`. The statement that both are `not measured` by the mutation audit under every option stays.",
+      "authority": "docs/testing/test-prune-cadence-options.md:36 (\"Baseline suites are not the gate commands… Wall time of the two gate commands themselves is **not measured** here\"); packages/dev-tools/src/test-audit/suites.ts:25-29 NODE_TEST_SUITES (`.claude/workflows`, `scripts`, `qa`) vs package.json:49-50 (`dev-scripts:test` = `node --test scripts/dev/*.test.mjs`, `workflows:test` = shard test + `scripts/workflow-test-runner.mjs`); card #627 AC6"
+    },
+    {
+      "id": "C9",
+      "finding": "r0-3",
+      "requirement": "docs/testing/test-prune-cadence-options.md decision-boundary paragraph (line 59) no longer says \"before an ADL and adoption delta are recorded\": it states that the decision is recorded in the ADL, with the ADL's actual Status (Active — manual-only chosen), and links it as ../../.pair/adoption/decision-log/2026-11-17-test-prune-cadence.md (the link resolves from docs/testing/). The revisit / human-approval / disposable-worktree sentences that follow stay.",
+      "authority": ".pair/adoption/decision-log/2026-11-17-test-prune-cadence.md in the same tree and its \"## Status\" line; finding r0-3 ASSERT \"the sentence agrees with the ADL existing and its Status\" — the recommended wording \"Proposed\" is superseded by https://github.com/foomakers/pair/issues/627#issuecomment-7039595471"
+    }
+  ],
+  "redTests": [],
+  "matrix": [],
+  "notes": [
+    "Doc group: no executable witnesses (doc-remediation-groups.md); nothing was run or edited at the base.",
+    "r0-1 was `external` only for the missing maintainer choice; the decision comment supplies it, so its correction is now in-repo prose and it is grouped, not carried.",
+    "Out of scope: any code, CI, test, dataset or card/PR-body edit (manual-only is decision-only, AC5)."
+  ]
+}
