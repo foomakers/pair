@@ -1,6 +1,6 @@
 import { errorAt, parseWorkflow, type Step, type Workflow, type WorkflowError } from '../grammar'
 import { fieldsOf, kindByName } from '../kinds'
-import { violations } from '../schema'
+import { textsOf, violations } from '../schema'
 
 /** What the validator asks of its caller: the package reads no skill directory and no adoption file itself. */
 export interface ValidationDeps {
@@ -67,19 +67,8 @@ const gateErrors: Check = (workflow, step, deps) => {
   )
 }
 
-/** Every string under `with`, keys included, with its path. */
-function texts(value: unknown, path: readonly (string | number)[]): [typeof path, string][] {
-  if (typeof value === 'string') return [[path, value]]
-  if (Array.isArray(value)) return value.flatMap((item, index) => texts(item, [...path, index]))
-  if (typeof value !== 'object' || value === null) return []
-  return Object.entries(value).flatMap(([key, member]) => [
-    [[...path, key], key] as [typeof path, string],
-    ...texts(member, [...path, key]),
-  ])
-}
-
 const safetyErrors: Check = (workflow, step, deps) =>
-  texts(step.with ?? {}, ['steps', step.id, 'with'])
+  textsOf(step.with ?? {}, ['steps', step.id, 'with'])
     .filter(([, text]) => !deps.isSafeText(text))
     .map(([path, text]) =>
       errorAt(workflow, path, {

@@ -1,6 +1,6 @@
 import type { StepLaunch } from '../engine'
 import { COMMON_RESULT, settle, type StepKind, type StepResult } from '../kinds'
-import type { JsonSchema } from '../schema'
+import { textsOf, type JsonSchema } from '../schema'
 
 /** How an engine is told to run a skill; the host passes its engine's own style, the package holds no engine table. */
 export type InvocationStyle = 'slash' | 'instruction'
@@ -47,15 +47,6 @@ export function resultBlock(kind: StepKind): string {
 const render = (value: unknown): string =>
   typeof value === 'string' ? value : JSON.stringify(value)
 
-/** Every string inside `value`, keys included: what the safety check reads. */
-function textsIn(value: unknown): string[] {
-  if (typeof value === 'string') return [value]
-  if (typeof value !== 'object' || value === null) return []
-  return Object.entries(value).flatMap(([key, member]) =>
-    Array.isArray(value) ? textsIn(member) : [key, ...textsIn(member)],
-  )
-}
-
 function section(title: string, values: Readonly<Record<string, unknown>>): string[] {
   const lines = Object.entries(values).map(([name, value]) => `- ${name}: ${render(value)}`)
   return lines.length === 0 ? [] : ['', `${title}:`, ...lines]
@@ -67,9 +58,9 @@ function section(title: string, values: Readonly<Record<string, unknown>>): stri
  * splice fails the safety check.
  */
 export function buildMessage(step: StepLaunch, kind: StepKind, options: MessageOptions): string {
-  const unsafe = textsIn([step.uses, step.inputs, step.with]).find(
-    text => !options.isSafeText(text),
-  )
+  const unsafe = textsOf([step.uses, step.inputs, step.with])
+    .map(([, text]) => text)
+    .find(text => !options.isSafeText(text))
   if (unsafe !== undefined)
     throw new Error(`unsafe-value: ${JSON.stringify(unsafe)} cannot be handed to an agent`)
   return [

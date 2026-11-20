@@ -1,4 +1,4 @@
-import { violations, type JsonSchema } from './schema'
+import { textsOf, violations, type JsonSchema } from './schema'
 
 const schema: JsonSchema = {
   type: 'object',
@@ -105,6 +105,20 @@ describe('violations', () => {
   it('tells to remove a key when the schema declares none', () => {
     expect(violations({ type: 'object', additionalProperties: false }, { a: 1 })).toEqual([
       { path: ['a'], problem: "unknown key 'a'", fix: 'remove it' },
+    ])
+  })
+})
+
+describe('textsOf', () => {
+  it('lists every string of a value, keys of maps included, with its path', () => {
+    expect(textsOf({ a: 'x', b: [1, 'y', { c: 'z' }], d: null })).toEqual([
+      [['a'], 'a'],
+      [['a'], 'x'],
+      [['b'], 'b'],
+      [['b', 1], 'y'],
+      [['b', 2, 'c'], 'c'],
+      [['b', 2, 'c'], 'z'],
+      [['d'], 'd'],
     ])
   })
 })

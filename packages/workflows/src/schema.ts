@@ -118,3 +118,14 @@ export function violations(schema: JsonSchema, value: unknown, path: Path = []):
     return objectViolations(schema, value as Record<string, unknown>, path)
   return []
 }
+
+/** Every string inside a JSON value, keys of maps included, each with its path: what a safety check reads. */
+export function textsOf(value: unknown, path: Path = []): [Path, string][] {
+  if (typeof value === 'string') return [[path, value]]
+  if (Array.isArray(value)) return value.flatMap((item, index) => textsOf(item, [...path, index]))
+  if (typeof value !== 'object' || value === null) return []
+  return Object.entries(value).flatMap(([key, member]) => [
+    [[...path, key], key] as [Path, string],
+    ...textsOf(member, [...path, key]),
+  ])
+}
