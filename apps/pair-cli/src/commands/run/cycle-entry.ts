@@ -630,16 +630,13 @@ function cardReasonOf(outcome: DriveCycleResult): string {
     : outcome.status
 }
 
-/** Success = the card ended where its target says (PR, ready, merged) or awaits a human; `escalated` is a failure (exit 1). */
-const SUCCESS_STATUSES: ReadonlySet<string> = new Set([
-  'ready-for-merge',
-  'target-ready',
-  'merged',
-  'awaiting-human',
-])
+/** Success = the card reached its target or a host outage was parked for resumption. */
+const SUCCESS_STATUSES: ReadonlySet<string> = new Set(['ready-for-merge', 'target-ready', 'merged'])
 
 function exitCodeFor(outcome: DriveCycleResult): number {
   const parkKind = (outcome.merge as { parkKind?: unknown } | undefined)?.parkKind
   const awaitingHuman = outcome.status === 'merge-parked' && parkKind === 'awaiting-human'
-  return SUCCESS_STATUSES.has(outcome.status) || awaitingHuman ? 0 : 1
+  const hostPark =
+    outcome.status === 'awaiting-human' && outcome.resumeToken?.endsWith(':host-transient') === true
+  return SUCCESS_STATUSES.has(outcome.status) || awaitingHuman || hostPark ? 0 : 1
 }

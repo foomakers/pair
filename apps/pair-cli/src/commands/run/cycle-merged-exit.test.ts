@@ -70,6 +70,22 @@ afterEach(() => {
 })
 
 describe('merge park reporting', () => {
+  it('#605: dead-dispatch park exits nonzero while remaining awaiting human', async () => {
+    const { deps } = harness({
+      status: 'awaiting-human',
+      stagesRun: 1,
+      next: { step: 'implement', phase: 'a0' },
+      resumeToken: 'implement:a0:dead-dispatch',
+      reason: 'dead-dispatch: stage returned no handoff',
+    })
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '601', cardTags: '' }),
+      files(),
+      deps,
+    )
+    expect(code).toBe(1)
+  })
+
   it('US-601 AC3: an exhausted host park exits successfully and releases the lock', async () => {
     let releases = 0
     const { deps } = harness({
