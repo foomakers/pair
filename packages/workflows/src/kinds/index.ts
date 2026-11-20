@@ -55,12 +55,20 @@ export function settle(kind: StepKind, value: unknown): StepResult {
   return broken === undefined ? result : { ...result, ...invalid, detail: broken }
 }
 
+/**
+ * The cells of one table row (GFM): a bare `|` ends a cell, `\|` is a pipe of its cell, any other
+ * escape pair is kept as written. A row is one line, so a newline stands for the cell boundary.
+ */
 const cells = (row: string): string[] =>
   row
     .trim()
-    .replace(/^\||\|$/g, '')
-    .split('|')
+    .replace(/\\(.)|\|/g, (pair, escaped) => (escaped === '|' ? '|' : escaped ? pair : '\n'))
+    .replace(/^\n|\n$/g, '')
+    .split('\n')
     .map(cell => cell.trim())
+
+/** A cell written as inline code, without its backticks. */
+const code = (cell = ''): string => cell.replace(/^`|`$/g, '')
 
 /**
  * The Custom Gate Registry of `way-of-working.md`: gate key → command.
@@ -80,7 +88,7 @@ export function readGateRegistry(text: string): Readonly<Record<string, string>>
     table
       .slice(2)
       .map(cells)
-      .filter(row => row[key])
-      .map(row => [row[key], (row[command] ?? '').replace(/^`|`$/g, '')]),
+      .map(row => [code(row[key]), code(row[command])])
+      .filter(([name]) => name),
   ) as Record<string, string>
 }
