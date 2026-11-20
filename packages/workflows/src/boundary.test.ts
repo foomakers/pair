@@ -13,6 +13,8 @@ function forbiddenImports(path: string, source: string): string[] {
   return [...source.matchAll(SPECIFIER)]
     .map(match => match[1] as string)
     .filter(specifier => {
+      // A test may read a published page as text, to prove it is not stale.
+      if (isTest && specifier.endsWith('.md?raw')) return false
       if (specifier.startsWith('.'))
         return posix.normalize(posix.join(posix.dirname(path), specifier)).startsWith('..')
       return !ALLOWED.has(specifier) && !(isTest && TEST_ONLY.has(specifier))
@@ -40,6 +42,14 @@ describe('package boundary (AC-8)', () => {
   it('accepts the package own modules and its declared dependencies', () => {
     const source = "import { parseDocument } from 'yaml'\nimport { kindByName } from '../kinds'"
     expect(forbiddenImports('validate/index.ts', source)).toEqual([])
+  })
+
+  it('lets a test, and only a test, read a published page as text', () => {
+    const source = "import page from '../../../knowledge-hub/dataset/x.md?raw'"
+    expect(forbiddenImports('kinds/reference.test.ts', source)).toEqual([])
+    expect(forbiddenImports('kinds/reference.ts', source)).toEqual([
+      '../../../knowledge-hub/dataset/x.md?raw',
+    ])
   })
 
   it('holds on every source file of the package', () => {
