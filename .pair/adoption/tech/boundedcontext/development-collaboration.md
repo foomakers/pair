@@ -34,7 +34,7 @@ This context orchestrates the collaboration between developers and AI assistants
 
 | Term | Definition |
 | ---- | ---------- |
-| Workflow | A sequence of collaborative phases (requirements → design → implementation → review) between developer and AI assistant |
+| Workflow | Process steps composed by a logic the project can describe: a versioned YAML file of steps, run on a card. Full definition and related terms (step, kind, configuration, run, host) in [collaborative-workflow.context.md](../../product/subdomain/collaborative-workflow.context.md) (#641) |
 | Skill | An atomic, invocable unit of operational knowledge that an AI assistant executes |
 | Adoption *(consumed)* | A project's committed choice of a practice, tool, or process, recorded as a delta over KB defaults. **Owned by Knowledge & Standards** (subdomain Adoption & Guidelines); workflows and skills here *read* adoptions, they do not define or own them. |
 

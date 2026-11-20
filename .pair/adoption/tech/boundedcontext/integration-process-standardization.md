@@ -13,7 +13,7 @@ This context manages all integration logic and process standardization for the p
 ## Relationships Between Bounded Context and Sub Domains
 
 - **Integration** provides adapters and APIs for external services (e.g., CI/CD, code repositories, notifications).
-- **Process Standardization** defines and enforces workflows, automation scripts, and operational standards for development and deployment.
+- **Process Standardization** defines integration and operational standards, and packages and distributes the workflows, the package that runs them and the host and PM-tool adapters. The workflows themselves are defined and owned by Collaborative Workflow (#641).
 - **KB packaging & distribution** builds the KB dataset, flattens/prefixes/symlinks skills to AI-tool directories, and manages the local versioned KB cache — distributing what the knowledge subdomains (Code & Documentation Generation, Adoption & Guidelines, How-To Knowledge) produce. It owns no business subdomain of its own; it is infrastructure absorbed here (see DDR `decision-log/2026-07-19-merge-kb-management-into-integration.md`).
 - All other contexts consume the shared services, integration endpoints, and KB access provided by this context.
 
@@ -26,7 +26,7 @@ This context manages all integration logic and process standardization for the p
 
 ## Data Ownership
 
-- Owns integration configurations, process definitions, and automation scripts.
+- Owns integration configurations and automation scripts. Workflow definitions are owned by Development Collaboration (Collaborative Workflow); this context distributes them.
 - Owns the KB dataset, its distribution artifacts/metadata, and the local KB cache.
 - **Ownership splits by concern, not by path.** This context owns the *packaging & distribution* of KB content — the dataset as a release artifact, the flatten/prefix/symlink transform, the `pair-cli update` mirror, and the cache. It does **not** own the content's *authoring*: guidelines and conventions are authored and owned by **Knowledge & Standards**, skills and workflows by **Development Collaboration**. A file under `packages/knowledge-hub/dataset/.pair/knowledge/**` is therefore *authored-by* its content subdomain and *distributed-by* this context — its co-location in the dataset directory is packaging, not content ownership. (Resolves the recurring "same edit lands in two bounded contexts" attribution ambiguity.)
 - **The docs site is dissemination, and the same split applies.** `apps/website/**` is a separate deployable owned by this context as a *distribution channel*: its build/deploy pipeline, its routing/IA, and the `docs-staleness` gate. It maps to no business subdomain of its own. The **facts** it renders — skill catalog rows, `N skills` / `N capabilities` counts, guideline prose — are *authored-by* the content contexts (**Knowledge & Standards** for guidelines/how-to, **Development Collaboration** for skills/workflows) and only *disseminated-by* this context. Corollary, load-bearing: those facts MUST be derived from the dataset (single source of truth), never hand-copied into `.mdx`; the derivation checks in `apps/website/lib/docs-staleness-check.ts` are the contract test of that derivation. Hand-maintained duplication of dataset facts in the site is a CRITICAL coupling defect (see the `$scope: full` dogfood triage in story #263).
