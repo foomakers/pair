@@ -14,14 +14,14 @@ Process Decision
 
 ## Context
 
-#613, #625 and #626 built and ran the test-audit tooling. #627 asks for an evidence-based prune cadence. Comparison of four options (changed-tests-only, release, manual-only, nightly/CI) by trigger, scope, elapsed time, cost, risk, touched files, effort, suites reached and placement: [`docs/testing/test-prune-cadence-options.md`](../../../docs/testing/test-prune-cadence-options.md) (comparison revision `a453ad7f`).
+Stories #613, #625 and #626 built and ran the test-audit tooling. #627 asks for an evidence-based prune cadence. Comparison of four options (changed-tests-only, release, manual-only, nightly/CI) by trigger, scope, elapsed time, cost, risk, touched files, effort, suites reached and placement: [`docs/testing/test-prune-cadence-options.md`](../../../docs/testing/test-prune-cadence-options.md) (comparison revision `23d1fecb`).
 
 Evidence and limits:
 
 - Only measured run: #626 content-ops mutation, 20m38s at `21f14940`; 457 candidate signals in 49 files (451 zero unique kills, 6 never killed); two Stryker worker crashes, one mutant error. No candidate passed protection review.
-- `test-audit/baseline.json` (`base_rev f0799084`) is **stale**; no fresh baseline was run (machine load). Every elapsed-time cell beyond the 20m38s sample is `not measured` or extrapolated.
+- Fresh baseline measured at `23d1fecb` in a disposable worktree (3 runs per suite, uncontrolled load, 3 failing tests noted in the comparison): one plain pass is 322 s for the six Vitest `MODULES` and 537 s for all twelve suites (sums of medians). It times plain test runs, not mutation. The checked-in `test-audit/baseline.json` (`base_rev f0799084`) is **stale** and unused. Mutation wall time beyond the 20m38s sample is `not measured`.
 - No changed-test selector exists: `analyze-test-prune` takes `$module`, `mutation.ts --module`, `redundancy.ts --modules`. The closest scope is #648 AC-17's affected-package `turbo --filter=...[<round base>]`, which a changed-tests option must reuse.
-- Audit covers Vitest `MODULES` only; `workflows:test` and `dev-scripts:test` (node `--test`) are `not measured` under every option.
+- Audit covers Vitest `MODULES` only; `workflows:test` and `dev-scripts:test` (node `--test`) are `not measured` by the mutation audit under every option; their plain wall time is in the fresh baseline.
 
 ## Decision
 
