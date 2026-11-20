@@ -250,7 +250,8 @@ const a = process.argv.slice(2)
 const labels = (process.env.FAKE_CARD_LABELS || '').split(',').filter(Boolean).map(name => ({ name }))
 const prLabels = process.env.FAKE_PR_LABELS === undefined ? labels : process.env.FAKE_PR_LABELS.split(',').filter(Boolean).map(name => ({ name }))
 const card = { number: 7, title: 'A story', state: 'OPEN', body: '**Status**: Refined\\n\\n## Task Breakdown\\n\\n- [ ] T-1\\n', labels: a[0] === 'pr' ? prLabels : labels, headRefName: '${BRANCH}' }
-if ((a[0] === 'issue' || a[0] === 'pr') && a[1] === 'view') {
+if (a[0] === 'api' && a.some(x => x.includes('/issues/${PR}/labels'))) process.stdout.write(JSON.stringify(prLabels))
+else if ((a[0] === 'issue' || a[0] === 'pr') && a[1] === 'view') {
 const q = a.indexOf('-q') >= 0 ? a[a.indexOf('-q') + 1] : a.indexOf('--jq') >= 0 ? a[a.indexOf('--jq') + 1] : undefined
 if (q === undefined) process.stdout.write(JSON.stringify(card))
 else if (q.includes('headRefName')) process.stdout.write('${BRANCH}\\n')

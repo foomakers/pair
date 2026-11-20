@@ -72,19 +72,19 @@ describe('pair-cli run --card reaches the merge stage (US-490 r1-g2, finding r0-
 
   it.each(['risk:a.b', 'risk:a/b', 'risk:', 'risk:1x', 'risk:green:x', 'risk:gre en', 'risk:_x'])(
     'g3-w1: a malformed risk label %j is no card tier (fail-safe undefined), never itself',
-    label => {
+    async label => {
       vi.stubEnv('FAKE_CARD_LABELS', label)
 
-      expect(readCardTier('7', main)).toBeUndefined()
+      expect(await readCardTier('7', main)).toBeUndefined()
     },
   )
 
   it.each(['risk:green', 'risk:yellow', 'risk:red', 'risk:Green', 'risk:red-2'])(
     'g3-c1: a well-formed risk label %j is the card tier, verbatim',
-    label => {
+    async label => {
       vi.stubEnv('FAKE_CARD_LABELS', `bug,${label},auto-dev`)
 
-      expect(readCardTier('7', main)).toBe(label)
+      expect(await readCardTier('7', main)).toBe(label)
     },
   )
 
@@ -92,10 +92,10 @@ describe('pair-cli run --card reaches the merge stage (US-490 r1-g2, finding r0-
     ['two well-formed', 'risk:green,risk:yellow'],
     ['a well-formed and a malformed', 'risk:green,risk:a.b'],
     ['none', 'bug,auto-dev'],
-  ])('g3-c2: %s risk label(s) is no card tier (fail-safe undefined)', (_name, labels) => {
+  ])('g3-c2: %s risk label(s) is no card tier (fail-safe undefined)', async (_name, labels) => {
     vi.stubEnv('FAKE_CARD_LABELS', labels)
 
-    expect(readCardTier('7', main)).toBeUndefined()
+    expect(await readCardTier('7', main)).toBeUndefined()
   })
 
   it('g3-w2: a malformed risk label is never handed to resolve as --tier, and no merge script runs', async () => {

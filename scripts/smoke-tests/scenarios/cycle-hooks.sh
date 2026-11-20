@@ -101,7 +101,7 @@ policy '## Cycle Hooks
 - `on-halt`: `pwd -P >> on-halt.ran`
 - `post-cycle`: `pwd -P >> post-cycle.ran`'
 reset_run
-if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
+run_pair run --card 12 --autonomous || fail "an awaiting-human park exited nonzero"
 assert_output_contains "Cycle status: awaiting-human" || FAILED=1
 grep -q "/pair-workflow-implement-phase" "$ENGINE_LOG" || fail "the implement stage was never dispatched"
 [ -d "$story_wt" ] || fail "the story worktree was not created at $story_wt"
@@ -131,7 +131,7 @@ policy '## Max Parallelism
 
 3'
 reset_run
-if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
+run_pair run --card 12 --autonomous || fail "an awaiting-human park exited nonzero"
 assert_output_contains "Cycle status: awaiting-human" || FAILED=1
 if grep -Eqi "## Cycle Hooks|hook key|hook " "$TMP_DIR/last_cmd_output.log"; then fail "output mentions hooks though none are declared"; fi
 
@@ -140,7 +140,7 @@ policy '## Cycle Hooks
 
 - `pre-implemnt`: `exit 1`'
 reset_run
-if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
+run_pair run --card 12 --autonomous || fail "an awaiting-human park exited nonzero"
 assert_output_contains "unrecognized hook key" || FAILED=1
 assert_output_contains "Cycle status: awaiting-human" || FAILED=1
 

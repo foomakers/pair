@@ -70,6 +70,28 @@ afterEach(() => {
 })
 
 describe('merge park reporting', () => {
+  it('US-601 AC3: an exhausted host park exits successfully and releases the lock', async () => {
+    let releases = 0
+    const { deps } = harness({
+      status: 'awaiting-human',
+      stagesRun: 0,
+      next: { step: 'resolve', phase: 'run' },
+      resumeToken: 'resolve:run:host-transient',
+      reason: 'host-transient: gh issue view exhausted',
+    })
+    deps.acquireLock = ({ card }) => ({
+      kind: 'acquired',
+      lock: { path: `/locks/${card}`, release: () => releases++ },
+    })
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '601', cardTags: '' }),
+      files(),
+      deps,
+    )
+    expect(code).toBe(0)
+    expect(releases).toBe(1)
+  })
+
   it.each([
     ['awaiting-human', 'awaiting-human'],
     ['halted', 'failed'],

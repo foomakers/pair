@@ -45,14 +45,14 @@ export function ciWaitFromEnv(
 
 export async function checkWithCiWait(
   /** `deferPark: true` on a poll (no park comment); the one final call after the wait parks for real. */
-  check: (deferPark: boolean) => CycleMergeResult,
+  check: (deferPark: boolean) => CycleMergeResult | Promise<CycleMergeResult>,
   wait: Wait,
   options: CiWaitOptions = {},
   notice: (message: string) => void = () => undefined,
 ): Promise<CycleMergeResult> {
   const { capMs, intervalMs, now, sleep } = resolveOptions(options, wait)
   const start = now()
-  let result = check(true)
+  let result = await check(true)
   const reran = (): boolean => {
     if (result['ciFailed'] !== true || options.rerun?.() !== true) return false
     notice('  Merge: CI failed — re-run of the failed jobs requested')
@@ -64,17 +64,17 @@ export async function checkWithCiWait(
     const step = Math.min(intervalMs, remaining)
     notice(`  Merge: CI pending — waiting ${Math.round(step / 1000)}s`)
     if ((await sleep(step)) === 'interrupted') return parkOnce(result, check)
-    result = check(true)
+    result = await check(true)
   }
   return result
 }
 
 /** The wait ended with CI still pending: ONE real check records the park comment (polls posted none). */
-function parkOnce(
+async function parkOnce(
   pending: CycleMergeResult,
-  check: (deferPark: boolean) => CycleMergeResult,
-): CycleMergeResult {
-  return check(false) ?? pending
+  check: (deferPark: boolean) => CycleMergeResult | Promise<CycleMergeResult>,
+): Promise<CycleMergeResult> {
+  return (await check(false)) ?? pending
 }
 
 function resolveOptions(options: CiWaitOptions, wait: Wait) {

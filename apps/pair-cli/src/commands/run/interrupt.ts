@@ -115,10 +115,12 @@ export async function whileInterruptible<T>(
   }
   for (const signal of SIGNALS) host.on(signal, listener)
   try {
-    const result = await run().catch((error: unknown) => {
-      if (interrupted) return NEVER as Promise<T>
-      throw error
-    })
+    const result = await run()
+      .finally(() => new Promise<void>(resolve => setImmediate(resolve)))
+      .catch((error: unknown) => {
+        if (interrupted) return NEVER as Promise<T>
+        throw error
+      })
     return interrupted ? await (NEVER as Promise<T>) : result
   } finally {
     for (const signal of SIGNALS) host.off(signal, listener)

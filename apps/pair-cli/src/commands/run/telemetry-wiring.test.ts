@@ -60,6 +60,7 @@ interface Options {
 async function launch(options: Options) {
   vi.resetModules()
   const childProcess = await import('child_process')
+  const hostProcess = await import('./host-process.js')
   const { createDefaultCycleDriver } = await import('./cycle-wiring.js')
   const { ENGINES } = await import('./engines.js')
   const { whileInterruptible } = await import('./interrupt.js')
@@ -147,6 +148,12 @@ async function launch(options: Options) {
       status: 0,
       signal: null,
     }
+  })
+  vi.spyOn(hostProcess, 'runHostProcess').mockImplementation(async (bin, args) => {
+    if (bin === 'gh')
+      return { status: 0, stdout: String(childProcess.execFileSync(bin, [...args])), stderr: '' }
+    const result = childProcess.spawnSync(bin, [...args], { encoding: 'utf8' })
+    return { status: result.status, stdout: result.stdout, stderr: result.stderr }
   })
   vi.spyOn(console, 'log').mockImplementation(() => {})
   let time = 0

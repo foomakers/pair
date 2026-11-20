@@ -98,6 +98,7 @@
         "pair-contracts/board-authorization.rows.json",
         "pair-contracts/filesystem-adapter.test.mjs",
         "pair-contracts/linear-adapter.test.mjs",
+        "pair-contracts/host-pm-retry-601.test.mjs",
         "pair-contracts/fixtures/linear/fake-linear.mjs",
         "pair-contracts/fixtures/linear/world.json",
         "pair-contracts/filesystem-roundtrip.test.mjs",

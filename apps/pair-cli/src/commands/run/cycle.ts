@@ -409,6 +409,7 @@ export const PROCESS_STOPS: ReadonlySet<string> = new Set([
   'dead-dispatch',
   'idle-timeout',
   'gate-flake',
+  'host-transient',
 ])
 
 /** The catalogued process fault a stop reason names (`contract-attempt-overwritten:<file>` ⇒ its kind), if any. */
@@ -640,6 +641,27 @@ function announce(input: RunCycleInput, next: CycleNext): void {
   input.onDispatch?.(next)
 }
 
+async function spawnPrepared(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+  packet: Awaited<ReturnType<RunCycleInput['packet']>>,
+): Promise<CycleStageResult> {
+  const corrected = withFormatCorrection(packet, state)
+  const resume = sameNext(state.resumeImplementation ?? null, next)
+  delete state.resumeImplementation
+  return await input.spawnStage(
+    resume
+      ? {
+          ...corrected,
+          prompt:
+            corrected.prompt +
+            '\n\nThis is a retry of incomplete implementation. Resume the first pending task from the checkpoint and story worktree. Complete its test, implementation and verification before moving to the next task. Continue the phase through publication. If blocked, report the specific failed command or missing prerequisite and what remains.',
+        }
+      : corrected,
+  )
+}
+
 async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
   const state: LoopState = {
     stagesRun: 0,
@@ -669,69 +691,58 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
 }
 
 async function runCycleIterations(input: RunCycleInput, state: LoopState): Promise<CycleOutcome> {
-  const { resolve, policy, onNotice, hooks } = input
+  const { resolve, onNotice } = input
   const observers: StageObservers = {
     onStage: input.onStage,
     appendAudit: input.appendAudit,
     onNotice: input.onNotice,
   }
-  const deadDispatchRetries = policy.deadDispatchRetries ?? 0
   for (;;) {
-    const answer = await resolve()
-    const next = answer.next
-    state.currentNext = next
-    relayWarnings(answer, onNotice)
-    if (next === undefined) return stopWithoutNext(state, answer as CycleResolveStop, observers)
+    let active: CycleNext = state.dispatchedNext ?? { step: 'resolve', phase: 'run' }
+    let engineStarted = false
+    try {
+      const answer: CycleResolveAnswer = await resolve()
+      const next = answer.next
+      relayWarnings(answer, onNotice)
+      if (next === undefined) return stopWithoutNext(state, answer as CycleResolveStop, observers)
+      active = next
 
-    const settled = settlePreviousDispatch(state, next, deadDispatchRetries, observers)
-    if (settled !== null) {
-      if (await recoveredStop(input, state, settled)) continue
-      return settled
+      const transition = await resolvedTransition(input, state, next, answer)
+      if (transition.kind === 'continue') continue
+      if (transition.kind === 'stop') return transition.outcome
+      const dispatch = await prepareDispatch(input, state, next)
+      if ('stop' in dispatch) return dispatch.stop
+      engineStarted = true
+      state.dispatchedResult = await spawnPrepared(input, state, next, dispatch.packet)
+      state.stagesRun += 1
+      state.dispatchedNext = next
+    } catch (error) {
+      const parked = await recoverHostError(input, state, active, { error, engineStarted })
+      if (parked === null) continue
+      return parked
     }
-    await runPostStageHook(state, next, hooks, onNotice)
-
-    if (!DISPATCHABLE_STEPS.has(next.step)) {
-      const outcome = await terminalOrResume(input, state, next, answer)
-      if (outcome !== null) return outcome
-      continue
-    }
-    noticeReuseOnce(state, next, onNotice)
-    const gated = await gateDispatch(state, next, input)
-    if (gated !== null) return gated
-
-    const blocked = await dispatchStage(input, state, next)
-    if (blocked !== undefined) return blocked
   }
 }
 
-async function dispatchStage(
+async function resolvedTransition(
   input: RunCycleInput,
   state: LoopState,
   next: CycleNext,
-): Promise<CycleOutcome | undefined> {
-  const prepared = await cleanBeforePrepare(input, state, next)
-  if ('parked' in prepared) return prepared.parked
-  const recovered = await recoverPrepareHead(input, state, prepared.dispatch)
-  if ('parked' in recovered) return recovered.parked
-  const dispatch = recovered.dispatch
-  announce(input, next)
-  const stagePacket = await input.packet(dispatch)
-  const corrected = withFormatCorrection(stagePacket, state)
-  const resume = sameNext(state.resumeImplementation ?? null, next)
-  delete state.resumeImplementation
-  state.dispatchedResult = await input.spawnStage(
-    resume
-      ? {
-          ...corrected,
-          prompt:
-            corrected.prompt +
-            '\n\nThis is a retry of incomplete implementation. Resume the first pending task from the checkpoint and story worktree. Complete its test, implementation and verification before moving to the next task. Continue the phase through publication. If blocked, report the specific failed command or missing prerequisite and what remains.',
-        }
-      : corrected,
-  )
-  state.stagesRun += 1
-  state.dispatchedNext = next
-  return undefined
+  answer: CycleResolveAnswer,
+): Promise<{ kind: 'continue' } | { kind: 'dispatch' } | { kind: 'stop'; outcome: CycleOutcome }> {
+  const settled = settlePreviousDispatch(state, next, input.policy.deadDispatchRetries ?? 0, {
+    onStage: input.onStage,
+    appendAudit: input.appendAudit,
+    onNotice: input.onNotice,
+  })
+  if (settled !== null)
+    return (await recoveredStop(input, state, settled))
+      ? { kind: 'continue' }
+      : { kind: 'stop', outcome: settled }
+  await runPostStageHook(state, next, input.hooks, input.onNotice)
+  if (DISPATCHABLE_STEPS.has(next.step)) return { kind: 'dispatch' }
+  const outcome = await terminalOrResume(input, state, next, answer)
+  return outcome === null ? { kind: 'continue' } : { kind: 'stop', outcome }
 }
 
 async function recoverPrepareHead(
@@ -776,6 +787,38 @@ async function checkPrepareHead(
     ? `Worktree HEAD differs from dispatch: expected ${expected}, actual ${actual}. If the heads diverge, the maintainer must decide how to preserve local commits and restore reviewed ancestry before resuming. For an integration-base update, use cycle-state.mjs base-sync, then re-run.`
     : `Cannot read worktree HEAD: expected ${expected}. Restore access to the story worktree, then re-run.`
   return processPark(state, { ...next, reason, detail }, reason, detail)
+}
+
+async function prepareDispatch(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+): Promise<{ stop: CycleOutcome } | { packet: Awaited<ReturnType<RunCycleInput['packet']>> }> {
+  noticeReuseOnce(state, next, input.onNotice)
+  const gated = await gateDispatch(state, next, input)
+  if (gated !== null) return { stop: gated }
+  const prepared = await cleanBeforePrepare(input, state, next)
+  if ('parked' in prepared) return { stop: prepared.parked }
+  const recovered = await recoverPrepareHead(input, state, prepared.dispatch)
+  if ('parked' in recovered) return { stop: recovered.parked }
+  announce(input, next)
+  return { packet: await input.packet(recovered.dispatch) }
+}
+
+async function recoverHostError(
+  input: RunCycleInput,
+  state: LoopState,
+  active: CycleNext,
+  failure: { error: unknown; engineStarted: boolean },
+): Promise<CycleOutcome | null> {
+  const { error, engineStarted } = failure
+  const detail = error instanceof Error ? error.message : String(error)
+  if (engineStarted || !detail.includes('host-transient:')) throw error
+  if (input.recoverStop !== undefined) {
+    await input.worktree()
+    await input.recoverStop(active, 'host-transient')
+  }
+  return processPark(state, active, 'host-transient', detail)
 }
 
 /** `resolve` answered no `next`: the dispatch in flight (if any) is logged as not advanced, then the typed stop. */

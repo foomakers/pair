@@ -68,3 +68,18 @@ export function sweepWorkingArea(input: {
   }
   return removed
 }
+
+/** Resolve tracker dates without blocking the driver, then use the existing deletion policy. */
+export async function sweepWorkingAreaAsync(input: {
+  readonly workingArea: string
+  readonly policy: WorkingCleanup
+  readonly closedAt: (card: string) => Date | null | undefined | Promise<Date | null | undefined>
+  readonly now: Date
+}): Promise<string[]> {
+  if (input.policy.mode === 'never') return []
+  const runs = join(input.workingArea, 'runs')
+  const cards = new Set(dirs(runs).flatMap(run => dirs(join(runs, run))))
+  const dates = new Map<string, Date | null | undefined>()
+  for (const card of cards) dates.set(card, await input.closedAt(card))
+  return sweepWorkingArea({ ...input, closedAt: card => dates.get(card) })
+}

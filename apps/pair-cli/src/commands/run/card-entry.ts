@@ -7,6 +7,7 @@ import { createPerimeter } from './perimeter'
 import { isEligibilityOffWarning, POLICY_PATH, type AutomationPolicy } from './automation-policy'
 import type { CardReadiness } from './cycle-scripts'
 import { CardUnreadableError, createCardReadinessProbe, readCardLabels } from './cycle-wiring'
+import { whileInterruptible } from './interrupt'
 import { CardOutOfScopeError } from './card-readiness'
 import { filterDeliveryFor } from './invocation'
 import { carriesEligibility, type DispatchSkipReason } from './dispatch'
@@ -214,7 +215,7 @@ async function handleDorFallback(
   }
   const prep = PREP_ROUTES[readiness]
   if (prep === undefined) {
-    if (isEscalatedReady(input, deps)) return skipEscalatedCard(input, deps)
+    if (await isEscalatedReady(input, deps)) return skipEscalatedCard(input, deps)
     console.log(
       `  Fallback: card ${decision.card} is Ready (Definition of Ready met) — entering the delivery cycle`,
     )
@@ -235,10 +236,13 @@ async function handleDorFallback(
  * loop and `cycle-prepare.mjs decide` do. Consulted only when autonomy resolved (otherwise the entry is the
  * pre-#523 one, labels never read).
  */
-function isEscalatedReady(input: DorFallbackInput, deps: RunHandlerDependencies): boolean {
+async function isEscalatedReady(
+  input: DorFallbackInput,
+  deps: RunHandlerDependencies,
+): Promise<boolean> {
   const { config, context, cwd, decision } = input
   if (config.autonomous !== true || context.autonomySelection === undefined) return false
-  const labels = (deps.prepare?.readLabels ?? readCardLabels)(decision.card, cwd)
+  const labels = await (deps.prepare?.readLabels ?? readCardLabels)(decision.card, cwd)
   return labels?.includes(NEEDS_REVIEW) === true
 }
 
@@ -375,8 +379,12 @@ async function readReadiness(
 ): Promise<CardReadiness | undefined> {
   const { decision, fs, cwd } = input
   try {
-    return await (deps.cardReadiness ?? createCardReadinessProbe(fs, cwd, input.context.config))(
-      decision.card,
+    return await whileInterruptible(
+      () => {},
+      async () =>
+        await (deps.cardReadiness ?? createCardReadinessProbe(fs, cwd, input.context.config))(
+          decision.card,
+        ),
     )
   } catch (error) {
     if (!isCleanSkip(error, decision)) throw error
@@ -387,6 +395,7 @@ async function readReadiness(
 }
 
 function isCleanSkip(error: unknown, decision: SkipDecision): boolean {
+  if (String(error).includes('host-transient:')) return false
   if (error instanceof CardOutOfScopeError) return true
   return decision.reason === 'no-mapping-declared' && error instanceof CardUnreadableError
 }

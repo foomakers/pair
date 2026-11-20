@@ -232,7 +232,7 @@ async function durableState(
   if (deps.closedAt !== undefined)
     return {
       progress: [0, 0, readCardRank(main, id)],
-      atTarget: deps.closedAt(id, cwd) instanceof Date,
+      atTarget: (await deps.closedAt(id, cwd)) instanceof Date,
     }
   const [card, pr] = await Promise.all([cardState(id, cwd), prRank(id, deps.readPrs)])
   if (!card.readable) return { progress: [0, 0, 0], atTarget: false }
@@ -271,7 +271,7 @@ export async function handleCardsRun(input: CardsEntryInput): Promise<number> {
           return run(id)
         },
         readRank: id => readCardRank(main, id),
-        atTarget: id => deps.readCardClosedAt?.(id, cwd) instanceof Date,
+        atTarget: () => false,
         readState: id => durableState(main, id, cwd, { closedAt: deps.readCardClosedAt, readPrs }),
         interrupted: isInterrupted,
       }),

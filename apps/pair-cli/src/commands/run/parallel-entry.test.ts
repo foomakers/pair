@@ -7,6 +7,30 @@ import type { LockAcquirer } from './card-lock'
 import { resolveMaxParallelism, type RootCandidate } from './root-plan'
 import type { CardProcessExit, CardProcessRunner } from './parallel'
 import { parseCandidates } from './root-select'
+import * as telemetry from './telemetry'
+import { relayHostRetries } from './host-retry-audit'
+
+it('#601 AC5: title reads during parallel selection retain card attribution', async () => {
+  const append = vi.spyOn(telemetry, 'appendTelemetry').mockReturnValue(true)
+  const h = harness([card('601', { title: '' })])
+  const readCardTitle = vi.fn(async () => {
+    relayHostRetries('HOST-RETRY: operation=gh:issue:read attempt=2 outcome=recovered')
+    return 'Example'
+  })
+  try {
+    await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '2', autonomous: true, telemetry: true }),
+      projectFs(policy('3')),
+      { ...h.deps, readCardTitle },
+    )
+    expect(append).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ event: 'host-retry', card: '601', run: 'story-601' }),
+    )
+  } finally {
+    append.mockRestore()
+  }
+})
 
 /** US-575 AC6: the deterministic prerequisite state, faked from each fixture card's own prerequisites. */
 const prereqsOf = (candidates: readonly RootCandidate[]) => (id: string) => {
@@ -452,8 +476,13 @@ describe('run --root --parallel — AC2 each card is its own run --card process,
     const held = new Promise<void>(resolve => {
       release = resolve
     })
+    let started!: () => void
+    const bothStarted = new Promise<void>(resolve => {
+      started = resolve
+    })
     h.runCardProcess.mockImplementation(async ({ card: c }) => {
       h.started.push(c.id)
+      if (h.started.length === 2) started()
       if (c.id === '589') await held
       return { exitCode: 0, signal: null }
     })
@@ -462,7 +491,7 @@ describe('run --root --parallel — AC2 each card is its own run --card process,
       projectFs(policy('2')),
       h.deps,
     )
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await bothStarted
     expect(h.started).toEqual(['589', '600'])
     expect(lines.join('\n')).toContain('Plan: Run (3): #589, #600, #598')
     release()

@@ -631,7 +631,12 @@ function cardReasonOf(outcome: DriveCycleResult): string {
 }
 
 /** Success = the card ended where its target says (PR, ready, merged) or awaits a human; `escalated` is a failure (exit 1). */
-const SUCCESS_STATUSES: ReadonlySet<string> = new Set(['ready-for-merge', 'target-ready', 'merged'])
+const SUCCESS_STATUSES: ReadonlySet<string> = new Set([
+  'ready-for-merge',
+  'target-ready',
+  'merged',
+  'awaiting-human',
+])
 
 function exitCodeFor(outcome: DriveCycleResult): number {
   const parkKind = (outcome.merge as { parkKind?: unknown } | undefined)?.parkKind

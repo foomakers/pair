@@ -1,13 +1,13 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
-  "scanned": 1051,
-  "files": 383,
-  "distinctContents": 348,
+  "scanned": 1077,
+  "files": 398,
+  "distinctContents": 363,
   "dispositionCounts": {
     "standalone-script": 14,
     "os-guarantee": 25,
     "type-contract": 13,
-    "in-flight-churn": 229,
+    "in-flight-churn": 244,
     "repo-contract": 101,
     "boundary-adapter": 1
   },
@@ -29,8 +29,15 @@
       ],
       "disposition": "standalone-script",
       "producer": "apps/pair-cli/scripts/postbuild.js",
-      "sourceSymbols": ["fs"],
-      "observedOperations": ["copyFileSync", "mkdirSync", "readFileSync", "writeFileSync"],
+      "sourceSymbols": [
+        "fs"
+      ],
+      "observedOperations": [
+        "copyFileSync",
+        "mkdirSync",
+        "readFileSync",
+        "writeFileSync"
+      ],
       "operationConsumer": "Runs at package build time before @pair/content-ops is built; it cannot import the service.",
       "reason": "Runs at package build time before @pair/content-ops is built; it cannot import the service.",
       "decision": "Exact-path exception.",
@@ -48,8 +55,20 @@
       ],
       "disposition": "os-guarantee",
       "producer": "apps/pair-cli/src/commands/dispatcher.test.ts",
-      "sourceSymbols": ["chmodSync", "mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["chmodSync", "mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "sourceSymbols": [
+        "chmodSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "rmSync",
+        "writeFileSync"
+      ],
+      "observedOperations": [
+        "chmodSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "rmSync",
+        "writeFileSync"
+      ],
       "operationConsumer": "The test writes an executable stub and invokes a child process; executable permissions and process launch require the OS.",
       "reason": "The test writes an executable stub and invokes a child process; executable permissions and process launch require the OS.",
       "decision": "Keep a temp-directory process integration witness, with cleanup; ordinary dispatcher cases already use the in-memory service.",
@@ -102,8 +121,13 @@
       ],
       "disposition": "type-contract",
       "producer": "apps/pair-cli/src/commands/package/link-rewriter.test.ts",
-      "sourceSymbols": ["fs"],
-      "observedOperations": ["readFile", "writeFile"],
+      "sourceSymbols": [
+        "fs"
+      ],
+      "observedOperations": [
+        "readFile",
+        "writeFile"
+      ],
       "operationConsumer": "The Node fs namespace supplies only Dirent assertions for the injected service; it performs no Node fs call.",
       "reason": "The Node fs namespace supplies only Dirent assertions for the injected service; it performs no Node fs call.",
       "decision": "Keep the type contract, make the import type-only during the CLI wave.",
@@ -237,6 +261,22 @@
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/async-host-read-601.test.ts",
+      "hash": "2665f4e365c1993eb35f58e916a6bbeba209fc3b18990f0d0e428848888e2e3c",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/async-host-read-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
     },
     {
       "path": "apps/pair-cli/src/commands/run/autonomy-card-entry.test.ts",
@@ -767,6 +807,22 @@
       "testCategory": "root import guard"
     },
     {
+      "path": "apps/pair-cli/src/commands/run/cycle-bridge-interrupt-601.test.ts",
+      "hash": "c9e4900a61e1e43577a21e68ff7f8862bdcb59e85cba16b6e8762a75f57f9546",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/cycle-bridge-interrupt-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
       "path": "apps/pair-cli/src/commands/run/cycle-catalogue.test.ts",
       "hash": "deb719938799b44c33f8d180ffacf3ec692142c9e6153b4ca3a397af93f7355f",
       "dependencies": [
@@ -1008,7 +1064,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-merge-stage-lib.ts",
-      "hash": "e14132c2d0d44ab37312873254da8cc4495f0f9f4e13e2edafdd50a0b35b243e",
+      "hash": "8bf7c74531ec94dfc5e6c533d8a3f9c326617f662d4ed2ea8107b8b176355ec8",
       "dependencies": [
         {
           "form": "import",
@@ -1263,6 +1319,22 @@
       "testCategory": "root import guard"
     },
     {
+      "path": "apps/pair-cli/src/commands/run/early-signal-601.test.ts",
+      "hash": "17434c630c1e99da319c6bd0a53da88ac33a8d158fe5ed9fa517d363422eeff9",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 10
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/early-signal-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
       "path": "apps/pair-cli/src/commands/run/fixtures/recovered-custody.ts",
       "hash": "29dc83b70b3f04fa11e21bc5af87ef9cb8da9392a23add19c296567e8bba1b62",
       "dependencies": [
@@ -1293,6 +1365,166 @@
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/handler.ts",
+      "hash": "870d9a805e04a9266a948c8b2e07df42283d2e9e337c62a509181b4431190ef1",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/handler.ts",
+      "reason": "Create the real lock directory before acquiring operating-system locks.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-entry-cli-601.test.ts",
+      "hash": "4343a7c5f673b2a39240e71e4ee0220f1147c90cd21cf53deb5b65096e4e9f20",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 12
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-entry-cli-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-entry-recovery-601.test.ts",
+      "hash": "ccaa6bb3454360c2de0cb619207ea2bff38f1c92664d7af9468aa52e02e17cb1",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-entry-recovery-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-gh-fallback-601.test.ts",
+      "hash": "b994d72e7bc1d4ea7b1402d66d2f2bfa6a4195f8159718211f83086fed320966",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-gh-fallback-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-pm-recovery.test.ts",
+      "hash": "a482b284a671c983e17655a893b7b76e375dd2fff2a4d342f5e92950b5b6c53a",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 3
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-pm-recovery.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-process.test.ts",
+      "hash": "e6c8dac9f0c1639751bf40d197e2e35db9e95bf3cbf6a5f308995167295897ea",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 4
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-process.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-read-timeout-601.test.ts",
+      "hash": "a5e48552e897a3b5feb79eeac197a44a4c61f3d53e6f4d19015ce7767fc5c778",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-read-timeout-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-recovery-cli.test.ts",
+      "hash": "1910c2ce0f8eb1709283dff0c5d5d671326ca9fe0f8b2dc4edcb13579f3e1e40",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-recovery-cli.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-recovery.test.ts",
+      "hash": "d56058164904d2410fcbf27b9019a7e4f2e630cbc79572f5152edd838097718f",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 3
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-recovery.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-retry-audit.test.ts",
+      "hash": "5dd849ebc6d3cd21437e2306811ebffb406284dbd5ff641413338ef6cfac500c",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-retry-audit.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
     },
     {
       "path": "apps/pair-cli/src/commands/run/interrupt-group.test.ts",
@@ -1453,6 +1685,22 @@
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/nested-host-signal-601.test.ts",
+      "hash": "1bef9c5a12a9217333be48e8de5c78166848269cfad8b59cce93e730daab81c4",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/nested-host-signal-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
     },
     {
       "path": "apps/pair-cli/src/commands/run/pair-loop-parity.test.ts",
@@ -2239,8 +2487,18 @@
       ],
       "disposition": "os-guarantee",
       "producer": "apps/pair-cli/src/commands/tokens/tokens.acceptance.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "rmSync", "writeFileSync"],
+      "sourceSymbols": [
+        "mkdirSync",
+        "mkdtempSync",
+        "rmSync",
+        "writeFileSync"
+      ],
+      "observedOperations": [
+        "mkdirSync",
+        "mkdtempSync",
+        "rmSync",
+        "writeFileSync"
+      ],
       "operationConsumer": "Runs the compiled tokens CLI as a child process over temporary corpus and baseline files.",
       "reason": "Runs the compiled tokens CLI as a child process over temporary corpus and baseline files.",
       "decision": "Retain real process and file interoperability in isolated temporary directories.",
@@ -2384,7 +2642,9 @@
       ],
       "disposition": "type-contract",
       "producer": "apps/pair-cli/src/registry/layout.test.ts",
-      "sourceSymbols": ["fs"],
+      "sourceSymbols": [
+        "fs"
+      ],
       "observedOperations": [],
       "reason": "fs.Dirent is used only as a type for a service-provided readdir result; no Node filesystem operation runs.",
       "decision": "Retain an exact-path type-only contract while removing the runtime import.",
@@ -2456,8 +2716,12 @@
       ],
       "disposition": "os-guarantee",
       "producer": "apps/pair-cli/src/test-utils/cli-entry.ts",
-      "sourceSymbols": ["existsSync"],
-      "observedOperations": ["existsSync"],
+      "sourceSymbols": [
+        "existsSync"
+      ],
+      "observedOperations": [
+        "existsSync"
+      ],
       "operationConsumer": "cli.epipe.test.ts and token acceptance/pipe tests select the built CLI or ts-node entry for a real child process",
       "reason": "The test helper checks whether the compiled process entry exists on disk.",
       "decision": "Retain real artifact detection for the subprocess tests as a narrow process-boundary exception.",
@@ -2475,8 +2739,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "apps/website/lib/adoption-files-fences.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
       "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2494,8 +2762,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "apps/website/lib/ci-docs-staleness-env.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
       "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2513,8 +2785,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "apps/website/lib/deploy-build-command.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
       "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2532,8 +2808,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "apps/website/lib/docs-ia.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
       "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2556,8 +2840,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "apps/website/lib/docs-staleness-check.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
       "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2575,8 +2863,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "apps/website/lib/source.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
       "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2594,8 +2886,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "apps/website/lib/turbo-source-order.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
       "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2613,8 +2909,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "apps/website/lib/whats-new-guard.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "test reads checked-in repo files (docs, CI/turbo config) as the asserted subject",
       "reason": "The assertion is about the real checked-in files; an in-memory copy would only prove the seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2632,7 +2934,13 @@
       ],
       "disposition": "standalone-script",
       "producer": "apps/website/scripts/landing-video/github-scroll.mjs",
-      "sourceSymbols": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"],
+      "sourceSymbols": [
+        "readdirSync",
+        "renameSync",
+        "statSync",
+        "unlinkSync",
+        "writeFileSync"
+      ],
       "observedOperations": [
         "readdirSync",
         "renameSync",
@@ -2657,7 +2965,13 @@
       ],
       "disposition": "standalone-script",
       "producer": "apps/website/scripts/landing-video/login-closing.mjs",
-      "sourceSymbols": ["readdirSync", "renameSync", "statSync", "unlinkSync", "writeFileSync"],
+      "sourceSymbols": [
+        "readdirSync",
+        "renameSync",
+        "statSync",
+        "unlinkSync",
+        "writeFileSync"
+      ],
       "observedOperations": [
         "readdirSync",
         "renameSync",
@@ -2906,8 +3220,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/quality-gates/ci-staleness-checkout-depth.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2925,8 +3245,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/quality-gates/delivery-process-docs.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2962,8 +3288,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/quality-gates/format-workflow-composition.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -2981,8 +3313,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/quality-gates/pre-push-gate-composition.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -3000,8 +3336,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/quality-gates/smoke-ci-platform.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -3019,8 +3361,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/quality-gates/smoke-scenario-modes.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -3038,8 +3384,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -3057,8 +3407,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/release/release-concurrency.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -3076,8 +3430,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/release/release-sandbox.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -3095,8 +3453,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/release/release-workflows.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -3114,8 +3478,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -3400,7 +3768,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -3560,7 +3928,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -3672,7 +4040,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -3768,7 +4136,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -3864,7 +4232,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -4013,7 +4381,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -4359,7 +4727,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-runtime.test.mjs",
-      "hash": "dc3e670ef4378d383a8a32a3a38d7b23997b162a32ab157aa3447e27e22aac7b",
+      "hash": "d3386e345b7137e7eb04535bf25c24fe7cc41a2eb23cd86154c6f90ec3ea63a9",
       "dependencies": [
         {
           "form": "import",
@@ -4380,7 +4748,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs",
-      "hash": "29750d25c46d4b524e4297cc361cd79899f5e2668171071bd025512aa6815b11",
+      "hash": "22a8caef2c695b2b6cd1a013fbea50392f56ef2214d7f6ca794e19a9172776f3",
       "dependencies": [
         {
           "form": "import",
@@ -4581,6 +4949,22 @@
       "testCategory": "root import guard"
     },
     {
+      "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/host-pm-retry-601.test.mjs",
+      "hash": "d1f5490478da1e7397d51e3a7c65fe54f8af6657d31d18235485b1c27a7b5766",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 3
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/host-pm-retry-601.test.mjs",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/linear-adapter.test.mjs",
       "hash": "cf5cd5a684d0ea245cd52dc16bb8edc3500bbbaf34227f6f0690ae25ea777b97",
       "dependencies": [
@@ -4678,7 +5062,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pr-comment.test.mjs",
-      "hash": "a51a8a42af08d33e3c463531877b7b37aebdff09dc52fbe99d1eda10048c9774",
+      "hash": "088cfdba80a4c2225f179780901cee50b870cbd3e58f1546316dbd89e2daf119",
       "dependencies": [
         {
           "form": "import",
@@ -4885,8 +5269,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/adoption-informed-generation.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -4904,8 +5296,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/adr-template.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -4923,8 +5319,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/agent-harness-guides.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -4942,8 +5344,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -4961,8 +5367,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/analyze-delivery-metrics.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -4980,8 +5392,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/analyze-test-skills-root-scripts.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -4999,8 +5415,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/analyze-test-skills.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5018,8 +5438,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/approval-signal.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5037,8 +5465,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/assess-cost.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5056,8 +5490,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/assess-coupling.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5075,8 +5515,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/assess-output-only.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5094,8 +5540,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/assess-security.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5113,8 +5563,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/automation-eligibility.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5132,8 +5590,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/autonomous-prepare-skills.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5151,8 +5613,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/autonomy-arguments.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5170,8 +5638,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/bootstrap-classification-delta.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5189,8 +5661,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/bootstrap.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5208,8 +5686,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/brainstorm-phases.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5227,8 +5711,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/classify.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5246,8 +5734,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/code-host-routing.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5265,8 +5761,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/code-review-verdict-first.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5284,8 +5784,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/coverage-ratchet-adopter-path.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5303,8 +5807,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/coverage-ratchet-asset.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5322,8 +5830,18 @@
       ],
       "disposition": "os-guarantee",
       "producer": "packages/knowledge-hub/src/conformance/cycle-autonomy-active.test.ts",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
+      "sourceSymbols": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "writeFileSync"
+      ],
+      "observedOperations": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "writeFileSync"
+      ],
       "operationConsumer": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
       "reason": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
       "decision": "Exact-path exception; out of the story migration scope.",
@@ -5341,8 +5859,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/cycle-hooks-cwd.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5360,8 +5882,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/cycle-hooks-schema.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5379,8 +5905,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5398,8 +5930,18 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/dataset-adoption-no-leak.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "statSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync", "statSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync",
+        "statSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync",
+        "statSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5417,8 +5959,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/definition-of-ready-and-done.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5436,8 +5984,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/delivery-cycle-process-gaps.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5455,8 +6007,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/delivery-metrics.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5474,8 +6030,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/doc-groups.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5493,8 +6053,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5595,8 +6161,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/headless-stage-execution.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5614,8 +6184,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/implement-compose-close.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5633,8 +6207,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/implement-phase-fresh-branch.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5652,8 +6230,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/implementation-never-files-a-card.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5702,8 +6284,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/mirror-realign-asset.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5721,8 +6307,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/mirror-realignment.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5740,8 +6330,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/output-shapes.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5759,8 +6357,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/pair-assistant-config-guide.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5778,8 +6380,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/pair-assistant-install-footprint.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5797,8 +6403,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5816,8 +6426,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/pair-next-autonomy-selection.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5835,8 +6449,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/pair-next-control-state.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5854,8 +6472,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/pair-next-scoping.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5873,8 +6495,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/pm-tool-adapter-contract.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5892,8 +6522,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/pr-state-flow.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5911,8 +6547,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/process-profile.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5930,8 +6572,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/quality-model.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5949,8 +6597,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/record-decision.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5968,8 +6622,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/refine-story-draft-to-ready.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -5987,8 +6645,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/review-identity.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6006,8 +6668,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/review-phase-classifies.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6025,8 +6691,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/scoped-context-skills.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6044,8 +6718,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/secret-scanning.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6063,8 +6741,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6082,8 +6766,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/skills-defects-b.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6101,8 +6789,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/story-local-markers.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync", "statSync"],
-      "observedOperations": ["readFileSync", "readdirSync", "statSync"],
+      "sourceSymbols": [
+        "readFileSync",
+        "readdirSync",
+        "statSync"
+      ],
+      "observedOperations": [
+        "readFileSync",
+        "readdirSync",
+        "statSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6120,8 +6816,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/task-progress-feedback.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6149,8 +6851,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/template-resolution.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6168,8 +6874,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/template-shrink.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6187,8 +6897,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/timeouts-section.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6206,8 +6920,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/to-issues-triage.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6225,8 +6943,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/verified-writes-contract.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6244,8 +6966,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/verify-quality.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6263,8 +6993,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/web-cloud-environment.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6282,8 +7018,14 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/workflow-scripts-shape.test.ts",
-      "sourceSymbols": ["readFileSync", "readdirSync"],
-      "observedOperations": ["readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6301,8 +7043,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/conformance/working-area.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6325,8 +7071,18 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "statSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync", "statSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync",
+        "statSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync",
+        "statSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6344,8 +7100,14 @@
       ],
       "disposition": "standalone-script",
       "producer": "packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts",
-      "sourceSymbols": ["readFileSync", "writeFileSync"],
-      "observedOperations": ["readFileSync", "writeFileSync"],
+      "sourceSymbols": [
+        "readFileSync",
+        "writeFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync",
+        "writeFileSync"
+      ],
       "operationConsumer": "Shipped node-builtins-only .cjs asset built from this file; it runs in adopter repos with no workspace package available.",
       "reason": "Shipped node-builtins-only .cjs asset built from this file; it runs in adopter repos with no workspace package available.",
       "decision": "Exact-path exception; node builtins only (build-ratchet-asset.ts).",
@@ -6363,8 +7125,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/tools/mirror-guard.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "statSync"],
-      "observedOperations": ["existsSync", "readFileSync", "statSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "statSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "statSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6382,8 +7152,12 @@
       ],
       "disposition": "standalone-script",
       "producer": "packages/knowledge-hub/src/tools/mirror-realign.ts",
-      "sourceSymbols": ["existsSync"],
-      "observedOperations": ["existsSync"],
+      "sourceSymbols": [
+        "existsSync"
+      ],
+      "observedOperations": [
+        "existsSync"
+      ],
       "operationConsumer": "Shipped node-builtins-only .cjs asset built from this file; it runs in adopter repos with no workspace package available.",
       "reason": "Shipped node-builtins-only .cjs asset built from this file; it runs in adopter repos with no workspace package available.",
       "decision": "Exact-path exception; node builtins only (build-realign-asset.ts).",
@@ -6401,8 +7175,16 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/tools/skill-md-mirror.test.ts",
-      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync"],
-      "observedOperations": ["existsSync", "readFileSync", "readdirSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync",
+        "readdirSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6420,8 +7202,12 @@
       ],
       "disposition": "repo-contract",
       "producer": "packages/knowledge-hub/src/tools/skills-guide-mirror.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
+      "sourceSymbols": [
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "readFileSync"
+      ],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
@@ -6439,8 +7225,20 @@
       ],
       "disposition": "os-guarantee",
       "producer": "scripts/dev/delivery-process-overwrite.test.mjs",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
+      "sourceSymbols": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
+      ],
+      "observedOperations": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync",
+        "writeFileSync"
+      ],
       "operationConsumer": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
       "reason": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
       "decision": "Exact-path exception; out of the story migration scope.",
@@ -6491,8 +7289,14 @@
       ],
       "disposition": "standalone-script",
       "producer": "scripts/dev/rtk-review-hook.mjs",
-      "sourceSymbols": ["existsSync", "readFileSync"],
-      "observedOperations": ["existsSync", "readFileSync"],
+      "sourceSymbols": [
+        "existsSync",
+        "readFileSync"
+      ],
+      "observedOperations": [
+        "existsSync",
+        "readFileSync"
+      ],
       "operationConsumer": "standalone .mjs run directly by node (video capture / developer hook), no workspace package at runtime",
       "reason": "Runs outside the package graph; importing a service would add a build dependency.",
       "decision": "Exact-path exception.",
@@ -6510,8 +7314,18 @@
       ],
       "disposition": "os-guarantee",
       "producer": "scripts/dev/rtk-review-hook.test.mjs",
-      "sourceSymbols": ["chmodSync", "mkdirSync", "mkdtempSync", "writeFileSync"],
-      "observedOperations": ["chmodSync", "mkdirSync", "mkdtempSync", "writeFileSync"],
+      "sourceSymbols": [
+        "chmodSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "writeFileSync"
+      ],
+      "observedOperations": [
+        "chmodSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "writeFileSync"
+      ],
       "operationConsumer": "real subprocess/executable-bit (chmod) or packaged-artifact copy proof in temp dirs",
       "reason": "Proves OS permission bits, real process execution or installed-artifact layout; the double cannot.",
       "decision": "Exact-path exception; keep isolated temp dir with cleanup.",
@@ -6529,8 +7343,14 @@
       ],
       "disposition": "standalone-script",
       "producer": "scripts/dev/rtk-session-path.mjs",
-      "sourceSymbols": ["appendFileSync", "existsSync"],
-      "observedOperations": ["appendFileSync", "existsSync"],
+      "sourceSymbols": [
+        "appendFileSync",
+        "existsSync"
+      ],
+      "observedOperations": [
+        "appendFileSync",
+        "existsSync"
+      ],
       "operationConsumer": "standalone .mjs run directly by node (video capture / developer hook), no workspace package at runtime",
       "reason": "Runs outside the package graph; importing a service would add a build dependency.",
       "decision": "Exact-path exception.",
@@ -6583,8 +7403,18 @@
       ],
       "disposition": "os-guarantee",
       "producer": "scripts/dev/sealed-manifest-format.test.mjs",
-      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
-      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "writeFileSync"],
+      "sourceSymbols": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "writeFileSync"
+      ],
+      "observedOperations": [
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "writeFileSync"
+      ],
       "operationConsumer": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
       "reason": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
       "decision": "Exact-path exception; out of the story migration scope.",
@@ -6602,8 +7432,14 @@
       ],
       "disposition": "os-guarantee",
       "producer": "scripts/smoke-tests/lib/run-card-omission.test.js",
-      "sourceSymbols": ["mkdtempSync", "rmSync"],
-      "observedOperations": ["mkdtempSync", "rmSync"],
+      "sourceSymbols": [
+        "mkdtempSync",
+        "rmSync"
+      ],
+      "observedOperations": [
+        "mkdtempSync",
+        "rmSync"
+      ],
       "operationConsumer": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
       "reason": "Spawns a real process (git/sh/node) and runs a repo script over a real temp tree; the OS and process boundary are the subject.",
       "decision": "Exact-path exception; out of the story migration scope.",
@@ -6654,8 +7490,20 @@
       ],
       "disposition": "os-guarantee",
       "producer": "scripts/smoke-tests/witnesses/packaged-control-state-build-tree-615.mjs",
-      "sourceSymbols": ["cpSync", "mkdirSync", "mkdtempSync", "readFileSync", "rmSync"],
-      "observedOperations": ["cpSync", "mkdirSync", "mkdtempSync", "readFileSync", "rmSync"],
+      "sourceSymbols": [
+        "cpSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync"
+      ],
+      "observedOperations": [
+        "cpSync",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "rmSync"
+      ],
       "operationConsumer": "real subprocess/executable-bit (chmod) or packaged-artifact copy proof in temp dirs",
       "reason": "Proves OS permission bits, real process execution or installed-artifact layout; the double cannot.",
       "decision": "Exact-path exception; keep isolated temp dir with cleanup.",

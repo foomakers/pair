@@ -106,13 +106,16 @@ test('AC5: no LINEAR_API_KEY ⇒ host-unconfigured naming it, nothing sent; the 
   assert.ok(!readFileSync(fileURLToPath(new URL('../../skills/pair-workflow-cycle/scripts/host/linear.mjs', import.meta.url)), 'utf8').includes('process.env.LINEAR_API_KEY'), 'never read into JS')
 })
 
-test('edge: rate limit ⇒ one bounded retry, then failed:linear-rate-limited', () => {
+test('#601 AC1: Linear rate limiting uses the shared four-attempt read budget', () => {
   const once = fake({ limited: 1 })
   assert.equal(once.pm.readCard('ENG-2', { fields: ['title'] }).title, 'Login')
   assert.equal(once.calls().length, 2)
   const twice = fake({ limited: 2 })
-  assert.throws(() => twice.pm.readCard('ENG-2'), e => e.kind === 'failed' && e.detail === 'linear-rate-limited')
-  assert.equal(twice.calls().length, 2, 'exactly one retry')
+  assert.equal(twice.pm.readCard('ENG-2', { fields: ['title'] }).title, 'Login')
+  assert.equal(twice.calls().length, 3)
+  const exhausted = fake({ limited: 4 })
+  assert.throws(() => exhausted.pm.readCard('ENG-2'), e => e.kind === 'transient-exhausted')
+  assert.equal(exhausted.calls().length, 4)
 })
 
 test('edge: an issue of another team than the binding is refused naming both teams', () => {

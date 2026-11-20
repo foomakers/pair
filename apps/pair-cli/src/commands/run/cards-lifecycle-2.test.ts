@@ -87,7 +87,7 @@ for (const adapter of ['fallback', 'installed'] as const) {
           }
     state.cards['12'] = make(c.from)
     save(state)
-    expect(readCardDocumentViaGh('12', root).boardState).toBe(c.from)
+    expect((await readCardDocumentViaGh('12', root)).boardState).toBe(c.from)
     const map = parseStateMapping(c.map)
     const before = resolveMacrostate(c.from, map)
     const after = resolveMacrostate(c.to, map)
@@ -149,7 +149,7 @@ for (const adapter of ['fallback', 'installed'] as const) {
     const evidence = { ...board('Building'), state: c.state, stateReason: c.reason, closedAt: c.at }
     state.cards['12'] = evidence
     save(state)
-    expect(readCardClosedAt('12', root) instanceof Date).toBe(c.valid)
+    expect((await readCardClosedAt('12', root)) instanceof Date).toBe(c.valid)
     const before = await invoke(state, () => retry, { cards: '12' })
     expect(before.calls).toEqual(c.valid ? [] : ['12'])
     expect(before.code).toBe(c.valid ? 0 : 1)

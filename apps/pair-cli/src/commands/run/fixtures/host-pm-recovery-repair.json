@@ -1,0 +1,1631 @@
+[
+  {
+    "id": "linear-budget-http429",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{}\n429",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted",
+    "elapsedPerCall": 29500,
+    "expectedTimeouts": [30000],
+    "expectedElapsed": 29500
+  },
+  {
+    "id": "linear-wake-http429",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{}\n429",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [1000],
+    "kind": "transient-exhausted",
+    "oversleep": true,
+    "expectedTimeouts": [30000],
+    "expectedElapsed": 30001
+  },
+  {
+    "id": "linear-budget-http503",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{}\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted",
+    "elapsedPerCall": 29500,
+    "expectedTimeouts": [30000],
+    "expectedElapsed": 29500
+  },
+  {
+    "id": "linear-wake-http503",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{}\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [1000],
+    "kind": "transient-exhausted",
+    "oversleep": true,
+    "expectedTimeouts": [30000],
+    "expectedElapsed": 30001
+  },
+  {
+    "id": "linear-budget-graphql",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted",
+    "elapsedPerCall": 29500,
+    "expectedTimeouts": [30000],
+    "expectedElapsed": 29500
+  },
+  {
+    "id": "linear-wake-graphql",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [1000],
+    "kind": "transient-exhausted",
+    "oversleep": true,
+    "expectedTimeouts": [30000],
+    "expectedElapsed": 30001
+  },
+  {
+    "id": "linear-mixed-transport-first",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "",
+        "stderr": "ECONNRESET",
+        "code": 1
+      },
+      {
+        "stdout": "{}\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "",
+        "stderr": "ECONNRESET",
+        "code": 1
+      }
+    ],
+    "attempts": 4,
+    "delays": [1000, 2000, 4000],
+    "kind": "transient-exhausted",
+    "elapsedPerCall": 1000,
+    "expectedTimeouts": [30000, 28000, 25000, 20000],
+    "expectedElapsed": 11000
+  },
+  {
+    "id": "linear-mixed-graphql-first",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "",
+        "stderr": "ECONNRESET",
+        "code": 1
+      },
+      {
+        "stdout": "{}\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "",
+        "stderr": "ECONNRESET",
+        "code": 1
+      }
+    ],
+    "attempts": 4,
+    "delays": [1000, 2000, 4000],
+    "kind": "transient-exhausted",
+    "elapsedPerCall": 1000,
+    "expectedTimeouts": [30000, 28000, 25000, 20000],
+    "expectedElapsed": 11000
+  },
+  {
+    "id": "linear-mixed-recover",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "",
+        "stderr": "ECONNRESET",
+        "code": 1
+      },
+      {
+        "stdout": "{}\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 4,
+    "delays": [1000, 2000, 4000],
+    "value": {
+      "body": "fixture body"
+    },
+    "elapsedPerCall": 1000,
+    "expectedTimeouts": [30000, 28000, 25000, 20000],
+    "expectedElapsed": 11000
+  },
+  {
+    "id": "linear-mixed-elapsed",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "",
+        "stderr": "ECONNRESET",
+        "code": 1
+      },
+      {
+        "stdout": "{}\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 3,
+    "delays": [1000, 2000],
+    "kind": "transient-exhausted",
+    "elapsedPerCall": 8000,
+    "expectedTimeouts": [30000, 21000, 11000],
+    "expectedElapsed": 27000
+  },
+  {
+    "id": "linear-precedence-400-limited-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n400",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-400-limited-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n400",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-400-application-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n400",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-400-application-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n400",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-400-raw-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "not json\n400",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-400-raw-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "not json\n400",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-401-limited-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n401",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-401-limited-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n401",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-401-application-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n401",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-401-application-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n401",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-401-raw-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "not json\n401",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-401-raw-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "not json\n401",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-403-limited-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n403",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-403-limited-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n403",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-403-application-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n403",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-403-application-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n403",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-403-raw-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "not json\n403",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-403-raw-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "not json\n403",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-404-limited-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n404",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-404-limited-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n404",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-404-application-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n404",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-404-application-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n404",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-404-raw-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "not json\n404",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-404-raw-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "not json\n404",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-422-limited-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n422",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-422-limited-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n422",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-422-application-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n422",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-422-application-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n422",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-422-raw-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "not json\n422",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-422-raw-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "not json\n422",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-429-limited-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n429",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-429-limited-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n429",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-429-application-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n429",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-429-application-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n429",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-429-raw-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "not json\n429",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-429-raw-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "not json\n429",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-500-limited-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n500",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-500-limited-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n500",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-500-application-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n500",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-500-application-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n500",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-500-raw-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "not json\n500",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-500-raw-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "not json\n500",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-503-limited-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-503-limited-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-503-application-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-503-application-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-503-raw-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "not json\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-503-raw-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "not json\n503",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-599-limited-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n599",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-599-limited-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n599",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-599-application-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n599",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-599-application-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n599",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-599-raw-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "not json\n599",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-599-raw-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "not json\n599",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-200-limited-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [1000],
+    "value": {
+      "body": "fixture body"
+    }
+  },
+  {
+    "id": "linear-precedence-200-limited-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"limited\",\"extensions\":{\"code\":\"RATELIMITED\"}}]}\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "transient-exhausted"
+  },
+  {
+    "id": "linear-precedence-200-application-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-200-application-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{\"errors\":[{\"message\":\"invalid query\"}]}\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "failed"
+  },
+  {
+    "id": "linear-precedence-200-raw-readCard",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "not json\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "invalid-json"
+  },
+  {
+    "id": "linear-precedence-200-raw-updateCard",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "not json\n200",
+        "stderr": "",
+        "code": 0
+      },
+      {
+        "stdout": "{\"data\":{\"issueUpdate\":{\"success\":true}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "kind": "invalid-json"
+  },
+  {
+    "id": "linear-header-fits",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{}\n429",
+        "stderr": "",
+        "code": 0,
+        "headers": {
+          "Retry-After": "2"
+        }
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 2,
+    "delays": [2000],
+    "native": true,
+    "requireHeader": true,
+    "value": {
+      "body": "fixture body"
+    },
+    "expectedTimeouts": [30000, 28000],
+    "expectedElapsed": 2000
+  },
+  {
+    "id": "linear-header-exceeds",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{}\n429",
+        "stderr": "",
+        "code": 0,
+        "headers": {
+          "Retry-After": "31"
+        }
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "native": true,
+    "requireHeader": true,
+    "kind": "transient-exhausted",
+    "expectedTimeouts": [30000],
+    "expectedElapsed": 0
+  },
+  {
+    "id": "linear-header-remaining",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{}\n429",
+        "stderr": "",
+        "code": 0,
+        "headers": {
+          "Retry-After": "2"
+        }
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "native": true,
+    "requireHeader": true,
+    "kind": "transient-exhausted",
+    "elapsedPerCall": 28500,
+    "expectedTimeouts": [30000],
+    "expectedElapsed": 28500
+  },
+  {
+    "id": "linear-header-absent",
+    "host": "linear",
+    "operation": "readCard",
+    "replies": [
+      {
+        "stdout": "{}\n429",
+        "stderr": "",
+        "code": 0,
+        "headers": {}
+      }
+    ],
+    "attempts": 4,
+    "delays": [1000, 2000, 4000],
+    "native": true,
+    "requireHeader": false,
+    "kind": "transient-exhausted",
+    "expectedTimeouts": [30000, 29000, 27000, 23000],
+    "expectedElapsed": 7000
+  },
+  {
+    "id": "linear-header-write",
+    "host": "linear",
+    "operation": "updateCard",
+    "replies": [
+      {
+        "stdout": "{}\n429",
+        "stderr": "",
+        "code": 0,
+        "headers": {
+          "Retry-After": "2"
+        }
+      },
+      {
+        "stdout": "{\"data\":{\"issue\":{\"id\":\"uuid-601\",\"identifier\":\"ENG-601\",\"description\":\"fixture body\",\"team\":{\"key\":\"ENG\"}}}}\n200",
+        "stderr": "",
+        "code": 0
+      }
+    ],
+    "attempts": 1,
+    "delays": [],
+    "native": true,
+    "requireHeader": true,
+    "kind": "transient-exhausted",
+    "expectedTimeouts": [30000],
+    "expectedElapsed": 0
+  }
+]
