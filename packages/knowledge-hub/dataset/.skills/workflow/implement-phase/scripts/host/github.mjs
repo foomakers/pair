@@ -27,7 +27,28 @@ export default defineAdapter({
   binaries: ['gh'],
   create(transport = {}) {
     const bin = transport.ghBin || process.env.PAIR_GH_BIN || 'gh'
-    const gh = (args, { input } = {}) => runCli({ bin, args, input, label: 'gh' })
+    // A failed mutation may already have reached GitHub. Only replay commands with no write effect.
+    const readOnly = args => {
+      if (['issue', 'pr', 'repo', 'project'].includes(args[0]))
+        return ['view', 'list', 'status'].includes(args[1])
+      if (
+        args[0] !== 'api' ||
+        args.includes('--input')
+      )
+        return false
+      for (const flag of ['--method', '-X']) {
+        const index = args.indexOf(flag)
+        if (index !== -1 && args[index + 1] !== 'GET') return false
+      }
+      if (args[1] === 'graphql')
+        return (
+          args.some((arg, i) => args[i - 1] === '-f' && /^query=/.test(arg)) &&
+          !args.some((arg, i) => args[i - 1] === '-f' && /^query=mutation/.test(arg))
+        )
+      return !args.some(arg => ['-f', '-F', '--field', '--raw-field'].includes(arg))
+    }
+    const gh = (args, { input } = {}) =>
+      runCli({ bin, args, input, label: 'gh', operation: `gh:${args[0]}:${readOnly(args) ? 'read' : 'write'}`, replaySafe: readOnly(args) })
     const withRepo = (args, repo) => (repo ? [...args, '--repo', repo] : args)
     // A write that needs an explicit `--repo` never sends an empty one: the given slug, else the
     // current checkout's (`gh repo view`), else a typed refusal BEFORE the write.
@@ -40,7 +61,8 @@ export default defineAdapter({
       let out = ''
       try {
         out = gh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim()
-      } catch {
+      } catch (error) {
+        if (error?.kind === 'transient-exhausted') throw error
         out = ''
       }
       if (!SLUG_RE.test(out)) throw new HostError('invalid-input', { message: 'github: repo unresolved — no --repo given and `gh repo view` could not resolve one; nothing was written (pass --repo owner/name)' })
@@ -124,7 +146,11 @@ export default defineAdapter({
       // #691: the url travels with the conclusion, so a remote failure can be reported where it can be read.
       return [...byName].map(([name, c]) => ({ name, ...c }))
     }
-    const readLabels = ({ pr, repo }) => JSON.parse(gh(['api', `${apiRepo(repo)}/issues/${pr}/labels`])).map(l => String(l.name))
+    const readLabels = ({ pr, repo }) => {
+      const number = /^\d+$/.test(String(pr)) ? pr : parseJson(gh(withRepo(['pr', 'view', String(pr), '--json', 'number'], repo)), { command: 'gh pr view' })?.number
+      if (!/^\d+$/.test(String(number))) throw new HostError('invalid-output', { message: `gh pr view ${JSON.stringify(pr)}: PR number missing` })
+      return JSON.parse(gh(['api', `${apiRepo(repo)}/issues/${number}/labels`])).map(l => String(l.name))
+    }
     // True only on a host-confirmed merge (`mergedAt` set): closed-unmerged and unreadable are false / thrown.
     const isMerged = ({ pr, repo }) => {
       return Boolean(parseJson(gh(withRepo(['pr', 'view', String(pr)], repo).concat(['--json', 'mergedAt'])), { command: 'gh pr view' })?.mergedAt)
@@ -132,7 +158,8 @@ export default defineAdapter({
     const mergedSafe = a => {
       try {
         return isMerged(a)
-      } catch {
+      } catch (error) {
+        if (error?.kind === 'transient-exhausted') throw error
         return false // unreadable PR: the open-PR write path decides, as before
       }
     }
@@ -218,7 +245,8 @@ export default defineAdapter({
         try {
           const p = parseJson(gh(['api', `repos/${resolveRepo(repo)}/collaborators/${user}/permission`, '--method', 'GET']), { command: 'gh api permission' })
           return p?.role_name ?? p?.permission ?? null
-        } catch {
+        } catch (error) {
+          if (error?.kind === 'transient-exhausted') throw error
           return null
         }
       },
@@ -259,7 +287,10 @@ export default defineAdapter({
         const m = ISSUE_URL_RE.exec(String(ref ?? ''))
         if (!m) return null
         let bound = repo
-        if (bound === undefined) try { bound = resolveRepo() } catch { /* unresolved: foreign, fail closed */ }
+        if (bound === undefined) try { bound = resolveRepo() } catch (error) {
+          if (error?.kind === 'transient-exhausted') throw error
+          /* unresolved: foreign, fail closed */
+        }
         return { id: m[3], number: Number(m[3]), inScope: `${m[1]}/${m[2]}` === bound }
       },
       // Close the card (`completed`), then walk up: a parent whose sub-issues are ALL closed is
@@ -496,7 +527,13 @@ export default defineAdapter({
         if (headSha) args.push('--match-head-commit', headSha)
         if (subject) args.push('--subject', subject)
         if (rest.join('\n').trim()) args.push('--body', rest.join('\n').replace(/^\n+/, ''))
-        gh(args)
+        try {
+          gh(args)
+        } catch (error) {
+          if (error?.kind !== 'transient-exhausted' || !headSha) throw error
+          const state = parseJson(gh(withRepo(['pr', 'view', String(pr), '--json', 'state,headRefOid'], repo)), { command: 'gh pr view' })
+          if (state.state !== 'MERGED' || state.headRefOid !== headSha) throw error
+        }
         return { merged: true, pr: Number(pr), strategy }
       },
     }

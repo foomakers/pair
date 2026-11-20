@@ -103,6 +103,7 @@ policy '## Cycle Hooks
 reset_run
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
 assert_output_contains "Cycle status: awaiting-human" || FAILED=1
+assert_output_contains "resume token implement:a0:dead-dispatch" || FAILED=1
 grep -q "/pair-workflow-implement-phase" "$ENGINE_LOG" || fail "the implement stage was never dispatched"
 [ -d "$story_wt" ] || fail "the story worktree was not created at $story_wt"
 [ "$(cat "$story_wt/pre-implement.ran" 2>/dev/null)" = "$(cd "$story_wt" 2>/dev/null && pwd -P)" ] || fail "pre-implement did not run in the story worktree ($story_wt)"
@@ -133,6 +134,7 @@ policy '## Max Parallelism
 reset_run
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
 assert_output_contains "Cycle status: awaiting-human" || FAILED=1
+assert_output_contains "resume token implement:a0:dead-dispatch" || FAILED=1
 if grep -Eqi "## Cycle Hooks|hook key|hook " "$TMP_DIR/last_cmd_output.log"; then fail "output mentions hooks though none are declared"; fi
 
 log_info "Test 3b: typo'd hook key ⇒ unrecognized-key warning, the cycle still runs"
@@ -143,6 +145,7 @@ reset_run
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
 assert_output_contains "unrecognized hook key" || FAILED=1
 assert_output_contains "Cycle status: awaiting-human" || FAILED=1
+assert_output_contains "resume token implement:a0:dead-dispatch" || FAILED=1
 
 if [ "$FAILED" -ne 0 ]; then
   echo "=== $TEST_NAME FAILED ==="

@@ -113,6 +113,26 @@ describe('runCycle (US-487 T-4)', () => {
     expect(recoverStop).not.toHaveBeenCalled()
   })
 
+  it('#601 AC3 / #602 AC6: ownership is checked before spending host recovery budget', async () => {
+    const recoverStop = vi.fn(async () => true)
+    const owned = vi
+      .fn()
+      .mockResolvedValueOnce({ path: '/worktrees/487' })
+      .mockRejectedValue(new Error('worktree-conflict: foreign owner'))
+    const outcome = await runCycle({
+      resolve: scriptedResolve([{ status: 'in-progress', next: VALIDATE_A0 }]),
+      worktree: owned,
+      packet: async () => {
+        throw new Error('host-transient: packet read failed')
+      },
+      spawnStage: vi.fn(),
+      policy: {},
+      recoverStop,
+    })
+    expect(outcome.status).toBe('worktree-conflict')
+    expect(recoverStop).not.toHaveBeenCalled()
+  })
+
   it('US-602 AC6: ownership conflict in merge is a catalogued stop', async () => {
     const outcome = await runCycle({
       resolve: scriptedResolve([{ status: 'in-progress', next: { step: 'merge' } }]),
@@ -210,6 +230,98 @@ describe('runCycle (US-487 T-4)', () => {
       greenRetries: 2,
       maxFixRounds: 10,
     })
+  })
+
+  it('US-601 AC2/AC3: a host outage after a stage preserves its result and parks the current step', async () => {
+    const resolve = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'empty', next: PREPARE_A0 })
+      .mockRejectedValueOnce(new Error('host-transient: readCard exhausted after 4 attempts'))
+    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
+    const recoverStop = vi.fn(async () => false)
+
+    const outcome = await runCycle({
+      resolve,
+      worktree,
+      packet,
+      spawnStage,
+      policy: {},
+      recoverStop,
+    })
+
+    expect(spawnStage).toHaveBeenCalledTimes(1)
+    expect(recoverStop).toHaveBeenCalledWith(PREPARE_A0, 'host-transient')
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'prepare:a0:host-transient',
+      reason: expect.stringContaining('readCard'),
+    })
+  })
+
+  it('US-601 AC2/AC3: exhaustion parks once; the rerun consults durable state without redispatching', async () => {
+    const resolve = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'empty', next: PREPARE_A0 })
+      .mockRejectedValueOnce(new Error('host-transient: readCard exhausted after 4 attempts'))
+    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
+
+    const first = await runCycle({
+      resolve,
+      worktree,
+      packet,
+      spawnStage,
+      policy: {},
+      recoverStop: async () => true,
+    })
+    expect(first.status).toBe('awaiting-human')
+    expect(resolve).toHaveBeenCalledTimes(2)
+
+    const resumed = await runCycle({
+      resolve: scriptedResolve([{ status: 'completed', next: DONE }]),
+      worktree,
+      packet,
+      spawnStage,
+      policy: {},
+    })
+
+    expect(spawnStage).toHaveBeenCalledTimes(1)
+    expect(resumed.status).toBe('ready-for-merge')
+  })
+
+  it('US-601 AC3: an exhausted packet host read parks before engine dispatch', async () => {
+    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
+    const outcome = await runCycle({
+      resolve: scriptedResolve([{ status: 'empty', next: PREPARE_A0 }]),
+      worktree,
+      packet: async () => {
+        throw new Error('host-transient: packet read exhausted')
+      },
+      spawnStage,
+      policy: {},
+      recoverStop: async () => false,
+    })
+    expect(outcome).toMatchObject({
+      status: 'awaiting-human',
+      resumeToken: 'prepare:a0:host-transient',
+    })
+    expect(spawnStage).not.toHaveBeenCalled()
+  })
+
+  it('US-601 AC2: an engine error containing host text never redispatches it', async () => {
+    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => {
+      throw new Error('host-transient: engine output')
+    })
+    await expect(
+      runCycle({
+        resolve: scriptedResolve([{ status: 'empty', next: PREPARE_A0 }]),
+        worktree,
+        packet,
+        spawnStage,
+        policy: {},
+        recoverStop: async () => true,
+      }),
+    ).rejects.toThrow(/engine output/)
+    expect(spawnStage).toHaveBeenCalledTimes(1)
   })
 
   it('AC1: drives resolve → worktree → packet → spawnStage → resolve until a terminal step, one fresh dispatch per stage', async () => {

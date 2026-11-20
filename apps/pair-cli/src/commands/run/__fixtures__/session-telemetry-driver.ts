@@ -1,3 +1,4 @@
+import * as hostProcess from '../host-process'
 // #645 r0-8: real driver/runner/reader/storage; only host processes and engine output are stubbed.
 import * as childProcess from 'child_process'
 import { chmodSync, mkdirSync, writeFileSync } from 'fs'
@@ -73,6 +74,14 @@ export async function driveSessionStream(
   chmodSync(executable, 0o755)
   const host = stubHost(root)
   const coordinator = stubCoordinator(root)
+  const asyncHost = vi
+    .spyOn(hostProcess, 'runHostProcess')
+    .mockImplementation(async (bin, args) => {
+      if (bin === 'gh')
+        return { status: 0, stdout: String(childProcess.execFileSync(bin, [...args])), stderr: '' }
+      const result = childProcess.spawnSync(bin, [...args], { encoding: 'utf8' })
+      return { status: result.status, stdout: result.stdout, stderr: result.stderr }
+    })
   const log = vi.spyOn(console, 'log').mockImplementation(() => {})
   let time = 0
   const clock = vi.spyOn(Date, 'now').mockImplementation(() => (time += 10))
@@ -91,6 +100,7 @@ export async function driveSessionStream(
   } finally {
     host.mockRestore()
     coordinator.mockRestore()
+    asyncHost.mockRestore()
     log.mockRestore()
     clock.mockRestore()
   }

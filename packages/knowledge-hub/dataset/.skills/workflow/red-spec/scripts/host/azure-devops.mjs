@@ -73,7 +73,13 @@ export default defineAdapter({
   binaries: ['az'],
   create(transport = {}) {
     const bin = transport.azBin || process.env.PAIR_AZ_BIN || 'az'
-    const az = args => runCli({ bin, args, label: 'az' })
+    const az = args => {
+      const command = args.slice(0, 3).join(' ')
+      const method = args.indexOf('--http-method')
+      const replaySafe = ['boards work-item show', 'boards query --wiql', 'repos pr show', 'repos pr list', 'repos ref list'].includes(command) ||
+        (args[0] === 'devops' && args[1] === 'invoke' && method >= 0 && String(args[method + 1]).toUpperCase() === 'GET')
+      return runCli({ bin, args, label: 'az', replaySafe, sleep: transport.sleep, now: transport.now })
+    }
     const azJson = (args, what) => parseJson(az([...args, '--output', 'json']), { command: `az ${what}` })
     const adoption = transport.wayOfWorking ?? adoptionText(process.cwd())
     const area = areaOf(adoption)

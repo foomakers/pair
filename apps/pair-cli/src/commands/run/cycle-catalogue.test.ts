@@ -120,4 +120,15 @@ describe('AC-9 (r1-4): the pair run driver is inside the stop catalogue', () => 
         .sort(),
     )
   })
+
+  it('US-601 AC3: exhausted host reads park as a resumable process fault', () => {
+    expect(CATALOG.filter(row => row.status === 'host-transient')).toEqual([
+      expect.objectContaining({
+        status: 'host-transient',
+        class: 'process',
+        resume: expect.stringContaining('pair run --card <card>'),
+      }),
+    ])
+    expect(PROCESS_STOPS.has('host-transient')).toBe(true)
+  })
 })

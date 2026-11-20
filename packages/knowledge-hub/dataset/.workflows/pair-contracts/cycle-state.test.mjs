@@ -78,7 +78,7 @@ if (a[0] === 'issue' && a[1] === 'view') {
   const failAt = process.env.FAKE_GH2_FAIL_VIEW_CALL_INDEX ? Number(process.env.FAKE_GH2_FAIL_VIEW_CALL_INDEX) : null
   if (failAt) {
     const viewCallsSoFar = fs.readFileSync(${JSON.stringify(logFile)}, 'utf8').trim().split('\\n').filter(Boolean).map(l => JSON.parse(l)).filter(x => x[0] === 'issue' && x[1] === 'view').length
-    if (viewCallsSoFar === failAt) { process.stderr.write('HTTP 502 (simulated view failure #' + viewCallsSoFar + ')'); process.exit(1) }
+    if (viewCallsSoFar >= failAt) { process.stderr.write('HTTP 502 (simulated view failure #' + viewCallsSoFar + ')'); process.exit(1) }
   }
   const id = idOf(a[2])
   const issue = state.issues[id]
@@ -2437,7 +2437,7 @@ test('Finding 6 residual (Caso A): a readback that does not confirm the approved
     delete process.env.FAKE_GH2_FAIL_VIEW_CALL_INDEX
   }
   assert.equal(out.applied, false, JSON.stringify(out))
-  assert.match(out.results[0].reason, /gh-issue-view-readback-failed/)
+  assert.match(out.results[0].reason, /host-transient-exhausted:issue-view-readback/)
   assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 1, 'the edit itself DID happen — only its confirmation failed')
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.equal(r.next.scopeEpoch ?? 1, 1, 'scopeEpoch never bumped on an unconfirmed extension')
@@ -2725,7 +2725,7 @@ test('Finding 6 residual (Caso A, colon dialect): a readback that does not confi
     delete process.env.FAKE_GH2_FAIL_VIEW_CALL_INDEX
   }
   assert.equal(out.applied, false, JSON.stringify(out))
-  assert.match(out.results[0].reason, /gh-issue-view-readback-failed/)
+  assert.match(out.results[0].reason, /host-transient-exhausted:issue-view-readback/)
   assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 1, 'the edit itself DID happen — only its confirmation failed')
   assert.equal(gh2.body('42'), 'AC-1: the approved text', 'the colon-format line was rewritten in place, not appended to')
   assert.equal(existsSync(join(dir, 'r0-review-phase.attempt-2.json')), false, 'no decision handoff written — scopeEpoch never bumped on an unconfirmed extension')

@@ -1226,7 +1226,7 @@ const contractProcessFaultKind = reason => {
   return CONTRACT_PROCESS_FAULTS.has(kind) ? kind : null
 }
 // AC-9/AC-10: the process class of cycle-state.mjs STOP_CATALOG, mirrored (this sandbox imports nothing); a test pins the equality.
-const PROCESS_FAULTS = new Set(['failed-seal', 'failed-verify', 'failed-resume', 'failed-publication', 'interrupted', 'dirty', 'stale', 'stale-write', 'parent-not-base', 'sealed-history-rewritten', 'contract-attempt-overwritten', 'contract-hash-mismatch', 'seal-not-pushed', 'dead-dispatch', 'idle-timeout', 'gate-flake'])
+const PROCESS_FAULTS = new Set(['failed-seal', 'failed-verify', 'failed-resume', 'failed-publication', 'interrupted', 'dirty', 'stale', 'stale-write', 'parent-not-base', 'sealed-history-rewritten', 'contract-attempt-overwritten', 'contract-hash-mismatch', 'seal-not-pushed', 'dead-dispatch', 'idle-timeout', 'gate-flake', 'host-transient'])
 // The process fault a stage reported, whatever stage and status: typed (`processFault`), a process refusal, or a failed stage's process reason.
 const processFaultOf = r => {
   if (!r || typeof r !== 'object') return null

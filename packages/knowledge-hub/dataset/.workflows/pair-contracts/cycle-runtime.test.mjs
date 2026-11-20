@@ -405,7 +405,7 @@ test('t9d-5: a `gh` that fails is a typed `failed` publication — metrics.json 
   const out = JSON.parse(r.stdout.trim().split('\n').pop())
   assert.equal(out.written, true, JSON.stringify(out))
   assert.equal(out.publication.state, 'failed')
-  assert.match(out.publication.lastError, /gh api .*failed.*HTTP 502/)
+  assert.match(out.publication.lastError, /host-transient: gh api .*after 4 attempts: HTTP 502/)
   const view = JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8'))
   assert.deepEqual({ delivery: view.outcome.delivery, reason: view.outcome.reason, state: view.publication.state }, { delivery: 'failed-publication', reason: 'publication-pending', state: 'failed' })
   // the retry is still owed: a later finalize with a working transport publishes and confirms

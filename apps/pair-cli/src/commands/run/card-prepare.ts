@@ -54,11 +54,17 @@ export interface PrepareDependencies {
     CycleScriptsBridge,
     'prepareDecide' | 'prepareEscalate' | 'prepareComplete'
   > &
-    Partial<Pick<CycleScriptsBridge, 'bindHosts'>>
+    Partial<Pick<CycleScriptsBridge, 'bindHosts' | 'prepareEscalateAsync' | 'prepareCompleteAsync'>>
   /** The card's labels NOW; `undefined` = unreadable (a `when` gate then escalates). */
-  readonly readLabels?: (card: string, cwd: string) => readonly string[] | undefined
+  readonly readLabels?: (
+    card: string,
+    cwd: string,
+  ) => readonly string[] | undefined | Promise<readonly string[] | undefined>
   /** The card body NOW (for `## Assumptions` / `## Open Questions`); `undefined` = unreadable. */
-  readonly readBody?: (card: string, cwd: string) => string | undefined
+  readonly readBody?: (
+    card: string,
+    cwd: string,
+  ) => string | undefined | Promise<string | undefined>
   /** `## Cycle Hooks` — only `on-halt` is fired here. */
   readonly hooks?: Pick<CycleHooks, 'run'>
 }
@@ -94,8 +100,8 @@ interface Phase {
   readonly source: string
   readonly attended: boolean
   readonly until: string
-  labels(): readonly string[] | undefined
-  body(): string | undefined
+  labels(): Promise<readonly string[] | undefined>
+  body(): Promise<string | undefined>
   halt(status: string): Promise<void>
 }
 
@@ -186,16 +192,16 @@ function phaseFor(entry: PrepareEntry, effective: EffectiveGate, deps: PrepareDe
   const location = () => (located ??= locateCycleScripts(fs, context.config, cwd))
   const bridge = deps.bridge ?? createCycleScriptsBridge(location(), cwd)
   const hooks = hooksFor(entry, deps, location)
-  const readBody = deps.readBody ?? ((c, d) => readCardDocumentViaGh(c, d).body)
+  const readBody = deps.readBody ?? (async (c, d) => (await readCardDocumentViaGh(c, d)).body)
   return {
     ...effective,
     bridge,
     runDir,
     attended: config.autonomous !== true,
-    labels: () => (deps.readLabels ?? readCardLabels)(card, cwd),
-    body: () => {
+    labels: async () => await (deps.readLabels ?? readCardLabels)(card, cwd),
+    body: async () => {
       try {
-        return readBody(card, cwd)
+        return await readBody(card, cwd)
       } catch {
         return undefined
       }
@@ -253,7 +259,7 @@ export async function handlePreparation(
     readiness,
     attended: drive.phase.attended,
     boundary,
-    labels: drive.phase.labels(),
+    labels: await drive.phase.labels(),
     source: effective.source,
   })
   console.log(
@@ -301,8 +307,8 @@ interface Reason {
 }
 
 /** The assumptions recorded so far, handed to the escalation comment through a file in the run directory. */
-function assumptionsFileOf(phase: Phase): string | undefined {
-  const assumptions = sectionOf(phase.body(), 'Assumptions')
+async function assumptionsFileOf(phase: Phase): Promise<string | undefined> {
+  const assumptions = sectionOf(await phase.body(), 'Assumptions')
   if (assumptions === null || assumptions.length === 0) return undefined
   mkdirSync(phase.runDir, { recursive: true })
   const file = join(phase.runDir, 'prepare-assumptions.md')
@@ -336,8 +342,8 @@ async function writeEscalation(
 ): Promise<number> {
   const { entry, phase } = drive
   phase.bridge.bindHosts?.(phase.runDir)
-  const assumptionsFile = assumptionsFileOf(phase)
-  const out = phase.bridge.prepareEscalate({
+  const assumptionsFile = await assumptionsFileOf(phase)
+  const out = await (phase.bridge.prepareEscalateAsync ?? phase.bridge.prepareEscalate)({
     dir: phase.runDir,
     story: entry.card,
     boundary,
@@ -375,7 +381,7 @@ async function boundaryStop(drive: Drive, boundary: 'B1' | 'B2'): Promise<number
     readiness: 'refined-no-breakdown',
     attended: phase.attended,
     boundary,
-    labels: phase.labels(),
+    labels: await phase.labels(),
     source: phase.source,
   })
   if (d.route === 'run-autonomous') return undefined
@@ -395,7 +401,7 @@ async function refineStep(drive: Drive, mode: 'never' | 'when'): Promise<number 
     },
   )
   if (refined !== 0) return await fail(drive.phase, `prepare:refine exited ${refined}`)
-  const open = openQuestionOf(drive.phase.body())
+  const open = openQuestionOf(await drive.phase.body())
   if (open !== undefined) return await writeEscalation(drive, 'B1', { openQuestion: open })
   return await boundaryStop(drive, 'B1')
 }
@@ -414,7 +420,7 @@ async function planStep(
   if (planned !== 0) return await fail(phase, `prepare:plan exited ${planned}`)
   const stopped = await boundaryStop(drive, 'B2')
   if (stopped !== undefined) return stopped
-  const done = phase.bridge.prepareComplete({
+  const done = await (phase.bridge.prepareCompleteAsync ?? phase.bridge.prepareComplete)({
     dir: phase.runDir,
     story: entry.card,
     gate: phase.gate,

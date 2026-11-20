@@ -1,3 +1,5 @@
+import { relayHostRetries } from './host-retry-audit'
+import { runHostProcess } from './host-process'
 import { spawnSync } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
 import { isAbsolute, join, posix, relative, resolve, win32 } from 'path'
@@ -260,6 +262,7 @@ export interface PrereqState {
 
 export interface CycleScriptsBridge {
   resolve(options: CycleResolveOptions): CycleResolveResult
+  resolveAsync?(options: CycleResolveOptions): Promise<CycleResolveResult>
   recover(options: {
     dir: string
     kind: 'gate-retry' | 'base-sync' | 'ci-rerun' | 'worktree-clean' | 'stage-retry' | 'resume'
@@ -293,12 +296,18 @@ export interface CycleScriptsBridge {
   }
   prereqState(options: { story: string; dir?: string }): PrereqState
   /** US-647 AC-11: `cycle-state.mjs decisions` — the maintainer's decision comments, authenticated by the script (no login passed). */
-  decisions?(options: { dir: string; story: string; pr?: number }): CycleDecisionsResult
+  decisions?(options: {
+    dir: string
+    story: string
+    pr?: number
+  }): CycleDecisionsResult | Promise<CycleDecisionsResult>
   worktree(options: CycleWorktreeOptions): CycleWorktreeResult
   /** `cycle-merge.mjs check`: conditions 1-5 re-read live; a failure PARKS the card. */
   mergeCheck(options: CycleMergeOptions): CycleMergeResult
+  mergeCheckAsync?(options: CycleMergeOptions): Promise<CycleMergeResult>
   /** `cycle-merge.mjs run`: conditions 1-6 (`gate`), then merge + Story Closure. */
   mergeRun(options: CycleMergeRunOptions): CycleMergeResult
+  mergeRunAsync?(options: CycleMergeRunOptions): Promise<CycleMergeResult>
   packet(options: CyclePacketOptions): CyclePacketResult
   /** US-521 `autonomy-policy.mjs resolve`: the ONE effective-policy resolution (grammar, translation, precedence). */
   autonomyResolve(options: { adoption: string; args: Record<string, string> }): AutonomyResolution
@@ -313,15 +322,17 @@ export interface CycleScriptsBridge {
   prepareDecide(options: PrepareDecideOptions): PrepareDecision
   /** US-523 `cycle-prepare.mjs escalate`: `needs-review` + the ONE marker comment; never a board write. */
   prepareEscalate(options: PrepareEscalateOptions): PrepareEscalation
+  prepareEscalateAsync?(options: PrepareEscalateOptions): Promise<PrepareEscalation>
   /** US-523 `cycle-prepare.mjs complete`: re-checks B2, the provenance evidence, then writes Ready once. */
   prepareComplete(options: PrepareCompleteOptions): PrepareCompletion
+  prepareCompleteAsync?(options: PrepareCompleteOptions): Promise<PrepareCompletion>
   /** `inputs --story <card JSON>`: the effective-inputs digest both realizations must agree on. */
   inputs(story: Record<string, unknown>, workflowVersion: string): string
   /**
    * `ac-hash --story <id> [--dir <run dir>]`: the card body's canonical hash, the one every handoff
    * records — read through the PM tool the run directory is bound to, when it is.
    */
-  acHash(story: string, dir?: string): string
+  acHash(story: string, dir?: string): string | Promise<string>
   /**
    * `bind-hosts --dir <run dir>` (US-492 AC2): the ONE resolution of the run's PM tool / code host,
    * written once and reused by every later script call naming that directory. A declared host with
@@ -480,6 +491,28 @@ function rejectIfFailed(parsed: unknown): void {
 }
 
 /** Runs `node <script> <cmd> --flag value …` and parses the ONE line of JSON it writes to stdout. */
+async function runHostScript(
+  script: string,
+  cmd: string,
+  args: readonly (readonly [string, string])[],
+  options: { cwd: string | undefined; timeout?: number },
+): Promise<unknown> {
+  const { cwd, timeout = 30_000 } = options
+  const argv = [script, cmd]
+  for (const [flag, value] of args) argv.push(`--${flag}`, value)
+  const result = await runHostProcess('node', argv, cwd ?? process.cwd(), { timeout })
+  if (result.error?.message.includes('timed out'))
+    throw new Error(`host-transient: ${cmd} timed out`)
+  const parsed = parseScriptOutput(
+    script,
+    cmd,
+    (result.stdout ?? '').trim(),
+    result.error ?? result.stderr,
+  )
+  rejectIfFailed(parsed)
+  return parsed
+}
+
 function runScriptIn(
   script: string,
   cmd: string,
@@ -503,6 +536,7 @@ function runScriptArgv(
     ...(cwd !== undefined && { cwd }),
     ...(maxBuffer !== undefined && { maxBuffer }),
   })
+  relayHostRetries(String(result.stderr ?? ''))
   const parsed = parseScriptOutput(head[0]!, head[1]!, (result.stdout ?? '').trim(), result.stderr)
   rejectIfFailed(parsed)
   return parsed
@@ -790,6 +824,64 @@ function stateMethods(
       ]) as PrereqState,
   }
 }
+function hostWriteMethods(
+  location: CycleScriptsLocation,
+  cwd: string | undefined,
+): Pick<CycleScriptsBridge, 'mergeRunAsync' | 'prepareEscalateAsync' | 'prepareCompleteAsync'> {
+  const asyncWriter = (script: string, cmd: string, args: readonly (readonly [string, string])[]) =>
+    runHostScript(script, cmd, args, { cwd: cwd, timeout: 0 })
+  return {
+    mergeRunAsync: async o =>
+      await mergeMethods(asyncWriter, join(location.scriptsDir, 'cycle-merge.mjs')).mergeRun(o),
+    prepareEscalateAsync: async o =>
+      await prepareMethods(asyncWriter, location.scriptsDir).prepareEscalate(o),
+    prepareCompleteAsync: async o =>
+      await prepareMethods(asyncWriter, location.scriptsDir).prepareComplete(o),
+  }
+}
+
+function hostBridgeMethods(
+  location: CycleScriptsLocation,
+  cwd: string | undefined,
+): Pick<CycleScriptsBridge, 'resolveAsync' | 'decisions' | 'mergeCheckAsync' | 'acHash'> {
+  const cycleStatePath = join(location.scriptsDir, 'cycle-state.mjs')
+  return {
+    resolveAsync: async o =>
+      (await runHostScript(cycleStatePath, 'resolve', resolveArgs(o), {
+        cwd: cwd,
+      })) as CycleResolveResult,
+    decisions: async o =>
+      (await runHostScript(
+        cycleStatePath,
+        'decisions',
+        [
+          ['dir', o.dir],
+          ['story', o.story],
+          ...optional([['pr', o.pr === undefined ? undefined : String(o.pr)]]),
+        ],
+        { cwd: cwd },
+      )) as CycleDecisionsResult,
+    mergeCheckAsync: options =>
+      runHostScript(
+        join(location.scriptsDir, 'cycle-merge.mjs'),
+        'check',
+        [
+          ...mergeArgs(options),
+          ...(options.deferPark === true ? ([['deferPark', 'true']] as ScriptArgs) : []),
+        ],
+        { cwd: cwd },
+      ) as Promise<CycleMergeResult>,
+    async acHash(story, dir) {
+      const out = (await runHostScript(
+        cycleStatePath,
+        'ac-hash',
+        [['story', story], ...optional([['dir', dir]])],
+        { cwd: cwd },
+      )) as { acHash?: unknown }
+      return String(out.acHash)
+    },
+  }
+}
 
 export function createCycleScriptsBridge(
   location: CycleScriptsLocation,
@@ -814,6 +906,8 @@ export function createCycleScriptsBridge(
     ...mergeMethods(runScript, join(location.scriptsDir, 'cycle-merge.mjs')),
     ...autonomyMethods(runScript, location.scriptsDir),
     ...prepareMethods(runScript, location.scriptsDir),
+    ...hostBridgeMethods(location, cwd),
+    ...hostWriteMethods(location, cwd),
     packet: options =>
       runScript(cycleDispatchPath, 'packet', packetArgs(options, location)) as CyclePacketResult,
     inputs(story, workflowVersion) {
@@ -822,13 +916,6 @@ export function createCycleScriptsBridge(
         ['workflowVersion', workflowVersion],
       ]) as { inputsDigest?: unknown }
       return String(out.inputsDigest)
-    },
-    acHash(story, dir) {
-      const out = runScript(cycleStatePath, 'ac-hash', [
-        ['story', story],
-        ...optional([['dir', dir]]),
-      ]) as { acHash?: unknown }
-      return String(out.acHash)
     },
     bindHosts(dir) {
       return runScript(cycleStatePath, 'bind-hosts', [['dir', dir]]) as CycleHostBinding

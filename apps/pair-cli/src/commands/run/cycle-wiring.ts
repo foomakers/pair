@@ -1,7 +1,9 @@
 import { execFileSync, spawn, spawnSync } from 'child_process'
+import { runHostProcess, type HostProcessResult } from './host-process'
+import { relayHostRetries } from './host-retry-audit'
 import { RUN_EVENTS_ENV, runEventLine, stageLabel, type RunEvent } from './run-events'
 import { cardProgress, todoInProgress, type CardProgress } from './card-progress'
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'fs'
 import { acquireRunLock, RUN_LOCK_FILE } from './run-lock'
 import { dirname, isAbsolute, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
@@ -19,6 +21,7 @@ import { AUTO_ADVANCE_OFF, readAutomationPolicy } from './automation-policy'
 import {
   createCycleScriptsBridge,
   createCycleHooksBridge,
+  resolveCycleWorktreeRoot,
   cycleHooksPolicyPath,
   type AutonomyResolution,
   type CardReadiness,
@@ -133,13 +136,93 @@ const CYCLE_STATE_REL = join(
  * adapter to ask: the operator's own `gh` answers, as before (a GitHub-only reader).
  */
 // ponytail: the cycle skill at its default install path only; a redirected skills target falls back to gh.
-function readCard(card: string, cwd: string): CardView {
+function throwHostTimeout(error: Error | undefined): void {
+  if (error && /host command timed out/i.test(error.message))
+    throw new Error(`host-transient: ${error.message}`)
+}
+
+const TRANSIENT_GH_READ =
+  /\b(?:ECONNRESET|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|ESOCKETTIMEDOUT|ENETUNREACH|EHOSTUNREACH|HTTP\s*(?:429|5\d\d)|(?:status|error)\s*(?:429|5\d\d)|rate limit|timed? out|temporary failure in name resolution|connection reset by peer|i\/o timeout)\b/i
+
+type GhRetryReport = (attempt: number, outcome: string) => void
+
+function ghRetryDelay(detail: string, attempt: number): number {
+  const retryAfter = /\bRetry-After:\s*([^\r\n]+)/i.exec(detail)?.[1]?.trim()
+  if (retryAfter && /^\d+$/.test(retryAfter)) return Number(retryAfter) * 1000
+  const retryAt = retryAfter ? Date.parse(retryAfter) : NaN
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : 1000 * 2 ** (attempt - 1)
+}
+
+function ghExhausted(
+  operation: string,
+  attempt: number,
+  cause: string,
+  report: GhRetryReport,
+): never {
+  report(attempt, 'exhausted')
+  throw new Error(
+    `host-transient: gh ${operation} read failed after ${String(attempt)} attempts: ${cause}`,
+  )
+}
+
+function ghRetryFailure(
+  result: HostProcessResult,
+  attempt: number,
+  deadline: number,
+  control: { operation: string; report: GhRetryReport },
+): { delay: number; cause: string } {
+  const { operation, report } = control
+  const detail = result.stderr || result.error?.message || ''
+  const transient = TRANSIENT_GH_READ.exec(detail)
+  if (!transient) {
+    if (attempt > 1) report(attempt, 'permanent')
+    throw result.error ?? new Error(detail.trim())
+  }
+  const delay = ghRetryDelay(detail, attempt)
+  const cause = transient[0]
+  if (attempt === 4 || delay >= deadline - Date.now())
+    ghExhausted(operation, attempt, cause, report)
+  return { delay, cause }
+}
+
+/** The installed adapter may be absent; its bounded policy still applies to direct gh reads. */
+async function readGh(
+  args: readonly string[],
+  cwd: string,
+  operation: 'issue' | 'pr',
+  deadline = Date.now() + 30_000,
+): Promise<string> {
+  const report = (attempt: number, outcome: string) =>
+    relayHostRetries(
+      `HOST-RETRY: operation=gh:${operation}:read attempt=${attempt} outcome=${outcome}`,
+    )
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    if (Date.now() >= deadline) {
+      report(attempt, 'exhausted')
+      throw new Error(`host-transient: gh ${operation} read exceeded its deadline`)
+    }
+    const result = await runHostProcess('gh', args, cwd, {
+      timeout: Math.max(1, deadline - Date.now()),
+    })
+    if (result.error?.message.includes('timed out'))
+      ghExhausted(operation, attempt, 'timed out', report)
+    if (result.status === 0 && !result.error) {
+      if (attempt > 1) report(attempt, 'recovered')
+      return result.stdout
+    }
+    const { delay, cause } = ghRetryFailure(result, attempt, deadline, { operation, report })
+    await new Promise<void>(resolve => setTimeout(resolve, delay))
+    if (Date.now() >= deadline) ghExhausted(operation, attempt, cause, report)
+    report(attempt, 'retry')
+  }
+  throw new Error('host-transient: gh read exhausted')
+}
+
+async function readCard(card: string, cwd: string): Promise<CardView> {
   const script = join(cwd, CYCLE_STATE_REL)
   if (existsSync(script)) {
-    const r = spawnSync(process.execPath, [script, 'card', '--story', card], {
-      cwd,
-      encoding: 'utf-8',
-    })
+    const r = await runHostProcess(process.execPath, [script, 'card', '--story', card], cwd)
+    throwHostTimeout(r.error)
     let view: (CardView & { error?: string }) | undefined
     try {
       view = JSON.parse(r.stdout) as CardView & { error?: string }
@@ -156,19 +239,23 @@ function readCard(card: string, cwd: string): CardView {
   return readCardViaGh(card, cwd)
 }
 
-function readCardViaGh(card: string, cwd: string): CardView {
-  const view = (fields: string): string =>
-    execFileSync('gh', ['issue', 'view', card, '--json', fields], {
-      cwd,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+async function readCardViaGh(card: string, cwd: string): Promise<CardView> {
+  const deadline = Date.now() + 30_000
+  const view = async (fields: string): Promise<string> => {
+    return await readGh(['issue', 'view', card, '--json', fields], cwd, 'issue', deadline)
+  }
   let raw: string
   try {
     try {
-      raw = view('title,body,labels,state,stateReason,closedAt,projectItems')
-    } catch {
-      raw = view('title,body,labels,state,stateReason,closedAt')
+      raw = await view('title,body,labels,state,stateReason,closedAt,projectItems')
+    } catch (error) {
+      if (
+        !/(?:unknown json field|cannot query field|unknown field)[^\n]*projectItems/i.test(
+          String(error),
+        )
+      )
+        throw error
+      raw = await view('title,body,labels,state,stateReason,closedAt')
     }
   } catch (error) {
     throw new CardUnreadableError(
@@ -205,20 +292,22 @@ const LABEL_SHAPE_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i
  * `undefined` (none, several, malformed, or the tracker cannot say): `resolve` then never offers `merge`, the
  * unchanged `done` terminal — fail-safe, never a guess.
  */
-export function readCardTier(card: string, cwd: string): string | undefined {
+export async function readCardTier(card: string, cwd: string): Promise<string | undefined> {
   try {
-    const tiers = readCard(card, cwd).labels.filter(name => name.startsWith('risk:'))
+    const tiers = (await readCard(card, cwd)).labels.filter(name => name.startsWith('risk:'))
     return tiers.length === 1 && LABEL_SHAPE_RE.test(tiers[0]!) ? tiers[0] : undefined
-  } catch {
+  } catch (error) {
+    if (String(error).includes('host-transient:')) throw error
     return undefined
   }
 }
 
 /** The card's parent epic id (`**Parent Epic**: [#605 …]`), or `undefined` — telemetry only, never a guess. */
-function readCardEpic(card: string, cwd: string): string | undefined {
+async function readCardEpic(card: string, cwd: string): Promise<string | undefined> {
   try {
-    return /Parent Epic\*\*:\s*\[?#(\d+)/.exec(readCard(card, cwd).body)?.[1]
-  } catch {
+    return /Parent Epic\*\*:\s*\[?#(\d+)/.exec((await readCard(card, cwd)).body)?.[1]
+  } catch (error) {
+    if (String(error).includes('host-transient:')) throw error
     return undefined
   }
 }
@@ -227,18 +316,25 @@ function readCardEpic(card: string, cwd: string): string | undefined {
  * US-521: the card's labels RIGHT NOW (every one, not just `risk:*`) — what a `when` merge gate reads.
  * `undefined` when the tracker cannot say: `decide` then escalates (fail-safe), never proceeds on a guess.
  */
-export function readCardLabels(card: string, cwd: string): readonly string[] | undefined {
+export async function readCardLabels(
+  card: string,
+  cwd: string,
+): Promise<readonly string[] | undefined> {
   try {
-    return readCard(card, cwd).labels
-  } catch {
+    return (await readCard(card, cwd)).labels
+  } catch (error) {
+    if (String(error).includes('host-transient:')) throw error
     return undefined
   }
 }
 
 /** US-576: when the card was closed as Done — `null` while open (or closed as not planned), `undefined` when unreadable. */
-export function readCardClosedAt(card: string, cwd: string): Date | null | undefined {
+export async function readCardClosedAt(
+  card: string,
+  cwd: string,
+): Promise<Date | null | undefined> {
   try {
-    const parsed = readCard(card, cwd)
+    const parsed = await readCard(card, cwd)
     if (parsed.state !== 'CLOSED' || parsed.stateReason === 'NOT_PLANNED') return null
     const at = new Date(parsed.closedAt ?? '')
     return Number.isNaN(at.getTime()) ? undefined : at
@@ -248,9 +344,9 @@ export function readCardClosedAt(card: string, cwd: string): Date | null | undef
 }
 
 /** The card's title, read live from the tracker; `undefined` when it cannot be read (the card is then excluded). */
-export function readCardTitle(card: string, cwd: string): string | undefined {
+export async function readCardTitle(card: string, cwd: string): Promise<string | undefined> {
   try {
-    const title = readCard(card, cwd).title
+    const title = (await readCard(card, cwd)).title
     return title?.trim() || undefined
   } catch {
     return undefined
@@ -275,8 +371,8 @@ interface GhCard {
  * when the card sits on a board, else the `**Status**:` line the card template writes — the literal
  * `## State Mapping` is keyed by. Never parses prose it did not ask for.
  */
-export function readCardDocumentViaGh(card: string, cwd: string): CardDocument {
-  const c = readCard(card, cwd)
+export async function readCardDocumentViaGh(card: string, cwd: string): Promise<CardDocument> {
+  const c = await readCard(card, cwd)
   return {
     title: c.title ?? '',
     body: c.body,
@@ -299,7 +395,11 @@ export function createCardReadinessProbe(
       config === undefined ? undefined : locateControlStateScript(fs, config, projectRoot)
     const mapping = readStateMapping(fs, projectRoot, script)
     // r1-3: `gh` resolves the repository from ITS cwd — the project's, never this process's.
-    const verdict = resolveCardReadiness(readCardDocumentViaGh(card, projectRoot), mapping, script)
+    const verdict = resolveCardReadiness(
+      await readCardDocumentViaGh(card, projectRoot),
+      mapping,
+      script,
+    )
     console.log(`  Readiness: card ${card} — ${verdict.explanation}`)
     for (const warning of verdict.warnings ?? [])
       console.log(`  Conflict: card ${card} — ${warning}`)
@@ -505,7 +605,7 @@ export interface CycleDriverRequest {
 }
 
 /** The run's own coordinates, resolved once per invocation and shared by every collaborator below. */
-function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
+async function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   if (ctx.location === undefined) {
     throw new Error(
       `skill-missing: pair-workflow-cycle's scripts were not located, so no stage can be ` +
@@ -518,7 +618,7 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   const main = mainCheckout(ctx.cwd)
   const runsRoot = `${main}/.pair/working/runs`
   // Title only: the board state is readiness's question, answered upstream (r0-1).
-  const record = readCardDocumentViaGh(input.card, ctx.cwd)
+  const record = await readCardDocumentViaGh(input.card, ctx.cwd)
   // r1-3: the scripts run in the project too — `ac-hash` asks `gh` from its own cwd.
   const bridge = createCycleScriptsBridge(ctx.location, ctx.cwd)
   const branch = resolveBranch(input.card, record.title, input.pr, ctx.cwd)
@@ -542,15 +642,15 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
     // script itself, never computed here, so the two realizations agree (the AC hash is read per resolve).
     inputs: bridge.inputs(card, ctx.workflowVersion),
     // US-490: what lets `resolve` OFFER `merge` — read once, like the scripts' own inputs.
-    tier: readCardTier(input.card, ctx.cwd),
-    epic: ctx.telemetryEnabled === true ? readCardEpic(input.card, ctx.cwd) : undefined,
+    tier: await readCardTier(input.card, ctx.cwd),
+    epic: ctx.telemetryEnabled === true ? await readCardEpic(input.card, ctx.cwd) : undefined,
     // An active autonomy policy replaces the tier list; otherwise the legacy read is unchanged (default off).
     autoAdvanceTiers: input.autonomy === undefined ? readAutoAdvanceTiers(ctx.fs, main) : [],
     autonomy: input.autonomy?.policy,
   }
 }
 
-type Coordinates = ReturnType<typeof coordinatesFor>
+type Coordinates = Awaited<ReturnType<typeof coordinatesFor>>
 
 /**
  * The branch's head on the remote, as `git ls-remote` reports it now — or `undefined` when there is
@@ -583,24 +683,48 @@ function remoteRef(main: string, ref: string): string | undefined {
  * host cannot say. The review writes the PR's `risk:*`; the SCRIPT (`autonomy-policy.mjs decide`) replaces the card's tier with
  * it, so this only READS: no rule is derived here.
  */
-export function readPrLabels(ref: string, cwd: string): readonly string[] | undefined {
+export async function readPrLabels(
+  ref: string,
+  cwd: string,
+  scriptsDir?: string,
+): Promise<readonly string[] | undefined> {
   try {
-    const out = execFileSync('gh', ['pr', 'view', ref, '--json', 'labels'], {
-      cwd,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const script = scriptsDir ? join(scriptsDir, 'cycle-state.mjs') : join(cwd, CYCLE_STATE_REL)
+    if (existsSync(script)) return await readPrLabelsViaScript(script, ref, cwd)
+    const out = await readGh(['pr', 'view', ref, '--json', 'labels'], cwd, 'pr')
     const parsed = JSON.parse(out) as { labels?: ReadonlyArray<{ name?: string }> }
     return (parsed.labels ?? []).map(label => label.name ?? '')
-  } catch {
+  } catch (error) {
+    if (String(error).includes('host-transient:')) throw error
     return undefined
   }
 }
 
-const liveLabels = (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => {
-  const labels = readCardLabels(input.card, ctx.cwd)
+async function readPrLabelsViaScript(
+  script: string,
+  ref: string,
+  cwd: string,
+): Promise<readonly string[] | undefined> {
+  const result = await runHostProcess(process.execPath, [script, 'pr-labels', '--ref', ref], cwd)
+  throwHostTimeout(result.error)
+  if (result.status !== 0 && result.stderr.includes('host-transient:'))
+    throw new Error('host-transient: PR labels read failed')
+  const parsed = JSON.parse(result.stdout) as { labels?: string[]; error?: string }
+  if (parsed.error !== undefined) {
+    if (parsed.error.includes('host-transient:')) throw new Error(parsed.error)
+    return undefined
+  }
+  return parsed.labels
+}
+
+const liveLabels = async (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => {
+  const labels = await readCardLabels(input.card, ctx.cwd)
   if (labels === undefined) return {}
-  const prLabels = readPrLabels(input.pr === undefined ? co.branch : String(input.pr), ctx.cwd)
+  const prLabels = await readPrLabels(
+    input.pr === undefined ? co.branch : String(input.pr),
+    ctx.cwd,
+    ctx.location?.scriptsDir,
+  )
   return prLabels === undefined ? { labels } : { labels, prLabels }
 }
 
@@ -631,7 +755,7 @@ function resolvePolicyFor(
 }
 
 /** Labels are re-read live at EVERY boundary, and only when a `when` gate can read them. */
-function labelsFor(ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) {
+async function labelsFor(ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) {
   return co.autonomy?.until === 'merged' && co.autonomy.merge.mode === 'when'
     ? liveLabels(ctx, input, co)
     : {}
@@ -641,15 +765,18 @@ function labelsFor(ctx: CycleDriverContext, input: CycleDriverRequest, co: Coord
  * US-647 AC-11: before every resolve, the script reads the maintainer's decision comments (card + PR) and authenticates
  * their author against the adopted maintainer — the driver passes no login. A failed pickup applies nothing.
  */
-function pickDecisions(input: CycleDriverRequest, co: Coordinates): void {
+async function pickDecisions(input: CycleDriverRequest, co: Coordinates): Promise<void> {
   try {
-    const out = co.bridge.decisions?.({
+    const out = await co.bridge.decisions?.({
       dir: co.runDir,
       story: input.card,
       ...(input.pr !== undefined && { pr: input.pr }),
     })
+    const transient = out?.errors?.find(error => error.includes('host-transient:'))
+    if (transient) throw new Error(transient)
     for (const line of decisionLines(out)) console.log(line)
   } catch (e) {
+    if ((e as Error).message.includes('host-transient:')) throw e
     console.log(`  Decision pickup failed, nothing applied: ${(e as Error).message}`)
   }
 }
@@ -682,12 +809,13 @@ const resolveFor =
     // behaviour (`readBlockingSeverities` HALTs on a malformed declaration — never a silent
     // fallback).
     const blocking = resolveBlockingSeverities(ctx.fs, co.main)
-    pickDecisions(input, co)
-    const answer = co.bridge.resolve({
+    await pickDecisions(input, co)
+    const resolve = co.bridge.resolveAsync ?? co.bridge.resolve
+    const answer = await resolve({
       dir: co.runDir,
       workflowVersion: ctx.workflowVersion,
       policy: resolvePolicyFor(blocking, co, input),
-      ...labelsFor(ctx, input, co),
+      ...(await labelsFor(ctx, input, co)),
       ...(co.tier !== undefined && { tier: co.tier }),
       entry: input.pr === undefined ? 'fresh' : 'pr',
       story: input.card,
@@ -695,7 +823,7 @@ const resolveFor =
       inputs: co.inputs,
       // Re-read at every resolve, never the setup snapshot: a card edited mid-run would otherwise
       // disagree with the hash the stage itself stamps, and verify would redirect forever (#573).
-      acHash: co.bridge.acHash(input.card, co.runDir),
+      acHash: await co.bridge.acHash(input.card, co.runDir),
       ...(head !== undefined && { head }),
       ...(baseHead !== undefined && { baseHead }),
       ...(input.pr !== undefined && { pr: input.pr }),
@@ -1408,6 +1536,8 @@ const stashBeforePrepareFor =
 
 /** The contract-identity faults whose recovery resets the group (`STOP_CATALOG` resume: `reset-group`). */
 const CONTRACT_FAULTS = new Set(['contract-hash-mismatch', 'contract-attempt-overwritten'])
+const recoveryDetail = (next: CycleNext, reason: string) =>
+  `${next.step}${next.phase ? `:${next.phase}` : ''} ${reason}`
 
 /**
  * AC-10/AC-22: a process fault — one `stage-retry` recovery round, then the same step again; a contract-identity
@@ -1419,10 +1549,16 @@ const recoverStopFor =
     const round = co.bridge.recover({
       dir: co.runDir,
       kind: 'stage-retry',
-      detail: `${next.step}${next.phase ? `:${next.phase}` : ''} ${reason}`,
+      detail: recoveryDetail(next, reason),
       policy: budgetsOf(input),
     })
     if (!round.allowed) return false
+    if (reason === 'host-transient') {
+      console.log(
+        `  Recovery: host-transient — parked ${next.step} (round ${String(round.round)}/${String(round.budget)})`,
+      )
+      return false
+    }
     const kind = reason.split(':', 1)[0] ?? ''
     if (CONTRACT_FAULTS.has(kind) && typeof next.phase === 'string') {
       const reset = co.bridge.resetGroup({
@@ -1575,7 +1711,7 @@ const mergeFor =
     if (synced !== undefined) return synced
     progress.merge('waiting for CI')
     const check = await checkWithCiWait(
-      deferPark => co.bridge.mergeCheck({ ...pins, deferPark }),
+      deferPark => (co.bridge.mergeCheckAsync ?? co.bridge.mergeCheck)({ ...pins, deferPark }),
       wait,
       { ...ctx.ciWait, rerun: rerunFailedCi(ctx, input, co, pins.reviewedHead) },
       message => console.log(message),
@@ -1592,7 +1728,7 @@ const mergeFor =
       }
     progress.merge('merging')
     checkedWorktree(ctx, input, co)
-    const run = co.bridge.mergeRun({
+    const run = await (co.bridge.mergeRunAsync ?? co.bridge.mergeRun)({
       ...pins,
       gate: gate.green ? 'green' : 'red',
       message: squashMessage(input.card, co.title),
@@ -1692,6 +1828,34 @@ function finalPr(outcome: CycleOutcome): number | undefined {
 /** A non-success stop's reason (or status), else none. */
 const causeOfOutcome = (outcome: CycleOutcome): string | undefined =>
   SUCCESS.has(outcome.status) ? undefined : (outcome.reason ?? outcome.status)
+
+function recordEarlyHostPark(
+  ctx: CycleDriverContext,
+  input: CycleDriverRequest,
+  outcome: CycleOutcome,
+  start: number,
+): CycleOutcome {
+  if (ctx.telemetryEnabled !== true) return outcome
+  appendTelemetry(
+    mainCheckout(ctx.cwd),
+    cardTelemetryRecord({
+      id: `${input.runId}:${input.card}`,
+      card: input.card,
+      run: input.runId,
+      ...(input.pr !== undefined && { pr: input.pr }),
+      pairVersion,
+      workflowVersion: ctx.workflowVersion,
+      profile: ctx.profile?.name ?? 'default',
+      outcome: outcome.status,
+      cause: outcome.reason ?? 'host-transient',
+      start,
+      end: Date.now(),
+      stages: [],
+      interventions: [],
+    }),
+  )
+  return outcome
+}
 
 function recordCardTelemetry({
   ctx,
@@ -1799,6 +1963,113 @@ const traced = async (runTrace: { finish(): void }, run: () => Promise<CycleOutc
   }
 }
 
+async function locateCoordinates(
+  ctx: CycleDriverContext,
+  input: CycleDriverRequest,
+  start: number,
+): Promise<{ co: Coordinates } | { park: CycleOutcome }> {
+  try {
+    return { co: await coordinatesFor(ctx, input) }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    if (!detail.includes('host-transient:') || ctx.location === undefined) throw error
+    const uncertain = unavailableWorktreeOwner(
+      ctx.location,
+      mainCheckout(ctx.cwd),
+      ctx.worktreeRoot,
+      input.card,
+    )
+    if (uncertain !== undefined) return { park: uncertain }
+    const runDir = `${mainCheckout(ctx.cwd)}/.pair/working/runs/${input.runId}/${input.card}`
+    createCycleScriptsBridge(ctx.location, ctx.cwd).recover({
+      dir: runDir,
+      kind: 'stage-retry',
+      detail: 'resolve:run host-transient',
+      policy: budgetsOf(input),
+    })
+    return {
+      park: recordEarlyHostPark(
+        ctx,
+        input,
+        {
+          status: 'awaiting-human',
+          stagesRun: 0,
+          next: { step: 'resolve', phase: 'run' },
+          reason: detail,
+          resumeToken: 'resolve:run:host-transient',
+        },
+        start,
+      ),
+    }
+  }
+}
+
+export function unavailableWorktreeOwner(
+  location: CycleScriptsLocation,
+  main: string,
+  worktreeRoot: string | undefined,
+  card: string,
+): CycleOutcome | undefined {
+  try {
+    const root = resolveCycleWorktreeRoot(location, main, worktreeRoot)
+    const path = join(root, card)
+    try {
+      lstatSync(path)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    }
+    return {
+      status: 'worktree-conflict',
+      stagesRun: 0,
+      reason: `worktree-conflict: cannot verify owner of ${path} while the host is unavailable`,
+      resumeToken: 'resolve:run:host-transient',
+    }
+  } catch {
+    return {
+      status: 'worktree-conflict',
+      stagesRun: 0,
+      reason: 'worktree-conflict: cannot verify the story worktree while the host is unavailable',
+      resumeToken: 'resolve:run:host-transient',
+    }
+  }
+}
+
+async function firstResolveWithRecovery(
+  ctx: CycleDriverContext,
+  input: CycleDriverRequest,
+  co: Coordinates,
+  start: number,
+): Promise<unknown | CycleOutcome> {
+  try {
+    return await resolveFor(ctx, input, co)()
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    if (!detail.includes('host-transient:')) throw error
+    try {
+      await checkedWorktree(ctx, input, co)
+    } catch (worktreeError) {
+      const reason = worktreeError instanceof Error ? worktreeError.message : String(worktreeError)
+      if (!reason.includes('worktree-conflict')) throw worktreeError
+      return { status: 'worktree-conflict', stagesRun: 0, reason }
+    }
+    const next = { step: 'resolve', phase: 'run' }
+    await recoverStopFor(ctx, input, co)(next, 'host-transient')
+    return recordEarlyHostPark(
+      ctx,
+      input,
+      {
+        status: 'awaiting-human',
+        stagesRun: 0,
+        next,
+        reason: detail,
+        resumeToken: 'resolve:run:host-transient',
+      },
+      start,
+    )
+  }
+}
+
 async function readWorktreeHead(cwd: string): Promise<string | undefined> {
   const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' })
   return result.status === 0 ? result.stdout.trim() : undefined
@@ -1806,8 +2077,20 @@ async function readWorktreeHead(cwd: string): Promise<string | undefined> {
 
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
-    const co = coordinatesFor(ctx, requested)
-    return await withRunLock(co.runDir, () => driveLocked(ctx, requested, co))
+    const start = Date.now()
+    const runDir = join(
+      mainCheckout(ctx.cwd),
+      '.pair',
+      'working',
+      'runs',
+      requested.runId,
+      requested.card,
+    )
+    return await withRunLock(runDir, async () => {
+      const located = await locateCoordinates(ctx, requested, start)
+      if ('park' in located) return located.park
+      return await driveLocked(ctx, requested, located.co, start)
+    })
   }
 }
 
@@ -1843,20 +2126,19 @@ async function withRunLock(
 async function driveLocked(
   ctx: CycleDriverContext,
   requested: CycleDriverRequest,
-  coordinates: ReturnType<typeof coordinatesFor>,
+  coordinates: Coordinates,
+  start: number,
 ): Promise<CycleOutcome> {
-  const first: unknown = await resolveFor(ctx, requested, coordinates)()
+  const first: unknown = await firstResolveWithRecovery(ctx, requested, coordinates, start)
+  if ((first as CycleOutcome).status === 'awaiting-human') return first as CycleOutcome
   const adopted = adoptOtherRun(requested, coordinates, first)
   if (adopted === undefined) return driveResolved(ctx, requested, coordinates, first)
   // The adopted run dir is the one this driver writes: it needs its own lock (before its resolve, which may archive).
-  return withRunLock(adopted.co.runDir, async () =>
-    driveResolved(
-      ctx,
-      adopted.input,
-      adopted.co,
-      await resolveFor(ctx, adopted.input, adopted.co)(),
-    ),
-  )
+  return withRunLock(adopted.co.runDir, async () => {
+    const again: unknown = await firstResolveWithRecovery(ctx, adopted.input, adopted.co, start)
+    if ((again as CycleOutcome).status === 'awaiting-human') return again as CycleOutcome
+    return driveResolved(ctx, adopted.input, adopted.co, again)
+  })
 }
 
 async function driveResolved(

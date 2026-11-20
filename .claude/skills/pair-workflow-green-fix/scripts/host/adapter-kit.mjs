@@ -129,14 +129,65 @@ export function redactArgs(args) {
     return SAFE_ARG.test(s) ? s : '<redacted>'
   })
 }
-export function runCli({ bin, args, input, label }) {
-  const r = spawnSync(bin, args, { encoding: 'utf8', input, env: cleanGitEnv(process.env), maxBuffer: MAX_OUTPUT })
-  if (r.error || r.status !== 0) {
-    const command = `${label ?? bin} ${redactArgs(args).join(' ')}`
-    const detail = (r.stderr || r.error?.message || '').trim().slice(0, MAX_ERROR)
-    throw new HostError('failed', { message: `${command} failed: ${detail}`, command, detail })
+const TRANSIENT_HOST_ERROR =
+  /\b(?:ECONNRESET|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|ESOCKETTIMEDOUT|ENETUNREACH|EHOSTUNREACH|HTTP\s*(?:429|5\d\d)|(?:status|error)\s*(?:429|5\d\d)|rate limit|timed? out|temporary failure in name resolution|connection reset by peer|i\/o timeout)\b/i
+const waitMs = ms => {
+  const flag = new Int32Array(new SharedArrayBuffer(4))
+  Atomics.wait(flag, 0, 0, ms)
+}
+
+export function runCli({ bin, args, input, label, operation = label ?? bin, replaySafe = false, sleep = waitMs, now = Date.now, responseError, sanitizeStderr }) {
+  const command = `${label ?? bin} ${redactArgs(args).join(' ')}`
+  const report = (attempt, outcome) => process.stderr.write(`HOST-RETRY: operation=${operation} attempt=${attempt} outcome=${outcome}\n`)
+  const deadline = now() + 30_000
+  for (let attempt = 1; attempt <= (replaySafe ? 4 : 1); attempt++) {
+    const remaining = Math.max(1, deadline - now())
+    const detached = process.platform !== 'win32' && process.env.PAIR_HOST_GROUP_MANAGED !== '1'
+    const r = spawnSync(bin, args, {
+      encoding: 'utf8',
+      input,
+      env: cleanGitEnv(process.env),
+      maxBuffer: MAX_OUTPUT,
+      timeout: remaining,
+      detached,
+      killSignal: 'SIGKILL',
+    })
+    if (r.error?.code === 'ETIMEDOUT' && r.pid && detached) {
+      try { process.kill(-r.pid, 'SIGKILL') } catch { /* process group already exited */ }
+    }
+    const stderr = sanitizeStderr ? sanitizeStderr(r.stderr ?? '') : r.stderr
+    const responseFailure = !r.error && r.status === 0 && responseError ? responseError(r.stdout, stderr) : undefined
+    if (!r.error && r.status === 0 && !responseFailure) {
+      if (attempt > 1) report(attempt, 'recovered')
+      return r.stdout
+    }
+    const detail = (responseFailure || stderr || r.error?.message || '').trim().slice(0, MAX_ERROR)
+    const diagnostic = responseFailure || r.stderr || r.error?.message || ''
+    const transient = TRANSIENT_HOST_ERROR.test(diagnostic) || r.error?.code === 'ETIMEDOUT'
+    if (!transient) {
+      if (attempt > 1) report(attempt, 'permanent')
+      throw new HostError('failed', { message: `${command} failed: ${detail}`, command, detail })
+    }
+    const retryAfter = /\bRetry-After:\s*([^\r\n]+)/i.exec(detail)?.[1].trim() ?? /\bHTTP\s*(?:429|5\d\d)\s+Retry-After:\s*(\d+)\b/i.exec(diagnostic)?.[1]
+    const retryAt = retryAfter && !/^\d+$/.test(retryAfter) ? Date.parse(retryAfter) : NaN
+    const delay = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Number.isFinite(retryAt) ? Math.max(0, retryAt - now()) : 1000 * 2 ** (attempt - 1)
+    const cause = r.error?.code === 'ETIMEDOUT' ? 'ETIMEDOUT' : (TRANSIENT_HOST_ERROR.exec(diagnostic)?.[0] ?? 'transient')
+    const exhausted = () => new HostError('transient-exhausted', {
+      message: `host-transient: ${command} transient host failure after ${attempt} attempts: ${cause}`,
+      command,
+      detail: cause,
+    })
+    if (!replaySafe || attempt === 4 || delay > deadline - now()) {
+      report(attempt, 'exhausted')
+      throw exhausted()
+    }
+    sleep(delay)
+    if (now() >= deadline) {
+      report(attempt, 'exhausted')
+      throw exhausted()
+    }
+    report(attempt, 'retry')
   }
-  return r.stdout
 }
 
 // The ONE PR→card link grammar (#642): the board workflow's selector (board-event.mjs) and every code
@@ -286,15 +337,26 @@ export function withMarker(body, marker) {
 export function upsertByMarker({ marker, body, max, list, create, update }) {
   const full = withMarker(body, marker)
   if (full.length > max) return { error: 'body-too-long', length: full.length, max, marker }
+  const write = (action, fn) => {
+    try {
+      const res = fn()
+      return { action, id: res.id, url: res.url, marker }
+    } catch (error) {
+      if (!String(error?.message ?? error).includes('host-transient:')) throw error
+      // A lost reply says nothing about whether the write landed. Read by the stable marker;
+      // an absent or ambiguous result remains a refusal, never a second mutation.
+      const after = findByMarker(list(), marker).hits
+      if (after.length !== 1 || after[0].body !== full) throw error
+      return { action, id: after[0].id, url: after[0].url, marker }
+    }
+  }
   const { hits } = findByMarker(list(), marker)
   if (hits.length > 1) return { error: 'marker-ambiguous', ids: hits.map(h => h.id), marker }
   if (hits.length === 1) {
     if (hits[0].body === full) return { action: 'unchanged', id: hits[0].id, url: hits[0].url, marker }
-    const res = update(hits[0], full)
-    return { action: 'updated', id: res.id, url: res.url, marker }
+    return write('updated', () => update(hits[0], full))
   }
-  const res = create(full)
-  return { action: 'created', id: res.id, url: res.url, marker }
+  return write('created', () => create(full))
 }
 
 // ── defineAdapter ─────────────────────────────────────────────────────────────────────────────

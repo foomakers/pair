@@ -1,13 +1,13 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
-  "scanned": 1051,
-  "files": 383,
-  "distinctContents": 348,
+  "scanned": 1077,
+  "files": 398,
+  "distinctContents": 363,
   "dispositionCounts": {
     "standalone-script": 14,
     "os-guarantee": 25,
     "type-contract": 13,
-    "in-flight-churn": 229,
+    "in-flight-churn": 244,
     "repo-contract": 101,
     "boundary-adapter": 1
   },
@@ -237,6 +237,22 @@
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/async-host-read-601.test.ts",
+      "hash": "2665f4e365c1993eb35f58e916a6bbeba209fc3b18990f0d0e428848888e2e3c",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/async-host-read-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
     },
     {
       "path": "apps/pair-cli/src/commands/run/autonomy-card-entry.test.ts",
@@ -767,6 +783,22 @@
       "testCategory": "root import guard"
     },
     {
+      "path": "apps/pair-cli/src/commands/run/cycle-bridge-interrupt-601.test.ts",
+      "hash": "c9e4900a61e1e43577a21e68ff7f8862bdcb59e85cba16b6e8762a75f57f9546",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/cycle-bridge-interrupt-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
       "path": "apps/pair-cli/src/commands/run/cycle-catalogue.test.ts",
       "hash": "deb719938799b44c33f8d180ffacf3ec692142c9e6153b4ca3a397af93f7355f",
       "dependencies": [
@@ -1008,7 +1040,7 @@
     },
     {
       "path": "apps/pair-cli/src/commands/run/cycle-merge-stage-lib.ts",
-      "hash": "e14132c2d0d44ab37312873254da8cc4495f0f9f4e13e2edafdd50a0b35b243e",
+      "hash": "8bf7c74531ec94dfc5e6c533d8a3f9c326617f662d4ed2ea8107b8b176355ec8",
       "dependencies": [
         {
           "form": "import",
@@ -1263,6 +1295,22 @@
       "testCategory": "root import guard"
     },
     {
+      "path": "apps/pair-cli/src/commands/run/early-signal-601.test.ts",
+      "hash": "17434c630c1e99da319c6bd0a53da88ac33a8d158fe5ed9fa517d363422eeff9",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 10
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/early-signal-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
       "path": "apps/pair-cli/src/commands/run/fixtures/recovered-custody.ts",
       "hash": "29dc83b70b3f04fa11e21bc5af87ef9cb8da9392a23add19c296567e8bba1b62",
       "dependencies": [
@@ -1293,6 +1341,166 @@
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/handler.ts",
+      "hash": "870d9a805e04a9266a948c8b2e07df42283d2e9e337c62a509181b4431190ef1",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/handler.ts",
+      "reason": "Create the real lock directory before acquiring operating-system locks.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-entry-cli-601.test.ts",
+      "hash": "4343a7c5f673b2a39240e71e4ee0220f1147c90cd21cf53deb5b65096e4e9f20",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 12
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-entry-cli-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-entry-recovery-601.test.ts",
+      "hash": "ccaa6bb3454360c2de0cb619207ea2bff38f1c92664d7af9468aa52e02e17cb1",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-entry-recovery-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-gh-fallback-601.test.ts",
+      "hash": "b994d72e7bc1d4ea7b1402d66d2f2bfa6a4195f8159718211f83086fed320966",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-gh-fallback-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-pm-recovery.test.ts",
+      "hash": "a482b284a671c983e17655a893b7b76e375dd2fff2a4d342f5e92950b5b6c53a",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 3
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-pm-recovery.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-process.test.ts",
+      "hash": "e6c8dac9f0c1639751bf40d197e2e35db9e95bf3cbf6a5f308995167295897ea",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 4
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-process.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-read-timeout-601.test.ts",
+      "hash": "a5e48552e897a3b5feb79eeac197a44a4c61f3d53e6f4d19015ce7767fc5c778",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-read-timeout-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-recovery-cli.test.ts",
+      "hash": "1910c2ce0f8eb1709283dff0c5d5d671326ca9fe0f8b2dc4edcb13579f3e1e40",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-recovery-cli.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-recovery.test.ts",
+      "hash": "d56058164904d2410fcbf27b9019a7e4f2e630cbc79572f5152edd838097718f",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 3
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-recovery.test.ts",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/host-retry-audit.test.ts",
+      "hash": "5dd849ebc6d3cd21437e2306811ebffb406284dbd5ff641413338ef6cfac500c",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/host-retry-audit.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
     },
     {
       "path": "apps/pair-cli/src/commands/run/interrupt-group.test.ts",
@@ -1453,6 +1661,22 @@
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/nested-host-signal-601.test.ts",
+      "hash": "1bef9c5a12a9217333be48e8de5c78166848269cfad8b59cce93e730daab81c4",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "apps/pair-cli/src/commands/run/nested-host-signal-601.test.ts",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
     },
     {
       "path": "apps/pair-cli/src/commands/run/pair-loop-parity.test.ts",
@@ -3400,7 +3624,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -3560,7 +3784,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -3672,7 +3896,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -3768,7 +3992,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -3864,7 +4088,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -4013,7 +4237,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/adapter-kit.mjs",
-      "hash": "7574d79f11a55f7a9c801b7c6460d42a6818d3d4a5f09fa3f90f07f08382bc8f",
+      "hash": "6d38c8ff3f2410c8face745687845b37c576cb5e293f781ed32c431b601bc7dc",
       "dependencies": [
         {
           "form": "import",
@@ -4359,7 +4583,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-runtime.test.mjs",
-      "hash": "dc3e670ef4378d383a8a32a3a38d7b23997b162a32ab157aa3447e27e22aac7b",
+      "hash": "d3386e345b7137e7eb04535bf25c24fe7cc41a2eb23cd86154c6f90ec3ea63a9",
       "dependencies": [
         {
           "form": "import",
@@ -4380,7 +4604,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs",
-      "hash": "29750d25c46d4b524e4297cc361cd79899f5e2668171071bd025512aa6815b11",
+      "hash": "22a8caef2c695b2b6cd1a013fbea50392f56ef2214d7f6ca794e19a9172776f3",
       "dependencies": [
         {
           "form": "import",
@@ -4581,6 +4805,22 @@
       "testCategory": "root import guard"
     },
     {
+      "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/host-pm-retry-601.test.mjs",
+      "hash": "d1f5490478da1e7397d51e3a7c65fe54f8af6657d31d18235485b1c27a7b5766",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 3
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/host-pm-retry-601.test.mjs",
+      "reason": "Real subprocess and filesystem integration fixture.",
+      "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
+      "testCategory": "real subprocess and lock integration"
+    },
+    {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/linear-adapter.test.mjs",
       "hash": "cf5cd5a684d0ea245cd52dc16bb8edc3500bbbaf34227f6f0690ae25ea777b97",
       "dependencies": [
@@ -4678,7 +4918,7 @@
     },
     {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pr-comment.test.mjs",
-      "hash": "a51a8a42af08d33e3c463531877b7b37aebdff09dc52fbe99d1eda10048c9774",
+      "hash": "088cfdba80a4c2225f179780901cee50b870cbd3e58f1546316dbd89e2daf119",
       "dependencies": [
         {
           "form": "import",

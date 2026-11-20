@@ -863,6 +863,8 @@ pair-cli run [options]
 
 What each timeout covers (stage, selection, per-card), what is retried (transient vs durable) and how stale locks are reclaimed: [Timeouts, stalls and retries by surface](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md#9-timeouts-stalls-and-retries-by-surface).
 
+During a delivery cycle, transient host reads (connection resets, temporary DNS failures, timeouts, HTTP 429/5xx) retry at most four times with 1/2/4-second backoff and a 30-second total limit. `Retry-After` applies only within that limit. A permanent error fails immediately. If the host remains unavailable, the card parks `awaiting-human` with a resume token; re-run `pair-cli run --card <card>` after recovery. The stage's work and the card's retry budgets remain intact. An uncertain host write is read back by identity where possible and is never blindly replayed.
+
 ### A work perimeter is mandatory
 
 Without a scope the run **refuses to start**: it never falls back to "the whole backlog". A

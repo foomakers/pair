@@ -2,7 +2,8 @@ import { join } from 'path'
 import { randomUUID } from 'node:crypto'
 import { POLICY_PATH, sectionLines } from './policy-sections'
 import type { FileSystemService } from '@pair/content-ops'
-import { readCardTitle, remoteBaseHead } from './cycle-wiring'
+import { mainCheckoutOrCwd, readCardTitle, remoteBaseHead } from './cycle-wiring'
+import { withHostRetryContext } from './host-retry-audit'
 import { effectiveSelection } from './autonomy-policy'
 import chalk from 'chalk'
 import { acquireCardLock } from './card-lock'
@@ -279,15 +280,34 @@ function withPrereqState(fan: FanOut, candidates: readonly RootCandidate[]): Roo
   })
 }
 
-function planFor(fan: FanOut, candidates: RootCandidate[]): RootPlan {
+async function planFor(fan: FanOut, candidates: RootCandidate[]): Promise<RootPlan> {
   const { input } = fan
   const { policy } = input.context
   const { readCardTitle: readTitle = readCardTitle } = fan.deps
+  const titles = new Map<string, string | undefined>()
+  for (const candidate of candidates) {
+    if (!candidate.title && !titles.has(candidate.id)) {
+      const read = () => readTitle(candidate.id, input.cwd)
+      const title =
+        input.config.telemetry === true
+          ? await withHostRetryContext(
+              {
+                root: mainCheckoutOrCwd(input.cwd),
+                card: candidate.id,
+                run: `story-${candidate.id}`,
+                enabled: true,
+              },
+              read,
+            )
+          : await read()
+      titles.set(candidate.id, title)
+    }
+  }
   const stateOrder = stateOrderOf(input)
   const plan = computeRootPlan({
     candidates: withPrereqState(
       fan,
-      completeCandidates(candidates, id => readTitle(id, input.cwd)),
+      completeCandidates(candidates, id => titles.get(id)),
     ),
     // Only the legacy `## Eligibility` is a tier gate; a filter from an argument or `## Autonomy` already
     // chose the cards (argument > adoption, ADR-027).
@@ -357,7 +377,10 @@ async function runSingleBatch(fan: FanOut): Promise<number> {
     return 0
   }
 
-  const plan = planFor(fan, candidates)
+  const plan = await whileInterruptible(
+    () => {},
+    async () => await planFor(fan, candidates),
+  )
   return await runBatch({ input, deps, plan, root: rootLabel(selection) })
 }
 
@@ -695,7 +718,7 @@ function loopDeps(
     },
     probeLock: probeLockFor(input.context.workingArea),
     runBatch: async cards => {
-      const plan = planFor(fan, [...cards])
+      const plan = await planFor(fan, [...cards])
       const batch = createBatch({ input, deps, plan, root: rootLabel(selection) })
       hooks.setBatch(batch.onInterrupt)
       try {

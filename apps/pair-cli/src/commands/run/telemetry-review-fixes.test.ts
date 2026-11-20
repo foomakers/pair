@@ -1,3 +1,4 @@
+import * as hostProcess from './host-process'
 // #645 review fixes r0-1/3/4/5/6/7/9/10: real driver/reader/report; only host processes and engine output are stubbed.
 import * as childProcess from 'child_process'
 import {
@@ -108,6 +109,12 @@ async function drive(options: {
       status: 0,
       signal: null,
     }
+  })
+  vi.spyOn(hostProcess, 'runHostProcess').mockImplementation(async (bin, args) => {
+    if (bin === 'gh')
+      return { status: 0, stdout: String(childProcess.execFileSync(bin, [...args])), stderr: '' }
+    const result = childProcess.spawnSync(bin, [...args], { encoding: 'utf8' })
+    return { status: result.status, stdout: result.stdout, stderr: result.stderr }
   })
   vi.spyOn(console, 'log').mockImplementation(() => {})
   let time = 0

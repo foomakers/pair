@@ -1,6 +1,7 @@
 import { format } from 'util'
+import { mkdirSync } from 'node:fs'
 import { plainConsole, plainNote } from './plain-console'
-import { resolve } from 'path'
+import { join, resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
 import { isParallelRun, parseRunCommand, type RunCommandConfig } from './parser'
@@ -16,15 +17,26 @@ import {
 import { createPerimeter, describePerimeter, type Perimeter } from './perimeter'
 import { describeMergePosture, describeParallelism } from './automation-policy'
 import { describeApprovalPosture, filterDeliveryFor, selectionDeliveredBy } from './invocation'
-import { mainCheckoutOrCwd, readCardClosedAt, readCardLabels } from './cycle-wiring'
-import { readWorkingCleanup, sweepWorkingArea } from './working-cleanup'
+import {
+  mainCheckoutOrCwd,
+  readCardClosedAt,
+  readCardLabels,
+  unavailableWorktreeOwner,
+} from './cycle-wiring'
+import { withHostRetryContext } from './host-retry-audit'
+import { acquireRunLock } from './run-lock'
+import { readWorkingCleanup, sweepWorkingAreaAsync } from './working-cleanup'
 import { POLICY_PATH } from './policy-sections'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { whileInterruptible } from './interrupt'
 import { effectiveSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
-import { locateCycleScripts } from './cycle-scripts'
+import {
+  createCycleScriptsBridge,
+  locateCycleScripts,
+  type CycleScriptsLocation,
+} from './cycle-scripts'
 import {
   resolveOffCycleProfile,
   resolveWorkflowProfile,
@@ -39,6 +51,7 @@ import {
   declaredEngineBin,
   idleTimeoutForEngine,
   driveLockedCard,
+  takeCardLock,
   resolveAutonomyFor,
   resolveContext,
   withRunAgentRunner,
@@ -252,14 +265,14 @@ function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void 
  * is "nobody told us", not "no labels"). An unreadable tracker fails closed with its own message.
  * `--card-tags` (even empty) stays the explicit override.
  */
-function withLiveCardTags(
+async function withLiveCardTags(
   config: RunCommandConfig,
   cwd: string,
   deps: RunHandlerDependencies,
-): RunCommandConfig {
+): Promise<RunCommandConfig> {
   const request = config.dispatch
   if (!request || config.autonomous !== true || request.tagsObserved !== false) return config
-  const labels = (deps.readCardLabels ?? readCardLabels)(request.card, cwd)
+  const labels = await (deps.readCardLabels ?? readCardLabels)(request.card, cwd)
   if (labels === undefined) {
     throw new Error(
       `could not read the labels of card ${request.card} from the tracker (\`gh issue view\` failed), ` +
@@ -282,15 +295,15 @@ function withLiveCardTags(
  * malformed one HALTs on every route before any card is touched. Downstream consumers receive this very
  * resolution (through the context and the injected resolver) instead of re-resolving it.
  */
-function resolveEntry(
+async function resolveEntry(
   config: RunCommandConfig,
   fs: FileSystemService,
   cwd: string,
   callerDeps: RunHandlerDependencies,
-): { config: RunCommandConfig; context: RunContext; deps: RunHandlerDependencies } {
-  config = withLiveCardTags(config, cwd, callerDeps)
+): Promise<{ config: RunCommandConfig; context: RunContext; deps: RunHandlerDependencies }> {
+  config = await withLiveCardTags(config, cwd, callerDeps)
   const base = resolveContext(config, fs, cwd, true)
-  if (!config.dryRun) sweepWorkingState(base.workingArea, fs, cwd, callerDeps)
+  if (!config.dryRun) await sweepWorkingState(base.workingArea, fs, cwd, callerDeps)
   const selection = resolveRunAutonomy({
     resolver: callerDeps.resolveAutonomy ?? spawnAutonomyResolver,
     config,
@@ -313,18 +326,18 @@ function resolveEntry(
 }
 
 /** US-576 AC7: at run start, drop the run state of cards Done longer than `## Working Cleanup` allows. */
-function sweepWorkingState(
+async function sweepWorkingState(
   workingArea: string,
   fs: FileSystemService,
   cwd: string,
   deps: RunHandlerDependencies,
-): void {
+): Promise<void> {
   const policyFile = resolve(mainCheckoutOrCwd(cwd), POLICY_PATH)
   const policy = readWorkingCleanup(
     fs.existsSync(policyFile) ? fs.readFileSync(policyFile) : undefined,
   )
   const closedAt = deps.readCardClosedAt ?? readCardClosedAt
-  const removed = sweepWorkingArea({
+  const removed = await sweepWorkingAreaAsync({
     workingArea,
     policy,
     closedAt: card => closedAt(card, cwd),
@@ -435,11 +448,63 @@ async function runCommand(
   fs: FileSystemService,
   callerDeps: RunHandlerDependencies,
 ): Promise<number> {
+  const dispatch = rawConfig.dispatch
+  if (!dispatch || rawConfig.telemetry !== true)
+    return await runCommandInner(rawConfig, fs, callerDeps)
+  const root = mainCheckoutOrCwd(resolve(rawConfig.cwd ?? fs.currentWorkingDirectory()))
+  return await withHostRetryContext(
+    { root, card: dispatch.card, run: dispatch.runId, enabled: rawConfig.telemetry === true },
+    () => runCommandInner(rawConfig, fs, callerDeps),
+  )
+}
+async function runResolvedCard({
+  config,
+  context,
+  fs,
+  cwd,
+  deps,
+}: {
+  config: RunCommandConfig
+  context: RunContext
+  fs: FileSystemService
+  cwd: string
+  deps: RunHandlerDependencies
+}): Promise<number> {
+  const reviewCard = prEntryOnMappedRoute(config, context)
+  if (reviewCard !== undefined) {
+    return await enterCycleAtReview({ config, context, fs, cwd, card: reviewCard }, deps)
+  }
+  const resolved = resolveRun(config, context, cwd, { fs, deps })
+  report(resolved, resolved.policy.warnings)
+  if (config.dryRun) {
+    console.log(chalk.dim('  Dry run: nothing was spawned.'))
+    return 0
+  }
+  assertEngineAvailable(resolved.engine, createExecutableProbe(fs))
+  return resolved.dispatch
+    ? await driveDispatchedCard({ resolved, decision: resolved.dispatch, context, config }, deps)
+    : await driveTrapped(resolved, config, deps)
+}
+
+async function runCommandInner(
+  rawConfig: RunCommandConfig,
+  fs: FileSystemService,
+  callerDeps: RunHandlerDependencies,
+): Promise<number> {
   // ABSOLUTE, always: the perimeter's directory is printed as the run's containment boundary and
   // probed against the engine's trust store, and `--cwd .` is neither legible as a boundary nor
   // comparable against an absolute trust-store key.
   const cwd = resolve(rawConfig.cwd ?? fs.currentWorkingDirectory())
-  const { config, context, deps } = resolveEntry(rawConfig, fs, cwd, callerDeps)
+  let entry: Awaited<ReturnType<typeof resolveEntry>>
+  try {
+    entry = await whileInterruptible(
+      () => {},
+      () => resolveEntry(rawConfig, fs, cwd, callerDeps),
+    )
+  } catch (error) {
+    return parkHostEntry(error, { config: rawConfig, fs: fs, cwd: cwd, deps: callerDeps })
+  }
+  const { config, context, deps } = entry
 
   haltOnUnresolvedProfileInDryRun({ config, context, fs, cwd }, deps)
   // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
@@ -455,30 +520,107 @@ async function runCommand(
   // runs" — the card's OWN Definition-of-Ready macrostate now decides. Every OTHER skip reason
   // (`automation-off`, `ineligible`, `run-in-progress`) is unchanged.
   if (context.dispatch?.kind === 'skip') {
-    return await handleSkipDecision({ config, context, fs, cwd, decision: context.dispatch }, deps)
+    try {
+      return await handleSkipDecision(
+        { config, context, fs, cwd, decision: context.dispatch },
+        deps,
+      )
+    } catch (error) {
+      return parkHostEntry(error, { config: config, fs: fs, cwd: cwd, deps: callerDeps })
+    }
   }
 
   // AC2 (r0-2): `--pr` enters the cycle at review even on a card whose tag maps a workflow — the
   // mapping names what a card STARTS with, and a card with a PR has started. Never silently dropped.
-  const reviewCard = prEntryOnMappedRoute(config, context)
-  if (reviewCard !== undefined) {
-    return await enterCycleAtReview({ config, context, fs, cwd, card: reviewCard }, deps)
+  return await runResolvedCard({ config, context, fs, cwd, deps })
+}
+function hostParkContext(
+  config: RunCommandConfig,
+  fs: FileSystemService,
+  cwd: string,
+  deps: RunHandlerDependencies,
+) {
+  const dispatch = config.dispatch!
+  const context = resolveContext(config, fs, cwd, true)
+  const location = locateCycleScripts(fs, context.config, cwd)
+  const selection = resolveRunAutonomy({
+    resolver: deps.resolveAutonomy ?? spawnAutonomyResolver,
+    config,
+    projectConfig: context.config,
+    fs,
+    cwd,
+  })
+  const policy = {
+    redRepairs: 3,
+    greenRetries: 2,
+    ...(selection?.policy.autoRecoveryRounds !== undefined && {
+      autoRecoveryRounds: selection.policy.autoRecoveryRounds,
+    }),
+    ...(selection?.policy.maxFixRounds !== undefined && {
+      maxFixRounds: selection.policy.maxFixRounds,
+    }),
+    ...(typeof dispatch.rounds === 'number' && { maxFixRounds: dispatch.rounds }),
   }
+  return { context, location, policy }
+}
 
-  const resolved = resolveRun(config, context, cwd, { fs, deps })
+function parkUnverifiedWorktree(
+  location: CycleScriptsLocation,
+  cwd: string,
+  card: string,
+): boolean {
+  const uncertain = unavailableWorktreeOwner(location, mainCheckoutOrCwd(cwd), undefined, card)
+  if (uncertain === undefined) return false
+  console.log(`  ${uncertain.reason}; resume token ${uncertain.resumeToken}`)
+  return true
+}
 
-  report(resolved, resolved.policy.warnings)
-
-  if (config.dryRun) {
-    console.log(chalk.dim('  Dry run: nothing was spawned.'))
-    return 0
+function parkHostEntry(
+  error: unknown,
+  input: {
+    config: RunCommandConfig
+    fs: FileSystemService
+    cwd: string
+    deps: RunHandlerDependencies
+  },
+): number {
+  const { config, fs, cwd, deps } = input
+  const detail = error instanceof Error ? error.message : String(error)
+  const dispatch = config.dispatch
+  if (!detail.includes('host-transient:') || dispatch === undefined) throw error
+  const { context, location, policy } = hostParkContext(config, fs, cwd, deps)
+  const dir = join(mainCheckoutOrCwd(cwd), '.pair/working/runs', dispatch.runId, dispatch.card)
+  const cardLock = takeCardLock(context, deps, dispatch.card)
+  if (cardLock === undefined) return 0
+  try {
+    mkdirSync(dir, { recursive: true })
+    const runLock = acquireRunLock(dir)
+    if (runLock.kind !== 'acquired') {
+      console.log(
+        `  run-locked: ${dir} (pid ${String(runLock.pid ?? 'unknown')}, host ${runLock.host ?? 'unknown'})`,
+      )
+      return 1
+    }
+    try {
+      if (parkUnverifiedWorktree(location, cwd, dispatch.card)) return 1
+      const round = createCycleScriptsBridge(location, cwd).recover({
+        dir,
+        kind: 'stage-retry',
+        detail: 'resolve:run host-transient',
+        policy,
+      })
+      console.log(
+        `  Recovery: host-transient — parked entry (round ${String(round.round)}/${String(round.budget)})`,
+      )
+      console.log('  Cycle status: awaiting-human (0 stage(s) dispatched)')
+      console.log(`  Parked: ${detail}; resume token resolve:run:host-transient`)
+      return 0
+    } finally {
+      runLock.release()
+    }
+  } finally {
+    cardLock.release()
   }
-
-  assertEngineAvailable(resolved.engine, createExecutableProbe(fs))
-
-  return resolved.dispatch
-    ? await driveDispatchedCard({ resolved, decision: resolved.dispatch, context, config }, deps)
-    : await driveTrapped(resolved, config, deps)
 }
 
 /** US-573: a plain loop run, trapped so Ctrl+C finalizes the live lines and the audit's `loop-end interrupted`. */

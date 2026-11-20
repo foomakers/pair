@@ -54,20 +54,20 @@ afterEach(() => {
 })
 
 describe('pair-cli reads a filesystem card through the bound adapter (US-572)', () => {
-  it('labels, tier, title and board state come from the backlog file', () => {
-    expect(readCardLabels('01-01-001', root)).toEqual(['risk:yellow', 'cli'])
-    expect(readCardTier('01-01-001', root)).toBe('risk:yellow')
-    expect(readCardTitle('01-01-001', root)).toBe('US 01-01-001: Login')
-    expect(readCardDocumentViaGh('01-01-001', root).boardState).toBe('In Progress')
+  it('labels, tier, title and board state come from the backlog file', async () => {
+    expect(await readCardLabels('01-01-001', root)).toEqual(['risk:yellow', 'cli'])
+    expect(await readCardTier('01-01-001', root)).toBe('risk:yellow')
+    expect(await readCardTitle('01-01-001', root)).toBe('US 01-01-001: Login')
+    expect((await readCardDocumentViaGh('01-01-001', root)).boardState).toBe('In Progress')
   })
 
-  it('closure: an open card is null, a completed one carries a date', () => {
-    expect(readCardClosedAt('01-01-001', root)).toBeNull()
-    expect(readCardClosedAt('01-01-002', root)).toBeInstanceOf(Date)
+  it('closure: an open card is null, a completed one carries a date', async () => {
+    expect(await readCardClosedAt('01-01-001', root)).toBeNull()
+    expect(await readCardClosedAt('01-01-002', root)).toBeInstanceOf(Date)
   })
 
-  it('an unknown or path-shaped id is unreadable, never a guess', () => {
-    expect(readCardLabels('09-09-009', root)).toBeUndefined()
-    expect(readCardLabels('../etc', root)).toBeUndefined()
+  it('an unknown or path-shaped id is unreadable, never a guess', async () => {
+    expect(await readCardLabels('09-09-009', root)).toBeUndefined()
+    expect(await readCardLabels('../etc', root)).toBeUndefined()
   })
 })

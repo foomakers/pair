@@ -1194,6 +1194,66 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     expect(calls()).toHaveLength(0)
   }, 60_000)
 
+  it('#601 AC3 / #602 AC6: a card host failure does not recover a foreign worktree', async () => {
+    const stage = 'card'
+    execFileSync(
+      'git',
+      ['worktree', 'add', '-q', '-b', 'someone-else', join(root, 'pair-worktrees', 'main', '7')],
+      { cwd: main, stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+    const gh = join(root, 'bin', 'gh')
+    const marker = join(root, `host-failure-${stage}`)
+    const fail = stage === 'card' ? "a[0] === 'issue'" : "a[0] === 'api'"
+    const script = readFileSync(gh, 'utf8').replace(
+      'const a = process.argv.slice(2)',
+      `const a = process.argv.slice(2)\nif (${fail}) { require('fs').writeFileSync(${JSON.stringify(marker)}, 'seen'); process.stderr.write('HTTP 503 Retry-After: 31'); process.exit(1) }`,
+    )
+    writeFileSync(gh, script)
+    const recovery = join(runDirOf('story-7'), 'recovery.json')
+    const before = existsSync(recovery) ? readFileSync(recovery, 'utf8') : undefined
+
+    const outcome = await settle(drive(ENGINES.claude, 42))
+
+    expect(existsSync(marker)).toBe(true)
+    expect(outcome).toContain('worktree-conflict')
+    expect(existsSync(recovery) ? readFileSync(recovery, 'utf8') : undefined).toBe(before)
+    expect(calls()).toHaveLength(0)
+  }, 60_000)
+
+  it('#601 AC3 / #602 AC6: a card host failure parks when the story worktree is absent', async () => {
+    const gh = join(root, 'bin', 'gh')
+    writeFileSync(
+      gh,
+      `#!/usr/bin/env node\nprocess.stderr.write('HTTP 503 Retry-After: 31');process.exit(1)\n`,
+    )
+    const outcome = await settle(drive(ENGINES.claude, 42))
+    expect(outcome).toContain('awaiting-human')
+    expect(outcome).toContain('host-transient')
+    expect(existsSync(join(runDirOf('story-7'), 'recovery.json'))).toBe(true)
+  }, 60_000)
+
+  it('#601 AC3 / #602 AC6: an unverifiable existing worktree resumes after the host returns', async () => {
+    const path = join(root, 'pair-worktrees', 'main', '7')
+    execFileSync('git', ['worktree', 'add', '-q', '-b', 'feature/US-7-a-story', path], {
+      cwd: main,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    const gh = join(root, 'bin', 'gh')
+    const healthy = readFileSync(gh, 'utf8')
+    writeFileSync(
+      gh,
+      `#!/usr/bin/env node\nprocess.stderr.write('HTTP 503 Retry-After: 31');process.exit(1)\n`,
+    )
+    expect(await settle(drive(ENGINES.claude))).toContain('worktree-conflict')
+    expect(existsSync(join(runDirOf('story-7'), 'recovery.json'))).toBe(false)
+    writeFileSync(gh, healthy)
+
+    const resumed = await settle(drive(ENGINES.claude))
+
+    expect(resumed).not.toContain('worktree-conflict')
+    expect(calls().length).toBeGreaterThan(0)
+  }, 60_000)
+
   it('AC3/AC2 (verify cwd): the verify stage STARTS in the main checkout like every stage, and its $worktree names the DETACHED review worktree it cds into', async () => {
     // The one cwd rule (maintainer decision, a0 repair): every stage process starts in the MAIN
     // checkout, where the phase skills anchor the run directory; the verify packet's own

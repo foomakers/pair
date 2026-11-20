@@ -163,6 +163,7 @@ export const STOP_CATALOG = [
   { status: 'dead-dispatch', class: 'process', resume: 'pair run --card <card>' },
   { status: 'idle-timeout', class: 'process', resume: 'pair run --card <card>' },
   { status: 'gate-flake', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'host-transient', class: 'process', resume: 'pair run --card <card> resumes the parked step within autoRecoveryRounds after the host recovers' },
 ]
 // ── the cycle's rules, held HERE as data (US-486 AC-12) ─────────────────────────────────────
 // Every realization of the cycle — the `pair-implement-batch` Workflow script, the
@@ -2938,7 +2939,8 @@ export function cardView({ story, dir, host }) {
   try {
     try {
       c = h.pm.readCard(story, { fields: [...CARD_FIELDS, 'projectItems'] })
-    } catch {
+    } catch (error) {
+      if (error?.kind === 'transient-exhausted') throw error
       c = h.pm.readCard(story, { fields: CARD_FIELDS })
     }
   } catch (e) {
@@ -2947,6 +2949,15 @@ export function cardView({ story, dir, host }) {
   const closed = String(c?.state ?? '').toUpperCase() === 'CLOSED'
   const boardState = (c?.projectItems ?? []).map(i => String(i?.status?.name ?? '').trim()).find(Boolean) ?? null
   return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState }
+}
+
+export function prLabelsView({ ref, dir, host }) {
+  try {
+    const h = host ?? bindHosts(dir ? { dir } : { from: process.cwd() })
+    return { labels: h.code.readLabels({ pr: ref }) }
+  } catch (error) {
+    return { error: hostDetail(error) }
+  }
 }
 
 // US-572: `--assignee @me` through the bound PM adapter. No resolveUser ⇒ a typed HALT naming it.
@@ -4560,6 +4571,7 @@ if (isMain()) {
       'worktree-clean': ['cwd', 'dir', 'story'],
       'prereq-state': ['dir', 'story'],
       card: ['dir', 'story'],
+      'pr-labels': ['dir', 'ref'],
       whoami: ['dir'],
     }
     if (FLAGS[cmd]) {
@@ -4748,6 +4760,11 @@ if (isMain()) {
       out = cardView({ story: opts.story, dir: opts.dir })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.error ? 1 : 0)
+    } else if (cmd === 'pr-labels') {
+      need('ref')
+      out = prLabelsView({ ref: opts.ref, dir: opts.dir })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.error ? 1 : 0)
     } else if (cmd === 'whoami') {
       out = whoami({ dir: opts.dir })
       process.stdout.write(JSON.stringify(out) + '\n')
@@ -4765,7 +4782,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | approve-correction | decisions | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | card | whoami | test-identity | version)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | approve-correction | decisions | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | card | pr-labels | whoami | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

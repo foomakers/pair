@@ -70,6 +70,44 @@ afterEach(() => {
 })
 
 describe('merge park reporting', () => {
+  it('#605: dead-dispatch park exits nonzero while remaining awaiting human', async () => {
+    const { deps } = harness({
+      status: 'awaiting-human',
+      stagesRun: 1,
+      next: { step: 'implement', phase: 'a0' },
+      resumeToken: 'implement:a0:dead-dispatch',
+      reason: 'dead-dispatch: stage returned no handoff',
+    })
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '601', cardTags: '' }),
+      files(),
+      deps,
+    )
+    expect(code).toBe(1)
+  })
+
+  it('US-601 AC3: an exhausted host park exits successfully and releases the lock', async () => {
+    let releases = 0
+    const { deps } = harness({
+      status: 'awaiting-human',
+      stagesRun: 0,
+      next: { step: 'resolve', phase: 'run' },
+      resumeToken: 'resolve:run:host-transient',
+      reason: 'host-transient: gh issue view exhausted',
+    })
+    deps.acquireLock = ({ card }) => ({
+      kind: 'acquired',
+      lock: { path: `/locks/${card}`, release: () => releases++ },
+    })
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '601', cardTags: '' }),
+      files(),
+      deps,
+    )
+    expect(code).toBe(0)
+    expect(releases).toBe(1)
+  })
+
   it.each([
     ['awaiting-human', 'awaiting-human'],
     ['halted', 'failed'],
@@ -81,11 +119,12 @@ describe('merge park reporting', () => {
       chunk => (output.push(String(chunk)), true),
     )
     const { deps } = harness(parked(kind, 'gate', 'merge reason'))
-    await handleRunCommand(
+    const exitCode = await handleRunCommand(
       parseRunCommand({ card: '596', cardTags: '', json: true }),
       files(),
       deps,
     )
+    expect(exitCode).toBe(kind === 'awaiting-human' ? 0 : 1)
     const events = output
       .join('')
       .split('\n')
