@@ -47,7 +47,7 @@ Under Claude Code they are not inert, and it is worth knowing exactly what arriv
 | `pair-implementer`        | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write files, run commands, create worktrees, commit, push, open or update pull requests, always above a sealed acceptance contract (`/pair-workflow-implement-phase`, `/pair-workflow-green-fix`) |
 | `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | the independent final verifier (`/pair-workflow-review-phase`): read the code, run commands (`git`, `gh`), run the custody script, publish the marker-keyed review comments; by its own instructions it does not edit, commit or merge |
 | `pair-fix-test-author`    | `Read, Edit, Write, Bash, Grep, Glob, Skill` | the preparation owner (`/pair-workflow-red-spec`): inventory, grouping, tests and fixtures only; it cannot commit, push, post or edit production artifacts by instruction |
-| `pair-red-contract-verifier` | `Read, Grep, Glob, Bash, Skill`          | the independent validator and sealer (`/pair-workflow-red-verify`): reproduce the contract, reject with every gap or run `red-snapshot.mjs seal`; read-only apart from the seal commit the script makes |
+| `pair-red-contract-verifier` | `Read, Write, Grep, Glob, Bash, Skill` | the independent validator and sealer (`/pair-workflow-red-verify`): reproduce the contract, seal accepted evidence and publish the typed handoff |
 | `pair-contract-generator` | `Read, Write, Bash`                        | read a KB template and write the derived `*.contract.json` cache beside it    |
 
 **One more agent type arrives with no definition of ours: `general-purpose`.** `pair-refine-batch`
@@ -59,7 +59,7 @@ in every prompt it dispatches, not a tool grant.
 
 **Read the third column as process, not as permission.** `Bash` is unrestricted wherever it is
 declared, so writing files, committing, pushing and `gh pr merge` are all technically inside the
-authority you install. What keeps `pair-reviewer` and `pair-red-contract-verifier` read-only,
+authority you install. What keeps `pair-reviewer` read-only and limits `pair-red-contract-verifier` writes,
 `pair-fix-test-author` test-only, and keeps merge out of every run that did not declare one is instruction (the engine's
 dispatched prompts and each agent's own definition) not the tool grant.
 

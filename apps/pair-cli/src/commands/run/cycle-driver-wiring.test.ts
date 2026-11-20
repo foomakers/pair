@@ -11,12 +11,13 @@ import {
   realpathSync,
   rmSync,
   writeFileSync,
+  utimesSync,
 } from 'fs'
 import { hostname, tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { createDefaultCycleDriver } from './cycle-wiring'
-import { runCycle } from './cycle'
+import { runCycle, type CycleResolveResult, type RunCycleInput } from './cycle'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 import { POLICY_PATH } from './automation-policy'
@@ -144,7 +145,12 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     expect(answer.counters?.['spentCycles']).toBe(0)
   }
 
-  const drive = (engine: EngineDefinition, pr?: number, telemetryEnabled?: boolean) =>
+  const drive = (
+    engine: EngineDefinition,
+    pr?: number,
+    telemetryEnabled?: boolean,
+    recoveryBudget = 1,
+  ) =>
     createDefaultCycleDriver({
       engine: { ...engine, command: join(root, 'bin', 'fake-engine') },
       cwd: main,
@@ -159,7 +165,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     })({
       runId: 'story-7',
       card: '7',
-      budgets: { autoRecoveryRounds: 1 },
+      budgets: { autoRecoveryRounds: recoveryBudget },
       ...(pr !== undefined && { pr }),
     })
 
@@ -368,6 +374,451 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
       readFileSync(join(main, '.pair/working/runs/story-7/7/recovery.json'), 'utf8'),
     ).rounds as { kind: string }[]
     expect(rounds.map(r => r.kind)).toEqual(['stage-retry'])
+  }, 60_000)
+
+  function recoveryGit(cwd: string, ...args: string[]): string {
+    return execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 5000,
+    }).trim()
+  }
+
+  function seedReviewedHead(
+    dir: string,
+    reviewed: string,
+    round = 0,
+    createdAt = '2000-01-01T00:00:00.000Z',
+  ) {
+    mkdirSync(dir, { recursive: true })
+    const phase = `r${round}`
+    const path = join(dir, `${phase}-review-phase.json`)
+    const body = JSON.stringify({
+      schemaVersion: 3,
+      workflowVersion: CYCLE_WORKFLOW_VERSION,
+      run: 'story-7',
+      story: '7',
+      skill: 'review-phase',
+      phase,
+      attempt: 1,
+      seq: round + 1,
+      pr: 42,
+      inputHead: reviewed,
+      reviewedHead: reviewed,
+      createdAt,
+      verdict: 'changes-requested',
+      custody: { contractBreach: false },
+      readiness: { ready: false },
+      findings: [
+        {
+          id: 'r0-1',
+          severity: 'Major',
+          location: 'src/a.ts:1',
+          description: 'wrong',
+          recommendation: 'fix',
+          kind: 'defect',
+          transition: 'open',
+          blocking: true,
+        },
+      ],
+    })
+    writeFileSync(path, body)
+    return { path, body }
+  }
+
+  function seedStalePrepare(dir: string, reviewed: string) {
+    writeFileSync(
+      join(dir, 'r1-g1-red-spec.json'),
+      JSON.stringify({
+        schemaVersion: 3,
+        workflowVersion: CYCLE_WORKFLOW_VERSION,
+        run: 'story-7',
+        story: '7',
+        skill: 'red-spec',
+        phase: 'r1-g1',
+        attempt: 1,
+        seq: 2,
+        pr: 42,
+        inputHead: reviewed,
+        status: 'stale',
+        mode: 'remediation',
+        createdAt: '2000-01-02T00:00:00.000Z',
+      }),
+    )
+  }
+
+  function recoveryFixture(
+    tree: string,
+    relationship: 'sibling' | 'descendant' | 'matched',
+    integrationMoved: boolean,
+  ) {
+    const git = (...args: string[]) => recoveryGit(tree, ...args)
+    git('config', '--local', 'user.name', 'Fixture')
+    git('config', '--local', 'user.email', 'fixture@example.invalid')
+    const base = git('rev-parse', 'origin/main')
+    git('checkout', '-q', '-b', 'fixture-reviewed')
+    writeFileSync(join(tree, 'reviewed.txt'), 'reviewed change')
+    git('add', 'reviewed.txt')
+    git('commit', '-qm', 'reviewed')
+    const reviewed = git('rev-parse', 'HEAD')
+    git('checkout', '-q', 'feature/US-7-a-story')
+    if (relationship !== 'sibling') git('merge', '--ff-only', reviewed)
+    if (relationship !== 'matched') git('commit', '-qm', relationship, '--allow-empty')
+    const actual = git('rev-parse', 'HEAD')
+    if (integrationMoved) {
+      const integration = git(
+        'commit-tree',
+        `${base}^{tree}`,
+        '-p',
+        base,
+        '-m',
+        'integration moved',
+      )
+      git('update-ref', 'refs/remotes/origin/main', integration)
+    }
+    expect(git('merge-base', base, actual)).toBe(base)
+    expect(git('merge-base', reviewed, actual)).toBe(relationship === 'sibling' ? base : reviewed)
+    return { reviewed, actual, git }
+  }
+
+  const recoveryRead = (dir: string) => {
+    const path = join(dir, 'recovery.json')
+    return (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {}) as {
+      baseSynced?: { head: string; at: string }
+      rounds?: { kind: string }[]
+    }
+  }
+
+  function stageLocalPrepare(dir: string, skill: string, cwd: string) {
+    const args = [
+      'resolve',
+      '--dir',
+      dir,
+      '--workflowVersion',
+      CYCLE_WORKFLOW_VERSION,
+      '--policy',
+      '{"autoRecoveryRounds":1,"blockingFloor":"Minor"}',
+      '--story',
+      '7',
+      '--entry',
+      'pr',
+      '--pr',
+      '42',
+    ]
+    return (
+      JSON.parse(
+        execFileSync(process.execPath, [skill, ...args], {
+          cwd,
+          encoding: 'utf8',
+          timeout: 5000,
+        }),
+      ) as CycleResolveResult
+    ).next
+  }
+
+  function restartedBases(dir: string) {
+    const dataset = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills/workflow')
+    const paths = [
+      join(main, '.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs'),
+      join(REPO_ROOT, '.claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs'),
+      join(dataset, 'cycle/scripts/cycle-state.mjs'),
+      join(dataset, 'red-spec/scripts/cycle-state.mjs'),
+    ]
+    return paths.map(script => stageLocalPrepare(dir, script, main)['base'])
+  }
+
+  async function runRecovery(input: RunCycleInput) {
+    const { runCycle: run } = await vi.importActual<typeof import('./cycle')>('./cycle')
+    // The engine is a recorder. End the loop at that boundary and re-read the real resolver separately.
+    return run({
+      ...input,
+      resolve: async () =>
+        calls().length ? { status: 'completed', next: { step: 'done' } } : input.resolve(),
+    })
+  }
+
+  function expectParkedRecovery(
+    outcome: Awaited<ReturnType<typeof runRecovery>>,
+    reviewed: string,
+    actual: string,
+    attempt = 1,
+  ) {
+    expect.soft(outcome).toMatchObject({
+      status: 'awaiting-human',
+      stagesRun: 0,
+      resumeToken: 'prepare:r1-g1:prepare-head-mismatch',
+      next: {
+        step: 'prepare',
+        phase: 'r1-g1',
+        mode: 'remediation',
+        attempt,
+        base: reviewed,
+        reason: 'prepare-head-mismatch',
+      },
+    })
+    expect.soft(outcome.reason ?? '').toContain(`expected ${reviewed}, actual ${actual}`)
+    expect.soft(calls()).toHaveLength(0)
+  }
+
+  it.each([
+    ['sibling-up-to-date', false, 1],
+    ['sibling-merge', true, 1],
+    ['sibling-stale-retry', false, 2],
+  ] as const)(
+    '#687 r6-driver-red %s',
+    async (_name, moved, attempt) => {
+      vi.mocked(runCycle).mockImplementationOnce(async input => {
+        const { path: tree } = (await input.worktree()) as { path: string }
+        const { reviewed, actual, git } = recoveryFixture(tree, 'sibling', moved)
+        const dir = join(main, '.pair/working/runs/story-7/7')
+        const review = seedReviewedHead(dir, reviewed)
+        if (attempt === 2) seedStalePrepare(dir, reviewed)
+        const outcome = await runRecovery(input)
+        expectParkedRecovery(outcome, reviewed, actual, attempt)
+        expect.soft(git('merge-base', reviewed, git('rev-parse', 'HEAD'))).not.toBe(reviewed)
+        expect.soft(existsSync(join(tree, 'reviewed.txt'))).toBe(false)
+        expect.soft(recoveryRead(dir).baseSynced).toBeUndefined()
+        expect.soft(readFileSync(review.path, 'utf8')).toBe(review.body)
+        expect.soft((await input.resolve()).next?.['base']).toBe(reviewed)
+        expect.soft(restartedBases(dir)).toEqual(Array(4).fill(reviewed))
+        return outcome
+      })
+      await drive(ENGINES.codex, 42)
+    },
+    15_000,
+  )
+
+  it.each([
+    ['matched', false, 1],
+    ['descendant-up-to-date', false, 1],
+    ['descendant-merge', true, 1],
+    ['descendant-stale-retry', false, 2],
+  ] as const)(
+    '#687 r6-driver-control %s',
+    async (name, moved, attempt) => {
+      const relationship = name === 'matched' ? 'matched' : 'descendant'
+      vi.mocked(runCycle).mockImplementationOnce(async input => {
+        const { path: tree } = (await input.worktree()) as { path: string }
+        const { reviewed, actual, git } = recoveryFixture(tree, relationship, moved)
+        const dir = join(main, '.pair/working/runs/story-7/7')
+        const review = seedReviewedHead(dir, reviewed)
+        if (attempt === 2) seedStalePrepare(dir, reviewed)
+        const before = await input.resolve()
+        expect(before.next).toMatchObject({
+          step: 'prepare',
+          phase: 'r1-g1',
+          attempt,
+          base: reviewed,
+        })
+        const outcome = await runRecovery(input)
+        const finalHead = git('rev-parse', 'HEAD')
+        const recovered = recoveryRead(dir)
+        if (moved) {
+          expect(git('rev-parse', 'HEAD^1')).toBe(actual)
+          expect(git('rev-parse', 'HEAD^2')).toBe(git('rev-parse', 'origin/main'))
+        } else expect(finalHead).toBe(actual)
+        expect(git('merge-base', reviewed, finalHead)).toBe(reviewed)
+        expect(readFileSync(join(tree, 'reviewed.txt'), 'utf8')).toBe('reviewed change')
+        expect(calls()).toHaveLength(1)
+        const attemptArg = attempt === 1 ? '' : ` $attempt=${attempt}`
+        expect(calls()[0]?.argv.at(-1)).toContain(`$phase=r1-g1${attemptArg} $head=${finalHead}`)
+        expect(calls()[0]?.cwd).toBe(main)
+        expect(outcome.stagesRun).toBe(1)
+        expect(recovered.baseSynced?.head).toBe(relationship === 'matched' ? undefined : finalHead)
+        expect((recovered.rounds ?? []).map(round => round.kind)).toEqual(
+          relationship === 'matched' ? [] : ['base-sync'],
+        )
+        expect((await input.resolve()).next).toMatchObject({ ...before.next, base: finalHead })
+        expect(restartedBases(dir)).toEqual(Array(4).fill(finalHead))
+        expect(readFileSync(review.path, 'utf8')).toBe(review.body)
+        return outcome
+      })
+      await drive(ENGINES.codex, 42)
+    },
+    15_000,
+  )
+
+  it.each([0, 1])(
+    '#687 r6-driver-red real-spent-budget-%s',
+    async budget => {
+      vi.mocked(runCycle).mockImplementationOnce(async input => {
+        const { path: tree } = (await input.worktree()) as { path: string }
+        const { reviewed, actual, git } = recoveryFixture(tree, 'descendant', true)
+        const dir = join(main, '.pair/working/runs/story-7/7')
+        const review = seedReviewedHead(dir, reviewed)
+        const rounds =
+          budget === 0
+            ? []
+            : [{ kind: 'base-sync', detail: 'prior attempt', at: '2000-01-03T00:00:00.000Z' }]
+        utimesSync(review.path, new Date(0), new Date('2000-01-01'))
+        const path = join(dir, 'recovery.json')
+        const bytes = JSON.stringify({ rounds })
+        writeFileSync(path, bytes)
+        const outcome = await runRecovery(input)
+        expectParkedRecovery(outcome, reviewed, actual)
+        expect.soft(outcome.reason ?? '').toContain(`autoRecoveryRounds (${budget}) spent`)
+        expect.soft(git('rev-parse', 'HEAD')).toBe(actual)
+        expect.soft(readFileSync(path, 'utf8')).toBe(bytes)
+        expect.soft(readFileSync(review.path, 'utf8')).toBe(review.body)
+        expect.soft(restartedBases(dir)).toEqual(Array(4).fill(reviewed))
+        return outcome
+      })
+      await drive(ENGINES.codex, 42, undefined, budget)
+    },
+    15_000,
+  )
+
+  it('#687 r6-driver-control no-review', async () => {
+    vi.mocked(runCycle).mockImplementationOnce(async input => {
+      const dir = join(main, '.pair/working/runs/story-7/7')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(
+        join(dir, 'recovery.json'),
+        JSON.stringify({
+          baseSynced: { head: 'a'.repeat(40), at: '2025-01-01T00:00:00.000Z' },
+        }),
+      )
+      expect((await input.resolve()).next).toMatchObject({ step: 'verify', phase: 'r0' })
+      expect(calls()).toHaveLength(0)
+      return { status: 'awaiting-human', stagesRun: 0 }
+    })
+    await drive(ENGINES.codex, 42)
+  }, 15_000)
+
+  it('#687 r6-driver-red restart-foreign-head', async () => {
+    vi.mocked(runCycle).mockImplementationOnce(async input => {
+      const { path: tree } = (await input.worktree()) as { path: string }
+      const { reviewed, actual } = recoveryFixture(tree, 'sibling', false)
+      const dir = join(main, '.pair/working/runs/story-7/7')
+      mkdirSync(dir, { recursive: true })
+      // Schema-valid prior evidence from a recovery against a different review head.
+      writeFileSync(
+        join(dir, 'recovery.json'),
+        JSON.stringify({
+          baseSynced: { head: actual, at: '2025-01-01T00:00:00.000Z' },
+          rounds: [],
+        }),
+      )
+      seedReviewedHead(dir, reviewed)
+      expect.soft((await input.resolve()).next?.['base']).toBe(reviewed)
+      expect.soft(restartedBases(dir)).toEqual(Array(4).fill(reviewed))
+      expect(calls()).toHaveLength(0)
+      return { status: 'awaiting-human', stagesRun: 0 }
+    })
+    await drive(ENGINES.codex, 42)
+  }, 15_000)
+
+  it('#687 r6-driver-control newer-review', async () => {
+    vi.mocked(runCycle).mockImplementationOnce(async input => {
+      const { path: tree } = (await input.worktree()) as { path: string }
+      const { reviewed, actual, git } = recoveryFixture(tree, 'descendant', false)
+      const dir = join(main, '.pair/working/runs/story-7/7')
+      seedReviewedHead(dir, reviewed)
+      const outcome = await runRecovery(input)
+      expect(recoveryRead(dir).baseSynced?.head).toBe(actual)
+      git('commit', '-qm', 'new review head', '--allow-empty')
+      const newer = git('rev-parse', 'HEAD')
+      seedReviewedHead(dir, newer, 1, '2099-01-01T00:00:00.000Z')
+      expect((await input.resolve()).next?.['base']).toBe(newer)
+      expect(restartedBases(dir)).toEqual(Array(4).fill(newer))
+      expect(calls()).toHaveLength(1)
+      return outcome
+    })
+    await drive(ENGINES.codex, 42)
+  }, 15_000)
+
+  const resolverStages = [
+    'cycle',
+    'green-fix',
+    'implement-phase',
+    'red-spec',
+    'red-verify',
+    'review-phase',
+  ] as const
+  const resolverScenarios = [
+    'foreign-sibling',
+    'legitimate-descendant',
+    'superseding-review',
+  ] as const
+  const resolverCases = (['dataset', 'installed'] as const).flatMap(copy =>
+    resolverStages.flatMap(stage =>
+      resolverScenarios.map(scenario => {
+        const baseline = scenario === 'foreign-sibling' ? 'red' : 'control'
+        return [
+          `#687 r6-resolver-${baseline} resolver-${copy}-${stage}-${scenario}`,
+          copy,
+          stage,
+          scenario,
+        ] as const
+      }),
+    ),
+  )
+
+  it.each(resolverCases)(
+    '%s',
+    (_name, copy, stage, scenario) => {
+      recoveryGit(main, 'branch', 'feature/US-7-a-story')
+      const relationship = scenario === 'foreign-sibling' ? 'sibling' : 'descendant'
+      const { reviewed, actual, git } = recoveryFixture(main, relationship, false)
+      const dir = join(main, '.pair/working/runs/story-7/7')
+      seedReviewedHead(dir, reviewed)
+      const newerReview = scenario === 'superseding-review'
+      if (newerReview) seedReviewedHead(dir, actual, 1, '2000-01-04T00:00:00.000Z')
+      // The older memo can still name a descendant of the newer review.
+      // These timestamps isolate the precedence rule from the ancestry check.
+      const recorded = newerReview
+        ? git('commit-tree', 'HEAD^{tree}', '-p', actual, '-m', 'recovered')
+        : actual
+      const memo = join(dir, 'recovery.json')
+      const bytes = JSON.stringify({
+        baseSynced: { head: recorded, at: '2000-01-03T00:00:00.000Z' },
+        rounds: [],
+      })
+      writeFileSync(memo, bytes)
+
+      const skill =
+        copy === 'dataset'
+          ? `packages/knowledge-hub/dataset/.skills/workflow/${stage}`
+          : `.claude/skills/pair-workflow-${stage}`
+      const next = stageLocalPrepare(dir, join(REPO_ROOT, skill, 'scripts/cycle-state.mjs'), main)
+      expect(next).toMatchObject({
+        step: 'prepare',
+        phase: newerReview ? 'r2-g1' : 'r1-g1',
+        attempt: 1,
+        base: scenario === 'foreign-sibling' ? reviewed : actual,
+      })
+      expect(readFileSync(memo, 'utf8')).toBe(bytes)
+    },
+    15_000,
+  )
+
+  it('#605: Codex prepare recovers a divergent Git worktree with base-sync', async () => {
+    const { runCycle: run } = await vi.importActual<typeof import('./cycle')>('./cycle')
+    vi.mocked(runCycle).mockImplementationOnce(async input => {
+      const tree = join(root, 'pair-worktrees', '7')
+      const git = (...args: string[]) =>
+        execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+          cwd: tree,
+          encoding: 'utf8',
+        }).trim()
+      await input.worktree()
+      const base = git('rev-parse', 'HEAD')
+      git('commit', '-q', '--allow-empty', '-m', 'story HEAD moved')
+      const actual = git('rev-parse', 'HEAD')
+      const prepare = { step: 'prepare', mode: 'remediation', phase: 'r1-g1', attempt: 1, base }
+      const resumed = await run({
+        ...input,
+        resolve: vi
+          .fn(async () => ({ status: 'completed', next: { step: 'done' } }))
+          .mockResolvedValueOnce({ status: 'in-progress', next: prepare }),
+      })
+      expect(resumed.stagesRun).toBe(1)
+      expect(calls()).toHaveLength(1)
+      expect(git('rev-parse', 'HEAD')).toBe(actual)
+      return resumed
+    })
+    await drive(ENGINES.codex)
   }, 60_000)
 
   // #646 round 2 — r1-2, the class: each process refusal a preparation retry follows runs ITS recovery before the

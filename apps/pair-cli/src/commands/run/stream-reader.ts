@@ -51,12 +51,13 @@ export interface IterationResult {
 }
 
 /**
- * A stage's own final JSON result (`{ status, reason?, next? }`), kept from the terminal event's final
+ * A stage's own final JSON result (`{ status, reason?, detail?, next? }`), kept from the terminal event's final
  * text so a deliberate `failed`/`blocked` is never mistaken for a dead dispatch. Relayed, never judged.
  */
 export interface StageFinalResult {
   readonly status?: string
   readonly reason?: string
+  readonly detail?: string
   readonly verdict?: string
   readonly next?: { readonly step?: string; readonly [key: string]: unknown } | undefined
 }
@@ -70,6 +71,7 @@ function asFinal(value: unknown): StageFinalResult | undefined {
   return {
     status: found['status'],
     ...(typeof found['reason'] === 'string' && { reason: found['reason'] }),
+    ...(typeof found['detail'] === 'string' && { detail: found['detail'] }),
     ...(typeof found['verdict'] === 'string' && { verdict: found['verdict'] }),
     ...(next !== undefined && { next: next as StageFinalResult['next'] }),
   }

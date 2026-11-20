@@ -335,7 +335,13 @@ export function buildPromptText(
 
   const skillArgs = buildSkillArgs(invocation.name, args)
   const rendered = [invocation.name, ...skillArgs].join(' ')
-  return engine.skillInvocationStyle === 'slash'
-    ? `/${rendered}`
-    : `Run the ${invocation.name} skill with these arguments: ${skillArgs.join(' ') || '(none)'}`
+  const prompt =
+    engine.skillInvocationStyle === 'slash'
+      ? `/${rendered}`
+      : `Run the ${invocation.name} skill with these arguments: ${skillArgs.join(' ') || '(none)'}`
+  return invocation.name === 'pair-process-plan-tasks' &&
+    args.approval === 'auto' &&
+    args.prepare !== undefined
+    ? `${prompt}\nThis is an autonomous prepare phase; plan the refined Draft story under the skill's Draft exception.`
+    : prompt
 }

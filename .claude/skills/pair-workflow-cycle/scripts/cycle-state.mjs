@@ -82,7 +82,7 @@
 //
 //   node … test-identity --cwd <worktree> --command <cmd> [--env-keys K1,K2] [--toolchain <s>]
 //     → { identity, parts, reusable, missing }     a cached test result is valid ONLY for this identity
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join, basename, dirname, resolve as resolvePath, sep } from 'node:path'
@@ -133,6 +133,7 @@ export const STOP_CATALOG = [
   { status: 'failed-hook', class: 'decision', resume: 'fix the blocking hook the detail names; pair run --card <card>' },
   { status: 'failed-contract', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-seal', class: 'process', resume: 'pair run --card <card>' },
+  { status: 'immutable-evidence-conflict', class: 'decision', resume: 'restore the recorded evidence or cycle-state.mjs reset-group --phase <phase>; pair run --card <card>' },
   { status: 'failed-implement', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-fix', class: 'finding', resume: 'pair run --card <card>' },
   { status: 'failed-verify', class: 'process', resume: 'pair run --card <card>' },
@@ -854,7 +855,7 @@ export function envelopeErrors(data, { phase, skill }) {
   // the exit code and the observed output; a witness (`baseline: red`) needs a run that FAILED — at
   // the unfixed base, or on the injected regression a `mode: test` guard is proven against — and a
   // control (`baseline: pass`) a run that PASSED. A test that cannot fail, or cannot pass, is refused.
-  // A rejection may carry its audited rows too; when it does they are held to the same shape.
+  // Rejections retain observed failures; only accepted contracts must meet the expected baselines.
   if (skill === 'red-verify') {
     const rows = data.reproduced
     // AE (`mode: doc`): a prose contract has no test to reproduce. The validator proves it checked the CHECKLIST: it names
@@ -879,8 +880,8 @@ export function envelopeErrors(data, { phase, skill }) {
       }
       for (const [rowId, runs] of byRow) {
         const baseline = runs[0].baseline
-        if (baseline === 'red' && !runs.some(x => x.exitCode !== 0)) errs.push(`witness-cannot-fail:${rowId}`)
-        if (baseline === 'pass' && !runs.some(x => x.exitCode === 0)) errs.push(`control-cannot-pass:${rowId}`)
+        if (data.verified === true && baseline === 'red' && !runs.some(x => x.exitCode !== 0)) errs.push(`witness-cannot-fail:${rowId}`)
+        if (data.verified === true && baseline === 'pass' && !runs.some(x => x.exitCode === 0)) errs.push(`control-cannot-pass:${rowId}`)
       }
     }
   }
@@ -1975,6 +1976,7 @@ export function discoverDecisions({ dir, story, pr, repo, now = new Date(), lock
   const at = (now instanceof Date ? now : new Date(now)).toISOString()
   mkdirSync(dir, { recursive: true }) // a fresh card has no run directory yet; a standing amendment is still recorded
   return withLock(dir, lockWaitMs, () => {
+    try { readRecovery(dir) } catch { return { error: 'recovery-invalid' } }
     // review r0-1/r0-2: a decision whose comment is gone from (or edited on) a source read successfully is revoked —
     // recorded, never deleted. A failed read proves nothing and revokes nothing.
     const readOk = new Set(['card', 'pr'].filter(src => (src === 'card' ? typeof host.pm?.listCardComments === 'function' : !!prNo) && !errors.some(e => e.startsWith(`${src}:`))))
@@ -1999,16 +2001,27 @@ export function discoverDecisions({ dir, story, pr, repo, now = new Date(), lock
       const reason = c.authorIsUser !== true ? 'author-not-a-user' : c.authorLogin !== who.login ? `author-not-authorized:${c.authorLogin}` : (commentEditedReason(c) ?? parsed.error ?? (parsed.value.story !== String(story) ? 'story-mismatch' : undefined))
       fresh.push({ decisionRef, source: c.source, id: c.id, author: String(c.authorLogin ?? ''), status: reason ? 'ignored' : 'accepted', ...(reason ? { reason } : { value: parsed.value }), recordedAt: at })
     }
-    if (fresh.length || revoked) writeFileSync(join(dir, DECISIONS_FILE), JSON.stringify([...all, ...fresh], null, 2) + '\n')
+    const lockedHandoffs = readHandoffs(dir).filter(h => h.data?.recordType !== 'migration')
+    const last = lockedHandoffs[lockedHandoffs.length - 1]
+    const block = last ? blockIdOf(last) : null
+    for (const r of fresh) {
+      if (r.status === 'accepted' && r.value.choice === 'reset' && r.value.block === block) {
+        r.restartsBudget = true
+        r.verifiedMaintainer = who.login
+      }
+    }
+    if (fresh.length || revoked) {
+      const tmp = join(dir, `.decisions-${process.pid}-${randomUUID()}.tmp`)
+      writeFileSync(tmp, JSON.stringify([...all, ...fresh], null, 2) + '\n')
+      renameSync(tmp, join(dir, DECISIONS_FILE))
+    }
     // #691: a block a reset epoch set aside (`reset-<date>-<name>`, bytes unchanged) still anchors the override that
     // answered it — the waiver is per (code, path, segment), so it covers the same breaches re-listed after the reset, nothing else.
     const archived = readdirSync(dir).flatMap(f => {
       const name = RESET_ASIDE.exec(f)?.[1]
       return name && NAME_RE.test(name) ? [`${name}@${sha256(readFileSync(join(dir, f))).slice(7, 19)}`] : []
     })
-    writeCustodyOverrides(dir, acceptedDecisions(dir), new Set([...handoffs.map(blockIdOf), ...archived]))
-    const last = handoffs[handoffs.length - 1]
-    const block = last ? blockIdOf(last) : null
+    writeCustodyOverrides(dir, acceptedDecisions(dir), new Set([...lockedHandoffs.map(blockIdOf), ...archived]))
     for (const r of fresh.filter(x => x.status === 'accepted')) {
       const v = r.value
       appendIntervention(dir, [r.decisionRef, `maintainer decision: ${v.choice}`, v.reason, `${r.author}, ${dayOf(now)}`, v.block ? `answers ${v.block}${v.block === block ? '' : ' (no longer the current block)'}` : 'standing amendment'])
@@ -2423,7 +2436,11 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       return { published: false, reason: 'stale-write', processFault: 'stale-write', path: target }
     }
     const seq = readHandoffs(dir).reduce((m, h) => Math.max(m, Number.isInteger(h.data?.seq) ? h.data.seq : 0), 0) + 1
-    const stamped = { ...data, schemaVersion: SCHEMA_VERSION, workflowVersion, seq, attempt: n, createdAt: new Date().toISOString(), ...(predecessor ? { predecessor } : {}), ...profileStamp(dir) }
+    const trustedData = { ...data }
+    delete trustedData.recoveryProgressId
+    const archived = readdirSync(dir).some(f => RESET_ASIDE.exec(f)?.[1] === basename(target))
+    const recoveryProgressId = n === 1 && !(archived && isProcessFault(data)) ? randomUUID() : undefined
+    const stamped = { ...trustedData, schemaVersion: SCHEMA_VERSION, workflowVersion, seq, attempt: n, createdAt: new Date().toISOString(), ...(predecessor ? { predecessor } : {}), ...(recoveryProgressId ? { recoveryProgressId } : {}), ...profileStamp(dir) }
     const tmp = join(dir, `.tmp-${process.pid}-${Date.now()}.json`)
     writeFileSync(tmp, JSON.stringify(stamped, null, 2) + '\n')
     renameSync(tmp, target)
@@ -2642,12 +2659,18 @@ const DURABLE_FAILURES = new Set(['failed-preparation', 'failed-implement', 'fai
 export const RECOVERY_FILE = 'recovery.json'
 export const RECOVERY_KINDS = ['gate-retry', 'base-sync', 'ci-rerun', 'worktree-clean', 'stage-retry', 'resume']
 function readRecovery(dir) {
-  try {
-    return { failures: {}, rounds: [], ...JSON.parse(readFileSync(join(dir, RECOVERY_FILE), 'utf8')) }
-  } catch {
-    return { failures: {}, rounds: [] }
+  let raw
+  try { raw = readFileSync(join(dir, RECOVERY_FILE), 'utf8') } catch (error) {
+    if (error.code === 'ENOENT') return { failures: {}, rounds: [] }
+    throw new Error('recovery-invalid')
   }
+  try {
+    const data = JSON.parse(raw)
+    if (!data || typeof data !== 'object' || Array.isArray(data) || (data.rounds !== undefined && !Array.isArray(data.rounds)) || (data.resumes !== undefined && !Array.isArray(data.resumes)) || (data.resets !== undefined && (!Array.isArray(data.resets) || data.resets.some(r => !r || typeof r !== 'object' || Array.isArray(r))))) throw new Error('invalid')
+    return { failures: {}, rounds: [], ...data }
+  } catch { throw new Error('recovery-invalid') }
 }
+
 function writeRecovery(dir, state) {
   const tmp = join(dir, `.${RECOVERY_FILE}.${process.pid}.tmp`)
   writeFileSync(tmp, JSON.stringify(state, null, 2) + '\n')
@@ -2667,6 +2690,73 @@ const faultedFile = path => {
     return false
   }
 }
+function recoveryResetRefs(dir) {
+  const path = join(dir, DECISIONS_FILE)
+  if (!existsSync(path)) return []
+  try {
+    const decisions = JSON.parse(readFileSync(path, 'utf8'))
+    if (!Array.isArray(decisions)) return null
+    const resets = decisions.filter(d => d?.restartsBudget === true)
+    if (resets.some(d => !['accepted', 'revoked'].includes(d.status) || !d.decisionRef || !d.author || d.verifiedMaintainer !== d.author || !d.source || d.value?.choice !== 'reset' || !d.value?.block || Number.isNaN(Date.parse(d.recordedAt)))) return null
+    if (resets.length) {
+      const blocks = new Set(readdirSync(dir).flatMap(f => {
+        const name = RESET_ASIDE.exec(f)?.[1] ?? /^superseded-\d{4}-\d{2}-\d{2}(?:-\d+)?-(.+)$/.exec(f)?.[1] ?? f
+        return NAME_RE.test(name) ? [`${name}@${sha256(readFileSync(join(dir, f))).slice(7, 19)}`] : []
+      }))
+      if (resets.some(d => !blocks.has(d.value.block))) return null
+    }
+    return resets.map(d => d.decisionRef).sort()
+  } catch { return null }
+}
+
+function recoveryProgress(dir) {
+  try {
+    const files = readdirSync(dir)
+    const reset = new Set(files.map(f => RESET_ASIDE.exec(f)?.[1]).filter(Boolean))
+    const ids = []
+    for (const f of files) {
+      const archive = RESET_ASIDE.exec(f) ?? /^superseded-\d{4}-\d{2}-\d{2}(?:-\d+)?-(.+)$/.exec(f)
+      const name = archive?.[1] ?? f
+      if (!STEP_HANDOFF.test(name)) continue
+      const bytes = readFileSync(join(dir, f))
+      const data = JSON.parse(bytes.toString('utf8'))
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return null
+      if (!archive && reset.has(name) && isProcessFault(data)) continue
+      if (archive && isProcessFault(data) && !data.recoveryProgressId) continue
+      ids.push(`${name}:${typeof data.recoveryProgressId === 'string' ? data.recoveryProgressId : sha256(bytes)}`)
+    }
+    return [...new Set(ids)].sort()
+  } catch { return null }
+}
+
+function recoverySnapshot(dir) {
+  return { resets: recoveryResetRefs(dir), progress: recoveryProgress(dir) }
+}
+
+function reconcileRecoveryResets(dir, state) {
+  const refs = recoveryResetRefs(dir)
+  if (!refs) return
+  const existing = new Set((state.resets ?? []).map(r => r.decisionRef))
+  const missing = readDecisions(dir).filter(d => refs.includes(d.decisionRef) && !existing.has(d.decisionRef))
+  if (!missing.length) return
+  state.resets = [...(state.resets ?? []), ...missing.map(d => ({ decisionRef: d.decisionRef, block: d.value.block, detail: d.value.reason, by: d.author, at: d.recordedAt, restarted: ['autoRecoveryRounds'], preserved: ['maxFixRounds', 'redRepairs', 'greenRetries'] }))]
+  const latest = missing.map(d => d.recordedAt).sort().at(-1)
+  if (!state.budgetResetAt || Date.parse(latest) > Date.parse(state.budgetResetAt)) state.budgetResetAt = latest
+  writeRecovery(dir, state)
+}
+
+function recoveredSince(round, snapshot, includeProgress) {
+  if (!Array.isArray(snapshot.resets) || !Array.isArray(snapshot.progress)) return false
+  if (!round || typeof round !== 'object' || Array.isArray(round)) return false
+  if (!Object.hasOwn(round, 'recoverySnapshot')) return undefined
+  const prior = round.recoverySnapshot
+  if (!prior || typeof prior !== 'object' || !Array.isArray(prior.resets) || !Array.isArray(snapshot.resets) || prior.resets.some(ref => !snapshot.resets.includes(ref))) return false
+  if (!Array.isArray(prior.progress) || !Array.isArray(snapshot.progress)) return false
+  if (snapshot.resets.some(ref => !prior.resets.includes(ref))) return true
+  if (!includeProgress) return false
+  return snapshot.progress.some(id => !prior.progress.includes(id))
+}
+
 function spentRounds(dir, rounds) {
   let since = 0
   try {
@@ -2676,7 +2766,11 @@ function spentRounds(dir, rounds) {
   } catch {}
   // US-647 AC-6: a maintainer reset restarts the process budget explicitly (recovery.json `budgetResetAt`).
   since = Math.max(since, Date.parse(readRecovery(dir).budgetResetAt ?? '') || 0)
-  return rounds.filter(r => Date.parse(r.at) > since)
+  const snapshot = recoverySnapshot(dir)
+  return rounds.filter(r => {
+    const advanced = recoveredSince(r, snapshot, true)
+    return advanced === undefined ? Number.isNaN(Date.parse(r.at)) || Date.parse(r.at) >= Math.floor(since) : !advanced
+  })
 }
 const recoveryBudget = policy => (Number.isInteger(policy?.autoRecoveryRounds) && policy.autoRecoveryRounds >= 0 ? policy.autoRecoveryRounds : POLICY_DEFAULTS.autoRecoveryRounds)
 
@@ -2688,19 +2782,25 @@ export function recover({ dir, kind, detail = '', policy = {}, lockWaitMs = 5000
   const budget = recoveryBudget(policy)
   mkdirSync(dir, { recursive: true })
   return withLock(dir, lockWaitMs, () => {
-    const state = readRecovery(dir)
+    let state
+    try { state = readRecovery(dir) } catch { return { allowed: false, error: 'recovery-invalid' } }
+    reconcileRecoveryResets(dir, state)
     // r0-3: an explicit re-run lifts a process-budget park once (`resume`), apart from the rounds; the run's total is the budget.
     if (kind === 'resume') {
-      const resumes = (state.resumes ?? []).filter(r => !state.budgetResetAt || Date.parse(r.at) > Date.parse(state.budgetResetAt))
+      const snapshot = recoverySnapshot(dir)
+      const resumes = (state.resumes ?? []).filter(r => {
+        const advanced = recoveredSince(r, snapshot, false)
+        return advanced === undefined ? !state.budgetResetAt || Number.isNaN(Date.parse(r.at)) || Number.isNaN(Date.parse(state.budgetResetAt)) || Date.parse(r.at) >= Date.parse(state.budgetResetAt) : !advanced
+      })
       if (resumes.length >= budget)
         return { allowed: false, round: resumes.length, budget, next: blocked('needs-human', { budget: 'autoRecoveryRounds', resumesSpent: true, detail: `autoRecoveryRounds (${budget}) re-run resumes spent — clear the cause, then a maintainer reset comment (reset-group) or a moved PR/base head resumes the run`.trim() }) }
-      writeRecovery(dir, { ...state, resumes: [...(state.resumes ?? []), { detail, at: now.toISOString() }] })
+      writeRecovery(dir, { ...state, resumes: [...(state.resumes ?? []), { detail, at: now.toISOString(), recoverySnapshot: snapshot }] })
       return { allowed: true, round: resumes.length + 1, budget }
     }
     const spent = spentRounds(dir, state.rounds)
     if (spent.length >= budget)
       return { allowed: false, round: spent.length, budget, next: blocked('needs-human', { budget: 'autoRecoveryRounds', detail: `autoRecoveryRounds (${budget}) spent — last: ${kind}: ${detail}`.trim(), rounds: spent }) }
-    state.rounds.push({ kind, detail, at: now.toISOString() })
+    state.rounds.push({ kind, detail, at: now.toISOString(), recoverySnapshot: recoverySnapshot(dir) })
     writeRecovery(dir, state)
     return { allowed: true, round: spent.length + 1, budget }
   })
@@ -2739,6 +2839,9 @@ const mirrorOf = (mirror, source) => {
 const BASE_OWNED_GENERATED = ['.claude/', '.agents/', '.agent/', '.cursor/', '.windsurf/', '.pair/knowledge/', '.pair/llms.txt']
 const isGenerated = p => BASE_OWNED_GENERATED.some(r => (r.endsWith('/') ? p.startsWith(r) : p === r))
 export function baseSync({ cwd, base, story, owned, snapshot, dir }) {
+  if (dir && existsSync(dir)) {
+    try { readRecovery(dir) } catch { return { synced: false, reason: 'recovery-invalid' } }
+  }
   // AC-13 (r0-6): the guard never depends on the step being due — the run dir's seals name the latest snapshot and the cycle base.
   const seals = dir && existsSync(dir) ? readHandoffs(dir).filter(h => h.skill === 'red-verify' && h.data?.sealed === true && h.data.verified === true && SHA_RE.test(String(h.data.snapshot ?? ''))) : []
   snapshot ??= seals.at(-1)?.data.snapshot
@@ -2756,7 +2859,12 @@ export function baseSync({ cwd, base, story, owned, snapshot, dir }) {
   if (snapshot && (!SHA_RE.test(String(snapshot)) || run(['merge-base', '--is-ancestor', snapshot, 'HEAD']).status !== 0))
     return { synced: false, reason: 'sealed-history-rewritten', detail: `base-sync refused: sealed snapshot ${snapshot} is not an ancestor of HEAD — a rebase rewrote sealed history. Sync the base only by merge (\`cycle-state.mjs base-sync\`), never rebase; restore the sealed history or post a maintainer reset comment`, base: baseSha, conflicts: [] }
   // `head`: the worktree HEAD a `stale` preparation's retry must be dispatched on (r2-3), synced or not.
-  if (run(['merge-base', '--is-ancestor', baseSha, 'HEAD']).status === 0) return { synced: false, reason: 'up-to-date', base: baseSha, head: g(['rev-parse', 'HEAD']), conflicts: [] }
+  // The head a later `prepare` is based on: recorded for the run, so a stage-local resolve (no --head) agrees with the dispatch.
+  const noteHead = head => {
+    if (dir && existsSync(dir)) writeRecovery(dir, { ...readRecovery(dir), baseSynced: { head, cwd, baseRef: base, at: new Date().toISOString() } })
+    return head
+  }
+  if (run(['merge-base', '--is-ancestor', baseSha, 'HEAD']).status === 0) return { synced: false, reason: 'up-to-date', base: baseSha, head: noteHead(g(['rev-parse', 'HEAD'])), conflicts: [], ...sealIds }
   if (g(['status', '--porcelain', '--untracked-files=no'])) return { synced: false, reason: 'dirty-worktree', base: baseSha, conflicts: [] }
   const fork = g(['merge-base', 'HEAD', baseSha])
   const sealed = new Set()
@@ -2785,13 +2893,14 @@ export function baseSync({ cwd, base, story, owned, snapshot, dir }) {
   const side = s => conflicts.filter(c => c.side === s).map(c => c.path)
   const trailer = `Pair-Base-Sync: base=${baseSha}${side('ours').length ? `; ours=${side('ours').join(',')}` : ''}${side('theirs').length ? `; theirs=${side('theirs').join(',')}` : ''}`
   g(['commit', '-q', '--no-verify', '-m', `[#${story}] chore: sync base ${base}`, '-m', trailer])
-  return { synced: true, base: baseSha, head: g(['rev-parse', 'HEAD']), conflicts, ...sealIds }
+  return { synced: true, base: baseSha, head: noteHead(g(['rev-parse', 'HEAD'])), conflicts, ...sealIds }
 }
 /** Preserve dirty tracked and untracked work at a durable ref before a preparation retry. */
 export function worktreeClean({ cwd, dir, story }) {
   const where = safeRunDir(dir)
   if (where.error) return { cleaned: false, reason: where.error }
   if (!/^\d+$/.test(String(story ?? ''))) return { cleaned: false, reason: 'story-invalid' }
+  try { readRecovery(dir) } catch { return { cleaned: false, reason: 'recovery-invalid' } }
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !GIT_ENV_RE.test(k)))
   const git = args => spawnSync('git', args, { cwd, encoding: 'utf8', env })
   const status = git(['status', '--porcelain', '--untracked-files=all'])
@@ -3259,7 +3368,15 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       if (repairs <= (policy.redRepairs ?? 1) || ctx.stale) return { ...(ctx.stale ? { stale: true } : {}), step: 'prepare', mode: 'repair', phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, rejection: d.findings ?? [], contract: contractOf(last.phase), group: groupOf(last.phase) }
       return blocked('failed-contract', { budget: 'redRepairs', phase: last.phase, findings: d.findings ?? [] })
     }
-    if (d.sealed !== true) return blocked('failed-seal', { phase: last.phase, detail: d.reason })
+    if (d.sealed !== true) {
+      const contract = contractOf(last.phase)
+      if (contractBytesChanged(contract?.path, contract?.hash))
+        return blocked('immutable-evidence-conflict', { phase: last.phase, detail: `Prepared contract ${contract.path} no longer matches ${contract.hash}. Restore the recorded evidence or use reset-group for this phase before retrying.` })
+      const failed = byPhase('red-verify', last.phase).filter(h => h.data.verified === true && h.data.sealed !== true)
+      const spent = !answered && processBudgetSpent(failed, last.phase, 'failed-seal')
+      if (spent) return spent
+      return { step: 'validate', mode: latestOf('red-spec', last.phase)?.data.mode ?? (parts.kind === 'initial' ? 'initial' : 'remediation'), phase: last.phase, round: parts.round, attempt: byPhase('red-verify', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, detail: 'retry after failed-seal: ' + (d.reason ?? '') }
+    }
     if (parts.kind === 'initial') return { step: 'implement', mode: parts.revision > 1 ? 'revision' : 'initial', phase: last.phase, round: 0, attempt: byPhase('implement-phase', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), pr: list.map(h => h.data.pr).find(x => Number.isInteger(x)) }
     // A sealed `mode: test` group has nothing to implement: the guard is the fix, verified on the sealed head.
     if (fixModeOf(list, last.phase) === 'test') return afterGreen(last.phase, d.outputHead ?? d.snapshot ?? d.inputHead)
@@ -3966,6 +4083,21 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
     const waived = new Set(waiver.findings)
     next = withActiveGuards({ step: 'verify', mode: 're-review', phase: `r${round}`, round, attempt: 1, base: priorReview.data.reviewedHead, prior: priorReview.name, openIds: priorBlocking.map(f => f.id).filter(id => !waived.has(id)), priorFindings: [...new Map(handoffs.filter(h => h.skill === 'review-phase').flatMap(r => (r.data.findings ?? []).filter(f => f?.id).map(f => [f.id, { id: f.id, severity: f.severity }]))).values()], waived: waiver.findings.map(id => ({ id, decisionRef: waiver.decisionRef, actor: waiver.actor, reason: waiver.reason })), ...(next.headMoved ? { headMoved: true } : {}) }, ledger.filter(r => r.state === 'active'))
   }
+  // A base-sync moved the worktree head after the review named its own: the preparation is based on the synced head
+  // (a handoff published after the sync is newer and wins — the override then stops).
+  const synced = recovery.baseSynced
+  const seals = handoffs.filter(h => h.skill === 'red-verify' && h.data?.sealed === true && h.data.verified === true && SHA_RE.test(String(h.data.snapshot ?? '')))
+  const currentHead = synced?.cwd && spawnSync('git', ['rev-parse', 'HEAD'], { cwd: synced.cwd, encoding: 'utf8', env: cleanGitEnv() }).stdout?.trim()
+  let custodyOk = seals.length === 0
+  if (!custodyOk && currentHead === synced?.head && synced?.baseRef && pr) {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const script = [join(here, '../../review-phase/scripts/red-snapshot.mjs'), join(here, '../../pair-workflow-review-phase/scripts/red-snapshot.mjs')].find(existsSync)
+    if (script) {
+      const check = spawnSync(process.execPath, [script, 'verify-chain', '--pr', String(pr), '--base', seals[0].data.inputHead, '--base-ref', synced.baseRef, '--run-dir', dir, '--cwd', synced.cwd], { encoding: 'utf8', env: cleanGitEnv() })
+      try { custodyOk = check.status === 0 && JSON.parse(check.stdout).verified === true } catch { custodyOk = false }
+    }
+  }
+  if (next.step === 'prepare' && custodyOk && SHA_RE.test(String(synced?.head ?? '')) && SHA_RE.test(String(next.base ?? '')) && next.base !== synced.head && String(last.data.createdAt ?? '') <= synced.at && spawnSync('git', ['merge-base', '--is-ancestor', next.base, synced.head], { cwd: synced.cwd, encoding: 'utf8', env: cleanGitEnv() }).status === 0) next = { ...next, base: synced.head }
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated
   // from the last reviewed head. Sealed contracts and GREEN commits stay trusted.

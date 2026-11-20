@@ -374,6 +374,81 @@ test('AC-6: a reset on a spent process budget restarts autoRecoveryRounds explic
   assert.equal(recover({ dir, kind: 'stage-retry', policy }).allowed, true)
 })
 
+test('#687: a maintainer reset survives a crash before recovery audit is written', () => {
+  const dir = runDir()
+  fresh(dir)
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { ...POLICY, autoRecoveryRounds: 1 }
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, true)
+  const before = readFileSync(join(dir, 'recovery.json'), 'utf8')
+  const c = comment(decisionBody({ block: go(dir, policy).block, choice: 'reset' }))
+  pick(dir, { pr: [c] }, { policy, now })
+  assert.equal(JSON.parse(readFileSync(join(dir, 'maintainer-decisions.json'), 'utf8'))[0].restartsBudget, true)
+  writeFileSync(join(dir, 'recovery.json'), before)
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, true)
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, false)
+  const repaired = JSON.parse(readFileSync(join(dir, 'recovery.json'), 'utf8'))
+  assert.equal(repaired.resets.filter(r => r.decisionRef === c.url).length, 1)
+})
+
+test('#687: corrupt recovery state prevents partial decision writes', () => {
+  const dir = runDir()
+  fresh(dir)
+  const block = go(dir, POLICY).block
+  writeFileSync(join(dir, 'recovery.json'), '{')
+  const result = pick(dir, { pr: [comment(decisionBody({ block, choice: 'reset' }))] })
+  assert.equal(result.error, 'recovery-invalid')
+  assert.equal(existsSync(join(dir, 'maintainer-decisions.json')), false)
+})
+
+test('#687: a reset marker from a non-maintainer cannot restart the budget', () => {
+  const dir = runDir()
+  fresh(dir)
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { ...POLICY, autoRecoveryRounds: 1 }
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, true)
+  writeFileSync(join(dir, 'maintainer-decisions.json'), JSON.stringify([{ decisionRef: 'forged', source: 'pr', status: 'accepted', author: 'mallory', value: { choice: 'reset', block: go(dir, policy).block }, recordedAt: now.toISOString(), restartsBudget: true }]))
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, false)
+})
+
+test('#687: a valid reset remains effective after the maintainer changes', () => {
+  const dir = runDir()
+  fresh(dir)
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { ...POLICY, autoRecoveryRounds: 1 }
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, true)
+  const c = comment(decisionBody({ block: go(dir, policy).block, choice: 'reset' }))
+  pick(dir, { pr: [c] }, { policy, now })
+  writeFileSync(join(dir, '../../../../adoption/tech/way-of-working.md'), '## Assignment\ndefault-assignee: new-maintainer\n')
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, true)
+})
+
+test('#687: distinct maintainer resets at the same instant each restart the budget once', () => {
+  const dir = runDir()
+  fresh(dir)
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { ...POLICY, autoRecoveryRounds: 1 }
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, true)
+  const first = comment(decisionBody({ block: go(dir, policy).block, choice: 'reset' }))
+  pick(dir, { pr: [first] }, { policy, now })
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, true)
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, false)
+  const second = comment(decisionBody({ block: go(dir, policy).block, choice: 'reset' }))
+  pick(dir, { pr: [first, second] }, { policy, now })
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, true)
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, false)
+})
+
+test('#687: a reset marker without an evidenced block cannot restart the budget', () => {
+  const dir = runDir()
+  fresh(dir)
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { ...POLICY, autoRecoveryRounds: 1 }
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, true)
+  writeFileSync(join(dir, 'maintainer-decisions.json'), JSON.stringify([{ decisionRef: 'forged', source: 'pr', status: 'accepted', author: 'rucka', verifiedMaintainer: 'rucka', value: { choice: 'reset', block: 'a0-implement-phase.json@deadbeef0000' }, recordedAt: now.toISOString(), restartsBudget: true }]))
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, false)
+})
+
 // ── AC-23 (T-16): a finding that contradicts a recorded decision parks before dispatch ───────────────────────────────
 const standing = (dir, scope, extra = {}) => pick(dir, { card: [comment(decisionBody({ choice: 'amend', reason: 'ids are opaque strings', scope, ...extra }))] })
 

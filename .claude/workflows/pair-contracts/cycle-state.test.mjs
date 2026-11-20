@@ -146,7 +146,7 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
 }
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, rmdirSync, utimesSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, rmdirSync, utimesSync, symlinkSync, renameSync } from 'node:fs'
 import { tmpdir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -249,6 +249,30 @@ const review = (dir, phase, extra = {}, opts) =>
 const finding = (id, extra = {}) => ({ id, severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', kind: 'defect', reproducer: { command: 'node --test test/a.test.mjs' }, ...extra })
 
 // ── publish: atomic, sequenced, predecessor-checked, never overwrites a newer handoff ────────
+test('#687: publish stamps its own durable recovery progress identity', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { recoveryProgressId: 'forged' })
+  const written = JSON.parse(readFileSync(join(dir, 'a0-red-spec.json'), 'utf8'))
+  assert.match(written.recoveryProgressId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  assert.notEqual(written.recoveryProgressId, 'forged')
+  const verify = redVerify(dir, 'a0', { recoveryProgressId: 'forged' }, { predecessor: 'a0-red-spec' })
+  assert.equal(verify.published, true)
+  const second = JSON.parse(readFileSync(join(dir, 'a0-red-verify.json'), 'utf8'))
+  assert.notEqual(second.recoveryProgressId, written.recoveryProgressId)
+  redSpec(dir, 'a0', { recoveryProgressId: 'forged' }, { attempt: 2 })
+  const retry = JSON.parse(readFileSync(join(dir, 'a0-red-spec.attempt-2.json'), 'utf8'))
+  assert.equal(retry.recoveryProgressId, undefined)
+})
+
+test('#687: a fault recreated after reset cannot claim recovery progress', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0')
+  renameSync(join(dir, 'a0-red-spec.json'), join(dir, 'reset-2026-11-19-a0-red-spec.json'))
+  redSpec(dir, 'a0', { processFault: 'failed-seal', recoveryProgressId: 'forged' })
+  const retry = JSON.parse(readFileSync(join(dir, 'a0-red-spec.json'), 'utf8'))
+  assert.equal(retry.recoveryProgressId, undefined)
+})
+
 test('publish: writes <phase>-<skill>.json atomically with a monotonic seq and the envelope stamped', () => {
   const { dir } = runDir()
   const a = redSpec(dir, 'a0')
@@ -5493,6 +5517,20 @@ test('US-506 T-6 c2 (control, AC10): an executed, discriminating witness and a p
   const { dir } = runDir()
   redSpec(dir, 'r1-g1')
   assert.equal(publish({ dir, file: verdictDraft(dir, { verified: false, sealed: false, snapshot: undefined, findings: [{ rowId: 'row-1', location: 'a', severity: 'Major', description: 'd', recommendation: 'r' }] }), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' }).published, true)
+})
+
+test('US-687 T-1: rejected executions publish their observed failures and route to repair', () => {
+  for (const row of [ran('row-1', { exitCode: 0, observed: 'unexpected pass' }), ran('row-2', { baseline: 'pass', exitCode: 1, observed: 'unexpected failure' })]) {
+    const { dir } = runDir()
+    redSpec(dir, 'r1-g1')
+    const findings = [{ rowId: row.rowId, location: 'test/a.test.ts:1', severity: 'Major', description: row.observed, recommendation: 'repair test' }]
+    const result = publish({ dir, file: verdictDraft(dir, { verified: false, sealed: false, snapshot: undefined, reproduced: [row], findings }), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' })
+    assert.equal(result.published, true, JSON.stringify(result))
+    const next = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
+    assert.equal(next.step, 'prepare')
+    assert.equal(next.mode, 'repair')
+    assert.deepEqual(next.rejection, findings)
+  }
 })
 
 // ── US-506 F-4 (AC5 × AC7): a run started before the attempt-file rule wrote EVERY attempt over

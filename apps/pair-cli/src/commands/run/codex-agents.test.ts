@@ -16,6 +16,10 @@ const project = (files: Record<string, string>) => {
 }
 
 describe('US-623 AC9 neutral agents -> per-engine dirs', () => {
+  it('US-687 AC1 permits the validator to seal and publish its handoff', () => {
+    const role = readFileSync(join(REPO, '.agents/agents/pair-red-contract-verifier.md'), 'utf8')
+    expect(toCodexRole(role)).toContain('sandbox_mode = "workspace-write"')
+  })
   it('maps name, description, body; read-only without Edit/Write', () => {
     const t = toCodexRole(md('Read, Grep'))
     expect(t).toContain('name = "pair-x"')
@@ -57,6 +61,10 @@ describe('US-623 AC9 neutral agents -> per-engine dirs', () => {
     const src = join(REPO, '.agents/agents')
     for (const f of readdirSync(src)) {
       const text = readFileSync(join(src, f), 'utf8')
+      // #605: a stale neutral role must not overwrite a corrected dataset role at run startup.
+      expect(text).toBe(
+        readFileSync(join(REPO, 'packages/knowledge-hub/dataset/.agents', f), 'utf8'),
+      )
       expect(readFileSync(join(REPO, '.claude/agents', f), 'utf8')).toBe(text)
       expect(readFileSync(join(REPO, '.codex/agents', f.replace(/\.md$/, '.toml')), 'utf8')).toBe(
         toCodexRole(text),

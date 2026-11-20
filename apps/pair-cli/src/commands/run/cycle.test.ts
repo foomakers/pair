@@ -691,6 +691,189 @@ describe('US-573: onDispatch announces each stage BEFORE it runs (live progress)
 })
 
 describe('US-623 AC6 — stray files of a failed attempt are stashed before the next prepare', () => {
+  const prepareIdentity = {
+    ...PREPARE_A0,
+    mode: 'remediation',
+    phase: 'r1-g1',
+    base: '1'.repeat(40),
+  }
+  const otherHead = '2'.repeat(40)
+  const prepareSuccess = async (): Promise<CycleStageResult> => ({ processOutcome: 'success' })
+
+  it.each([
+    [
+      'spent-remediation',
+      { mode: 'remediation', phase: 'r1-g1', attempt: 1 },
+      'autoRecoveryRounds spent',
+    ],
+    ['spent-repair', { mode: 'repair', phase: 'r1-g2', attempt: 2 }, 'autoRecoveryRounds spent'],
+    [
+      'spent-revision',
+      { mode: 'revision', phase: 'r2-g1-rev2', attempt: 1 },
+      'autoRecoveryRounds spent',
+    ],
+    [
+      'custody-refusal',
+      { mode: 'remediation', phase: 'r1-g1', attempt: 1 },
+      'base-sync refused: sealed snapshot is not an ancestor of HEAD',
+    ],
+  ] as const)('#687 r6-loop-red %s', async (_name, dispatch, refusal) => {
+    const prepare = { ...prepareIdentity, ...dispatch }
+    const spawnStage = vi.fn(prepareSuccess)
+    const makePacket = vi.fn(packet)
+    const beforePrepare = vi.fn(async () => ({ park: refusal }))
+    const result = await runCycle({
+      resolve: scriptedResolve([{ status: 'in-progress', next: prepare }]),
+      worktree,
+      readWorktreeHead: async () => otherHead,
+      beforePrepare,
+      packet: makePacket,
+      spawnStage,
+      policy: {},
+    })
+    const identity = `expected ${prepare.base}, actual ${otherHead}`
+    expect.soft(result).toMatchObject({
+      status: 'awaiting-human',
+      stagesRun: 0,
+      resumeToken: `prepare:${dispatch.phase}:prepare-head-mismatch`,
+      next: { ...prepare, reason: 'prepare-head-mismatch' },
+    })
+    expect.soft(result.reason).toContain(identity)
+    expect.soft(result.reason).toContain(refusal)
+    expect(beforePrepare).toHaveBeenCalledExactlyOnceWith({
+      ...prepare,
+      attempt: 2,
+      refusal: 'stale',
+    })
+    expect(makePacket).not.toHaveBeenCalled()
+    expect(spawnStage).not.toHaveBeenCalled()
+  })
+
+  it.each(['without-recovery', 'unreadable', 'recheck', 'no-sync-head'] as const)(
+    '#687 r6-loop-control %s',
+    async scenario => {
+      const prepare = prepareIdentity
+      const spawnStage = vi.fn(prepareSuccess)
+      const makePacket = vi.fn(packet)
+      const reads = vi.fn(async (): Promise<string | undefined> => otherHead)
+      if (scenario === 'unreadable') reads.mockResolvedValue(undefined)
+      const proposedHead = '3'.repeat(40)
+      const beforePrepare = vi.fn(async () =>
+        scenario === 'no-sync-head' ? undefined : { head: proposedHead },
+      )
+      const result = await runCycle({
+        resolve: scriptedResolve([{ status: 'in-progress', next: prepare }]),
+        worktree,
+        readWorktreeHead: reads,
+        packet: makePacket,
+        spawnStage,
+        policy: {},
+        ...(scenario !== 'without-recovery' && { beforePrepare }),
+      })
+      expect(result).toMatchObject({
+        status: 'awaiting-human',
+        stagesRun: 0,
+        resumeToken: 'prepare:r1-g1:prepare-head-mismatch',
+        next: { reason: 'prepare-head-mismatch', step: 'prepare', phase: 'r1-g1' },
+      })
+      if (scenario === 'unreadable') {
+        expect(result.reason).toContain(`Cannot read worktree HEAD: expected ${prepare.base}`)
+        expect(beforePrepare).not.toHaveBeenCalled()
+      } else {
+        expect(result.reason).toContain(
+          `expected ${scenario === 'recheck' ? proposedHead : prepare.base}, actual ${otherHead}`,
+        )
+        expect(result.reason).toContain('base-sync')
+      }
+      expect(makePacket).not.toHaveBeenCalled()
+      expect(spawnStage).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each([
+    ['initial', prepareIdentity.base],
+    ['remediation', undefined],
+    ['remediation', 'origin/main'],
+  ] as const)('#687 r6-loop-control bypass-%s-%s', async (mode, base) => {
+    const prepare = { ...prepareIdentity, mode, base }
+    const spawnStage = vi.fn(prepareSuccess)
+    const readWorktreeHead = vi.fn(async () => otherHead)
+    const beforePrepare = vi.fn(async () => ({ park: 'must not run' }))
+    const result = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: prepare },
+        { status: 'completed', next: DONE },
+      ]),
+      worktree,
+      readWorktreeHead,
+      beforePrepare,
+      packet,
+      spawnStage,
+      policy: {},
+    })
+    expect(readWorktreeHead).not.toHaveBeenCalled()
+    expect(beforePrepare).not.toHaveBeenCalled()
+    expect(spawnStage).toHaveBeenCalledTimes(1)
+    expect(result.stagesRun).toBe(1)
+  })
+
+  it.each([false, true])(
+    '#687: remediation dispatch requires the expected worktree HEAD (match: %s)',
+    async matches => {
+      const expected = 'a'.repeat(40)
+      const actual = matches ? expected : 'b'.repeat(40)
+      const prepare = { ...PREPARE_A0, mode: 'remediation', phase: 'r1-g1', base: expected }
+      const spawn = vi.fn(async () => ({ processOutcome: 'success' }) as CycleStageResult)
+      const result = await runCycle({
+        resolve: scriptedResolve([
+          { status: 'in-progress', next: prepare },
+          { status: 'completed', next: DONE },
+        ]),
+        worktree: async () => ({ path: '/fixture/story' }),
+        readWorktreeHead: async path => {
+          expect(path).toBe('/fixture/story')
+          return actual
+        },
+        packet,
+        spawnStage: spawn,
+        policy: {},
+      })
+      expect(spawn).toHaveBeenCalledTimes(matches ? 1 : 0)
+      if (!matches) {
+        expect(result.status).toBe('awaiting-human')
+        expect(result.resumeToken).toBe('prepare:r1-g1:prepare-head-mismatch')
+        expect(result.reason).toContain(`expected ${expected}, actual ${actual}`)
+        expect(result.reason).toContain('base-sync')
+      }
+    },
+  )
+
+  it('#605: a moved prepare HEAD runs stale recovery before dispatch', async () => {
+    const expected = 'a'.repeat(40)
+    const actual = 'b'.repeat(40)
+    const prepare = { ...PREPARE_A0, mode: 'remediation', phase: 'r1-g1', base: expected }
+    const beforePrepare = vi.fn(async () => ({ head: actual }))
+    const sent: string[] = []
+    const outcome = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: prepare },
+        { status: 'completed', next: DONE },
+      ]),
+      worktree: async () => ({ path: '/fixture/story' }),
+      readWorktreeHead: async () => actual,
+      beforePrepare,
+      packet: async next => {
+        sent.push(String(next['base']))
+        return packet(next)
+      },
+      spawnStage: async () => ({ processOutcome: 'success' }) as CycleStageResult,
+      policy: {},
+    })
+    expect(beforePrepare).toHaveBeenCalledWith(expect.objectContaining({ refusal: 'stale' }))
+    expect(sent).toEqual([actual])
+    expect(outcome.status).toBe('ready-for-merge')
+  })
+
   it('beforePrepare runs before a prepare with attempt > 1, never before attempt 1 or other steps', async () => {
     const order: string[] = []
     const run = async (first: { step: string; [key: string]: unknown }) => {

@@ -39,7 +39,7 @@
 // A rebase is never repaired (US-479 c1): a snapshot that is no longer an ancestor is simply
 // `snapshot-missing`, and the attempt fails closed.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -588,6 +588,24 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
     const stated = contract.redTests.find(a => a.file === f).sha256
     if (actual !== stated) return { sealed: false, reason: 'artifact-hash-mismatch', path: f, stated, actual }
   }
+  // A failed commit may leave our manifest and ignore entry staged if an index lock
+  // prevented cleanup. Only recover the exact generated entry and matching manifest.
+  const stagedManifest = git(['show', `:${manifest}`], cwd, { allowFail: true })
+  const stagedIgnore = spawnSync('git', ['show', `:${FORMAT_IGNORE}`], { cwd, encoding: 'utf8', env: cleanGitEnv() })
+  const baseIgnore = spawnSync('git', ['show', `${base}:${FORMAT_IGNORE}`], { cwd, encoding: 'utf8', env: cleanGitEnv() })
+  const originalIgnore = baseIgnore.status === 0 ? baseIgnore.stdout : ''
+  const generatedIgnore = `${originalIgnore}${originalIgnore && !originalIgnore.endsWith('\n') ? '\n' : ''}${dirname(manifest)}/\n`
+  const ignorePath = join(cwd, FORMAT_IGNORE)
+  const ignoreIsFile = existsSync(ignorePath) && statSync(ignorePath).isFile()
+  const currentIgnore = ignoreIsFile ? git(['hash-object', '--path', FORMAT_IGNORE, '--', FORMAT_IGNORE], cwd) : null
+  const originalIgnoreHash = git(['rev-parse', '--verify', '-q', `${base}:${FORMAT_IGNORE}`], cwd, { allowFail: true })
+  if (stagedManifest && stagedIgnore.status === 0 && stagedIgnore.stdout === generatedIgnore && currentIgnore === originalIgnoreHash) {
+    let saved
+    try { saved = JSON.parse(stagedManifest) } catch { saved = null }
+    if (saved?.$meta?.pr === pr && saved.$meta.phase === phase && saved.$meta.base === base && contractHash(saved) === contractHash(contract)) {
+      git(['reset', '-q', base, '--', FORMAT_IGNORE], cwd)
+    }
+  }
   const dirty = (git(['status', '--porcelain', '--untracked-files=all'], cwd) ?? '')
     .split('\n')
     .filter(Boolean)
@@ -659,11 +677,24 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
   )
   // The manifest is machine-written JSON, never prettier-shaped — the seal ignores its own directory.
   const ignoreAbs = join(cwd, FORMAT_IGNORE)
-  const ignored = existsSync(ignoreAbs) ? readFileSync(ignoreAbs, 'utf8') : ''
+  const ignoreExisted = existsSync(ignoreAbs)
+  const ignored = ignoreExisted ? readFileSync(ignoreAbs, 'utf8') : ''
   const entry = `${dirname(manifest)}/`
-  if (!ignored.split('\n').some(l => l.trim() === entry)) writeFileSync(ignoreAbs, `${ignored}${ignored && !ignored.endsWith('\n') ? '\n' : ''}${entry}\n`)
-  git(['add', '--', manifest, FORMAT_IGNORE, ...files], cwd)
-  git(['commit', '--no-verify', '-q', '-m', `RED snapshot pr=${pr} phase=${phase}\n\n${trailer}`], cwd)
+  const addIgnore = !ignored.split('\n').some(l => l.trim() === entry)
+  try {
+    if (addIgnore) writeFileSync(ignoreAbs, `${ignored}${ignored && !ignored.endsWith('\n') ? '\n' : ''}${entry}\n`)
+    git(['add', '--', manifest, FORMAT_IGNORE, ...files], cwd)
+    git(['commit', '--no-verify', '-q', '-m', `RED snapshot pr=${pr} phase=${phase}\n\n${trailer}`], cwd)
+  } catch (error) {
+    // A retry already accepts the prepared artifacts and transient manifest. Restore the generated
+    // ignore entry so a failed commit does not create a change outside those paths.
+    if (addIgnore && git(['rev-parse', 'HEAD'], cwd) === base) {
+      if (ignoreExisted) writeFileSync(ignoreAbs, ignored)
+      else rmSync(ignoreAbs, { force: true })
+      git(['reset', '-q', base, '--', FORMAT_IGNORE], cwd)
+    }
+    throw error
+  }
   const snapshot = git(['rev-parse', 'HEAD'], cwd)
   return { sealed: true, snapshot, manifest, preSeal }
 }
@@ -693,9 +724,10 @@ export function pushSnapshot({ snapshot, branch, cwd, remote = 'origin' }) {
   const trailer = (git(['log', '-1', '--format=%B', snapshot], cwd, { allowFail: true }) ?? '').split('\n').map(l => SNAP_TRAILER_RE.exec(l)).find(Boolean)
   const manifest = trailer?.[4]
   let removedManifest = false
-  if (manifest && git(['ls-files', '--error-unmatch', '--', manifest], cwd, { allowFail: true }) !== null) {
-    git(['rm', '-q', '--', manifest], cwd)
-    git(['commit', '-q', '--no-verify', '-m', `chore: remove the transient RED manifest (${trailer[2]}, phase ${trailer[3]})`], cwd)
+  if (manifest && git(['cat-file', '-e', `HEAD:${manifest}`], cwd, { allowFail: true }) !== null) {
+    if (git(['ls-files', '--error-unmatch', '--', manifest], cwd, { allowFail: true }) !== null)
+      git(['rm', '-q', '--', manifest], cwd)
+    git(['commit', '-q', '--no-verify', '-m', `chore: remove the transient RED manifest (${trailer[2]}, phase ${trailer[3]})`, '--', manifest], cwd)
     removedManifest = true
   }
   const outputHead = git(['rev-parse', 'HEAD'], cwd)
@@ -703,7 +735,14 @@ export function pushSnapshot({ snapshot, branch, cwd, remote = 'origin' }) {
   // A plain push — never `--no-verify`, never forced: the repository's own gates run.
   // The hook's output is unbounded (a full quality gate prints megabytes): the default 1 MB buffer would kill the push.
   const r = spawnSync('git', ['push', remote, `HEAD:refs/heads/${branch}`], { cwd, encoding: 'utf8', env: cleanGitEnv(), maxBuffer: 512 * 1024 * 1024 })
-  if (r.status !== 0) return { pushed: false, reason: 'push-rejected', snapshot, outputHead, removedManifest, detail: `${r.stdout ?? ''}\n${r.stderr ?? ''}`.trim().split('\n').filter(l => /fail|error|✖|×|ELIFECYCLE|rejected/i.test(l)).slice(-8).join(' | ') || r.stderr.trim().split('\n').slice(-3).join(' | ') }
+  if (r.status !== 0) {
+    const termination = r.error ? `git push: ${r.error.message}` : r.signal ? `git push terminated by ${r.signal}` : `git push exited with code ${r.status}`
+    const output = `${r.stdout ?? ''}\n${r.stderr ?? ''}`.trim().split('\n')
+    const errors = output.filter(line => /fail|error|✖|×|ELIFECYCLE|rejected/i.test(line))
+    const gateTail = (r.stdout ?? '').trim().slice(-2048).split('\n').slice(-3)
+    const detail = [...new Set([termination, ...gateTail, ...(errors.length ? errors.slice(-8) : output.slice(-3))])].filter(Boolean).join(' | ')
+    return { pushed: false, reason: 'push-rejected', snapshot, outputHead, removedManifest, detail }
+  }
   const remoteHead = remoteHeadOf()
   return remoteHead === outputHead ? { pushed: true, snapshot, outputHead, remoteHead, removedManifest } : { pushed: false, reason: 'push-not-confirmed', snapshot, outputHead, remoteHead, removedManifest }
 }

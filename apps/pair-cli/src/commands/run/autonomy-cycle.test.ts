@@ -262,22 +262,25 @@ describe('runCycle: escalated and target-ready', () => {
     expect(out.escalation).toEqual({ comment: { posted: false, error: 'rate limited' } })
   })
 
-  it('L3: on-halt fires for escalated (and post-cycle closes the invocation); never before, never twice', async () => {
-    const log: string[] = []
-    const hooks: CycleHooks = {
-      run: async (point, status) => {
-        log.push(status === undefined ? point : `${point}(${status})`)
-        return {}
-      },
-    }
-    await runCycle({
-      ...loopBase,
-      hooks,
-      resolve: async () => ESCALATED,
-      escalate: async () => ({}),
-    })
-    expect(log).toEqual(['pre-cycle', 'on-halt(escalated)', 'post-cycle(escalated)'])
-  })
+  it.each(['escalated', 'immutable-evidence-conflict'])(
+    'L3: runs on-halt and post-cycle once for %s',
+    async reason => {
+      const log: string[] = []
+      const hooks: CycleHooks = {
+        run: async (point, status) => {
+          log.push(status === undefined ? point : `${point}(${status})`)
+          return {}
+        },
+      }
+      await runCycle({
+        ...loopBase,
+        hooks,
+        resolve: async () => ({ ...ESCALATED, next: { ...ESCALATED.next, reason } }),
+        escalate: async () => ({}),
+      })
+      expect(log).toEqual(['pre-cycle', `on-halt(${reason})`, `post-cycle(${reason})`])
+    },
+  )
 
   it('L4: `until: ready` (done with target ready) is `target-ready`, not `ready-for-merge`; a plain done is unchanged', async () => {
     const ready = await runCycle({

@@ -37,6 +37,7 @@ const SCOPE =
   /^(?:apps\/pair-cli\/(?:src|scripts)|apps\/website\/lib|packages\/dev-tools\/src|packages\/knowledge-hub\/src\/tools)\//
 const TEST_PATH = /\.(?:test|spec)\.[cm]?[jt]sx?$|\/test-utils\//
 const EXCEPTION_PRODUCTION = new Set([
+  'apps/pair-cli/src/commands/run/fixtures/recovered-custody.ts',
   'packages/dev-tools/src/quality-gates/direct-fs-guard.ts', // repo-contract: the root guard reads real disk
   'apps/pair-cli/src/registry/llms-generation.ts', // type-contract: types only
   'apps/pair-cli/scripts/postbuild.js', // standalone-script: runs before the package is built
@@ -46,6 +47,8 @@ const EXCEPTION_PRODUCTION = new Set([
 // Reviewed, pinned set of in-scope TEST paths that may keep a registry row (real process/OS/repo-contract
 // boundaries, type-only fs). Every other in-scope test must use InMemoryFileSystemService and carry no row.
 const EXCEPTION_TESTS = new Set([
+  'apps/pair-cli/src/commands/run/cycle-recovered-custody-authority.test.ts',
+  'apps/pair-cli/src/commands/run/cycle-sibling-recovery.test.ts',
   'apps/pair-cli/src/commands/dispatcher.test.ts',
   'apps/pair-cli/src/commands/install/workflow-presets.test.ts',
   'apps/pair-cli/src/commands/package/link-rewriter.test.ts',
@@ -89,6 +92,10 @@ const EXCEPTION_TESTS = new Set([
 // Reviewed, pinned set of OUT-of-SCOPE paths (not editable by this story) that may keep an exception row.
 // A path outside migration SCOPE cannot be migrated here, so it may only be relabeled by being listed.
 const EXCEPTION_OUT_OF_SCOPE = new Set([
+  'scripts/workflow-test-runner.mjs',
+  'packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs',
+  'packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-witness.mjs',
+  'packages/knowledge-hub/src/conformance/fixtures/red-snapshot-whole-index-probe.mjs',
   'apps/website/scripts/landing-video/github-scroll.mjs',
   'apps/website/scripts/landing-video/login-closing.mjs',
   'packages/content-ops/src/file-system/file-operations.ts',

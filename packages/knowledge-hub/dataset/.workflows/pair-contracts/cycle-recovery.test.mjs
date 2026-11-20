@@ -11,7 +11,7 @@ for (const k of Object.keys(process.env))
     delete process.env[k]
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -25,6 +25,8 @@ import {
   prereqState,
   supersede,
   POLICY_DEFAULTS,
+  blockIdOf,
+  contractHash,
 } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(
@@ -377,6 +379,134 @@ test('AC8: the KB defaults are autoRecoveryRounds 5 and maxFixRounds 10, returne
     autoRecoveryRounds: 5,
     maxFixRounds: 10,
   })
+})
+
+test('#687: a recovery round in the same millisecond as a handoff consumes budget', () => {
+  const dir = runDir()
+  const handoff = join(dir, 'a0-implement-phase.json')
+  writeFileSync(handoff, '{}')
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  utimesSync(handoff, now.getTime() / 1000, now.getTime() / 1000 + 0.0005)
+  const policy = { autoRecoveryRounds: 1 }
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, true)
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
+  const next = join(dir, 'a1-implement-phase.json')
+  writeFileSync(next, '{}')
+  utimesSync(next, now.getTime() / 1000, now.getTime() / 1000 + 0.0005)
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, true)
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
+})
+
+test('#687: a resume in the same millisecond as a reset consumes budget', () => {
+  const dir = runDir()
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  writeFileSync(join(dir, 'recovery.json'), JSON.stringify({ rounds: [], budgetResetAt: now.toISOString(), resets: [{ at: now.toISOString() }] }))
+  const policy = { autoRecoveryRounds: 1 }
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, true)
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, false)
+})
+
+test('#687: archiving and recreating a fault is not progress, but a valid handoff is', () => {
+  const dir = runDir()
+  const handoff = join(dir, 'a0-implement-phase.json')
+  const archived = join(dir, 'reset-2026-11-19-a0-implement-phase.json')
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { autoRecoveryRounds: 1 }
+  writeFileSync(handoff, '{}')
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, true)
+  writeFileSync(archived, '{}')
+  writeFileSync(handoff, JSON.stringify({ processFault: 'failed-seal' }))
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
+  writeFileSync(handoff, JSON.stringify({ status: 'implemented' }))
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, true)
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
+})
+
+test('#687: corrupt decision state cannot reset a spent budget', () => {
+  const dir = runDir()
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { autoRecoveryRounds: 1 }
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, true)
+  writeFileSync(join(dir, 'maintainer-decisions.json'), '{')
+  writeFileSync(join(dir, 'a1-implement-phase.json'), JSON.stringify({ recoveryProgressId: 'new-progress' }))
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
+})
+
+test('#687: an incomplete reset marker cannot restart a spent budget', () => {
+  const dir = runDir()
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { autoRecoveryRounds: 1 }
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, true)
+  writeFileSync(join(dir, 'maintainer-decisions.json'), JSON.stringify([{ decisionRef: 'forged', restartsBudget: true }]))
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
+})
+
+test('#687: corrupt decisions cannot advance a legacy recovery round', () => {
+  const dir = runDir()
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { autoRecoveryRounds: 1 }
+  writeFileSync(join(dir, 'recovery.json'), JSON.stringify({ rounds: [{ kind: 'stage-retry', at: '2026-11-19T11:59:00.000Z' }] }))
+  writeFileSync(join(dir, 'maintainer-decisions.json'), '{')
+  writeFileSync(join(dir, 'a1-implement-phase.json'), '{}')
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
+})
+
+test('#687: a corrupt snapshot cannot be treated as a legacy round', () => {
+  const dir = runDir()
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { autoRecoveryRounds: 1 }
+  writeFileSync(join(dir, 'recovery.json'), JSON.stringify({ rounds: [{ kind: 'stage-retry', at: '2026-11-19T11:59:00.000Z', recoverySnapshot: null }] }))
+  writeFileSync(join(dir, 'a1-implement-phase.json'), '{}')
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
+})
+
+test('#687: malformed legacy timestamps cannot clear spent budgets', () => {
+  const dir = runDir()
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { autoRecoveryRounds: 1 }
+  writeFileSync(join(dir, 'recovery.json'), JSON.stringify({ rounds: [{ kind: 'stage-retry', at: 'invalid' }], resumes: [{ at: 'invalid' }], budgetResetAt: now.toISOString() }))
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
+  assert.equal(recover({ dir, kind: 'resume', policy, now }).allowed, false)
+})
+
+test('#687: a corrupt recovery file cannot reopen a budget', () => {
+  for (const raw of ['{', JSON.stringify({ rounds: {} }), JSON.stringify({ resets: {} }), JSON.stringify({ resets: [null] })]) {
+    const dir = runDir()
+    writeFileSync(join(dir, 'recovery.json'), raw)
+    const result = recover({ dir, kind: 'stage-retry', policy: { autoRecoveryRounds: 1 } })
+    assert.equal(result.allowed, false)
+    assert.equal(result.error, 'recovery-invalid')
+  }
+})
+
+test('#687: a gate observation cannot overwrite corrupt recovery evidence', () => {
+  const dir = runDir()
+  const path = join(dir, 'recovery.json')
+  writeFileSync(path, '{')
+  assert.throws(() => recordGateRed({ dir, reviewedHead: 'b'.repeat(40), gates: [{ name: 'lint', ok: false, lastLines: [] }] }), /recovery-invalid/)
+  assert.equal(readFileSync(path, 'utf8'), '{')
+  assert.equal(recover({ dir, kind: 'stage-retry', policy: { autoRecoveryRounds: 1 } }).allowed, false)
+})
+
+test('#687: an archived publication remains visible as progress', () => {
+  const dir = runDir()
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { autoRecoveryRounds: 1 }
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, true)
+  writeFileSync(join(dir, 'reset-2026-11-19-a1-implement-phase.json'), JSON.stringify({ recoveryProgressId: '4a2dcc5b-8442-4e16-8e77-d3a0c1b608c0' }))
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, true)
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
+})
+
+test('#687: touching an unchanged handoff is not progress', () => {
+  const dir = runDir()
+  const handoff = join(dir, 'a0-implement-phase.json')
+  const now = new Date('2026-11-19T12:00:00.000Z')
+  const policy = { autoRecoveryRounds: 1 }
+  writeFileSync(handoff, '{}')
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, true)
+  utimesSync(handoff, now.getTime() / 1000 + 1, now.getTime() / 1000 + 1)
+  assert.equal(recover({ dir, kind: 'stage-retry', policy, now }).allowed, false)
 })
 
 test('AC8: recovery rounds are granted until autoRecoveryRounds is spent, then the card is needs-human with the reason', () => {
@@ -743,6 +873,21 @@ const repo = () => {
   return cwd
 }
 
+test('#687: corrupt recovery state prevents base sync before HEAD changes', () => {
+  const cwd = repo()
+  const dir = runDir()
+  commit(cwd, '[#42] feat: own', { 'src/own.ts': 'story' })
+  git(cwd, 'checkout', 'main')
+  commit(cwd, 'base', { 'other.txt': 'base' })
+  git(cwd, 'checkout', 'story')
+  const before = git(cwd, 'rev-parse', 'HEAD')
+  writeFileSync(join(dir, 'recovery.json'), '{')
+  const result = baseSync({ cwd, base: 'main', story: '42', dir })
+  assert.equal(result.synced, false)
+  assert.equal(result.reason, 'recovery-invalid')
+  assert.equal(git(cwd, 'rev-parse', 'HEAD'), before)
+})
+
 test('AC5: a base that moved cleanly is merged with a Pair-Base-Sync trailer', () => {
   const cwd = repo()
   commit(cwd, '[#42] feat: own', { 'src/own.ts': 'b\n' })
@@ -753,6 +898,18 @@ test('AC5: a base that moved cleanly is merged with a Pair-Base-Sync trailer', (
   assert.deepEqual(pick(out, 'synced', 'conflicts'), { synced: true, conflicts: [] })
   assert.match(git(cwd, 'log', '-1', '--format=%B'), new RegExp(`Pair-Base-Sync: base=${base}`))
   assert.equal(git(cwd, 'merge-base', '--is-ancestor', base, 'HEAD'), '')
+})
+
+test('#687: corrupt recovery state does not stash worktree changes', () => {
+  const cwd = repo()
+  const dir = runDir()
+  write(cwd, 'src/own.ts', 'unfinished')
+  const before = git(cwd, 'status', '--porcelain')
+  writeFileSync(join(dir, 'recovery.json'), '{')
+  const result = worktreeClean({ cwd, dir, story: '42' })
+  assert.equal(result.cleaned, false)
+  assert.equal(result.reason, 'recovery-invalid')
+  assert.equal(git(cwd, 'status', '--porcelain'), before)
 })
 
 test('AC-10: dirty story work is saved at a recorded ref and the branch can resume cleanly', () => {
@@ -1221,3 +1378,71 @@ for (const [row, body] of [
     assert.deepEqual(out.prerequisites, [])
   })
 }
+
+test('base-sync: after a sync the remediation prepare is based on the synced head, not the head the review named', () => {
+  const cwd = repo()
+  commit(cwd, '[#42] feat: own', { 'src/own.ts': 'b\n' })
+  const reviewed = git(cwd, 'rev-parse', 'HEAD')
+  const dir = runDir()
+  put(dir, 'r0', 'review-phase', {
+    pr: 7,
+    reviewedHead: reviewed,
+    verdict: 'changes-requested',
+    findings: [{ id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', kind: 'defect', location: 'a', description: 'd', recommendation: 'r' }],
+    custody: { contractBreach: false },
+    readiness: { ready: false },
+  })
+  assert.equal(go(dir, { head: reviewed }).next.base, reviewed, 'before any sync: the reviewed head')
+  git(cwd, 'checkout', '-q', 'main')
+  commit(cwd, 'base moved', { 'other.txt': 'x\n' })
+  git(cwd, 'checkout', '-q', 'story')
+  const out = baseSync({ cwd, base: 'main', story: '42', dir })
+  assert.equal(out.synced, true)
+  assert.notEqual(out.head, reviewed)
+  assert.equal(go(dir, { head: out.head }).next.base, out.head, 'dispatch head')
+  assert.equal(go(dir).next.base, out.head, 'a stage-local resolve (no --head) agrees')
+})
+
+// #605: a verified contract whose seal failed retries validation, never preparation or GREEN.
+test('#605: failed seal retries the unchanged contract within autoRecoveryRounds', () => {
+  const dir = runDir()
+  put(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: 'contract.json', contractHash: 'unchanged' })
+  put(dir, 'r1-g1', 'red-verify', { verified: true, sealed: false, reason: 'git commit failed' })
+  const next = go(dir).next
+  assert.deepEqual(pick(next, 'step', 'mode', 'phase', 'attempt', 'base'), {
+    step: 'validate', mode: 'remediation', phase: 'r1-g1', attempt: 2, base: SHA('a'),
+  })
+  assert.deepEqual(next.contract, { path: 'contract.json', hash: 'unchanged', revision: 1 })
+  for (let attempt = 2; attempt <= 6; attempt++)
+    put(dir, 'r1-g1', 'red-verify', { verified: true, sealed: false, reason: 'git commit failed' }, attempt)
+  assert.deepEqual(pick(go(dir).next, 'step', 'reason', 'budget'), {
+    step: 'blocked', reason: 'needs-human', budget: 'autoRecoveryRounds',
+  })
+})
+
+test('#687: a maintainer decision retries a failed seal only while the prepared evidence matches', () => {
+  const dir = runDir()
+  const path = join(dir, 'contract.json')
+  const original = { rows: ['first'] }
+  writeFileSync(path, JSON.stringify(original))
+  put(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: path, contractHash: contractHash(original) })
+  for (let attempt = 1; attempt <= 6; attempt++)
+    put(dir, 'r1-g1', 'red-verify', { verified: true, sealed: false, reason: 'git commit failed' }, attempt)
+  const file = join(dir, 'r1-g1-red-verify.attempt-6.json')
+  const prior = readFileSync(file, 'utf8')
+  assert.equal(go(dir).next.step, 'blocked')
+  writeFileSync(join(dir, 'maintainer-decisions.json'), JSON.stringify([
+    { status: 'accepted', commentId: 1, value: { choice: 'decide', block: blockIdOf({ file }) } },
+  ]))
+  assert.equal(go(dir).next.step, 'validate')
+  const changed = JSON.stringify({ rows: ['changed'] })
+  writeFileSync(path, changed)
+  const next = go(dir).next
+  assert.equal(next.step, 'blocked')
+  assert.equal(next.reason, 'immutable-evidence-conflict')
+  assert.match(next.detail, /restore.*reset-group/i)
+  assert.equal(readFileSync(path, 'utf8'), changed)
+  assert.equal(readFileSync(file, 'utf8'), prior)
+  writeFileSync(path, JSON.stringify(original))
+  assert.equal(go(dir).next.step, 'validate')
+})

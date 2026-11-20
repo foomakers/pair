@@ -1246,12 +1246,17 @@ export function stashStrayFiles(worktree: string, message: string): boolean {
   return stash.status === 0 && (git(worktree, ['status', '--porcelain']).stdout ?? '').trim() === ''
 }
 
+const descendsFromExpected = (worktree: string, expected: unknown): boolean =>
+  typeof expected !== 'string' ||
+  !/^[a-f0-9]{40}$/i.test(expected) ||
+  git(worktree, ['merge-base', '--is-ancestor', expected, 'HEAD']).status === 0
+
 /** AC-13 (r1-2): a `stale` preparation — one `base-sync` round, the base MERGED (never rebased), custody re-verified. */
 function syncStaleBase(
   ctx: CycleDriverContext,
   input: CycleDriverRequest,
   co: Coordinates,
-  worktree: string,
+  { worktree, expected }: { worktree: string; expected: unknown },
 ): { park?: string; head?: string } {
   const round = co.bridge.recover({
     dir: co.runDir,
@@ -1260,6 +1265,8 @@ function syncStaleBase(
     policy: budgetsOf(input),
   })
   if (!round.allowed) return { park: round.next?.detail ?? 'autoRecoveryRounds spent' }
+  if (!descendsFromExpected(worktree, expected))
+    return { park: 'base-sync refused: worktree HEAD does not descend from the dispatched head' }
   git(worktree, ['fetch', '-q', 'origin'])
   const sync = co.bridge.baseSync({
     cwd: worktree,
@@ -1287,7 +1294,7 @@ function verifyAfterSync(
   sync: BaseSyncResult,
   { pr, baseRef }: { pr: number | undefined; baseRef: string },
 ): string | undefined {
-  if (sync.synced !== true || sync.cycleBase === undefined || pr === undefined) return undefined
+  if (sync.cycleBase === undefined || pr === undefined) return undefined
   const failed = 'base-sync verify-chain failed: custody does not hold on the merged head'
   try {
     const chain = co.bridge.verifyChain({
@@ -1363,7 +1370,8 @@ const stashBeforePrepareFor =
     )
     if (stashed) console.log('  Recovery: stray files of the failed attempt stashed before prepare')
     // AC-13 (r1-2): a stale refusal merges the base (never a rebase) under a base-sync round, custody re-verified.
-    if (next['refusal'] === 'stale') return syncStaleBase(ctx, input, co, worktree)
+    if (next['refusal'] === 'stale')
+      return syncStaleBase(ctx, input, co, { worktree, expected: next['base'] })
   }
 
 /** The contract-identity faults whose recovery resets the group (`STOP_CATALOG` resume: `reset-group`). */
@@ -1627,7 +1635,8 @@ export function finalPart(record: CycleStageRecord): string {
     const reason = final.reason ? ` reason=${final.reason}` : ''
     const verdict = final.verdict ? ` verdict=${final.verdict}` : ''
     const next = final.next?.step ? ` next=${final.next.step}` : ''
-    return ` — final: status=${final.status ?? '?'}${reason}${verdict}${next}`
+    const detail = final.detail ? ` detail=${JSON.stringify(final.detail.slice(0, 600))}` : ''
+    return ` — final: status=${final.status ?? '?'}${reason}${verdict}${next}${detail}`
   }
   if (record.processOutcome !== 'success' || record.handoffAdvanced) return ''
   return ` — no final result (the stage ended without its structured JSON; the retry resumes from the commits already on the branch)${noResultWhy(record)}`
@@ -1749,6 +1758,11 @@ const traced = async (runTrace: { finish(): void }, run: () => Promise<CycleOutc
   }
 }
 
+async function readWorktreeHead(cwd: string): Promise<string | undefined> {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' })
+  return result.status === 0 ? result.stdout.trim() : undefined
+}
+
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
     const co = coordinatesFor(ctx, requested)
@@ -1823,6 +1837,7 @@ async function driveResolved(
       hooks,
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),
+      readWorktreeHead,
       packet: packetFor(ctx, input, co) as never,
       spawnStage: spawnStageFor(ctx, co, progress, pending),
       mergeStage: mergeWithTelemetry(ctx, co, merge),

@@ -11,14 +11,28 @@ const stream = (text: string) =>
   )
 
 describe('C: the stage final result survives the stream', () => {
-  it('keeps status/reason/next from the final JSON of a claude result event', async () => {
-    const final = { status: 'failed', reason: 'branch-not-fresh', next: { step: 'blocked' } }
+  it('keeps the failure detail from the final JSON and prints it in the stage line', async () => {
+    const final = {
+      status: 'failed',
+      reason: 'branch-not-fresh',
+      detail: 'The branch contains an unrelated commit.',
+      next: { step: 'blocked' },
+    }
     const result = await readIterationOutcome(
       stream(`done.\n${JSON.stringify(final)}`),
       ENGINES['claude'],
     )
     expect(result.outcome).toBe('success')
     expect(result.final).toEqual(final)
+    const { finalPart } = await import('./cycle-wiring.js')
+    expect(
+      finalPart({
+        step: 'implement',
+        processOutcome: 'success',
+        handoffAdvanced: false,
+        final: result.final!,
+      }),
+    ).toContain(final.detail)
   })
 
   it('no JSON in the final text ⇒ no final', async () => {
@@ -140,6 +154,21 @@ describe('A1: `{status: failed, reason: incomplete}` is resumable — it goes th
     })
     expect(spawnStage).toHaveBeenCalledTimes(3)
     expect(outcome).toMatchObject({ status: 'awaiting-human', reason: 'dead-dispatch' })
+  })
+  it('#605: a fresh retry of incomplete implementation explicitly continues the first pending task', async () => {
+    const spawnStage = vi.fn(async (_packet: unknown) => incomplete)
+    await runCycle({
+      resolve: resolve(),
+      worktree: async () => ({ path: '/w' }),
+      packet,
+      spawnStage,
+      policy: { deadDispatchRetries: 1 },
+    })
+    expect(spawnStage.mock.calls[0]?.[0]).toMatchObject({ prompt: 'p1', attempt: 1 })
+    expect(spawnStage.mock.calls[1]?.[0]).toMatchObject({
+      prompt: expect.stringMatching(/^p1\n\n.*first pending task/s),
+      attempt: 1,
+    })
   })
   it('an explicit non-resumable reason or next.step blocked still stops at once', async () => {
     for (const final of [
