@@ -156,7 +156,7 @@ test('r0-1 w1: no RED seal manifest is tracked at HEAD — the transient record 
 })
 
 test('verify-chain: only an allow-listed breach code accepts a human override — the set is named, never inferred from the shape of the breach (r0-4)', () => {
-  assert.deepEqual([...OVERRIDABLE_BREACH_CODES].sort(), ['behavioral-adds-or-moves-module', 'out-of-scope', 'test-blob-changed', 'test-mode-production-change', 'unlisted-test-changed'])
+  assert.deepEqual([...OVERRIDABLE_BREACH_CODES].sort(), ['behavioral-adds-or-moves-module', 'manual-infra-commit', 'out-of-scope', 'test-blob-changed', 'test-mode-production-change', 'unlisted-test-changed'])
   assert.ok(!OVERRIDABLE_BREACH_CODES.includes('parent-not-base'), 'ancestry is not a human-overridable property')
   const { cwd, base } = chainRepo()
   // A crafted snapshot whose trailer names a base that is NOT its parent → `parent-not-base`.
