@@ -23,7 +23,7 @@ const UNCONFIGURED = 64
 // $0 = the curl binary; stdin = the JSON request; stdout = the response body, then the HTTP status on its own line.
 // The auth header reaches curl through a here-doc on fd 3 (`-H @file`), so the key is never an argv element (`ps`).
 const GQL_SH = `test -n "$${TOKEN_VAR}" || { echo "${TOKEN_VAR} is not set" >&2; exit ${UNCONFIGURED}; }
-exec "$0" -sS -D /dev/stderr -X POST -H "Content-Type: application/json" -H @/dev/fd/3 --data-binary @- -w '\\n%{http_code}' ${API_URL} 3<<PAIR_EOF
+exec "$0" -sS -D - -X POST -H "Content-Type: application/json" -H @/dev/fd/3 --data-binary @- -w '\\n%{http_code}' ${API_URL} 3<<PAIR_EOF
 Authorization: $${TOKEN_VAR}
 PAIR_EOF`
 const KEY_RE = /^#?([A-Za-z][A-Za-z0-9_]*)-(\d+)$/
@@ -49,6 +49,7 @@ export default defineAdapter({
     const inView = i => !project || i?.project?.name === project
     const stateMap = stateMapOf(adoption)
 
+    const validRetryAfter = value => value && (/^\d+$/.test(value) || /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT$/i.test(value)) ? value : undefined
     const sanitizeStderr = text => {
       let inHeaders = false
       let retryAfter
@@ -60,24 +61,37 @@ export default defineAdapter({
         const header = /^retry-after:\s*(.*?)\s*$/i.exec(line)
         if (header) {
           const value = header[1]
-          retryAfter = /^\d+$/.test(value) || /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT$/i.test(value) ? value : undefined
+          retryAfter = validRetryAfter(value)
         } else if (!inHeaders && (/^curl:\s*\(\d+\)/.test(line) || line === `${TOKEN_VAR} is not set`)) diagnostics.push(line)
       }
       return [...diagnostics, ...(retryAfter ? [`Retry-After: ${retryAfter}`] : [])].join('\n')
+    }
+
+    const splitResponse = text => {
+      const at = text.lastIndexOf('\n')
+      let body = text.slice(0, at)
+      let headers
+      while (/^HTTP\/\S+\s+\d{3}/i.test(body)) {
+        const end = /\r?\n\r?\n/.exec(body)
+        if (!end) break
+        headers = body.slice(0, end.index)
+        body = body.slice(end.index + end[0].length)
+      }
+      return { status: Number(text.slice(at + 1)), body, headers }
     }
 
     const send = (query, variables, replaySafe) => {
       let out
       try {
         const responseError = (text, headers) => {
-          const split = text.lastIndexOf('\n')
-          if (split < 0) return undefined
-          const status = Number(text.slice(split + 1))
-          const retryAfter = /^retry-after:\s*([^\r\n]{1,100})/im.exec(headers ?? '')?.[1]
+          if (text.lastIndexOf('\n') < 0) return undefined
+          const response = splitResponse(text)
+          const status = response.status
+          const retryAfter = validRetryAfter(/^retry-after:\s*([^\r\n]{1,100})/im.exec(response.headers ?? headers ?? '')?.[1]?.trim())
           if (status === 429 || (status >= 500 && status <= 599)) return `HTTP ${status}${retryAfter ? ` Retry-After: ${retryAfter}` : ''}`
           if (status >= 400) return undefined
           try {
-            const body = JSON.parse(text.slice(0, split))
+            const body = JSON.parse(response.body)
             if (body?.errors?.some(error => error?.extensions?.code === 'RATELIMITED')) return `HTTP 429 rate limit${retryAfter ? ` Retry-After: ${retryAfter}` : ''}`
           } catch { /* the ordinary parser reports invalid JSON */ }
           return undefined
@@ -87,10 +101,10 @@ export default defineAdapter({
         if (e.detail?.includes(`${TOKEN_VAR} is not set`)) throw new HostError('host-unconfigured', { message: `linear: host-unconfigured — set ${TOKEN_VAR} (a Linear personal API key) in the environment`, detail: TOKEN_VAR })
         throw e
       }
-      const at = out.lastIndexOf('\n')
-      const status = Number(out.slice(at + 1))
+      const response = splitResponse(out)
+      const status = response.status
       if (status >= 400 && status < 500 && status !== 429) throw new HostError('failed', { message: `linear: HTTP ${status}`, detail: `HTTP ${status}`, command: 'linear graphql' })
-      return { status, res: parseJson(out.slice(0, at), { command: 'linear graphql' }) }
+      return { status, res: parseJson(response.body, { command: 'linear graphql' }) }
     }
     const limited = ({ status, res }) => status === 429 || (res?.errors ?? []).some(e => e?.extensions?.code === 'RATELIMITED')
     // One bounded retry on a rate limit, then `linear-rate-limited`.

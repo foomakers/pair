@@ -126,6 +126,53 @@ test('#601 AC1: Linear honors a bounded Retry-After header', () => {
   }
 })
 
+test('#601 AC1: Linear reads final response headers from stdout without exposing them', () => {
+  const payload = { data: { issue: { identifier: 'ENG-7', title: 'fixture', description: '', labels: { nodes: [] }, state: { name: 'Todo', type: 'unstarted' } } } }
+  const host = executable([{ stdout: 'HTTP/1.1 200 Connection established\r\nRetry-After: 0\r\n\r\nHTTP/2 503\r\nRetry-After: 3\r\nSet-Cookie: secret\r\n\r\n{}\n503' }, { stdout: `HTTP/2 200\r\n\r\n${JSON.stringify(payload)}\n200` }])
+  const pauses = []
+  const previous = process.env.LINEAR_API_KEY
+  process.env.LINEAR_API_KEY = 'test-token'
+  try {
+    const adapter = linear.instantiate({ curlBin: host.bin, team: 'ENG', sleep: ms => pauses.push(ms) })
+    assert.equal(adapter.readCard('ENG-7', { fields: ['number'] }).number, 'ENG-7')
+    assert.deepEqual(pauses, [3000])
+  } finally {
+    if (previous === undefined) delete process.env.LINEAR_API_KEY
+    else process.env.LINEAR_API_KEY = previous
+  }
+})
+
+test('#601 AC1: Linear never exposes untrusted response headers', () => {
+  const host = executable([{ stdout: 'HTTP/2 503\r\nRetry-After: secret-token\r\nSet-Cookie: secret-token\r\n\r\n{}\n503' }])
+  const pauses = []
+  const previous = process.env.LINEAR_API_KEY
+  process.env.LINEAR_API_KEY = 'test-token'
+  try {
+    const adapter = linear.instantiate({ curlBin: host.bin, team: 'ENG', sleep: ms => pauses.push(ms) })
+    assert.throws(() => adapter.readCard('ENG-7', { fields: ['number'] }), error => error.kind === 'transient-exhausted' && !`${error.message} ${error.detail}`.includes('secret-token'))
+    assert.deepEqual(pauses, [1000, 2000, 4000])
+  } finally {
+    if (previous === undefined) delete process.env.LINEAR_API_KEY
+    else process.env.LINEAR_API_KEY = previous
+  }
+})
+
+test('#601 AC1: Linear ignores a redirect Retry-After when the final response has none', () => {
+  const payload = { data: { issue: { identifier: 'ENG-7', title: 'fixture', description: '', labels: { nodes: [] }, state: { name: 'Todo', type: 'unstarted' } } } }
+  const host = executable([{ stdout: 'HTTP/1.1 302 Found\r\nRetry-After: 29\r\n\r\nHTTP/2 503\r\n\r\n{}\n503' }, { stdout: `HTTP/2 200\r\n\r\n${JSON.stringify(payload)}\n200` }])
+  const pauses = []
+  const previous = process.env.LINEAR_API_KEY
+  process.env.LINEAR_API_KEY = 'test-token'
+  try {
+    const adapter = linear.instantiate({ curlBin: host.bin, team: 'ENG', sleep: ms => pauses.push(ms) })
+    assert.equal(adapter.readCard('ENG-7', { fields: ['number'] }).number, 'ENG-7')
+    assert.deepEqual(pauses, [1000])
+  } finally {
+    if (previous === undefined) delete process.env.LINEAR_API_KEY
+    else process.env.LINEAR_API_KEY = previous
+  }
+})
+
 test('#601 AC1: Linear does not wait beyond the 30-second budget', () => {
   const host = executable([{ stdout: '{}\n503', stderr: 'Retry-After: 31\n' }])
   const previous = process.env.LINEAR_API_KEY

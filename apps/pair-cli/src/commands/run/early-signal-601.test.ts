@@ -12,6 +12,44 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 
+function stopped(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return true
+    throw error
+  }
+  if (process.platform !== 'linux') return false
+  try {
+    return /^\d+ \(.+\) Z(?:\s|$)/.test(readFileSync(`/proc/${pid}/stat`, 'utf8'))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true
+    throw error
+  }
+}
+
+async function expectStopped(pid: number): Promise<void> {
+  const deadline = Date.now() + 2000
+  while (!stopped(pid) && Date.now() < deadline)
+    await new Promise<void>(resolve => setImmediate(resolve))
+  expect(stopped(pid)).toBe(true)
+}
+
+it('#601 control: a running descendant is not treated as stopped', async () => {
+  const child = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' })
+  try {
+    await new Promise<void>((resolve, reject) => {
+      child.once('spawn', resolve)
+      child.once('error', reject)
+    })
+    expect(stopped(child.pid!)).toBe(false)
+  } finally {
+    const exited = new Promise<void>(resolve => child.once('exit', () => resolve()))
+    child.kill('SIGKILL')
+    await exited
+  }
+})
+
 it.each(['readiness', 'parallel'] as const)(
   '#601 AC3: SIGINT during %s host read stops descendants',
   async route => {
@@ -112,7 +150,7 @@ handleRunCommand(parseRunCommand(${JSON.stringify(options)}),fs,deps).then(code=
         new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 3000)),
       ])
       expect(status, output).toEqual({ code: 130, signal: null })
-      expect(() => process.kill(pid, 0)).toThrow()
+      await expectStopped(pid)
     } finally {
       if (existsSync(leader)) {
         try {
