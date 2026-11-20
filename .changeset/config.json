@@ -8,6 +8,7 @@
       "@pair/brand",
       "@pair/content-ops",
       "@pair/knowledge-hub",
+      "@pair/workflows",
       "@pair/eslint-config",
       "@pair/prettier-config",
       "@pair/website",

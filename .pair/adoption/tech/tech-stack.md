@@ -32,6 +32,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - @testing-library/react and @testing-library/jest-dom are adopted for React component testing (peer dependencies of UI workspaces).
 - vitest-axe v1.0.0-pre.5 is adopted for automated accessibility testing in vitest unit tests.
 - yaml v2.8.2 is adopted (devDependency) for parsing YAML this repo generates OR consumes — generated YAML sinks are asserted by parsing, never by string-matching (`.pair/adoption/decision-log/2026-07-29-yaml-parser-for-generated-yaml-tests.md`), and the repo's own workflow guards parse the workflow they read rather than re-implementing a reader (`@pair/dev-tools`' `format-workflow-composition`, `.pair/adoption/decision-log/2026-09-01-workflow-guard-rejects-what-it-cannot-read.md`). Declared by `apps/pair-cli` and `@pair/dev-tools`; both are dev-only, nothing ships to an adopting project.
+- yaml v2.8.2 is also a runtime dependency of `@pair/workflows`, which parses workflow files with it (YAML 1.2, duplicate keys refused) — [ADR-031](adr/adr-031-workflows-package-and-hosts.md).
 - @axe-core/playwright v4.11.1 is adopted for automated accessibility testing in Playwright CT.
 - jsdom v25.0.1 is adopted as the DOM environment for vitest unit tests in React/UI workspaces (`apps/website/`, `packages/brand/`).
 - Playwright is adopted for E2E and component testing:
