@@ -614,7 +614,7 @@ function parkHostEntry(
       )
       console.log('  Cycle status: awaiting-human (0 stage(s) dispatched)')
       console.log(`  Parked: ${detail}; resume token resolve:run:host-transient`)
-      return 1
+      return 0
     } finally {
       runLock.release()
     }

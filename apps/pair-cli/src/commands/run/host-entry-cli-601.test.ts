@@ -91,7 +91,7 @@ else process.exit(1)
         }))
     try {
       const first = await invoke()
-      expect(first.code, first.text).toBe(1)
+      expect(first.code, first.text).toBe(0)
       expect(first.text).toMatch(/awaiting-human/)
       expect(first.text).toMatch(/resolve:run:host-transient/)
       const runDir = join(main, '.pair/working/runs/story-493/493')

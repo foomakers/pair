@@ -152,7 +152,7 @@ it.each(['labels', 'readiness'] as const)(
         acquireLock: lock,
         appendAudit: () => {},
       })
-      expect(code).toBe(1)
+      expect(code).toBe(0)
       expect(output.join('\n')).toMatch(/awaiting-human/)
       expect(output.join('\n')).toMatch(/resolve:run:host-transient/)
       const runDir = join(root, '.pair/working/runs/story-493/493')
