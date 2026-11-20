@@ -261,6 +261,7 @@ These paths are pair's own, written by `install`/`update` from the registries co
 
 - `.pair/` (`.pair/knowledge`, `.pair/adoption`) and `.github/`
 - `AGENTS.md` and `CLAUDE.md`
+- `pair.config.json` (add-only seed; an existing project config remains user-owned)
 - `.claude/skills/` (canonical), `.claude/workflows/`, `.claude/agents/`
 - skill symlinks: `.github/skills/`, `.cursor/skills/`, `.agent/skills/`, `.agents/skills/`, `.windsurf/skills/`
 

@@ -70,7 +70,7 @@ description: Decide how far unattended runs go, and which engine, model and effo
      }
      ```
 
-     Per stage, `engine` (`default`, `pi`, `opencode`, `claude`, `codex`), `model` (`default`, an id, `cheap` / `balanced` / `frontier`, `by-tier`), `effort` (`default`, `low`, `medium`, `high`, `xhigh`, `max`) and `context` (`fresh`, `reuse`; `reuse` only into `prepare` and `green`). A stage declares only what differs from `defaults`. With pair-cli, `effort` reaches `claude` and `codex`; for other engines the run warns and marks it `ignored` in the table.
+     Stage fields: `engine` (`default`, `pi`, `opencode`, `claude`, `codex`), `model` (id, `default`, `cheap` / `balanced` / `frontier`, `by-tier`), `effort` (`default`, `low`, `medium`, `high`, `xhigh`, `max`), `context` (`fresh`, `reuse`, or conditional `shared-with`). `verify` stays fresh; `validate` stays fresh at `risk:red`. Declare only differences from `defaults`. Pair-cli applies effort to `claude` and `codex`; for other engines it warns and prints `ignored`.
    - With `/pair-assistant` (optional, Claude Code): "use profile mixed for the review" shows the edit, then records it as an ADL.
 2. **Let the model follow the risk tier (optional)**: set `"model": "by-tier"` and add to `tech/automation.md`:
 
@@ -95,7 +95,7 @@ Cascade, highest first: `--workflow-config` > `--profile` > `workflowProfiles.de
 
 - `autonomy-policy.mjs resolve` prints each gate with its source; defaults are `until: pr`, `prepare: hold-always`, `merge: hold-always`: nothing merges and no Draft card is prepared unattended until you change them.
 - `workflow-profile.mjs resolve` prints `Profile: mixed`, its source and hash, then a line per stage; with no profile it prints `Profile: KB default`.
-- A stage asking `context: reuse` into `validate` or `verify` is refused at load, so the independent checks always run fresh.
+- `verify` always runs fresh. `validate` stays fresh at red or unknown risk; explicit sharing below red follows the profile’s matching risk condition. Forbidden sharing is refused before dispatch.
 
 ## Related
 

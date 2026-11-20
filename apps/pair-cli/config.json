@@ -1,5 +1,11 @@
 {
   "asset_registries": {
+    "project-config": {
+      "source": ".pair/defaults/pair.config.json",
+      "behavior": "add",
+      "description": "Fresh-project workflow profile defaults",
+      "targets": [{ "path": "pair.config.json", "mode": "canonical" }]
+    },
     "github": {
       "source": ".github",
       "behavior": "mirror",
@@ -50,6 +56,7 @@
       "exclude": [
         "pair-implement-batch.test.mjs",
         "pair-refine-batch.test.mjs",
+        "pair-profile-batch-regressions.test.mjs",
         "pair-loop.test.mjs",
         "pair-contracts/autonomy-policy.test.mjs",
         "pair-contracts/autonomy-cycle.test.mjs",

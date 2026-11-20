@@ -49,6 +49,8 @@ export async function doCopyAndUpdateLinks(
       ...(options && { options }),
     })
   } else {
+    if (options?.defaultBehavior === 'add' && (await fsService.exists(tgtPath)))
+      return { preserved: true }
     await fsService.mkdir(dirname(tgtPath), { recursive: true })
     await writeFileAtomically(tgtPath, fsService, tmp =>
       copyFileHelper(fsService, srcPath, tmp, 'overwrite'),

@@ -1,6 +1,6 @@
 # Workflow Profiles — engine, model, effort and context per delivery-cycle stage
 
-A **workflow profile** declares which engine, model, effort level and context policy each stage of the delivery cycle (`prepare`, `validate`, `implement`, `green`, `verify`, `contract`, `merge`) uses — so `prepare`/`green` can run on a cheap model with a resumed session while `validate`/`verify` run on a frontier one with a fresh session, without touching any skill or script.
+A **workflow profile** declares which engine, model, effort level and context policy each stage of the delivery cycle (`prepare`, `validate`, `implement`, `green`, `verify`, `contract`, `merge`, plus the routing stages `refine-story`, `plan-tasks`, `triage`, `classify`) uses — so `contract`/`classify` can run on a cheap model while `verify` runs on a stronger one with a fresh session, without touching any skill or script.
 
 It is consumed by both realizations of the cycle through **one** resolver, `workflow-profile.mjs` (shipped beside `pair-workflow-cycle`'s scripts): the in-session coordinator runs it, and `pair-cli run --card` spawns it. Neither reimplements the cascade, the validation or the model-class lookup.
 
@@ -24,10 +24,12 @@ No `pair.config.json`, no `workflowProfiles` block, no `--profile` / `--workflow
 }
 ```
 
-- **`default`** — the profile name used when nothing is passed.
+- **`default`** — a profile name, or an engine-to-profile-name map such as `{"codex":"codex-medium","claude":"claude-medium"}`. Explicit selectors win. A map selects the actual CLI execution engine or in-session host, then configured engine fallbacks; a missing engine entry uses the KB default. Unknown keys, empty values and malformed unused entries fail validation. The selected profile stays fixed in run snapshots and external remedies.
 - **`files`** — a glob or an array of globs (project-relative; `*` inside a segment, `**` as a whole segment; never above the project root). Each file is one profile, **indexed by its own `name`**, never by its filename.
 - **`inline`** — profiles declared directly, keyed by name, for a project that wants no extra file.
 - Anything else under `workflowProfiles` is `profile-invalid`.
+
+Fresh official-dataset installs include six Claude/Codex profiles and seed `codex-medium` / `claude-medium` as per-engine defaults. Install and update preserve existing project configuration and customized profiles, while adding missing shipped assets. Projects without an installed configuration retain the KB default.
 
 ## Profile shape
 
@@ -63,7 +65,7 @@ Anything else — an unknown top-level key, an unknown stage (`verfy`), an unkno
 
 ### `context` is validated against the cycle's transition table
 
-`reuse` resumes the previous subagent of the same role, and `cycle-state.mjs` alone decides where that is allowed (`prepare→prepare`, `implement→green`, `green→green`). A stage entry asking `reuse` into any other stage — `validate` and `verify` above all, whose value is an independent verifier — is rejected **at load** as `profile-invalid`, never accepted and silently overridden at dispatch. A `defaults.context: reuse` is not an error: it applies only where the table admits it. The profile becomes the `contextPolicy` `resolve` is given, which contains only admissible transitions.
+`cycle-state.mjs` owns the allowed transitions. A conditional rule such as `"context": {"shared-with":"prepare","when":{"risk":"yellow"}}` shares only when the tier matches; otherwise the stage is fresh. `verify` is always fresh, and `validate` must be fresh at `risk:red`. `pair run` always starts a fresh process per stage. Legacy `defaults.context: reuse` covers only `prepare→prepare`, `implement→green` and `green→green`; validation and verification remain fresh.
 
 ### Model classes
 
@@ -80,6 +82,23 @@ Anything else — an unknown top-level key, an unknown stage (`verfy`), an unkno
 
 The profile is resolved **once**, before the first dispatch, and its table is printed once (profile, source, hash, then every stage with each field's value and the level that decided it). It is never re-resolved mid-cycle.
 
+## General and per-agent run defaults
+
+`pair.config.json` may also set machine-specific fallbacks:
+
+```json
+{
+  "run": {
+    "defaults": { "engine": "claude", "model": "claude-sonnet-5-5", "idleTimeout": 900 },
+    "agents": { "codex": { "command": "/opt/codex", "args": ["--config", "literal value"], "model": "gpt-6-sol", "idleTimeout": 600 } }
+  }
+}
+```
+
+For each field the order is CLI flag, profile `stages.<step>`, profile `defaults`, `run.agents.<engine>`, `run.defaults`, legacy `engine.*`, KB default. Per-agent settings cannot choose engine or effort. A malformed agent entry fails validation even when that engine is unused. `command` and `args` are passed as executable and literal argv; no shell interprets them. `run.defaults.engine` chooses the run engine when no flag or profile stage chooses one. Existing config needs no rewrite.
+
+`refine-story`, `plan-tasks`, `triage` and `classify` are stage ids for skills and batches. A skill uses its `process-step` marker, a batch uses its mode, and an unmapped invocation uses `defaults`. An in-session host reports engine/model gaps before dispatch with a runnable `pair-cli run` command retaining the card, profile and compatible engine.
+
 ## Audit, not input
 
 The resolved profile's **name and content hash** are recorded in every handoff (`workflowProfile`) via the run directory's `.workflow-profile.json`. They are **excluded from the effective-inputs digest**, exactly like the fix-round budget: swapping the profile between invocations invalidates no evidence and triggers no re-validation.
@@ -93,22 +112,29 @@ The resolved profile's **name and content hash** are recorded in every handoff (
 | `effort` | passed through the engine adapter: Codex `-c model_reasoning_effort=<level>`, Claude `--effort <level>`; recorded only when no effort flag is declared | the packet's `--profile` effort: enforced for Codex, a prompt request for Claude |
 | `context` | `reuse` is reported and run fresh (the driver spawns a new process per stage) | honoured as `next.context` |
 
+## Stages
+
+| Stage | Role | Wired |
+| --- | --- | --- |
+| `prepare`, `validate`, `implement`, `green`, `verify`, `contract`, `merge` | the delivery cycle | yes |
+| `refine-story`, `plan-tasks`, `triage`, `classify` | skill and batch routing | yes |
+
+The four routing ids inherit `defaults` unless the profile overrides them. The transition table determines whether a requested context reuse is admissible.
+
 ## Example
 
-The `claude-cheap` profile above is the shipped example, a **pilot** and never active by default. A sample sits at `.pair/adoption/tech/workflow-profiles/claude-cheap.json`; to use it, pass `--profile claude-cheap` and register the glob `"workflowProfiles": { "files": ".pair/adoption/tech/workflow-profiles/*.json" }` in `pair.config.json` — do **not** set it as `default`.
+Six profiles ship under `.pair/adoption/tech/workflow-profiles/`; fresh installs register their glob and map Codex to `codex-medium`, Claude to `claude-medium`. Pass `--profile <name>` to override the selected default. This project uses the same per-engine map; `medium` is the reference level.
 
-### Recommended stage → model mapping (pilot)
+| Profile | Defaults | Notable overrides |
+| --- | --- | --- |
+| `claude-cheap` | balanced, medium | `contract`, `green`, `merge`, `classify`, `triage` cheap; `verify` balanced/high; `prepare`, `green` `reuse` |
+| `claude-medium` | balanced, medium | `contract`, `merge`, `classify`, `triage` cheap; `verify` frontier/high |
+| `claude-high` | frontier, high | none |
+| `codex-cheap` | engine default, low | `verify` high; `prepare`, `implement`, `refine-story`, `plan-tasks` medium |
+| `codex-medium` | `gpt-6-sol`, medium | `contract`, `validate`, `verify`, `classify`, `triage` `gpt-6-astra` (`verify` high); `merge` low |
+| `codex-high` | `gpt-6-astra`, high | `implement`, `green` `gpt-6-sol` |
 
-| Stage / role | Model class | Id (`*-5-5`) | Note |
-| --- | --- | --- | --- |
-| contract | cheap | `claude-haiku-5-5` | contract-derivation phase |
-| relay (batch/loop `models.relay`) | cheap | `claude-haiku-5-5` | pure script relays only (never the merge run, which judges gates, nor per-card state classification); the batch default |
-| green on `doc` groups | cheap | `claude-haiku-5-5` | PILOT — measure custody/review pass rate against sonnet |
-| selection, implement, green on behavioral groups | balanced | `claude-sonnet-5-5` | |
-| prepare, validate, verify | frontier | `claude-opus-5-5` | independent judgment stages |
-| post-merge closure (`merge`) | balanced | `claude-sonnet-5-5` | |
-
-**Pilot status.** A profile cannot tell a `doc` group from a behavioral one, so `claude-cheap` puts the whole `green` stage on the cheap class: use it only for doc-only cards, and run behavioral cards on a profile with `green: balanced`. **Success criterion:** doc-group GREEN by Haiku passes review on the first round in at least 2 of 3 cards; otherwise return to `balanced`.
+`claude-cheap` is a cost pilot: it puts the whole `green` stage on the cheap class, so use it for doc-only cards and run behavioral cards on `claude-medium` or above. Success criterion: doc-group GREEN by Haiku passes review on the first round in at least 2 of 3 cards; otherwise return to `balanced`.
 
 ## Refusals
 
@@ -118,7 +144,12 @@ The `claude-cheap` profile above is the shipped example, a **pilot** and never a
 | `profile-invalid` | unknown key/stage/field, bad value, forbidden `reuse`, malformed JSON, unknown stage engine |
 | `profile-name-collision` | two files declare the same `name` |
 
-`--profile` / `--workflow-config` apply only to a card that enters the delivery cycle; on a card routed to a mapped workflow or a preparation skill they are refused, never silently ignored.
+`--profile` / `--workflow-config` apply to delivery-cycle cards, mapped workflows, preparation skills, `--skill`, and `--prompt`. A skill uses its `process-step` marker; an unmapped skill or prompt uses `defaults`. Batch work uses its mode (`refine-story`, `plan-tasks`, `triage`, or `classify`). Disabled process steps are ignored with a note; a workflow profile never enables them.
+
+```bash
+pair-cli run --skill pair-process-plan-tasks --profile claude-medium --engine claude
+pair-cli run --prompt 'Inspect the project' --workflow-config ./profile.json --engine codex
+```
 
 ## Related
 

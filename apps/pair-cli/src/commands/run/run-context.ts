@@ -3,11 +3,18 @@ import type { PrepareDependencies, PromptExtras } from './card-prepare'
 import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
-import { loadConfigWithOverrides, readEngineDeclaration } from '#config'
+import { loadConfigWithOverrides, readEngineDeclaration, readRunDeclaration } from '#config'
 import { resolveWorkingPathOverride, type Config } from '#registry'
 import type { RunCommandConfig } from './parser'
 import type { resolveEngine } from './resolve-engine'
-import { ENGINE_IDS, isEngineId, type EngineDefinition, type EngineId } from './engines'
+import type { ResolvedEngine } from './resolve-engine'
+import {
+  DEFAULT_ENGINE_ID,
+  ENGINE_IDS,
+  isEngineId,
+  type EngineDefinition,
+  type EngineId,
+} from './engines'
 import type { ResolvedInvocation, SkillProbe } from './resolve-skill'
 import { createSkillProbe } from './skill-probe'
 import type { Perimeter } from './perimeter'
@@ -48,6 +55,8 @@ import {
 /** Injected so the loop can be driven in tests without spawning an engine. */
 export type IterationRunner = (input: {
   engine: EngineDefinition
+  model?: string | undefined
+  effort?: string | undefined
   promptText: string
   cwd: string
   autonomyArgs: readonly string[]
@@ -123,6 +132,9 @@ export interface RunHandlerDependencies {
 
 export interface ResolvedRun {
   engine: ReturnType<typeof resolveEngine>
+  profile?: { readonly stage: string; readonly table: readonly string[] }
+  model?: string
+  effort?: string
   invocation: ResolvedInvocation
   perimeter: Perimeter
   policy: AutomationPolicy
@@ -162,6 +174,7 @@ function effectiveCardEligibility(
 
 export interface RunContext {
   config: Config
+  profileSnapshot?: ResolvedWorkflowProfile
   probe: SkillProbe
   policy: AutomationPolicy
   dispatch?: DispatchDecision
@@ -177,13 +190,28 @@ export interface RunContext {
 
 export type SkipDecision = Extract<DispatchDecision, { kind: 'skip' }>
 
+function readRunSnapshot(path: string | undefined, fs: FileSystemService, cwd: string) {
+  if (path === undefined) return undefined
+  const snapshot = JSON.parse(fs.readFileSync(path)) as {
+    root: string
+    config: Config
+    profile?: ResolvedWorkflowProfile
+  }
+  if (snapshot.root !== cwd || !snapshot.config || typeof snapshot.config !== 'object')
+    throw new Error(
+      'profile-invalid: run snapshot does not belong to this project; restart the parent run',
+    )
+  return snapshot
+}
+
 export function resolveContext(
   config: RunCommandConfig,
   fs: FileSystemService,
   cwd: string,
   deferDispatch = false,
 ): RunContext {
-  const loaded = loadConfigWithOverrides(fs, { projectRoot: cwd })
+  const snapshot = readRunSnapshot(config.runSnapshot, fs, cwd)
+  const loaded = snapshot ?? loadConfigWithOverrides(fs, { projectRoot: cwd })
   // One probe per RUN, not per iteration: the installed skill set does not change mid-run.
   const probe = createSkillProbe(fs, loaded.config, cwd)
   const policy = effectiveCardEligibility(readAutomationPolicy(fs, cwd), config)
@@ -202,6 +230,7 @@ export function resolveContext(
 
   return {
     config: loaded.config,
+    ...(snapshot?.profile && { profileSnapshot: snapshot.profile }),
     probe,
     policy,
     ...(dispatch && { dispatch }),
@@ -210,7 +239,10 @@ export function resolveContext(
     idleTimeout: resolveIdleTimeout({
       flag: config.idleTimeoutSeconds,
       policy: policy.idleTimeoutSeconds,
-      declared: readEngineDeclaration(loaded.config, ENGINE_IDS).idleTimeout,
+      declared: declaredRunIdleTimeout(
+        loaded.config,
+        config.engine ?? declaredEngine(loaded.config) ?? DEFAULT_ENGINE_ID,
+      ),
     }),
   }
 }
@@ -245,12 +277,73 @@ export function withResolvedCardSelection(
 
 /** `engine.bin` from `pair.config.json`: where THIS machine keeps each executable, when it must say. */
 export function declaredEngineBin(config: Config): Readonly<Record<string, string>> | undefined {
-  return readEngineDeclaration(config, ENGINE_IDS).bin
+  const bin = readEngineDeclaration(config, ENGINE_IDS).bin
+  const run = readRunDeclaration(config, ENGINE_IDS)
+  if (run.errors.length)
+    throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  return Object.fromEntries(Object.entries(bin ?? {}).filter(([id]) => !run.agents?.[id]?.command))
 }
 
 /** `engine.model`: the model this project pins for each engine, run-wide (per-stage is #488's). */
 export function declaredEngineModel(config: Config, id: string): string | undefined {
-  return readEngineDeclaration(config, ENGINE_IDS).model?.[id]
+  const run = readRunDeclaration(config, ENGINE_IDS)
+  if (run.errors.length)
+    throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  return (
+    run.agents?.[id]?.model ??
+    run.defaults?.model ??
+    readEngineDeclaration(config, ENGINE_IDS).model?.[id]
+  )
+}
+
+export function declaredRunIdleTimeout(config: Config, id: string): number | undefined {
+  const run = readRunDeclaration(config, ENGINE_IDS)
+  if (run.errors.length)
+    throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  return (
+    run.agents?.[id]?.idleTimeout ??
+    run.defaults?.idleTimeout ??
+    readEngineDeclaration(config, ENGINE_IDS).idleTimeout
+  )
+}
+
+/** Resolve the hang guard after the profile has selected this stage's engine. */
+export function idleTimeoutForEngine(
+  context: RunContext,
+  config: RunCommandConfig,
+  id: string,
+): IdleTimeout {
+  const timeout = resolveIdleTimeout({
+    flag: config.idleTimeoutSeconds,
+    policy: context.policy.idleTimeoutSeconds,
+    declared: declaredRunIdleTimeout(context.config, id),
+  })
+  if (timeout.source !== 'pair.config.json engine.idleTimeout') return timeout
+  const run = readRunDeclaration(context.config, ENGINE_IDS)
+  return {
+    ...timeout,
+    source:
+      run.agents?.[id]?.idleTimeout !== undefined
+        ? `run.agents.${id}.idleTimeout`
+        : run.defaults?.idleTimeout !== undefined
+          ? 'run.defaults.idleTimeout'
+          : timeout.source,
+  }
+}
+
+/** Apply a configured runner as executable and literal argv before engine flags. */
+export function withRunAgentRunner(resolved: ResolvedEngine, config: Config): ResolvedEngine {
+  const run = readRunDeclaration(config, ENGINE_IDS)
+  if (run.errors.length)
+    throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
+  const agent = run.agents?.[resolved.engine.id]
+  if (!agent?.command && !agent?.args?.length) return resolved
+  const engine = {
+    ...resolved.engine,
+    command: agent.command ?? resolved.engine.command,
+    headlessArgs: [...(agent.args ?? []), ...resolved.engine.headlessArgs],
+  }
+  return { ...resolved, engine, commandLine: [engine.command, ...engine.headlessArgs].join(' ') }
 }
 
 /**
@@ -260,11 +353,18 @@ export function declaredEngineModel(config: Config, id: string): string | undefi
  * silently ignored would have no way to tell a working configuration from a broken one.
  */
 export function declaredEngine(config: Config): EngineId | undefined {
+  const run = readRunDeclaration(config, ENGINE_IDS)
+  if (run.errors.length)
+    throw new Error(`pair.config.json is invalid:\n  - ${run.errors.join('\n  - ')}`)
   const outcome = readEngineDeclaration(config, ENGINE_IDS)
   if (outcome.errors.length > 0) {
     throw new Error(`pair.config.json is invalid:\n  - ${outcome.errors.join('\n  - ')}`)
   }
-  return isEngineId(outcome.engine) ? outcome.engine : undefined
+  return isEngineId(run.defaults?.engine)
+    ? run.defaults.engine
+    : isEngineId(outcome.engine)
+      ? outcome.engine
+      : undefined
 }
 
 /** The autonomy/trust posture for one resolved engine — shared by every entry that spawns one. */

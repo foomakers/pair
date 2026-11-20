@@ -33,13 +33,13 @@ A **delivery cycle** drives ONE card to a review-approved pull request, and opti
 
 **State is files, not memory.** Each stage publishes a *handoff* under the run directory; the next question is answered from those files. A cycle interrupted at any point resumes from its first incomplete stage.
 
-**Independence is structural.** The agent that implements never reviews; the agent that writes a finding's failing test is never its fixer; the validator never repairs. Only independent review activities are recorded as evidence.
+**Final review is independent.** Contexts are fresh by default. A profile may explicitly share an earlier context when its risk condition holds; `verify` always stays fresh, and `validate` stays fresh at `risk:red` or an unknown risk. A validator never repairs while validating.
 
 Operational detail: the [`pair-workflow-cycle` skill](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md) (in-session coordinator, [#486](https://github.com/foomakers/pair/issues/486)), the [`cycle-state.mjs` script](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs), and the `merge` stage ([#490](https://github.com/foomakers/pair/issues/490)) in [section 6](#6-the-merge-stage-and--auto-advance). The design is recorded in [ADR-024](https://github.com/foomakers/pair/blob/main/.pair/adoption/tech/adr/adr-024-delivery-phases-are-skills.md).
 
 ## 2. The stages, one by one
 
-Every stage is a *skill* run by one *role*. `cycle-state.mjs` also decides whether the stage gets a **fresh** agent (the default) or **resumes** the previous agent of the same role (`reuse`); resuming is admitted only inside one role, never into `validate` or `verify`, whose whole value is independence.
+Every stage is a *skill* run by one *role*. `cycle-state.mjs` decides whether it gets a **fresh** agent (the default) or **resumes** the context named by the resolved profile. A matching risk condition may permit cross-role sharing. `verify` is always fresh; `validate` is fresh at red or unknown risk. Legacy defaults reuse only the existing prepare/green transitions.
 
 | Stage | Role | Skill |
 | --- | --- | --- |
@@ -212,7 +212,7 @@ Within a profile, a stage entry overrides only the fields it declares, then `def
 
 Because `prepare` and `validate` apply to remediation rounds only, a profile must not assume every stage runs on every card — a fresh card runs `implement` and `verify` first.
 
-**`context` is validated, not trusted.** A stage entry asking `reuse` into a stage where the cycle's transition table forbids it — `validate` and `verify` above all — is rejected at load, never accepted and silently overridden at dispatch. The table is `cycle-state.mjs`'s ([the rule is in workflow-profiles.md](workflow-profiles.md#context-is-validated-against-the-cycles-transition-table)).
+**`context` is validated, not trusted.** A stage entry asking `reuse` into a stage where the cycle's transition table forbids it — `verify`, or `validate` at red risk — is rejected at load, never accepted and silently overridden at dispatch. The table is `cycle-state.mjs`'s ([the rule is in workflow-profiles.md](workflow-profiles.md#context-is-validated-against-the-cycles-transition-table)).
 
 **Audit, not input.** The resolved profile's name and content hash are recorded in every handoff but excluded from the inputs that invalidate evidence: swapping a profile between invocations re-validates nothing.
 

@@ -5,7 +5,7 @@ import { DEFAULT_ENGINE_ID, ENGINES, type EngineDefinition, type EngineId } from
  * Which level of the cascade produced the engine — printed verbatim, never inferred by the
  * reader of the output. AC1 is about the run being able to SAY where its engine came from.
  */
-export type EngineSource = '--engine' | 'pair.config.json' | 'schema default'
+export type EngineSource = '--engine' | 'pair.config.json' | 'schema default' | 'workflow profile'
 
 export interface ResolvedEngine {
   readonly engine: EngineDefinition

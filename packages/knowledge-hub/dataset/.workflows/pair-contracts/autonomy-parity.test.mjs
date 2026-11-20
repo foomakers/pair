@@ -91,6 +91,7 @@ function batchRun(row, ids, maxParallelism) {
   const p = project(row, ids)
   const calls = []
   const agent = async (prompt, opts) => {
+    if (opts.label === 'profile:resolve') return { source: 'KB default', stages: Object.fromEntries(['prepare', 'validate', 'implement', 'green', 'verify'].map(stage => [stage, { engine: { value: 'default' }, model: { resolved: { id: null } }, effort: { value: 'default' } }])) }
     calls.push(opts.label)
     const l = opts.label ?? ''
     if (l === 'autonomy:resolve' || l.startsWith('decide:') || l.startsWith('merge-check:') || l.startsWith('escalate:')) return runCommand(prompt, p, l.startsWith('merge-check:') && row.labelsAtMerge ? row.labelsAtMerge : row.labels, l.startsWith('merge-check:') ? (row.prLabelsAtMerge ?? row.labelsAtMerge ?? row.labels) : row.labels)

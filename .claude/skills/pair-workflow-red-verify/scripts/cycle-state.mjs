@@ -255,10 +255,13 @@ function loadResolvedContractSeverityRanks(repoRoot) {
 }
 // ── transition context policy (US-486 AC-7) ────────────────────────────────────────────────
 // `next.context` says whether the stage about to run gets a FRESH subagent or RESUMES the previous
-// subagent of the same role. The KB default is `fresh` on every transition (ADR-024: freeze the
-// baseline before optimizing). `reuse` is admissible only WITHIN one role — never into `validate`
-// or `verify`, whose whole value is an independent, blind verifier (ADR-017 §3, ADL 2026-07-11).
-export const CONTEXT_TABLE = { default: 'fresh', reuseAllowed: ['prepare->prepare', 'implement->green', 'green->green'] }
+// subagent. The KB default is `fresh` on every transition. A declared sharing rule may cross
+// roles; verify remains independent and validate stays fresh at risk:red (#617 AC-14).
+const CONTEXT_STAGES = ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge', 'refine-story', 'plan-tasks', 'triage', 'classify']
+export const CONTEXT_TABLE = {
+  default: 'fresh',
+  reuseAllowed: CONTEXT_STAGES.flatMap(from => CONTEXT_STAGES.filter(to => to !== 'verify' && !(from === 'validate' && to === 'validate')).map(to => `${from}->${to}`)),
+}
 // Which cycle STEP a published handoff's skill played, so a transition can be named `from->to`.
 export const STEP_OF_SKILL = { 'red-spec': 'prepare', 'red-verify': 'validate', 'implement-phase': 'implement', 'green-fix': 'green', 'review-phase': 'verify' }
 // The agent ROLE each step runs as (ADR-024 §7: no new agent type, ever). `reuse` resumes the
@@ -3685,12 +3688,13 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
 // A `--contextPolicy` is validated against CONTEXT_TABLE as a WHOLE before anything resolves: a
 // caller asking `reuse` where the table forbids it is refused fail-closed, never silently
 // downgraded to `fresh` — the refusal is the signal that a profile is wrong.
-export function contextPolicyError(contextPolicy) {
+export function contextPolicyError(contextPolicy, tier) {
   if (contextPolicy === undefined || contextPolicy === null) return null
   if (typeof contextPolicy !== 'object' || Array.isArray(contextPolicy)) return 'context-policy-invalid'
   for (const [transition, value] of Object.entries(contextPolicy)) {
     if (value !== 'fresh' && value !== 'reuse') return 'context-policy-invalid'
     if (value === 'reuse' && !CONTEXT_TABLE.reuseAllowed.includes(transition)) return 'context-policy-invalid'
+    if (tier === 'risk:red' && value === 'reuse' && transition.endsWith('->validate')) return 'context-policy-invalid'
   }
   return null
 }
@@ -3760,12 +3764,17 @@ const priorStepOfRole = (handoffs, toStep) => {
   }
   return null
 }
-const withContext = (next, handoffs, contextPolicy) =>
-  next && typeof next === 'object' && next.context === undefined ? { ...next, context: contextOf(priorStepOfRole(handoffs, next.step), next.step, contextPolicy) } : next
+const withContext = (next, handoffs, contextPolicy, tier) => {
+  if (!next || typeof next !== 'object' || next.context !== undefined) return next
+  const source = [...handoffs].reverse().map(h => STEP_OF_SKILL[h.skill]).find(step => contextPolicy?.[`${step}->${next.step}`] === 'reuse' && (AGENT_OF_STEP[step] === AGENT_OF_STEP[next.step] || ['risk:green', 'risk:yellow', 'risk:red'].includes(tier)))
+  const from = source ?? priorStepOfRole(handoffs, next.step)
+  const context = contextOf(from, next.step, contextPolicy)
+  return { ...next, context, ...(context === 'reuse' ? { contextSource: from, contextAgentType: AGENT_OF_STEP[from] } : {}) }
+}
 
 export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels, host }) {
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
-  const policyError = contextPolicyError(contextPolicy)
+  const policyError = contextPolicyError(contextPolicy, tier)
   if (policyError) throw new Error(policyError)
   // r1-4: the retired `policy.blockingSeverities` (a severity LIST) is refused HERE too — the same
   // reason `publish` and `packet` refuse it — never silently accepted and acted on as if it named a floor.
@@ -3824,7 +3833,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
     }
     // US-521: the autonomy decision applies to a card with no handoff yet too (`until: ready` stops it before
     // `implement`; an escalation fires before its first dispatch).
-    const first = withContext(applyAutonomy(deriveNext([], policy, { entry }), { policy, tier, labels, prLabels }), [], contextPolicy)
+    const first = withContext(applyAutonomy(deriveNext([], policy, { entry }), { policy, tier, labels, prLabels }), [], contextPolicy, tier)
     return { status: first.step === 'blocked' && first.reason === 'escalated' ? 'escalated' : first.step === 'done' ? 'completed' : 'empty', next: first, handoffs: [], legacyRuns, workflowVersion, recovery: { spent: spentRounds(dir, readRecovery(dir).rounds).length, budget: recoveryBudget(policy) } }
   }
   for (const h of handoffs) {
@@ -3967,7 +3976,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
     if (next.step !== 'blocked' && Number.isInteger(Number(redirects)) && Number(redirects) >= CAPS.consecutiveRedirects)
       next = { step: 'blocked', reason: 'failed-resume', cap: 'consecutiveRedirects', detail: `${CAPS.consecutiveRedirects} consecutive redirects — the durable state and the dispatched step disagree` }
   }
-  next = withContext(next, handoffs, contextPolicy)
+  next = withContext(next, handoffs, contextPolicy, tier)
   // US-647: a blocked answer names its block — the value a maintainer decision comment quotes to resume it.
   if (next.step === 'blocked') next = { ...next, block }
   const status = next.step === 'done' ? 'completed' : next.reason === 'escalated' && next.step === 'blocked' ? 'escalated' : next.step === 'blocked' ? 'blocked' : 'in-progress'

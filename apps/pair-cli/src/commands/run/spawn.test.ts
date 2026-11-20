@@ -9,6 +9,7 @@ import {
   DEFAULT_IDLE_TIMEOUT_SECONDS,
 } from './spawn'
 import { ENGINES } from './engines'
+import { withRunAgentRunner } from './run-context'
 
 describe('buildEngineArgs', () => {
   it('puts the prompt last, as ONE argv element (never a shell string)', () => {
@@ -77,6 +78,31 @@ describe('spawnIteration — a real child process emitting fixture JSONL', () =>
     writeFileSync(file, script)
     return { dir, file }
   }
+
+  it('#617 AC-4: runner command and args stay literal without a shell', async () => {
+    const { dir, file } = stubEngine(
+      `require('fs').writeFileSync(process.argv[2], process.argv[3]); process.stdout.write(JSON.stringify({type:'result',subtype:'success'})+'\\n')`,
+    )
+    const output = join(dir, 'argv.txt')
+    const marker = join(dir, 'injected')
+    const literal = `; touch ${marker} #`
+    const resolved = withRunAgentRunner(
+      { engine: ENGINES.claude, source: 'schema default', commandLine: 'claude' },
+      {
+        run: { agents: { claude: { command: process.execPath, args: [file, output, literal] } } },
+      } as never,
+    )
+    const result = await spawnIteration({
+      engine: resolved.engine,
+      promptText: 'go',
+      cwd: dir,
+      autonomyArgs: [],
+      timeoutSeconds: 10,
+    })
+    expect(result.outcome).toBe('success')
+    expect(readFileSync(output, 'utf8')).toBe(literal)
+    expect(existsSync(marker)).toBe(false)
+  })
 
   it('reads the outcome from the stream of a fresh process', async () => {
     const { dir, file } = stubEngine(

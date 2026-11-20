@@ -25,13 +25,23 @@ import { whileInterruptible } from './interrupt'
 import { effectiveSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
 import { locateCycleScripts } from './cycle-scripts'
-import { refuseProfileOffCycle, resolveWorkflowProfile } from './workflow-profile'
+import {
+  resolveOffCycleProfile,
+  resolveWorkflowProfile,
+  profileForTier,
+  stageEngineIds,
+  validateProfileRun,
+} from './workflow-profile'
+import { ENGINE_IDS, isEngineId } from './engines'
 import { handleParallelRun } from './parallel-entry'
 import {
   declaredEngine,
+  declaredEngineBin,
+  idleTimeoutForEngine,
   driveLockedCard,
   resolveAutonomyFor,
   resolveContext,
+  withRunAgentRunner,
   withResolvedCardSelection,
   type ResolvedRun,
   type RunContext,
@@ -127,14 +137,10 @@ function resolveRun(
   config: RunCommandConfig,
   context: RunContext,
   cwd: string,
-  fs: FileSystemService,
+  services: { fs: FileSystemService; deps: RunHandlerDependencies },
 ): ResolvedRun {
+  const { fs } = services
   const { policy } = context
-  // US-488: a routed card runs a mapped workflow — no cycle stage exists for a profile to configure.
-  if (context.dispatch?.kind === 'route') {
-    refuseProfileOffCycle(config, `the mapped workflow \`${context.dispatch.workflow}\``)
-  }
-  const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
   // On a routed run the WORKFLOW is the invocation: the card's tag chose it through the adoption
   // mapping, which is the whole point of tag-driven automation — the cascade never gets a say, and
   // `--skill`/`--prompt` were refused at parse time so there is nothing to arbitrate here.
@@ -142,25 +148,90 @@ function resolveRun(
     context.dispatch?.kind === 'route'
       ? { kind: 'skill', name: context.dispatch.workflow, source: 'mapping' }
       : resolveInvocation(config.invocation, context.probe)
+  const { selected, configured, engineDef } = resolveProfileEngine(
+    { config, context, cwd, services },
+    invocation,
+  )
   const perimeter = perimeterFor({ config, context, cwd, invocation })
-  const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
+  const autonomy = resolveAutonomyFor(engineDef, config, cwd, fs)
 
   return {
-    engine,
+    engine: { ...configured, engine: engineDef },
+    ...(selected && { profile: { stage: selected.stage, table: selected.profile.table } }),
+    ...(selected?.settings.model !== undefined && { model: selected.settings.model }),
+    ...(selected?.settings.effort !== undefined && { effort: selected.settings.effort }),
     invocation,
     perimeter,
     policy,
     autonomy,
     ...(context.dispatch && { dispatch: context.dispatch }),
     auditPath: context.auditPath,
-    idleTimeout: context.idleTimeout,
+    idleTimeout: idleTimeoutForEngine(context, config, engineDef.id),
   }
+}
+
+function resolveProfileEngine(
+  input: {
+    config: RunCommandConfig
+    context: RunContext
+    cwd: string
+    services: { fs: FileSystemService; deps: RunHandlerDependencies }
+  },
+  invocation: ResolvedInvocation,
+) {
+  const { config, context, cwd, services } = input
+  const { fs, deps } = services
+  const selected = resolveOffCycleProfile({
+    fs,
+    config: context.config,
+    cwd,
+    flags: config,
+    invocation,
+    tier: config.dispatch?.tags.find(tag => tag.startsWith('risk:')),
+    resolve: deps.resolveWorkflowProfile,
+  })
+  validateRunSelection(selected, config, context)
+  const wanted = selected?.settings.engine
+  if (wanted !== undefined && !isEngineId(wanted))
+    throw new Error(`profile-invalid: stages.${selected?.stage}.engine: unknown engine '${wanted}'`)
+  const engine =
+    wanted === undefined
+      ? resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
+      : { ...resolveEngine({ flag: wanted }), source: 'workflow profile' as const }
+  const configured = withRunAgentRunner(engine, context.config)
+  const engineDef =
+    selected === undefined
+      ? configured.engine
+      : assertEngineAvailable(configured, createExecutableProbe(fs), {
+          fs,
+          repoRoot: cwd,
+          declaredBin: declaredEngineBin(context.config),
+        })
+  return { selected, configured, engineDef }
+}
+
+function validateRunSelection(
+  selected: ReturnType<typeof resolveOffCycleProfile>,
+  config: RunCommandConfig,
+  context: RunContext,
+): void {
+  if (!selected) return
+  stageEngineIds(selected.profile, ENGINE_IDS)
+  validateProfileRun(selected.profile, {
+    commandLine: config.profile !== undefined || config.workflowConfig !== undefined,
+    ...(config.engine && { engineFlag: config.engine }),
+    runEngine: config.engine ?? declaredEngine(context.config),
+  })
 }
 
 function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void {
   console.log(chalk.bold('pair-cli run'))
   if (resolved.dispatch) console.log(`  ${describeDispatch(resolved.dispatch)}`)
   console.log(`  ${describeEngineResolution(resolved.engine)}`)
+  if (resolved.profile) {
+    for (const line of resolved.profile.table) console.log(`  ${line}`)
+    console.log(`  Active stage: ${resolved.profile.stage}`)
+  }
   console.log(`  ${describeSkillResolution(resolved.invocation)}`)
   console.log(`  ${describePerimeter(resolved.perimeter)}`)
   for (const note of resolved.autonomy.notes) console.log(`  ${note}`)
@@ -230,7 +301,14 @@ function resolveEntry(
   return {
     config,
     context: withResolvedCardSelection(base, config, selection),
-    deps: { ...callerDeps, resolveAutonomy: () => selection },
+    deps: {
+      ...callerDeps,
+      resolveAutonomy: () => selection,
+      ...(base.profileSnapshot && {
+        resolveWorkflowProfile: (_scripts, request) =>
+          profileForTier(base.profileSnapshot!, request.tier),
+      }),
+    },
   }
 }
 
@@ -387,7 +465,7 @@ async function runCommand(
     return await enterCycleAtReview({ config, context, fs, cwd, card: reviewCard }, deps)
   }
 
-  const resolved = resolveRun(config, context, cwd, fs)
+  const resolved = resolveRun(config, context, cwd, { fs, deps })
 
   report(resolved, resolved.policy.warnings)
 

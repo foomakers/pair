@@ -86,9 +86,11 @@ import { listComments, findByMarker, upsert } from '../../skills/pair-workflow-r
 // happens once WF accepts the shape).
 const WF_SRC = readFileSync(new URL('../pair-implement-batch.js', import.meta.url), 'utf8').replace(/^export /gm, '')
 const WF_AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
+const DEFAULT_PROFILE = { source: 'KB default', stages: Object.fromEntries(['prepare', 'validate', 'implement', 'green', 'verify'].map(stage => [stage, { engine: { value: 'default' }, model: { resolved: { id: null } }, effort: { value: 'default' } }])) }
 async function runWF({ cards, entryCapsules, dispatch }) {
   const calls = []
   const agent = async (prompt, opts) => {
+    if (opts.label === 'profile:resolve') return DEFAULT_PROFILE
     calls.push({ prompt, opts })
     return dispatch ? dispatch(prompt, opts) : {}
   }
@@ -363,6 +365,7 @@ test('B1 (DT-04): a contradiction with sealed rows routes a successor revision t
   through('a0', 'red-spec', a0Prepared)
   const STEP_OF = { 'pair-fix-test-author': 'prepare', 'pair-red-contract-verifier': 'validate', 'pair-reviewer': 'verify' }
   const agent = async (prompt, opts) => {
+    if (opts.label === 'profile:resolve') return DEFAULT_PROFILE
     dispatched.push(opts.label)
     if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: { $meta: { source: 't.md', sourceHash: D('0'), generatedAt: 'x' }, vocabulary: { verdictOptions: ['APPROVED', 'CHANGES-REQUESTED'], severities: ['Critical', 'Major', 'Minor', 'Questions'] }, severityRanks: { Critical: 4, Major: 3, Minor: 2, Questions: 1 }, schema: { type: 'object', properties: { verdict: { type: 'string', enum: ['APPROVED', 'CHANGES-REQUESTED'] }, findings: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Critical', 'Major', 'Minor', 'Questions'] }, location: { type: 'string' }, description: { type: 'string' }, recommendation: { type: 'string' } }, required: ['id', 'severity', 'location', 'description', 'recommendation'] } } }, required: ['verdict', 'findings'] } } }
     const phase = arg(prompt, 'phase')
@@ -520,6 +523,7 @@ test('F1 (DT-04 x DT-33): a contradiction naming a contract sealed in a PREDECES
   const dispatched = []
   let revisionPrompt = null
   const agent = async (prompt, opts) => {
+    if (opts.label === 'profile:resolve') return DEFAULT_PROFILE
     dispatched.push(opts.label)
     if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: { $meta: { source: 't.md', sourceHash: D('0'), generatedAt: 'x' }, vocabulary: { verdictOptions: ['APPROVED', 'CHANGES-REQUESTED'], severities: ['Critical', 'Major', 'Minor', 'Questions'] }, severityRanks: { Critical: 4, Major: 3, Minor: 2, Questions: 1 }, schema: { type: 'object', properties: { verdict: { type: 'string', enum: ['APPROVED', 'CHANGES-REQUESTED'] }, findings: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Critical', 'Major', 'Minor', 'Questions'] }, location: { type: 'string' }, description: { type: 'string' }, recommendation: { type: 'string' } }, required: ['id', 'severity', 'location', 'description', 'recommendation'] } } }, required: ['verdict', 'findings'] } } }
     const phase = arg(prompt, 'phase')
@@ -686,6 +690,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
   const guardPrompts = []
   let reviewPass = 0
   const agent = async (prompt, opts) => {
+    if (opts.label === 'profile:resolve') return DEFAULT_PROFILE
     dispatched.push(opts.label)
     if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: { $meta: { source: 't.md', sourceHash: D('0'), generatedAt: 'x' }, vocabulary: { verdictOptions: ['APPROVED', 'CHANGES-REQUESTED'], severities: ['Critical', 'Major', 'Minor', 'Questions'] }, severityRanks: { Critical: 4, Major: 3, Minor: 2, Questions: 1 }, schema: { type: 'object', properties: { verdict: { type: 'string', enum: ['APPROVED', 'CHANGES-REQUESTED'] }, findings: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Critical', 'Major', 'Minor', 'Questions'] }, location: { type: 'string' }, description: { type: 'string' }, recommendation: { type: 'string' } }, required: ['id', 'severity', 'location', 'description', 'recommendation'] } } }, required: ['verdict', 'findings'] } } }
     const phase = arg(prompt, 'phase')
@@ -837,6 +842,7 @@ test('US-506 F-2 (AC5): the batch engine resumes an old-path run sealed at a0 â€
   const STEP_OF = { 'pair-fix-test-author': 'prepare', 'pair-red-contract-verifier': 'validate', 'pair-reviewer': 'verify' }
   const dispatched = []
   const agent = async (prompt, opts) => {
+    if (opts.label === 'profile:resolve') return DEFAULT_PROFILE
     dispatched.push({ label: opts.label, prompt })
     if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit' }
     const phase = arg(prompt, 'phase')

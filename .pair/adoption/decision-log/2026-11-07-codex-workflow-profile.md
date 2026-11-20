@@ -6,7 +6,7 @@
 
 ## Status
 
-Active
+Superseded by ADL-2026-11-15-autonomy-preset-full-and-tiered-workflow-profiles
 
 ## Category
 

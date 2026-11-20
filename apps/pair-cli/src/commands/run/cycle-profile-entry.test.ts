@@ -32,7 +32,7 @@ const files = (extra: Record<string, string> = {}, configExtra: Record<string, u
         },
         ...configExtra,
       }),
-      [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '',
+      [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '# Pair Loop',
       [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
       [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
       [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
@@ -56,7 +56,7 @@ const profileOf = (engine = 'default'): ResolvedWorkflowProfile => ({
   source: 'argument',
   sourceDetail: '/project/p.json',
   hash: 'f'.repeat(64),
-  stages: { implement: stage(engine) },
+  stages: { implement: stage(engine), defaults: stage(engine), 'refine-story': stage(engine) },
   table: [
     'Profile: claude-cheap (source: argument — /project/p.json) hash ffffffffffff',
     '  implement | TABLE-ROW',
@@ -215,32 +215,209 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     expect(events).not.toContain('drive')
   })
 
-  it('a profile flag on a card the mapping routes to a workflow (not the cycle) is refused, never silently ignored', async () => {
-    capture()
+  it('a mapped workflow applies its profile defaults before dispatch (AC-3)', async () => {
+    const output = capture()
     const fs = files({
       [`${cwd}/${POLICY_PATH}`]:
         '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n',
     })
 
-    await expect(
-      run(
+    const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+    expect(
+      await run(
         { card: '12', cardTags: 'auto-dev,risk:green', profile: 'claude-cheap' },
         fs,
-        baseDeps({ resolveWorkflowProfile: () => profileOf() }),
+        baseDeps({ resolveWorkflowProfile: () => profileOf(), runIteration: iteration }),
       ),
-    ).rejects.toThrow(/--profile.*delivery cycle/)
+    ).toBe(0)
+    expect(iteration).toHaveBeenCalledOnce()
+    expect(output()).toContain('Active stage: defaults')
   })
 
-  it('a profile flag on a Draft card (preparation skill route) is refused the same way', async () => {
+  it('a mapped workflow spawns its selected engine and model (AC-8)', async () => {
     capture()
+    const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+    const configured = profileOf('pi')
+    const defaults = {
+      ...stage('pi'),
+      model: {
+        value: 'pi/provider-model',
+        source: 'defaults',
+        resolved: { id: 'pi/provider-model', line: 'pi/provider-model' },
+      },
+    }
+    const selected = { ...configured, stages: { ...configured.stages, defaults } }
+    const fs = files({
+      [`${cwd}/${POLICY_PATH}`]:
+        '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n',
+    })
 
-    await expect(
-      run(
+    expect(
+      await run(
+        {
+          card: '12',
+          cardTags: 'auto-dev,risk:green',
+          profile: 'claude-cheap',
+          autonomous: true,
+          approveProjectTrust: true,
+        },
+        fs,
+        baseDeps({ resolveWorkflowProfile: () => selected, runIteration: iteration }),
+      ),
+    ).toBe(0)
+    expect(iteration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: expect.objectContaining({ id: 'pi' }),
+        model: 'pi/provider-model',
+      }),
+    )
+  })
+
+  it('#617 r0-3: profile engine uses its own agent idle timeout', async () => {
+    capture()
+    const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+    const fs = files(
+      {},
+      {
+        run: {
+          defaults: { engine: 'claude' },
+          agents: { claude: { idleTimeout: 111 }, codex: { idleTimeout: 222 } },
+        },
+      },
+    )
+    fs.writeFile('/bin/codex', '')
+    await run(
+      { prompt: 'go', cwd, profile: 'claude-cheap', autonomous: true },
+      fs,
+      baseDeps({ resolveWorkflowProfile: () => profileOf('codex'), runIteration: iteration }),
+    )
+    expect(iteration).toHaveBeenCalledWith(expect.objectContaining({ idleTimeoutSeconds: 222 }))
+  })
+
+  it('#617 r0-6: a Codex-only profile never requires unused Claude installed', async () => {
+    capture()
+    const fs = files({ '/bin/codex': '' })
+    await fs.unlink('/bin/claude')
+    const driveCycle = vi.fn(async () => ({ status: 'ready-for-merge', stagesRun: 1 }))
+    await run(
+      { card: '12', cardTags: '', profile: 'claude-cheap' },
+      fs,
+      baseDeps({ resolveWorkflowProfile: () => profileOf('codex'), driveCycle }),
+    )
+    expect(driveCycle).toHaveBeenCalledOnce()
+  })
+
+  it('#617 r0-6: one stage engine override preserves the cycle fallback engine', async () => {
+    const output = capture()
+    const root = mkdtempSync(join(tmpdir(), 'pair-partial-engine-'))
+    try {
+      const declared = {
+        workflowProfiles: {
+          default: 'p',
+          inline: { p: { name: 'p', stages: { implement: { engine: 'codex' } } } },
+        },
+      }
+      writeFileSync(join(root, 'pair.config.json'), JSON.stringify(declared))
+      const fs = files({ '/bin/codex': '' }, declared)
+      const profile = resolveWorkflowProfile(REAL_SCRIPTS, { root })
+      expect(profile.stages['verify']?.engine.value).toBe('default')
+      await run(
+        { card: '12', cardTags: '' },
+        fs,
+        baseDeps({ resolveWorkflowProfile: () => profile }),
+      )
+      expect(output()).toMatch(/Engine: claude .*from schema default/)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    {
+      title: 'explicit Codex',
+      engine: 'codex' as const,
+      expectedModel: 'gpt-6-sol',
+      expectedEngine: 'codex',
+    },
+    { title: 'schema Claude', expectedModel: 'sonnet', expectedEngine: 'claude' },
+  ])(
+    '#617 engine default map: CLI $title dispatches its mapped profile without a global engine',
+    async ({ engine, expectedModel, expectedEngine }) => {
+      capture()
+      const root = mkdtempSync(join(tmpdir(), 'pair-cli-engine-map-'))
+      try {
+        const config = {
+          workflowProfiles: {
+            default: { codex: 'codex-medium', claude: 'claude-medium' },
+            inline: {
+              'codex-medium': {
+                name: 'codex-medium',
+                defaults: { engine: 'codex', model: 'gpt-6-sol' },
+              },
+              'claude-medium': {
+                name: 'claude-medium',
+                defaults: { engine: 'claude', model: 'sonnet' },
+              },
+            },
+          },
+        }
+        writeFileSync(join(root, 'pair.config.json'), JSON.stringify(config))
+        const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+        const fs = files({ '/bin/codex': '' }, config)
+        await run(
+          { prompt: 'go', cwd, autonomous: true, ...(engine && { engine }) },
+          fs,
+          baseDeps({
+            resolveWorkflowProfile: (_scripts, request) =>
+              resolveWorkflowProfile(REAL_SCRIPTS, { ...request, root }),
+            runIteration: iteration,
+          }),
+        )
+        expect(iteration).toHaveBeenCalledWith(
+          expect.objectContaining({
+            engine: expect.objectContaining({ id: expectedEngine }),
+            model: expectedModel,
+          }),
+        )
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    },
+  )
+
+  it('--prompt uses profile defaults before spawning (AC-3)', async () => {
+    capture()
+    const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+    const configured = profileOf('pi')
+    expect(
+      await run(
+        { prompt: 'go', cwd, profile: 'claude-cheap', autonomous: true, approveProjectTrust: true },
+        files(),
+        baseDeps({ resolveWorkflowProfile: () => configured, runIteration: iteration }),
+      ),
+    ).toBe(0)
+    expect(iteration).toHaveBeenCalledWith(
+      expect.objectContaining({ engine: expect.objectContaining({ id: 'pi' }) }),
+    )
+  })
+
+  it('a Draft card applies profile defaults when its skill has no marker (AC-3)', async () => {
+    const output = capture()
+    const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
+
+    expect(
+      await run(
         { card: '12', cardTags: '', workflowConfig: '/tmp/x.json' },
         files(),
-        baseDeps({ cardReadiness: async () => 'draft', resolveWorkflowProfile: () => profileOf() }),
+        baseDeps({
+          cardReadiness: async () => 'draft',
+          resolveWorkflowProfile: () => profileOf(),
+          runIteration: iteration,
+        }),
       ),
-    ).rejects.toThrow(/--workflow-config.*delivery cycle/)
+    ).toBe(0)
+    expect(iteration).toHaveBeenCalledOnce()
+    expect(output()).toContain('Active stage: defaults')
   })
 
   // PR #517 finding: the entry wired to the REAL resolver (`workflow-profile.mjs`) refuses a mistyped
@@ -290,12 +467,12 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     capture()
     const { dir, resolver } = withRealResolver({
       name: 'p',
-      modelClasses: { frontier: 'm-frontier' },
+      modelClasses: { frontier: 'claude-opus-4-1' },
       stages: { verify: { model: 'frontier' }, green: { model: 'claude-sonnet-4-5' } },
     })
     try {
       const code = await run(
-        { card: '12', cardTags: '', workflowConfig: '/tmp/p.json' },
+        { card: '12', cardTags: '', workflowConfig: '/tmp/p.json', engine: 'claude' },
         files(),
         baseDeps({ resolveWorkflowProfile: resolver }),
       )

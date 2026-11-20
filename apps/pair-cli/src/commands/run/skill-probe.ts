@@ -34,6 +34,25 @@ export function createSkillProbe(
   }
 }
 
+/** Read the installed skill through the same registry targets as the existence probe. */
+export function readInstalledSkill(
+  fs: FileSystemService,
+  config: Config,
+  projectRoot: string,
+  name: string,
+): string | undefined {
+  const registry = extractRegistries(config)[SKILLS_REGISTRY]
+  const targets = registry?.targets?.map(target => target.path) ?? ['.claude/skills']
+  const prefix = registry?.prefix
+  const directories = prefix ? [name, `${prefix}-${name}`, stripPrefix(name, prefix)] : [name]
+  for (const target of targets)
+    for (const directory of directories) {
+      const path = installedSkillPath(fs, projectRoot, target, directory)
+      if (path) return fs.readFileSync(path)
+    }
+  return undefined
+}
+
 /**
  * Whether `<target>/<directory>/SKILL.md` exists AND stays inside `<target>` (round 7, Major).
  *
@@ -49,11 +68,21 @@ function isInstalledUnder(
   target: string,
   directory: string,
 ): boolean {
+  return installedSkillPath(fs, projectRoot, target, directory) !== undefined
+}
+
+function installedSkillPath(
+  fs: FileSystemService,
+  projectRoot: string,
+  target: string,
+  directory: string,
+): string | undefined {
   const targetRoot = resolve(projectRoot, target)
   const candidate = resolve(targetRoot, directory)
   const inside = relative(targetRoot, candidate)
-  if (inside.startsWith('..') || isAbsolute(inside)) return false
-  return fs.existsSync(join(candidate, 'SKILL.md'))
+  if (inside.startsWith('..') || isAbsolute(inside)) return undefined
+  const path = join(candidate, 'SKILL.md')
+  return fs.existsSync(path) ? path : undefined
 }
 
 /** `pair-loop` installed from dataset entry `loop`: probe the bare name too. */
