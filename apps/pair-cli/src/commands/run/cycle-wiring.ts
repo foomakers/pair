@@ -1973,7 +1973,12 @@ async function locateCoordinates(
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
     if (!detail.includes('host-transient:') || ctx.location === undefined) throw error
-    const uncertain = unavailableWorktreeOwner(ctx, input)
+    const uncertain = unavailableWorktreeOwner(
+      ctx.location,
+      mainCheckout(ctx.cwd),
+      ctx.worktreeRoot,
+      input.card,
+    )
     if (uncertain !== undefined) return { park: uncertain }
     const runDir = `${mainCheckout(ctx.cwd)}/.pair/working/runs/${input.runId}/${input.card}`
     createCycleScriptsBridge(ctx.location, ctx.cwd).recover({
@@ -1999,13 +2004,15 @@ async function locateCoordinates(
   }
 }
 
-function unavailableWorktreeOwner(
-  ctx: CycleDriverContext,
-  input: CycleDriverRequest,
+export function unavailableWorktreeOwner(
+  location: CycleScriptsLocation,
+  main: string,
+  worktreeRoot: string | undefined,
+  card: string,
 ): CycleOutcome | undefined {
   try {
-    const root = resolveCycleWorktreeRoot(ctx.location!, mainCheckout(ctx.cwd), ctx.worktreeRoot)
-    const path = join(root, input.card)
+    const root = resolveCycleWorktreeRoot(location, main, worktreeRoot)
+    const path = join(root, card)
     try {
       lstatSync(path)
     } catch (error) {
@@ -2016,12 +2023,14 @@ function unavailableWorktreeOwner(
       status: 'worktree-conflict',
       stagesRun: 0,
       reason: `worktree-conflict: cannot verify owner of ${path} while the host is unavailable`,
+      resumeToken: 'resolve:run:host-transient',
     }
   } catch {
     return {
       status: 'worktree-conflict',
       stagesRun: 0,
       reason: 'worktree-conflict: cannot verify the story worktree while the host is unavailable',
+      resumeToken: 'resolve:run:host-transient',
     }
   }
 }

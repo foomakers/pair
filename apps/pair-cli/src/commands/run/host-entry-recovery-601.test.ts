@@ -1,6 +1,15 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { expect, it, vi } from 'vitest'
 import { CardUnreadableError } from './cycle-wiring'
@@ -11,9 +20,90 @@ import { acquireCardLock } from './card-lock'
 import { acquireRunLock } from './run-lock'
 
 it.each(['labels', 'readiness'] as const)(
+  '#601 / #602: %s outage cannot recover an unverified worktree',
+  async route => {
+    const root = mkdtempSync(join(tmpdir(), 'pair-601-entry-owner-'))
+    const treeRoot = join(dirname(root), 'pair-worktrees', basename(root))
+    const scripts = join(root, '.claude/skills/pair-workflow-cycle/scripts')
+    cpSync(resolve(process.cwd(), '../../.claude/skills/pair-workflow-cycle/scripts'), scripts, {
+      recursive: true,
+    })
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'ignore' })
+    git('init', '-q', '-b', 'main')
+    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init')
+    mkdirSync(treeRoot, { recursive: true })
+    git('worktree', 'add', '-q', '-b', 'foreign-owner', join(treeRoot, '493'))
+    const fs = new InMemoryFileSystemService(
+      {
+        [join(root, 'config.json')]: JSON.stringify({
+          asset_registries: {
+            skills: {
+              source: '.skills',
+              behavior: 'overwrite',
+              description: 'skills',
+              prefix: 'pair',
+              targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+            },
+          },
+        }),
+        [join(root, POLICY_PATH)]: '# Automation\n',
+        [join(root, '.claude/skills/pair-workflow-cycle/SKILL.md')]: '',
+        [join(scripts, 'cycle-state.mjs')]: '',
+        [join(scripts, 'cycle-dispatch.mjs')]: '',
+      },
+      root,
+      root,
+    )
+    const runDir = join(root, '.pair/working/runs/story-493/493')
+    mkdirSync(runDir, { recursive: true })
+    const recovery = join(runDir, 'recovery.json')
+    const before = JSON.stringify({ rounds: [] })
+    writeFileSync(recovery, before)
+    const lines: string[] = []
+    const log = vi
+      .spyOn(console, 'log')
+      .mockImplementation((...args: unknown[]) => lines.push(args.map(String).join(' ')))
+    const error = new CardUnreadableError(
+      'card-unreadable: host-transient: HTTP 503 Retry-After: 31',
+    )
+    try {
+      const code = await handleRunCommand(
+        parseRunCommand(
+          route === 'labels' ? { card: '493', autonomous: true } : { card: '493', cardTags: '' },
+        ),
+        fs,
+        {
+          readCardLabels: async () => {
+            throw error
+          },
+          cardReadiness: async () => {
+            throw error
+          },
+          appendAudit: () => {},
+        },
+      )
+      expect(code).toBe(1)
+      expect(lines.join('\n')).toContain('worktree-conflict')
+      expect(lines.join('\n')).toContain('resolve:run:host-transient')
+      expect(readFileSync(recovery, 'utf8')).toBe(before)
+      expect(existsSync(join(runDir, 'run.lock'))).toBe(false)
+      const cardLock = acquireCardLock({ workingArea: join(root, '.pair/working'), card: '493' })
+      expect(cardLock.kind).toBe('acquired')
+      if (cardLock.kind === 'acquired') cardLock.lock.release()
+    } finally {
+      log.mockRestore()
+      rmSync(root, { recursive: true, force: true })
+      rmSync(treeRoot, { recursive: true, force: true })
+    }
+  },
+  60_000,
+)
+
+it.each(['labels', 'readiness'] as const)(
   '#601 r0-2: %s host outage parks durably and allows resume',
   async route => {
     const root = mkdtempSync(join(tmpdir(), 'pair-601-entry-'))
+    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root, stdio: 'ignore' })
     const scriptDir = join(root, '.claude/skills/pair-workflow-cycle/scripts')
     cpSync(resolve(process.cwd(), '../../.claude/skills/pair-workflow-cycle/scripts'), scriptDir, {
       recursive: true,

@@ -17,7 +17,12 @@ import {
 import { createPerimeter, describePerimeter, type Perimeter } from './perimeter'
 import { describeMergePosture, describeParallelism } from './automation-policy'
 import { describeApprovalPosture, filterDeliveryFor, selectionDeliveredBy } from './invocation'
-import { mainCheckoutOrCwd, readCardClosedAt, readCardLabels } from './cycle-wiring'
+import {
+  mainCheckoutOrCwd,
+  readCardClosedAt,
+  readCardLabels,
+  unavailableWorktreeOwner,
+} from './cycle-wiring'
 import { withHostRetryContext } from './host-retry-audit'
 import { acquireRunLock } from './run-lock'
 import { readWorkingCleanup, sweepWorkingAreaAsync } from './working-cleanup'
@@ -27,7 +32,11 @@ import { driveRun } from './loop-driver'
 import { whileInterruptible } from './interrupt'
 import { effectiveSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
-import { createCycleScriptsBridge, locateCycleScripts } from './cycle-scripts'
+import {
+  createCycleScriptsBridge,
+  locateCycleScripts,
+  type CycleScriptsLocation,
+} from './cycle-scripts'
 import {
   resolveOffCycleProfile,
   resolveWorkflowProfile,
@@ -555,6 +564,17 @@ function hostParkContext(
   return { context, location, policy }
 }
 
+function parkUnverifiedWorktree(
+  location: CycleScriptsLocation,
+  cwd: string,
+  card: string,
+): boolean {
+  const uncertain = unavailableWorktreeOwner(location, mainCheckoutOrCwd(cwd), undefined, card)
+  if (uncertain === undefined) return false
+  console.log(`  ${uncertain.reason}; resume token ${uncertain.resumeToken}`)
+  return true
+}
+
 function parkHostEntry(
   error: unknown,
   input: {
@@ -582,6 +602,7 @@ function parkHostEntry(
       return 1
     }
     try {
+      if (parkUnverifiedWorktree(location, cwd, dispatch.card)) return 1
       const round = createCycleScriptsBridge(location, cwd).recover({
         dir,
         kind: 'stage-retry',
