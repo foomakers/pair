@@ -224,8 +224,20 @@ const commonDir = cwd => {
 }
 const mainCheckout = cwd => {
   const common = commonDir(cwd)
-  must(common !== null, 'main-invalid', `--main is not a Git checkout: ${cwd}`)
-  return dirname(common)
+  must(common !== null, 'main-invalid', `main is not a Git checkout: ${cwd}`)
+  const dir = git(cwd, ['rev-parse', '--absolute-git-dir'])
+  if (dir.status === 0 && samePath(String(dir.stdout).trim(), common)) {
+    const top = git(cwd, ['rev-parse', '--show-toplevel'])
+    must(top.status === 0, 'main-checkout-unresolved', `cannot resolve main checkout from ${cwd}`)
+    return realpathSync(String(top.stdout).trim())
+  }
+  const config = git(cwd, ['config', '--path', '--get', 'pair.mainCheckout'])
+  const declared = config.status === 0 ? String(config.stdout).trim() : null
+  const candidate = declared || dirname(common)
+  const top = isAbsolute(candidate) ? git(candidate, ['rev-parse', '--show-toplevel']) : null
+  const candidateGit = top?.status === 0 ? git(candidate, ['rev-parse', '--absolute-git-dir']) : null
+  must(top?.status === 0 && samePath(String(top.stdout).trim(), candidate) && candidateGit?.status === 0 && samePath(String(candidateGit.stdout).trim(), common), 'main-checkout-unresolved', `cannot resolve main checkout from ${cwd}; configure its absolute path with git config pair.mainCheckout <path>`)
+  return realpathSync(candidate)
 }
 const defaultWorktreeRoot = main => join(PIPELINE_DEFAULTS.worktreeRoot, basename(main))
 const validWorktreeRoot = value =>
@@ -323,6 +335,7 @@ function worktreeCommand(opts) {
     )
   }
 
+  if (opts.inspect === true) return emit({ path, created: false, reused: false, available: true })
   mkdirSync(dirname(path), { recursive: true })
   // An existing card branch is the work in progress: check it out as it is, never `-B` it back to
   // the base. A branch only on origin is checked out from origin; only a new one starts at the base.
@@ -918,6 +931,7 @@ function realizationsCommand(opts) {
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────
 const FLAGS = {
   worktree: ['main', 'story', 'branch', 'base', 'worktree-root'],
+  'worktree-inspect': ['main', 'story', 'branch', 'base', 'worktree-root'],
   root: ['main', 'worktree-root'],
   packet: [
     'next',
@@ -970,9 +984,9 @@ try {
   const need = (...ks) => {
     for (const k of ks) if (opts[k] === undefined) throw new Error(`--${k} is required`)
   }
-  if (cmd === 'worktree') {
+  if (cmd === 'worktree' || cmd === 'worktree-inspect') {
     need('main', 'story', 'branch', 'base')
-    OUT = worktreeCommand(opts)
+    OUT = worktreeCommand(cmd === 'worktree-inspect' ? { ...opts, inspect: true } : opts)
   } else if (cmd === 'root') {
     need('main')
     OUT = emit({ root: resolveWorktreeRoot(opts.main, opts['worktree-root']) })

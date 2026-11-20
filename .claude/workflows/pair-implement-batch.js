@@ -1615,10 +1615,12 @@ async function dispatch(prompt, opts, { retry = false } = {}) {
 // A dead step (null, or a shape the stage cannot use) is retried ONCE with the same prompt: every
 // stage is re-entrant by construction (it resolves the durable state first), so the retry RESUMES.
 // A typed answer — a refusal, a redirect, a rejection — is never retried.
-async function agentRetry(prompt, opts, isUsable = r => !!r) {
+async function agentRetry(prompt, opts, isUsable = r => !!r, beforeRetry = async () => null) {
   const first = await dispatch(prompt, opts)
   if (isUsable(first)) return first
   log(`${opts.label}: step returned nothing usable (agent died or returned an invalid shape) — retrying once`)
+  const refusal = await beforeRetry()
+  if (refusal) return { ownershipRefusal: refusal }
   return dispatch(prompt, { ...opts, label: `${opts.label} retry` }, { retry: true })
 }
 
@@ -1892,6 +1894,21 @@ async function driveStoryInner(story) {
   // this sandbox cannot confirm its claim, and a self-consistent capsule is not proof (an
   // unapproved verdict, a fabricated `run`, or a stale head all passed the old shape check). Every
   // story dispatches normally; the dispatched phase's own `resolve()` is the only real authority.
+  const inspectWorktree = async () => {
+    let inspected
+    try {
+      inspected = await dispatch(
+        `Run exactly this read-only command from the main checkout and return its JSON verbatim: node .claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs worktree-inspect --main "$PWD" --story ${shellQuote(story.id)} --branch ${shellQuote(story.branch)} --base ${shellQuote(storyBase)} --worktree-root ${shellQuote(PIPELINE.worktreeRoot)}`,
+        withModel('relay', { phase: 'Worktree', label: `worktree:inspect:${tag}`, effort: 'low' }),
+      )
+    } catch (error) {
+      return result('failed', { reason: `worktree inspection failed: ${error.message}` })
+    }
+    if (inspected?.halt === 'worktree-conflict') return result('worktree-conflict', { reason: inspected.detail, worktree: inspected })
+    if (inspected?.halt) return result('failed', { reason: inspected.detail ?? inspected.halt })
+    if (inspected?.path !== worktreePath || inspected?.created !== false || (inspected?.reused !== true && inspected?.available !== true)) return result('failed', { reason: 'worktree inspection returned an incomplete result' })
+    return null
+  }
   const blockedResult = n => {
     // US-479 T-22 (S5) / ADR-024 amendment 2026-09-10: the four new non-ready statuses pass
     // through unmapped — never silently coerced to failed-resume, which would make a clean
@@ -1923,6 +1940,8 @@ async function driveStoryInner(story) {
     const token = `${runId}:${story.id}:${due.phase}:${faultKind}`
     const park = reason => result('awaiting-human', { reason, resumeToken: token, phase: due.phase })
     const script = '.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+    const refusal = await inspectWorktree()
+    if (refusal) return { park: refusal }
     const budget = await dispatch(
       `Run exactly this command from the main checkout and return its JSON verbatim: node ${script} recover --dir ${runDir()} --kind ${kind} --policy '${JSON.stringify(policy)}'`,
       withModel('relay', { phase: 'Recovery', label: `recover:budget:${tag}`, effort: 'low' }),
@@ -1962,34 +1981,35 @@ async function driveStoryInner(story) {
   }
 
   // ── The four stages, each a SKILL invoked by name with typed arguments ─────────────────────
+  const guardedAgentRetry = (prompt, opts, isUsable) => agentRetry(prompt, opts, isUsable, inspectWorktree)
   // US-647: the maintainer decision that resumed this block travels to the stage that answers it, verbatim.
   const decisionArg = n => (n.maintainerDecision ? ` $maintainerDecision=${JSON.stringify(n.maintainerDecision)}` : '')
   const prepare = n =>
-    agentRetry(
+    guardedAgentRetry(
       invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${decisionArg(n)}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || !!processFaultOf(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
     )
   const validate = n =>
-    agentRetry(
+    guardedAgentRetry(
       invoke(SK.redVerify, `${common()} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'xhigh', schema: VALIDATE_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasValidation(r) || !!processFaultOf(r),
     )
   const implement = n =>
-    agentRetry(
+    guardedAgentRetry(
       invoke(SK.implementPhase, `${common()} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''} $attempt=${n.attempt ?? 1}${n.contract ? ` $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}` : ''} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
       withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `implement:${tag}${(n.attempt ?? 1) > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: IMPLEMENT_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || (!!r && (r.status === 'ok' || r.status === 'failed') && typeof r.gatesPassed === 'boolean') || !!processFaultOf(r),
     )
   const green = n =>
-    agentRetry(
+    guardedAgentRetry(
       invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${decisionArg(n)}${notesArg()}`),
       withModel('green', { agentType: 'pair-implementer', phase: 'Implement', label: `green:${tag} ${n.phase}${n.attempt > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: GREEN_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasGreen(r) || !!processFaultOf(r),
     )
   const verify = (n, required) =>
-    agentRetry(
+    guardedAgentRetry(
       invoke(
         SK.reviewPhase,
         `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${promptPath(reviewWorktreePath)} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.waived?.length ? ` $waived=${JSON.stringify(n.waived)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${decisionArg(n)}${CONTRACT.status === 'unresolved' ? ` $contractSpec=${JSON.stringify(contractSpecArg())}` : ''}`,
@@ -2070,9 +2090,13 @@ async function driveStoryInner(story) {
   // US-506 AC-1: a fresh card has no up-front contract — its first stage is `implement / initial`,
   // exactly what `cycle-state.mjs`'s `deriveNext([], …, { entry: 'fresh' })` answers.
   // US-523: a Draft / refined-no-breakdown card is prepared (or parked) BEFORE the cycle's first stage; a PR entry never is.
+  const initialRefusal = await inspectWorktree()
+  if (initialRefusal) return initialRefusal
+  let inspectedForStage = true
   if (!resuming && AUTONOMY.preparing) {
     emitStage(story, 'prepare', pr)
     const prep = await prepareStage(story, runDir())
+    inspectedForStage = false
     if (prep.outcome === 'escalated') return result('escalated', { stage: 'prepare', boundary: prep.boundary, conditions: prep.conditions ?? [], reason: prep.reason })
     if (prep.outcome === 'needs-human') return result('awaiting-human', { stage: 'prepare', reason: prep.reason ?? 'prepare-needs-human' })
     if (prep.outcome === 'failed') return result('failed-preparation', { reason: prep.reason ?? 'the prepare phase failed' })
@@ -2119,6 +2143,11 @@ async function driveStoryInner(story) {
       continue
     }
     if (next.step === 'blocked') return blockedResult(next)
+    if (!inspectedForStage) {
+      const worktreeRefusal = await inspectWorktree()
+      if (worktreeRefusal) return worktreeRefusal
+    }
+    inspectedForStage = false
     const key = `${next.step}:${next.phase}:${next.mode ?? ''}:${next.attempt ?? 1}:${next.reviewer ?? 1}`
     if (seen.has(key)) return result('failed-resume', { reason: `the cycle state asked for ${key} twice in one run` })
     seen.add(key)
@@ -2159,6 +2188,7 @@ async function driveStoryInner(story) {
       return verify(next, pendingRequiredFindings)
     }
     res = await dispatchStage()
+    if (res?.ownershipRefusal) return res.ownershipRefusal
     // AO: validate-then-retry-ONCE. A result that fails the coordinator's FORMAT validation (a malformed finding, a missing PR
     // number or head, an unusable `next`) is not the end of the card: the step is re-entrant, so it is re-dispatched once
     // with the EXACT validation error. The second answer is judged by the unchanged checks below — the same failure ends as before.
@@ -2175,10 +2205,13 @@ async function driveStoryInner(story) {
         }
       }
       if (defect) {
+        const refusal = await inspectWorktree()
+        if (refusal) return refusal
         log(`${tag} ${next.phase}: ${stage} result failed format validation (${defect}) — re-dispatching once with the exact error`)
         formatNote = `Your previous answer for this step was REJECTED by the coordinator's format validation: ${defect}. The step is re-entrant — resolve the existing durable state, branch and PR first and continue from them (do NOT open or publish a second PR, branch or review), correct exactly that defect in the handoff / result you publish, and return the corrected result. `
         try {
           res = await dispatchStage()
+          if (res?.ownershipRefusal) return res.ownershipRefusal
         } finally {
           formatNote = ''
         }

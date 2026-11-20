@@ -22,6 +22,8 @@
 
 Cycle worktrees default to `../pair-worktrees/<main-checkout-name>/<card>` from the canonical main checkout. Top-level `pair.config.json.worktreeRoot` or the cycle script's `--worktree-root` selects a direct root instead; a relative root is anchored to that checkout. Existing legacy trees stay in place and can be reused by selecting `../pair-worktrees` explicitly. `worktree-conflict` requires manual ownership resolution; no cleanup or retry runs on a foreign repository. See [decision](../decision-log/2026-11-17-repository-scoped-worktree-root.md).
 
+When a linked worktree cannot identify its primary checkout, set `git config pair.mainCheckout <absolute-primary-path>`. The path must be the primary checkout of the same Git repository; otherwise the cycle stops.
+
 **Nothing declared here — both keys are at their defaults**; `.pair/adoption/` is delta-only (D21, ADR-018). `code-host` omitted ⇒ the code host **is** the PM tool (GitHub Projects hosts the repo): the zero-configuration single-tool path — no dual-write, no cross-link comment, every PR/review operation on GitHub. `base-branch` omitted ⇒ `main`. A split setup (e.g. Linear backlog + GitHub code) is what makes `code-host` load-bearing. Schema and resolution: [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 
 ## Story Closure (post-merge)

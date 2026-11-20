@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { mainCheckout, mainCheckoutOrCwd } from './cycle-wiring'
 
 const script = resolve(
   __dirname,
@@ -103,6 +104,39 @@ describe('US-602 real Git worktree ownership', () => {
     expect(packet(main, '../legacy').data).toMatchObject({
       worktree: join(parent, 'legacy', '55'),
     })
+  })
+
+  it('AC1/AC2: a separate Git directory does not replace the main checkout anchor', () => {
+    const parent = realpathSync(mkdtempSync(join(tmpdir(), 'pair-separate-git-dir-')))
+    roots.push(parent)
+    const main = join(parent, 'project')
+    const metadata = join(parent, 'metadata.git')
+    mkdirSync(main)
+    git(main, 'init', '-q', '-b', 'main', '--separate-git-dir', metadata)
+    git(main, 'config', 'user.name', 'Fixture')
+    git(main, 'config', 'user.email', 'fixture@example.invalid')
+    writeFileSync(join(main, 'seed'), 'seed')
+    git(main, 'add', 'seed')
+    git(main, 'commit', '-q', '-m', 'initial')
+    const first = worktree(main)
+    expect(first.status, JSON.stringify(first.data)).toBe(0)
+    expect(first.data['path']).toBe(join(parent, 'pair-worktrees', 'project', '55'))
+    expect(mainCheckout(main)).toBe(main)
+    const linked = first.data['path'] as string
+    expect(() => mainCheckout(linked)).toThrow(/main-checkout-unresolved[\s\S]*pair\.mainCheckout/)
+    expect(() => mainCheckoutOrCwd(linked)).toThrow(/main-checkout-unresolved/)
+    expect(worktree(linked, '57').data['halt']).toBe('main-checkout-unresolved')
+    git(main, 'config', 'pair.mainCheckout', linked)
+    expect(() => mainCheckout(linked)).toThrow(/main-checkout-unresolved/)
+    expect(worktree(linked, '57').data['halt']).toBe('main-checkout-unresolved')
+    git(main, 'config', 'pair.mainCheckout', main)
+    expect(mainCheckout(linked)).toBe(main)
+    expect(worktree(linked, '57').data['path']).toBe(
+      join(parent, 'pair-worktrees', 'project', '57'),
+    )
+    const custom = worktree(main, '56', 'custom-root')
+    expect(custom.status).toBe(0)
+    expect(custom.data['path']).toBe(join(main, 'custom-root', '56'))
   })
 
   it('AC1: sibling repositories use separate defaults, linked invocation keeps the main anchor', () => {

@@ -12,7 +12,11 @@
 // an inconsistent `blocking`, a dropped id), which fail closed.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, renameSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { severityRankErrors as canonicalSeverityRankErrors } from '../skills/pair-workflow-contract-phase/scripts/ensure-contract.mjs'
 import { STOP_CATALOG } from '../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
@@ -207,8 +211,9 @@ const withPolicyText = a => (a && typeof a === 'object' && !Array.isArray(a) && 
 const OFF_POLICY = { ok: true, active: false, policy: { until: 'pr', merge: { mode: 'always', has: [], lacks: [] }, prepare: { mode: 'always', has: [], lacks: [] } }, lines: [], warnings: [], errors: [] }
 const DEFAULT_PROFILE = { source: 'KB default', stages: Object.fromEntries(['prepare', 'validate', 'implement', 'green', 'verify'].map(stage => [stage, { engine: { value: 'default' }, model: { resolved: { id: null } }, effort: { value: 'default' } }])) }
 
-async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry, autonomy }) {
+async function runWorkflow({ args, dispatch, inspect, floor, maxFixRounds, entry, autonomy }) {
   const calls = []
+  let effectiveRoot = '/pair-worktrees/main'
   const simulate = makeSimulator({ entry, floor: floor ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.severityFloor ?? 'Minor' : 'Minor'), maxFixRounds: maxFixRounds ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.pipeline?.maxFixRounds ?? 3 : 3) })
   const agent = async (prompt, opts) => {
     if (opts.label === 'profile:resolve') {
@@ -217,7 +222,13 @@ async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry, autonom
     }
     if (opts.label === 'root:resolve') {
       const explicit = await dispatch(prompt, opts)
-      return explicit?.root ? explicit : { root: args?.pipeline?.worktreeRoot ? resolve('/main', args.pipeline.worktreeRoot) : '/pair-worktrees/main' }
+      const result = explicit?.root ? explicit : { root: args?.pipeline?.worktreeRoot ? resolve('/main', args.pipeline.worktreeRoot) : '/pair-worktrees/main' }
+      effectiveRoot = result.root
+      return result
+    }
+    if (opts.label?.startsWith('worktree:inspect')) {
+      const explicit = inspect ? await inspect(prompt, opts) : null
+      return explicit?.halt || explicit?.created !== undefined ? explicit : { path: `${effectiveRoot}/${opts.label.split(':')[2].replace(/^#/, '')}`, created: false, reused: false, available: true }
     }
     if (!autonomy && opts.label === 'autonomy:resolve') return OFF_POLICY
     // US-523 r1-g1: the harness card (STORY) is Ready — a launch with no scripted policy answers its prepare phase so, unrecorded.
@@ -234,6 +245,103 @@ async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry, autonom
   const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)(withPolicyText(args), agent, parallel, log)
   return { result, calls, logs }
 }
+
+test('#602 r0-2: a foreign worktree stops before stage dispatch or recovery spend', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pair-602-batch-'))
+  const alpha = join(root, 'alpha')
+  const beta = join(root, 'beta')
+  const trees = join(root, 'trees')
+  const path = join(trees, '55')
+  const branch = 'feature/US-55-example'
+  const git = (cwd, ...args) => {
+    const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
+    assert.equal(result.status, 0, result.stderr)
+    return result.stdout.trim()
+  }
+  for (const repo of [alpha, beta]) {
+    mkdirSync(repo)
+    git(repo, 'init', '-q', '-b', 'main')
+    git(repo, 'config', 'user.name', 'Fixture')
+    git(repo, 'config', 'user.email', 'fixture@example.invalid')
+    writeFileSync(join(repo, 'seed'), 'seed')
+    git(repo, 'add', 'seed')
+    git(repo, 'commit', '-q', '-m', 'initial')
+  }
+  mkdirSync(trees)
+  git(beta, 'worktree', 'add', '-q', '-b', branch, path, 'main')
+  writeFileSync(join(path, 'keep'), 'foreign')
+  const before = git(beta, 'status', '--porcelain')
+  const inspect = () => {
+    const script = fileURLToPath(new URL('../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs', import.meta.url))
+    const result = spawnSync(process.execPath, [script, 'worktree-inspect', '--main', alpha, '--story', '55', '--branch', branch, '--base', 'main', '--worktree-root', trees], { encoding: 'utf8' })
+    return JSON.parse(result.stdout)
+  }
+  const standard = stdDispatch()
+  const { result, calls } = await runWorkflow({
+    args: { cards: [{ id: '55', branch, title: 'Example' }], pipeline: { worktreeRoot: trees } },
+    inspect,
+    dispatch: standard,
+  })
+  assert.equal(result.batch[0].status, 'worktree-conflict')
+  assert.equal(calls.some(c => c.opts.agentType || c.opts.label?.startsWith('recover')), false)
+  assert.equal(readFileSync(join(path, 'keep'), 'utf8'), 'foreign')
+  assert.equal(git(beta, 'status', '--porcelain'), before)
+})
+
+for (const fault of ['dirty', 'stale', 'redirect', 'dead']) test(`#602 r0-2: ownership is rechecked after stage reports ${fault}`, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pair-602-recovery-'))
+  const alpha = join(root, 'alpha')
+  const beta = join(root, 'beta')
+  const trees = join(root, 'trees')
+  const path = join(trees, '55')
+  const foreign = join(root, 'foreign')
+  const branch = 'feature/US-55-example'
+  const git = (cwd, ...args) => {
+    const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
+    assert.equal(result.status, 0, result.stderr)
+    return result.stdout.trim()
+  }
+  for (const repo of [alpha, beta]) {
+    mkdirSync(repo)
+    git(repo, 'init', '-q', '-b', 'main')
+    git(repo, 'config', 'user.name', 'Fixture')
+    git(repo, 'config', 'user.email', 'fixture@example.invalid')
+    writeFileSync(join(repo, 'seed'), 'seed')
+    git(repo, 'add', 'seed')
+    git(repo, 'commit', '-q', '-m', 'initial')
+  }
+  mkdirSync(trees)
+  git(alpha, 'worktree', 'add', '-q', '-b', branch, path, 'main')
+  git(beta, 'worktree', 'add', '-q', '-b', branch, foreign, 'main')
+  writeFileSync(join(foreign, 'keep'), 'foreign')
+  const script = fileURLToPath(new URL('../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs', import.meta.url))
+  let stageReached = false
+  const standard = stdDispatch()
+  const { result, calls } = await runWorkflow({
+    args: { cards: [{ id: '55', branch, title: 'Example' }], pipeline: { worktreeRoot: trees } },
+    entry: 'legacy',
+    inspect: () => {
+        const checked = spawnSync(process.execPath, [script, 'worktree-inspect', '--main', alpha, '--story', '55', '--branch', branch, '--base', 'main', '--worktree-root', trees], { encoding: 'utf8' })
+        return JSON.parse(checked.stdout)
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-fix-test-author' && !stageReached) {
+        stageReached = true
+        renameSync(path, join(root, 'old-alpha'))
+        renameSync(foreign, path)
+        return fault === 'dead' ? null : { status: fault, reason: 'fixture', next: fault === 'redirect' ? { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 } : { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 2 } }
+      }
+      return standard(prompt, opts)
+    },
+  })
+  assert.equal(stageReached, true, 'same-owner control reached its stage')
+  assert.equal(result.batch[0].status, 'worktree-conflict')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 1, 'no later stage runs on the substituted worktree')
+  assert.equal(calls.some(c => c.opts.label?.startsWith('recover:budget') || c.opts.label?.startsWith('recover:dirty') || c.opts.label?.startsWith('recover:stale')), false)
+  assert.equal(readFileSync(join(path, 'keep'), 'utf8'), 'foreign')
+  assert.equal(git(beta, 'stash', 'list'), '')
+  assert.equal(git(beta, 'for-each-ref', '--format=%(refname)', 'refs/pair/recovery'), '')
+})
 
 // Happy-path fixture: the contract generator answers with `contractResult`, every judgment stage
 // answers with the simulator's default, the verifier with `review` (a function of the pass index).
@@ -290,7 +398,7 @@ test('US-506 TC-11 golden trace: a FRESH story with a clean first verification i
   assert.doesNotMatch(calls[0].prompt, /\$snapshot=|\$contract=|\$head=/)
   assert.match(calls[0].prompt, /\$phase=a0 \$attempt=1 \$title="T" \$implementSkill=/)
   assert.match(calls[1].prompt, /\$contractSpec=\{/, 'the first review dispatch carries the contract spec')
-  assert.equal(result.metrics.dispatches, 2)
+  assert.equal(result.metrics.dispatches, 4, 'two stages and two ownership relays')
 })
 
 test('AC-10: dirty preparation invokes budgeted recovery, saves work, and resumes the same card', async () => {
@@ -605,7 +713,7 @@ test('TC-11 golden trace: one fix round on one group adds exactly four dispatche
   const all = labels(calls).join(' ')
   for (const gone of ['plan:', 'probe:', 'red-seal:', 'preflight:', 'synth:', 'flush:', 'pr:', 'red-spec:', 'red-verify:', 'fix:', 'rev:'])
     assert.ok(!all.includes(gone), `a retired dispatch label survives: ${gone}`)
-  assert.equal(result.metrics.dispatches, 9, 'the legacy entry redirect is one dispatch that spends no judgment')
+  assert.equal(result.metrics.dispatches, 18, 'nine stage dispatches and nine ownership relays')
   assert.equal(result.metrics.tokens, 'unknown', 'token counters are not exposed to the script — reported unknown, never zero')
 })
 
@@ -666,13 +774,13 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
 
 test('TC-11: the workflow source dispatches ONLY skill invocations — no free-form prompt, no shell, no retired rule or role', () => {
   const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
-  const all = [...code.matchAll(/\b(?:agent(?:Retry)?|dispatch)\(\s*\n?\s*([^\n,]+)/g), ...code.matchAll(/\bboundedAgent\('profile:resolve',\s*\n\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
+  const all = [...code.matchAll(/\b(?:guardedAgentRetry|agent(?:Retry)?|dispatch)\(\s*\n?\s*([^\n,]+)/g), ...code.matchAll(/\bboundedAgent\('profile:resolve',\s*\n\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
   // US-524: the only dispatches that are not a skill invocation are the eight SCRIPT RUNNERS of the autonomy model (an agent
   // runs one named script and relays its JSON): resolve, tier, decide, escalate, pr-state, cascade, merge check, merge — and, US-523,
   // the prepare phase (cycle-prepare.mjs). No rule lives in them.
   const scriptRunners = all.filter(d => /^`(Run (?:EXACTLY|exactly)|Card )/.test(d))
   const dispatches = all.filter(d => !scriptRunners.includes(d))
-  assert.equal(scriptRunners.length, 18, `expected existing relays plus the workflow profile resolver, found ${scriptRunners.length}`)
+  assert.equal(scriptRunners.length, 19, `expected existing relays plus ownership inspection, found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
@@ -829,7 +937,7 @@ test('TC-14: the effective-inputs digest is keyed by the engine MAJOR — a patc
   const src = SRC.replace(/const WORKFLOW_VERSION = '4\.0\.\d+'/, "const WORKFLOW_VERSION = '4.9.9'")
   const digestOf = async code => {
     const calls = []
-    const agent = async (prompt, opts) => { if (opts.label === 'profile:resolve') return DEFAULT_PROFILE; if (opts.label === 'root:resolve') return { root: '/pair-worktrees/main' }; calls.push(prompt); return opts.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'stale', reason: 'x' } }
+    const agent = async (prompt, opts) => { if (opts.label === 'profile:resolve') return DEFAULT_PROFILE; if (opts.label === 'root:resolve') return { root: '/pair-worktrees/main' }; if (opts.label?.startsWith('worktree:inspect')) return { path: '/pair-worktrees/main/292', created: false, available: true }; calls.push(prompt); return opts.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'stale', reason: 'x' } }
     await new AsyncFunction('args', 'agent', 'parallel', 'log', code)({ cards: [STORY], policyText: '' }, agent, fns => Promise.all(fns.map(f => f())), () => {})
     return /\$inputs=([0-9a-f]{16})/.exec(calls[0])[1]
   }
@@ -1411,22 +1519,22 @@ test('TC-14: the result carries workflowVersion 4.0.1 and every status row is on
 // ═══════════════════════════════════════════════════════════════════════════
 // TC-16 — fixed-trace cost accounting
 // ═══════════════════════════════════════════════════════════════════════════
-test('TC-16: fixed traces — cold path 4 dispatches (was 5 with the generator), one-fix path 8 (was 9), unchanged resume 1 identity dispatch with zero fresh review', async () => {
-  // US-506: a FRESH cold path is 2 dispatches (implement, verify) and one fix round adds the 4 of the
-  // test-first remediation; a run already on the `a0` path pays one extra redirect at entry.
+test('TC-16: fixed traces count each stage and its ownership relay', async () => {
+  // #602: every stage is preceded by one ownership relay; judgment stages remain unchanged.
   const freshCold = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch(), entry: 'fresh' })
-  assert.equal(freshCold.result.metrics.dispatches, 2)
+  assert.equal(freshCold.result.metrics.dispatches, 4)
   const freshFix = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }), entry: 'fresh' })
-  assert.equal(freshFix.result.metrics.dispatches, 6)
+  assert.equal(freshFix.result.metrics.dispatches, 12)
   const cold = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
-  assert.equal(cold.result.metrics.dispatches, 5)
+  assert.equal(cold.result.metrics.dispatches, 10)
   const oneFix = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }) })
-  assert.equal(oneFix.result.metrics.dispatches, 9)
+  assert.equal(oneFix.result.metrics.dispatches, 18)
   const resume = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'redirect', next: { step: 'done', reviewedHead: HEAD, round: 1, verdict: 'Approved' } }) })
-  assert.equal(resume.result.metrics.dispatches, 1)
+  assert.equal(resume.result.metrics.dispatches, 2)
   assert.equal(resume.result.metrics.redirects, 1)
   assert.equal(resume.result.batch[0].status, 'ready-for-merge')
-  for (const r of [cold, oneFix, resume]) {
+  for (const r of [freshCold, freshFix, cold, oneFix, resume]) {
+    assert.equal(r.result.metrics.perDispatch.filter(d => d.label.startsWith('worktree:inspect')).length, r.result.metrics.dispatches / 2)
     assert.equal(r.result.metrics.tokens, 'unknown')
     assert.ok(Array.isArray(r.result.metrics.perDispatch) && r.result.metrics.perDispatch.every(d => typeof d.label === 'string' && typeof d.retry === 'boolean'))
     assert.equal(r.result.metrics.wallMs, 'unknown')

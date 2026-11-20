@@ -20,6 +20,10 @@ Sibling repositories using `../pair-worktrees/<card>` target the same path for e
 
 The default cycle root is `../pair-worktrees/<main-checkout-name>`, anchored to the canonical Git common directory's main checkout. A top-level `pair.config.json.worktreeRoot` or explicit `--worktree-root` replaces that root directly. Relative roots resolve from the main checkout; absolute roots retain spaces. Git common directory identity determines ownership. A foreign or occupied destination is a manual `worktree-conflict` decision stop.
 
+For a linked worktree whose main checkout cannot be derived (including a separate Git directory), stop with `main-checkout-unresolved`. Set its absolute path with `git config pair.mainCheckout <path>`; validate that it is the primary checkout of the same Git common directory. Never guess an anchor.
+
+The batch performs an ownership relay before each stage and recovery budget. These security relays count in dispatch metrics, in addition to the judgment stages; a fresh clean path therefore costs four dispatches rather than two.
+
 ## Alternatives Considered
 
 - **Remote URL namespace**: separate clones can share an origin and still own distinct worktrees.

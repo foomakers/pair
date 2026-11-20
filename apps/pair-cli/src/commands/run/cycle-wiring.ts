@@ -1,9 +1,9 @@
 import { execFileSync, spawn, spawnSync } from 'child_process'
 import { RUN_EVENTS_ENV, runEventLine, stageLabel, type RunEvent } from './run-events'
 import { cardProgress, todoInProgress, type CardProgress } from './card-progress'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'fs'
 import { acquireRunLock, RUN_LOCK_FILE } from './run-lock'
-import { dirname, join } from 'path'
+import { dirname, isAbsolute, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { EngineDefinition } from './engines'
 import {
@@ -395,16 +395,33 @@ function existingBranchFor(card: string, cwd: string): string | undefined {
  */
 export function mainCheckout(cwd: string): string {
   try {
-    const commonDir = execFileSync(
-      'git',
-      ['rev-parse', '--path-format=absolute', '--git-common-dir'],
-      { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
-    ).trim()
-    return dirname(commonDir)
+    const git = (at: string, ...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: at,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim()
+    const common = realpathSync(git(cwd, 'rev-parse', '--path-format=absolute', '--git-common-dir'))
+    const dir = realpathSync(git(cwd, 'rev-parse', '--absolute-git-dir'))
+    if (dir === common) return realpathSync(git(cwd, 'rev-parse', '--show-toplevel'))
+    let declared: string | undefined
+    try {
+      declared = git(cwd, 'config', '--path', '--get', 'pair.mainCheckout')
+    } catch {
+      /* unset */
+    }
+    const candidate = declared || dirname(common)
+    if (
+      !isAbsolute(candidate) ||
+      realpathSync(git(candidate, 'rev-parse', '--show-toplevel')) !== realpathSync(candidate) ||
+      realpathSync(git(candidate, 'rev-parse', '--absolute-git-dir')) !== common
+    )
+      throw new Error('configured checkout is not the main repository')
+    return realpathSync(candidate)
   } catch (error) {
     throw new Error(
       `main-checkout-unresolved: could not resolve this repository's main checkout from ${cwd} — ` +
-        `${error instanceof Error ? error.message : String(error)}`,
+        `${error instanceof Error ? error.message : String(error)}; configure its absolute path with git config pair.mainCheckout <path>`,
     )
   }
 }
@@ -413,7 +430,9 @@ export function mainCheckout(cwd: string): string {
 export function mainCheckoutOrCwd(cwd: string): string {
   try {
     return mainCheckout(cwd)
-  } catch {
+  } catch (error) {
+    if (spawnSync('git', ['rev-parse', '--git-common-dir'], { cwd, stdio: 'ignore' }).status === 0)
+      throw error
     return cwd
   }
 }
