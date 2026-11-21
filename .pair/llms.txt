@@ -52,6 +52,7 @@
 - [ADR-030: Workflow profile over layered run defaults](.pair/adoption/tech/adr/adr-030-workflow-profile-layered-run-defaults.md)
 - [ADR-031: The `workflows` package and its hosts](.pair/adoption/tech/adr/adr-031-workflows-package-and-hosts.md)
 - [ADR-032: Step kinds, contracts and result collection](.pair/adoption/tech/adr/adr-032-step-kinds-contracts-and-result-collection.md)
+- [ADR-033: One telemetry file per workflow run](.pair/adoption/tech/adr/adr-033-workflow-run-telemetry-file.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Bounded Context Catalog (Grouped)](.pair/adoption/tech/boundedcontext/README.md)

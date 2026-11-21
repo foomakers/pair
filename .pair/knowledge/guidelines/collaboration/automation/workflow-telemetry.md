@@ -19,6 +19,7 @@ A step that runs again (a resume after a failure) has one record per execution.
 | Field                        | Content                                              |
 | ---------------------------- | ---------------------------------------------------- |
 | `type`                       | `step`                                               |
+| `schema`                     | `1`. The version of the record format (ADR-033).     |
 | `run`, `workflow`, `card`    | The run id, the workflow name, the card.             |
 | `step`, `kind`, `uses`       | The step, its kind, the skill it ran.                |
 | `host`                       | `pair-run` or `session`.                             |
@@ -36,6 +37,7 @@ Written when the run ends (`done`, `failed` or `parked`), as the last line. A ru
 | Field                     | Content                                                   |
 | ------------------------- | --------------------------------------------------------- |
 | `type`                    | `run`                                                     |
+| `schema`                  | `1`. The version of the record format (ADR-033).          |
 | `run`, `workflow`, `card` | The same identity as the step records.                    |
 | `status`                  | `done`, `failed` or `parked`.                             |
 | `durationMs`, `tokens`    | The sums of the step records, never a separate measurement. |

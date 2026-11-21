@@ -13,6 +13,9 @@ import type { StepStatus } from '../kinds'
 
 export { TELEMETRY_FILE }
 
+/** The version of the record format of a run's `telemetry.jsonl` (ADR-033). A change of shape raises it. */
+export const TELEMETRY_SCHEMA = 1
+
 /** Where a number comes from. Never a number without its origin. */
 export type TokenSource = 'measured' | 'estimated' | 'unknown'
 
@@ -58,6 +61,7 @@ export type TelemetryHost = 'pair-run' | 'session'
 /** One execution of a step. A re-executed step has one record per execution. */
 export interface StepTelemetry extends RunIdentity {
   readonly type: 'step'
+  readonly schema: typeof TELEMETRY_SCHEMA
   readonly step: string
   readonly kind: KindName
   readonly uses: string
@@ -85,6 +89,7 @@ export interface TokenSum extends TokenEntry {
 /** The closing record of a run. Its totals are sums of the step records, never a separate measurement. */
 export interface RunTelemetry extends RunIdentity {
   readonly type: 'run'
+  readonly schema: typeof TELEMETRY_SCHEMA
   readonly status: Exclude<RunState, 'running'>
   readonly durationMs: number
   readonly tokens: Readonly<Record<TokenName, TokenSum>>
@@ -132,6 +137,7 @@ export async function recordStep(run: RunDirectory, execution: StepExecution): P
   const isEstimate = Object.values(tokens).some(entry => entry.source === 'estimated')
   const record: StepTelemetry = {
     type: 'step',
+    schema: TELEMETRY_SCHEMA,
     ...identityOf(run),
     step: step.id,
     kind: step.kind,
@@ -170,6 +176,7 @@ export async function closeRun(run: RunDirectory, status: RunTelemetry['status']
   const steps = stepsOf(run)
   const record: RunTelemetry = {
     type: 'run',
+    schema: TELEMETRY_SCHEMA,
     ...identityOf(run),
     status,
     durationMs: steps.reduce((sum, step) => sum + step.durationMs, 0),

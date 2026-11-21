@@ -226,6 +226,7 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
     ).toEqual([
       {
         type: 'step',
+        schema: 1,
         ...identity,
         step: 'implement',
         kind: 'implement',
@@ -239,6 +240,7 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
       },
       {
         type: 'step',
+        schema: 1,
         ...identity,
         step: 'review',
         kind: 'review',
@@ -252,6 +254,7 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
       },
       {
         type: 'run',
+        schema: 1,
         ...identity,
         status: 'done',
         durationMs: 120_000,

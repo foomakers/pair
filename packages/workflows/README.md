@@ -16,4 +16,4 @@ The package launches no process, uses no git and calls no PM tool: a host does. 
 | `host/`     | The interface a host implements, and the run loop over it                  |
 | `telemetry/` | Step and closing records of `telemetry.jsonl`: tokens with their source   |
 
-Decisions: [ADR-031](../../.pair/adoption/tech/adr/adr-031-workflows-package-and-hosts.md), [ADR-032](../../.pair/adoption/tech/adr/adr-032-step-kinds-contracts-and-result-collection.md).
+Decisions: [ADR-031](../../.pair/adoption/tech/adr/adr-031-workflows-package-and-hosts.md), [ADR-032](../../.pair/adoption/tech/adr/adr-032-step-kinds-contracts-and-result-collection.md), [ADR-033](../../.pair/adoption/tech/adr/adr-033-workflow-run-telemetry-file.md).
