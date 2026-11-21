@@ -266,6 +266,62 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
   })
 })
 
+describe('runSteps: the telemetry switch (US-697 AC-5)', () => {
+  const SETTINGS = { host: 'pair-run', settings: { engine: 'claude' } } as const
+
+  it('writes no file and runs the same when telemetry is off', async () => {
+    const { host, events } = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => REVIEWED,
+    })
+    await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
+    const off = await runSteps(host, DIR)
+    expect(host.files.existsSync(`${DIR}/telemetry.jsonl`)).toBe(false)
+
+    const on = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => REVIEWED,
+    })
+    await start({ files: on.host.files, dir: DIR }, SOURCE, { card: '627' })
+    expect(await runSteps(on.host, DIR, SETTINGS)).toEqual(off)
+    expect(on.events).toEqual(events)
+    expect(on.host.files.readFileSync(`${DIR}/state.json`)).toBe(
+      host.files.readFileSync(`${DIR}/state.json`),
+    )
+  })
+
+  it('never fails a step on a write error: it is reported once and the run goes on', async () => {
+    const { host } = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => REVIEWED,
+    })
+    const files = host.files
+    const broken: WorkflowHost = {
+      ...host,
+      files: {
+        ...files,
+        writeFile: (path, content) =>
+          path.includes('telemetry.jsonl')
+            ? Promise.reject(new Error('EACCES: permission denied'))
+            : files.writeFile(path, content),
+      },
+    }
+    await start({ files, dir: DIR }, SOURCE, { card: '627' })
+    const warnings: string[] = []
+
+    const outcome = await runSteps(broken, DIR, {
+      ...SETTINGS,
+      warn: message => void warnings.push(message),
+    })
+
+    expect(outcome.run).toBe('done')
+    expect(statesOf(host)).toEqual({ implement: 'ok', review: 'ok' })
+    expect(warnings).toEqual([
+      'telemetry was not written: EACCES: permission denied — the run goes on without it',
+    ])
+  })
+})
+
 describe('settingsOf', () => {
   it('gives every step the settings of the run', () => {
     const run = { engine: 'claude', model: 'm' }

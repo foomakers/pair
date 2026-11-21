@@ -14,6 +14,7 @@ import {
   measured,
   recordStep,
   UNKNOWN_TOKENS,
+  type StepExecution,
   type TelemetryHost,
   type Usage,
 } from '../telemetry'
@@ -71,6 +72,8 @@ export interface TelemetryOptions {
   readonly settings: StepSettings
   /** The clock. */
   readonly now?: () => Date
+  /** Told once when a record cannot be written. */
+  readonly warn?: (message: string) => void
 }
 
 export interface RunOutcome {
@@ -103,26 +106,56 @@ async function execute(
   return record(run, step.id, readResult(final, kind), final)
 }
 
+/**
+ * The run's telemetry, when it is on. It never fails a run: the first write error is reported, and
+ * the run goes on without it.
+ */
+function writerOf(run: RunDirectory, telemetry: TelemetryOptions) {
+  let told = false
+  const safe = async (write: Promise<void>): Promise<void> => {
+    try {
+      await write
+    } catch (error) {
+      if (!told)
+        telemetry.warn?.(
+          `telemetry was not written: ${(error as Error).message} — the run goes on without it`,
+        )
+      told = true
+    }
+  }
+  return {
+    now: telemetry.now ?? (() => new Date()),
+    step: (execution: Omit<StepExecution, 'host' | 'settings'>) =>
+      safe(
+        recordStep(run, {
+          ...execution,
+          host: telemetry.host,
+          settings: settingsOf(telemetry.settings, execution.step.id),
+        }),
+      ),
+    close: (status: RunOutcome['run']) => safe(closeRun(run, status)),
+  }
+}
+
+type Writer = ReturnType<typeof writerOf> | undefined
+
 /** One step, timed and metered when telemetry is on. */
 async function executeMetered(
   host: WorkflowHost,
   run: RunDirectory,
   step: StepLaunch,
-  telemetry: TelemetryOptions | undefined,
+  writer: Writer,
 ): Promise<StepResult> {
-  if (telemetry === undefined) return execute(host, run, step, () => undefined)
-  const now = telemetry.now ?? (() => new Date())
-  const startedAt = now()
+  if (writer === undefined) return execute(host, run, step, () => undefined)
+  const startedAt = writer.now()
   let usage: Usage | undefined
   const result = await execute(host, run, step, measure => {
     usage = measure
   })
-  await recordStep(run, {
+  await writer.step({
     step,
-    host: telemetry.host,
-    settings: settingsOf(telemetry.settings, step.id),
     startedAt,
-    durationMs: now().getTime() - startedAt.getTime(),
+    durationMs: writer.now().getTime() - startedAt.getTime(),
     tokens: usage === undefined ? UNKNOWN_TOKENS : measured(usage),
     status: result.status,
     ...(result.reason !== undefined && { reason: result.reason }),
@@ -131,13 +164,12 @@ async function executeMetered(
 }
 
 async function ended(
-  run: RunDirectory,
   state: RunState,
   last: StepEvent | undefined,
-  telemetry: TelemetryOptions | undefined,
+  writer: Writer,
 ): Promise<RunOutcome> {
   const outcome = state === 'running' ? 'failed' : state
-  if (telemetry !== undefined) await closeRun(run, outcome)
+  await writer?.close(outcome)
   return { run: outcome, ...(last !== undefined && { last }) }
 }
 
@@ -148,13 +180,14 @@ export async function runSteps(
   telemetry?: TelemetryOptions,
 ): Promise<RunOutcome> {
   const run = { files: host.files, dir }
+  const writer = telemetry && writerOf(run, telemetry)
   let last: StepEvent | undefined
   for (;;) {
     const { ready, run: state } = await next(run)
     const step = ready[0]
-    if (state !== 'running' || step === undefined) return ended(run, state, last, telemetry)
+    if (state !== 'running' || step === undefined) return ended(state, last, writer)
     host.report?.({ step: step.id, kind: step.kind, state: 'running' })
-    const { status, summary, reason, detail } = await executeMetered(host, run, step, telemetry)
+    const { status, summary, reason, detail } = await executeMetered(host, run, step, writer)
     last = {
       step: step.id,
       kind: step.kind,

@@ -10,6 +10,7 @@ import {
   type RunOutcome,
   type StepEvent,
   type StepLaunch,
+  type StepSettings,
   type Workflow,
 } from '@pair/workflows'
 import { loadConfigWithOverrides } from '#config'
@@ -185,11 +186,17 @@ interface Launch {
   readonly worktree: string
 }
 
+/** What every step of the run launches with: its one engine and that engine's declared model. */
+function runSettings(resolved: Resolved): StepSettings {
+  const { id } = resolved.engine.engine
+  return { engine: id, model: declaredEngineModel(resolved.project, id) }
+}
+
 /** One agent per step, in the card's worktree, on the run's one engine and model. */
 function launcher(run: Launch) {
   const { config, resolved, services } = run
   const engine = resolved.engine.engine
-  const settings = { engine: engine.id, model: declaredEngineModel(resolved.project, engine.id) }
+  const settings = runSettings(resolved)
   const autonomyArgs = resolveAutonomyFor(engine, config, resolved.main, services.fs).args
   const idle = resolveIdleTimeout({
     flag: config.idleTimeoutSeconds,
@@ -291,6 +298,14 @@ async function runOnConsole(
             : console.log(stepLine(event)),
       },
       runDir,
+      // Off unless the flag turns it on; the configuration key arrives with #672.
+      config.telemetry === true
+        ? {
+            host: 'pair-run',
+            settings: runSettings(resolved),
+            warn: message => console.log(`  Warning: ${message}`),
+          }
+        : undefined,
     )
     return conclude(outcome, request, sink)
   } finally {

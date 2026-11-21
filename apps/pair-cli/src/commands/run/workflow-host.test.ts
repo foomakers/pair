@@ -329,6 +329,40 @@ describe('the run directory (AC-7)', () => {
   })
 })
 
+describe('telemetry, switched by flag (US-697 AC-5)', () => {
+  const telemetryFile = () => join(runDir(), 'telemetry.jsonl')
+
+  it('--telemetry records every step and the closing record in the run directory', async () => {
+    expect(await run(['quick'], OK, { telemetry: true })).toBe(0)
+    const records = fs
+      .readFileSync(telemetryFile())
+      .trimEnd()
+      .split('\n')
+      .map(line => JSON.parse(line) as unknown)
+    expect(records).toMatchObject([
+      { type: 'step', step: 'implement', host: 'pair-run', engine: 'claude', status: 'ok' },
+      { type: 'step', step: 'review', host: 'pair-run', engine: 'claude', status: 'ok' },
+      { type: 'run', run: 'quick-627', workflow: 'quick', card: '627', status: 'done', steps: 2 },
+    ])
+  })
+
+  it.each([
+    ['no flag', {}],
+    ['--no-telemetry', { telemetry: false }],
+  ])('writes no file with %s', async (_name, options) => {
+    expect(await run(['quick'], OK, options)).toBe(0)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+    expect(fs.existsSync(telemetryFile())).toBe(false)
+  })
+
+  it('goes on when the file cannot be written, and says so once', async () => {
+    fs.mkdirSync(telemetryFile(), { recursive: true })
+    expect(await run(['quick'], OK, { telemetry: true })).toBe(0)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+    expect(lines.filter(line => line.includes('telemetry was not written'))).toHaveLength(1)
+  })
+})
+
 describe('refusals before any launch (design §8)', () => {
   it.each([
     ['a card the tracker does not have', 'missing', 'card-not-found: card 627'],
