@@ -8,5 +8,5 @@ export const generic: StepKind = {
   },
   outputs: { type: 'object', description: 'The common fields only.' },
   with: { type: 'object', description: 'A free object, passed to the skill as written.' },
-  escalations: ['Whatever the skill named by `uses` documents.'],
+  escalations: ['Whatever the skill named by `skill` documents.'],
 }

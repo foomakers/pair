@@ -2,7 +2,7 @@ import type { StepKind } from './kind'
 
 export const implement: StepKind = {
   name: 'implement',
-  defaultUses: 'pair-process-implement',
+  defaultSkill: 'pair-process-implement',
   inputs: {
     type: 'object',
     required: ['card'],

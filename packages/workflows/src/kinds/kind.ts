@@ -4,8 +4,8 @@ import type { KindName } from '../grammar'
 /** What a kind of step receives, accepts and must return. The kind reference page is generated from these objects. */
 export interface StepKind {
   readonly name: KindName
-  /** The pair skill a step of this kind runs when it has no `uses`. */
-  readonly defaultUses?: string
+  /** The pair skill a step of this kind runs when it has no `skill`. */
+  readonly defaultSkill?: string
   /** What the step receives: launch arguments, or outputs of earlier steps with the same name. */
   readonly inputs: JsonSchema
   /** What the step must return when it is `ok` — and, for a kind with a `rule`, when it is `failed` — besides the common fields. */

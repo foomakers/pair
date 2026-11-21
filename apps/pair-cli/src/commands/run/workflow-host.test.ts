@@ -176,8 +176,8 @@ describe('validation before any launch (AC-2, AC-3)', () => {
     ],
     [
       'a skill that is not installed',
-      QUICK.replace('kind: review', 'kind: review\n    uses: nowhere'),
-      "quick.yaml:10: steps.review.uses: skill 'nowhere' is not installed",
+      QUICK.replace('kind: review', 'kind: review\n    skill: nowhere'),
+      "quick.yaml:10: steps.review.skill: skill 'nowhere' is not installed",
     ],
   ])('refuses %s, naming file, line and fix, and launches nothing', async (_name, text, error) => {
     write('.pair/adoption/tech/workflows/quick.yaml', text)
@@ -207,10 +207,10 @@ describe('validation before any launch (AC-2, AC-3)', () => {
 })
 
 describe('skill and options of a step (AC-4, AC-5)', () => {
-  it('runs the skill named by `uses` with the options of `with`, then asks for the result of the kind', async () => {
+  it('runs the skill named by `skill` with the options of `with`, then asks for the result of the kind', async () => {
     write(
       '.pair/adoption/tech/workflows/quick.yaml',
-      QUICK.replace('kind: review', 'kind: generic\n    uses: my-skill\n    with:\n      depth: 2'),
+      QUICK.replace('kind: review', 'kind: generic\n    skill: my-skill\n    with:\n      depth: 2'),
     )
     const mine = () => fenced({ status: 'ok', summary: 'noted' })
     expect(await run(['quick'], { ...OK, 'my-skill': mine })).toBe(0)

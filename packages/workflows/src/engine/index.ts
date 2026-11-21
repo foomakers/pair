@@ -234,7 +234,7 @@ export async function next(
   const launch: StepLaunch = {
     id: step.id,
     kind: step.kind,
-    uses: step.uses ?? kindByName[step.kind].defaultUses ?? '',
+    uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
     inputs: inputsOf(step, steps, state),
     attempt,

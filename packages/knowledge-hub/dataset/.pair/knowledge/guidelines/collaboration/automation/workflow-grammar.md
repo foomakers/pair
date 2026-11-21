@@ -41,7 +41,7 @@ Each step:
 | Key    | Required                     | Meaning                                                                         |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------- |
 | `kind` | Yes                          | `implement`, `review` or `generic`.                                             |
-| `uses` | Only for `generic`           | The skill that runs. A typed kind has a default skill; `uses` replaces it.      |
+| `skill` | Only for `generic`          | The skill that runs. A typed kind has a default skill; `skill` replaces it.     |
 | `with` | No                           | Options of the step. The kind declares the keys it accepts.                     |
 
 A step id starts with a lower-case letter and continues with lower-case letters, digits and hyphens: it names a directory of the run.
@@ -66,7 +66,7 @@ A workflow is validated before any step is launched, and by `--dry-run`, which l
 | Part      | What is checked                                                                                   |
 | --------- | ------------------------------------------------------------------------------------------------- |
 | Form      | The rules above.                                                                                  |
-| Coherence | `uses` names an installed skill; a `generic` step has `uses`.                                     |
+| Coherence | `skill` names an installed skill; a `generic` step has `skill`; `uses` is refused (it is for including a workflow). |
 | Coherence | Every input of a step is a launch argument (`--card`) or an output of an earlier step.            |
 | Coherence | Every key under `with` is declared by the kind.                                                   |
 | Coherence | Every key in `with.gates` is a `Key` of the Custom Gate Registry in `way-of-working.md`.          |

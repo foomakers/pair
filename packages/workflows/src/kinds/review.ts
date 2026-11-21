@@ -5,7 +5,7 @@ export const SEVERITIES = ['Critical', 'Major', 'Minor'] as const
 
 export const review: StepKind = {
   name: 'review',
-  defaultUses: 'pair-process-review',
+  defaultSkill: 'pair-process-review',
   inputs: {
     type: 'object',
     required: ['card', 'pr', 'head'],

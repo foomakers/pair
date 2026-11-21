@@ -17,12 +17,12 @@ function fields(schema: JsonSchema, marked = false): string[] {
 
 function section(name: (typeof KIND_NAMES)[number]): string[] {
   const kind = kindByName[name]
-  const uses =
-    kind.defaultUses === undefined ? 'none: `uses` is required' : `\`${kind.defaultUses}\``
+  const skill =
+    kind.defaultSkill === undefined ? 'none: `skill` is required' : `\`${kind.defaultSkill}\``
   return [
     `## ${name}`,
     '',
-    `- **Default skill**: ${uses}`,
+    `- **Default skill**: ${skill}`,
     '- **Inputs**',
     ...fields(kind.inputs),
     `- **Outputs**, required when \`status\` is \`ok\`${kind.rule === undefined ? '' : ' or `failed`'}`,

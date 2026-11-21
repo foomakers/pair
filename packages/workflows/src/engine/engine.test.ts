@@ -122,7 +122,7 @@ describe('engine: a linear run (AC-1)', () => {
 
   it('gives a generic step every scalar produced so far, and no list', async () => {
     const run = open()
-    const text = `${QUICK}  notes:\n    kind: generic\n    uses: my-skill\n`
+    const text = `${QUICK}  notes:\n    kind: generic\n    skill: my-skill\n`
     await start(run, { text, file: 'workflows/quick.yaml' }, { card: '627' })
     await next(run)
     await record(run, 'implement', IMPLEMENTED)

@@ -361,7 +361,7 @@ async function drive(
 function printPlan(workflow: Workflow): void {
   workflow.steps.forEach((step, index) =>
     console.log(
-      `  ${String(index + 1)}. ${step.id} — ${step.kind}${step.uses ? ` (${step.uses})` : ''}`,
+      `  ${String(index + 1)}. ${step.id} — ${step.kind}${step.skill ? ` (${step.skill})` : ''}`,
     ),
   )
 }
