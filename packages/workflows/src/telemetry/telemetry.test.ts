@@ -36,7 +36,7 @@ const recordsOf = (run: RunDirectory): unknown[] =>
     .map(line => JSON.parse(line) as unknown)
 
 const IMPLEMENT: StepExecution = {
-  step: { id: 'implement', kind: 'implement', uses: 'pair-process-implement' },
+  step: { id: 'implement', kind: 'implement', uses: 'pair-process-implement', attempt: 1 },
   host: 'pair-run',
   settings: { engine: 'claude', model: 'claude-fable-5-2', effort: 'high' },
   startedAt: new Date('2026-11-21T10:00:00.000Z'),
@@ -46,7 +46,7 @@ const IMPLEMENT: StepExecution = {
 }
 const REVIEW: StepExecution = {
   ...IMPLEMENT,
-  step: { id: 'review', kind: 'review', uses: 'pair-process-review' },
+  step: { id: 'review', kind: 'review', uses: 'pair-process-review', attempt: 1 },
   durationMs: 30_000,
   tokens: measured({ read: 20, cached: 200, written: 2 }),
 }
@@ -85,12 +85,18 @@ describe('step record (US-697 AC-1, AC-3)', () => {
     const run = await open()
     await recordStep(run, { ...IMPLEMENT, status: 'failed', reason: 'quality-gate' })
     await recordStep(run, REVIEW)
-    await recordStep(run, IMPLEMENT)
+    await recordStep(run, { ...IMPLEMENT, step: { ...IMPLEMENT.step, attempt: 2 } })
     expect(recordsOf(run)).toMatchObject([
       { step: 'implement', status: 'failed', reason: 'quality-gate', attempt: 1 },
       { step: 'review', attempt: 1 },
       { step: 'implement', status: 'ok', attempt: 2 },
     ])
+  })
+
+  it('numbers an execution as the run does, also when the earlier ones were not recorded (PR #714 Q4)', async () => {
+    const run = await open()
+    await recordStep(run, { ...IMPLEMENT, step: { ...IMPLEMENT.step, attempt: 3 } })
+    expect(recordsOf(run)).toMatchObject([{ step: 'implement', attempt: 3 }])
   })
 
   it('leaves out the model and the effort a step launched without', async () => {
@@ -166,7 +172,7 @@ describe('closing record (US-697 AC-2)', () => {
     const run = await open()
     await recordStep(run, { ...IMPLEMENT, status: 'failed', reason: 'quality-gate' })
     await closeRun(run, 'failed')
-    await recordStep(run, IMPLEMENT)
+    await recordStep(run, { ...IMPLEMENT, step: { ...IMPLEMENT.step, attempt: 2 } })
     await closeRun(run, 'done')
     expect(recordsOf(run)).toMatchObject([
       { type: 'step', attempt: 1 },

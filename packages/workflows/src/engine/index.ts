@@ -32,6 +32,8 @@ export type RunState = 'running' | 'done' | 'failed' | 'parked'
 
 export interface StepRecord {
   readonly state: StepState
+  /** How many times the step was launched in this run. */
+  readonly executions?: number
   readonly summary?: string
   readonly reason?: string
   readonly detail?: string
@@ -53,6 +55,8 @@ export interface StepLaunch {
   readonly uses: string
   readonly with: Readonly<Record<string, unknown>>
   readonly inputs: Readonly<Record<string, unknown>>
+  /** The number of this execution of the step in the run: 1 the first time. */
+  readonly attempt: number
 }
 
 export const hashOf = (text: string): string =>
@@ -151,7 +155,15 @@ async function resume(
   if (records.every(([, step]) => step.state === 'ok')) return { status: 'complete', warnings }
   // A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
   const steps = Object.fromEntries(
-    records.map(([id, step]) => [id, step.state === 'ok' ? step : { state: 'pending' as const }]),
+    records.map(([id, step]) => [
+      id,
+      step.state === 'ok'
+        ? step
+        : {
+            state: 'pending' as const,
+            ...(step.executions !== undefined && { executions: step.executions }),
+          },
+    ]),
   )
   await writeState(run, { ...state, steps })
   return { status: 'resumed', warnings }
@@ -214,13 +226,18 @@ export async function next(
   if (step === undefined) return { ready: [], run: 'done' }
   const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
   if (halted !== undefined) return { ready: [], run: halted }
-  await writeState(run, { ...state, steps: { ...state.steps, [step.id]: { state: 'running' } } })
+  const attempt = (state.steps[step.id]?.executions ?? 0) + 1
+  await writeState(run, {
+    ...state,
+    steps: { ...state.steps, [step.id]: { state: 'running', executions: attempt } },
+  })
   const launch: StepLaunch = {
     id: step.id,
     kind: step.kind,
     uses: step.uses ?? kindByName[step.kind].defaultUses ?? '',
     with: step.with ?? {},
     inputs: inputsOf(step, steps, state),
+    attempt,
   }
   return { ready: [launch], run: 'running' }
 }
@@ -251,8 +268,10 @@ export async function record(
       .filter(name => name in settled)
       .map(name => [name, settled[name]]),
   )
+  const executions = state.steps[stepId]?.executions
   const entry: StepRecord = {
     state: status,
+    ...(executions !== undefined && { executions }),
     summary,
     ...(reason !== undefined && { reason }),
     ...(detail !== undefined && { detail }),

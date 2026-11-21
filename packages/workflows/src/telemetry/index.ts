@@ -99,7 +99,7 @@ export interface RunTelemetry extends RunIdentity {
 
 /** What a host knows about one execution of a step. */
 export interface StepExecution {
-  readonly step: Pick<StepLaunch, 'id' | 'kind' | 'uses'>
+  readonly step: Pick<StepLaunch, 'id' | 'kind' | 'uses' | 'attempt'>
   readonly host: TelemetryHost
   /** The engine, model and effort actually used. */
   readonly settings: {
@@ -152,7 +152,7 @@ export async function recordStep(run: RunDirectory, execution: StepExecution): P
     ...(isEstimate && { estimate: 'lower-bound-from-text' as const }),
     status: execution.status,
     ...(reason !== undefined && { reason }),
-    attempt: steps.filter(one => one.step === step.id).length + 1,
+    attempt: step.attempt,
   }
   await write(run, [...steps, record])
 }

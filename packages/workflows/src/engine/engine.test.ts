@@ -65,6 +65,7 @@ describe('engine: a linear run (AC-1)', () => {
           uses: 'pair-process-implement',
           with: { gates: ['quality-gate'] },
           inputs: { card: '627' },
+          attempt: 1,
         },
       ],
     })
@@ -80,6 +81,7 @@ describe('engine: a linear run (AC-1)', () => {
           uses: 'pair-process-review',
           with: {},
           inputs: { card: '627', pr: 12, head: HEAD },
+          attempt: 1,
         },
       ],
     })
@@ -100,6 +102,7 @@ describe('engine: a linear run (AC-1)', () => {
     expect(run.files.readFileSync(`${DIR}/steps/implement/output.log`)).toBe('final message')
     expect(stateOf(run).steps['implement']).toEqual({
       state: 'ok',
+      executions: 1,
       summary: 'PR opened',
       outputs: { branch: 'feature/US-627-x', pr: 12, head: HEAD },
     })
@@ -139,6 +142,7 @@ describe('engine: a linear run (AC-1)', () => {
           verdict: 'approved',
           reviewedHead: HEAD,
         },
+        attempt: 1,
       },
     ])
   })
@@ -209,6 +213,7 @@ describe('engine: outcomes and resume (AC-6)', () => {
     expect(await next(run)).toEqual({ run: 'failed', ready: [] })
     expect(stateOf(run).steps['implement']).toEqual({
       state: 'failed',
+      executions: 1,
       summary: 'the result does not match the implement contract',
       reason: 'invalid-result',
       detail: 'pr: expected integer, found string "12"',
@@ -230,7 +235,8 @@ describe('engine: outcomes and resume (AC-6)', () => {
     await next(run)
     // the process dies here: nothing is recorded
     expect(await start(run, SOURCE, { card: '627' })).toEqual({ status: 'resumed', warnings: [] })
-    expect((await next(run)).ready.map(step => step.id)).toEqual(['implement'])
+    // the second launch of the step is its second execution (PR #714 Q4)
+    expect((await next(run)).ready.map(step => [step.id, step.attempt])).toEqual([['implement', 2]])
   })
 
   it('does nothing on a complete run', async () => {

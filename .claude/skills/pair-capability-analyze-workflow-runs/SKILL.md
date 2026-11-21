@@ -30,7 +30,7 @@ author: Foomakers
 | `time`    | Duration per step and per kind, the slowest step, the total.                                        |
 | `passes`  | Executions per step, re-executions included, with the outcome of each.                              |
 | `compare` | The runs of the same card (`--by workflow`: of the same workflow) side by side, with their configuration. |
-| `trend`   | Median and range per workflow and per kind over the selected runs.                                  |
+| `trend`   | Median and range per workflow and per kind over the selected runs, one figure per origin when measured and estimated values are both present. |
 
 ## Algorithm
 

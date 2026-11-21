@@ -16,17 +16,22 @@ import { fileURLToPath } from 'node:url'
 const QUESTIONS = ['cost', 'time', 'passes', 'compare', 'trend']
 const TOKENS = ['read', 'cached', 'written']
 const NOT_CALCULATED = 'not calculated'
+/** The record format this script reads (ADR-033). */
+const SCHEMA = 1
 
 function parse(file) {
   return readFileSync(file, 'utf8')
     .split('\n')
     .flatMap((line, index) => {
       if (line === '') return []
+      let record
       try {
-        return [JSON.parse(line)]
+        record = JSON.parse(line)
       } catch (error) {
         throw new Error(`${file}:${index + 1}: ${error.message}`)
       }
+      if (record.schema !== SCHEMA) throw new Error(`${file}:${index + 1}: schema ${record.schema} is not read by this script (reads ${SCHEMA})`)
+      return [record]
     })
 }
 
@@ -186,22 +191,28 @@ function compare(runs, { prices, by = 'card' }) {
   }
 }
 
-/** Median and range of figures; a figure with unknown entries is left out and counted. */
-function spread(figures) {
-  const known = figures.filter(one => one.value !== null && one.unknown === undefined)
-  const values = known.map(one => one.value).sort((a, b) => a - b)
-  const left = figures.length - known.length
-  const unknown = left > 0 ? { unknown: left } : {}
-  if (values.length === 0) return { median: null, min: null, max: null, n: 0, source: 'unknown', ...unknown }
+/** Median and range of sorted values. */
+function stats(values) {
   const middle = values.length >> 1
   return {
     median: values.length % 2 === 1 ? values[middle] : (values[middle - 1] + values[middle]) / 2,
     min: values[0],
     max: values.at(-1),
     n: values.length,
-    source: known.every(one => one.source === 'measured') ? 'measured' : 'estimated',
-    ...unknown,
   }
+}
+
+/** Median and range of figures, per origin when both are present; a figure with unknown entries is left out and counted. */
+function spread(figures) {
+  const known = figures.filter(one => one.value !== null && one.unknown === undefined)
+  const values = known.map(one => one.value).sort((a, b) => a - b)
+  const left = figures.length - known.length
+  const unknown = left > 0 ? { unknown: left } : {}
+  if (values.length === 0) return { median: null, min: null, max: null, n: 0, source: 'unknown', ...unknown }
+  const [measured, estimated] = ['measured', 'estimated'].map(source => known.filter(one => one.source === source).map(one => one.value).sort((a, b) => a - b))
+  // Measured and estimated values are never put in one figure: each origin has its own.
+  if (measured.length > 0 && estimated.length > 0) return { measured: stats(measured), estimated: stats(estimated), ...unknown }
+  return { ...stats(values), source: estimated.length > 0 ? 'estimated' : 'measured', ...unknown }
 }
 
 const spreadOf = groups => ({

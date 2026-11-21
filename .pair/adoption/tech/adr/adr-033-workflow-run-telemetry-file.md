@@ -24,7 +24,7 @@ Accepted
 ## Decision
 
 - A workflow run with telemetry on writes `telemetry.jsonl` in its run directory. Two record types: `step` (one per execution of a step) and `run` (one closing record, the last line).
-- Every record carries `schema: 1`. A change of shape raises the number, so a reader can tell the formats apart.
+- Every record carries `schema: 1`. A change of shape raises the number; the analysis script refuses a record whose number it does not read.
 - The format is independent of ADR-029: no shared keys are required, no record is written to `.pair/working/telemetry/records.jsonl`. ADR-029 stays in force for the delivery cycle only, until #700 removes it.
 - A card's history across runs is a read concern: the analysis script (`pair-capability-analyze-workflow-runs`) reads the run directories it is given. A restarted run starts an empty file; the archived run keeps its own.
 - Tokens hold `read`, `cached`, `written`, each with `source` `measured`, `estimated` or `unknown`. Sums never count `unknown` as zero.

@@ -20,11 +20,11 @@ const fromText = (read, written) => ({ read: entry(read, 'estimated'), cached: e
 
 /** A step record as `@pair/workflows` writes it. */
 const step = (run, id, over = {}) => ({
-  type: 'step', run, workflow: 'quick', card: '627', step: id, kind: id, uses: `pair-process-${id}`,
+  type: 'step', schema: 1, run, workflow: 'quick', card: '627', step: id, kind: id, uses: `pair-process-${id}`,
   host: 'pair-run', engine: 'claude', model: 'claude-fable-5-2', startedAt: '2026-11-21T10:00:00.000Z',
   durationMs: 60_000, tokens: measured(100, 1000, 10), status: 'ok', attempt: 1, ...over,
 })
-const closing = (run, status = 'done') => ({ type: 'run', run, workflow: 'quick', card: '627', status })
+const closing = (run, status = 'done') => ({ type: 'run', schema: 1, run, workflow: 'quick', card: '627', status })
 
 /** A runs directory holding one `telemetry.jsonl` per run. */
 function runsDir(runs) {
@@ -138,7 +138,7 @@ test('compare: values of the same origin are compared, by workflow when asked', 
   assert.deepEqual(ask('compare', { 'quick-627': MEASURED, 'cheap-628': cheaper }).single, ['cheap-628', 'quick-627'])
 })
 
-test('trend: median and range per workflow and per kind; an estimate anywhere makes the figure an estimate', () => {
+test('trend: median and range per workflow and per kind; measured and estimated values are never put in one figure', () => {
   const third = [step('third-629', 'implement', { card: '629', durationMs: 10_000, tokens: measured(100, 0, 1) })]
   const { workflows, kinds } = ask('trend', { 'quick-627': MEASURED, 'session-627': ESTIMATED, 'third-629': third })
   assert.deepEqual(workflows, [{
@@ -146,14 +146,14 @@ test('trend: median and range per workflow and per kind; an estimate anywhere ma
     runs: 3,
     durationMs: { median: 50_000, min: 10_000, max: 165_000, n: 3, source: 'measured' },
     tokens: {
-      read: { median: 100, min: 40, max: 3500, n: 3, source: 'estimated' },
+      read: { measured: { median: 1800, min: 100, max: 3500, n: 2 }, estimated: { median: 40, min: 40, max: 40, n: 1 } },
       cached: { median: 30_000, min: 0, max: 60_000, n: 2, source: 'measured', unknown: 1 },
-      written: { median: 8, min: 1, max: 350, n: 3, source: 'estimated' },
+      written: { measured: { median: 175.5, min: 1, max: 350, n: 2 }, estimated: { median: 8, min: 8, max: 8, n: 1 } },
     },
   }])
-  assert.deepEqual(kinds.map(one => [one.kind, one.executions, one.durationMs.median, one.tokens.read.median]), [
-    ['implement', 4, 40_000, 550],
-    ['review', 1, 45_000, 500],
+  assert.deepEqual(kinds.map(one => [one.kind, one.executions, one.durationMs.median, one.tokens.read]), [
+    ['implement', 4, 40_000, { measured: { median: 1000, min: 100, max: 2000, n: 3 }, estimated: { median: 40, min: 40, max: 40, n: 1 } }],
+    ['review', 1, 45_000, { median: 500, min: 500, max: 500, n: 1, source: 'measured' }],
   ])
 })
 
@@ -180,6 +180,11 @@ test('CLI: same files, same numbers — JSON on stdout, the price table read fro
   assert.equal(first.status, 0, first.stderr)
   assert.equal(JSON.parse(first.stdout).runs[0].total.cost.value, 0.1125)
   assert.equal(run().stdout, first.stdout)
+})
+
+test('readRuns: a record of a schema this script does not read is refused, naming file, line and version', () => {
+  const dir = runsDir({ 'quick-627': [{ ...MEASURED[0], schema: 99 }] })
+  assert.throws(() => readRuns(dir), /telemetry\.jsonl:1: schema 99 is not read by this script \(reads 1\)/)
 })
 
 test('CLI: unknown question, missing runs directory or a broken record → exit 2 with the cause, never numbers', () => {
