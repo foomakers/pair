@@ -832,7 +832,10 @@ function resolveWorkflowRun(
   if (card === undefined)
     throw new Error(`\`pair-cli run ${workflow}\` needs --card <id>: a workflow runs on one card`)
   const runId = identifierText(options.runId, '--run-id')
-  const moreRounds = options.moreRounds === undefined ? undefined : parsePositiveInteger('--more-rounds', options.moreRounds)
+  const moreRounds =
+    options.moreRounds === undefined
+      ? undefined
+      : parsePositiveInteger('--more-rounds', options.moreRounds)
   return {
     name: workflow,
     card,

@@ -122,8 +122,14 @@ function checkWorkflow(
   const loopOptions = Object.entries(c.steps ?? {}).flatMap(([id, entry]) => {
     const step = steps.find(one => one.id === id)
     if (step?.kind === 'loop')
-      return (['engine', 'model', 'effort'] as const).filter(key => entry[key] !== undefined).map(key => at(['steps', id, key], `only max can be overridden for loop '${id}'`, `remove '${key}'`))
-    return entry.max === undefined ? [] : [at(['steps', id, 'max'], `max is only allowed for a loop id`, 'remove max or name a loop')]
+      return (['engine', 'model', 'effort'] as const)
+        .filter(key => entry[key] !== undefined)
+        .map(key =>
+          at(['steps', id, key], `only max can be overridden for loop '${id}'`, `remove '${key}'`),
+        )
+    return entry.max === undefined
+      ? []
+      : [at(['steps', id, 'max'], `max is only allowed for a loop id`, 'remove max or name a loop')]
   })
   const warnings = Object.keys(c.steps ?? {})
     .filter(id => !ids.has(id))
@@ -143,7 +149,9 @@ function checkWorkflow(
         "remove it, or declare it in the workflow's aliases",
       ),
     )
-  const used = new Set(steps.filter(s => s.kind !== 'loop').map(s => settingsFor(c, s, aliases).engine))
+  const used = new Set(
+    steps.filter(s => s.kind !== 'loop').map(s => settingsFor(c, s, aliases).engine),
+  )
   const notInstalled = [...used]
     .filter(engine => facts.known(engine) && !facts.installed(engine))
     .map(engine =>

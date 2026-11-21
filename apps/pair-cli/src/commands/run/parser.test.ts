@@ -124,6 +124,15 @@ describe('parseRunCommand', () => {
 })
 
 describe('parseRunCommand: a workflow name (US-652)', () => {
+  it('accepts --more-rounds only with a workflow and a positive integer (#670 AC-5)', () => {
+    expect(parseRunCommand({ card: '627', moreRounds: '3' }, ['quick']).workflow).toMatchObject({
+      moreRounds: 3,
+    })
+    expect(() => parseRunCommand({ card: '627', moreRounds: '0' }, ['quick'])).toThrow(
+      /positive integer/,
+    )
+    expect(() => parseRunCommand({ card: '627', moreRounds: '1' })).toThrow(/needs a workflow/)
+  })
   it('carries the workflow, its card and the flags of the run', () => {
     expect(parseRunCommand({ card: '627' }, ['quick']).workflow).toEqual({
       name: 'quick',

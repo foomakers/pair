@@ -73,7 +73,12 @@ export const stepSchema: JsonSchema = {
     until: { type: 'string', pattern: STEP_ID },
     max: { type: 'integer', minimum: 1 },
     'on-max': { enum: ['escalate', 'fail'] },
-    steps: { type: 'object', minProperties: 1, propertyNames: { pattern: STEP_ID }, additionalProperties: {} },
+    steps: {
+      type: 'object',
+      minProperties: 1,
+      propertyNames: { pattern: STEP_ID },
+      additionalProperties: {},
+    },
   },
 }
 
@@ -142,6 +147,13 @@ export interface Workflow {
   /** Line of every key and list item, by JSON-encoded path. Read through `errorAt`. */
   readonly lines: Readonly<Record<string, number>>
 }
+
+/** Loop children have run-wide ids; the loop itself stays addressable for configuration. */
+export const addressedSteps = (workflow: Workflow): readonly Step[] =>
+  workflow.steps.flatMap(step => [
+    step,
+    ...(step.steps ?? []).map(child => ({ ...child, id: `${step.id}/${child.id}` })),
+  ])
 
 export type ParsedWorkflow =
   | { readonly workflow: Workflow; readonly errors: readonly [] }
@@ -249,7 +261,11 @@ type RawStep = Omit<Step, 'id' | 'steps'> & { steps?: Record<string, RawStep> }
 
 const parseStep = ([id, raw]: [string, RawStep]): Step => {
   const { steps, ...rest } = raw
-  return { ...rest, id, ...(steps !== undefined && { steps: Object.entries(steps).map(parseStep) }) }
+  return {
+    ...rest,
+    id,
+    ...(steps !== undefined && { steps: Object.entries(steps).map(parseStep) }),
+  }
 }
 
 /** A YAML source read under the package's strict rules: its value and the line of every key, or the syntax errors. */
@@ -286,11 +302,17 @@ export function parseWorkflow(text: string, file: string): ParsedWorkflow {
   ]
   if (errors.length > 0) return { errors }
   const undeclared = Object.entries(value.steps)
+    .flatMap(([id, step]) => [
+      [['steps', id], step] as const,
+      ...Object.entries(step.steps ?? {}).map(
+        ([childId, child]) => [['steps', id, 'steps', childId], child] as const,
+      ),
+    ])
     .filter(
       ([, step]) => step.alias !== undefined && !Object.hasOwn(value.aliases ?? {}, step.alias),
     )
-    .map(([id, step]) =>
-      errorAt({ file, lines }, ['steps', id, 'alias'], {
+    .map(([path, step]) =>
+      errorAt({ file, lines }, [...path, 'alias'], {
         problem: `alias '${String(step.alias)}' is not declared in aliases`,
         fix: `declare ${String(step.alias)} under aliases, or cite a declared alias`,
       }),

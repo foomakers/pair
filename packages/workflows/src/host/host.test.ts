@@ -21,6 +21,60 @@ const IMPLEMENTED = fenced({
   pr: 12,
   head: HEAD,
 })
+
+describe('loop telemetry (#670 AC-6)', () => {
+  it('records each inner execution with its round', async () => {
+    const text = `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 2
+    on-max: fail
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+`
+    let reviews = 0
+    const failedReview = fenced({
+      status: 'failed',
+      summary: 'gap',
+      verdict: 'changes-requested',
+      reviewedHead: HEAD,
+      findings: [{ id: 'f', severity: 'Major', title: 'gap', blocking: true }],
+    })
+    const fixed = fenced({
+      status: 'ok',
+      summary: 'fixed',
+      head: HEAD,
+      resolutions: [{ id: 'f', status: 'resolved', reason: 'fixed' }],
+    })
+    const { host } = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => (++reviews === 1 ? failedReview : REVIEWED),
+      'pair-process-fix': () => fixed,
+    })
+    await start({ files: host.files, dir: DIR }, { text, file: 'quick.yaml' }, { card: '627' })
+    expect(
+      (await runSteps(host, DIR, { host: 'pair-run', settings: () => ({ engine: 'claude' }) })).run,
+    ).toBe('done')
+    const records = host.files
+      .readFileSync(`${DIR}/telemetry.jsonl`)
+      .trimEnd()
+      .split('\n')
+      .map(line => JSON.parse(line))
+    expect(
+      records.filter(record => record.type === 'step').map(record => [record.step, record.round]),
+    ).toEqual([
+      ['implement', undefined],
+      ['rounds/review', 1],
+      ['rounds/fix', 1],
+      ['rounds/review', 2],
+    ])
+  })
+})
 const REVIEWED = fenced({
   status: 'ok',
   summary: 'approved',
@@ -226,7 +280,7 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
     ).toEqual([
       {
         type: 'step',
-        schema: 1,
+        schema: 2,
         ...identity,
         step: 'implement',
         kind: 'implement',
@@ -240,7 +294,7 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
       },
       {
         type: 'step',
-        schema: 1,
+        schema: 2,
         ...identity,
         step: 'review',
         kind: 'review',
@@ -254,7 +308,7 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
       },
       {
         type: 'run',
-        schema: 1,
+        schema: 2,
         ...identity,
         status: 'done',
         durationMs: 120_000,

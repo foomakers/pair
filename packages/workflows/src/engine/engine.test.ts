@@ -187,8 +187,19 @@ steps:
 `
   const source = { text, file: 'workflows/quick.yaml' }
   const findings = [{ id: 'a', severity: 'Major', title: 'gap', blocking: true }]
-  const failedReview = { status: 'failed', summary: 'gap', verdict: 'changes-requested', reviewedHead: HEAD, findings }
-  const fixed = { status: 'ok', summary: 'fixed', head: HEAD, resolutions: [{ id: 'a', status: 'resolved', reason: 'fixed' }] }
+  const failedReview = {
+    status: 'failed',
+    summary: 'gap',
+    verdict: 'changes-requested',
+    reviewedHead: HEAD,
+    findings,
+  }
+  const fixed = {
+    status: 'ok',
+    summary: 'fixed',
+    head: HEAD,
+    resolutions: [{ id: 'a', status: 'resolved', reason: 'fixed' }],
+  }
 
   async function opened() {
     const run = open()
@@ -200,7 +211,11 @@ steps:
 
   it('exits on the until result before later steps', async () => {
     const run = await opened()
-    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 1, inputs: { pr: 12, head: HEAD } })
+    expect((await next(run)).ready[0]).toMatchObject({
+      id: 'rounds/review',
+      round: 1,
+      inputs: { pr: 12, head: HEAD },
+    })
     await record(run, 'rounds/review', REVIEWED)
     expect(await next(run)).toEqual({ ready: [], run: 'done' })
     expect(run.files.existsSync(`${DIR}/steps/rounds/review/round-1/result.json`)).toBe(true)
@@ -210,9 +225,17 @@ steps:
     const run = await opened()
     await next(run)
     await record(run, 'rounds/review', failedReview)
-    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/fix', round: 1, inputs: { findings } })
+    expect((await next(run)).ready[0]).toMatchObject({
+      id: 'rounds/fix',
+      round: 1,
+      inputs: { findings },
+    })
     await record(run, 'rounds/fix', fixed)
-    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 2, inputs: { head: HEAD } })
+    expect((await next(run)).ready[0]).toMatchObject({
+      id: 'rounds/review',
+      round: 2,
+      inputs: { head: HEAD },
+    })
   })
 
   it('counts another failed step as a spent round and parks at max', async () => {
@@ -228,7 +251,10 @@ steps:
     expect((await next(run)).run).toBe('parked')
     expect(stateOf(run).steps.rounds).toMatchObject({ state: 'needs-human', outputs: { findings } })
     expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
-    expect(await start(run, source, { card: '627', moreRounds: 1, requestedBy: 'rucka' })).toEqual({ status: 'resumed', warnings: [] })
+    expect(await start(run, source, { card: '627', moreRounds: 1, requestedBy: 'rucka' })).toEqual({
+      status: 'resumed',
+      warnings: [],
+    })
     expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 3 })
   })
 
@@ -243,7 +269,10 @@ steps:
 
   it('fails after max when on-max is fail', async () => {
     const run = open()
-    const failSource = { text: text.replace('max: 2', 'max: 1').replace('on-max: escalate', 'on-max: fail'), file: source.file }
+    const failSource = {
+      text: text.replace('max: 2', 'max: 1').replace('on-max: escalate', 'on-max: fail'),
+      file: source.file,
+    }
     await start(run, failSource, { card: '627' })
     await next(run)
     await record(run, 'implement', IMPLEMENTED)
@@ -252,7 +281,10 @@ steps:
     await next(run)
     await record(run, 'rounds/fix', fixed)
     expect((await next(run)).run).toBe('failed')
-    expect(await start(run, failSource, { card: '627' })).toEqual({ status: 'failed', warnings: [] })
+    expect(await start(run, failSource, { card: '627' })).toEqual({
+      status: 'failed',
+      warnings: [],
+    })
   })
 
   it('exits when until is the last step', async () => {
@@ -266,6 +298,17 @@ steps:
     await next(run)
     await record(run, 'rounds/fix', fixed)
     expect((await next(run)).run).toBe('done')
+  })
+
+  it('uses only the frozen configuration max for a loop', async () => {
+    const run = open()
+    await start(run, source, {
+      card: '627',
+      configuration: {
+        text: 'version: 1\nname: c\ndefaults: { engine: codex }\nsteps: { rounds: { max: 4 } }\n',
+      },
+    })
+    expect(JSON.parse(run.files.readFileSync(`${DIR}/state.json`)).loops.rounds.max).toBe(4)
   })
 })
 

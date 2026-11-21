@@ -159,7 +159,8 @@ const configurationRecord = (c: NonNullable<StartOptions['configuration']>) => (
 function loopMax(text: string | undefined, step: Step): number {
   if (text === undefined) return step.max ?? 1
   const parsed = parseFrozenConfiguration(text, 'configuration.yaml')
-  if (parsed.configuration === undefined) throw new Error('run-state-unreadable: frozen configuration is invalid')
+  if (parsed.configuration === undefined)
+    throw new Error('run-state-unreadable: frozen configuration is invalid')
   return parsed.configuration.steps?.[step.id]?.max ?? step.max ?? 1
 }
 
@@ -214,21 +215,60 @@ async function resume(
       : [`${source.file} changed after this run started: the frozen copy in ${run.dir} is used`]
   if (configuration !== undefined && options.reconfigure === true) {
     await writeAtomic(run.files, join(run.dir, FROZEN_CONFIGURATION), configuration.text)
-    const loops = Object.fromEntries(Object.entries(state.loops ?? {}).map(([id, loop]) => {
-      const step = frozenWorkflow(run).steps.find(one => one.id === id)
-      return [id, { ...loop, max: step === undefined ? loop.max : loopMax(configuration.text, step) }]
-    }))
-    state = { ...state, configuration: configurationRecord(configuration), ...(state.loops !== undefined && { loops }) }
+    const loops = Object.fromEntries(
+      Object.entries(state.loops ?? {}).map(([id, loop]) => {
+        const step = frozenWorkflow(run).steps.find(one => one.id === id)
+        return [
+          id,
+          { ...loop, max: step === undefined ? loop.max : loopMax(configuration.text, step) },
+        ]
+      }),
+    )
+    state = {
+      ...state,
+      configuration: configurationRecord(configuration),
+      ...(state.loops !== undefined && { loops }),
+    }
   } else warnings.push(...configurationWarnings(run, state, configuration))
-  const exhausted = Object.entries(state.loops ?? {}).find(([id, loop]) => loop.exhausted && ['needs-human', 'failed'].includes(state.steps[id]?.state ?? ''))
+  const exhausted = Object.entries(state.loops ?? {}).find(
+    ([id, loop]) =>
+      loop.exhausted && ['needs-human', 'failed'].includes(state.steps[id]?.state ?? ''),
+  )
   if (options.moreRounds !== undefined) {
-    if (exhausted === undefined || state.steps[exhausted[0]]?.state !== 'needs-human') throw new Error('more-rounds-invalid: no loop is parked at max')
-    if (!Number.isInteger(options.moreRounds) || options.moreRounds < 1) throw new Error('more-rounds-invalid: pass a positive integer')
+    if (exhausted === undefined || state.steps[exhausted[0]]?.state !== 'needs-human')
+      throw new Error('more-rounds-invalid: no loop is parked at max')
+    if (!Number.isInteger(options.moreRounds) || options.moreRounds < 1)
+      throw new Error('more-rounds-invalid: pass a positive integer')
     const [id, loop] = exhausted
-    const grants = [...(loop.grants ?? []), { rounds: options.moreRounds, by: options.requestedBy ?? 'unknown', at: (options.now ?? new Date()).toISOString() }]
+    const grants = [
+      ...(loop.grants ?? []),
+      {
+        rounds: options.moreRounds,
+        by: options.requestedBy ?? 'unknown',
+        at: (options.now ?? new Date()).toISOString(),
+      },
+    ]
     const children = frozenWorkflow(run).steps.find(step => step.id === id)?.steps ?? []
-    state = { ...state, loops: { ...state.loops, [id]: { ...loop, round: loop.round + 1, max: loop.max + options.moreRounds, exhausted: false, grants } }, steps: { ...state.steps, [id]: { state: 'running' }, ...Object.fromEntries(children.map(child => [`${id}/${child.id}`, { state: 'pending' }])) } }
-  } else if (exhausted !== undefined) return { status: state.steps[exhausted[0]]?.state === 'failed' ? 'failed' : 'parked', warnings }
+    state = {
+      ...state,
+      loops: {
+        ...state.loops,
+        [id]: {
+          ...loop,
+          round: loop.round + 1,
+          max: loop.max + options.moreRounds,
+          exhausted: false,
+          grants,
+        },
+      },
+      steps: {
+        ...state.steps,
+        [id]: { state: 'running' },
+        ...Object.fromEntries(children.map(child => [`${id}/${child.id}`, { state: 'pending' }])),
+      },
+    }
+  } else if (exhausted !== undefined)
+    return { status: state.steps[exhausted[0]]?.state === 'failed' ? 'failed' : 'parked', warnings }
   const records = Object.entries(state.steps)
   if (frozenWorkflow(run).steps.every(step => state.steps[step.id]?.state === 'ok')) {
     if (state !== saved) await writeState(run, state)
@@ -262,7 +302,8 @@ export async function start(
   // A restart never reads the state it replaces: one this version cannot read is archived like any other.
   const existing = options.restart === true ? undefined : readState(run)
   if (existing !== undefined) return resume(run, existing, source, options)
-  if (options.moreRounds !== undefined) throw new Error('more-rounds-invalid: no parked loop exists')
+  if (options.moreRounds !== undefined)
+    throw new Error('more-rounds-invalid: no parked loop exists')
   const { workflow, errors } = parseWorkflow(source.text, source.file)
   if (workflow === undefined)
     throw new Error(`workflow-invalid: ${errors[0]?.problem ?? source.file}`)
@@ -277,12 +318,20 @@ export async function start(
     workflow: { name: workflow.name, hash: hashOf(source.text) },
     card: options.card,
     ...(configuration !== undefined && { configuration: configurationRecord(configuration) }),
-    steps: Object.fromEntries(workflow.steps.flatMap(step => [
-      [step.id, { state: 'pending' as const }],
-      ...(step.steps ?? []).map(child => [`${step.id}/${child.id}`, { state: 'pending' as const }] as const),
-    ])),
+    steps: Object.fromEntries(
+      workflow.steps.flatMap(step => [
+        [step.id, { state: 'pending' as const }],
+        ...(step.steps ?? []).map(
+          child => [`${step.id}/${child.id}`, { state: 'pending' as const }] as const,
+        ),
+      ]),
+    ),
     ...(workflow.steps.some(step => step.kind === 'loop') && {
-      loops: Object.fromEntries(workflow.steps.filter(step => step.kind === 'loop').map(step => [step.id, { round: 1, max: loopMax(configuration?.text, step) }])),
+      loops: Object.fromEntries(
+        workflow.steps
+          .filter(step => step.kind === 'loop')
+          .map(step => [step.id, { round: 1, max: loopMax(configuration?.text, step) }]),
+      ),
       latest: {},
     }),
   })
@@ -335,18 +384,47 @@ export async function next(
       const at = state.steps[`${step.id}/${one.id}`]?.state
       return at !== 'ok' && at !== 'failed'
     })
-    if (child === undefined) throw new Error(`run-state-unreadable: loop ${step.id} has no next step`)
+    if (child === undefined)
+      throw new Error(`run-state-unreadable: loop ${step.id} has no next step`)
     const id = `${step.id}/${child.id}`
     const childHalt = HALTED[state.steps[id]?.state ?? 'pending']
     if (childHalt !== undefined) return { ready: [], run: childHalt }
     if (child.kind === 'loop') throw new Error('nested loop is not launchable')
     const attempt = (state.steps[id]?.executions ?? 0) + 1
     const round = state.loops?.[step.id]?.round ?? 1
-    await writeState(run, { ...state, steps: { ...state.steps, [step.id]: { state: 'running', round }, [id]: { state: 'running', executions: attempt, round } } })
-    const produced = Object.assign({ card: state.card }, ...steps.slice(0, steps.indexOf(step)).map(one => state.steps[one.id]?.outputs ?? {}), state.latest ?? {}) as Record<string, unknown>
+    await writeState(run, {
+      ...state,
+      steps: {
+        ...state.steps,
+        [step.id]: { state: 'running', round },
+        [id]: { state: 'running', executions: attempt, round },
+      },
+    })
+    const produced = Object.assign(
+      { card: state.card },
+      ...steps.slice(0, steps.indexOf(step)).map(one => state.steps[one.id]?.outputs ?? {}),
+      state.latest ?? {},
+    ) as Record<string, unknown>
     const declared = fieldsOf(kindByName[child.kind].inputs)
-    const inputs = Object.fromEntries(Object.entries(produced).filter(([name, value]) => declared.length > 0 ? declared.includes(name) : typeof value !== 'object'))
-    return { ready: [{ id, kind: child.kind, uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '', with: child.with ?? {}, inputs, attempt, round }], run: 'running' }
+    const inputs = Object.fromEntries(
+      Object.entries(produced).filter(([name, value]) =>
+        declared.length > 0 ? declared.includes(name) : typeof value !== 'object',
+      ),
+    )
+    return {
+      ready: [
+        {
+          id,
+          kind: child.kind,
+          uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
+          with: child.with ?? {},
+          inputs,
+          attempt,
+          round,
+        },
+      ],
+      run: 'running',
+    }
   }
   const attempt = (state.steps[step.id]?.executions ?? 0) + 1
   await writeState(run, {
@@ -381,7 +459,8 @@ export async function record(
   const outer = frozenWorkflow(run).steps.find(one => one.id === outerId)
   const step = childId === undefined ? outer : outer?.steps?.find(one => one.id === childId)
   if (step === undefined) throw new Error(`step-unknown: ${stepId} is not a step of ${run.dir}`)
-  if (step.kind === 'loop') throw new Error(`step-unknown: ${stepId} is a loop, not a launchable step`)
+  if (step.kind === 'loop')
+    throw new Error(`step-unknown: ${stepId} is a loop, not a launchable step`)
   const kind = kindByName[step.kind]
   const settled = settle(kind, result)
   const round = childId === undefined ? undefined : state.loops?.[outerId]?.round
@@ -415,21 +494,39 @@ export async function record(
     if (childId === outer.until && loopAt !== undefined)
       loops = { ...state.loops, [outerId]: { ...loopAt, untilResult: outputs } }
     if (status !== 'needs-human') {
-    if (untilOk) steps = { ...steps, [outerId]: { state: 'ok', outputs } }
-    else if ((status === 'failed' && childId !== outer.until) || last) {
-      const loop = loops?.[outerId]
-      if (loop === undefined) throw new Error(`run-state-unreadable: loop ${outerId} has no round`)
-      if (loop.round >= loop.max) {
-        const escalate = outer['on-max'] === 'escalate'
-        steps = { ...steps, [outerId]: { state: escalate ? 'needs-human' : 'failed', outputs: loop.untilResult ?? {}, reason: 'loop-max', summary: `loop ${outerId} reached ${loop.max} rounds` } }
-        loops = { ...state.loops, [outerId]: { ...loop, exhausted: true } }
-      } else {
-        loops = { ...state.loops, [outerId]: { ...loop, round: loop.round + 1 } }
-        steps = { ...steps, ...Object.fromEntries(children.map(child => [`${outerId}/${child.id}`, { state: 'pending' as const }])) }
+      if (untilOk) steps = { ...steps, [outerId]: { state: 'ok', outputs } }
+      else if ((status === 'failed' && childId !== outer.until) || last) {
+        const loop = loops?.[outerId]
+        if (loop === undefined)
+          throw new Error(`run-state-unreadable: loop ${outerId} has no round`)
+        if (loop.round >= loop.max) {
+          const escalate = outer['on-max'] === 'escalate'
+          steps = {
+            ...steps,
+            [outerId]: {
+              state: escalate ? 'needs-human' : 'failed',
+              outputs: loop.untilResult ?? {},
+              reason: 'loop-max',
+              summary: `loop ${outerId} reached ${loop.max} rounds`,
+            },
+          }
+          loops = { ...state.loops, [outerId]: { ...loop, exhausted: true } }
+        } else {
+          loops = { ...state.loops, [outerId]: { ...loop, round: loop.round + 1 } }
+          steps = {
+            ...steps,
+            ...Object.fromEntries(
+              children.map(child => [`${outerId}/${child.id}`, { state: 'pending' as const }]),
+            ),
+          }
+        }
       }
     }
-    }
   }
-  await writeState(run, { ...state, steps, ...(loops !== undefined && { loops, latest: { ...state.latest, ...outputs } }) })
+  await writeState(run, {
+    ...state,
+    steps,
+    ...(loops !== undefined && { loops, latest: { ...state.latest, ...outputs } }),
+  })
   return settled
 }

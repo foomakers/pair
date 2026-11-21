@@ -17,7 +17,7 @@ const QUESTIONS = ['cost', 'time', 'passes', 'compare', 'trend']
 const TOKENS = ['read', 'cached', 'written']
 const NOT_CALCULATED = 'not calculated'
 /** The record format this script reads (ADR-033). */
-const SCHEMA = 1
+const SCHEMAS = [1, 2]
 
 function parse(file) {
   return readFileSync(file, 'utf8')
@@ -30,7 +30,7 @@ function parse(file) {
       } catch (error) {
         throw new Error(`${file}:${index + 1}: ${error.message}`)
       }
-      if (record.schema !== SCHEMA) throw new Error(`${file}:${index + 1}: schema ${record.schema} is not read by this script (reads ${SCHEMA})`)
+      if (!SCHEMAS.includes(record.schema)) throw new Error(`${file}:${index + 1}: schema ${record.schema} is not read by this script (reads ${SCHEMAS.join(', ')})`)
       return [record]
     })
 }

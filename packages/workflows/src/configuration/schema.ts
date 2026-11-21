@@ -23,7 +23,13 @@ export const configurationSchemaV1: JsonSchema = {
     name: { type: 'string', description: 'Equals the file name without its extension.' },
     defaults: { ...entry, required: ['engine'] },
     aliases: { type: 'object', propertyNames: { pattern: STEP_ID }, additionalProperties: entry },
-    steps: { type: 'object', additionalProperties: { ...entry, properties: { ...entry.properties, max: { type: 'integer', minimum: 1 } } } },
+    steps: {
+      type: 'object',
+      additionalProperties: {
+        ...entry,
+        properties: { ...entry.properties, max: { type: 'integer', minimum: 1 } },
+      },
+    },
     telemetry: { type: 'boolean' },
   },
 }

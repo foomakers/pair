@@ -60,7 +60,7 @@ describe('step record (US-697 AC-1, AC-3)', () => {
     expect(recordsOf(run)).toEqual([
       {
         type: 'step',
-        schema: 1,
+        schema: 2,
         ...IDENTITY,
         step: 'implement',
         kind: 'implement',
@@ -135,7 +135,7 @@ describe('closing record (US-697 AC-2)', () => {
     await closeRun(run, 'done')
     expect(recordsOf(run).at(-1)).toEqual({
       type: 'run',
-      schema: 1,
+      schema: 2,
       ...IDENTITY,
       status: 'done',
       durationMs: 120_000,

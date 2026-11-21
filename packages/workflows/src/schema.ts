@@ -63,7 +63,13 @@ function scalarViolations(schema: JsonSchema, value: unknown, path: Path): Viola
       },
     ]
   if (schema.minimum !== undefined && typeof value === 'number' && value < schema.minimum)
-    return [{ path, problem: `${show(value)} is below ${schema.minimum}`, fix: `use at least ${schema.minimum}` }]
+    return [
+      {
+        path,
+        problem: `${show(value)} is below ${schema.minimum}`,
+        fix: `use at least ${schema.minimum}`,
+      },
+    ]
   return []
 }
 

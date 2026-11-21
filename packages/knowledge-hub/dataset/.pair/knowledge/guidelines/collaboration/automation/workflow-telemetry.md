@@ -19,7 +19,7 @@ A step that runs again (a resume after a failure) has one record per execution.
 | Field                        | Content                                              |
 | ---------------------------- | ---------------------------------------------------- |
 | `type`                       | `step`                                               |
-| `schema`                     | `1`. The version of the record format (ADR-033).     |
+| `schema`                     | `2`. The version of the record format (ADR-033).     |
 | `run`, `workflow`, `card`    | The run id, the workflow name, the card.             |
 | `step`, `kind`, `uses`       | The step, its kind, the skill it ran.                |
 | `host`                       | `pair-run` or `session`.                             |
@@ -29,6 +29,7 @@ A step that runs again (a resume after a failure) has one record per execution.
 | `estimate`                   | `lower-bound-from-text`, only when a token entry is estimated. |
 | `status`, `reason`           | The outcome of the step.                             |
 | `attempt`                    | The execution number of this step in the run.        |
+| `round`                      | The loop round, present for an inner step.           |
 
 ### One closing record per run
 
@@ -37,7 +38,7 @@ Written when the run ends (`done`, `failed` or `parked`), as the last line. A ru
 | Field                     | Content                                                   |
 | ------------------------- | --------------------------------------------------------- |
 | `type`                    | `run`                                                     |
-| `schema`                  | `1`. The version of the record format (ADR-033).          |
+| `schema`                  | `2`. The version of the record format (ADR-033).          |
 | `run`, `workflow`, `card` | The same identity as the step records.                    |
 | `status`                  | `done`, `failed` or `parked`.                             |
 | `durationMs`, `tokens`    | The sums of the step records, never a separate measurement. |

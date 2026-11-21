@@ -14,7 +14,7 @@ import type { StepStatus } from '../kinds'
 export { TELEMETRY_FILE }
 
 /** The version of the record format of a run's `telemetry.jsonl` (ADR-033). A change of shape raises it. */
-export const TELEMETRY_SCHEMA = 1
+export const TELEMETRY_SCHEMA = 2
 
 /** Where a number comes from. Never a number without its origin. */
 export type TokenSource = 'measured' | 'estimated' | 'unknown'

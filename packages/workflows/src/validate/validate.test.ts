@@ -45,9 +45,27 @@ steps:
   it.each([
     ['missing max', loop.replace('    max: 2\n', ''), "missing key 'max'"],
     ['missing on-max', loop.replace('    on-max: escalate\n', ''), "missing key 'on-max'"],
-    ['unknown until', loop.replace('until: review', 'until: absent'), "unknown until step 'absent'"],
-    ['on-failed child', loop.replace('review: { kind: generic, skill: my-skill }', 'review: { kind: generic, skill: my-skill, on-failed: continue }'), 'on-failed is not allowed inside a loop'],
-    ['nested loop', loop.replace('fix: { kind: generic, skill: my-skill }', 'fix: { kind: loop, until: a, max: 1, on-max: fail, steps: { a: { kind: generic, skill: my-skill } } }'), 'nested loop is not allowed'],
+    [
+      'unknown until',
+      loop.replace('until: review', 'until: absent'),
+      "unknown until step 'absent'",
+    ],
+    [
+      'on-failed child',
+      loop.replace(
+        'review: { kind: generic, skill: my-skill }',
+        'review: { kind: generic, skill: my-skill, on-failed: continue }',
+      ),
+      'on-failed is not allowed inside a loop',
+    ],
+    [
+      'nested loop',
+      loop.replace(
+        'fix: { kind: generic, skill: my-skill }',
+        'fix: { kind: loop, until: a, max: 1, on-max: fail, steps: { a: { kind: generic, skill: my-skill } } }',
+      ),
+      'nested loop is not allowed',
+    ],
   ])('refuses %s', (_name, text, problem) => {
     expect(check(text).errors.some(error => error.problem === problem)).toBe(true)
   })

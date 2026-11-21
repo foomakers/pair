@@ -5,6 +5,7 @@ import {
   checkAgainstEngines,
   describeSettings,
   formatError,
+  addressedSteps,
   frozenConfiguration,
   parseFrozenConfiguration,
   readGateRegistry,
@@ -391,7 +392,7 @@ interface Opened {
 
 /** The step of the workflow with this id. */
 const stepOf = (resolved: Resolved, id: string) =>
-  resolved.workflow.steps.find(step => step.id === id) ?? { id, kind: 'generic' as const }
+  addressedSteps(resolved.workflow).find(step => step.id === id) ?? { id, kind: 'generic' as const }
 
 /** The engine the settings of a step name. */
 const engineIdOf = (opened: Opened, id: string): keyof typeof ENGINES => {
@@ -509,7 +510,10 @@ async function drive(
     card: request.card,
     restart: request.restart,
     reconfigure: request.reconfigure === true,
-    ...(request.moreRounds !== undefined && { moreRounds: request.moreRounds, requestedBy: process.env['USER'] ?? 'unknown' }),
+    ...(request.moreRounds !== undefined && {
+      moreRounds: request.moreRounds,
+      requestedBy: process.env['USER'] ?? 'unknown',
+    }),
     ...(resolved.configuration && {
       configuration: {
         text: resolved.configuration.text,
@@ -530,7 +534,9 @@ async function drive(
     deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   )
   if (started.status === 'parked') {
-    console.log(`  Run: loop reached max — resume with: ${resumeCommand(request)} --more-rounds <n>`)
+    console.log(
+      `  Run: loop reached max — resume with: ${resumeCommand(request)} --more-rounds <n>`,
+    )
     return 0
   }
   if (started.status === 'failed') {
@@ -600,11 +606,13 @@ function printSettings(resolved: Resolved, effective: Configuration | undefined)
   console.log(
     `  Configuration: ${effective.name}${resolved.configuration ? ` — ${resolved.configuration.source}` : ' — frozen copy'}`,
   )
-  resolved.workflow.steps.forEach(step =>
-    console.log(
-      `    ${describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))}`,
-    ),
-  )
+  addressedSteps(resolved.workflow)
+    .filter(step => step.kind !== 'loop')
+    .forEach(step =>
+      console.log(
+        `    ${describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))}`,
+      ),
+    )
 }
 
 function printPlan(workflow: Workflow): void {
