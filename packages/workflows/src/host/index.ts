@@ -11,9 +11,9 @@ import type { KindName } from '../grammar'
 import { kindByName, type StepResult, type StepStatus } from '../kinds'
 import {
   closeRun,
+  estimated,
   measured,
   recordStep,
-  UNKNOWN_TOKENS,
   type StepExecution,
   type TelemetryHost,
   type Usage,
@@ -82,11 +82,18 @@ export interface RunOutcome {
   readonly last?: StepEvent
 }
 
+/** What a step exchanged with its agent: the two texts, and the usage when the host measured it. */
+interface Exchange {
+  sent: string
+  final: string
+  usage?: Usage
+}
+
 async function execute(
   host: WorkflowHost,
   run: RunDirectory,
   step: StepLaunch,
-  meter: (usage: Usage) => void,
+  exchange: Exchange = { sent: '', final: '' },
 ): Promise<StepResult> {
   const kind = kindByName[step.kind]
   let message: string
@@ -96,13 +103,17 @@ async function execute(
     const summary = (error as Error).message
     return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
   }
-  const final = await host.launch(step, message, meter)
+  exchange.sent = message
+  const final = await host.launch(step, message, usage => {
+    exchange.usage = usage
+  })
   if (final === undefined)
     return record(run, step.id, {
       status: 'failed',
       reason: 'no-result',
       summary: 'the agent ended without a final message',
     })
+  exchange.final = final
   return record(run, step.id, readResult(final, kind), final)
 }
 
@@ -146,17 +157,17 @@ async function executeMetered(
   step: StepLaunch,
   writer: Writer,
 ): Promise<StepResult> {
-  if (writer === undefined) return execute(host, run, step, () => undefined)
+  if (writer === undefined) return execute(host, run, step)
   const startedAt = writer.now()
-  let usage: Usage | undefined
-  const result = await execute(host, run, step, measure => {
-    usage = measure
-  })
+  const exchange: Exchange = { sent: '', final: '' }
+  const result = await execute(host, run, step, exchange)
+  const { sent, final, usage } = exchange
   await writer.step({
     step,
     startedAt,
     durationMs: writer.now().getTime() - startedAt.getTime(),
-    tokens: usage === undefined ? UNKNOWN_TOKENS : measured(usage),
+    // A host that cannot measure: the estimate from the two texts.
+    tokens: usage === undefined ? estimated(sent, final) : measured(usage),
     status: result.status,
     ...(result.reason !== undefined && { reason: result.reason }),
   })

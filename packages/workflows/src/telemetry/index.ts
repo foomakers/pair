@@ -30,12 +30,27 @@ export type Tokens = Readonly<Record<TokenName, TokenEntry>>
 export type Usage = Readonly<Record<TokenName, number>>
 
 const UNKNOWN: TokenEntry = { value: null, source: 'unknown' }
-export const UNKNOWN_TOKENS: Tokens = { read: UNKNOWN, cached: UNKNOWN, written: UNKNOWN }
 
 export const measured = (usage: Usage): Tokens => ({
   read: { value: usage.read, source: 'measured' },
   cached: { value: usage.cached, source: 'measured' },
   written: { value: usage.written, source: 'measured' },
+})
+
+const fromText = (text: string): TokenEntry => ({
+  value: Math.ceil(text.length / 4),
+  source: 'estimated',
+})
+
+/**
+ * The fallback of a host that cannot measure: a quarter of the characters of the message sent to
+ * the step and of the agent's final message. A lower bound: the text does not show file reads,
+ * tool calls or reasoning, and nothing in it tells what the cache served.
+ */
+export const estimated = (sent: string, final: string): Tokens => ({
+  read: fromText(sent),
+  cached: UNKNOWN,
+  written: fromText(final),
 })
 
 export type TelemetryHost = 'pair-run' | 'session'
@@ -53,6 +68,8 @@ export interface StepTelemetry extends RunIdentity {
   readonly startedAt: string
   readonly durationMs: number
   readonly tokens: Tokens
+  /** Present when a token entry is estimated: how, and what the estimate does not see. */
+  readonly estimate?: 'lower-bound-from-text'
   readonly status: StepStatus
   readonly reason?: string
   /** The execution number of this step in the run. */
@@ -111,7 +128,8 @@ const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetr
 /** Appends the record of one execution of a step to the run's `telemetry.jsonl`. */
 export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {
   const steps = stepsOf(run)
-  const { step, settings, reason } = execution
+  const { step, settings, tokens, reason } = execution
+  const isEstimate = Object.values(tokens).some(entry => entry.source === 'estimated')
   const record: StepTelemetry = {
     type: 'step',
     ...identityOf(run),
@@ -124,7 +142,8 @@ export async function recordStep(run: RunDirectory, execution: StepExecution): P
     ...(settings.effort !== undefined && { effort: settings.effort }),
     startedAt: execution.startedAt.toISOString(),
     durationMs: execution.durationMs,
-    tokens: execution.tokens,
+    tokens,
+    ...(isEstimate && { estimate: 'lower-bound-from-text' as const }),
     status: execution.status,
     ...(reason !== undefined && { reason }),
     attempt: steps.filter(one => one.step === step.id).length + 1,

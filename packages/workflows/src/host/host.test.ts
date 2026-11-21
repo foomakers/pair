@@ -266,6 +266,30 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
   })
 })
 
+describe('runSteps: a host that cannot measure usage (US-697 AC-4)', () => {
+  it('estimates read from the message sent and written from the final message, as a lower bound', async () => {
+    const { host, launched } = fakeHost({
+      'pair-process-implement': () => fenced({ status: 'failed', summary: 'gate red' }),
+    })
+    await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
+
+    await runSteps(host, DIR, { host: 'session', settings: { engine: 'claude' } })
+
+    const sent = launched[0]?.message.length as number
+    const final = fenced({ status: 'failed', summary: 'gate red' }).length
+    const [step] = host.files.readFileSync(`${DIR}/telemetry.jsonl`).split('\n')
+    expect(JSON.parse(step as string)).toMatchObject({
+      host: 'session',
+      tokens: {
+        read: { value: Math.ceil(sent / 4), source: 'estimated' },
+        cached: { value: null, source: 'unknown' },
+        written: { value: Math.ceil(final / 4), source: 'estimated' },
+      },
+      estimate: 'lower-bound-from-text',
+    })
+  })
+})
+
 describe('runSteps: the telemetry switch (US-697 AC-5)', () => {
   const SETTINGS = { host: 'pair-run', settings: { engine: 'claude' } } as const
 

@@ -1,4 +1,12 @@
-import { closeRun, measured, recordStep, TELEMETRY_FILE, type StepExecution, type Tokens } from '.'
+import {
+  closeRun,
+  estimated,
+  measured,
+  recordStep,
+  TELEMETRY_FILE,
+  type StepExecution,
+  type Tokens,
+} from '.'
 import { start, type RunDirectory } from '../engine'
 import { createMemoryFiles } from '../engine/memory-files'
 
@@ -92,6 +100,22 @@ describe('step record (US-697 AC-1, AC-3)', () => {
     expect(record).not.toHaveProperty('model')
     expect(record).not.toHaveProperty('effort')
     expect(record).not.toHaveProperty('reason')
+  })
+})
+
+describe('estimate from text (US-697 AC-4)', () => {
+  it('estimates read and written as a quarter of the characters, rounded up, and leaves cached unknown', () => {
+    expect(estimated('x'.repeat(400), 'y'.repeat(41))).toEqual({
+      read: { value: 100, source: 'estimated' },
+      cached: { value: null, source: 'unknown' },
+      written: { value: 11, source: 'estimated' },
+    })
+  })
+
+  it('marks a record with estimated tokens as a lower bound', async () => {
+    const run = await open()
+    await recordStep(run, { ...IMPLEMENT, tokens: estimated('sent', 'final') })
+    expect(recordsOf(run)).toMatchObject([{ estimate: 'lower-bound-from-text' }])
   })
 })
 
