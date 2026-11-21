@@ -184,6 +184,8 @@ const EXCEPTION_OUT_OF_SCOPE = new Set([
   'packages/knowledge-hub/src/conformance/verify-quality.test.ts',
   'packages/knowledge-hub/src/conformance/web-cloud-environment.test.ts',
   'packages/knowledge-hub/src/conformance/workflow-scripts-shape.test.ts',
+  'packages/knowledge-hub/src/conformance/workflows-test-cache-inputs-controls.test.ts',
+  'packages/knowledge-hub/src/conformance/workflows-test-cache-inputs.test.ts',
   'packages/knowledge-hub/src/conformance/working-area.test.ts',
   'scripts/dev/hook-git-env.test.mjs',
   'scripts/dev/rtk-review-hook.mjs',
