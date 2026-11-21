@@ -41,7 +41,12 @@ import {
   type ResolvedEngine,
 } from './resolve-engine'
 import { ghBoard } from './card-board'
-import { MACROSTATES, readStateMapping, resolveMacrostate } from './card-readiness'
+import {
+  MACROSTATES,
+  readStateMapping,
+  resolveMacrostate,
+  type StateMapping,
+} from './card-readiness'
 import { createExecutableProbe } from './path-probe'
 import { createSkillProbe } from './skill-probe'
 import { ENGINES, isEngineId, type EngineDefinition } from './engines'
@@ -408,6 +413,12 @@ const telemetryOf = (config: RunCommandConfig, { resolved, effective }: Opened) 
 const whenOf = (state: StepEvent['state']) =>
   state === 'running' ? 'start' : state === 'ok' ? 'end' : undefined
 
+/** True when the card's current board literal is the macrostate or ahead of it. */
+const notAhead = (current: string | null, macrostate: CardState, mapping: StateMapping) => {
+  const held = current === null ? undefined : resolveMacrostate(current, mapping)
+  return held !== undefined && MACROSTATES.indexOf(held) >= MACROSTATES.indexOf(macrostate)
+}
+
 /** Sets the card's state through the board, by the adopted mapping; a failure is a warning, never a stop. */
 async function setCardState(
   card: string,
@@ -424,10 +435,8 @@ async function setCardState(
       ghBoard(fs, locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir, resolved.main)
     if (literal === undefined) throw new Error(`no board state maps to ${macrostate}`)
     // The state only moves forward: a step whose state is behind (or equal) sets nothing.
-    const mapping = readStateMapping(fs, resolved.main)
-    const current = await board.getState(card)
-    const held = current === null ? undefined : resolveMacrostate(current, mapping)
-    if (held !== undefined && MACROSTATES.indexOf(held) >= MACROSTATES.indexOf(macrostate)) return
+    if (notAhead(await board.getState(card), macrostate, readStateMapping(fs, resolved.main)))
+      return
     await board.setState(card, literal)
     console.log(`  Card ${card}: state ${literal}`)
   } catch (error) {
