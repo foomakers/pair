@@ -372,6 +372,22 @@ describe('telemetry, switched by flag (US-697 AC-5)', () => {
     })
   })
 
+  // The run is named after its directory, whatever the platform (darwin, linux) reports.
+  it.each(['darwin', 'linux'] as const)(
+    'names the run after its directory on platform %s',
+    async platform => {
+      const real = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor
+      Object.defineProperty(process, 'platform', { ...real, value: platform })
+      try {
+        expect(await run(['quick'], OK, { telemetry: true, runId: 'second' })).toBe(0)
+      } finally {
+        Object.defineProperty(process, 'platform', real)
+      }
+      const [first] = fs.readFileSync(join(runDir('second'), 'telemetry.jsonl')).split('\n')
+      expect(JSON.parse(first as string)).toMatchObject({ run: 'second', card: '627' })
+    },
+  )
+
   it.each([
     ['no flag', {}],
     ['--no-telemetry', { telemetry: false }],

@@ -1,13 +1,13 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1077,
-  "files": 400,
-  "distinctContents": 365,
+  "files": 402,
+  "distinctContents": 367,
   "dispositionCounts": {
-    "standalone-script": 14,
+    "standalone-script": 15,
     "os-guarantee": 25,
     "type-contract": 13,
-    "in-flight-churn": 244,
+    "in-flight-churn": 245,
     "repo-contract": 103,
     "boundary-adapter": 1
   },
@@ -3379,6 +3379,23 @@
       "operationConsumer": "Node fs for the installed mirror command; consumed by generated project mirror workflow"
     },
     {
+      "path": "packages/knowledge-hub/dataset/.skills/capability/analyze-workflow-runs/scripts/analyze.mjs",
+      "hash": "79a4979d678f9a21405667ee3fb6482eda6ee7cde270fa96b305fcbf4cd94b62",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 12
+        }
+      ],
+      "disposition": "standalone-script",
+      "producer": "packages/knowledge-hub/dataset/.skills/capability/analyze-workflow-runs/scripts/analyze.mjs",
+      "reason": "Published analyze-workflow-runs skill script invoked by Node without installing workspace packages",
+      "decision": "Retain direct fs inside the independently shipped Node script",
+      "testCategory": "installed-script-smoke",
+      "operationConsumer": "existsSync/readdirSync/readFileSync/realpathSync over the runs directory and the price table, read-only; consumed by the published skill"
+    },
+    {
       "path": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs",
       "hash": "9210ef7c8bcc78ec533e830d4966740b2f351d553466487a1751f9e91f654f1b",
       "dependencies": [
@@ -4359,6 +4376,22 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs",
+      "reason": "in-flight-churn",
+      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
+      "testCategory": "root import guard"
+    },
+    {
+      "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/analyze-workflow-runs.test.mjs",
+      "hash": "ca8c2b712fbf50f6e90cb5abc7246c20b4c138a7e61e5405d326db28373810de",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 7
+        }
+      ],
+      "disposition": "in-flight-churn",
+      "producer": "packages/knowledge-hub/dataset/.workflows/pair-contracts/analyze-workflow-runs.test.mjs",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { fileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
 // Conformance guard for story #697 (AC-6, AC-7): the read-only `analyze-workflow-runs` capability.
@@ -9,22 +9,23 @@ const DATASET = join(__dirname, '../../dataset/.skills/capability/analyze-workfl
 const MIRROR = join(__dirname, '../../../../.claude/skills/pair-capability-analyze-workflow-runs')
 const SCRIPT = 'scripts/analyze.mjs'
 
+const read = (path: string) => fileSystemService.readFileSync(path)
 const norm = (s: string) => s.replace(/[*`_]/g, '').replace(/\s+/g, ' ').toLowerCase()
-const script = readFileSync(join(DATASET, SCRIPT), 'utf-8')
+const script = read(join(DATASET, SCRIPT))
 const questions = (/const QUESTIONS = \[([^\]]+)\]/.exec(script)?.[1] ?? '')
   .split(',')
   .map(name => name.trim().replace(/'/g, ''))
 
 describe('analyze-workflow-runs — skill contract (#697)', () => {
   it('ships its script byte-identical in the installed skill', () => {
-    expect(readFileSync(join(MIRROR, SCRIPT), 'utf-8')).toBe(script)
+    expect(read(join(MIRROR, SCRIPT))).toBe(script)
   })
 
   for (const [label, dir] of [
     ['dataset', DATASET],
     ['mirror', MIRROR],
   ] as const) {
-    const content = readFileSync(join(dir, 'SKILL.md'), 'utf-8')
+    const content = read(join(dir, 'SKILL.md'))
     const lower = norm(content)
 
     it(`${label} is read-only: it reads the runs and writes nothing but a report on request`, () => {
