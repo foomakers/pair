@@ -3,6 +3,7 @@ import {
   estimated,
   measured,
   recordStep,
+  reopenRun,
   TELEMETRY_FILE,
   type StepExecution,
   type Tokens,
@@ -179,6 +180,15 @@ describe('closing record (US-697 AC-2)', () => {
       { type: 'step', attempt: 2 },
       { type: 'run', status: 'done', steps: 2, durationMs: 180_000 },
     ])
+  })
+
+  it('a failed run resumed without telemetry loses its closing record, and keeps its steps (#672 AC-10)', async () => {
+    const run = await open()
+    await recordStep(run, { ...IMPLEMENT, status: 'failed', reason: 'quality-gate' })
+    await closeRun(run, 'failed')
+    await reopenRun(run)
+    expect(recordsOf(run)).toMatchObject([{ type: 'step', status: 'failed' }])
+    await reopenRun({ ...run, dir: `${DIR}-none` })
   })
 
   it('starts a restarted run on an empty file: the records of the archived run stay with it', async () => {

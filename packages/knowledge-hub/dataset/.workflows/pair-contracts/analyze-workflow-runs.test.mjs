@@ -75,7 +75,8 @@ test('cost: an estimated entry makes the sum and the cost estimates; unknown ent
     written: entry(18, 'estimated'),
   })
   // review: 40 × 10 + 8 × 50 = 800 per million, cached left out
-  assert.deepEqual(run.steps[1].cost, entry(0.0008, 'estimated'))
+  // The cost leaves the unknown entry out, and says which step it is (#672 AC-10).
+  assert.deepEqual(run.steps[1].cost, { ...entry(0.0008, 'estimated'), unknown: ['review#1'] })
   assert.equal(run.total.cost.source, 'estimated')
   assert.equal(run.status, 'open', 'a run without a closing record is not closed')
 })
@@ -170,6 +171,13 @@ test('readRuns: only directories with a telemetry file, in name order, narrowed 
   assert.deepEqual(readRuns(dir, { card: '628' }).map(one => one.run), ['a-628'])
   assert.deepEqual(readRuns(dir, { workflow: 'quick' }).map(one => one.run), ['quick-627'])
   assert.deepEqual(readRuns(dir, { run: 'quick-627' }).map(one => one.run), ['quick-627'])
+})
+
+test('readRuns: --run names one run, so an unreadable other run under --runs does not stop it (#672 AC-10)', () => {
+  const dir = runsDir({ 'quick-627': MEASURED, 'bad-1': MEASURED })
+  writeFileSync(join(dir, 'bad-1', 'telemetry.jsonl'), '{"type":"step"\n')
+  assert.deepEqual(readRuns(dir, { run: 'quick-627' }).map(one => one.run), ['quick-627'])
+  assert.throws(() => readRuns(dir), /telemetry\.jsonl:1/)
 })
 
 test('CLI: same files, same numbers — JSON on stdout, the price table read from --prices', () => {

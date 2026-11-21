@@ -1,0 +1,8 @@
+version: 1
+name: claude-cheap
+defaults: { engine: claude, model: claude-sonnet-5-5, effort: medium }
+aliases:
+  build: { engine: claude, model: claude-sonnet-5-5, effort: medium }
+  judge: { engine: claude, model: claude-sonnet-5-5, effort: high }
+steps:
+  fix: { model: claude-haiku-5-5 }

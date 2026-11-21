@@ -189,3 +189,11 @@ export async function closeRun(run: RunDirectory, status: RunTelemetry['status']
   }
   await write(run, [...steps, record])
 }
+
+/**
+ * A launch that writes no telemetry resumes a run an earlier launch closed: its closing record is
+ * dropped, so the file never says `failed` (or `done`) for a run that went on without it.
+ */
+export async function reopenRun(run: RunDirectory): Promise<void> {
+  if (run.files.existsSync(fileOf(run))) await write(run, stepsOf(run))
+}
