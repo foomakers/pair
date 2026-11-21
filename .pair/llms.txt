@@ -338,6 +338,7 @@
 - [Workflow step kinds](.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md)
 - [Workflow Profiles — engine, model, effort and context per delivery-cycle stage](.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md)
 - [The `quick` workflow](.pair/knowledge/guidelines/collaboration/automation/workflow-quick.md)
+- [Telemetry of a workflow run](.pair/knowledge/guidelines/collaboration/automation/workflow-telemetry.md)
 - [Decision Records: ADR, ADL, DDR, and Analysis-Log](.pair/knowledge/guidelines/collaboration/decision-records.md)
 - [Estimation Framework](.pair/knowledge/guidelines/collaboration/estimation/README.md)
 - [AI-Assisted Estimation](.pair/knowledge/guidelines/collaboration/estimation/ai-assisted-estimation.md)
