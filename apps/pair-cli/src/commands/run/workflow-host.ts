@@ -416,7 +416,7 @@ async function setCardState(
   try {
     const board =
       deps.workflow?.board ??
-      ghBoard(locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir, resolved.main)
+      ghBoard(fs, locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir, resolved.main)
     if (literal === undefined) throw new Error(`no board state maps to ${macrostate}`)
     await board.setState(card, literal)
     console.log(`  Card ${card}: state ${literal}`)

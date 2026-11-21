@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import { fileSystemService as fs } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { ghBoard } from './card-board'
@@ -9,13 +9,13 @@ const SCRIPTS = resolve(__dirname, '../../../../../.claude/skills/pair-workflow-
 const WOW = '# way\n\n- `pm-project`: `B`\n- GitHub Projects\n'
 
 const setup = (member: boolean, failWrites = false) => {
-  const dir = mkdtempSync(join(tmpdir(), 'pair-board-'))
+  const dir = fs.mkdtempSync(join(tmpdir(), 'pair-board-'))
   const log = join(dir, 'log.json')
-  writeFileSync(log, JSON.stringify({ member, calls: [] }))
-  mkdirSync(join(dir, '.pair/adoption/tech'), { recursive: true })
-  writeFileSync(join(dir, '.pair/adoption/tech/way-of-working.md'), WOW)
+  fs.writeFileSync(log, JSON.stringify({ member, calls: [] }))
+  fs.mkdirSync(join(dir, '.pair/adoption/tech'), { recursive: true })
+  fs.writeFileSync(join(dir, '.pair/adoption/tech/way-of-working.md'), WOW)
   const bin = join(dir, 'gh')
-  writeFileSync(
+  fs.writeFileSync(
     bin,
     `#!/usr/bin/env node
 const fs = require('fs'); const a = process.argv.slice(2); const s = JSON.parse(fs.readFileSync(${JSON.stringify(log)}, 'utf8'))
@@ -30,27 +30,27 @@ else out({ data: { repository: { issue: { id: 'I1', projectItems: { nodes: s.mem
 save()
 `,
   )
-  chmodSync(bin, 0o755)
-  return { dir, bin, read: () => JSON.parse(readFileSync(log, 'utf8')) }
+  fs.chmodSync(bin, 0o755)
+  return { dir, bin, read: () => JSON.parse(fs.readFileSync(log)) }
 }
 
 describe('ghBoard.setState', () => {
   it('sets the Status option id of the literal on the card item', async () => {
     const t = setup(true)
-    await ghBoard(SCRIPTS, t.dir, t.bin).setState('627', 'Review')
+    await ghBoard(fs, SCRIPTS, t.dir, t.bin).setState('627', 'Review')
     expect(t.read().set).toBe('o2')
   })
 
   it('adds the item when it is not on the board, then sets the state', async () => {
     const t = setup(false)
-    await ghBoard(SCRIPTS, t.dir, t.bin).setState('627', 'Review')
+    await ghBoard(fs, SCRIPTS, t.dir, t.bin).setState('627', 'Review')
     expect(t.read().member).toBe(true)
     expect(t.read().set).toBe('o2')
   })
 
   it('throws what the read observed when membership stays unconfirmed; no state written', async () => {
     const t = setup(false, true)
-    await expect(ghBoard(SCRIPTS, t.dir, t.bin).setState('627', 'Review')).rejects.toThrow(
+    await expect(ghBoard(fs, SCRIPTS, t.dir, t.bin).setState('627', 'Review')).rejects.toThrow(
       /membership unconfirmed/,
     )
     expect(t.read().set).toBeUndefined()
