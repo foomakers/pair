@@ -39,6 +39,7 @@ import {
   type ExecutableProbe,
   type ResolvedEngine,
 } from './resolve-engine'
+import { ghBoard } from './card-board'
 import { readStateMapping } from './card-readiness'
 import { createExecutableProbe } from './path-probe'
 import { createSkillProbe } from './skill-probe'
@@ -79,7 +80,7 @@ export interface WorkflowHostDependencies {
   readonly prepareWorktree?: (input: WorktreeInput) => Promise<string>
   /** Whether an executable is on PATH (shipped: a PATH probe). */
   readonly engineAvailable?: ExecutableProbe
-  /** Sets the card's board state to a board literal (shipped: none — the state is printed only). */
+  /** Sets the card's board state to a board literal (shipped: `ghBoard`, the adopted GitHub Projects board). */
   readonly board?: { setState(card: string, boardState: string): Promise<void> }
 }
 
@@ -409,12 +410,13 @@ async function setCardState(
   resolved: Resolved,
   { fs, deps }: Services,
 ): Promise<void> {
-  const board = deps.workflow?.board
   const literal = readStateMapping(fs, resolved.main)?.find(
     row => row.macrostate === macrostate,
   )?.boardState
   try {
-    if (board === undefined) throw new Error('no board access')
+    const board =
+      deps.workflow?.board ??
+      ghBoard(locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir, resolved.main)
     if (literal === undefined) throw new Error(`no board state maps to ${macrostate}`)
     await board.setState(card, literal)
     console.log(`  Card ${card}: state ${literal}`)
