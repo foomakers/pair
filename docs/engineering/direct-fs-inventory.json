@@ -1,14 +1,14 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1077,
-  "files": 398,
-  "distinctContents": 363,
+  "files": 400,
+  "distinctContents": 365,
   "dispositionCounts": {
     "standalone-script": 14,
     "os-guarantee": 25,
     "type-contract": 13,
     "in-flight-churn": 244,
-    "repo-contract": 101,
+    "repo-contract": 103,
     "boundary-adapter": 1
   },
   "limits": [
@@ -6524,6 +6524,44 @@
       "producer": "packages/knowledge-hub/src/conformance/workflow-scripts-shape.test.ts",
       "sourceSymbols": ["readFileSync", "readdirSync"],
       "observedOperations": ["readFileSync", "readdirSync"],
+      "operationConsumer": "see observedOperations",
+      "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
+    },
+    {
+      "path": "packages/knowledge-hub/src/conformance/workflows-test-cache-inputs-controls.test.ts",
+      "hash": "5d62255325239b97fcfc4453971364845a6d73daf87fde1d740731e3b36d66b8",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 10
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "packages/knowledge-hub/src/conformance/workflows-test-cache-inputs-controls.test.ts",
+      "sourceSymbols": ["readFileSync", "readdirSync"],
+      "observedOperations": ["readFileSync", "readdirSync"],
+      "operationConsumer": "see observedOperations",
+      "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
+    },
+    {
+      "path": "packages/knowledge-hub/src/conformance/workflows-test-cache-inputs.test.ts",
+      "hash": "bb1a053c423f8523befc4f0557a4ab01f676d358259558973a995209af575abe",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 21
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "packages/knowledge-hub/src/conformance/workflows-test-cache-inputs.test.ts",
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"],
       "operationConsumer": "see observedOperations",
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
