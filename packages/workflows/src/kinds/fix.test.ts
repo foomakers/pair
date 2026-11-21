@@ -72,7 +72,7 @@ describe('fix result (#708 AC-1, AC-5, AC-6)', () => {
   })
 
   it('refuses ok without the head', () => {
-    const { head: _head, ...rest } = fixed({})
+    const rest = Object.fromEntries(Object.entries(fixed({})).filter(([name]) => name !== 'head'))
     expect(settle(kindByName.fix, rest).detail).toContain('head')
   })
 })
