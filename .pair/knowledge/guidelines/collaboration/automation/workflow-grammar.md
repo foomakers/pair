@@ -40,9 +40,10 @@ Each step:
 
 | Key    | Required                     | Meaning                                                                         |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------- |
-| `kind` | Yes                          | `implement`, `review` or `generic`.                                             |
-| `uses` | Only for `generic`           | The skill that runs. A typed kind has a default skill; `uses` replaces it.      |
+| `kind` | Yes                          | `implement`, `review`, `fix` or `generic`.                                           |
+| `skill` | Only for `generic`          | The skill that runs. A typed kind has a default skill; `skill` replaces it.     |
 | `with` | No                           | Options of the step. The kind declares the keys it accepts.                     |
+| `on-failed` | No                      | `stop` (default) or `continue`: what a `failed` step does to the run.           |
 
 A step id starts with a lower-case letter and continues with lower-case letters, digits and hyphens: it names a directory of the run.
 
@@ -54,10 +55,10 @@ A step id starts with a lower-case letter and continues with lower-case letters,
 - Every error names the file, the line, the key and the fix:
 
 ```text
-quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "generic"
+quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic"
 ```
 
-Not in version 1: `context`, `interactive`, `prompt`, `loop`, `gate`, `approval`, `merge`, `when`, `on-failed`, and a step that uses another workflow.
+Not in version 1: `context`, `interactive`, `prompt`, `loop`, `gate`, `approval`, `merge`, `when`, and a step that uses another workflow.
 
 ## Validation
 
@@ -66,13 +67,17 @@ A workflow is validated before any step is launched, and by `--dry-run`, which l
 | Part      | What is checked                                                                                   |
 | --------- | ------------------------------------------------------------------------------------------------- |
 | Form      | The rules above.                                                                                  |
-| Coherence | `uses` names an installed skill; a `generic` step has `uses`.                                     |
+| Coherence | `skill` names an installed skill; a `generic` step has `skill`; `uses` is refused (it is for including a workflow). |
 | Coherence | Every input of a step is a launch argument (`--card`) or an output of an earlier step.            |
 | Coherence | Every key under `with` is declared by the kind.                                                   |
 | Coherence | Every key in `with.gates` is a `Key` of the Custom Gate Registry in `way-of-working.md`.          |
 | Coherence | Every text under `with` is short plain text: no backtick, no `$(`, no line break.                 |
 
-An error refuses the workflow. A warning does not; version 1 defines none.
+An error refuses the workflow. A warning does not.
+
+| Warning | When |
+| ------- | ---- |
+| `on-failed: continue` on the last step | Nothing consumes the failure. |
 
 ## What a run leaves on disk
 
@@ -91,7 +96,8 @@ An error refuses the workflow. A warning does not; version 1 defines none.
 | When                                | What happens                                                      |
 | ----------------------------------- | ----------------------------------------------------------------- |
 | A step is `failed`                  | The run stops and the command exits 1.                            |
-| A step is `needs-human`             | The run parks and the command exits 0, with the resume command.   |
+| A step is `failed`, `on-failed: continue` | The failure is recorded and the next step runs with its outputs. The last step decides the run: `ok` ends it `done`, `failed` ends it `failed`. |
+| A step is `needs-human`             | The run parks and the command exits 0, with the resume command, whatever `on-failed` says. |
 | The run is launched again           | It resumes at the first step that is not `ok`.                    |
 | The workflow file changed meanwhile | The frozen copy is used; a warning says so.                       |
 | The run is complete                 | Nothing runs. `--restart` archives the directory and starts over. |

@@ -213,6 +213,16 @@ function inputsOf(
 
 const HALTED: Partial<Record<StepState, RunState>> = { failed: 'failed', 'needs-human': 'parked' }
 
+/** A step the run is past: `ok`, or `failed` with `on-failed: continue`. */
+const settled = (state: RunStateFile, step: Step): boolean => {
+  const at = state.steps[step.id]?.state
+  return at === 'ok' || (at === 'failed' && step['on-failed'] === 'continue')
+}
+
+/** The state of a run with nothing left to launch: the last step decides. */
+const finalState = (state: RunStateFile, steps: readonly Step[]): RunState =>
+  state.steps[steps[steps.length - 1]?.id ?? '']?.state === 'failed' ? 'failed' : 'done'
+
 /**
  * The steps to launch now and the state of the run. Linear: at most one step is ready, and it is
  * written `running` before it is returned, so an interrupted launch is visible on disk.
@@ -222,8 +232,8 @@ export async function next(
 ): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
   const state = requireState(run)
   const { steps } = frozenWorkflow(run)
-  const step = steps.find(one => state.steps[one.id]?.state !== 'ok')
-  if (step === undefined) return { ready: [], run: 'done' }
+  const step = steps.find(one => !settled(state, one))
+  if (step === undefined) return { ready: [], run: finalState(state, steps) }
   const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
   if (halted !== undefined) return { ready: [], run: halted }
   const attempt = (state.steps[step.id]?.executions ?? 0) + 1
@@ -234,7 +244,7 @@ export async function next(
   const launch: StepLaunch = {
     id: step.id,
     kind: step.kind,
-    uses: step.uses ?? kindByName[step.kind].defaultUses ?? '',
+    uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
     inputs: inputsOf(step, steps, state),
     attempt,

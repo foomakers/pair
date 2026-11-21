@@ -3,7 +3,7 @@ import { isAlias, isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, vi
 import { violations, type JsonSchema, type Path } from '../schema'
 
 /** The step kinds of grammar v1. A kind's contract lives in `kinds/`. */
-export const KIND_NAMES = ['implement', 'review', 'generic'] as const
+export const KIND_NAMES = ['implement', 'review', 'fix', 'generic'] as const
 export type KindName = (typeof KIND_NAMES)[number]
 
 /** A step id names a directory of the run and a row of the output: lower-case, digits and hyphens. */
@@ -17,12 +17,21 @@ const stepSchema: JsonSchema = {
   additionalProperties: false,
   properties: {
     kind: { enum: KIND_NAMES, description: 'What the step does and what it returns.' },
-    uses: {
+    skill: {
       type: 'string',
       pattern: SKILL_NAME,
       description: 'The skill that runs. Optional for a typed kind, required for `generic`.',
     },
+    uses: {
+      type: 'string',
+      description: 'Reserved for including a workflow (#699); never a skill name.',
+    },
     with: { type: 'object', description: 'Options of the step; the kind declares the keys.' },
+    'on-failed': {
+      enum: ['stop', 'continue'],
+      description:
+        'What a `failed` step does to the run. `stop` (default) stops it; `continue` records the failure and runs the next step.',
+    },
   },
 }
 
@@ -58,8 +67,11 @@ export interface WorkflowError {
 export interface Step {
   readonly id: string
   readonly kind: KindName
+  readonly skill?: string
+  /** Reserved for including a workflow (#699); the validator refuses it as a skill name. */
   readonly uses?: string
   readonly with?: Readonly<Record<string, unknown>>
+  readonly 'on-failed'?: 'stop' | 'continue'
 }
 
 export interface Workflow {

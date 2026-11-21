@@ -51,7 +51,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 7,
         key: 'steps.implement.when',
         problem: "unknown key 'when'",
-        fix: 'use one of kind, uses, with',
+        fix: 'use one of kind, skill, uses, with, on-failed',
       },
     ],
     [
@@ -61,7 +61,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 10,
         key: 'steps.review.kind',
         problem: 'unknown value "merge"',
-        fix: 'use one of "implement", "review", "generic"',
+        fix: 'use one of "implement", "review", "fix", "generic"',
       },
     ],
     [
@@ -126,15 +126,15 @@ describe('parseWorkflow (AC-2)', () => {
     ],
     [
       'a step with no kind',
-      seeded('    kind: review\n', '    uses: my-skill\n'),
+      seeded('    kind: review\n', '    skill: my-skill\n'),
       { line: 9, key: 'steps.review', problem: "missing key 'kind'", fix: "add 'kind'" },
     ],
     [
-      'a `uses` that is not a skill name',
-      seeded('kind: review', 'kind: review\n    uses: My Skill'),
+      'a `skill` that is not a skill name',
+      seeded('kind: review', 'kind: review\n    skill: My Skill'),
       {
         line: 11,
-        key: 'steps.review.uses',
+        key: 'steps.review.skill',
         problem: '"My Skill" does not match ^[a-z0-9][a-z0-9:._-]*$',
         fix: 'write a value matching ^[a-z0-9][a-z0-9:._-]*$',
       },
@@ -216,7 +216,7 @@ describe('parseWorkflow (AC-2)', () => {
   it('formats an error as file:line: key: problem — fix', () => {
     const { errors } = parseWorkflow(seeded('kind: review', 'kind: merge'), 'quick.yaml')
     expect(errors.map(formatError)).toEqual([
-      'quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "generic"',
+      'quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic"',
     ])
   })
 })

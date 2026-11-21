@@ -18,26 +18,33 @@ export interface Validation {
   /** Present only when there is no error. */
   readonly workflow?: Workflow
   readonly errors: readonly WorkflowError[]
-  /** Never refuse a workflow. None is defined yet; later kinds add theirs. */
+  /** Never refuse a workflow. */
   readonly warnings: readonly WorkflowError[]
 }
 
 type Check = (workflow: Workflow, step: Step, deps: ValidationDeps) => WorkflowError[]
 
-const usesErrors: Check = (workflow, step, deps) => {
-  const uses = step.uses ?? kindByName[step.kind].defaultUses
-  if (uses === undefined)
+const skillErrors: Check = (workflow, step, deps) => {
+  if (step.uses !== undefined)
+    return [
+      errorAt(workflow, ['steps', step.id, 'uses'], {
+        problem: `'uses' does not name a skill: '${step.uses}'`,
+        fix: `write skill: ${step.uses}`,
+      }),
+    ]
+  const skill = step.skill ?? kindByName[step.kind].defaultSkill
+  if (skill === undefined)
     return [
       errorAt(workflow, ['steps', step.id], {
         problem: `a ${step.kind} step has no default skill`,
-        fix: "add 'uses' with the skill to run",
+        fix: "add 'skill' with the skill to run",
       }),
     ]
-  if (deps.skillExists(uses)) return []
+  if (deps.skillExists(skill)) return []
   return [
-    errorAt(workflow, ['steps', step.id, 'uses'], {
-      problem: `skill '${uses}' is not installed`,
-      fix: "install it, or name an installed skill in 'uses'",
+    errorAt(workflow, ['steps', step.id, 'skill'], {
+      problem: `skill '${skill}' is not installed`,
+      fix: "install it, or name an installed skill in 'skill'",
     }),
   ]
 }
@@ -77,7 +84,7 @@ const safetyErrors: Check = (workflow, step, deps) =>
       }),
     )
 
-const CHECKS: readonly Check[] = [usesErrors, withErrors, gateErrors, safetyErrors]
+const CHECKS: readonly Check[] = [skillErrors, withErrors, gateErrors, safetyErrors]
 
 function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowError[] {
   const available = new Set(deps.launchInputs)
@@ -96,6 +103,19 @@ function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowErro
   })
 }
 
+/** `on-failed: continue` on the last step: nothing consumes the failure. */
+function warnings(workflow: Workflow): WorkflowError[] {
+  const last = workflow.steps[workflow.steps.length - 1]
+  return last?.['on-failed'] === 'continue'
+    ? [
+        errorAt(workflow, ['steps', last.id, 'on-failed'], {
+          problem: 'on-failed: continue on the last step; no step consumes the failure',
+          fix: 'remove it, or put a step after it',
+        }),
+      ]
+    : []
+}
+
 /**
  * The one validator: form (the grammar) then coherence (skills, inputs, options, gate keys).
  * `pair run <workflow>` calls it before any launch, and `--dry-run` calls nothing else.
@@ -106,5 +126,5 @@ export function validate(text: string, file: string, deps: ValidationDeps): Vali
   const errors = coherenceErrors(parsed.workflow, deps)
   return errors.length > 0
     ? { errors, warnings: [] }
-    : { workflow: parsed.workflow, errors: [], warnings: [] }
+    : { workflow: parsed.workflow, errors: [], warnings: warnings(parsed.workflow) }
 }

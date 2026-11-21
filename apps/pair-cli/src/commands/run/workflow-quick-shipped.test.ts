@@ -68,7 +68,7 @@ describe('the shipped quick workflow on the shipped adoption template (r0-2)', (
   it('w2 passes pair run quick --dry-run on a fresh install while its page says it needs no configuration', async () => {
     write(WAY_OF_WORKING, shipped(WAY_OF_WORKING))
     write(QUICK, shipped(QUICK))
-    for (const skill of ['pair-process-implement', 'pair-process-review'])
+    for (const skill of ['pair-process-implement', 'pair-process-review', 'pair-process-fix'])
       write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
     const workflow: WorkflowHostDependencies = {
       runIteration: async () => {

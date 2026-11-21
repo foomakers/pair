@@ -14,15 +14,15 @@ Run `/next` at the start of every session. It reads project adoption files and P
 
 | Type | Count | Purpose |
 |------|-------|---------|
-| **Process** | 10 | Lifecycle phases — orchestrate capability skills |
+| **Process** | 11 | Lifecycle phases — orchestrate capability skills |
 | **Capability** | 35 | Atomic units — perform a single focused operation |
 | **Workflow** | 7 | Delivery stages — dispatched by the batch engine, one mutation boundary each |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 54 (10 process + 35 capability + 7 workflow + 2 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 55 (11 process + 35 capability + 7 workflow + 2 navigator).
 
 ## Full Catalog
 
-### Process Skills (10)
+### Process Skills (11)
 
 | Skill | How-To | Phase | Description |
 |-------|--------|-------|-------------|
@@ -36,6 +36,7 @@ Process skills compose capability skills. Capability skills are independently in
 | `/plan-tasks` | 09 | Iteration | Break stories into tasks |
 | `/implement` | 10 | Execution | Implement tasks with TDD |
 | `/review` | 11 | Review | Code review with merge flow |
+| `/fix` | — | Review | Fix the findings of a review (run by the `fix` workflow step) |
 
 > `/brainstorm` carries no numbered how-to guide (`—` above): it is a discovery entry point that runs *before* guide 01, and its `SKILL.md` is the canonical reference for its three phases.
 >

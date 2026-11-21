@@ -26,9 +26,9 @@ describe('kind `with` options (AC-5)', () => {
 
 describe('kind contracts (AC-4, design §3)', () => {
   it('names the pair skill of each typed kind, and none for generic', () => {
-    expect(kindByName.implement.defaultUses).toBe('pair-process-implement')
-    expect(kindByName.review.defaultUses).toBe('pair-process-review')
-    expect(kindByName.generic.defaultUses).toBeUndefined()
+    expect(kindByName.implement.defaultSkill).toBe('pair-process-implement')
+    expect(kindByName.review.defaultSkill).toBe('pair-process-review')
+    expect(kindByName.generic.defaultSkill).toBeUndefined()
   })
 
   it.each([

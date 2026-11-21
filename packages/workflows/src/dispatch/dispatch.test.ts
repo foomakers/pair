@@ -65,7 +65,7 @@ describe('buildMessage (AC-4, AC-5)', () => {
     )
   })
 
-  it('runs the skill named by `uses` with the options as written, and asks generic for the common fields only', () => {
+  it('runs the skill named by `skill` with the options as written, and asks generic for the common fields only', () => {
     const step: StepLaunch = {
       id: 'notes',
       kind: 'generic',
