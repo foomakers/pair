@@ -468,6 +468,15 @@ steps:
     ).toMatchObject({ rounds: 1 })
   })
 
+  it.each(['escalate', 'fail'])('reports exhaustion and the last until outcome on %s (#670-exhaustion-message)', async action => {
+    write('.pair/adoption/tech/workflows/quick.yaml', loop.replace('on-max: escalate', `on-max: ${action}`))
+    await run(['quick'], { ...OK, 'pair-process-review': () => failedReview, 'pair-process-fix': () => fixed })
+    const output = lines.join('\n')
+    expect(output).toContain('loop rounds reached 1 rounds')
+    expect(output).toContain('gap')
+    expect(output).toContain(action === 'escalate' ? '--more-rounds <n>' : '--restart')
+  })
+
   it('applies a configuration max override to the loop id', async () => {
     write('.pair/adoption/tech/workflows/quick.yaml', loop)
     write(
