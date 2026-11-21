@@ -257,7 +257,7 @@ function withMoreRounds(
       [id]: {
         ...loop,
         round: loop.round + 1,
-        max: loop.max + options.moreRounds,
+        max: loop.round + options.moreRounds,
         exhausted: false,
         grants,
       },
@@ -302,14 +302,17 @@ async function resume(
   let state = saved
   const { configuration } = options
   const warnings = workflowWarnings(run, state, source, options.card)
+  if (options.moreRounds !== undefined) parkedLoop(state, exhaustedLoop(state), options.moreRounds)
   if (configuration !== undefined && options.reconfigure === true)
     state = await reconfigured(run, state, configuration)
   else warnings.push(...configurationWarnings(run, state, configuration))
   const exhausted = exhaustedLoop(state)
   if (options.moreRounds !== undefined)
     state = withMoreRounds(run, state, exhausted, { ...options, moreRounds: options.moreRounds })
-  else if (exhausted !== undefined)
+  else if (exhausted !== undefined) {
+    if (state !== saved) await writeState(run, state)
     return { status: state.steps[exhausted[0]]?.state === 'failed' ? 'failed' : 'parked', warnings }
+  }
   if (frozenWorkflow(run).steps.every(step => state.steps[step.id]?.state === 'ok')) {
     if (state !== saved) await writeState(run, state)
     return { status: 'complete', warnings }
