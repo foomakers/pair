@@ -1,6 +1,7 @@
 import { basename, extname, join, resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import {
+  cardStateOf,
   describeSettings,
   formatError,
   frozenConfiguration,
@@ -10,6 +11,7 @@ import {
   settingsFor,
   start,
   validate,
+  type CardState,
   type Configuration,
   type RunOutcome,
   type StepEvent,
@@ -37,6 +39,7 @@ import {
   type ExecutableProbe,
   type ResolvedEngine,
 } from './resolve-engine'
+import { readStateMapping } from './card-readiness'
 import { createExecutableProbe } from './path-probe'
 import { createSkillProbe } from './skill-probe'
 import { ENGINES, isEngineId, type EngineDefinition } from './engines'
@@ -76,6 +79,8 @@ export interface WorkflowHostDependencies {
   readonly prepareWorktree?: (input: WorktreeInput) => Promise<string>
   /** Whether an executable is on PATH (shipped: a PATH probe). */
   readonly engineAvailable?: ExecutableProbe
+  /** Sets the card's board state to a board literal (shipped: none — the state is printed only). */
+  readonly board?: { setState(card: string, boardState: string): Promise<void> }
 }
 
 export interface WorktreeInput {
@@ -378,12 +383,33 @@ const engineIdOf = (opened: Opened, id: string): keyof typeof ENGINES => {
   return isEngineId(named) ? named : opened.resolved.engine.engine.id
 }
 
+/** Sets the card's state through the board, by the adopted mapping; a failure is a warning, never a stop. */
+async function setCardState(
+  card: string,
+  macrostate: CardState,
+  resolved: Resolved,
+  fs: FileSystemService,
+  board: WorkflowHostDependencies['board'],
+): Promise<void> {
+  const literal = readStateMapping(fs, resolved.main)?.find(row => row.macrostate === macrostate)
+    ?.boardState
+  try {
+    if (board === undefined) throw new Error('no board access')
+    if (literal === undefined) throw new Error(`no board state maps to ${macrostate}`)
+    await board.setState(card, literal)
+    console.log(`  Card ${card}: state ${literal}`)
+  } catch (error) {
+    console.log(`  Warning: card state ${literal ?? macrostate} not set: ${(error as Error).message}`)
+  }
+}
+
 /** The steps, drawn on the run's console: the card line, one line per step outcome, the ending. */
 async function runOnConsole(
   config: RunCommandConfig,
   opened: Opened,
   launch: ReturnType<typeof launcher>,
   fs: FileSystemService,
+  board?: WorkflowHostDependencies['board'],
 ): Promise<number> {
   const { resolved, request, runDir } = opened
   const sink = createConsoleSink({
@@ -394,6 +420,7 @@ async function runOnConsole(
     plain: config.verbose !== true,
   })
   const restore = routeConsoleTo(sink)
+  const pending: Promise<void>[] = []
   try {
     sink.event({ event: 'card-start', card: request.card, title: opened.title })
     const outcome = await runSteps(
@@ -403,10 +430,14 @@ async function runOnConsole(
         isSafeText: isSafePromptText,
         styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
-        report: event =>
-          event.state === 'running'
-            ? sink.event({ event: 'stage', card: request.card, stage: event.step })
-            : console.log(stepLine(event)),
+        report: event => {
+          if (event.state === 'running')
+            sink.event({ event: 'stage', card: request.card, stage: event.step })
+          else console.log(stepLine(event))
+          const set = cardStateOf(stepOf(resolved, event.step))
+          if (set?.when === (event.state === 'running' ? 'start' : event.state === 'ok' ? 'end' : ''))
+            pending.push(setCardState(request.card, set.state, resolved, fs, board))
+        },
       },
       runDir,
       // The flag over the configuration's `telemetry` key; off when neither says.
@@ -418,6 +449,7 @@ async function runOnConsole(
           }
         : undefined,
     )
+    await Promise.all(pending)
     return conclude(outcome, request, sink)
   } finally {
     sink.finish()
@@ -474,6 +506,7 @@ async function drive(
     { ...opened, effective },
     launcher({ config, resolved, services, worktree, effective }),
     fs,
+    deps.workflow?.board,
   )
 }
 

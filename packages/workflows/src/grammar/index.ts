@@ -5,6 +5,24 @@ import { violations, type JsonSchema, type Path } from '../schema'
 /** The step kinds of grammar v1. A kind's contract lives in `kinds/`. */
 export const KIND_NAMES = ['implement', 'review', 'fix', 'generic'] as const
 export type KindName = (typeof KIND_NAMES)[number]
+/** The macrostates of a card, as the adopted state mapping names them. */
+export const CARD_STATES = ['Draft', 'Ready', 'In Progress', 'Review', 'Done'] as const
+export type CardState = (typeof CARD_STATES)[number]
+
+/** The card state a step sets, and when: Ready and Done as the step ends `ok`, the others as it starts. */
+export function cardStateOf(step: {
+  readonly kind: KindName
+  readonly state?: CardState | 'none'
+}): { readonly state: CardState; readonly when: 'start' | 'end' } | undefined {
+  const state =
+    step.state ??
+    ({ implement: 'In Progress', fix: 'In Progress', review: 'Review' } as const)[
+      step.kind as 'implement'
+    ]
+  return state === undefined || state === 'none'
+    ? undefined
+    : { state, when: state === 'Ready' || state === 'Done' ? 'end' : 'start' }
+}
 
 /** A step id names a directory of the run and a row of the output: lower-case, digits and hyphens. */
 export const STEP_ID = '^[a-z][a-z0-9-]*$'
@@ -47,6 +65,11 @@ const stepSchema: JsonSchema = {
         'What a `failed` step does to the run. `stop` (default) stops it; `continue` records the failure and runs the next step.',
     },
     alias: { type: 'string', description: 'The alias, declared in `aliases`, the step runs with.' },
+    state: {
+      enum: [...CARD_STATES, 'none'],
+      description:
+        "The card's board state the host sets for the step (a macrostate), or `none`; overrides the kind's default.",
+    },
   },
 }
 
@@ -95,6 +118,8 @@ export interface Step {
   readonly 'on-failed'?: 'stop' | 'continue'
   /** One of the workflow's `aliases`: what a configuration sets for the step. */
   readonly alias?: string
+  /** The card's board state the host sets for the step; `none` sets nothing. */
+  readonly state?: CardState | 'none'
 }
 
 export interface Workflow {

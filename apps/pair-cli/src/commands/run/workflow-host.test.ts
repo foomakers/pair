@@ -132,6 +132,59 @@ afterEach(() => {
   fs.rmSync(project, { recursive: true, force: true })
 })
 
+describe('card state (AC-13)', () => {
+  const MAPPING = `## State Mapping
+
+| Board State | Macrostate |
+| --- | --- |
+| Inbox | Draft |
+| Planned | Ready |
+| Building | In Progress |
+| Checking | Review |
+| Finished | Done |
+`
+  const withBoard = (setState: (card: string, state: string) => Promise<void>) => ({
+    board: { setState },
+  })
+  beforeEach(() => write('.pair/adoption/tech/way-of-working.md', REGISTRY + MAPPING))
+
+  it('sets Building when implement starts, Checking when review starts, and prints each', async () => {
+    const writes: string[] = []
+    const board = withBoard(async (card, state) => void writes.push(`${card}:${state}`))
+    expect(await run(['quick'], OK, {}, board)).toBe(0)
+
+    expect(writes).toEqual(['627:Building', '627:Checking'])
+    expect(lines).toContain('  Card 627: state Building')
+  })
+
+  it('a step key overrides the kind: none sets nothing, Done is set when the step ends ok', async () => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('kind: implement\n', 'kind: implement\n    state: none\n').replace(
+        'kind: review\n',
+        'kind: review\n    state: Done\n',
+      ),
+    )
+    const writes: string[] = []
+    const board = withBoard(async (_card, state) => void writes.push(state))
+    expect(await run(['quick'], OK, {}, board)).toBe(0)
+
+    expect(writes).toEqual(['Finished'])
+  })
+
+  it('a failed write is a warning and the run goes on', async () => {
+    const board = withBoard(async () => {
+      throw new Error('no board')
+    })
+    expect(await run(['quick'], OK, {}, board)).toBe(0)
+
+    expect(lines.some(line => line.includes('Warning: card state Building not set: no board'))).toBe(
+      true,
+    )
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+  })
+})
+
 describe('always autonomous (AC-12)', () => {
   it.each([[{}], [{ autonomous: true }]])(
     'passes the engine bypass arguments with or without --autonomous (%j)',

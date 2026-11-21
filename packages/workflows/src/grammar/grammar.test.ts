@@ -1,4 +1,4 @@
-import { formatError, parseWorkflow } from '.'
+import { cardStateOf, formatError, parseWorkflow } from '.'
 
 const QUICK = `version: 1
 name: quick
@@ -16,6 +16,29 @@ steps:
 const seeded = (from: string, to: string) => QUICK.replace(from, to)
 const PLAIN = 'write the value in full, as plain YAML'
 const STEP_ID = '^[a-z][a-z0-9-]*$'
+
+describe('card state of a step (#672 AC-13)', () => {
+  const stepWith = (extra: string) =>
+    parseWorkflow(QUICK.replace('kind: review\n', `kind: review\n    ${extra}\n`), 'workflows/quick.yaml')
+
+  it.each([
+    ['implement', undefined, { state: 'In Progress', when: 'start' }],
+    ['fix', undefined, { state: 'In Progress', when: 'start' }],
+    ['review', undefined, { state: 'Review', when: 'start' }],
+    ['generic', undefined, undefined],
+    ['review', 'none', undefined],
+    ['generic', 'Done', { state: 'Done', when: 'end' }],
+    ['generic', 'Ready', { state: 'Ready', when: 'end' }],
+    ['implement', 'Review', { state: 'Review', when: 'start' }],
+  ] as const)('%s with state %s', (kind, state, expected) => {
+    expect(cardStateOf({ kind, ...(state && { state }) })).toEqual(expected)
+  })
+
+  it('reads the state key and refuses a value that is not a macrostate or none', () => {
+    expect(stepWith('state: Review').workflow?.steps[1]?.state).toBe('Review')
+    expect(stepWith('state: Shipped').errors.length).toBeGreaterThan(0)
+  })
+})
 
 describe('workflow aliases (#672 AC-11)', () => {
   const ALIASED = QUICK.replace(
@@ -91,7 +114,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 7,
         key: 'steps.implement.when',
         problem: "unknown key 'when'",
-        fix: 'use one of kind, skill, uses, with, on-failed, alias',
+        fix: 'use one of kind, skill, uses, with, on-failed, alias, state',
       },
     ],
     [
