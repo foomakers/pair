@@ -302,6 +302,23 @@ describe('frozen copy and resume (AC-7)', () => {
     expect(lines.some(line => line.includes('started with no configuration'))).toBe(true)
     expect(launched).toEqual([])
   })
+
+  it('a resume on a frozen copy no configuration resolves now checks the copy\'s engines', async () => {
+    writeConfig(
+      'mine',
+      CONFIG.replace(
+        'engine: claude, model: claude-sonnet-5-5',
+        'engine: codex, model: gpt-6-sol',
+      ).replace('claude-opus-5-5', 'gpt-6-astra'),
+    )
+    await run(['quick'], { ...OK, 'pair-process-review': FAIL }, { config: 'mine' })
+    launched = []
+    const claudeOnly = { engineAvailable: (engine: string) => engine === 'claude' }
+    await expect(run(['quick'], OK, {}, claudeOnly)).rejects.toThrow(
+      "engine 'codex' is not installed",
+    )
+    expect(launched).toEqual([])
+  })
 })
 
 describe('the key telemetry and its flag (AC-9)', () => {
