@@ -288,6 +288,17 @@ steps:
     expect(run.files.readFileSync(`${DIR}/configuration.yaml`, 'utf8')).toBe(configuration.text)
   })
 
+  it('increments attempts across rounds and grants (#670-telemetry-attempt)', async () => {
+    const run = await opened()
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      if (attempt === 3) await start(run, source, { card: '627', moreRounds: 1 })
+      expect((await next(run)).ready[0]?.attempt).toBe(attempt)
+      await record(run, 'rounds/review', failedReview)
+      expect((await next(run)).ready[0]?.attempt).toBe(attempt)
+      await record(run, 'rounds/fix', fixed)
+    }
+  })
+
   it('resumes needs-human at the same step and round', async () => {
     const run = await opened()
     await next(run)
