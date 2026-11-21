@@ -46,6 +46,7 @@ import {
 } from './workflow-profile'
 import { ENGINE_IDS, isEngineId } from './engines'
 import { handleParallelRun } from './parallel-entry'
+import { handleWorkflowRun } from './workflow-host'
 import {
   declaredEngine,
   declaredEngineBin,
@@ -448,6 +449,9 @@ async function runCommand(
   fs: FileSystemService,
   callerDeps: RunHandlerDependencies,
 ): Promise<number> {
+  // US-652: a workflow name selects the workflow path; `--card` alone is the cycle below, unchanged.
+  if (rawConfig.workflow !== undefined)
+    return await handleWorkflowRun(rawConfig, rawConfig.workflow, { fs, deps: callerDeps })
   const dispatch = rawConfig.dispatch
   if (!dispatch || rawConfig.telemetry !== true)
     return await runCommandInner(rawConfig, fs, callerDeps)

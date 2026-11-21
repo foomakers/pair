@@ -1,7 +1,7 @@
 export const runCommandMetadata = {
   name: 'run',
   description: 'Run a pair skill headlessly on a chosen engine, re-invoked until it stops',
-  usage: 'pair-cli run [options]',
+  usage: 'pair-cli run [workflow] [options]',
   examples: [
     'pair-cli run --root 212 --max-iterations 5            # drive the #212 subtree, confirmations active',
     'pair-cli run --engine pi --root 212 --autonomous --max-iterations 3   # eligibility comes from the policy',
@@ -11,6 +11,8 @@ export const runCommandMetadata = {
     'pair-cli run --card 217 --card-tags "auto-dev,risk:green"   # tag-driven: the mapping picks the workflow',
     "pair-cli run --card 487                                # Ready, no mapping: drives or resumes the story's delivery cycle",
     'pair-cli run --cards 12,15,9 --autonomous             # ordered list: serial, retried in passes while progress is made',
+    'pair-cli run quick --card 627 --autonomous            # workflow `quick`: implement, then review, one step at a time',
+    'pair-cli run quick --card 627 --dry-run               # validates the workflow and prints its steps; launches nothing',
     'pair-cli run --card 487 --pr 42                        # enters the cycle at {verify, first, r0} — never prepare',
     'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',
     'pair-cli run --root 66 --parallel 3 --autonomous       # fan-out: up to 3 `run --card` processes at once',
@@ -19,7 +21,17 @@ export const runCommandMetadata = {
     'pair-cli run --skill pair-next --filter risk:green,risk:yellow --assignee @me --status Draft,Ready --max-iterations 1',
   ],
   options: [
+    {
+      flags: '[workflow]',
+      description:
+        'US-652: a workflow to run step by step on one card (needs --card): the path of a workflow file, else `.pair/adoption/tech/workflows/<name>.yaml`, else the knowledge-base default of that name. Validated before any launch; a failed step exits 1, a step that needs a person parks the run (exit 0) and prints the command that resumes it. Without it, `--card` runs the delivery cycle, unchanged',
+    },
     { flags: '--engine <id>', description: 'Engine to run: pi | opencode | claude | codex' },
+    {
+      flags: '--restart',
+      description:
+        'US-652: with a workflow name, archive the run directory and start the run over (a complete run is otherwise left as it is)',
+    },
     {
       flags: '--skill <name>',
       description: 'Skill to invoke (no fallback); default cascades pair-loop → pair-next',
@@ -98,7 +110,7 @@ export const runCommandMetadata = {
     {
       flags: '--run-id <id>',
       description:
-        "US-487: the delivery cycle's run identity; defaults to story-<card> (requires --card)",
+        "US-487: the delivery cycle's run identity; defaults to story-<card> (requires --card). US-652: with a workflow name, the run directory `.pair/working/runs/<id>`; defaults to <workflow>-<card>",
     },
     {
       flags: '--parallel <n>',

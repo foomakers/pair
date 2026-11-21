@@ -1,0 +1,371 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { hostname, tmpdir } from 'os'
+import { join } from 'path'
+import { fileSystemService as fs } from '@pair/content-ops'
+import { handleRunCommand } from './handler'
+import { parseRunCommand } from './parser'
+import type { SpawnIterationInput } from './spawn'
+import type { WorkflowHostDependencies } from './workflow-host'
+
+/**
+ * US-652 — `pair run <workflow> --card <id>`, through the command's own entry point, with a fake
+ * launcher and fake skills: no real agent, tracker or git. The disk is real (a temp project).
+ */
+
+const HEAD = 'a'.repeat(40)
+const fenced = (value: unknown) => `Done.\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\``
+const IMPLEMENTED = fenced({
+  status: 'ok',
+  summary: 'PR opened',
+  branch: 'feature/US-627-x',
+  pr: 12,
+  head: HEAD,
+})
+const REVIEWED = fenced({
+  status: 'ok',
+  summary: 'approved',
+  verdict: 'approved',
+  reviewedHead: HEAD,
+  findings: [],
+})
+const QUICK = `version: 1
+name: quick
+steps:
+  implement:
+    kind: implement
+    with:
+      gates: [quality-gate]
+  review:
+    kind: review
+`
+const REGISTRY = `### Custom Gate Registry
+
+| Order | Key | Gate | Command |
+| --- | --- | --- | --- |
+| 1 | quality-gate | Quality Gate | \`pnpm quality-gate\` |
+`
+
+/** A fake skill answers with the agent's final message, `undefined` when the agent dies, or throws on a crash. */
+type FakeSkill = () => string | undefined
+type Launched = Pick<SpawnIterationInput, 'promptText' | 'cwd'>
+
+let project: string
+let lines: string[]
+let launched: Launched[]
+
+const write = (path: string, content: string) => {
+  fs.mkdirSync(join(project, path, '..'), { recursive: true })
+  fs.writeFileSync(join(project, path), content)
+}
+const runDir = (id = 'quick-627') => join(project, '.pair/working/runs', id)
+const states = (id?: string) =>
+  Object.fromEntries(
+    Object.entries(
+      (
+        JSON.parse(fs.readFileSync(join(runDir(id), 'state.json'))) as {
+          steps: Record<string, { state: string }>
+        }
+      ).steps,
+    ).map(([step, record]) => [step, record.state]),
+  )
+
+/** The skill a prompt invokes: `/<skill>` on a slash engine, `Run the <skill> skill.` on an instruction one. */
+const skillOf = (prompt: string) => /^(?:\/|Run the )(\S+)/.exec(prompt)?.[1] ?? ''
+
+function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDependencies> = {}) {
+  const workflow: WorkflowHostDependencies = {
+    runIteration: async input => {
+      launched.push({ promptText: input.promptText, cwd: input.cwd })
+      const text = (skills[skillOf(input.promptText)] as FakeSkill)()
+      if (text !== undefined) input.onEvent?.({ type: 'result', subtype: 'success', result: text })
+      return text === undefined
+        ? { outcome: 'failed', detail: 'timed out (idle): no engine event for 1800s' }
+        : { outcome: 'success', detail: 'terminal event: success' }
+    },
+    readCard: async () => ({ title: 'A card' }),
+    prepareWorktree: async ({ main, card }) => join(main, 'worktrees', card),
+    engineAvailable: () => true,
+    ...over,
+  }
+  return { workflow }
+}
+
+const OK = { 'pair-process-implement': () => IMPLEMENTED, 'pair-process-review': () => REVIEWED }
+
+const run = (
+  args: string[],
+  skills: Record<string, FakeSkill> = OK,
+  options: Record<string, unknown> = {},
+  over: Partial<WorkflowHostDependencies> = {},
+) =>
+  handleRunCommand(
+    parseRunCommand({ card: '627', cwd: project, ...options }, args),
+    fs,
+    deps(skills, over),
+  )
+
+beforeEach(() => {
+  project = fs.mkdtempSync(join(tmpdir(), 'pair-workflow-'))
+  lines = []
+  launched = []
+  for (const skill of ['pair-process-implement', 'pair-process-review', 'my-skill'])
+    write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
+  write('.pair/adoption/tech/way-of-working.md', REGISTRY)
+  write('.pair/adoption/tech/workflows/quick.yaml', QUICK)
+  const keep = (...args: unknown[]) => void lines.push(args.join(' '))
+  vi.spyOn(console, 'log').mockImplementation(keep)
+  vi.spyOn(console, 'error').mockImplementation(keep)
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  fs.rmSync(project, { recursive: true, force: true })
+})
+
+describe('a linear run (AC-1)', () => {
+  it('runs the steps in file order in the card worktree, prints each outcome, leaves every step ok', async () => {
+    expect(await run(['quick'])).toBe(0)
+
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([
+      'pair-process-implement',
+      'pair-process-review',
+    ])
+    expect(launched.map(one => one.cwd)).toEqual(Array(2).fill(join(project, 'worktrees/627')))
+    expect(lines).toContain('  implement: ok — PR opened')
+    expect(lines).toContain('  review: ok — approved')
+    expect(lines).toContain('  Run: done — every step is ok.')
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+  })
+
+  it('stops at the step that fails: exit 1, the reason printed and stored', async () => {
+    const failing = () => fenced({ status: 'failed', summary: 'gate red', reason: 'quality-gate' })
+    expect(await run(['quick'], { ...OK, 'pair-process-implement': failing })).toBe(1)
+
+    expect(launched).toHaveLength(1)
+    expect(lines).toContain('  implement: failed — gate red (quality-gate)')
+    expect(lines).toContain(
+      '  Run: failed at step implement — gate red (quality-gate). Fix it, then resume with: pair-cli run quick --card 627',
+    )
+    expect(states()).toEqual({ implement: 'failed', review: 'pending' })
+    expect(
+      JSON.parse(fs.readFileSync(join(runDir(), 'steps/implement/result.json'))),
+    ).toMatchObject({ status: 'failed', reason: 'quality-gate' })
+  })
+
+  it('prints the engine with the level of the cascade that chose it', async () => {
+    await run(['quick'], OK, { engine: 'codex' })
+    expect(lines.find(line => line.startsWith('  Engine: '))).toMatch(
+      /^ {2}Engine: codex — .*\(from --engine\)$/,
+    )
+    expect(launched[0]?.promptText.split('\n')[0]).toBe('Run the pair-process-implement skill.')
+  })
+})
+
+describe('validation before any launch (AC-2, AC-3)', () => {
+  it.each([
+    [
+      'an unknown kind',
+      QUICK.replace('kind: review', 'kind: merge'),
+      'quick.yaml:9: steps.review.kind: unknown value "merge"',
+    ],
+    [
+      'an unknown gate key',
+      QUICK.replace('[quality-gate]', '[e2e]'),
+      "quick.yaml:7: steps.implement.with.gates.0: unknown gate key 'e2e' — fix: use one of quality-gate",
+    ],
+    [
+      'a skill that is not installed',
+      QUICK.replace('kind: review', 'kind: review\n    uses: nowhere'),
+      "quick.yaml:10: steps.review.uses: skill 'nowhere' is not installed",
+    ],
+  ])('refuses %s, naming file, line and fix, and launches nothing', async (_name, text, error) => {
+    write('.pair/adoption/tech/workflows/quick.yaml', text)
+    expect(await run(['quick'])).toBe(1)
+    expect(lines.some(line => line.includes(error) && line.includes('— fix: '))).toBe(true)
+    expect(lines).toContain('  Refused: 1 error(s); nothing was launched.')
+    expect(launched).toEqual([])
+    expect(fs.existsSync(runDir())).toBe(false)
+  })
+
+  it('--dry-run validates and prints the steps without launching or creating a run', async () => {
+    expect(await run(['quick'], OK, { dryRun: true })).toBe(0)
+    expect(lines).toContain('  1. implement — implement')
+    expect(lines).toContain('  2. review — review')
+    expect(lines).toContain('  Dry run: the workflow is valid; nothing was launched.')
+    expect(launched).toEqual([])
+    expect(fs.existsSync(runDir())).toBe(false)
+  })
+
+  it('--dry-run refuses an invalid workflow', async () => {
+    write('.pair/adoption/tech/workflows/quick.yaml', QUICK.replace('version: 1', 'version: 2'))
+    expect(await run(['quick'], OK, { dryRun: true })).toBe(1)
+    expect(
+      lines.some(line => line.includes('quick.yaml:1: version: unknown value 2 — fix: use 1')),
+    ).toBe(true)
+  })
+})
+
+describe('skill and options of a step (AC-4, AC-5)', () => {
+  it('runs the skill named by `uses` with the options of `with`, then asks for the result of the kind', async () => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('kind: review', 'kind: generic\n    uses: my-skill\n    with:\n      depth: 2'),
+    )
+    const mine = () => fenced({ status: 'ok', summary: 'noted' })
+    expect(await run(['quick'], { ...OK, 'my-skill': mine })).toBe(0)
+
+    const prompt = launched[1]?.promptText ?? ''
+    expect(prompt.split('\n').slice(0, 2)).toEqual(['/my-skill', ''])
+    expect(prompt).toContain('Options:\n- depth: 2')
+    expect(prompt).toContain('Inputs:\n- card: 627\n- branch: feature/US-627-x\n- pr: 12')
+    expect(prompt).toContain('End your turn with one JSON object in a fenced `json` block')
+  })
+
+  it.each([
+    ['a final message with no JSON result', () => 'All done, PR #12 is open.', 'invalid-result'],
+    ['an agent that died or timed out', () => undefined, 'no-result'],
+  ])('fails the step on %s', async (_name, skill, reason) => {
+    expect(await run(['quick'], { ...OK, 'pair-process-implement': skill })).toBe(1)
+    expect(
+      lines.some(line => line.startsWith('  implement: failed — ') && line.includes(`(${reason}`)),
+    ).toBe(true)
+    expect(states()).toEqual({ implement: 'failed', review: 'pending' })
+  })
+})
+
+describe('resume (AC-6)', () => {
+  it('resumes at a failed step and skips the ok ones', async () => {
+    const answers = [fenced({ status: 'failed', summary: 'one blocking finding' }), REVIEWED]
+    const skills = { ...OK, 'pair-process-review': () => answers.shift() }
+    expect(await run(['quick'], skills)).toBe(1)
+    expect(await run(['quick'], skills)).toBe(0)
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([
+      'pair-process-implement',
+      'pair-process-review',
+      'pair-process-review',
+    ])
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+  })
+
+  it('parks on needs-human: exit 0, what is needed and the command that resumes', async () => {
+    const parked = () => fenced({ status: 'needs-human', summary: 'pick the migration order' })
+    expect(await run(['quick'], { ...OK, 'pair-process-review': parked }, { runId: 'mine' })).toBe(
+      0,
+    )
+    expect(lines).toContain(
+      '  Run: parked at step review — it needs a person: pick the migration order. Resume with: pair-cli run quick --card 627 --run-id mine',
+    )
+    expect(states('mine')).toEqual({ implement: 'ok', review: 'needs-human' })
+  })
+
+  it('runs again a step an interrupted launch left running', async () => {
+    const crash = () => {
+      throw new Error('the process died')
+    }
+    await expect(run(['quick'], { ...OK, 'pair-process-implement': crash })).rejects.toThrow(
+      'the process died',
+    )
+    expect(states()).toEqual({ implement: 'running', review: 'pending' })
+
+    expect(await run(['quick'])).toBe(0)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+  })
+
+  it('leaves a complete run as it is, and starts it over with --restart', async () => {
+    await run(['quick'])
+    launched = []
+    expect(await run(['quick'])).toBe(0)
+    expect(launched).toEqual([])
+    expect(lines).toContain(
+      '  Run: already complete — nothing to do. Pass --restart to start over.',
+    )
+
+    expect(await run(['quick'], OK, { restart: true })).toBe(0)
+    expect(launched).toHaveLength(2)
+    expect(fs.existsSync(join(runDir(), 'archive'))).toBe(true)
+  })
+})
+
+describe('the run directory (AC-7)', () => {
+  it('holds the frozen workflow and the state, and keeps using the frozen copy when the file changes', async () => {
+    const failing = () => fenced({ status: 'failed', summary: 'gate red' })
+    await run(['quick'], { ...OK, 'pair-process-implement': failing })
+    expect(fs.readFileSync(join(runDir(), 'workflow.yaml'))).toBe(QUICK)
+    expect(fs.existsSync(join(runDir(), 'state.json'))).toBe(true)
+
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('  review:\n    kind: review\n', ''),
+    )
+    expect(await run(['quick'])).toBe(0)
+    expect(
+      lines.some(
+        line => line.startsWith('  Warning: ') && line.includes('changed after this run started'),
+      ),
+    ).toBe(true)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+  })
+
+  it('exits at once when another live process holds the run', async () => {
+    fs.mkdirSync(runDir(), { recursive: true })
+    fs.writeFileSync(
+      join(runDir(), 'run.lock'),
+      JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }),
+    )
+    expect(await run(['quick'])).toBe(1)
+    expect(
+      lines.some(line =>
+        line.startsWith(`  run-locked: pid ${String(process.pid)} on ${hostname()}`),
+      ),
+    ).toBe(true)
+    expect(launched).toEqual([])
+    expect(fs.existsSync(join(runDir(), 'state.json'))).toBe(false)
+  })
+
+  it('releases the lock when the run ends', async () => {
+    await run(['quick'])
+    expect(fs.existsSync(join(runDir(), 'run.lock'))).toBe(false)
+  })
+})
+
+describe('refusals before any launch (design §8)', () => {
+  it.each([
+    ['a card the tracker does not have', 'missing', 'card-not-found: card 627'],
+    ['a closed card', 'closed', 'card-closed: card 627 is closed'],
+  ] as const)('refuses %s', async (_name, card, message) => {
+    await expect(run(['quick'], OK, {}, { readCard: async () => card })).rejects.toThrow(message)
+    expect(launched).toEqual([])
+    expect(fs.existsSync(runDir())).toBe(false)
+  })
+
+  it('refuses when the engine is not installed', async () => {
+    await expect(run(['quick'], OK, {}, { engineAvailable: () => false })).rejects.toThrow(
+      "Engine 'claude' is not installed or not on PATH",
+    )
+    expect(launched).toEqual([])
+  })
+
+  it('refuses a workflow that is neither a file nor a known name', async () => {
+    await expect(run(['nowhere'])).rejects.toThrow(
+      "workflow-not-found: 'nowhere' is neither a workflow file nor a workflow name",
+    )
+  })
+})
+
+describe('workflow resolution (design §7)', () => {
+  it('takes the argument as a path when it is an existing file', async () => {
+    write('flows/quick.yaml', QUICK.replace('  review:\n    kind: review\n', ''))
+    expect(await run(['flows/quick.yaml'])).toBe(0)
+    expect(launched).toHaveLength(1)
+    expect(states()).toEqual({ implement: 'ok' })
+  })
+
+  it('falls back to the knowledge-base default of that name', async () => {
+    fs.rmSync(join(project, '.pair/adoption/tech/workflows'), { recursive: true, force: true })
+    expect(await run(['quick'], OK, { dryRun: true })).toBe(0)
+    expect(
+      lines.some(line => line.includes('dataset/.pair/adoption/tech/workflows/quick.yaml')),
+    ).toBe(true)
+  })
+})

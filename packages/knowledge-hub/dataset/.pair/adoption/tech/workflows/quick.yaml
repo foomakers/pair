@@ -1,0 +1,8 @@
+version: 1
+name: quick
+description: Implement a card and review the result.
+steps:
+  implement:
+    kind: implement
+  review:
+    kind: review

@@ -10,6 +10,7 @@
 - No compliance or integration requirements are adopted.
 - No formal scalability or performance constraints are adopted.
 - No external integrations are required for initial release.
+- Workflows described in YAML are interpreted by one package, `packages/workflows` (`@pair/workflows`): grammar, validator, step kinds, the `next` / `record` engine and the dispatch message. It launches no process, uses no git and no PM tool, and reads the disk only through a port a host passes in; an import-guard test enforces this. `apps/pair-cli` is its host (`pair-cli run <workflow>`) and depends on it, never the reverse ([ADR-031](adr/adr-031-workflows-package-and-hosts.md), [ADR-032](adr/adr-032-step-kinds-contracts-and-result-collection.md)).
 
 ## Knowledge Base Distribution
 

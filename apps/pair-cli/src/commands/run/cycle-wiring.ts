@@ -353,6 +353,20 @@ export async function readCardTitle(card: string, cwd: string): Promise<string |
   }
 }
 
+/** US-652: the card a workflow run is about — its title, or why it cannot be run. An unreadable card is `missing`. */
+export async function readRunnableCard(
+  card: string,
+  cwd: string,
+): Promise<{ readonly title: string } | 'missing' | 'closed'> {
+  try {
+    const view = await readCard(card, cwd)
+    return view.state === 'CLOSED' ? 'closed' : { title: view.title?.trim() ?? '' }
+  } catch (error) {
+    if (String(error).includes('host-transient:')) throw error
+    return 'missing'
+  }
+}
+
 /** `## Auto-Advance`'s tiers as `resolve` takes them; `(none)` / absent ⇒ none. A malformed section HALTs. */
 export function readAutoAdvanceTiers(fs: FileSystemService, main: string): readonly string[] {
   const { autoAdvance } = readAutomationPolicy(fs, main)

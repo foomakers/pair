@@ -51,6 +51,7 @@
     "@inquirer/prompts": "catalog:",
     "@pair/content-ops": "workspace:*",
     "@pair/knowledge-hub": "workspace:*",
+    "@pair/workflows": "workspace:*",
     "adm-zip": "catalog:",
     "chalk": "catalog:",
     "commander": "catalog:",

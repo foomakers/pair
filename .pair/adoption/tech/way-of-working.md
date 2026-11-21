@@ -137,11 +137,11 @@ The "Merge" column only bites when `Review enforcement` is `enabled` (above). Di
 
 Gate 2 runs a **subset** in CI: the `smoke` job in `ci.yml` runs `run-all.sh --ci`, i.e. the CI-safe list declared in [`scripts/smoke-tests/lib/ci-tests.sh`](../../../scripts/smoke-tests/lib/ci-tests.sh) — the full suite is the local `pnpm smoke-tests` command in the table. Membership is an enforced rule with recorded exceptions (#400, ADL [2026-08-11-smoke-suite-runs-in-ci-pre-merge.md](../decision-log/2026-08-11-smoke-suite-runs-in-ci-pre-merge.md)).
 
-| Order | Gate         | Command                           | Scope Key | Required | Description                                    |
-| ----- | ------------ | --------------------------------- | --------- | -------- | ---------------------------------------------- |
-| 1     | Quality Gate | `pnpm quality-gate`               | quality   | Yes      | build, test, formatting check (never fix)      |
-| 2     | Smoke tests  | `pnpm smoke-tests`                | testing   | Yes      | e2e CLI/release scenarios; CI-safe list per PR |
-| 3     | E2E tests    | `pnpm --filter @pair/website e2e` | testing   | Yes      | Playwright E2E tests (builds + starts Next.js) |
+| Order | Key          | Gate         | Command                           | Scope Key | Required | Description                                    |
+| ----- | ------------ | ------------ | --------------------------------- | --------- | -------- | ---------------------------------------------- |
+| 1     | quality-gate | Quality Gate | `pnpm quality-gate`               | quality   | Yes      | build, test, formatting check (never fix)      |
+| 2     | smoke-tests  | Smoke tests  | `pnpm smoke-tests`                | testing   | Yes      | e2e CLI/release scenarios; CI-safe list per PR |
+| 3     | e2e-tests    | E2E tests    | `pnpm --filter @pair/website e2e` | testing   | Yes      | Playwright E2E tests (builds + starts Next.js) |
 
 ---
 

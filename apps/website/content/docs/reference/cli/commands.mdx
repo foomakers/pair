@@ -814,13 +814,15 @@ already defines, and that file is never written. **It never merges, in any mode.
 ### Usage
 
 ```bash
-pair-cli run [options]
+pair-cli run [workflow] [options]
 ```
 
 ### Options
 
 | Option                          | Description                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `[workflow]`                    | A workflow to run step by step on one card: a file path or a workflow name. Needs `--card`. See [Run a workflow file](#run-a-workflow-file-pair-cli-run-workflow) |
+| `--restart`                     | With a workflow name: archive the run directory and start the run over                              |
 | `--engine <id>`                 | Engine to drive: `pi`, `opencode`, `claude` or `codex`. Precedence: flag > `pair.config.json` > schema default |
 | `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back: a missing skill is an error                     |
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
@@ -838,7 +840,7 @@ pair-cli run [options]
 | `--card-tags <list>`            | Comma-separated labels the trigger observed on `--card` (explicit override). Absent with `--autonomous` ⇒ the card's live labels are read from the tracker (unreadable ⇒ fails closed, nothing runs). Empty or unmapped ⇒ the card's own readiness decides |
 | `--pr <n>`                      | Enter the cycle straight at fix-and-review on an existing PR: the first stage is `verify`, no `prepare` before it. Requires `--card` |
 | `--rounds <n\|max>`             | Remediation round budget for a cycle run. Numeric `n` overrides `maxFixRounds`; omitted or `max` uses the policy budget |
-| `--run-id <segment>`            | Run directory to continue. Defaults to `story-<card>`: the same convention the batch engine uses       |
+| `--run-id <segment>`            | Run directory to continue. Defaults to `story-<card>`: the same convention the batch engine uses. With a workflow name: `<workflow>-<card>` |
 | `--parallel <n>`                | Fan-out: up to `min(dependency-allowed, n)` cards at once; explicit `n` overrides adopted `## Max Parallelism`, each card's delivery cycle driven in the loop's own process (its stages are skills, each its own engine process, never a nested `pair-cli run`), see below. Optional: the loop flags (`--watch`, `--preset`, `--until`, `--prepare`, `--merge`, `--predicate`) imply fan-out; omitted `--parallel` inherits adopted `## Max Parallelism`, otherwise KB default 1. Needs `--root` or `--filter` (or the policy's); not combinable with `--card`/`--skill`/`--prompt` |
 | `--watch`                       | On the loop (`--parallel` optional; omission inherits adopted `## Max Parallelism`, otherwise KB default 1): the watch loop, every iteration re-selects (skipping escalated cards until the escalation clears, locked cards, and terminal ones, merged, parked, target reached, or a durable failure (`failed-*`, `escalate` awaiting a human); a TRANSIENT failure (a crash or an engine/API error before the cycle reported) is retried once per run, then excluded as `retry budget exhausted`) and an idle one waits `--interval`. Stops at the Stop Predicate, the iteration cap (only iterations that ran a card count: an idle poll never spends it, so with no cap the watch loop stays on, waiting for new cards) or Ctrl-C. `--parallel 1` for a sequential agent |
 | `--no-watch`                    | Explicitly no watch loop (the default; refused together with `--watch`)                      |
@@ -950,6 +952,54 @@ The cycle's own values (the workflow version, the base branch, the worktree root
 Worktrees default to `../pair-worktrees/<main-checkout-name>/<card>` relative to the canonical main checkout. Linked checkouts use that same anchor. Set top-level `pair.config.json` `worktreeRoot` to use another root directly: absolute paths may contain spaces; relative paths use safe segments and at most one leading `..`. An empty, non-string or traversing value stops before creation. Set `"worktreeRoot": "../pair-worktrees"` to reuse legacy trees; none are moved or removed. A destination owned by another Git repository stops as `worktree-conflict` with both Git identities for manual resolution.
 
 Missing pieces HALT: `skill-missing` (the skill is not installed) and `worktree-conflict` (an occupied destination or another branch) before any spawn; `agent-definition-missing` (a stage's role, located through the `agent-definitions` registry) when the stage that needs that role is due, before any spawn for the first stage's role, later for a role only a later stage uses (e.g. the preparation role, first needed by a finding round).
+
+### Run a workflow file: `pair-cli run <workflow>`
+
+A workflow is a YAML file of typed steps. A workflow name as the positional argument runs it on
+one card, one step at a time, in file order. The grammar and the step kinds are in the knowledge
+base: `.pair/knowledge/guidelines/collaboration/automation/workflow-grammar.md` and
+`workflow-kinds.md`.
+
+```bash
+pair-cli run quick --card 627 --autonomous
+```
+
+`pair-cli run --card 627` with no workflow name is the delivery cycle above, unchanged.
+
+- **Which file.** The argument is a path if that file exists; else
+  `.pair/adoption/tech/workflows/<name>.yaml`; else the knowledge-base default of that name
+  (`quick` ships with pair).
+- **Validated first.** Form (version, keys, kinds, a non-empty `steps`) and coherence (installed
+  skills, inputs, options, gate keys) are checked before anything is launched. An error names the
+  file, the line and the fix, and the command exits `1`. `--dry-run` validates, prints the steps
+  and launches nothing.
+- **One agent per step**, in the card's worktree (`../pair-worktrees/<card>`), on one engine and
+  its default model for the whole run. The engine is printed with the level that chose it
+  (`--engine` > `pair.config.json` > default).
+- **Each step returns a result.** The agent ends its turn with one JSON object in a fenced `json`
+  block: `status` (`ok`, `failed` or `needs-human`), `summary`, and the fields of the step's kind.
+  A missing or invalid result fails the step with `invalid-result`; an agent that died or timed
+  out fails it with `no-result`.
+- **The run directory** is `.pair/working/runs/<run-id>/` in the main checkout: `run.lock`,
+  `workflow.yaml` (a copy frozen at the start), `state.json`, and per step `result.json` and
+  `output.log`. `<run-id>` defaults to `<workflow>-<card>`; `--run-id` overrides it. A second
+  process on the same run exits at once on the lock.
+
+| Outcome                         | What the command does                                                             |
+| ------------------------------- | --------------------------------------------------------------------------------- |
+| Every step `ok`                 | Exit `0`                                                                          |
+| A step `failed`                 | The run stops; exit `1`; the reason is printed and stored                         |
+| A step `needs-human`            | The run parks; exit `0`; prints what is needed and the command that resumes it    |
+| Launched again after a stop     | Resumes at that step; `ok` steps are not run again                                |
+| Interrupted, launched again     | The step that was running runs again from the start                               |
+| Launched again when complete    | Nothing runs: "already complete". `--restart` archives the directory and starts over |
+| Workflow file changed mid-run   | The frozen copy is used; a warning says the file changed                          |
+| Card not found or closed        | Refused before any launch                                                         |
+
+With a workflow name the command takes `--card`, `--engine`, `--run-id`, `--restart`, `--dry-run`,
+`--cwd`, `--autonomous`, `--approve-project-trust`, the timeouts and the output flags. `--profile`
+and `--workflow-config` are refused: per-step configuration is not available yet. The flags of the
+cycle and of the loop (`--pr`, `--rounds`, `--root`, `--filter`, `--parallel`, …) are refused too.
 
 ### Fan-out: `--parallel <n>` (`--root <id>` and/or `--filter <label>`)
 

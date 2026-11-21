@@ -96,6 +96,8 @@ export type CycleDriver = (input: DriveCycleInput) => Promise<DriveCycleResult>
 
 export interface RunHandlerDependencies {
   runIteration?: IterationRunner
+  /** US-652: the collaborators of `pair run <workflow>` (default: the real agent, tracker and worktree). */
+  workflow?: import('./workflow-host').WorkflowHostDependencies
   /** The per-card concurrency guard. Injected so a test never touches a real working area. */
   acquireLock?: LockAcquirer
   /** The audit writer. Injected for the same reason — the trail is a real file, by design. */

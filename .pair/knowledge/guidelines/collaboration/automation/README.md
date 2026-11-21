@@ -18,6 +18,7 @@ This framework covers:
 - Unattended-development policy: which cards may run without a human (`tech/automation.md` — [automation-policy.md](automation-policy.md))
 - Workflow profiles: which engine, model, effort and context each delivery-cycle stage uses ([workflow-profiles.md](workflow-profiles.md))
 - The delivery cycle end to end: stages, realizations, hooks, merge, adapters ([delivery-cycle.md](delivery-cycle.md))
+- Workflows described in YAML: the grammar ([workflow-grammar.md](workflow-grammar.md)), the step kinds ([workflow-kinds.md](workflow-kinds.md)) and the shipped `quick` workflow ([workflow-quick.md](workflow-quick.md))
 
 ## Out of Scope
 

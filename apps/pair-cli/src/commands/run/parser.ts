@@ -66,8 +66,21 @@ export interface RunDispatchRequest {
   readonly rounds?: number | 'max'
 }
 
+/** US-652: `pair run <workflow> --card <id>` — a workflow file run step by step, its own path beside the cycle. */
+export interface RunWorkflowRequest {
+  /** A workflow name, or the path of a workflow file. */
+  readonly name: string
+  readonly card: string
+  /** `--run-id`, when passed; the host defaults it to `<workflow>-<card>`. */
+  readonly runId?: string
+  /** `--restart`: archive the run directory and start over. */
+  readonly restart: boolean
+}
+
 export interface RunCommandConfig {
   command: 'run'
+  /** US-652: present only when a workflow name was passed as the positional argument. */
+  workflow?: RunWorkflowRequest
   /** Internal immutable configuration passed from the root/parallel parent. */
   runSnapshot?: string
   /** AC-24: explicit --telemetry / --no-telemetry; absent reads the adoption. */
@@ -185,6 +198,8 @@ interface ParseRunOptions {
   profile?: string
   /** US-488: `--workflow-config <path>` — an external profile file, wins over every other source; needs `--card`, `--root` or `--parallel`. */
   workflowConfig?: string
+  /** US-652: `--restart` — only with a workflow name. */
+  restart?: boolean
 }
 
 function parsePositiveInteger(flag: string, raw: string | number): number {
@@ -707,10 +722,93 @@ function explicitParallel(
   return input.parallel !== undefined && cards.cards === undefined ? parallel : {}
 }
 
-export function parseRunCommand(input: ParseRunOptions, args: string[] = []): RunCommandConfig {
-  if (args.length > 0) {
-    throw new Error(`Command 'run' does not accept positional arguments: ${args.join(', ')}`)
+/** Flags of the cycle and of the loop: none of them reaches a workflow run. */
+const FLAGS_NOT_FOR_A_WORKFLOW = [
+  ['skill', '--skill'],
+  ['prompt', '--prompt'],
+  ['root', '--root'],
+  ['filter', '--filter'],
+  ['assignee', '--assignee'],
+  ['status', '--status'],
+  ['cards', '--cards'],
+  ['cardTags', '--card-tags'],
+  ['pr', '--pr'],
+  ['rounds', '--rounds'],
+  ['parallel', '--parallel'],
+  ['stateOrder', '--state-order'],
+  ['watch', '--watch'],
+  ['interval', '--interval'],
+  ['preset', '--preset'],
+  ['until', '--until'],
+  ['prepare', '--prepare'],
+  ['merge', '--merge'],
+  ['predicate', '--predicate'],
+  ['eligibilityFilter', '--eligibility-filter'],
+  ['maxIterations', '--max-iterations'],
+] as const
+
+const passed = <K extends keyof ParseRunOptions>(
+  options: ParseRunOptions,
+  flags: ReadonlyArray<readonly [K, string]>,
+): string[] => flags.filter(([key]) => options[key] !== undefined).map(([, flag]) => flag)
+
+/**
+ * US-652: the positional argument names a workflow. `--profile` and `--workflow-config` are refused
+ * with it — a workflow run has one engine and its default model for every step until #672.
+ */
+function resolveWorkflowRun(
+  name: string | undefined,
+  options: ParseRunOptions,
+): RunWorkflowRequest | undefined {
+  if (name === undefined) {
+    if (options.restart === true)
+      throw new Error(
+        '--restart was passed without a workflow name: it restarts `pair-cli run <workflow> --card <id>`',
+      )
+    return undefined
   }
+  const workflow = promptSafeText(name, 'the workflow name')!
+  const configured = passed(options, [
+    ['profile', '--profile'],
+    ['workflowConfig', '--workflow-config'],
+  ])
+  if (configured.length > 0)
+    throw new Error(
+      `${configured.join(' and ')} cannot be combined with a workflow name: \`pair-cli run ${workflow}\` ` +
+        'uses one engine and its default model for every step (pass --engine to choose it). ' +
+        'Per-step configuration arrives with #672.',
+    )
+  const foreign = passed(options, FLAGS_NOT_FOR_A_WORKFLOW)
+  if (foreign.length > 0)
+    throw new Error(
+      `${foreign.join(', ')} cannot be combined with a workflow name: \`pair-cli run ${workflow}\` takes ` +
+        '--card, --engine, --run-id, --restart, --dry-run, --cwd, the timeouts and the output flags.',
+    )
+  const card = identifierText(options.card, '--card')
+  if (card === undefined)
+    throw new Error(`\`pair-cli run ${workflow}\` needs --card <id>: a workflow runs on one card`)
+  const runId = identifierText(options.runId, '--run-id')
+  return {
+    name: workflow,
+    card,
+    ...(runId !== undefined && { runId }),
+    restart: options.restart === true,
+  }
+}
+
+/** The one positional argument `run` takes: a workflow name (US-652). */
+function workflowOf(args: string[], input: ParseRunOptions): Pick<RunCommandConfig, 'workflow'> {
+  if (args.length > 1) {
+    throw new Error(
+      `Command 'run' accepts one positional argument, the workflow name: ${args.join(', ')}`,
+    )
+  }
+  const workflow = resolveWorkflowRun(args[0], input)
+  return workflow === undefined ? {} : { workflow }
+}
+
+export function parseRunCommand(input: ParseRunOptions, args: string[] = []): RunCommandConfig {
+  const workflow = workflowOf(args, input)
   const options = withImpliedParallel(input)
 
   const engine = resolveEngineFlag(options.engine)
@@ -725,6 +823,7 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
 
   return {
     command: 'run',
+    ...workflow,
     ...telemetryOptionOf(options),
     ...(engine && { engine }),
     ...(dispatch && { dispatch }),
