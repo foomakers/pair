@@ -265,7 +265,12 @@ function withMoreRounds(
     steps: {
       ...state.steps,
       [id]: { state: 'running' },
-      ...Object.fromEntries(children.map(child => [`${id}/${child.id}`, { state: 'pending', executions: state.steps[`${id}/${child.id}`]?.executions ?? 0 }])),
+      ...Object.fromEntries(
+        children.map(child => [
+          `${id}/${child.id}`,
+          { state: 'pending', executions: state.steps[`${id}/${child.id}`]?.executions ?? 0 },
+        ]),
+      ),
     },
   }
 }
@@ -563,7 +568,13 @@ function closeRound({ state, outer }: Advance, { steps, loops }: Progress): Prog
     steps: {
       ...steps,
       ...Object.fromEntries(
-        (outer.steps ?? []).map(child => [`${outerId}/${child.id}`, { state: 'pending' as const, executions: steps[`${outerId}/${child.id}`]?.executions ?? 0 }]),
+        (outer.steps ?? []).map(child => [
+          `${outerId}/${child.id}`,
+          {
+            state: 'pending' as const,
+            executions: steps[`${outerId}/${child.id}`]?.executions ?? 0,
+          },
+        ]),
       ),
     },
     loops: { ...state.loops, [outerId]: { ...loop, round: loop.round + 1 } },
@@ -587,7 +598,10 @@ function advanceLoop(a: Advance, recorded: Record<string, StepRecord>): Progress
   const progress = { steps: recorded, loops }
   if (status === 'needs-human') return progress
   if (isUntil && status === 'ok')
-    return { steps: { ...recorded, [outer.id]: { state: 'ok', outputs: { ...state.latest, ...outputs } } }, loops }
+    return {
+      steps: { ...recorded, [outer.id]: { state: 'ok', outputs: { ...state.latest, ...outputs } } },
+      loops,
+    }
   const children = outer.steps ?? []
   const last = children[children.length - 1]?.id === childId
   return (status === 'failed' && !isUntil) || last ? closeRound(a, progress) : progress
