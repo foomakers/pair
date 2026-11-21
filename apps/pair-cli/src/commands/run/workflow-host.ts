@@ -491,6 +491,19 @@ async function runOnConsole(
       telemetryOf(config, opened),
     )
     await Promise.all(pending)
+    const state = JSON.parse(fs.readFileSync(join(runDir, 'state.json'))) as {
+      loops?: Record<string, { exhausted?: boolean }>
+      steps: Record<string, { summary?: string; state: string }>
+    }
+    const exhausted = resolved.workflow.steps.find(step => state.loops?.[step.id]?.exhausted)
+    if (exhausted !== undefined && outcome.run !== 'done') {
+      const last = state.steps[`${exhausted.id}/${exhausted.until}`]
+      const why = `${state.steps[exhausted.id]?.summary}; last until: ${last?.state} — ${last?.summary}`
+      sink.event({ event: 'card-end', card: request.card, status: outcome.run === 'failed' ? 'failed' : 'awaiting-human', reason: why })
+      const flag = outcome.run === 'failed' ? '--restart' : '--more-rounds <n>'
+      console.log(`  Run: ${why}. Resume with: ${resumeCommand(request)} ${flag}`)
+      return outcome.run === 'failed' ? 1 : 0
+    }
     return conclude(outcome, request, sink)
   } finally {
     sink.finish()
