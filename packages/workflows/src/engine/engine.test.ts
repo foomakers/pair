@@ -273,6 +273,21 @@ steps:
     expect((await next(run)).ready[0]?.inputs.head).toBe(newer)
   })
 
+  it.each([false, true])('keeps parked reconfiguration consistent with grant %s (#670-reconfigure-budget)', async grant => {
+    const run = await opened()
+    for (let round = 0; round < 2; round++) {
+      await next(run)
+      await record(run, 'rounds/review', failedReview)
+      await next(run)
+      await record(run, 'rounds/fix', fixed)
+    }
+    const configuration = { text: 'version: 1\nname: c\ndefaults: { engine: codex }\nsteps: { rounds: { max: 4 } }\n' }
+    await start(run, source, { card: '627', reconfigure: true, configuration, ...(grant ? { moreRounds: 1 } : {}) })
+    expect(stateOf(run).loops.rounds.max).toBe(grant ? 3 : 4)
+    expect(stateOf(run).configuration).toBeDefined()
+    expect(run.files.readFileSync(`${DIR}/configuration.yaml`, 'utf8')).toBe(configuration.text)
+  })
+
   it('resumes needs-human at the same step and round', async () => {
     const run = await opened()
     await next(run)
