@@ -450,6 +450,12 @@ async function drive(
   console.log(`  Run dir: ${runDir} (${started.status})`)
   const effective = readEffective(fs, runDir)
   printSettings(resolved, effective)
+  // A resumed run that froze no configuration launches on the run's own engine, which preflight did not check.
+  if (effective === undefined && resolved.configuration !== undefined)
+    assertEngineAvailable(
+      resolved.engine,
+      deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
+    )
   if (started.status === 'complete') {
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
     return 0

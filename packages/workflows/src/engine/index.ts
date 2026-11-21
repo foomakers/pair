@@ -156,6 +156,24 @@ async function archive(run: RunDirectory, now: Date): Promise<void> {
   }
 }
 
+/** What a resume says when the configuration that resolves now is not the one the run froze. */
+function configurationWarnings(
+  run: RunDirectory,
+  state: RunStateFile,
+  configuration: StartOptions['configuration'],
+): string[] {
+  if (configuration === undefined) return []
+  if (state.configuration === undefined)
+    return [
+      'this run started with no configuration and keeps none — pass --reconfigure to apply the one that now resolves',
+    ]
+  return state.configuration.hash === hashOf(configuration.text)
+    ? []
+    : [
+        `the configuration changed after this run started: the frozen copy in ${run.dir} is used — pass --reconfigure to replace it`,
+      ]
+}
+
 async function resume(
   run: RunDirectory,
   saved: RunStateFile,
@@ -168,21 +186,14 @@ async function resume(
     throw new Error(
       `run-mismatch: ${run.dir} is the run of card ${state.card}, not of card ${card} — pass another --run-id`,
     )
-  const warnings =
+  const warnings: string[] =
     hashOf(source.text) === state.workflow.hash
       ? []
       : [`${source.file} changed after this run started: the frozen copy in ${run.dir} is used`]
   if (configuration !== undefined && options.reconfigure === true) {
     await writeAtomic(run.files, join(run.dir, FROZEN_CONFIGURATION), configuration.text)
     state = { ...state, configuration: configurationRecord(configuration) }
-  } else if (
-    configuration !== undefined &&
-    state.configuration !== undefined &&
-    state.configuration.hash !== hashOf(configuration.text)
-  )
-    warnings.push(
-      `the configuration changed after this run started: the frozen copy in ${run.dir} is used — pass --reconfigure to replace it`,
-    )
+  } else warnings.push(...configurationWarnings(run, state, configuration))
   const records = Object.entries(state.steps)
   if (records.every(([, step]) => step.state === 'ok')) {
     if (state !== saved) await writeState(run, state)
