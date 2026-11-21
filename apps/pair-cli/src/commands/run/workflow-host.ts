@@ -2,6 +2,7 @@ import { basename, extname, join, resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import {
   cardStateOf,
+  checkAgainstEngines,
   describeSettings,
   formatError,
   frozenConfiguration,
@@ -44,7 +45,7 @@ import { readStateMapping } from './card-readiness'
 import { createExecutableProbe } from './path-probe'
 import { createSkillProbe } from './skill-probe'
 import { ENGINES, isEngineId, type EngineDefinition } from './engines'
-import { resolveConfiguration, type ConfigurationPlan } from './workflow-configuration'
+import { engineFacts, resolveConfiguration, type ConfigurationPlan } from './workflow-configuration'
 import { isSafePromptText } from './prompt-safety'
 import { acquireRunLock } from './run-lock'
 import { isInterrupted, whileInterruptible } from './interrupt'
@@ -499,6 +500,19 @@ async function drive(
   console.log(`  Run dir: ${runDir} (${started.status})`)
   const effective = readEffective(fs, runDir)
   printSettings(resolved, effective)
+  // A frozen copy no configuration re-resolved now: its engines were not probed by preflight.
+  if (effective !== undefined && resolved.configuration === undefined) {
+    const { errors } = checkAgainstEngines(effective, {
+      file: join(runDir, 'configuration.yaml'),
+      facts: engineFacts(
+        resolved.project,
+        deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
+      ),
+      steps: resolved.workflow.steps,
+      aliases: resolved.workflow.aliases,
+    })
+    if (errors.length > 0) throw new Error(errors.map(formatError).join('\n'))
+  }
   // A resumed run that froze no configuration launches on the run's own engine, which preflight did not check.
   if (effective === undefined && resolved.configuration !== undefined)
     assertEngineAvailable(
