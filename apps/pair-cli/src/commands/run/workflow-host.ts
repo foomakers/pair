@@ -246,12 +246,12 @@ interface Launch {
 function stepSettings(
   resolved: Resolved,
   effective: Configuration | undefined,
-  step: { readonly id: string; readonly kind: StepLaunch['kind'] },
+  step: { readonly id: string; readonly alias?: string },
 ): StepSettings {
   const { id } = resolved.engine.engine
   if (effective === undefined)
     return { engine: id, model: declaredEngineModel(resolved.project, id) }
-  const { engine, model, effort } = settingsFor(effective, step)
+  const { engine, model, effort } = settingsFor(effective, step, resolved.workflow.aliases)
   return { engine, model: model ?? declaredEngineModel(resolved.project, engine), effort }
 }
 
@@ -290,7 +290,7 @@ function launcher(run: Launch) {
     message: string,
     meter: (usage: Usage) => void,
   ): Promise<string | undefined> => {
-    const settings = stepSettings(resolved, run.effective, step)
+    const settings = stepSettings(resolved, run.effective, stepOf(resolved, step.id))
     const engine = engineOf(resolved, settings.engine)
     const { autonomyArgs, idle } = policyOf(engine)
     let text: string | undefined
@@ -493,7 +493,9 @@ function printSettings(resolved: Resolved, effective: Configuration | undefined)
     `  Configuration: ${effective.name}${resolved.configuration ? ` — ${resolved.configuration.source}` : ' — frozen copy'}`,
   )
   resolved.workflow.steps.forEach(step =>
-    console.log(`    ${describeSettings(step.id, settingsFor(effective, step))}`),
+    console.log(
+      `    ${describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))}`,
+    ),
   )
 }
 

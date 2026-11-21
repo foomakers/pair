@@ -1,6 +1,8 @@
 version: 1
 name: codex-cheap
 defaults: { engine: codex, effort: low }
-kinds:
-  implement: { effort: medium }
-  review: { effort: high }
+aliases:
+  build: { engine: codex, effort: medium }
+  judge: { engine: codex, effort: high }
+steps:
+  fix: { effort: low }

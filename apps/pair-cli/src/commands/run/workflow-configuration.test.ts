@@ -255,9 +255,9 @@ describe('override (AC-6)', () => {
     expect(
       await run(['quick'], OK, { config: 'mine', configOverride: '{"aliases":{"ghost":{}}}' }),
     ).toBe(1)
-    expect(await run(['quick'], OK, { configOverride: '{"aliases":{"judge":{"model":"m"}}}' })).toBe(
-      1,
-    )
+    expect(
+      await run(['quick'], OK, { configOverride: '{"aliases":{"judge":{"model":"m"}}}' }),
+    ).toBe(1)
     expect(launched).toEqual([])
   })
 })
@@ -288,13 +288,17 @@ describe('frozen copy and resume (AC-7)', () => {
     await run(['quick'], { ...OK, 'pair-process-review': FAIL })
     writeConfig(
       'mine',
-      CONFIG.replace('engine: claude, model: claude-sonnet-5-5', 'engine: codex, model: gpt-6-sol')
-        .replace('claude-opus-5-5', 'gpt-6-astra'),
+      CONFIG.replace(
+        'engine: claude, model: claude-sonnet-5-5',
+        'engine: codex, model: gpt-6-sol',
+      ).replace('claude-opus-5-5', 'gpt-6-astra'),
     )
     lines.length = 0
     launched = []
     const codexOnly = { engineAvailable: (engine: string) => engine === 'codex' }
-    expect(await run(['quick'], OK, { config: 'mine' }, codexOnly)).toBe(1)
+    await expect(run(['quick'], OK, { config: 'mine' }, codexOnly)).rejects.toThrow(
+      "Engine 'claude' is not installed",
+    )
     expect(lines.some(line => line.includes('started with no configuration'))).toBe(true)
     expect(launched).toEqual([])
   })

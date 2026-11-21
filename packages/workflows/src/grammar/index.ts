@@ -11,6 +11,20 @@ export const STEP_ID = '^[a-z][a-z0-9-]*$'
 /** A skill name, as the registries install it. */
 export const SKILL_NAME = '^[a-z0-9][a-z0-9:._-]*$'
 
+/** Engine, model and effort of a step; each is resolved on its own. */
+export interface Entry {
+  readonly engine?: string
+  readonly model?: string
+  readonly effort?: string
+}
+
+const text = { type: 'string' } as const
+export const entrySchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { engine: text, model: text, effort: text },
+}
+
 const stepSchema: JsonSchema = {
   type: 'object',
   required: ['kind'],
@@ -32,6 +46,7 @@ const stepSchema: JsonSchema = {
       description:
         'What a `failed` step does to the run. `stop` (default) stops it; `continue` records the failure and runs the next step.',
     },
+    alias: { type: 'string', description: 'The alias, declared in `aliases`, the step runs with.' },
   },
 }
 
@@ -44,6 +59,12 @@ export const workflowSchemaV1: JsonSchema = {
     version: { const: 1, description: 'The grammar version.' },
     name: { type: 'string', description: 'Equals the file name without its extension.' },
     description: { type: 'string' },
+    aliases: {
+      type: 'object',
+      propertyNames: { pattern: STEP_ID },
+      additionalProperties: entrySchema,
+      description: 'The aliases the steps cite, each with its default engine, model and effort.',
+    },
     steps: {
       type: 'object',
       minProperties: 1,
@@ -72,12 +93,16 @@ export interface Step {
   readonly uses?: string
   readonly with?: Readonly<Record<string, unknown>>
   readonly 'on-failed'?: 'stop' | 'continue'
+  /** One of the workflow's `aliases`: what a configuration sets for the step. */
+  readonly alias?: string
 }
 
 export interface Workflow {
   readonly version: 1
   readonly name: string
   readonly description?: string
+  /** The declared aliases, each with its defaults. */
+  readonly aliases?: Readonly<Record<string, Entry>>
   /** In file order: the execution order. */
   readonly steps: readonly Step[]
   readonly file: string
@@ -222,6 +247,17 @@ export function parseWorkflow(text: string, file: string): ParsedWorkflow {
     ...nameError(value, file, lines),
   ]
   if (errors.length > 0) return { errors }
+  const undeclared = Object.entries(value.steps)
+    .filter(
+      ([, step]) => step.alias !== undefined && !Object.hasOwn(value.aliases ?? {}, step.alias),
+    )
+    .map(([id, step]) =>
+      errorAt({ file, lines }, ['steps', id, 'alias'], {
+        problem: `alias '${String(step.alias)}' is not declared in aliases`,
+        fix: `declare ${String(step.alias)} under aliases, or cite a declared alias`,
+      }),
+    )
+  if (undeclared.length > 0) return { errors: undeclared }
 
   const steps = Object.entries(value.steps).map(([id, step]) => ({ id, ...step }))
   return { workflow: { ...value, steps, file, lines }, errors: [] }

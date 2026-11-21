@@ -1,0 +1,6 @@
+version: 1
+name: codex
+defaults: { engine: codex, model: gpt-6-sol, effort: medium }
+aliases:
+  build: { engine: codex, model: gpt-6-sol, effort: medium }
+  judge: { engine: codex, model: gpt-6-astra, effort: high }

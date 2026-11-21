@@ -34,6 +34,7 @@ steps:
 | `version`     | Yes      | The grammar version. Only `1` is known.                              |
 | `name`        | Yes      | The workflow name. It equals the file name without its extension.    |
 | `description` | No       | One line for people.                                                 |
+| `aliases`     | No       | Names the steps cite, each with its default `engine`, `model`, `effort`; a configuration sets them (see [workflow-configuration.md](workflow-configuration.md)). |
 | `steps`       | Yes      | A non-empty map of steps, by id. Execution order is the file order.  |
 
 Each step:
@@ -44,6 +45,7 @@ Each step:
 | `skill` | Only for `generic`          | The skill that runs. A typed kind has a default skill; `skill` replaces it.     |
 | `with` | No                           | Options of the step. The kind declares the keys it accepts.                     |
 | `on-failed` | No                      | `stop` (default) or `continue`: what a `failed` step does to the run.           |
+| `alias` | No                          | One of `aliases`: the settings the step runs with. A step citing an undeclared alias is an error. |
 
 A step id starts with a lower-case letter and continues with lower-case letters, digits and hyphens: it names a directory of the run.
 

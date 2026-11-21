@@ -12,15 +12,24 @@ pair-cli run quick --card 627 --autonomous
 version: 1
 name: quick
 description: Implement a card, review it and fix the findings.
+# Defaults name no engine or model: the configuration sets them, so quick runs unedited on any engine.
+aliases:
+  build: { effort: medium }
+  judge: { effort: high }
 steps:
   implement:
     kind: implement
+    alias: build
   review:
     kind: review
+    alias: judge
     on-failed: continue
   fix:
     kind: fix
+    alias: build
 ```
+
+`implement` and `fix` run with the alias `build`, `review` with `judge`. A configuration sets their engine, model and effort: `pair-cli run quick --card 627 --config codex`. See [workflow-configuration.md](workflow-configuration.md).
 
 | Step        | Kind        | Skill                    | What it does                                      |
 | ----------- | ----------- | ------------------------ | ------------------------------------------------- |

@@ -1,5 +1,6 @@
 version: 1
 name: claude-medium
 defaults: { engine: claude, model: claude-sonnet-5-5, effort: medium }
-kinds:
-  review: { model: claude-opus-5-5, effort: high }
+aliases:
+  build: { engine: claude, model: claude-sonnet-5-5, effort: medium }
+  judge: { engine: claude, model: claude-opus-5-5, effort: high }

@@ -1,5 +1,3 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
 import {
   applyOverride,
   checkAgainstEngines,
@@ -44,7 +42,12 @@ describe('settings of a step (AC-1)', () => {
   const c = parsed()
   it.each([
     ['step over everything', { id: 'implement', alias: 'build' }, 'claude-haiku-5-5', 'low'],
-    ['configuration alias over workflow default', { id: 'review', alias: 'judge' }, 'claude-opus-5-5', 'high'],
+    [
+      'configuration alias over workflow default',
+      { id: 'review', alias: 'judge' },
+      'claude-opus-5-5',
+      'high',
+    ],
     ['workflow default over defaults', { id: 'fix', alias: 'build' }, 'claude-haiku-5-5', 'medium'],
     ['defaults with no alias', { id: 'x' }, 'claude-sonnet-5-5', 'medium'],
   ])('%s', (_, step, model, effort) => {
@@ -162,8 +165,10 @@ describe('validation (AC-4)', () => {
 
   it('an alias the workflow does not declare is an error', () => {
     const steps = [{ id: 'implement', alias: 'build' }]
-    const declared = { errors: checkAgainstEngines(parsed(), { file: FILE, steps, aliases: DECLARED, facts: facts() }).errors }
-    expect(declared.errors).toEqual([])
+    expect(
+      checkAgainstEngines(parsed(), { file: FILE, steps, aliases: DECLARED, facts: facts() })
+        .errors,
+    ).toEqual([])
     const { errors } = checkAgainstEngines(parsed(), {
       file: FILE,
       steps,
@@ -180,6 +185,7 @@ describe('validation (AC-4)', () => {
     const result = checkAgainstEngines(parsed(`${BASE}  ghost: { effort: low }\n`), {
       file: FILE,
       steps,
+      aliases: DECLARED,
       facts: facts({ installed: () => false, supportsEffort: () => false }),
     })
     expect(result.errors.map(e => e.problem)).toEqual(["engine 'claude' is not installed"])
@@ -239,12 +245,19 @@ describe('key telemetry (AC-9)', () => {
 })
 
 describe('the shipped set with quick (AC-8, AC-11)', () => {
-  const tech = join(__dirname, '../../../knowledge-hub/dataset/.pair/adoption/tech')
-  const quickFile = join(tech, 'workflows/quick.yaml')
-  const { workflow } = parseWorkflow(readFileSync(quickFile, 'utf8'), quickFile)
+  const files = import.meta.glob('../../../knowledge-hub/dataset/.pair/adoption/tech/*/*.yaml', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }) as Record<string, string>
+  const text = (path: string) => {
+    const [file, source] = Object.entries(files).find(([key]) => key.endsWith(path)) ?? []
+    if (file === undefined || source === undefined) throw new Error(`not shipped: ${path}`)
+    return [source, file] as const
+  }
+  const { workflow } = parseWorkflow(...text('/workflows/quick.yaml'))
   const shipped = (name: string): Configuration => {
-    const file = join(tech, 'configurations', `${name}.yaml`)
-    const result = parseConfiguration(readFileSync(file, 'utf8'), file)
+    const result = parseConfiguration(...text(`/configurations/${name}.yaml`))
     if (result.configuration === undefined) throw new Error(JSON.stringify(result.errors))
     return result.configuration
   }
@@ -259,7 +272,10 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
   })
 
   it('ships the six profile equivalents and the two base configurations', () => {
-    expect(readdirSync(join(tech, 'configurations')).sort()).toEqual(
+    const names = Object.keys(files)
+      .filter(path => path.includes('/configurations/'))
+      .map(path => path.replace(/^.*\//, '').replace('.yaml', ''))
+    expect(names.sort()).toEqual(
       [
         'claude',
         'claude-cheap',
@@ -269,7 +285,7 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
         'codex-cheap',
         'codex-high',
         'codex-medium',
-      ].map(name => `${name}.yaml`),
+      ].sort(),
     )
   })
 
@@ -277,19 +293,84 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
   const SONNET = 'claude-sonnet-5-5'
   const OPUS = 'claude-opus-5-5'
   it.each([
-    ['claude-cheap', 'claude', [[SONNET, 'medium'], [SONNET, 'high'], ['claude-haiku-5-5', 'medium']]],
-    ['claude-medium', 'claude', [[SONNET, 'medium'], [OPUS, 'high'], [SONNET, 'medium']]],
-    ['claude-high', 'claude', [[OPUS, 'high'], [OPUS, 'high'], [OPUS, 'high']]],
-    ['claude', 'claude', [[SONNET, 'medium'], [OPUS, 'high'], [SONNET, 'medium']]],
-    ['codex-cheap', 'codex', [[undefined, 'medium'], [undefined, 'high'], [undefined, 'low']]],
-    ['codex-medium', 'codex', [['gpt-6-sol', 'medium'], ['gpt-6-astra', 'high'], ['gpt-6-sol', 'medium']]],
-    ['codex-high', 'codex', [['gpt-6-sol', 'high'], ['gpt-6-astra', 'high'], ['gpt-6-sol', 'high']]],
-    ['codex', 'codex', [['gpt-6-sol', 'medium'], ['gpt-6-astra', 'high'], ['gpt-6-sol', 'medium']]],
+    [
+      'claude-cheap',
+      'claude',
+      [
+        [SONNET, 'medium'],
+        [SONNET, 'high'],
+        ['claude-haiku-5-5', 'medium'],
+      ],
+    ],
+    [
+      'claude-medium',
+      'claude',
+      [
+        [SONNET, 'medium'],
+        [OPUS, 'high'],
+        [SONNET, 'medium'],
+      ],
+    ],
+    [
+      'claude-high',
+      'claude',
+      [
+        [OPUS, 'high'],
+        [OPUS, 'high'],
+        [OPUS, 'high'],
+      ],
+    ],
+    [
+      'claude',
+      'claude',
+      [
+        [SONNET, 'medium'],
+        [OPUS, 'high'],
+        [SONNET, 'medium'],
+      ],
+    ],
+    [
+      'codex-cheap',
+      'codex',
+      [
+        [undefined, 'medium'],
+        [undefined, 'high'],
+        [undefined, 'low'],
+      ],
+    ],
+    [
+      'codex-medium',
+      'codex',
+      [
+        ['gpt-6-sol', 'medium'],
+        ['gpt-6-astra', 'high'],
+        ['gpt-6-sol', 'medium'],
+      ],
+    ],
+    [
+      'codex-high',
+      'codex',
+      [
+        ['gpt-6-sol', 'high'],
+        ['gpt-6-astra', 'high'],
+        ['gpt-6-sol', 'high'],
+      ],
+    ],
+    [
+      'codex',
+      'codex',
+      [
+        ['gpt-6-sol', 'medium'],
+        ['gpt-6-astra', 'high'],
+        ['gpt-6-sol', 'medium'],
+      ],
+    ],
   ])('%s runs quick clean, every step on %s', (name, engine, expected) => {
     const c = shipped(name)
     const steps = workflow?.steps ?? []
     expect(
-      checkAgainstEngines(c, { file: name, steps, aliases: workflow?.aliases, facts: facts() }).errors,
+      checkAgainstEngines(c, { file: name, steps, aliases: workflow?.aliases, facts: facts() })
+        .errors,
     ).toEqual([])
     expect(
       steps.map(step => {

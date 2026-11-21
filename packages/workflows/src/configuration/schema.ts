@@ -1,29 +1,17 @@
-import { KIND_NAMES, type KindName } from '../grammar'
+import { entrySchema as entry, STEP_ID, type Entry } from '../grammar'
 import type { JsonSchema } from '../schema'
 
-/** The three settings of a step; each is resolved on its own. */
-export interface Entry {
-  readonly engine?: string
-  readonly model?: string
-  readonly effort?: string
-}
+export type { Entry } from '../grammar'
 
-/** A configuration file (design §1): defaults, then exceptions by kind, then by step id. */
+/** A configuration file (design §1): defaults, then the aliases the workflow declares, then exceptions by step id. */
 export interface Configuration {
   readonly version: 1
   readonly name: string
   readonly defaults: Entry & { readonly engine: string }
-  readonly kinds?: Readonly<Partial<Record<KindName, Entry>>>
+  readonly aliases?: Readonly<Record<string, Entry>>
   readonly steps?: Readonly<Record<string, Entry>>
   /** Switches the run's telemetry on or off; a flag overrides it. */
   readonly telemetry?: boolean
-}
-
-const text = { type: 'string' } as const
-const entry: JsonSchema = {
-  type: 'object',
-  additionalProperties: false,
-  properties: { engine: text, model: text, effort: text },
 }
 
 export const configurationSchemaV1: JsonSchema = {
@@ -34,11 +22,7 @@ export const configurationSchemaV1: JsonSchema = {
     version: { const: 1, description: 'The grammar version.' },
     name: { type: 'string', description: 'Equals the file name without its extension.' },
     defaults: { ...entry, required: ['engine'] },
-    kinds: {
-      type: 'object',
-      additionalProperties: false,
-      properties: Object.fromEntries(KIND_NAMES.map(kind => [kind, entry])),
-    },
+    aliases: { type: 'object', propertyNames: { pattern: STEP_ID }, additionalProperties: entry },
     steps: { type: 'object', additionalProperties: entry },
     telemetry: { type: 'boolean' },
   },

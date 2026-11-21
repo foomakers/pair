@@ -1,4 +1,4 @@
-import { errorAt, type Lines, type Step, type WorkflowError } from '../grammar'
+import { errorAt, type Lines, type Step, type Workflow, type WorkflowError } from '../grammar'
 import type { Configuration, Entry } from './schema'
 import { settingsFor } from './settings'
 
@@ -21,7 +21,9 @@ export interface CheckContext {
   readonly lines?: Lines
   readonly facts: EngineFacts
   /** The steps of the running workflow; absent: only what the file says is checked. */
-  readonly steps?: readonly Pick<Step, 'id' | 'kind'>[]
+  readonly steps?: readonly Pick<Step, 'id' | 'alias'>[]
+  /** The aliases the running workflow declares, with its defaults. */
+  readonly aliases?: Workflow['aliases']
   /** `--engine`, when passed. */
   readonly engineFlag?: string | undefined
 }
@@ -83,26 +85,28 @@ function checkEntry(path: Path, entry: Entry, engine: string, { facts, at }: Ctx
 }
 
 /** Every entry of the file with the engine it resolves to. */
-function entriesOf(c: Configuration, steps: CheckContext['steps']): [Path, Entry, string][] {
+function entriesOf(c: Configuration, { steps, aliases }: CheckContext): [Path, Entry, string][] {
   const { defaults } = c
   return [
     [['defaults'], defaults, defaults.engine],
-    ...Object.entries(c.kinds ?? {}).map(([kind, e]): [Path, Entry, string] => [
-      ['kinds', kind],
+    ...Object.entries(c.aliases ?? {}).map(([alias, e]): [Path, Entry, string] => [
+      ['aliases', alias],
       e,
-      e.engine ?? defaults.engine,
+      settingsFor(c, { id: '', alias }, aliases).engine,
     ]),
-    ...Object.entries(c.steps ?? {}).map(([id, e]): [Path, Entry, string] => {
-      const kind = steps?.find(s => s.id === id)?.kind
-      return [['steps', id], e, e.engine ?? (kind && c.kinds?.[kind]?.engine) ?? defaults.engine]
-    }),
+    ...Object.entries(c.steps ?? {}).map(([id, e]): [Path, Entry, string] => [
+      ['steps', id],
+      e,
+      settingsFor(c, steps?.find(s => s.id === id) ?? { id }, aliases).engine,
+    ]),
   ]
 }
 
-/** What the workflow adds: an unknown step id warns, an engine used and not installed refuses. */
+/** What the workflow adds: an unknown step id warns; an undeclared alias and an engine used and not installed refuse. */
 function checkWorkflow(
   c: Configuration,
   steps: NonNullable<CheckContext['steps']>,
+  aliases: CheckContext['aliases'],
   { facts, at }: Ctx,
 ): Found {
   const ids = new Set(steps.map(s => s.id))
@@ -115,8 +119,17 @@ function checkWorkflow(
         'remove it, or ignore if another workflow uses it',
       ),
     )
-  const used = new Set(steps.map(s => settingsFor(c, s).engine))
-  const errors = [...used]
+  const undeclared = Object.keys(c.aliases ?? {})
+    .filter(alias => !Object.hasOwn(aliases ?? {}, alias))
+    .map(alias =>
+      at(
+        ['aliases', alias],
+        `alias '${alias}' is not one the workflow declares`,
+        "remove it, or declare it in the workflow's aliases",
+      ),
+    )
+  const used = new Set(steps.map(s => settingsFor(c, s, aliases).engine))
+  const notInstalled = [...used]
     .filter(engine => facts.known(engine) && !facts.installed(engine))
     .map(engine =>
       at(
@@ -125,7 +138,7 @@ function checkWorkflow(
         `install ${engine}, or choose another configuration`,
       ),
     )
-  return { errors, warnings }
+  return { errors: [...undeclared, ...notInstalled], warnings }
 }
 
 /** The checks of design §5 that need the engines. A file that parsed has the right shape already. */
@@ -135,8 +148,10 @@ export function checkAgainstEngines(c: Configuration, context: CheckContext): Co
     errorAt({ file: context.file, lines: context.lines ?? {} }, path, { problem, fix })
   const ctx = { facts: context.facts, at }
   const found = [
-    ...entriesOf(c, steps).map(([path, entry, engine]) => checkEntry(path, entry, engine, ctx)),
-    steps === undefined ? { errors: [], warnings: [] } : checkWorkflow(c, steps, ctx),
+    ...entriesOf(c, context).map(([path, entry, engine]) => checkEntry(path, entry, engine, ctx)),
+    steps === undefined
+      ? { errors: [], warnings: [] }
+      : checkWorkflow(c, steps, context.aliases, ctx),
   ]
   const flagged =
     engineFlag !== undefined && c.defaults.engine !== engineFlag

@@ -23,7 +23,7 @@ import { withRunAgentRunner } from './run-context'
 
 export const CONFIGURATIONS_DIR = '.pair/adoption/tech/configurations'
 
-/** The engines this CLI knows, as the package's injected facts. No engine declares a model list today. */
+/** The engines this CLI knows, as the package's injected facts. No engine declares a model list today: a model is checked by its form only (ADR-034). */
 export function engineFacts(project: Config, probe: ExecutableProbe): EngineFacts {
   return {
     known: isEngineId,
@@ -143,6 +143,7 @@ export function resolveConfiguration(input: ConfigurationInput): ConfigurationOu
     file,
     facts: engineFacts(input.project, input.probe),
     steps: input.workflow.steps,
+    aliases: input.workflow.aliases,
     engineFlag: input.engineFlag,
   })
   const plan: ConfigurationPlan = {

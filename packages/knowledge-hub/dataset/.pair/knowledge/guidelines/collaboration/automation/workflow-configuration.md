@@ -13,8 +13,9 @@ defaults: # required
   engine: claude
   model: claude-sonnet-5-5
   effort: medium
-kinds: # optional; applies in any workflow
-  review: { model: claude-opus-5-5, effort: high }
+aliases: # optional; defines aliases the workflow declares
+  build: { model: claude-sonnet-5-5, effort: medium }
+  judge: { model: claude-opus-5-5, effort: high }
 steps: # optional; an exception for one step id
   implement: { effort: high }
 telemetry: true # optional; switches the run's telemetry on or off
@@ -24,12 +25,30 @@ telemetry: true # optional; switches the run's telemetry on or off
 - `model` is the real model id. There are no model classes.
 - Same parsing rules as a workflow: YAML 1.2, no anchors, tags or duplicate keys. Unknown keys are errors.
 
+## Aliases
+
+The workflow declares its aliases, each with a default, and each step cites one with `alias`:
+
+```yaml
+aliases:
+  build: { effort: medium }
+  judge: { effort: high }
+steps:
+  implement: { kind: implement, alias: build }
+  review: { kind: review, alias: judge }
+```
+
+- A workflow declares only as many aliases as it needs different settings. A step with no `alias` takes the configuration `defaults`.
+- A step citing an undeclared alias, and a configuration alias the workflow does not declare, are errors.
+- A workflow meant for any engine leaves `engine` and `model` out of its defaults: the configuration sets them.
+- `quick` declares `build` (implement, fix) and `judge` (review).
+
 ## Settings of a step
 
-Per field: `steps.<id>`, then `kinds.<kind>`, then `defaults`. The run prints each value with its source:
+Per field: configuration `steps.<id>`, then configuration `aliases.<alias>`, then the workflow's default for the alias, then configuration `defaults`. The run prints each value with its source (`step`, `alias`, `workflow`, `defaults`):
 
 ```text
-review: engine=claude (defaults) model=claude-opus-5-5 (kind) effort=high (kind)
+review: engine=claude (alias) model=claude-opus-5-5 (alias) effort=high (alias)
 ```
 
 Different engines in one run are allowed.
@@ -58,23 +77,27 @@ Different engines in one run are allowed.
 
 | Case                                                       | Result                       |
 | ---------------------------------------------------------- | ---------------------------- |
-| Unknown key, unknown kind, wrong type                      | error                        |
+| Unknown key, unknown field, wrong type                     | error                        |
+| `aliases` names an alias the workflow does not declare     | error                        |
+| A step cites an alias the workflow does not declare        | error                        |
 | `steps` names an id the workflow lacks                     | warning                      |
 | `model` not in the list the engine declares                | error                        |
-| Engine declares no model list                              | form check, and a warning    |
+| Engine declares no model list (every engine today)         | form check, and a warning    |
 | `effort` on an engine with no effort flag                  | warning, value ignored       |
 | An engine used by a step is unknown or not installed       | refused before any launch    |
 | `defaults.engine` differs from `--engine`                  | error                        |
 
 `pair run <workflow> --dry-run --config <name|file>` runs the same checks and launches nothing.
 
+No engine declares a model list today, so a model id is checked by its form only: a misspelt id passes with a warning and fails at launch.
+
 ## Frozen copy and resume
 
-The run writes the effective configuration to `runs/<run-id>/configuration.yaml`. A resume uses the copy and warns when the source changed. `--reconfigure` (with `--config` and/or `--config-override`) replaces the copy; steps already `ok` are not run again. A run started before configurations existed has no copy and keeps the engine default.
+The run writes the effective configuration to `runs/<run-id>/configuration.yaml`. A resume uses the copy and warns when the source changed. `--reconfigure` (with `--config` and/or `--config-override`) replaces the copy; steps already `ok` are not run again. A run started with no configuration has no copy and keeps the engine default; when one resolves on resume, the run warns, and `--reconfigure` applies it.
 
 ## Shipped set
 
-`claude-cheap`, `claude-medium`, `claude-high`, `codex-cheap`, `codex-medium`, `codex-high`: the six profiles of the delivery cycle with each model class replaced by its model id.
+`claude-cheap`, `claude-medium`, `claude-high`, `codex-cheap`, `codex-medium`, `codex-high`: the six profiles of the delivery cycle with each model class replaced by its model id. `claude` and `codex`: base configurations, equal to the medium ones (`pair run quick --config codex`). Each defines `build` and `judge`.
 
 ## Coexistence with profiles
 
