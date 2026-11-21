@@ -1,0 +1,3 @@
+version: 1
+name: claude-high
+defaults: { engine: claude, model: claude-opus-5-5, effort: high }

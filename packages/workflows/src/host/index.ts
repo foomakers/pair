@@ -11,6 +11,7 @@ import type { KindName } from '../grammar'
 import { kindByName, type StepResult, type StepStatus } from '../kinds'
 import {
   closeRun,
+  reopenRun,
   estimated,
   measured,
   recordStep,
@@ -38,6 +39,8 @@ export interface WorkflowHost {
   readonly files: RunFiles
   /** How the host's engine is told to run a skill. */
   readonly style: InvocationStyle
+  /** A step whose engine is not the host's own: how that engine is told to run a skill. */
+  readonly styleOf?: (stepId: string) => InvocationStyle
   /** The host's prompt-safety check. */
   readonly isSafeText: (value: string) => boolean
   /**
@@ -62,14 +65,11 @@ export interface StepSettings {
   readonly effort?: string | undefined
 }
 
-/** The settings of one step: the run's own, the same for every step, until per-step configuration lands (#672). */
-export const settingsOf = (run: StepSettings, _stepId: string): StepSettings => run
-
 /** Telemetry of a run, when it is on: absent, nothing is written and nothing else changes. */
 export interface TelemetryOptions {
   readonly host: TelemetryHost
-  /** What the run's steps launch with. */
-  readonly settings: StepSettings
+  /** What a step launches with: the configuration's resolution of its id. */
+  readonly settings: (stepId: string) => StepSettings
   /** The clock. */
   readonly now?: () => Date
   /** Told once when a record cannot be written. */
@@ -98,7 +98,10 @@ async function execute(
   const kind = kindByName[step.kind]
   let message: string
   try {
-    message = buildMessage(step, kind, host)
+    message = buildMessage(step, kind, {
+      ...host,
+      style: host.styleOf?.(step.id) ?? host.style,
+    })
   } catch (error) {
     const summary = (error as Error).message
     return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
@@ -141,7 +144,7 @@ function writerOf(run: RunDirectory, telemetry: TelemetryOptions) {
         recordStep(run, {
           ...execution,
           host: telemetry.host,
-          settings: settingsOf(telemetry.settings, execution.step.id),
+          settings: telemetry.settings(execution.step.id),
         }),
       ),
     close: (status: RunOutcome['run']) => safe(closeRun(run, status)),
@@ -192,6 +195,7 @@ export async function runSteps(
 ): Promise<RunOutcome> {
   const run = { files: host.files, dir }
   const writer = telemetry && writerOf(run, telemetry)
+  if (writer === undefined) await reopenRun(run).catch(() => undefined)
   let last: StepEvent | undefined
   for (;;) {
     const { ready, run: state } = await next(run)

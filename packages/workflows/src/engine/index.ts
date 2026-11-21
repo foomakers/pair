@@ -24,6 +24,8 @@ export interface RunDirectory {
 export const STATE_SCHEMA_VERSION = 1
 export const STATE_FILE = 'state.json'
 export const FROZEN_WORKFLOW = 'workflow.yaml'
+/** The run's effective configuration, frozen at start (replaced only by `--reconfigure`). */
+export const FROZEN_CONFIGURATION = 'configuration.yaml'
 /** The run's telemetry, when it is on: written by `../telemetry`, archived with the run. */
 export const TELEMETRY_FILE = 'telemetry.jsonl'
 
@@ -45,6 +47,8 @@ export interface RunStateFile {
   readonly schemaVersion: typeof STATE_SCHEMA_VERSION
   readonly workflow: { readonly name: string; readonly hash: string }
   readonly card: string
+  /** Present when the run froze a configuration; `override` is the `--config-override` applied, as given. */
+  readonly configuration?: { readonly hash: string; readonly override?: unknown } | undefined
   readonly steps: Readonly<Record<string, StepRecord>>
 }
 
@@ -120,7 +124,22 @@ export interface StartOptions {
   readonly restart?: boolean
   /** The clock, for the name of the archive. */
   readonly now?: Date
+  /** The effective configuration (already validated) the run freezes; `override` is recorded in `state.json`. */
+  readonly configuration?: { readonly text: string; readonly override?: unknown }
+  /** Replace the frozen configuration with `configuration`; steps already `ok` stay `ok`. */
+  readonly reconfigure?: boolean
 }
+
+/** The frozen configuration of a run, when it has one. */
+export function frozenConfiguration(run: RunDirectory): string | undefined {
+  const path = join(run.dir, FROZEN_CONFIGURATION)
+  return run.files.existsSync(path) ? run.files.readFileSync(path) : undefined
+}
+
+const configurationRecord = (c: NonNullable<StartOptions['configuration']>) => ({
+  hash: hashOf(c.text),
+  ...(c.override !== undefined && { override: c.override }),
+})
 
 export interface Started {
   /** `complete`: every step is already `ok`; nothing will run. */
@@ -131,7 +150,7 @@ export interface Started {
 async function archive(run: RunDirectory, now: Date): Promise<void> {
   const target = join(run.dir, 'archive', now.toISOString().replace(/[:.]/g, '-'))
   await run.files.mkdir(target, { recursive: true })
-  for (const name of [STATE_FILE, FROZEN_WORKFLOW, TELEMETRY_FILE, 'steps']) {
+  for (const name of [STATE_FILE, FROZEN_WORKFLOW, FROZEN_CONFIGURATION, TELEMETRY_FILE, 'steps']) {
     const from = join(run.dir, name)
     if (run.files.existsSync(from)) await run.files.rename(from, join(target, name))
   }
@@ -139,10 +158,12 @@ async function archive(run: RunDirectory, now: Date): Promise<void> {
 
 async function resume(
   run: RunDirectory,
-  state: RunStateFile,
+  saved: RunStateFile,
   source: { readonly text: string; readonly file: string },
-  card: string,
+  options: StartOptions,
 ): Promise<Started> {
+  let state = saved
+  const { card, configuration } = options
   if (state.card !== card)
     throw new Error(
       `run-mismatch: ${run.dir} is the run of card ${state.card}, not of card ${card} — pass another --run-id`,
@@ -151,8 +172,22 @@ async function resume(
     hashOf(source.text) === state.workflow.hash
       ? []
       : [`${source.file} changed after this run started: the frozen copy in ${run.dir} is used`]
+  if (configuration !== undefined && options.reconfigure === true) {
+    await writeAtomic(run.files, join(run.dir, FROZEN_CONFIGURATION), configuration.text)
+    state = { ...state, configuration: configurationRecord(configuration) }
+  } else if (
+    configuration !== undefined &&
+    state.configuration !== undefined &&
+    state.configuration.hash !== hashOf(configuration.text)
+  )
+    warnings.push(
+      `the configuration changed after this run started: the frozen copy in ${run.dir} is used — pass --reconfigure to replace it`,
+    )
   const records = Object.entries(state.steps)
-  if (records.every(([, step]) => step.state === 'ok')) return { status: 'complete', warnings }
+  if (records.every(([, step]) => step.state === 'ok')) {
+    if (state !== saved) await writeState(run, state)
+    return { status: 'complete', warnings }
+  }
   // A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
   const steps = Object.fromEntries(
     records.map(([id, step]) => [
@@ -180,17 +215,21 @@ export async function start(
 ): Promise<Started> {
   // A restart never reads the state it replaces: one this version cannot read is archived like any other.
   const existing = options.restart === true ? undefined : readState(run)
-  if (existing !== undefined) return resume(run, existing, source, options.card)
+  if (existing !== undefined) return resume(run, existing, source, options)
   const { workflow, errors } = parseWorkflow(source.text, source.file)
   if (workflow === undefined)
     throw new Error(`workflow-invalid: ${errors[0]?.problem ?? source.file}`)
   if (run.files.existsSync(join(run.dir, STATE_FILE))) await archive(run, options.now ?? new Date())
   await run.files.mkdir(run.dir, { recursive: true })
   await writeAtomic(run.files, join(run.dir, FROZEN_WORKFLOW), source.text)
+  const { configuration } = options
+  if (configuration !== undefined)
+    await writeAtomic(run.files, join(run.dir, FROZEN_CONFIGURATION), configuration.text)
   await writeState(run, {
     schemaVersion: STATE_SCHEMA_VERSION,
     workflow: { name: workflow.name, hash: hashOf(source.text) },
     card: options.card,
+    ...(configuration !== undefined && { configuration: configurationRecord(configuration) }),
     steps: Object.fromEntries(workflow.steps.map(step => [step.id, { state: 'pending' as const }])),
   })
   return { status: 'started', warnings: [] }

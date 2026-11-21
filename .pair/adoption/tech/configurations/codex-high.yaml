@@ -1,0 +1,6 @@
+version: 1
+name: codex-high
+defaults: { engine: codex, model: gpt-6-astra, effort: high }
+kinds:
+  implement: { model: gpt-6-sol }
+  fix: { model: gpt-6-sol }

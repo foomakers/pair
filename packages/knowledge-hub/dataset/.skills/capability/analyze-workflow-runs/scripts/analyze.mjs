@@ -40,6 +40,8 @@ export function readRuns(dir, only = {}) {
   return readdirSync(dir, { withFileTypes: true })
     .filter(entry => entry.isDirectory() && existsSync(join(dir, entry.name, 'telemetry.jsonl')))
     .map(entry => entry.name)
+    // A run is named by its directory: `--run` leaves the others unread, so one that cannot be read does not stop it.
+    .filter(name => only.run === undefined || name === only.run)
     .sort()
     .flatMap(name => {
       const records = parse(join(dir, name, 'telemetry.jsonl'))
@@ -85,9 +87,12 @@ function unitsOf(step, prices) {
 function costOf(steps, prices) {
   const priced = steps.map(step => unitsOf(step, prices))
   if (priced.some(one => one === undefined)) return NOT_CALCULATED
+  // A token entry that is unknown is left out of the cost, never counted as zero: the cost says which steps.
+  const unknown = steps.filter(step => TOKENS.some(name => step.tokens[name].value === null)).map(at)
   return {
     value: Number((total(priced.map(one => one.units)) / 1e6).toFixed(6)),
     source: priced.every(one => one.measured) ? 'measured' : 'estimated',
+    ...(unknown.length > 0 && { unknown }),
   }
 }
 

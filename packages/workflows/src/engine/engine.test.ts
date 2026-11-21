@@ -1,4 +1,4 @@
-import { hashOf, next, record, start, type RunDirectory } from '.'
+import { frozenConfiguration, hashOf, next, record, start, type RunDirectory } from '.'
 import { createMemoryFiles } from './memory-files'
 
 const QUICK = `version: 1
@@ -405,5 +405,45 @@ describe('engine: on-failed (#708 AC-7)', () => {
     await next(run)
     await record(run, 'review', { status: 'needs-human', summary: 'x', reason: 'decide' })
     expect((await next(run)).run).toBe('parked')
+  })
+})
+
+describe('engine: frozen configuration (#672 AC-7)', () => {
+  const A = { text: 'name: a\n', override: { kinds: {} } }
+  const B = { text: 'name: b\n' }
+  const read = (run: RunDirectory) => stateOf(run) as { configuration?: unknown }
+
+  it('freezes the copy and records the override in state.json', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627', configuration: A })
+    expect(frozenConfiguration(run)).toBe(A.text)
+    expect(read(run).configuration).toEqual({ hash: hashOf(A.text), override: A.override })
+  })
+
+  it('a resume keeps the copy and reports a changed source', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627', configuration: A })
+    const resumed = await start(run, SOURCE, { card: '627', configuration: B })
+    expect(frozenConfiguration(run)).toBe(A.text)
+    expect(resumed.warnings.join()).toContain('configuration changed')
+  })
+
+  it('--reconfigure replaces the copy and leaves ok steps ok', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627', configuration: A })
+    await next(run)
+    await record(run, 'implement', IMPLEMENTED)
+    const resumed = await start(run, SOURCE, { card: '627', configuration: B, reconfigure: true })
+    expect(resumed.warnings).toEqual([])
+    expect(frozenConfiguration(run)).toBe(B.text)
+    expect(read(run).configuration).toEqual({ hash: hashOf(B.text) })
+    expect(statesOf(run)).toEqual({ implement: 'ok', review: 'pending' })
+  })
+
+  it('a run started without a configuration has none', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    await start(run, SOURCE, { card: '627', configuration: A })
+    expect(frozenConfiguration(run)).toBeUndefined()
   })
 })

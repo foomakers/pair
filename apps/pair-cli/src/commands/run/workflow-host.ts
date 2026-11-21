@@ -1,12 +1,16 @@
 import { basename, extname, join, resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import {
+  describeSettings,
   formatError,
+  frozenConfiguration,
+  parseFrozenConfiguration,
   readGateRegistry,
   runSteps,
-  settingsOf,
+  settingsFor,
   start,
   validate,
+  type Configuration,
   type RunOutcome,
   type StepEvent,
   type StepLaunch,
@@ -35,6 +39,8 @@ import {
 } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
 import { createSkillProbe } from './skill-probe'
+import { ENGINES, isEngineId, type EngineDefinition } from './engines'
+import { resolveConfiguration, type ConfigurationPlan } from './workflow-configuration'
 import { isSafePromptText } from './prompt-safety'
 import { acquireRunLock } from './run-lock'
 import { isInterrupted, whileInterruptible } from './interrupt'
@@ -133,16 +139,46 @@ interface Resolved {
   readonly source: Located
   readonly project: Config
   readonly engine: ResolvedEngine
+  /** The configuration this run launches with, when one applies. */
+  readonly configuration?: ConfigurationPlan
   readonly main: string
   readonly cwd: string
+}
+
+/** The configuration of the run, its warnings and refusals printed; `undefined`: refused. */
+function configure(
+  config: RunCommandConfig,
+  request: RunWorkflowRequest,
+  services: Services,
+  at: Pick<Resolved, 'cwd' | 'main' | 'project' | 'engine'> & { workflow: Workflow },
+): { plan?: ConfigurationPlan } | undefined {
+  const { fs } = services
+  const outcome = resolveConfiguration({
+    fs,
+    cwd: at.cwd,
+    main: at.main,
+    project: at.project,
+    workflow: at.workflow,
+    flag: request.config,
+    override: request.configOverride,
+    engineFlag: config.engine,
+    engine: at.engine.engine.id,
+    probe: services.deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
+  })
+  outcome.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
+  if (outcome.errors.length === 0) return outcome.plan ? { plan: outcome.plan } : {}
+  outcome.errors.forEach(error => console.error(`  ${error}`))
+  console.error(`  Refused: ${String(outcome.errors.length)} error(s); nothing was launched.`)
+  return undefined
 }
 
 /** Workflow, validation and engine: everything decided before the card is read or anything is launched. */
 function resolveWorkflowRun(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
-  fs: FileSystemService,
+  services: Services,
 ): Resolved | undefined {
+  const { fs } = services
   const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
   const main = mainCheckoutOrCwd(cwd)
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
@@ -168,7 +204,23 @@ function resolveWorkflowRun(
     project,
   )
   console.log(`  ${describeEngineResolution(engine)}`)
-  return { workflow: checked.workflow, source, project, engine, main, cwd }
+  const configured = configure(config, request, services, {
+    cwd,
+    main,
+    project,
+    workflow: checked.workflow,
+    engine,
+  })
+  if (configured === undefined) return undefined
+  return {
+    workflow: checked.workflow,
+    source,
+    project,
+    engine,
+    ...(configured.plan && { configuration: configured.plan }),
+    main,
+    cwd,
+  }
 }
 
 /** What a recorded step says: its summary, then its reason and detail when it has them. */
@@ -186,30 +238,61 @@ interface Launch {
   readonly resolved: Resolved
   readonly services: Services
   readonly worktree: string
+  /** The run's frozen configuration; absent: the run's one engine and its declared model for every step. */
+  readonly effective?: Configuration | undefined
 }
 
-/** What every step of the run launches with: its one engine and that engine's declared model. */
-function runSettings(resolved: Resolved): StepSettings {
+/** What a step launches with: its configuration's resolution, or the run's own engine and declared model. */
+function stepSettings(
+  resolved: Resolved,
+  effective: Configuration | undefined,
+  step: { readonly id: string; readonly kind: StepLaunch['kind'] },
+): StepSettings {
   const { id } = resolved.engine.engine
-  return { engine: id, model: declaredEngineModel(resolved.project, id) }
+  if (effective === undefined)
+    return { engine: id, model: declaredEngineModel(resolved.project, id) }
+  const { engine, model, effort } = settingsFor(effective, step)
+  return { engine, model: model ?? declaredEngineModel(resolved.project, engine), effort }
 }
 
-/** One agent per step, in the card's worktree, on the run's one engine and model. */
+/** The engine of a step: the run's own, or the one the configuration names for it. */
+function engineOf(resolved: Resolved, id: string): EngineDefinition {
+  return id === resolved.engine.engine.id || !isEngineId(id)
+    ? resolved.engine.engine
+    : withRunAgentRunner(resolveEngine({ flag: id }), resolved.project).engine
+}
+
+/** Per engine, once: its autonomy arguments and idle timeout. */
+function policiesOf({ config, resolved, services }: Launch) {
+  const policies = new Map<string, { autonomyArgs: readonly string[]; idle: number }>()
+  return (engine: EngineDefinition) => {
+    const known = policies.get(engine.id)
+    if (known !== undefined) return known
+    const made = {
+      autonomyArgs: resolveAutonomyFor(engine, config, resolved.main, services.fs).args,
+      idle: resolveIdleTimeout({
+        flag: config.idleTimeoutSeconds,
+        declared: declaredRunIdleTimeout(resolved.project, engine.id),
+      }).seconds,
+    }
+    policies.set(engine.id, made)
+    return made
+  }
+}
+
+/** One agent per step, in the card's worktree, on the engine, model and effort its settings say. */
 function launcher(run: Launch) {
   const { config, resolved, services } = run
-  const engine = resolved.engine.engine
-  const settings = runSettings(resolved)
-  const autonomyArgs = resolveAutonomyFor(engine, config, resolved.main, services.fs).args
-  const idle = resolveIdleTimeout({
-    flag: config.idleTimeoutSeconds,
-    declared: declaredRunIdleTimeout(resolved.project, engine.id),
-  })
+  const policyOf = policiesOf(run)
   const runIteration = services.deps.workflow?.runIteration ?? spawnIteration
   return async (
     step: StepLaunch,
     message: string,
     meter: (usage: Usage) => void,
   ): Promise<string | undefined> => {
+    const settings = stepSettings(resolved, run.effective, step)
+    const engine = engineOf(resolved, settings.engine)
+    const { autonomyArgs, idle } = policyOf(engine)
     let text: string | undefined
     let observed: EngineObservation = {}
     const result = await runIteration({
@@ -217,9 +300,10 @@ function launcher(run: Launch) {
       promptText: message,
       cwd: run.worktree,
       autonomyArgs,
-      model: settingsOf(settings, step.id).model,
+      model: settings.model,
+      effort: settings.effort,
       timeoutSeconds: config.iterationTimeoutSeconds,
-      idleTimeoutSeconds: idle.seconds,
+      idleTimeoutSeconds: idle,
       onEvent: payload => {
         text = finalTextOf(engine, payload) ?? text
         // The usage the engine reports, read by the per-engine parsers; none reported, none metered.
@@ -280,6 +364,18 @@ interface Opened {
   readonly request: RunWorkflowRequest
   readonly runDir: string
   readonly title: string
+  /** The run's frozen configuration (the copy on disk), when it has one. */
+  readonly effective?: Configuration | undefined
+}
+
+/** The step of the workflow with this id. */
+const stepOf = (resolved: Resolved, id: string) =>
+  resolved.workflow.steps.find(step => step.id === id) ?? { id, kind: 'generic' as const }
+
+/** The engine the settings of a step name. */
+const engineIdOf = (opened: Opened, id: string): keyof typeof ENGINES => {
+  const named = stepSettings(opened.resolved, opened.effective, stepOf(opened.resolved, id)).engine
+  return isEngineId(named) ? named : opened.resolved.engine.engine.id
 }
 
 /** The steps, drawn on the run's console: the card line, one line per step outcome, the ending. */
@@ -305,6 +401,7 @@ async function runOnConsole(
         files: fs,
         style: resolved.engine.engine.skillInvocationStyle,
         isSafeText: isSafePromptText,
+        styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
         report: event =>
           event.state === 'running'
@@ -312,11 +409,11 @@ async function runOnConsole(
             : console.log(stepLine(event)),
       },
       runDir,
-      // Off unless the flag turns it on; the configuration key arrives with #672.
-      config.telemetry === true
+      // The flag over the configuration's `telemetry` key; off when neither says.
+      (config.telemetry ?? opened.effective?.telemetry) === true
         ? {
             host: 'pair-run',
-            settings: runSettings(resolved),
+            settings: id => stepSettings(resolved, opened.effective, stepOf(resolved, id)),
             warn: message => console.log(`  Warning: ${message}`),
           }
         : undefined,
@@ -339,9 +436,20 @@ async function drive(
   const started = await start({ files: fs, dir: runDir }, resolved.source, {
     card: request.card,
     restart: request.restart,
+    reconfigure: request.reconfigure === true,
+    ...(resolved.configuration && {
+      configuration: {
+        text: resolved.configuration.text,
+        ...(resolved.configuration.override !== undefined && {
+          override: resolved.configuration.override,
+        }),
+      },
+    }),
   })
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   console.log(`  Run dir: ${runDir} (${started.status})`)
+  const effective = readEffective(fs, runDir)
+  printSettings(resolved, effective)
   if (started.status === 'complete') {
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
     return 0
@@ -355,7 +463,38 @@ async function drive(
     title: opened.title,
   })
   console.log(`  Worktree: ${worktree}`)
-  return runOnConsole(config, opened, launcher({ config, resolved, services, worktree }), fs)
+  return runOnConsole(
+    config,
+    { ...opened, effective },
+    launcher({ config, resolved, services, worktree, effective }),
+    fs,
+  )
+}
+
+/** The run's frozen configuration, read back from its copy: the copy wins over the source file (design §6). */
+function readEffective(fs: FileSystemService, runDir: string): Configuration | undefined {
+  const text = frozenConfiguration({ files: fs, dir: runDir })
+  if (text === undefined) return undefined
+  const path = join(runDir, 'configuration.yaml')
+  const { configuration, errors } = parseFrozenConfiguration(text, path)
+  if (configuration === undefined)
+    throw new Error(`run-state-unreadable: ${path}: ${errors[0]?.problem ?? 'invalid'}`)
+  return configuration
+}
+
+/** What every step launches with and where each value came from; or that no configuration applies. */
+function printSettings(resolved: Resolved, effective: Configuration | undefined): void {
+  if (effective === undefined) {
+    const { id } = resolved.engine.engine
+    console.log(`  Configuration: none applies — engine ${id}, its default model`)
+    return
+  }
+  console.log(
+    `  Configuration: ${effective.name}${resolved.configuration ? ` — ${resolved.configuration.source}` : ' — frozen copy'}`,
+  )
+  resolved.workflow.steps.forEach(step =>
+    console.log(`    ${describeSettings(step.id, settingsFor(effective, step))}`),
+  )
 }
 
 function printPlan(workflow: Workflow): void {
@@ -375,10 +514,12 @@ async function preflight(resolved: Resolved, card: string, services: Services): 
     )
   if (read === 'closed')
     throw new Error(`card-closed: card ${card} is closed; nothing was launched.`)
-  assertEngineAvailable(
-    resolved.engine,
-    services.deps.workflow?.engineAvailable ?? createExecutableProbe(services.fs),
-  )
+  // With a configuration, every engine it uses was already checked, before the card was read.
+  if (resolved.configuration === undefined)
+    assertEngineAvailable(
+      resolved.engine,
+      services.deps.workflow?.engineAvailable ?? createExecutableProbe(services.fs),
+    )
   return read.title
 }
 
@@ -388,7 +529,7 @@ export async function handleWorkflowRun(
   services: Services,
 ): Promise<number> {
   const { fs } = services
-  const resolved = resolveWorkflowRun(config, request, fs)
+  const resolved = resolveWorkflowRun(config, request, services)
   if (resolved === undefined) return 1
   printPlan(resolved.workflow)
   if (config.dryRun) {

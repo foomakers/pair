@@ -1,0 +1,6 @@
+version: 1
+name: codex-cheap
+defaults: { engine: codex, effort: low }
+kinds:
+  implement: { effort: medium }
+  review: { effort: high }
