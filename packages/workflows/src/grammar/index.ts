@@ -11,9 +11,10 @@ export type CardState = (typeof CARD_STATES)[number]
 
 /** The card state a step sets, and when: Ready and Done as the step ends `ok`, the others as it starts. */
 export function cardStateOf(step: {
-  readonly kind: KindName
+  readonly kind: KindName | 'loop'
   readonly state?: CardState | 'none'
 }): { readonly state: CardState; readonly when: 'start' | 'end' } | undefined {
+  // A loop has no kind of its own: its inner steps set the state.
   const state =
     step.state ??
     ({ implement: 'In Progress', fix: 'In Progress', review: 'Review' } as const)[

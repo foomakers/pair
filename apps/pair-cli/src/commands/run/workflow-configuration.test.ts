@@ -160,6 +160,36 @@ describe('settings per step, printed with their source (AC-1)', () => {
   })
 })
 
+describe('loop blocks (#670)', () => {
+  it('resolves settings per inner step; the loop has no kind of its own', async () => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 1
+    on-max: escalate
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+`,
+    )
+    writeConfig(
+      'mine',
+      'version: 1\nname: mine\ndefaults: { engine: claude, model: claude-sonnet-5-5, effort: medium }\nsteps: { rounds/review: { model: claude-haiku-5-5 } }\n',
+    )
+    await run(['quick'], OK, { config: 'mine' }, {})
+    expect(launched[1]?.model).toBe('claude-haiku-5-5')
+    expect(lines).toContain(
+      '    rounds/review: engine=claude (defaults) model=claude-haiku-5-5 (step) effort=medium (defaults)',
+    )
+  })
+})
+
 describe('which configuration runs (AC-2, AC-3, AC-5)', () => {
   it('--config wins over the pair.config.json map', async () => {
     write('pair.config.json', JSON.stringify({ workflows: { quick: { configuration: 'other' } } }))
