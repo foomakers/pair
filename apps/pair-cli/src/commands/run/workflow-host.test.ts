@@ -346,6 +346,32 @@ describe('telemetry, switched by flag (US-697 AC-5)', () => {
     ])
   })
 
+  it('records the usage the engine stream reports, as measured (AC-1, AC-3)', async () => {
+    // Claude's usage: fresh input is `input_tokens` plus the tokens written to the cache.
+    const usage = {
+      input_tokens: 100,
+      cache_creation_input_tokens: 20,
+      cache_read_input_tokens: 1000,
+      output_tokens: 10,
+    }
+    const runIteration: WorkflowHostDependencies['runIteration'] = async input => {
+      const result = skillOf(input.promptText) === 'pair-process-review' ? REVIEWED : IMPLEMENTED
+      input.onEvent?.({ type: 'result', subtype: 'success', result, usage })
+      return { outcome: 'success', detail: 'terminal event: success' }
+    }
+    expect(await run(['quick'], OK, { telemetry: true }, { runIteration })).toBe(0)
+    const [implement] = fs
+      .readFileSync(telemetryFile())
+      .trimEnd()
+      .split('\n')
+      .map(line => JSON.parse(line) as { tokens: unknown })
+    expect(implement?.tokens).toEqual({
+      read: { value: 120, source: 'measured' },
+      cached: { value: 1000, source: 'measured' },
+      written: { value: 10, source: 'measured' },
+    })
+  })
+
   it.each([
     ['no flag', {}],
     ['--no-telemetry', { telemetry: false }],

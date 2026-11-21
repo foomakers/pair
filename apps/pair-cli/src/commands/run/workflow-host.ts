@@ -11,6 +11,7 @@ import {
   type StepEvent,
   type StepLaunch,
   type StepSettings,
+  type Usage,
   type Workflow,
 } from '@pair/workflows'
 import { loadConfigWithOverrides } from '#config'
@@ -39,6 +40,7 @@ import { acquireRunLock } from './run-lock'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
 import { finalTextOf, type IterationResult } from './stream-reader'
+import { observeEngineEvent, type EngineObservation } from './telemetry'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
 import { mainCheckoutOrCwd, readRunnableCard, resolveBranch, runSetupCommand } from './cycle-wiring'
 import {
@@ -203,8 +205,13 @@ function launcher(run: Launch) {
     declared: declaredRunIdleTimeout(resolved.project, engine.id),
   })
   const runIteration = services.deps.workflow?.runIteration ?? spawnIteration
-  return async (step: StepLaunch, message: string): Promise<string | undefined> => {
+  return async (
+    step: StepLaunch,
+    message: string,
+    meter: (usage: Usage) => void,
+  ): Promise<string | undefined> => {
     let text: string | undefined
+    let observed: EngineObservation = {}
     const result = await runIteration({
       engine,
       promptText: message,
@@ -213,7 +220,14 @@ function launcher(run: Launch) {
       model: settingsOf(settings, step.id).model,
       timeoutSeconds: config.iterationTimeoutSeconds,
       idleTimeoutSeconds: idle.seconds,
-      onEvent: payload => (text = finalTextOf(engine, payload) ?? text),
+      onEvent: payload => {
+        text = finalTextOf(engine, payload) ?? text
+        // The usage the engine reports, read by the per-engine parsers; none reported, none metered.
+        observed = observeEngineEvent(observed, engine.id, payload)
+        const { tokens } = observed
+        if (typeof tokens === 'object')
+          meter({ read: tokens.freshIn, cached: tokens.cachedIn, written: tokens.out })
+      },
     })
     // An interrupted run records nothing: the step stays `running` on disk and runs again at the next launch.
     if (isInterrupted()) throw new Error('interrupted')
