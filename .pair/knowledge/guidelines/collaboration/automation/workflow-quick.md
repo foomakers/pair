@@ -28,10 +28,10 @@ The grammar is in [workflow-grammar.md](workflow-grammar.md), the kinds in [work
 
 ## Before the first run
 
-- The card is Ready.
+- The card is Ready. No command checks this: it is yours to verify.
 - The skills `pair-process-implement` and `pair-process-review` are installed.
 
-Check both without launching anything:
+`--dry-run` launches nothing and checks two things: the skills the workflow uses are installed, and every gate key the workflow names is in the Custom Gate Registry. It does not read the card; a real run does, and refuses one that is missing or closed.
 
 ```bash
 pair-cli run quick --card 627 --dry-run
