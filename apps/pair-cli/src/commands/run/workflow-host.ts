@@ -383,14 +383,28 @@ const engineIdOf = (opened: Opened, id: string): keyof typeof ENGINES => {
   return isEngineId(named) ? named : opened.resolved.engine.engine.id
 }
 
+/** The run's telemetry: the flag over the configuration's `telemetry` key; off when neither says. */
+const telemetryOf = (config: RunCommandConfig, { resolved, effective }: Opened) =>
+  (config.telemetry ?? effective?.telemetry) === true
+    ? {
+        host: 'pair-run' as const,
+        settings: (id: string) => stepSettings(resolved, effective, stepOf(resolved, id)),
+        warn: (message: string) => console.log(`  Warning: ${message}`),
+      }
+    : undefined
+
+/** Which edge of a step an event is: it starts, or it ends ok. */
+const whenOf = (state: StepEvent['state']) =>
+  state === 'running' ? 'start' : state === 'ok' ? 'end' : undefined
+
 /** Sets the card's state through the board, by the adopted mapping; a failure is a warning, never a stop. */
 async function setCardState(
   card: string,
   macrostate: CardState,
   resolved: Resolved,
-  fs: FileSystemService,
-  board: WorkflowHostDependencies['board'],
+  { fs, deps }: Services,
 ): Promise<void> {
+  const board = deps.workflow?.board
   const literal = readStateMapping(fs, resolved.main)?.find(row => row.macrostate === macrostate)
     ?.boardState
   try {
@@ -408,9 +422,9 @@ async function runOnConsole(
   config: RunCommandConfig,
   opened: Opened,
   launch: ReturnType<typeof launcher>,
-  fs: FileSystemService,
-  board?: WorkflowHostDependencies['board'],
+  services: Services,
 ): Promise<number> {
+  const { fs } = services
   const { resolved, request, runDir } = opened
   const sink = createConsoleSink({
     out: process.stdout,
@@ -435,19 +449,12 @@ async function runOnConsole(
             sink.event({ event: 'stage', card: request.card, stage: event.step })
           else console.log(stepLine(event))
           const set = cardStateOf(stepOf(resolved, event.step))
-          if (set?.when === (event.state === 'running' ? 'start' : event.state === 'ok' ? 'end' : ''))
-            pending.push(setCardState(request.card, set.state, resolved, fs, board))
+          if (set !== undefined && set.when === whenOf(event.state))
+            pending.push(setCardState(request.card, set.state, resolved, services))
         },
       },
       runDir,
-      // The flag over the configuration's `telemetry` key; off when neither says.
-      (config.telemetry ?? opened.effective?.telemetry) === true
-        ? {
-            host: 'pair-run',
-            settings: id => stepSettings(resolved, opened.effective, stepOf(resolved, id)),
-            warn: message => console.log(`  Warning: ${message}`),
-          }
-        : undefined,
+      telemetryOf(config, opened),
     )
     await Promise.all(pending)
     return conclude(outcome, request, sink)
@@ -505,8 +512,7 @@ async function drive(
     config,
     { ...opened, effective },
     launcher({ config, resolved, services, worktree, effective }),
-    fs,
-    deps.workflow?.board,
+    services,
   )
 }
 
