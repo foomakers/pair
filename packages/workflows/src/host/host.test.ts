@@ -185,6 +185,87 @@ describe('runSteps: results and resume (AC-4, AC-6)', () => {
   })
 })
 
+describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
+  it('appends one record per executed step, with the usage the host measured, then the closing record', async () => {
+    const { host } = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => REVIEWED,
+    })
+    const metered: WorkflowHost = {
+      ...host,
+      launch: (step, message, meter) => {
+        meter({ read: 100, cached: 1000, written: 10 })
+        return host.launch(step, message, meter)
+      },
+    }
+    await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
+    // The clock is read at the start and at the end of each step.
+    const clock = ['10:00:00', '10:01:30', '10:02:00', '10:02:30'].map(
+      time => new Date(`2026-11-21T${time}.000Z`),
+    )
+
+    await runSteps(metered, DIR, {
+      host: 'pair-run',
+      settings: { engine: 'claude', model: 'claude-fable-5-2' },
+      now: () => clock.shift() as Date,
+    })
+
+    const tokens = {
+      read: { value: 100, source: 'measured' },
+      cached: { value: 1000, source: 'measured' },
+      written: { value: 10, source: 'measured' },
+    }
+    const identity = { run: 'quick-627', workflow: 'quick', card: '627' }
+    const launchedWith = { host: 'pair-run', engine: 'claude', model: 'claude-fable-5-2' }
+    expect(
+      host.files
+        .readFileSync(`${DIR}/telemetry.jsonl`)
+        .trimEnd()
+        .split('\n')
+        .map(line => JSON.parse(line) as unknown),
+    ).toEqual([
+      {
+        type: 'step',
+        ...identity,
+        step: 'implement',
+        kind: 'implement',
+        uses: 'pair-process-implement',
+        ...launchedWith,
+        startedAt: '2026-11-21T10:00:00.000Z',
+        durationMs: 90_000,
+        tokens,
+        status: 'ok',
+        attempt: 1,
+      },
+      {
+        type: 'step',
+        ...identity,
+        step: 'review',
+        kind: 'review',
+        uses: 'pair-process-review',
+        ...launchedWith,
+        startedAt: '2026-11-21T10:02:00.000Z',
+        durationMs: 30_000,
+        tokens,
+        status: 'ok',
+        attempt: 1,
+      },
+      {
+        type: 'run',
+        ...identity,
+        status: 'done',
+        durationMs: 120_000,
+        tokens: {
+          read: { value: 200, source: 'measured' },
+          cached: { value: 2000, source: 'measured' },
+          written: { value: 20, source: 'measured' },
+        },
+        steps: 2,
+      },
+    ])
+  })
+})
+
 describe('settingsOf', () => {
   it('gives every step the settings of the run', () => {
     const run = { engine: 'claude', model: 'm' }

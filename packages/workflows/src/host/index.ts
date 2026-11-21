@@ -9,6 +9,14 @@ import {
 } from '../engine'
 import type { KindName } from '../grammar'
 import { kindByName, type StepResult, type StepStatus } from '../kinds'
+import {
+  closeRun,
+  measured,
+  recordStep,
+  UNKNOWN_TOKENS,
+  type TelemetryHost,
+  type Usage,
+} from '../telemetry'
 
 /** One line of a run: a step that starts, or a step that ended with its result. */
 export interface StepEvent {
@@ -34,9 +42,14 @@ export interface WorkflowHost {
   /**
    * Launches the agent of one step in the run's worktree and resolves to its final message —
    * `undefined` when the agent died or timed out. Rejects when the run is interrupted: nothing is
-   * recorded, the step stays `running` on disk and runs again at the next launch.
+   * recorded, the step stays `running` on disk and runs again at the next launch. A host whose engine
+   * reports usage hands it to `meter`; the last call is the step's usage.
    */
-  launch(step: StepLaunch, message: string): Promise<string | undefined>
+  launch(
+    step: StepLaunch,
+    message: string,
+    meter: (usage: Usage) => void,
+  ): Promise<string | undefined>
   /** Sees every step start and every recorded result, in order. */
   report?(event: StepEvent): void
 }
@@ -45,10 +58,20 @@ export interface WorkflowHost {
 export interface StepSettings {
   readonly engine: string
   readonly model?: string | undefined
+  readonly effort?: string | undefined
 }
 
 /** The settings of one step: the run's own, the same for every step, until per-step configuration lands (#672). */
 export const settingsOf = (run: StepSettings, _stepId: string): StepSettings => run
+
+/** Telemetry of a run, when it is on: absent, nothing is written and nothing else changes. */
+export interface TelemetryOptions {
+  readonly host: TelemetryHost
+  /** What the run's steps launch with. */
+  readonly settings: StepSettings
+  /** The clock. */
+  readonly now?: () => Date
+}
 
 export interface RunOutcome {
   readonly run: Exclude<RunState, 'running'>
@@ -60,6 +83,7 @@ async function execute(
   host: WorkflowHost,
   run: RunDirectory,
   step: StepLaunch,
+  meter: (usage: Usage) => void,
 ): Promise<StepResult> {
   const kind = kindByName[step.kind]
   let message: string
@@ -69,7 +93,7 @@ async function execute(
     const summary = (error as Error).message
     return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
   }
-  const final = await host.launch(step, message)
+  const final = await host.launch(step, message, meter)
   if (final === undefined)
     return record(run, step.id, {
       status: 'failed',
@@ -79,17 +103,58 @@ async function execute(
   return record(run, step.id, readResult(final, kind), final)
 }
 
+/** One step, timed and metered when telemetry is on. */
+async function executeMetered(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  telemetry: TelemetryOptions | undefined,
+): Promise<StepResult> {
+  if (telemetry === undefined) return execute(host, run, step, () => undefined)
+  const now = telemetry.now ?? (() => new Date())
+  const startedAt = now()
+  let usage: Usage | undefined
+  const result = await execute(host, run, step, measure => {
+    usage = measure
+  })
+  await recordStep(run, {
+    step,
+    host: telemetry.host,
+    settings: settingsOf(telemetry.settings, step.id),
+    startedAt,
+    durationMs: now().getTime() - startedAt.getTime(),
+    tokens: usage === undefined ? UNKNOWN_TOKENS : measured(usage),
+    status: result.status,
+    ...(result.reason !== undefined && { reason: result.reason }),
+  })
+  return result
+}
+
+async function ended(
+  run: RunDirectory,
+  state: RunState,
+  last: StepEvent | undefined,
+  telemetry: TelemetryOptions | undefined,
+): Promise<RunOutcome> {
+  const outcome = state === 'running' ? 'failed' : state
+  if (telemetry !== undefined) await closeRun(run, outcome)
+  return { run: outcome, ...(last !== undefined && { last }) }
+}
+
 /** The host loop over a started run: `next` → launch → `record`, until the run is no longer running. */
-export async function runSteps(host: WorkflowHost, dir: string): Promise<RunOutcome> {
+export async function runSteps(
+  host: WorkflowHost,
+  dir: string,
+  telemetry?: TelemetryOptions,
+): Promise<RunOutcome> {
   const run = { files: host.files, dir }
   let last: StepEvent | undefined
   for (;;) {
     const { ready, run: state } = await next(run)
     const step = ready[0]
-    if (state !== 'running' || step === undefined)
-      return { run: state === 'running' ? 'failed' : state, ...(last !== undefined && { last }) }
+    if (state !== 'running' || step === undefined) return ended(run, state, last, telemetry)
     host.report?.({ step: step.id, kind: step.kind, state: 'running' })
-    const { status, summary, reason, detail } = await execute(host, run, step)
+    const { status, summary, reason, detail } = await executeMetered(host, run, step, telemetry)
     last = {
       step: step.id,
       kind: step.kind,

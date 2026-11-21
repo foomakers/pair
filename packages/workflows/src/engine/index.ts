@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { parseWorkflow, type KindName, type Step, type Workflow } from '../grammar'
 import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 
@@ -24,6 +24,8 @@ export interface RunDirectory {
 export const STATE_SCHEMA_VERSION = 1
 export const STATE_FILE = 'state.json'
 export const FROZEN_WORKFLOW = 'workflow.yaml'
+/** The run's telemetry, when it is on: written by `../telemetry`, archived with the run. */
+export const TELEMETRY_FILE = 'telemetry.jsonl'
 
 export type StepState = 'pending' | 'running' | StepStatus
 export type RunState = 'running' | 'done' | 'failed' | 'parked'
@@ -57,7 +59,7 @@ export const hashOf = (text: string): string =>
   `sha256:${createHash('sha256').update(text).digest('hex')}`
 
 /** Temp file, then rename: a reader never sees half a file. */
-async function writeAtomic(files: RunFiles, path: string, content: string): Promise<void> {
+export async function writeAtomic(files: RunFiles, path: string, content: string): Promise<void> {
   await files.writeFile(`${path}.tmp`, content)
   await files.rename(`${path}.tmp`, path)
 }
@@ -81,6 +83,18 @@ function requireState(run: RunDirectory): RunStateFile {
   const state = readState(run)
   if (state === undefined) throw new Error(`run-not-started: no ${STATE_FILE} in ${run.dir}`)
   return state
+}
+
+/** Who a run is: its id (the name of its directory), its workflow and its card. */
+export interface RunIdentity {
+  readonly run: string
+  readonly workflow: string
+  readonly card: string
+}
+
+export function identityOf(run: RunDirectory): RunIdentity {
+  const { workflow, card } = requireState(run)
+  return { run: basename(run.dir), workflow: workflow.name, card }
 }
 
 /** The frozen copy, parsed. It was valid when `start` froze it. */
@@ -113,7 +127,7 @@ export interface Started {
 async function archive(run: RunDirectory, now: Date): Promise<void> {
   const target = join(run.dir, 'archive', now.toISOString().replace(/[:.]/g, '-'))
   await run.files.mkdir(target, { recursive: true })
-  for (const name of [STATE_FILE, FROZEN_WORKFLOW, 'steps']) {
+  for (const name of [STATE_FILE, FROZEN_WORKFLOW, TELEMETRY_FILE, 'steps']) {
     const from = join(run.dir, name)
     if (run.files.existsSync(from)) await run.files.rename(from, join(target, name))
   }
