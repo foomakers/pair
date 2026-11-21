@@ -196,15 +196,21 @@ function plainStepErrors(
 function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowError[] {
   const available = new Set(deps.launchInputs)
   const scope = { workflow, deps, available }
-  const checkStep: CheckStep = (step, path) =>
-    step.kind === 'loop'
-      ? [
-          ...loopOwnErrors(workflow, step, path),
-          ...(step.steps ?? []).flatMap(child =>
-            loopChildErrors(workflow, child, [...path, 'steps', child.id], checkStep),
-          ),
-        ]
-      : plainStepErrors(scope, step as Step & { kind: KindName }, path)
+  const checkStep: CheckStep = (step, path) => {
+    if (step.kind !== 'loop') return plainStepErrors(scope, step as Step & { kind: KindName }, path)
+    let exitInputs = new Set(available)
+    const errors = [
+      ...loopOwnErrors(workflow, step, path),
+      ...(step.steps ?? []).flatMap(child => {
+        const found = loopChildErrors(workflow, child, [...path, 'steps', child.id], checkStep)
+        if (child.id === step.until) exitInputs = new Set(available)
+        return found
+      }),
+    ]
+    available.clear()
+    exitInputs.forEach(input => available.add(input))
+    return errors
+  }
   return workflow.steps.flatMap(step => checkStep(step, ['steps', step.id]))
 }
 

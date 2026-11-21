@@ -584,7 +584,7 @@ function advanceLoop(a: Advance, recorded: Record<string, StepRecord>): Progress
   const progress = { steps: recorded, loops }
   if (status === 'needs-human') return progress
   if (isUntil && status === 'ok')
-    return { steps: { ...recorded, [outer.id]: { state: 'ok', outputs } }, loops }
+    return { steps: { ...recorded, [outer.id]: { state: 'ok', outputs: { ...state.latest, ...outputs } } }, loops }
   const children = outer.steps ?? []
   const last = children[children.length - 1]?.id === childId
   return (status === 'failed' && !isUntil) || last ? closeRound(a, progress) : progress
