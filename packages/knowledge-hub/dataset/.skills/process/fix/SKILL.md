@@ -43,7 +43,7 @@ For each finding, in order:
 1. Read the finding on the PR review (body, file, line).
 2. **Escalate** when the fix needs a product decision or contradicts an acceptance criterion of the story → stop, return `needs-human`, name the finding id in `reason`. Nothing is pushed.
 3. **Bug** → write a failing regression test first and run it to see it fail; commit it (`test:`) before the fix. Then make the minimal fix and see the test pass. Not a bug (docs, naming, structure) → fix directly.
-4. Change nothing outside the finding. Commit per the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md), one commit per finding, naming the finding id.
+4. Change nothing outside the finding. Commit per the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)), one commit per finding, naming the finding id.
 5. Record the resolution: `resolved`, or `not-resolved` with the technical `reason`.
 
 ### Step 3: Gates, push
