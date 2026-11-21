@@ -1,17 +1,14 @@
 {
   "name": "codex-high",
-  "description": "Astra high for contract, validate and verify; Sol high for implement and green (same as codex-max).",
   "defaults": {
     "engine": "codex",
-    "model": "gpt-6-astra",
-    "effort": "high"
+    "model": "frontier",
+    "effort": "high",
+    "context": "fresh"
   },
-  "stages": {
-    "implement": {
-      "model": "gpt-6-sol"
-    },
-    "green": {
-      "model": "gpt-6-sol"
-    }
+  "modelClasses": {
+    "cheap": "gpt-6-luna",
+    "balanced": "gpt-6.1-terra",
+    "frontier": "gpt-6.2-sol"
   }
 }

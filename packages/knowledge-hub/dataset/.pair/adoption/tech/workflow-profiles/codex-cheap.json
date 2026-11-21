@@ -1,23 +1,52 @@
 {
   "name": "codex-cheap",
   "defaults": {
-    "effort": "low"
+    "engine": "codex",
+    "model": "balanced",
+    "effort": "medium",
+    "context": "fresh"
+  },
+  "modelClasses": {
+    "cheap": "gpt-6-luna",
+    "balanced": "gpt-6.1-terra",
+    "frontier": "gpt-6.2-sol"
   },
   "stages": {
-    "verify": {
-      "effort": "high"
+    "contract": {
+      "model": "cheap"
     },
     "prepare": {
-      "effort": "medium"
+      "model": "balanced",
+      "context": "reuse"
+    },
+    "validate": {
+      "model": "balanced"
     },
     "implement": {
-      "effort": "medium"
+      "model": "balanced"
+    },
+    "green": {
+      "model": "cheap",
+      "context": "reuse"
+    },
+    "verify": {
+      "model": "balanced",
+      "effort": "high"
+    },
+    "merge": {
+      "model": "cheap"
     },
     "refine-story": {
-      "effort": "medium"
+      "model": "balanced"
     },
     "plan-tasks": {
-      "effort": "medium"
+      "model": "balanced"
+    },
+    "triage": {
+      "model": "cheap"
+    },
+    "classify": {
+      "model": "cheap"
     }
   }
 }

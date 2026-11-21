@@ -5,5 +5,13 @@
       "claude": "claude-medium"
     },
     "files": ".pair/adoption/tech/workflow-profiles/*.json"
+  },
+  "workflows": {
+    "default": {
+      "configuration": {
+        "claude": "claude-medium",
+        "codex": "codex-medium"
+      }
+    }
   }
 }

@@ -2,45 +2,50 @@
   "name": "codex-medium",
   "defaults": {
     "engine": "codex",
-    "model": "gpt-6-sol",
+    "model": "balanced",
     "effort": "medium",
     "context": "fresh"
   },
+  "modelClasses": {
+    "cheap": "gpt-6-luna",
+    "balanced": "gpt-6.1-terra",
+    "frontier": "gpt-6.2-sol"
+  },
   "stages": {
     "contract": {
-      "model": "gpt-6-astra"
-    },
-    "validate": {
-      "model": "gpt-6-astra"
-    },
-    "verify": {
-      "model": "gpt-6-astra",
-      "effort": "high"
+      "model": "cheap"
     },
     "prepare": {
-      "model": "gpt-6-sol"
+      "model": "balanced",
+      "effort": "high"
+    },
+    "validate": {
+      "model": "balanced"
     },
     "implement": {
-      "model": "gpt-6-sol"
+      "model": "balanced"
     },
     "green": {
-      "model": "gpt-6-sol"
+      "model": "balanced"
+    },
+    "verify": {
+      "model": "frontier",
+      "effort": "high"
     },
     "merge": {
-      "model": "gpt-6-sol",
-      "effort": "low"
+      "model": "cheap"
     },
     "refine-story": {
-      "model": "gpt-6-sol"
+      "model": "balanced"
     },
     "plan-tasks": {
-      "model": "gpt-6-sol"
+      "model": "balanced"
     },
     "triage": {
-      "model": "gpt-6-astra"
+      "model": "cheap"
     },
     "classify": {
-      "model": "gpt-6-astra"
+      "model": "cheap"
     }
   }
 }

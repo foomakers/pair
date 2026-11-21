@@ -8,5 +8,13 @@
   },
   "agents": {
     "targets": ["claude", "codex"]
+  },
+  "workflows": {
+    "default": {
+      "configuration": {
+        "claude": "claude-medium",
+        "codex": "codex-medium"
+      }
+    }
   }
 }

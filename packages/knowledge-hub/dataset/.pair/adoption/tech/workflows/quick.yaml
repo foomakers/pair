@@ -1,11 +1,18 @@
 version: 1
 name: quick
 description: Implement a card, review it and fix the findings.
+# Defaults name no engine or model: the configuration sets them, so quick runs unedited on any engine.
+aliases:
+  build: { effort: medium }
+  judge: { effort: high }
 steps:
   implement:
     kind: implement
+    alias: build
   review:
     kind: review
+    alias: judge
     on-failed: continue
   fix:
     kind: fix
+    alias: build

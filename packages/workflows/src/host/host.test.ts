@@ -1,4 +1,4 @@
-import { runSteps, settingsOf, type StepEvent, type WorkflowHost } from '.'
+import { runSteps, type StepEvent, type WorkflowHost } from '.'
 import { start, type StepLaunch } from '../engine'
 import { createMemoryFiles } from '../engine/memory-files'
 
@@ -206,7 +206,7 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
 
     await runSteps(metered, DIR, {
       host: 'pair-run',
-      settings: { engine: 'claude', model: 'claude-fable-5-2' },
+      settings: () => ({ engine: 'claude', model: 'claude-fable-5-2' }),
       now: () => clock.shift() as Date,
     })
 
@@ -275,7 +275,7 @@ describe('runSteps: a host that cannot measure usage (US-697 AC-4)', () => {
     const { host, launched } = fakeHost({ 'pair-process-implement': () => answer })
     await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
 
-    await runSteps(host, DIR, { host: 'session', settings: { engine: 'claude' } })
+    await runSteps(host, DIR, { host: 'session', settings: () => ({ engine: 'claude' }) })
 
     const sent = launched[0]?.message.length as number
     const final = answer.length
@@ -295,7 +295,7 @@ describe('runSteps: a host that cannot measure usage (US-697 AC-4)', () => {
 })
 
 describe('runSteps: the telemetry switch (US-697 AC-5)', () => {
-  const SETTINGS = { host: 'pair-run', settings: { engine: 'claude' } } as const
+  const SETTINGS = { host: 'pair-run', settings: () => ({ engine: 'claude' }) } as const
 
   it('writes no file and runs the same when telemetry is off', async () => {
     const { host, events } = fakeHost({
@@ -358,10 +358,22 @@ describe('runSteps: the telemetry switch (US-697 AC-5)', () => {
   )
 })
 
-describe('settingsOf', () => {
-  it('gives every step the settings of the run', () => {
-    const run = { engine: 'claude', model: 'm' }
-    expect(settingsOf(run, 'implement')).toBe(run)
-    expect(settingsOf(run, 'review')).toBe(run)
+describe('runSteps: settings per step (#672 AC-1)', () => {
+  it('telemetry records the settings the configuration resolves for each step', async () => {
+    const { host } = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => REVIEWED,
+    })
+    await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
+    await runSteps(host, DIR, {
+      host: 'pair-run',
+      settings: id => ({ engine: 'claude', model: id === 'review' ? 'opus' : 'sonnet' }),
+    })
+    const lines = host.files.readFileSync(`${DIR}/telemetry.jsonl`).trimEnd().split('\n')
+    expect(lines.map(line => (JSON.parse(line) as { model?: string }).model)).toEqual([
+      'sonnet',
+      'opus',
+      undefined,
+    ])
   })
 })

@@ -1,0 +1,354 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { fileSystemService as fs } from '@pair/content-ops'
+import { handleRunCommand } from './handler'
+import { parseRunCommand } from './parser'
+import { parseConfiguration } from '@pair/workflows'
+import type { SpawnIterationInput } from './spawn'
+import type { WorkflowHostDependencies } from './workflow-host'
+
+/**
+ * US-672 — configuration per step through `pair run <workflow>`; same harness as US-652.
+ * US-652 — `pair run <workflow> --card <id>`, through the command's own entry point, with a fake
+ * launcher and fake skills: no real agent, tracker or git. The disk is real (a temp project).
+ */
+
+const HEAD = 'a'.repeat(40)
+const fenced = (value: unknown) => `Done.\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\``
+const IMPLEMENTED = fenced({
+  status: 'ok',
+  summary: 'PR opened',
+  branch: 'feature/US-627-x',
+  pr: 12,
+  head: HEAD,
+})
+const REVIEWED = fenced({
+  status: 'ok',
+  summary: 'approved',
+  verdict: 'approved',
+  reviewedHead: HEAD,
+  findings: [],
+})
+const QUICK = `version: 1
+name: quick
+aliases:
+  build: { effort: medium }
+  judge: { effort: high }
+steps:
+  implement:
+    kind: implement
+    alias: build
+    with:
+      gates: [quality-gate]
+  review:
+    kind: review
+    alias: judge
+`
+const REGISTRY = `### Custom Gate Registry
+
+| Order | Key | Gate | Command |
+| --- | --- | --- | --- |
+| 1 | quality-gate | Quality Gate | \`pnpm quality-gate\` |
+`
+
+/** A fake skill answers with the agent's final message, `undefined` when the agent dies, or throws on a crash. */
+type FakeSkill = () => string | undefined
+type Launched = Pick<SpawnIterationInput, 'promptText' | 'cwd' | 'model' | 'effort'>
+
+let project: string
+let lines: string[]
+let launched: Launched[]
+
+const write = (path: string, content: string) => {
+  fs.mkdirSync(join(project, path, '..'), { recursive: true })
+  fs.writeFileSync(join(project, path), content)
+}
+const runDir = (id = 'quick-627') => join(project, '.pair/working/runs', id)
+/** The skill a prompt invokes: `/<skill>` on a slash engine, `Run the <skill> skill.` on an instruction one. */
+const skillOf = (prompt: string) => /^(?:\/|Run the )(\S+)/.exec(prompt)?.[1] ?? ''
+
+function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDependencies> = {}) {
+  const workflow: WorkflowHostDependencies = {
+    runIteration: async input => {
+      launched.push({
+        promptText: input.promptText,
+        cwd: input.cwd,
+        model: input.model,
+        effort: input.effort,
+      })
+      const text = (skills[skillOf(input.promptText)] as FakeSkill)()
+      if (text !== undefined) input.onEvent?.({ type: 'result', subtype: 'success', result: text })
+      return text === undefined
+        ? { outcome: 'failed', detail: 'timed out (idle): no engine event for 1800s' }
+        : { outcome: 'success', detail: 'terminal event: success' }
+    },
+    readCard: async () => ({ title: 'A card' }),
+    prepareWorktree: async ({ main, card }) => join(main, 'worktrees', card),
+    engineAvailable: () => true,
+    ...over,
+  }
+  return { workflow }
+}
+
+const OK = { 'pair-process-implement': () => IMPLEMENTED, 'pair-process-review': () => REVIEWED }
+
+const run = (
+  args: string[],
+  skills: Record<string, FakeSkill> = OK,
+  options: Record<string, unknown> = {},
+  over: Partial<WorkflowHostDependencies> = {},
+) =>
+  handleRunCommand(
+    parseRunCommand({ card: '627', cwd: project, ...options }, args),
+    fs,
+    deps(skills, over),
+  )
+
+beforeEach(() => {
+  project = fs.mkdtempSync(join(tmpdir(), 'pair-workflow-'))
+  lines = []
+  launched = []
+  for (const skill of [
+    'pair-process-implement',
+    'pair-process-review',
+    'pair-process-fix',
+    'my-skill',
+  ])
+    write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
+  write('.pair/adoption/tech/way-of-working.md', REGISTRY)
+  write('.pair/adoption/tech/workflows/quick.yaml', QUICK)
+  const keep = (...args: unknown[]) => void lines.push(args.join(' '))
+  vi.spyOn(console, 'log').mockImplementation(keep)
+  vi.spyOn(console, 'error').mockImplementation(keep)
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  fs.rmSync(project, { recursive: true, force: true })
+})
+
+const CONFIG = `version: 1
+name: mine
+defaults: { engine: claude, model: claude-sonnet-5-5, effort: medium }
+aliases:
+  judge: { model: claude-opus-5-5, effort: high }
+`
+const writeConfig = (name = 'mine', text = CONFIG) =>
+  write(
+    `.pair/adoption/tech/configurations/${name}.yaml`,
+    text.replace('name: mine', `name: ${name}`),
+  )
+const argsOf = (index: number) => launched[index]?.model ?? ''
+
+describe('settings per step, printed with their source (AC-1)', () => {
+  it('launches each step with its resolved model and prints each value with its source', async () => {
+    writeConfig()
+    expect(await run(['quick'], OK, { config: 'mine' }, {})).toBe(0)
+    expect(launched.map(one => one.model)).toEqual(['claude-sonnet-5-5', 'claude-opus-5-5'])
+    expect(launched.map(one => one.effort)).toEqual(['medium', 'high'])
+    expect(lines).toContain(
+      '    review: engine=claude (defaults) model=claude-opus-5-5 (alias) effort=high (alias)',
+    )
+  })
+
+  it('with no configuration says none applies and keeps the engine default', async () => {
+    expect(await run(['quick'])).toBe(0)
+    expect(lines).toContain('  Configuration: none applies — engine claude, its default model')
+    expect(argsOf(0)).toBe('')
+  })
+})
+
+describe('which configuration runs (AC-2, AC-3, AC-5)', () => {
+  it('--config wins over the pair.config.json map', async () => {
+    write('pair.config.json', JSON.stringify({ workflows: { quick: { configuration: 'other' } } }))
+    writeConfig('other', CONFIG.replace('claude-sonnet-5-5', 'm-other'))
+    writeConfig()
+    await run(['quick'], OK, { config: 'mine' })
+    expect(launched[0]?.model).toBe('claude-sonnet-5-5')
+  })
+
+  it('takes the map entry of the engine and the workflow default', async () => {
+    write(
+      'pair.config.json',
+      JSON.stringify({
+        workflows: { default: { configuration: { claude: 'mine', codex: 'cx' } } },
+      }),
+    )
+    writeConfig()
+    writeConfig(
+      'cx',
+      CONFIG.replace(/engine: claude/, 'engine: codex').replace('claude-sonnet-5-5', 'gpt-x'),
+    )
+    await run(['quick'])
+    expect(launched[0]?.model).toBe('claude-sonnet-5-5')
+    launched = []
+    fs.rmSync(runDir(), { recursive: true, force: true })
+    await run(['quick'], OK, { engine: 'codex' })
+    expect(launched[0]?.model).toBe('gpt-x')
+  })
+
+  it('refuses a configuration whose defaults.engine differs from --engine, before any launch', async () => {
+    writeConfig()
+    expect(await run(['quick'], OK, { config: 'mine', engine: 'codex' })).toBe(1)
+    expect(
+      lines.some(line => line.includes("defaults.engine is 'claude' but --engine is 'codex'")),
+    ).toBe(true)
+    expect(launched).toEqual([])
+  })
+
+  it('a project file replaces the knowledge-base file of the same name entirely', async () => {
+    writeConfig(
+      'claude-medium',
+      'version: 1\nname: mine\ndefaults: { engine: claude, model: only-mine }\n',
+    )
+    await run(['quick'], OK, { config: 'claude-medium' })
+    expect(launched.map(one => one.model)).toEqual(['only-mine', 'only-mine'])
+  })
+
+  it('refuses a name that is not a file anywhere', async () => {
+    expect(await run(['quick'], OK, { config: 'nope' })).toBe(1)
+    expect(lines.some(line => line.includes('configuration-not-found'))).toBe(true)
+  })
+})
+
+describe('validation of the configuration (AC-4)', () => {
+  it('refuses an unknown key before any launch, with file and line', async () => {
+    writeConfig('mine', `${CONFIG}extra: 1\n`)
+    expect(await run(['quick'], OK, { config: 'mine' })).toBe(1)
+    expect(lines.some(line => line.includes('mine.yaml:6: extra: unknown key'))).toBe(true)
+    expect(launched).toEqual([])
+  })
+
+  it('refuses an engine that is not installed', async () => {
+    writeConfig()
+    expect(await run(['quick'], OK, { config: 'mine' }, { engineAvailable: () => false })).toBe(1)
+    expect(lines.some(line => line.includes("engine 'claude' is not installed"))).toBe(true)
+  })
+
+  it('warns about an unknown step id and goes on', async () => {
+    writeConfig('mine', `${CONFIG}steps:\n  ghost: { effort: low }\n`)
+    expect(await run(['quick'], OK, { config: 'mine' })).toBe(0)
+    expect(lines.some(line => line.includes('Warning:') && line.includes("no step 'ghost'"))).toBe(
+      true,
+    )
+  })
+})
+
+describe('override (AC-6)', () => {
+  it('deep-merges over the file, runs with it and records it in state.json', async () => {
+    writeConfig()
+    const override = '{"aliases":{"judge":{"model":"claude-haiku-5-5"}}}'
+    await run(['quick'], OK, { config: 'mine', configOverride: override })
+    expect(launched.map(one => one.model)).toEqual(['claude-sonnet-5-5', 'claude-haiku-5-5'])
+    const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as {
+      configuration: { override: unknown }
+    }
+    expect(state.configuration.override).toEqual({
+      aliases: { judge: { model: 'claude-haiku-5-5' } },
+    })
+  })
+
+  it('refuses an invalid merge, and an override with no base and no defaults', async () => {
+    writeConfig()
+    expect(
+      await run(['quick'], OK, { config: 'mine', configOverride: '{"aliases":{"ghost":{}}}' }),
+    ).toBe(1)
+    expect(
+      await run(['quick'], OK, { configOverride: '{"aliases":{"judge":{"model":"m"}}}' }),
+    ).toBe(1)
+    expect(launched).toEqual([])
+  })
+})
+
+describe('frozen copy and resume (AC-7)', () => {
+  const FAIL = () => fenced({ status: 'failed', summary: 'red', reason: 'quality-gate' })
+
+  it('a resume uses the frozen copy and reports a changed source; --reconfigure replaces it without re-running ok steps', async () => {
+    writeConfig()
+    await run(['quick'], { ...OK, 'pair-process-review': FAIL }, { config: 'mine' })
+    writeConfig('mine', CONFIG.replace('claude-opus-5-5', 'claude-haiku-5-5'))
+    launched = []
+    lines.length = 0
+    await run(['quick'], OK, { config: 'mine' })
+    expect(launched.map(one => one.model)).toEqual(['claude-opus-5-5'])
+    expect(
+      lines.some(line => line.includes('the configuration changed after this run started')),
+    ).toBe(true)
+
+    fs.rmSync(join(runDir(), 'state.json'))
+    await run(['quick'], { ...OK, 'pair-process-review': FAIL }, { config: 'mine' })
+    launched = []
+    await run(['quick'], OK, { config: 'mine', reconfigure: true })
+    expect(launched.map(one => one.model)).toEqual(['claude-haiku-5-5'])
+  })
+
+  it('a run started with no configuration says so on resume when one now resolves, and checks its engine', async () => {
+    await run(['quick'], { ...OK, 'pair-process-review': FAIL })
+    writeConfig(
+      'mine',
+      CONFIG.replace(
+        'engine: claude, model: claude-sonnet-5-5',
+        'engine: codex, model: gpt-6-sol',
+      ).replace('claude-opus-5-5', 'gpt-6-astra'),
+    )
+    lines.length = 0
+    launched = []
+    const codexOnly = { engineAvailable: (engine: string) => engine === 'codex' }
+    await expect(run(['quick'], OK, { config: 'mine' }, codexOnly)).rejects.toThrow(
+      "Engine 'claude' is not installed",
+    )
+    expect(lines.some(line => line.includes('started with no configuration'))).toBe(true)
+    expect(launched).toEqual([])
+  })
+
+  it("a resume on a frozen copy no configuration resolves now checks the copy's engines", async () => {
+    writeConfig(
+      'mine',
+      CONFIG.replace(
+        'engine: claude, model: claude-sonnet-5-5',
+        'engine: codex, model: gpt-6-sol',
+      ).replace('claude-opus-5-5', 'gpt-6-astra'),
+    )
+    await run(['quick'], { ...OK, 'pair-process-review': FAIL }, { config: 'mine' })
+    launched = []
+    const claudeOnly = { engineAvailable: (engine: string) => engine === 'claude' }
+    await expect(run(['quick'], OK, {}, claudeOnly)).rejects.toThrow(
+      "engine 'codex' is not installed",
+    )
+    expect(launched).toEqual([])
+  })
+})
+
+describe('the key telemetry and its flag (AC-9)', () => {
+  const telemetry = () => fs.existsSync(join(runDir(), 'telemetry.jsonl'))
+  it.each([
+    ['on by the key', 'telemetry: true\n', {}, true],
+    ['off by the key', 'telemetry: false\n', {}, false],
+    ['the flag over the key', 'telemetry: false\n', { telemetry: true }, true],
+    ['--no-telemetry over the key', 'telemetry: true\n', { telemetry: false }, false],
+  ])('%s', async (_name, key, options, expected) => {
+    writeConfig('mine', CONFIG + key)
+    await run(['quick'], OK, { config: 'mine', ...options })
+    expect(telemetry()).toBe(expected)
+  })
+})
+
+describe('the shipped configurations (AC-8)', () => {
+  it.each(['claude', 'codex'])(
+    '%s base, cheap, medium and high parse and name themselves',
+    async family => {
+      const dir = join(
+        __dirname,
+        '../../../../../packages/knowledge-hub/dataset/.pair/adoption/tech/configurations',
+      )
+      for (const level of ['', '-cheap', '-medium', '-high']) {
+        const file = join(dir, `${family}${level}.yaml`)
+        const parsed = parseConfiguration(fs.readFileSync(file), file)
+        expect(parsed.errors).toEqual([])
+        expect(parsed.configuration?.defaults.engine).toBe(family)
+      }
+    },
+  )
+})
