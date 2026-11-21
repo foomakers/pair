@@ -108,7 +108,7 @@ beforeEach(() => {
   project = fs.mkdtempSync(join(tmpdir(), 'pair-workflow-'))
   lines = []
   launched = []
-  for (const skill of ['pair-process-implement', 'pair-process-review', 'my-skill'])
+  for (const skill of ['pair-process-implement', 'pair-process-review', 'pair-process-fix', 'my-skill'])
     write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
   write('.pair/adoption/tech/way-of-working.md', REGISTRY)
   write('.pair/adoption/tech/workflows/quick.yaml', QUICK)
@@ -443,5 +443,36 @@ describe('workflow resolution (design §7)', () => {
     expect(
       lines.some(line => line.includes('dataset/.pair/adoption/tech/workflows/quick.yaml')),
     ).toBe(true)
+  })
+})
+
+describe('quick: implement, review, fix (#708 AC-8)', () => {
+  const FIXED = fenced({ status: 'ok', summary: 'fixed', head: HEAD, resolutions: [] })
+  const CHANGES = fenced({
+    status: 'failed',
+    summary: '1 blocking',
+    reason: 'blocking-findings',
+    verdict: 'changes-requested',
+    reviewedHead: HEAD,
+    findings: [{ id: 'F1', severity: 'Major', title: 't', blocking: true }],
+  })
+  const quick = () =>
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      `${QUICK.replace('kind: review', 'kind: review\n    on-failed: continue')}  fix:\n    kind: fix\n`,
+    )
+
+  it.each([
+    ['approves', REVIEWED],
+    ['finds a blocking finding', CHANGES],
+  ])('runs the three steps in order when the review %s', async (_name, review) => {
+    quick()
+    const skills = { ...OK, 'pair-process-review': () => review, 'pair-process-fix': () => FIXED }
+    expect(await run(['quick'], skills)).toBe(0)
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([
+      'pair-process-implement',
+      'pair-process-review',
+      'pair-process-fix',
+    ])
   })
 })

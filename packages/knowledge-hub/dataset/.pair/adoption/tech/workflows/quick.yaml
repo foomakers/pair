@@ -1,8 +1,11 @@
 version: 1
 name: quick
-description: Implement a card and review the result.
+description: Implement a card, review it and fix the findings.
 steps:
   implement:
     kind: implement
   review:
     kind: review
+    on-failed: continue
+  fix:
+    kind: fix
