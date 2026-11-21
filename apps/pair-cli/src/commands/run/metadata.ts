@@ -81,7 +81,7 @@ export const runCommandMetadata = {
     {
       flags: '--telemetry',
       description:
-        'Record local per-stage and per-card telemetry; overrides ## Telemetry adoption setting',
+        'Record local per-stage and per-card telemetry; overrides ## Telemetry adoption setting. With a workflow name: record per-step telemetry.jsonl in the run directory (off without it)',
     },
     {
       flags: '--no-telemetry',

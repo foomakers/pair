@@ -112,6 +112,7 @@ const EXCEPTION_OUT_OF_SCOPE = new Set([
   'packages/content-ops/src/test-utils/in-memory-fs/in-memory-fs.ts',
   'packages/knowledge-hub/dataset/.pair/knowledge/assets/coverage-ratchet.cjs',
   'packages/knowledge-hub/dataset/.pair/knowledge/assets/mirror-realign.cjs',
+  'packages/knowledge-hub/dataset/.skills/capability/analyze-workflow-runs/scripts/analyze.mjs',
   'packages/knowledge-hub/dataset/.skills/capability/publish-pr/scripts/word-limits.mjs',
   'packages/knowledge-hub/dataset/.skills/capability/write-issue/scripts/word-limits.mjs',
   'packages/knowledge-hub/dataset/.skills/next/control-state.mjs',

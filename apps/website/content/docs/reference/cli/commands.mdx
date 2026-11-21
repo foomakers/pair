@@ -852,7 +852,7 @@ pair-cli run [workflow] [options]
 | `--approve-ineligible`          | Let THIS `--autonomous` run through `## Eligibility` on a card that does not carry the label. Announced, never persisted |
 | `--predicate '<selector> ⇒ <condition>'` | On the loop (`--parallel` optional; omission inherits adopted `## Max Parallelism`, otherwise KB default 1): the loop stop predicate (grammar of `## Stop Predicate`), argument > adoption, printed with its source. Checked at each iteration boundary before work; an empty or incomplete board snapshot never counts as satisfied |
 | `--eligibility-filter <labels>` | Internal, set by the `--parallel` loop on each child `--card` run: the loop's effective filter (argument or `## Autonomy`) as THIS card's eligibility, replacing the legacy `## Eligibility` label. Needs `--card`; not a selector, so the coordinator's `--filter` refusal does not apply |
-| `--telemetry` / `--no-telemetry` | Record (or not) local per-stage and per-card telemetry under `.pair/working/telemetry/records.jsonl` for this run; wins over the adopted `## Telemetry` setting (absent ⇒ off). Read it with `pnpm --filter @pair/pair-cli telemetry:report [root]` |
+| `--telemetry` / `--no-telemetry` | Record (or not) local per-stage and per-card telemetry under `.pair/working/telemetry/records.jsonl` for this run; wins over the adopted `## Telemetry` setting (absent ⇒ off). Read it with `pnpm --filter @pair/pair-cli telemetry:report [root]`. With a workflow name: record per-step telemetry in the run directory (`telemetry.jsonl`); off unless `--telemetry` is passed |
 | `--profile <name>`              | With `--card`, `--root` or `--parallel` (forwarded to every child card): the named workflow profile (per-stage engine/model/effort/context) from `pair.config.json`'s `workflowProfiles`. An unknown name halts `profile-unresolved`, never the KB default |
 | `--workflow-config <path>`      | With `--card`, `--root` or `--parallel` (forwarded to every child card): an external profile file, used verbatim, wins over `--profile` and `pair.config.json`  |
 | `--iteration-timeout <seconds>` | Opt-in **total** wall-clock cap per iteration. No default: the idle timeout is the hang guard     |
@@ -984,6 +984,12 @@ pair-cli run quick --card 627 --autonomous
   `workflow.yaml` (a copy frozen at the start), `state.json`, and per step `result.json` and
   `output.log`. `<run-id>` defaults to `<workflow>-<card>`; `--run-id` overrides it. A second
   process on the same run exits at once on the lock.
+- **Telemetry, when switched on.** `--telemetry` adds `telemetry.jsonl` to the run directory: one
+  record per execution of a step (duration, tokens, outcome, attempt) and one closing record with
+  their sums. Every token count carries its origin: `measured` from the engine's usage, `estimated`
+  from the exchanged text, or `unknown`. It is off by default, and a record that cannot be written
+  never fails a step. The format is in `workflow-telemetry.md`, beside the grammar; the skill
+  `/pair-capability-analyze-workflow-runs` reads the runs.
 
 | Outcome                         | What the command does                                                             |
 | ------------------------------- | --------------------------------------------------------------------------------- |
@@ -997,7 +1003,8 @@ pair-cli run quick --card 627 --autonomous
 | Card not found or closed        | Refused before any launch                                                         |
 
 With a workflow name the command takes `--card`, `--engine`, `--run-id`, `--restart`, `--dry-run`,
-`--cwd`, `--autonomous`, `--approve-project-trust`, the timeouts and the output flags. `--profile`
+`--cwd`, `--autonomous`, `--approve-project-trust`, `--telemetry` / `--no-telemetry`, the timeouts
+and the output flags. `--profile`
 and `--workflow-config` are refused: per-step configuration is not available yet. The flags of the
 cycle and of the loop (`--pr`, `--rounds`, `--root`, `--filter`, `--parallel`, …) are refused too.
 

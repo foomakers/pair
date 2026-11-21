@@ -65,6 +65,7 @@ describe('engine: a linear run (AC-1)', () => {
           uses: 'pair-process-implement',
           with: { gates: ['quality-gate'] },
           inputs: { card: '627' },
+          attempt: 1,
         },
       ],
     })
@@ -80,6 +81,7 @@ describe('engine: a linear run (AC-1)', () => {
           uses: 'pair-process-review',
           with: {},
           inputs: { card: '627', pr: 12, head: HEAD },
+          attempt: 1,
         },
       ],
     })
@@ -100,6 +102,7 @@ describe('engine: a linear run (AC-1)', () => {
     expect(run.files.readFileSync(`${DIR}/steps/implement/output.log`)).toBe('final message')
     expect(stateOf(run).steps['implement']).toEqual({
       state: 'ok',
+      executions: 1,
       summary: 'PR opened',
       outputs: { branch: 'feature/US-627-x', pr: 12, head: HEAD },
     })
@@ -139,6 +142,7 @@ describe('engine: a linear run (AC-1)', () => {
           verdict: 'approved',
           reviewedHead: HEAD,
         },
+        attempt: 1,
       },
     ])
   })
@@ -209,6 +213,7 @@ describe('engine: outcomes and resume (AC-6)', () => {
     expect(await next(run)).toEqual({ run: 'failed', ready: [] })
     expect(stateOf(run).steps['implement']).toEqual({
       state: 'failed',
+      executions: 1,
       summary: 'the result does not match the implement contract',
       reason: 'invalid-result',
       detail: 'pr: expected integer, found string "12"',
@@ -230,7 +235,8 @@ describe('engine: outcomes and resume (AC-6)', () => {
     await next(run)
     // the process dies here: nothing is recorded
     expect(await start(run, SOURCE, { card: '627' })).toEqual({ status: 'resumed', warnings: [] })
-    expect((await next(run)).ready.map(step => step.id)).toEqual(['implement'])
+    // the second launch of the step is its second execution (PR #714 Q4)
+    expect((await next(run)).ready.map(step => [step.id, step.attempt])).toEqual([['implement', 2]])
   })
 
   it('does nothing on a complete run', async () => {
@@ -252,6 +258,28 @@ describe('engine: outcomes and resume (AC-6)', () => {
     expect(run.files.existsSync(`${archived}/workflow.yaml`)).toBe(true)
     expect(run.files.existsSync(`${archived}/steps/implement/result.json`)).toBe(true)
     expect(run.files.existsSync(`${DIR}/steps`)).toBe(false)
+  })
+
+  it.each([
+    [
+      'written by another version',
+      (state: string) => JSON.stringify({ ...JSON.parse(state), schemaVersion: 2 }),
+    ],
+    ['that is not JSON', () => '{ "schemaVersion": 1, "steps"'],
+  ])('archives a state file %s and starts over on restart (#712 r0-7)', async (_name, damage) => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    const broken = damage(run.files.readFileSync(`${DIR}/state.json`))
+    await run.files.writeFile(`${DIR}/state.json`, broken)
+    const now = new Date('2026-11-20T10:00:00.000Z')
+    expect(await start(run, SOURCE, { card: '627', restart: true, now })).toEqual({
+      status: 'started',
+      warnings: [],
+    })
+    expect(statesOf(run)).toEqual({ implement: 'pending', review: 'pending' })
+    expect(run.files.readFileSync(`${DIR}/archive/2026-11-20T10-00-00-000Z/state.json`)).toBe(
+      broken,
+    )
   })
 
   it('warns when the workflow file changed, and keeps the frozen copy', async () => {

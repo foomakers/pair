@@ -185,6 +185,179 @@ describe('runSteps: results and resume (AC-4, AC-6)', () => {
   })
 })
 
+describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
+  it('appends one record per executed step, with the usage the host measured, then the closing record', async () => {
+    const { host } = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => REVIEWED,
+    })
+    const metered: WorkflowHost = {
+      ...host,
+      launch: (step, message, meter) => {
+        meter({ read: 100, cached: 1000, written: 10 })
+        return host.launch(step, message, meter)
+      },
+    }
+    await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
+    // The clock is read at the start and at the end of each step.
+    const clock = ['10:00:00', '10:01:30', '10:02:00', '10:02:30'].map(
+      time => new Date(`2026-11-21T${time}.000Z`),
+    )
+
+    await runSteps(metered, DIR, {
+      host: 'pair-run',
+      settings: { engine: 'claude', model: 'claude-fable-5-2' },
+      now: () => clock.shift() as Date,
+    })
+
+    const tokens = {
+      read: { value: 100, source: 'measured' },
+      cached: { value: 1000, source: 'measured' },
+      written: { value: 10, source: 'measured' },
+    }
+    const identity = { run: 'quick-627', workflow: 'quick', card: '627' }
+    const launchedWith = { host: 'pair-run', engine: 'claude', model: 'claude-fable-5-2' }
+    expect(
+      host.files
+        .readFileSync(`${DIR}/telemetry.jsonl`)
+        .trimEnd()
+        .split('\n')
+        .map(line => JSON.parse(line) as unknown),
+    ).toEqual([
+      {
+        type: 'step',
+        schema: 1,
+        ...identity,
+        step: 'implement',
+        kind: 'implement',
+        uses: 'pair-process-implement',
+        ...launchedWith,
+        startedAt: '2026-11-21T10:00:00.000Z',
+        durationMs: 90_000,
+        tokens,
+        status: 'ok',
+        attempt: 1,
+      },
+      {
+        type: 'step',
+        schema: 1,
+        ...identity,
+        step: 'review',
+        kind: 'review',
+        uses: 'pair-process-review',
+        ...launchedWith,
+        startedAt: '2026-11-21T10:02:00.000Z',
+        durationMs: 30_000,
+        tokens,
+        status: 'ok',
+        attempt: 1,
+      },
+      {
+        type: 'run',
+        schema: 1,
+        ...identity,
+        status: 'done',
+        durationMs: 120_000,
+        tokens: {
+          read: { value: 200, source: 'measured' },
+          cached: { value: 2000, source: 'measured' },
+          written: { value: 20, source: 'measured' },
+        },
+        steps: 2,
+      },
+    ])
+  })
+})
+
+describe('runSteps: a host that cannot measure usage (US-697 AC-4)', () => {
+  it('estimates read from the message sent and written from the final message, as a lower bound', async () => {
+    const answer = fenced({ status: 'failed', summary: 'gate red', reason: 'quality-gate' })
+    const { host, launched } = fakeHost({ 'pair-process-implement': () => answer })
+    await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
+
+    await runSteps(host, DIR, { host: 'session', settings: { engine: 'claude' } })
+
+    const sent = launched[0]?.message.length as number
+    const final = answer.length
+    const [step] = host.files.readFileSync(`${DIR}/telemetry.jsonl`).split('\n')
+    expect(JSON.parse(step as string)).toMatchObject({
+      host: 'session',
+      status: 'failed',
+      reason: 'quality-gate',
+      tokens: {
+        read: { value: Math.ceil(sent / 4), source: 'estimated' },
+        cached: { value: null, source: 'unknown' },
+        written: { value: Math.ceil(final / 4), source: 'estimated' },
+      },
+      estimate: 'lower-bound-from-text',
+    })
+  })
+})
+
+describe('runSteps: the telemetry switch (US-697 AC-5)', () => {
+  const SETTINGS = { host: 'pair-run', settings: { engine: 'claude' } } as const
+
+  it('writes no file and runs the same when telemetry is off', async () => {
+    const { host, events } = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => REVIEWED,
+    })
+    await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
+    const off = await runSteps(host, DIR)
+    expect(host.files.existsSync(`${DIR}/telemetry.jsonl`)).toBe(false)
+
+    const on = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => REVIEWED,
+    })
+    await start({ files: on.host.files, dir: DIR }, SOURCE, { card: '627' })
+    expect(await runSteps(on.host, DIR, SETTINGS)).toEqual(off)
+    expect(on.events).toEqual(events)
+    expect(on.host.files.readFileSync(`${DIR}/state.json`)).toBe(
+      host.files.readFileSync(`${DIR}/state.json`),
+    )
+  })
+
+  it.each([
+    ['a host that listens', true],
+    ['a host that does not', false],
+  ])(
+    'never fails a step on a write error, for %s: reported once, the run goes on',
+    async (_name, listens) => {
+      const { host } = fakeHost({
+        'pair-process-implement': () => IMPLEMENTED,
+        'pair-process-review': () => REVIEWED,
+      })
+      const files = host.files
+      const broken: WorkflowHost = {
+        ...host,
+        files: {
+          ...files,
+          writeFile: (path, content) =>
+            path.includes('telemetry.jsonl')
+              ? Promise.reject(new Error('EACCES: permission denied'))
+              : files.writeFile(path, content),
+        },
+      }
+      await start({ files, dir: DIR }, SOURCE, { card: '627' })
+      const warnings: string[] = []
+
+      const outcome = await runSteps(broken, DIR, {
+        ...SETTINGS,
+        ...(listens && { warn: (message: string) => void warnings.push(message) }),
+      })
+
+      expect(outcome.run).toBe('done')
+      expect(statesOf(host)).toEqual({ implement: 'ok', review: 'ok' })
+      expect(warnings).toEqual(
+        listens
+          ? ['telemetry was not written: EACCES: permission denied — the run goes on without it']
+          : [],
+      )
+    },
+  )
+})
+
 describe('settingsOf', () => {
   it('gives every step the settings of the run', () => {
     const run = { engine: 'claude', model: 'm' }

@@ -329,6 +329,82 @@ describe('the run directory (AC-7)', () => {
   })
 })
 
+describe('telemetry, switched by flag (US-697 AC-5)', () => {
+  const telemetryFile = () => join(runDir(), 'telemetry.jsonl')
+
+  it('--telemetry records every step and the closing record in the run directory', async () => {
+    expect(await run(['quick'], OK, { telemetry: true })).toBe(0)
+    const records = fs
+      .readFileSync(telemetryFile())
+      .trimEnd()
+      .split('\n')
+      .map(line => JSON.parse(line) as unknown)
+    expect(records).toMatchObject([
+      { type: 'step', step: 'implement', host: 'pair-run', engine: 'claude', status: 'ok' },
+      { type: 'step', step: 'review', host: 'pair-run', engine: 'claude', status: 'ok' },
+      { type: 'run', run: 'quick-627', workflow: 'quick', card: '627', status: 'done', steps: 2 },
+    ])
+  })
+
+  it('records the usage the engine stream reports, as measured (AC-1, AC-3)', async () => {
+    // Claude's usage: fresh input is `input_tokens` plus the tokens written to the cache.
+    const usage = {
+      input_tokens: 100,
+      cache_creation_input_tokens: 20,
+      cache_read_input_tokens: 1000,
+      output_tokens: 10,
+    }
+    const runIteration: WorkflowHostDependencies['runIteration'] = async input => {
+      const result = skillOf(input.promptText) === 'pair-process-review' ? REVIEWED : IMPLEMENTED
+      input.onEvent?.({ type: 'result', subtype: 'success', result, usage })
+      return { outcome: 'success', detail: 'terminal event: success' }
+    }
+    expect(await run(['quick'], OK, { telemetry: true }, { runIteration })).toBe(0)
+    const [implement] = fs
+      .readFileSync(telemetryFile())
+      .trimEnd()
+      .split('\n')
+      .map(line => JSON.parse(line) as { tokens: unknown })
+    expect(implement?.tokens).toEqual({
+      read: { value: 120, source: 'measured' },
+      cached: { value: 1000, source: 'measured' },
+      written: { value: 10, source: 'measured' },
+    })
+  })
+
+  // The run is named after its directory, whatever the platform (darwin, linux) reports.
+  it.each(['darwin', 'linux'] as const)(
+    'names the run after its directory on platform %s',
+    async platform => {
+      const real = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor
+      Object.defineProperty(process, 'platform', { ...real, value: platform })
+      try {
+        expect(await run(['quick'], OK, { telemetry: true, runId: 'second' })).toBe(0)
+      } finally {
+        Object.defineProperty(process, 'platform', real)
+      }
+      const [first] = fs.readFileSync(join(runDir('second'), 'telemetry.jsonl')).split('\n')
+      expect(JSON.parse(first as string)).toMatchObject({ run: 'second', card: '627' })
+    },
+  )
+
+  it.each([
+    ['no flag', {}],
+    ['--no-telemetry', { telemetry: false }],
+  ])('writes no file with %s', async (_name, options) => {
+    expect(await run(['quick'], OK, options)).toBe(0)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+    expect(fs.existsSync(telemetryFile())).toBe(false)
+  })
+
+  it('goes on when the file cannot be written, and says so once', async () => {
+    fs.mkdirSync(telemetryFile(), { recursive: true })
+    expect(await run(['quick'], OK, { telemetry: true })).toBe(0)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+    expect(lines.filter(line => line.includes('telemetry was not written'))).toHaveLength(1)
+  })
+})
+
 describe('refusals before any launch (design §8)', () => {
   it.each([
     ['a card the tracker does not have', 'missing', 'card-not-found: card 627'],

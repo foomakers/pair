@@ -102,6 +102,34 @@ describe('violations', () => {
     expect(violations(schema, value)).toEqual([expected])
   })
 
+  it.each(['constructor', 'toString', '__proto__'])(
+    'reports an undeclared key named like an Object.prototype member: %s (#712 r0-6)',
+    key => {
+      const value: unknown = JSON.parse(`{"kind":"a","${key}":1}`)
+      expect(violations(schema, value)).toEqual([
+        { path: [key], problem: `unknown key '${key}'`, fix: ALLOWED },
+      ])
+    },
+  )
+
+  it('reports such a key at a nested level too (#712 r0-6)', () => {
+    const nested: JsonSchema = {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        inner: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { a: { type: 'string' } },
+        },
+      },
+    }
+    const value: unknown = JSON.parse('{"inner":{"__proto__":1,"a":"x"}}')
+    expect(violations(nested, value)).toEqual([
+      { path: ['inner', '__proto__'], problem: "unknown key '__proto__'", fix: 'use one of a' },
+    ])
+  })
+
   it('tells to remove a key when the schema declares none', () => {
     expect(violations({ type: 'object', additionalProperties: false }, { a: 1 })).toEqual([
       { path: ['a'], problem: "unknown key 'a'", fix: 'remove it' },

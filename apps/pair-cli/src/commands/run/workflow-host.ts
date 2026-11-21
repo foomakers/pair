@@ -10,6 +10,8 @@ import {
   type RunOutcome,
   type StepEvent,
   type StepLaunch,
+  type StepSettings,
+  type Usage,
   type Workflow,
 } from '@pair/workflows'
 import { loadConfigWithOverrides } from '#config'
@@ -38,6 +40,7 @@ import { acquireRunLock } from './run-lock'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
 import { finalTextOf, type IterationResult } from './stream-reader'
+import { observeEngineEvent, type EngineObservation } from './telemetry'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
 import { mainCheckoutOrCwd, readRunnableCard, resolveBranch, runSetupCommand } from './cycle-wiring'
 import {
@@ -185,19 +188,30 @@ interface Launch {
   readonly worktree: string
 }
 
+/** What every step of the run launches with: its one engine and that engine's declared model. */
+function runSettings(resolved: Resolved): StepSettings {
+  const { id } = resolved.engine.engine
+  return { engine: id, model: declaredEngineModel(resolved.project, id) }
+}
+
 /** One agent per step, in the card's worktree, on the run's one engine and model. */
 function launcher(run: Launch) {
   const { config, resolved, services } = run
   const engine = resolved.engine.engine
-  const settings = { engine: engine.id, model: declaredEngineModel(resolved.project, engine.id) }
+  const settings = runSettings(resolved)
   const autonomyArgs = resolveAutonomyFor(engine, config, resolved.main, services.fs).args
   const idle = resolveIdleTimeout({
     flag: config.idleTimeoutSeconds,
     declared: declaredRunIdleTimeout(resolved.project, engine.id),
   })
   const runIteration = services.deps.workflow?.runIteration ?? spawnIteration
-  return async (step: StepLaunch, message: string): Promise<string | undefined> => {
+  return async (
+    step: StepLaunch,
+    message: string,
+    meter: (usage: Usage) => void,
+  ): Promise<string | undefined> => {
     let text: string | undefined
+    let observed: EngineObservation = {}
     const result = await runIteration({
       engine,
       promptText: message,
@@ -206,7 +220,14 @@ function launcher(run: Launch) {
       model: settingsOf(settings, step.id).model,
       timeoutSeconds: config.iterationTimeoutSeconds,
       idleTimeoutSeconds: idle.seconds,
-      onEvent: payload => (text = finalTextOf(engine, payload) ?? text),
+      onEvent: payload => {
+        text = finalTextOf(engine, payload) ?? text
+        // The usage the engine reports, read by the per-engine parsers; none reported, none metered.
+        observed = observeEngineEvent(observed, engine.id, payload)
+        const { tokens } = observed
+        if (typeof tokens === 'object')
+          meter({ read: tokens.freshIn, cached: tokens.cachedIn, written: tokens.out })
+      },
     })
     // An interrupted run records nothing: the step stays `running` on disk and runs again at the next launch.
     if (isInterrupted()) throw new Error('interrupted')
@@ -291,6 +312,14 @@ async function runOnConsole(
             : console.log(stepLine(event)),
       },
       runDir,
+      // Off unless the flag turns it on; the configuration key arrives with #672.
+      config.telemetry === true
+        ? {
+            host: 'pair-run',
+            settings: runSettings(resolved),
+            warn: message => console.log(`  Warning: ${message}`),
+          }
+        : undefined,
     )
     return conclude(outcome, request, sink)
   } finally {

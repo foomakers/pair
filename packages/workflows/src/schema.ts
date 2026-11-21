@@ -99,7 +99,10 @@ function objectViolations(
       ? [{ path, problem: 'is empty', fix: 'add at least one entry' }]
       : []
   const members = keys.flatMap(key => {
-    const declared = schema.properties?.[key]
+    // Own lookup: `constructor`, `toString`, `__proto__` are keys like any other, never the inherited members.
+    const declared = Object.hasOwn(schema.properties ?? {}, key)
+      ? schema.properties?.[key]
+      : undefined
     if (declared !== undefined) return violations(declared, value[key], [...path, key])
     const named = keyViolations(schema, key, path)
     if (named.length > 0 || typeof schema.additionalProperties !== 'object') return named

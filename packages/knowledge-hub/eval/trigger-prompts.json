@@ -215,7 +215,8 @@
         "analyze-code-quality",
         "analyze-debt",
         "analyze-test-speed",
-        "analyze-test-prune"
+        "analyze-test-prune",
+        "analyze-workflow-runs"
       ],
       "prompts": [
         {
@@ -253,6 +254,12 @@
           "type": "should-trigger",
           "expected": "analyze-test-prune",
           "prompt": "Which tests in packages/content-ops are redundant and could be removed? Report candidates only."
+        },
+        {
+          "id": "AR-07",
+          "type": "should-trigger",
+          "expected": "analyze-workflow-runs",
+          "prompt": "What did card 627 cost in tokens across its pair run steps, and which step was the slowest?"
         },
         {
           "id": "AR-N1",

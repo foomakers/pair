@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { parseWorkflow, type KindName, type Step, type Workflow } from '../grammar'
 import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 
@@ -24,12 +24,16 @@ export interface RunDirectory {
 export const STATE_SCHEMA_VERSION = 1
 export const STATE_FILE = 'state.json'
 export const FROZEN_WORKFLOW = 'workflow.yaml'
+/** The run's telemetry, when it is on: written by `../telemetry`, archived with the run. */
+export const TELEMETRY_FILE = 'telemetry.jsonl'
 
 export type StepState = 'pending' | 'running' | StepStatus
 export type RunState = 'running' | 'done' | 'failed' | 'parked'
 
 export interface StepRecord {
   readonly state: StepState
+  /** How many times the step was launched in this run. */
+  readonly executions?: number
   readonly summary?: string
   readonly reason?: string
   readonly detail?: string
@@ -51,13 +55,15 @@ export interface StepLaunch {
   readonly uses: string
   readonly with: Readonly<Record<string, unknown>>
   readonly inputs: Readonly<Record<string, unknown>>
+  /** The number of this execution of the step in the run: 1 the first time. */
+  readonly attempt: number
 }
 
 export const hashOf = (text: string): string =>
   `sha256:${createHash('sha256').update(text).digest('hex')}`
 
 /** Temp file, then rename: a reader never sees half a file. */
-async function writeAtomic(files: RunFiles, path: string, content: string): Promise<void> {
+export async function writeAtomic(files: RunFiles, path: string, content: string): Promise<void> {
   await files.writeFile(`${path}.tmp`, content)
   await files.rename(`${path}.tmp`, path)
 }
@@ -81,6 +87,18 @@ function requireState(run: RunDirectory): RunStateFile {
   const state = readState(run)
   if (state === undefined) throw new Error(`run-not-started: no ${STATE_FILE} in ${run.dir}`)
   return state
+}
+
+/** Who a run is: its id (the name of its directory), its workflow and its card. */
+export interface RunIdentity {
+  readonly run: string
+  readonly workflow: string
+  readonly card: string
+}
+
+export function identityOf(run: RunDirectory): RunIdentity {
+  const { workflow, card } = requireState(run)
+  return { run: basename(run.dir), workflow: workflow.name, card }
 }
 
 /** The frozen copy, parsed. It was valid when `start` froze it. */
@@ -113,7 +131,7 @@ export interface Started {
 async function archive(run: RunDirectory, now: Date): Promise<void> {
   const target = join(run.dir, 'archive', now.toISOString().replace(/[:.]/g, '-'))
   await run.files.mkdir(target, { recursive: true })
-  for (const name of [STATE_FILE, FROZEN_WORKFLOW, 'steps']) {
+  for (const name of [STATE_FILE, FROZEN_WORKFLOW, TELEMETRY_FILE, 'steps']) {
     const from = join(run.dir, name)
     if (run.files.existsSync(from)) await run.files.rename(from, join(target, name))
   }
@@ -137,7 +155,15 @@ async function resume(
   if (records.every(([, step]) => step.state === 'ok')) return { status: 'complete', warnings }
   // A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
   const steps = Object.fromEntries(
-    records.map(([id, step]) => [id, step.state === 'ok' ? step : { state: 'pending' as const }]),
+    records.map(([id, step]) => [
+      id,
+      step.state === 'ok'
+        ? step
+        : {
+            state: 'pending' as const,
+            ...(step.executions !== undefined && { executions: step.executions }),
+          },
+    ]),
   )
   await writeState(run, { ...state, steps })
   return { status: 'resumed', warnings }
@@ -152,13 +178,13 @@ export async function start(
   source: { readonly text: string; readonly file: string },
   options: StartOptions,
 ): Promise<Started> {
-  const existing = readState(run)
-  if (existing !== undefined && options.restart !== true)
-    return resume(run, existing, source, options.card)
+  // A restart never reads the state it replaces: one this version cannot read is archived like any other.
+  const existing = options.restart === true ? undefined : readState(run)
+  if (existing !== undefined) return resume(run, existing, source, options.card)
   const { workflow, errors } = parseWorkflow(source.text, source.file)
   if (workflow === undefined)
     throw new Error(`workflow-invalid: ${errors[0]?.problem ?? source.file}`)
-  if (existing !== undefined) await archive(run, options.now ?? new Date())
+  if (run.files.existsSync(join(run.dir, STATE_FILE))) await archive(run, options.now ?? new Date())
   await run.files.mkdir(run.dir, { recursive: true })
   await writeAtomic(run.files, join(run.dir, FROZEN_WORKFLOW), source.text)
   await writeState(run, {
@@ -200,13 +226,18 @@ export async function next(
   if (step === undefined) return { ready: [], run: 'done' }
   const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
   if (halted !== undefined) return { ready: [], run: halted }
-  await writeState(run, { ...state, steps: { ...state.steps, [step.id]: { state: 'running' } } })
+  const attempt = (state.steps[step.id]?.executions ?? 0) + 1
+  await writeState(run, {
+    ...state,
+    steps: { ...state.steps, [step.id]: { state: 'running', executions: attempt } },
+  })
   const launch: StepLaunch = {
     id: step.id,
     kind: step.kind,
     uses: step.uses ?? kindByName[step.kind].defaultUses ?? '',
     with: step.with ?? {},
     inputs: inputsOf(step, steps, state),
+    attempt,
   }
   return { ready: [launch], run: 'running' }
 }
@@ -237,8 +268,10 @@ export async function record(
       .filter(name => name in settled)
       .map(name => [name, settled[name]]),
   )
+  const executions = state.steps[stepId]?.executions
   const entry: StepRecord = {
     state: status,
+    ...(executions !== undefined && { executions }),
     summary,
     ...(reason !== undefined && { reason }),
     ...(detail !== undefined && { detail }),

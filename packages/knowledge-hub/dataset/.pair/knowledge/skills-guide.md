@@ -15,10 +15,10 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 10 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 34 | Atomic units — perform a single focused operation |
+| **Capability** | 35 | Atomic units — perform a single focused operation |
 | **Workflow** | 7 | Delivery stages — dispatched by the batch engine, one mutation boundary each |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 53 (10 process + 34 capability + 7 workflow + 2 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 54 (10 process + 35 capability + 7 workflow + 2 navigator).
 
 ## Full Catalog
 
@@ -41,7 +41,7 @@ Process skills compose capability skills. Capability skills are independently in
 >
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (34)
+### Capability Skills (35)
 
 #### Domain Modeling Skills (2)
 
@@ -87,6 +87,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 | `/analyze-delivery-metrics` | Delivery/AI metrics for a period — bug resolution time, PR lead time, process adoption — computed from the adopted PM tool/code host against the [delivery-metrics guideline](guidelines/quality-assurance/delivery-metrics.md) and written as one period-keyed panel under `.pair/working/reports/metrics/` per the [report-panel convention](guidelines/collaboration/working-area.md). Report-only, but (like `/assess-security`'s audit) it writes its own panel — the D14 operational-artifact exception; never blocks, never touches adoption |
 | `/analyze-test-speed` | Test and pre-push speed — measure, profile, rank bottlenecks, classify causes; asks before opening a card (report-only) |
 | `/analyze-test-prune` | Test prune candidates — baseline, mutation in a disposable worktree, U1–U8, protections, waves; asks before opening a card (report-only) |
+| `/analyze-workflow-runs` | Cost, time, passes, comparison and trend of workflow runs from their telemetry — a deterministic script computes every number with its origin (read-only) |
 
 #### Verification Skills (3)
 
@@ -187,6 +188,7 @@ Delivery-stage skills the batch engine (`pair-implement-batch`) or the in-sessio
 │   ├── analyze-delivery-metrics/ # report-only, writes one period panel
 │   ├── analyze-test-speed/    # report-only
 │   ├── analyze-test-prune/    # report-only
+│   ├── analyze-workflow-runs/ # read-only, numbers from its script
 │   ├── checkpoint/
 │   ├── publish-pr/
 │   ├── manage-flags/
