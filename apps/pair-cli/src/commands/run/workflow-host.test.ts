@@ -47,7 +47,7 @@ const REGISTRY = `### Custom Gate Registry
 
 /** A fake skill answers with the agent's final message, `undefined` when the agent dies, or throws on a crash. */
 type FakeSkill = () => string | undefined
-type Launched = Pick<SpawnIterationInput, 'promptText' | 'cwd'>
+type Launched = Pick<SpawnIterationInput, 'promptText' | 'cwd' | 'autonomyArgs'>
 
 let project: string
 let lines: string[]
@@ -75,7 +75,11 @@ const skillOf = (prompt: string) => /^(?:\/|Run the )(\S+)/.exec(prompt)?.[1] ??
 function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDependencies> = {}) {
   const workflow: WorkflowHostDependencies = {
     runIteration: async input => {
-      launched.push({ promptText: input.promptText, cwd: input.cwd })
+      launched.push({
+        promptText: input.promptText,
+        cwd: input.cwd,
+        autonomyArgs: input.autonomyArgs,
+      })
       const text = (skills[skillOf(input.promptText)] as FakeSkill)()
       if (text !== undefined) input.onEvent?.({ type: 'result', subtype: 'success', result: text })
       return text === undefined
@@ -126,6 +130,19 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   fs.rmSync(project, { recursive: true, force: true })
+})
+
+describe('always autonomous (AC-12)', () => {
+  it.each([[{}], [{ autonomous: true }]])(
+    'passes the engine bypass arguments with or without --autonomous (%j)',
+    async flags => {
+      expect(await run(['quick'], OK, { engine: 'claude', ...flags })).toBe(0)
+
+      expect(launched.map(one => one.autonomyArgs)).toEqual(
+        Array(2).fill(['--permission-mode', 'bypassPermissions']),
+      )
+    },
+  )
 })
 
 describe('a linear run (AC-1)', () => {

@@ -11,7 +11,7 @@ export const runCommandMetadata = {
     'pair-cli run --card 217 --card-tags "auto-dev,risk:green"   # tag-driven: the mapping picks the workflow',
     "pair-cli run --card 487                                # Ready, no mapping: drives or resumes the story's delivery cycle",
     'pair-cli run --cards 12,15,9 --autonomous             # ordered list: serial, retried in passes while progress is made',
-    'pair-cli run quick --card 627 --autonomous            # workflow `quick`: implement, then review, one step at a time',
+    'pair-cli run quick --card 627                           # workflow `quick`: implement, then review, one step at a time (always autonomous; only an escalation stops it)',
     'pair-cli run quick --card 627 --dry-run               # validates the workflow and prints its steps; launches nothing',
     'pair-cli run --card 487 --pr 42                        # enters the cycle at {verify, first, r0} — never prepare',
     'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',

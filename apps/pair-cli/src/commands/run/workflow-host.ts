@@ -262,14 +262,14 @@ function engineOf(resolved: Resolved, id: string): EngineDefinition {
     : withRunAgentRunner(resolveEngine({ flag: id }), resolved.project).engine
 }
 
-/** Per engine, once: its autonomy arguments and idle timeout. */
+/** Per engine, once: its autonomy arguments (a workflow run is always autonomous; only an escalation stops it) and idle timeout. */
 function policiesOf({ config, resolved, services }: Launch) {
   const policies = new Map<string, { autonomyArgs: readonly string[]; idle: number }>()
   return (engine: EngineDefinition) => {
     const known = policies.get(engine.id)
     if (known !== undefined) return known
     const made = {
-      autonomyArgs: resolveAutonomyFor(engine, config, resolved.main, services.fs).args,
+      autonomyArgs: resolveAutonomyFor(engine, { ...config, autonomous: true }, resolved.main, services.fs).args,
       idle: resolveIdleTimeout({
         flag: config.idleTimeoutSeconds,
         declared: declaredRunIdleTimeout(resolved.project, engine.id),

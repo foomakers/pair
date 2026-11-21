@@ -289,83 +289,37 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
     )
   })
 
-  // Expected: today's six profiles per stage (implement, review, fix); `claude` and `codex` as their medium.
-  const SONNET = 'claude-sonnet-5-5'
-  const OPUS = 'claude-opus-5-5'
+  // Expected: the profile JSON of the same name, per stage (implement, verify, green), model classes resolved;
+  // `claude` and `codex` as their medium.
+  const profiles = import.meta.glob(
+    '../../../knowledge-hub/dataset/.pair/adoption/tech/workflow-profiles/*.json',
+    { import: 'default', eager: true },
+  ) as Record<string, ProfileJson>
+  type Pick3 = { model?: string; effort?: string }
+  type ProfileJson = {
+    defaults: Pick3
+    modelClasses: Record<string, string>
+    stages?: Record<string, Pick3>
+  }
+  const profileSettings = (name: string) => {
+    const profile = Object.entries(profiles).find(([key]) => key.endsWith(`/${name}.json`))?.[1]
+    if (profile === undefined) throw new Error(`no profile ${name}`)
+    return ['implement', 'verify', 'green'].map(stage => {
+      const merged = { ...profile.defaults, ...profile.stages?.[stage] }
+      return [profile.modelClasses[merged.model ?? ''] ?? merged.model, merged.effort]
+    })
+  }
   it.each([
-    [
-      'claude-cheap',
-      'claude',
-      [
-        [SONNET, 'medium'],
-        [SONNET, 'high'],
-        ['claude-haiku-5-5', 'medium'],
-      ],
-    ],
-    [
-      'claude-medium',
-      'claude',
-      [
-        [SONNET, 'medium'],
-        [OPUS, 'high'],
-        [SONNET, 'medium'],
-      ],
-    ],
-    [
-      'claude-high',
-      'claude',
-      [
-        [OPUS, 'high'],
-        [OPUS, 'high'],
-        [OPUS, 'high'],
-      ],
-    ],
-    [
-      'claude',
-      'claude',
-      [
-        [SONNET, 'medium'],
-        [OPUS, 'high'],
-        [SONNET, 'medium'],
-      ],
-    ],
-    [
-      'codex-cheap',
-      'codex',
-      [
-        [undefined, 'medium'],
-        [undefined, 'high'],
-        [undefined, 'low'],
-      ],
-    ],
-    [
-      'codex-medium',
-      'codex',
-      [
-        ['gpt-6-sol', 'medium'],
-        ['gpt-6-astra', 'high'],
-        ['gpt-6-sol', 'medium'],
-      ],
-    ],
-    [
-      'codex-high',
-      'codex',
-      [
-        ['gpt-6-sol', 'high'],
-        ['gpt-6-astra', 'high'],
-        ['gpt-6-sol', 'high'],
-      ],
-    ],
-    [
-      'codex',
-      'codex',
-      [
-        ['gpt-6-sol', 'medium'],
-        ['gpt-6-astra', 'high'],
-        ['gpt-6-sol', 'medium'],
-      ],
-    ],
-  ])('%s runs quick clean, every step on %s', (name, engine, expected) => {
+    ['claude-cheap', 'claude', 'claude-cheap'],
+    ['claude-medium', 'claude', 'claude-medium'],
+    ['claude-high', 'claude', 'claude-high'],
+    ['claude', 'claude', 'claude-medium'],
+    ['codex-cheap', 'codex', 'codex-cheap'],
+    ['codex-medium', 'codex', 'codex-medium'],
+    ['codex-high', 'codex', 'codex-high'],
+    ['codex', 'codex', 'codex-medium'],
+  ])('%s runs quick clean on %s, as the profile %s', (name, engine, profile) => {
+    const expected = profileSettings(profile)
     const c = shipped(name)
     const steps = workflow?.steps ?? []
     expect(

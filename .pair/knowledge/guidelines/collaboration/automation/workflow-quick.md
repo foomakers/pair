@@ -3,7 +3,7 @@
 `quick` implements a card, reviews the result and fixes the findings. It ships with pair and needs no configuration.
 
 ```bash
-pair-cli run quick --card 627 --autonomous
+pair-cli run quick --card 627
 ```
 
 ## The file
