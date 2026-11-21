@@ -52,7 +52,23 @@
         "$TURBO_ROOT$/qa/**",
         "$TURBO_ROOT$/.github/workflows/**",
         "$TURBO_ROOT$/scripts/**",
-        "$TURBO_ROOT$/turbo.json"
+        "$TURBO_ROOT$/turbo.json",
+        "$TURBO_ROOT$/packages/workflows/src/**",
+        "$TURBO_ROOT$/packages/workflows/*.{json,cjs,ts,md}"
+      ]
+    },
+    // #652: src/kinds/reference.test.ts (the kind-reference staleness guard) imports the dataset
+    // page workflow-kinds.md, a file outside its package — same false green as above: without the
+    // page among the inputs, an edit of it replays a cached PASS. Keep this list identical in
+    // "@pair/workflows#test:coverage". The guards of these inputs live in
+    // packages/knowledge-hub/src/conformance/workflows-test-cache-inputs*.test.ts and read
+    // packages/workflows, hence the two packages/workflows entries in the knowledge-hub lists.
+    "@pair/workflows#test": {
+      "dependsOn": ["build"],
+      "outputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md"
       ]
     },
     // #518: regenerate-mirrors.test.ts runs the script over the BUILT pair CLI and never builds
@@ -71,6 +87,14 @@
     // block's — JSON/turbo.json has no anchor or extends mechanism to de-duplicate it — so if you
     // change one list, change the other the same way, or this task silently falls back to a stale
     // local cache that the plain "test" task above has already stopped serving.
+    "@pair/workflows#test:coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md"
+      ]
+    },
     "@pair/knowledge-hub#test:coverage": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"],
@@ -86,7 +110,9 @@
         "$TURBO_ROOT$/qa/**",
         "$TURBO_ROOT$/.github/workflows/**",
         "$TURBO_ROOT$/scripts/**",
-        "$TURBO_ROOT$/turbo.json"
+        "$TURBO_ROOT$/turbo.json",
+        "$TURBO_ROOT$/packages/workflows/src/**",
+        "$TURBO_ROOT$/packages/workflows/*.{json,cjs,ts,md}"
       ]
     },
     // packages/dev-tools/src/quality-gates/run-format.test.ts exercises
