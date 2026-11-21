@@ -65,7 +65,10 @@ const SCALAR_CHECKS: readonly Scalar[] = [
       : undefined,
   (schema, value) =>
     schema.minimum !== undefined && typeof value === 'number' && value < schema.minimum
-      ? { problem: `${show(value)} is below ${schema.minimum}`, fix: `use at least ${schema.minimum}` }
+      ? {
+          problem: `${show(value)} is below ${schema.minimum}`,
+          fix: `use at least ${schema.minimum}`,
+        }
       : undefined,
 ]
 

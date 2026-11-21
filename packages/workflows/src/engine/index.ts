@@ -207,7 +207,10 @@ async function reconfigured(
   const loops = Object.fromEntries(
     Object.entries(state.loops ?? {}).map(([id, loop]) => {
       const step = frozenWorkflow(run).steps.find(one => one.id === id)
-      return [id, { ...loop, max: step === undefined ? loop.max : loopMax(configuration.text, step) }]
+      return [
+        id,
+        { ...loop, max: step === undefined ? loop.max : loopMax(configuration.text, step) },
+      ]
     }),
   )
   return {
@@ -422,8 +425,7 @@ const pick = (produced: Record<string, unknown>, kind: KindName): Record<string,
 }
 
 /** The number of this launch of `id`. */
-const launches = (state: RunStateFile, id: string): number =>
-  (state.steps[id]?.executions ?? 0) + 1
+const launches = (state: RunStateFile, id: string): number => (state.steps[id]?.executions ?? 0) + 1
 
 /** What the steps before `step` produced, then the loop's latest outputs. */
 const producedBefore = (
