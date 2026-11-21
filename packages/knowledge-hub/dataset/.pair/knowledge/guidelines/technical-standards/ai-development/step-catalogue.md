@@ -14,7 +14,7 @@ Whitelisting a representation instead of the step looks equivalent and is not, b
 | Representation                                | Count | Consequence of keying on it                                                                     |
 | --------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------ |
 | how-to guides (`knowledge/how-to/`)           | 9     | `brainstorm` has none — a profile could never disable discovery                                   |
-| `process/*` skills                            | 10    | the DDD-mapping steps are **capabilities** — "a PoC never does DDD mapping" becomes inexpressible |
+| `process/*` skills                            | 11    | the DDD-mapping steps are **capabilities** — "a PoC never does DDD mapping" becomes inexpressible |
 
 The second row is the decisive one: the flagship reason a profile exists is a PoC that skips domain mapping, and that case lives exactly in the asymmetric part. So the profile governs the **step**, and this catalogue is what ties the two representations to it.
 
@@ -36,6 +36,7 @@ The second row is the decisive one: the flagship reason a profile exists is a Po
 | `plan-tasks`              | [`09-how-to-create-tasks.md`](../../../how-to/09-how-to-create-tasks.md)                                | `/plan-tasks`       | `refine-story`                     |
 | `implement`               | [`10-how-to-implement-a-task.md`](../../../how-to/10-how-to-implement-a-task.md)                        | `/implement`        | `plan-tasks`                       |
 | `review`                  | [`11-how-to-code-review.md`](../../../how-to/11-how-to-code-review.md)                                  | `/review`           | `implement`                        |
+| `fix`                     | —                                                                                                       | `/fix`              | `review`                           |
 
 ## The three asymmetric steps, as declared data
 

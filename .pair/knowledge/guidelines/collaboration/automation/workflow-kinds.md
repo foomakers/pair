@@ -51,7 +51,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 
 ## generic
 
-- **Default skill**: none: `uses` is required
+- **Default skill**: none: `skill` is required
 - **Inputs**
   - Whatever the launch and the earlier steps produced.
 - **Outputs**, required when `status` is `ok`
@@ -59,4 +59,4 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Options** (`with`)
   - A free object, passed to the skill as written.
 - **Returns `needs-human` when**
-  - Whatever the skill named by `uses` documents.
+  - Whatever the skill named by `skill` documents.

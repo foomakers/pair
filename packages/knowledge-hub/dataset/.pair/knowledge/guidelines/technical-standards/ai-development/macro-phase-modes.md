@@ -28,6 +28,7 @@ Steps in the [step catalogue](step-catalogue.md) that no mode runs, because they
 | ------------------------- | ------------------------------------------------------------------------------------------------ |
 | `define-subdomains`       | A capability composed by `analysis` steps (`plan-initiatives`, `plan-epics`, `refine-story`, …)  |
 | `define-bounded-contexts` | A capability composed by `analysis` steps (`refine-story`, `plan-tasks`, …)                      |
+| `fix`                     | Run by the `fix` step kind of a workflow (`pair run quick`), never selected by a cascade row     |
 
 Cascade rows 12–16 (`/setup-gates`, `/assess-stack`, `/analyze-debt`, `/estimate`, `/grill`) are capabilities, not steps, and belong to no mode: a mode never surfaces them.
 
