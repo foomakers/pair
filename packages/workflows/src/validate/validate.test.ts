@@ -56,6 +56,14 @@ steps:
     expect(errors.some(error => error.problem.includes("input 'findings'"))).toBe(true)
   })
 
+  it.each([
+    ['review:', 'steps.rounds.steps.review'],
+    ['review: { kind: typo }', 'steps.rounds.steps.review.kind'],
+  ])('diagnoses malformed child %s (#670-child-validation)', (child, key) => {
+    const result = check(loop.replace('review: { kind: generic, skill: my-skill }', child))
+    expect(result.errors.some(error => error.file === 'quick.yaml' && error.line > 0 && error.key === key)).toBe(true)
+  })
+
   it('accepts a bounded loop', () => {
     expect(check(loop).errors).toEqual([])
   })
