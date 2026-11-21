@@ -40,7 +40,7 @@ Each step:
 
 | Key    | Required                     | Meaning                                                                         |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------- |
-| `kind` | Yes                          | `implement`, `review` or `generic`.                                             |
+| `kind` | Yes                          | `implement`, `review`, `fix` or `generic`.                                           |
 | `skill` | Only for `generic`          | The skill that runs. A typed kind has a default skill; `skill` replaces it.     |
 | `with` | No                           | Options of the step. The kind declares the keys it accepts.                     |
 
@@ -54,7 +54,7 @@ A step id starts with a lower-case letter and continues with lower-case letters,
 - Every error names the file, the line, the key and the fix:
 
 ```text
-quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "generic"
+quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic"
 ```
 
 Not in version 1: `context`, `interactive`, `prompt`, `loop`, `gate`, `approval`, `merge`, `when`, `on-failed`, and a step that uses another workflow.

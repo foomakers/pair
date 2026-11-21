@@ -3,7 +3,7 @@ import { isAlias, isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, vi
 import { violations, type JsonSchema, type Path } from '../schema'
 
 /** The step kinds of grammar v1. A kind's contract lives in `kinds/`. */
-export const KIND_NAMES = ['implement', 'review', 'generic'] as const
+export const KIND_NAMES = ['implement', 'review', 'fix', 'generic'] as const
 export type KindName = (typeof KIND_NAMES)[number]
 
 /** A step id names a directory of the run and a row of the output: lower-case, digits and hyphens. */

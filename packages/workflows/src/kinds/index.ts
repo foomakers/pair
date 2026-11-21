@@ -1,5 +1,6 @@
 import type { KindName } from '../grammar'
 import { violations } from '../schema'
+import { fix } from './fix'
 import { generic } from './generic'
 import { implement } from './implement'
 import { COMMON_RESULT, type StepKind, type StepStatus } from './kind'
@@ -8,7 +9,7 @@ import { review } from './review'
 export { COMMON_RESULT, STEP_STATUSES, type StepKind, type StepStatus } from './kind'
 
 /** Every kind of grammar v1, by name. */
-export const kindByName: Readonly<Record<KindName, StepKind>> = { implement, review, generic }
+export const kindByName: Readonly<Record<KindName, StepKind>> = { implement, review, fix, generic }
 
 /** The names of the fields a kind declares in `inputs` or `outputs`. */
 export const fieldsOf = (schema: StepKind['inputs']): readonly string[] =>
