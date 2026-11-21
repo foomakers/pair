@@ -28,6 +28,7 @@ export interface CheckContext {
   readonly engineFlag?: string | undefined
 }
 
+const EFFORT_FORM = /^[a-z][a-z-]*$/
 const MODEL_FORM = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/
 
 type Path = (string | number)[]
@@ -77,7 +78,11 @@ function checkEntry(path: Path, entry: Entry, engine: string, { facts, at }: Ctx
   }
   const issue = entry.model === undefined ? undefined : modelIssue(entry.model, engine, facts)
   if (issue) found[issue.level].push(at([...path, 'model'], issue.problem, issue.fix))
-  if (entry.effort !== undefined && !facts.supportsEffort(engine))
+  if (entry.effort !== undefined && !EFFORT_FORM.test(entry.effort))
+    found.errors.push(
+      at([...path, 'effort'], `'${entry.effort}' is not an effort level`, 'use a word like low, medium, high'),
+    )
+  else if (entry.effort !== undefined && !facts.supportsEffort(engine))
     found.warnings.push(
       at([...path, 'effort'], `${engine} has no effort flag: the value is ignored`, 'remove it'),
     )

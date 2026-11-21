@@ -163,6 +163,14 @@ describe('validation (AC-4)', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('an effort that is not a plain level word is an error', () => {
+    const { errors } = checkAgainstEngines(parsed(BASE.replace('effort: high', "effort: 'high\"; rm'")), {
+      file: FILE,
+      facts: facts(),
+    })
+    expect(errors.map(e => e.key)).toEqual(['aliases.judge.effort'])
+  })
+
   it('an alias the workflow does not declare is an error', () => {
     const steps = [{ id: 'implement', alias: 'build' }]
     expect(
