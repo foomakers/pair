@@ -268,18 +268,19 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
 
 describe('runSteps: a host that cannot measure usage (US-697 AC-4)', () => {
   it('estimates read from the message sent and written from the final message, as a lower bound', async () => {
-    const { host, launched } = fakeHost({
-      'pair-process-implement': () => fenced({ status: 'failed', summary: 'gate red' }),
-    })
+    const answer = fenced({ status: 'failed', summary: 'gate red', reason: 'quality-gate' })
+    const { host, launched } = fakeHost({ 'pair-process-implement': () => answer })
     await start({ files: host.files, dir: DIR }, SOURCE, { card: '627' })
 
     await runSteps(host, DIR, { host: 'session', settings: { engine: 'claude' } })
 
     const sent = launched[0]?.message.length as number
-    const final = fenced({ status: 'failed', summary: 'gate red' }).length
+    const final = answer.length
     const [step] = host.files.readFileSync(`${DIR}/telemetry.jsonl`).split('\n')
     expect(JSON.parse(step as string)).toMatchObject({
       host: 'session',
+      status: 'failed',
+      reason: 'quality-gate',
       tokens: {
         read: { value: Math.ceil(sent / 4), source: 'estimated' },
         cached: { value: null, source: 'unknown' },
@@ -314,36 +315,44 @@ describe('runSteps: the telemetry switch (US-697 AC-5)', () => {
     )
   })
 
-  it('never fails a step on a write error: it is reported once and the run goes on', async () => {
-    const { host } = fakeHost({
-      'pair-process-implement': () => IMPLEMENTED,
-      'pair-process-review': () => REVIEWED,
-    })
-    const files = host.files
-    const broken: WorkflowHost = {
-      ...host,
-      files: {
-        ...files,
-        writeFile: (path, content) =>
-          path.includes('telemetry.jsonl')
-            ? Promise.reject(new Error('EACCES: permission denied'))
-            : files.writeFile(path, content),
-      },
-    }
-    await start({ files, dir: DIR }, SOURCE, { card: '627' })
-    const warnings: string[] = []
+  it.each([
+    ['a host that listens', true],
+    ['a host that does not', false],
+  ])(
+    'never fails a step on a write error, for %s: reported once, the run goes on',
+    async (_name, listens) => {
+      const { host } = fakeHost({
+        'pair-process-implement': () => IMPLEMENTED,
+        'pair-process-review': () => REVIEWED,
+      })
+      const files = host.files
+      const broken: WorkflowHost = {
+        ...host,
+        files: {
+          ...files,
+          writeFile: (path, content) =>
+            path.includes('telemetry.jsonl')
+              ? Promise.reject(new Error('EACCES: permission denied'))
+              : files.writeFile(path, content),
+        },
+      }
+      await start({ files, dir: DIR }, SOURCE, { card: '627' })
+      const warnings: string[] = []
 
-    const outcome = await runSteps(broken, DIR, {
-      ...SETTINGS,
-      warn: message => void warnings.push(message),
-    })
+      const outcome = await runSteps(broken, DIR, {
+        ...SETTINGS,
+        ...(listens && { warn: (message: string) => void warnings.push(message) }),
+      })
 
-    expect(outcome.run).toBe('done')
-    expect(statesOf(host)).toEqual({ implement: 'ok', review: 'ok' })
-    expect(warnings).toEqual([
-      'telemetry was not written: EACCES: permission denied — the run goes on without it',
-    ])
-  })
+      expect(outcome.run).toBe('done')
+      expect(statesOf(host)).toEqual({ implement: 'ok', review: 'ok' })
+      expect(warnings).toEqual(
+        listens
+          ? ['telemetry was not written: EACCES: permission denied — the run goes on without it']
+          : [],
+      )
+    },
+  )
 })
 
 describe('settingsOf', () => {
