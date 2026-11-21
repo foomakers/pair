@@ -61,6 +61,8 @@ End the turn with one JSON object in a fenced `json` block:
 - `head`: 40-hex sha after the push, or the input head when nothing changed
 - `resolutions`: `[{ id, status: "resolved" | "not-resolved", reason }]`
 
+`head` and `resolutions` are returned for `ok` and `failed` (on a red gate: the input head, nothing was pushed); `needs-human` may omit them.
+
 Status: `ok` when every finding in scope is `resolved`; `failed` when a gate is red or a finding is `not-resolved` for a technical reason; `needs-human` per Step 2.2.
 
 ## Never
