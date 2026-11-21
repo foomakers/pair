@@ -274,7 +274,12 @@ function policiesOf({ config, resolved, services }: Launch) {
     const known = policies.get(engine.id)
     if (known !== undefined) return known
     const made = {
-      autonomyArgs: resolveAutonomyFor(engine, { ...config, autonomous: true }, resolved.main, services.fs).args,
+      autonomyArgs: resolveAutonomyFor(
+        engine,
+        { ...config, autonomous: true },
+        resolved.main,
+        services.fs,
+      ).args,
       idle: resolveIdleTimeout({
         flag: config.idleTimeoutSeconds,
         declared: declaredRunIdleTimeout(resolved.project, engine.id),
@@ -405,15 +410,18 @@ async function setCardState(
   { fs, deps }: Services,
 ): Promise<void> {
   const board = deps.workflow?.board
-  const literal = readStateMapping(fs, resolved.main)?.find(row => row.macrostate === macrostate)
-    ?.boardState
+  const literal = readStateMapping(fs, resolved.main)?.find(
+    row => row.macrostate === macrostate,
+  )?.boardState
   try {
     if (board === undefined) throw new Error('no board access')
     if (literal === undefined) throw new Error(`no board state maps to ${macrostate}`)
     await board.setState(card, literal)
     console.log(`  Card ${card}: state ${literal}`)
   } catch (error) {
-    console.log(`  Warning: card state ${literal ?? macrostate} not set: ${(error as Error).message}`)
+    console.log(
+      `  Warning: card state ${literal ?? macrostate} not set: ${(error as Error).message}`,
+    )
   }
 }
 

@@ -178,9 +178,9 @@ describe('card state (AC-13)', () => {
     })
     expect(await run(['quick'], OK, {}, board)).toBe(0)
 
-    expect(lines.some(line => line.includes('Warning: card state Building not set: no board'))).toBe(
-      true,
-    )
+    expect(
+      lines.some(line => line.includes('Warning: card state Building not set: no board')),
+    ).toBe(true)
     expect(states()).toEqual({ implement: 'ok', review: 'ok' })
   })
 })

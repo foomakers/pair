@@ -19,7 +19,10 @@ const STEP_ID = '^[a-z][a-z0-9-]*$'
 
 describe('card state of a step (#672 AC-13)', () => {
   const stepWith = (extra: string) =>
-    parseWorkflow(QUICK.replace('kind: review\n', `kind: review\n    ${extra}\n`), 'workflows/quick.yaml')
+    parseWorkflow(
+      QUICK.replace('kind: review\n', `kind: review\n    ${extra}\n`),
+      'workflows/quick.yaml',
+    )
 
   it.each([
     ['implement', undefined, { state: 'In Progress', when: 'start' }],
