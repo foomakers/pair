@@ -80,8 +80,8 @@ test('cost: an estimated entry makes the sum and the cost estimates; unknown ent
   assert.equal(run.status, 'open', 'a run without a closing record is not closed')
 })
 
-test('cost: no price table, an empty one, or no row for the model → tokens reported, cost "not calculated" (AC-7)', () => {
-  for (const options of [{}, { prices: {} }, { prices: { 'another-model': PRICES['claude-fable-5-2'] } }]) {
+test('cost: no price table, an empty one, no row for the model, or a row missing a token price → tokens reported, cost "not calculated" (AC-7)', () => {
+  for (const options of [{}, { prices: {} }, { prices: { 'another-model': PRICES['claude-fable-5-2'] } }, { prices: { 'claude-fable-5-2': { read: 1 } } }]) {
     const [run] = ask('cost', { 'quick-627': MEASURED }, options).runs
     assert.deepEqual(run.steps.map(one => one.cost), ['not calculated', 'not calculated', 'not calculated'])
     assert.equal(run.total.cost, 'not calculated')

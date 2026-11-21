@@ -64,11 +64,12 @@ function sumOf(name, steps) {
 const tokensOf = steps => Object.fromEntries(TOKENS.map(name => [name, sumOf(name, steps)]))
 const durationOf = steps => clocked(total(steps.map(step => step.durationMs)))
 
-/** Price units (tokens × price per million) of a step: undefined without a price row or without any known entry. */
+/** Price units (tokens × price per million) of a step: undefined without a price row, with a row missing the price of a known entry, or without any known entry. */
 function unitsOf(step, prices) {
   const row = prices?.[step.model]
   const known = TOKENS.filter(name => step.tokens[name].value !== null)
   if (row === undefined || known.length === 0) return undefined
+  if (known.some(name => typeof row[name] !== 'number')) return undefined
   return {
     units: total(known.map(name => step.tokens[name].value * row[name])),
     measured: TOKENS.every(name => step.tokens[name].source === 'measured'),
