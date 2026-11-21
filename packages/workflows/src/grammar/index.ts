@@ -300,6 +300,13 @@ export function parseWorkflow(text: string, file: string): ParsedWorkflow {
       errorAt({ file, lines }, found.path, found),
     ),
     ...nameError(value, file, lines),
+    ...Object.entries(value?.steps ?? {}).flatMap(([id, step]) =>
+      Object.entries(step?.steps ?? {}).flatMap(([childId, child]) =>
+        violations(stepSchema, child).map(found =>
+          errorAt({ file, lines }, ['steps', id, 'steps', childId, ...found.path], found),
+        ),
+      ),
+    ),
   ]
   if (errors.length > 0) return { errors }
   const undeclared = Object.entries(value.steps)
