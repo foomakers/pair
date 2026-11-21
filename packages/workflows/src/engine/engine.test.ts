@@ -254,6 +254,28 @@ describe('engine: outcomes and resume (AC-6)', () => {
     expect(run.files.existsSync(`${DIR}/steps`)).toBe(false)
   })
 
+  it.each([
+    [
+      'written by another version',
+      (state: string) => JSON.stringify({ ...JSON.parse(state), schemaVersion: 2 }),
+    ],
+    ['that is not JSON', () => '{ "schemaVersion": 1, "steps"'],
+  ])('archives a state file %s and starts over on restart (#712 r0-7)', async (_name, damage) => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    const broken = damage(run.files.readFileSync(`${DIR}/state.json`))
+    await run.files.writeFile(`${DIR}/state.json`, broken)
+    const now = new Date('2026-11-20T10:00:00.000Z')
+    expect(await start(run, SOURCE, { card: '627', restart: true, now })).toEqual({
+      status: 'started',
+      warnings: [],
+    })
+    expect(statesOf(run)).toEqual({ implement: 'pending', review: 'pending' })
+    expect(run.files.readFileSync(`${DIR}/archive/2026-11-20T10-00-00-000Z/state.json`)).toBe(
+      broken,
+    )
+  })
+
   it('warns when the workflow file changed, and keeps the frozen copy', async () => {
     const run = open()
     await start(run, SOURCE, { card: '627' })

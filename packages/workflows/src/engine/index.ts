@@ -152,13 +152,13 @@ export async function start(
   source: { readonly text: string; readonly file: string },
   options: StartOptions,
 ): Promise<Started> {
-  const existing = readState(run)
-  if (existing !== undefined && options.restart !== true)
-    return resume(run, existing, source, options.card)
+  // A restart never reads the state it replaces: one this version cannot read is archived like any other.
+  const existing = options.restart === true ? undefined : readState(run)
+  if (existing !== undefined) return resume(run, existing, source, options.card)
   const { workflow, errors } = parseWorkflow(source.text, source.file)
   if (workflow === undefined)
     throw new Error(`workflow-invalid: ${errors[0]?.problem ?? source.file}`)
-  if (existing !== undefined) await archive(run, options.now ?? new Date())
+  if (run.files.existsSync(join(run.dir, STATE_FILE))) await archive(run, options.now ?? new Date())
   await run.files.mkdir(run.dir, { recursive: true })
   await writeAtomic(run.files, join(run.dir, FROZEN_WORKFLOW), source.text)
   await writeState(run, {
