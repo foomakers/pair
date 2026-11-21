@@ -265,7 +265,7 @@ function withMoreRounds(
     steps: {
       ...state.steps,
       [id]: { state: 'running' },
-      ...Object.fromEntries(children.map(child => [`${id}/${child.id}`, { state: 'pending' }])),
+      ...Object.fromEntries(children.map(child => [`${id}/${child.id}`, { state: 'pending', executions: state.steps[`${id}/${child.id}`]?.executions ?? 0 }])),
     },
   }
 }
@@ -563,7 +563,7 @@ function closeRound({ state, outer }: Advance, { steps, loops }: Progress): Prog
     steps: {
       ...steps,
       ...Object.fromEntries(
-        (outer.steps ?? []).map(child => [`${outerId}/${child.id}`, { state: 'pending' as const }]),
+        (outer.steps ?? []).map(child => [`${outerId}/${child.id}`, { state: 'pending' as const, executions: steps[`${outerId}/${child.id}`]?.executions ?? 0 }]),
       ),
     },
     loops: { ...state.loops, [outerId]: { ...loop, round: loop.round + 1 } },
