@@ -258,6 +258,21 @@ steps:
     expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 3 })
   })
 
+  it('passes the latest loop head to a following review (#670-loop-outputs)', async () => {
+    const run = open()
+    await start(run, { ...source, text: text + '  final: { kind: review }\n' }, { card: '627' })
+    await next(run)
+    await record(run, 'implement', IMPLEMENTED)
+    await next(run)
+    await record(run, 'rounds/review', failedReview)
+    await next(run)
+    const newer = 'b'.repeat(40)
+    await record(run, 'rounds/fix', { ...fixed, head: newer })
+    await next(run)
+    await record(run, 'rounds/review', { ...REVIEWED, reviewedHead: newer })
+    expect((await next(run)).ready[0]?.inputs.head).toBe(newer)
+  })
+
   it('resumes needs-human at the same step and round', async () => {
     const run = await opened()
     await next(run)

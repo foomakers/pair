@@ -38,6 +38,24 @@ steps:
       fix: { kind: generic, skill: my-skill }
 `
 
+  it('does not expose outputs of children skipped on loop exit (#670-loop-outputs)', () => {
+    const text = `version: 1
+name: quick
+steps:
+  rounds:
+    kind: loop
+    until: first
+    max: 2
+    on-max: escalate
+    steps:
+      first: { kind: generic, skill: my-skill }
+      review: { kind: review }
+  fix: { kind: fix }
+`
+    const errors = check(text, { launchInputs: ['card', 'pr', 'head'] }).errors
+    expect(errors.some(error => error.problem.includes("input 'findings'"))).toBe(true)
+  })
+
   it('accepts a bounded loop', () => {
     expect(check(loop).errors).toEqual([])
   })
