@@ -7,6 +7,7 @@ interface BoardResult {
   error?: string | null
 }
 interface PmHost {
+  cardState(o: { id: string }): { boardState?: string | null }
   ensureBoardMembership(o: { id: string }): BoardResult
   setBoardState(o: { id: string; state: string }): BoardResult
 }
@@ -17,14 +18,20 @@ interface PmHost {
  * adapter's transport (`ghBin`), so a test injects a fake binary. Throws what the read observed on failure.
  */
 export function ghBoard(fs: FileSystemService, scriptsDir: string, main: string, ghBin?: string) {
+  const bind = async () => {
+    const { bindHosts } = await import(pathToFileURL(join(scriptsDir, 'host', 'index.mjs')).href)
+    const wow = join(main, '.pair/adoption/tech/way-of-working.md')
+    const wayOfWorking = fs.existsSync(wow) ? fs.readFileSync(wow) : undefined
+    return (
+      bindHosts({ dir: main, from: main, transport: { ghBin, wayOfWorking } }) as { pm: PmHost }
+    ).pm
+  }
   return {
+    async getState(card: string): Promise<string | null> {
+      return (await bind()).cardState({ id: card }).boardState ?? null
+    },
     async setState(card: string, state: string): Promise<void> {
-      const { bindHosts } = await import(pathToFileURL(join(scriptsDir, 'host', 'index.mjs')).href)
-      const wow = join(main, '.pair/adoption/tech/way-of-working.md')
-      const wayOfWorking = fs.existsSync(wow) ? fs.readFileSync(wow) : undefined
-      const { pm } = bindHosts({ dir: main, from: main, transport: { ghBin, wayOfWorking } }) as {
-        pm: PmHost
-      }
+      const pm = await bind()
       for (const [step, r] of [
         ['membership', () => pm.ensureBoardMembership({ id: card })],
         ['state', () => pm.setBoardState({ id: card, state })],

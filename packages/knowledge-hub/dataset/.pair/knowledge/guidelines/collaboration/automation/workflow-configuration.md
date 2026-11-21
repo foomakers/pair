@@ -97,7 +97,7 @@ The run writes the effective configuration to `runs/<run-id>/configuration.yaml`
 
 ## Shipped set
 
-`claude-cheap`, `claude-medium`, `claude-high`, `codex-cheap`, `codex-medium`, `codex-high`: the six profiles of the delivery cycle with each model class replaced by its model id. `claude` and `codex`: base configurations, equal to the medium ones (`pair run quick --config codex`). Each defines `build` and `judge`.
+`claude-cheap`, `claude-medium`, `claude-high`, `codex-cheap`, `codex-medium`, `codex-high`: the profiles of the delivery cycle with each model class replaced by its model id (cheap ones excepted, below). `claude` and `codex`: base configurations, equal to the medium ones except that `claude` judges on `claude-sonnet-5-5` medium (`pair run quick --config codex`). `claude-cheap` and `codex-cheap` deliberately deviate from the old profiles: build and fix on the lightest model (`claude-haiku-5-5`, `gpt-6-luna`), medium; judge on `claude-sonnet-5-5` / `gpt-6.1-terra`, medium. Each defines `build` and `judge`.
 
 ## Coexistence with profiles
 

@@ -41,7 +41,7 @@ import {
   type ResolvedEngine,
 } from './resolve-engine'
 import { ghBoard } from './card-board'
-import { readStateMapping } from './card-readiness'
+import { MACROSTATES, readStateMapping, resolveMacrostate } from './card-readiness'
 import { createExecutableProbe } from './path-probe'
 import { createSkillProbe } from './skill-probe'
 import { ENGINES, isEngineId, type EngineDefinition } from './engines'
@@ -82,7 +82,11 @@ export interface WorkflowHostDependencies {
   /** Whether an executable is on PATH (shipped: a PATH probe). */
   readonly engineAvailable?: ExecutableProbe
   /** Sets the card's board state to a board literal (shipped: `ghBoard`, the adopted GitHub Projects board). */
-  readonly board?: { setState(card: string, boardState: string): Promise<void> }
+  readonly board?: {
+    /** The card's current board literal; null when it has none. */
+    getState(card: string): Promise<string | null>
+    setState(card: string, boardState: string): Promise<void>
+  }
 }
 
 export interface WorktreeInput {
@@ -419,6 +423,11 @@ async function setCardState(
       deps.workflow?.board ??
       ghBoard(fs, locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir, resolved.main)
     if (literal === undefined) throw new Error(`no board state maps to ${macrostate}`)
+    // The state only moves forward: a step whose state is behind (or equal) sets nothing.
+    const mapping = readStateMapping(fs, resolved.main)
+    const current = await board.getState(card)
+    const held = current === null ? undefined : resolveMacrostate(current, mapping)
+    if (held !== undefined && MACROSTATES.indexOf(held) >= MACROSTATES.indexOf(macrostate)) return
     await board.setState(card, literal)
     console.log(`  Card ${card}: state ${literal}`)
   } catch (error) {
@@ -461,7 +470,11 @@ async function runOnConsole(
           else console.log(stepLine(event))
           const set = cardStateOf(stepOf(resolved, event.step))
           if (set !== undefined && set.when === whenOf(event.state))
-            pending.push(setCardState(request.card, set.state, resolved, services))
+            pending.push(
+              (pending.at(-1) ?? Promise.resolve()).then(() =>
+                setCardState(request.card, set.state, resolved, services),
+              ),
+            )
         },
       },
       runDir,

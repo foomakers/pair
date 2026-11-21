@@ -143,9 +143,25 @@ describe('card state (AC-13)', () => {
 | Checking | Review |
 | Finished | Done |
 `
-  const withBoard = (setState: (card: string, state: string) => Promise<void>) => ({
-    board: { setState },
-  })
+  // A fake board that remembers the state it was given; `current` is what the card holds at the start.
+  const withBoard = (
+    setState: (card: string, state: string) => Promise<void>,
+    current: string | null | Error = null,
+  ) => {
+    let now = current
+    return {
+      board: {
+        getState: async () => {
+          if (now instanceof Error) throw now
+          return now
+        },
+        setState: async (card: string, state: string) => {
+          await setState(card, state)
+          now = state
+        },
+      },
+    }
+  }
   beforeEach(() => write('.pair/adoption/tech/way-of-working.md', REGISTRY + MAPPING))
 
   it('sets Building when implement starts, Checking when review starts, and prints each', async () => {
@@ -170,6 +186,40 @@ describe('card state (AC-13)', () => {
     expect(await run(['quick'], OK, {}, board)).toBe(0)
 
     expect(writes).toEqual(['Finished'])
+  })
+
+  it('never moves back: a card in Checking (Review) stays there through fix', async () => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      `${QUICK.replace('kind: review', 'kind: review\n    on-failed: continue')}  fix:\n    kind: fix\n`,
+    )
+    const fixed = fenced({ status: 'ok', summary: 'fixed', head: HEAD, resolutions: [] })
+    const skills = { ...OK, 'pair-process-fix': () => fixed }
+    const writes: string[] = []
+    const board = withBoard(async (_card, state) => void writes.push(state), 'Checking')
+    expect(await run(['quick'], skills, {}, board)).toBe(0)
+    expect(launched).toHaveLength(3)
+
+    expect(writes).toEqual([])
+  })
+
+  it('moves forward: a card in Building gets Checking when review starts', async () => {
+    const writes: string[] = []
+    const board = withBoard(async (_card, state) => void writes.push(state), 'Building')
+    expect(await run(['quick'], OK, {}, board)).toBe(0)
+
+    expect(writes).toEqual(['Checking'])
+  })
+
+  it('a failed read is a warning, sets nothing, and the run goes on', async () => {
+    const writes: string[] = []
+    const board = withBoard(async (_c, state) => void writes.push(state), new Error('no read'))
+    expect(await run(['quick'], OK, {}, board)).toBe(0)
+
+    expect(writes).toEqual([])
+    expect(lines.some(line => line.includes('Warning: card state Building not set: no read'))).toBe(
+      true,
+    )
   })
 
   it('a failed write is a warning and the run goes on', async () => {

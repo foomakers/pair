@@ -320,6 +320,26 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
       return [profile.modelClasses[merged.model ?? ''] ?? merged.model, merged.effort]
     })
   }
+  // Deliberate deviations from the profile of the same name (#672): `claude` judges on sonnet medium;
+  // the two cheap ones build and fix on the lightest model and judge one step up. Per step: [model, effort].
+  type Settings = [string, string][]
+  const DEVIATIONS: Record<string, Settings> = {
+    claude: [
+      ['claude-sonnet-5-5', 'medium'],
+      ['claude-sonnet-5-5', 'medium'],
+      ['claude-sonnet-5-5', 'medium'],
+    ],
+    'claude-cheap': [
+      ['claude-haiku-5-5', 'medium'],
+      ['claude-sonnet-5-5', 'medium'],
+      ['claude-haiku-5-5', 'medium'],
+    ],
+    'codex-cheap': [
+      ['gpt-6-luna', 'medium'],
+      ['gpt-6.1-terra', 'medium'],
+      ['gpt-6-luna', 'medium'],
+    ],
+  }
   it.each([
     ['claude-cheap', 'claude', 'claude-cheap'],
     ['claude-medium', 'claude', 'claude-medium'],
@@ -330,7 +350,7 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
     ['codex-high', 'codex', 'codex-high'],
     ['codex', 'codex', 'codex-medium'],
   ])('%s runs quick clean on %s, as the profile %s', (name, engine, profile) => {
-    const expected = profileSettings(profile)
+    const expected = DEVIATIONS[name] ?? profileSettings(profile)
     const c = shipped(name)
     const steps = workflow?.steps ?? []
     expect(

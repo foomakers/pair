@@ -1,8 +1,6 @@
 version: 1
 name: codex-cheap
-defaults: { engine: codex, model: gpt-6.1-terra, effort: medium }
+defaults: { engine: codex, model: gpt-6-luna, effort: medium }
 aliases:
-  build: { engine: codex, model: gpt-6.1-terra, effort: medium }
-  judge: { engine: codex, model: gpt-6.1-terra, effort: high }
-steps:
-  fix: { model: gpt-6-luna }
+  build: { engine: codex, model: gpt-6-luna, effort: medium }
+  judge: { engine: codex, model: gpt-6.1-terra, effort: medium }
