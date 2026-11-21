@@ -823,6 +823,9 @@ pair-cli run [workflow] [options]
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `[workflow]`                    | A workflow to run step by step on one card: a file path or a workflow name. Needs `--card`. See [Run a workflow file](#run-a-workflow-file-pair-cli-run-workflow) |
 | `--restart`                     | With a workflow name: archive the run directory and start the run over                              |
+| `--config <name\|file>`         | With a workflow name: the configuration (engine, model, effort per step). Else `pair.config.json` `workflows.<workflow>.configuration`, then `workflows.default.configuration`, then the engine default |
+| `--config-override <json>`      | With a workflow name: a JSON object deep-merged over the configuration, validated and recorded in the run |
+| `--reconfigure`                 | With a workflow name and `--config` and/or `--config-override`: replace the run's frozen configuration; steps already `ok` are not run again |
 | `--engine <id>`                 | Engine to drive: `pi`, `opencode`, `claude` or `codex`. Precedence: flag > `pair.config.json` > schema default |
 | `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back: a missing skill is an error                     |
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
@@ -1002,10 +1005,11 @@ pair-cli run quick --card 627 --autonomous
 | Workflow file changed mid-run   | The frozen copy is used; a warning says the file changed                          |
 | Card not found or closed        | Refused before any launch                                                         |
 
-With a workflow name the command takes `--card`, `--engine`, `--run-id`, `--restart`, `--dry-run`,
+With a workflow name the command takes `--card`, `--engine`, `--config`, `--config-override`,
+`--reconfigure`, `--run-id`, `--restart`, `--dry-run`,
 `--cwd`, `--autonomous`, `--approve-project-trust`, `--telemetry` / `--no-telemetry`, the timeouts
 and the output flags. `--profile`
-and `--workflow-config` are refused: per-step configuration is not available yet. The flags of the
+and `--workflow-config` are refused: a workflow run is configured with `--config`. The flags of the
 cycle and of the loop (`--pr`, `--rounds`, `--root`, `--filter`, `--parallel`, …) are refused too.
 
 ### Fan-out: `--parallel <n>` (`--root <id>` and/or `--filter <label>`)

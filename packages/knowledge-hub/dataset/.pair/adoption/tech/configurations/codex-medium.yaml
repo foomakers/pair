@@ -1,0 +1,5 @@
+version: 1
+name: codex-medium
+defaults: { engine: codex, model: gpt-6-sol, effort: medium }
+kinds:
+  review: { model: gpt-6-astra, effort: high }

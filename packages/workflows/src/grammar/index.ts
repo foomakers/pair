@@ -92,7 +92,7 @@ export type ParsedWorkflow =
 export const formatError = (error: WorkflowError): string =>
   `${error.file}:${String(error.line)}: ${error.key === '' ? '' : `${error.key}: `}${error.problem} — fix: ${error.fix}`
 
-type Lines = Readonly<Record<string, number>>
+export type Lines = Readonly<Record<string, number>>
 
 /** The line of `path`, or of its nearest ancestor present in the file. */
 function lineAt(lines: Lines, path: Path): number {
@@ -172,7 +172,11 @@ function syntaxErrors(
   return errors
 }
 
-function nameError(value: { name?: unknown } | null, file: string, lines: Lines): WorkflowError[] {
+export function nameError(
+  value: { name?: unknown } | null,
+  file: string,
+  lines: Lines,
+): WorkflowError[] {
   const expected = basename(file, extname(file))
   if (typeof value?.name !== 'string' || value.name === expected) return []
   return [
@@ -185,17 +189,32 @@ function nameError(value: { name?: unknown } | null, file: string, lines: Lines)
 
 type RawStep = Omit<Step, 'id'>
 
-/** Parses one workflow file: a typed `Workflow`, or every error found, each with file, line, key and fix. */
-export function parseWorkflow(text: string, file: string): ParsedWorkflow {
+/** A YAML source read under the package's strict rules: its value and the line of every key, or the syntax errors. */
+export type StrictSource =
+  | { readonly value: unknown; readonly lines: Lines; readonly errors: readonly [] }
+  | {
+      readonly value?: undefined
+      readonly lines?: undefined
+      readonly errors: readonly WorkflowError[]
+    }
+
+/** YAML 1.2, no anchors, tags or duplicate keys: the one reading every file of the package shares. */
+export function parseStrict(text: string, file: string): StrictSource {
   const counter = new LineCounter()
   const doc = parseDocument(text, { version: '1.2', lineCounter: counter, merge: false })
   const syntax = syntaxErrors(doc, file, counter)
   if (syntax.length > 0) return { errors: syntax }
+  return { value: doc.toJS(), lines: collectLines(doc.contents, [], counter), errors: [] }
+}
 
-  const value = doc.toJS() as Omit<Workflow, 'steps' | 'file' | 'lines'> & {
+/** Parses one workflow file: a typed `Workflow`, or every error found, each with file, line, key and fix. */
+export function parseWorkflow(text: string, file: string): ParsedWorkflow {
+  const source = parseStrict(text, file)
+  if (source.lines === undefined) return { errors: source.errors }
+  const { lines } = source
+  const value = source.value as Omit<Workflow, 'steps' | 'file' | 'lines'> & {
     steps: Record<string, RawStep>
   }
-  const lines = collectLines(doc.contents, [], counter)
   const errors = [
     ...violations(workflowSchemaV1, value).map(found =>
       errorAt({ file, lines }, found.path, found),

@@ -1,0 +1,6 @@
+version: 1
+name: claude-cheap
+defaults: { engine: claude, model: claude-sonnet-5-5, effort: medium }
+kinds:
+  review: { model: claude-sonnet-5-5, effort: high }
+  fix: { model: claude-haiku-5-5 }

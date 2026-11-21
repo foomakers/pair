@@ -6,7 +6,7 @@ A workflow run can record, per step, how long it took, the tokens it used and ho
 pair-cli run quick --card 627 --telemetry
 ```
 
-`--no-telemetry` switches it off for one run. Switching it off changes nothing else: the run state never depends on telemetry. A record that cannot be written never fails a step: the run says so once and goes on.
+The key `telemetry` of the run's [configuration](workflow-configuration.md) switches it on or off; a flag overrides the key. `--no-telemetry` switches it off for one run. Switching it off changes nothing else: the run state never depends on telemetry. A record that cannot be written never fails a step: the run says so once and goes on.
 
 ## The file
 
@@ -32,7 +32,7 @@ A step that runs again (a resume after a failure) has one record per execution.
 
 ### One closing record per run
 
-Written when the run ends (`done`, `failed` or `parked`), as the last line. A run that is resumed loses it and gets a new one when it ends again.
+Written when the run ends (`done`, `failed` or `parked`), as the last line. A run that is resumed loses it and gets a new one when it ends again; a run resumed without telemetry loses it and gets none.
 
 | Field                     | Content                                                   |
 | ------------------------- | --------------------------------------------------------- |

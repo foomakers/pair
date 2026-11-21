@@ -33,6 +33,21 @@ export const runCommandMetadata = {
         'US-652: with a workflow name, archive the run directory and start the run over (a complete run is otherwise left as it is)',
     },
     {
+      flags: '--config <name|file>',
+      description:
+        'US-672: with a workflow name, the configuration (engine, model, effort per step): a name under `.pair/adoption/tech/configurations/` (else the knowledge-base default) or the path of a file. Without it: `pair.config.json` `workflows.<workflow>.configuration`, then `workflows.default.configuration`, then the engine default',
+    },
+    {
+      flags: '--config-override <json>',
+      description:
+        'US-672: with a workflow name, a JSON object deep-merged over the configuration, validated like a file and recorded in the run',
+    },
+    {
+      flags: '--reconfigure',
+      description:
+        "US-672: with a workflow name and --config and/or --config-override, replace the run's frozen configuration; steps already ok are not run again",
+    },
+    {
       flags: '--skill <name>',
       description: 'Skill to invoke (no fallback); default cascades pair-loop → pair-next',
     },

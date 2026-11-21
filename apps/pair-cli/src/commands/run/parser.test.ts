@@ -135,6 +135,26 @@ describe('parseRunCommand: a workflow name (US-652)', () => {
     ).toEqual({ name: 'flows/quick.yaml', card: '627', runId: 'mine', restart: true })
   })
 
+  it('#672: carries --config, --config-override and --reconfigure; refuses them without a workflow, and --reconfigure alone', () => {
+    expect(
+      parseRunCommand(
+        { card: '627', config: 'mine', configOverride: '{"a":1}', reconfigure: true },
+        ['quick'],
+      ).workflow,
+    ).toEqual({
+      name: 'quick',
+      card: '627',
+      restart: false,
+      config: 'mine',
+      configOverride: '{"a":1}',
+      reconfigure: true,
+    })
+    expect(() => parseRunCommand({ card: '627', config: 'mine' })).toThrow(/need a workflow name/)
+    expect(() => parseRunCommand({ card: '627', reconfigure: true }, ['quick'])).toThrow(
+      /--reconfigure needs --config/,
+    )
+  })
+
   it('AC-7: leaves `--card` alone on the delivery cycle, with no workflow', () => {
     const config = parseRunCommand({ card: '627' })
     expect(config.workflow).toBeUndefined()
@@ -146,12 +166,12 @@ describe('parseRunCommand: a workflow name (US-652)', () => {
     [
       '--profile',
       { profile: 'cheap' },
-      /^--profile cannot be combined with a workflow name: .*#672/,
+      /^--profile cannot be combined with a workflow name: .*--config/,
     ],
     [
       '--workflow-config',
       { workflowConfig: 'p.json' },
-      /^--workflow-config cannot be combined with a workflow name: .*#672/,
+      /^--workflow-config cannot be combined with a workflow name: .*--config/,
     ],
     ['a cycle flag', { pr: '12' }, /^--pr cannot be combined with a workflow name/],
     ['a loop flag', { root: '641' }, /^--root cannot be combined with a workflow name/],

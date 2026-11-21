@@ -75,6 +75,12 @@ export interface RunWorkflowRequest {
   readonly runId?: string
   /** `--restart`: archive the run directory and start over. */
   readonly restart: boolean
+  /** `--config <name|file>`: the configuration (engine, model, effort per step) of the run. */
+  readonly config?: string
+  /** `--config-override '<json>'`: deep-merged over the configuration. */
+  readonly configOverride?: string
+  /** `--reconfigure`: replace the run's frozen configuration. */
+  readonly reconfigure?: true
 }
 
 export interface RunCommandConfig {
@@ -200,6 +206,10 @@ interface ParseRunOptions {
   workflowConfig?: string
   /** US-652: `--restart` — only with a workflow name. */
   restart?: boolean
+  /** US-672: `--config`, `--config-override`, `--reconfigure` — only with a workflow name. */
+  config?: string
+  configOverride?: string
+  reconfigure?: boolean
 }
 
 function parsePositiveInteger(flag: string, raw: string | number): number {
@@ -752,6 +762,37 @@ const passed = <K extends keyof ParseRunOptions>(
   flags: ReadonlyArray<readonly [K, string]>,
 ): string[] => flags.filter(([key]) => options[key] !== undefined).map(([, flag]) => flag)
 
+/** `--config`, `--config-override` and `--reconfigure` configure a workflow run; the cycle has its own flags. */
+function refuseStrayConfiguration(options: ParseRunOptions): void {
+  const stray = passed(options, [
+    ['config', '--config'],
+    ['configOverride', '--config-override'],
+    ['reconfigure', '--reconfigure'],
+  ])
+  if (stray.length > 0)
+    throw new Error(
+      `${stray.join(' and ')} need a workflow name: they configure \`pair-cli run <workflow> --card <id>\`; ` +
+        'the delivery cycle takes --profile and --workflow-config',
+    )
+}
+
+/** The configuration flags of a workflow run, checked together. */
+function configurationOf(
+  options: ParseRunOptions,
+): Pick<RunWorkflowRequest, 'config' | 'configOverride' | 'reconfigure'> {
+  const config = optionalText(options.config, '--config')
+  const configOverride = optionalText(options.configOverride, '--config-override')
+  if (options.reconfigure === true && config === undefined && configOverride === undefined)
+    throw new Error(
+      "--reconfigure needs --config and/or --config-override: it replaces the run's configuration with it",
+    )
+  return {
+    ...(config !== undefined && { config }),
+    ...(configOverride !== undefined && { configOverride }),
+    ...(options.reconfigure === true && { reconfigure: true as const }),
+  }
+}
+
 /**
  * US-652: the positional argument names a workflow. `--profile` and `--workflow-config` are refused
  * with it — a workflow run has one engine and its default model for every step until #672.
@@ -765,6 +806,7 @@ function resolveWorkflowRun(
       throw new Error(
         '--restart was passed without a workflow name: it restarts `pair-cli run <workflow> --card <id>`',
       )
+    refuseStrayConfiguration(options)
     return undefined
   }
   const workflow = promptSafeText(name, 'the workflow name')!
@@ -775,14 +817,13 @@ function resolveWorkflowRun(
   if (configured.length > 0)
     throw new Error(
       `${configured.join(' and ')} cannot be combined with a workflow name: \`pair-cli run ${workflow}\` ` +
-        'uses one engine and its default model for every step (pass --engine to choose it). ' +
-        'Per-step configuration arrives with #672.',
+        'is configured with --config and --config-override; --profile and --workflow-config belong to the delivery cycle',
     )
   const foreign = passed(options, FLAGS_NOT_FOR_A_WORKFLOW)
   if (foreign.length > 0)
     throw new Error(
       `${foreign.join(', ')} cannot be combined with a workflow name: \`pair-cli run ${workflow}\` takes ` +
-        '--card, --engine, --run-id, --restart, --dry-run, --cwd, the timeouts and the output flags.',
+        '--card, --engine, --config, --config-override, --reconfigure, --run-id, --restart, --dry-run, --cwd, the timeouts and the output flags.',
     )
   const card = identifierText(options.card, '--card')
   if (card === undefined)
@@ -793,6 +834,7 @@ function resolveWorkflowRun(
     card,
     ...(runId !== undefined && { runId }),
     restart: options.restart === true,
+    ...configurationOf(options),
   }
 }
 
