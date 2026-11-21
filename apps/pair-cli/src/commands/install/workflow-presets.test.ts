@@ -93,7 +93,7 @@ describe('#617 AC-16 shipped workflow presets', () => {
         .sort(),
     ).toEqual(PRESETS.map(name => `${name}.json`).sort())
     expect(installedProfile(root, 'codex').name).toBe('codex-medium')
-    expect(installedProfile(root, 'codex').stages.implement.model.resolved.id).toBe('gpt-6-sol')
+    expect(installedProfile(root, 'codex').stages.implement.model.resolved.id).toBe('gpt-6.1-terra')
     expect(installedProfile(root, 'claude').name).toBe('claude-medium')
     expect(installedProfile(root, 'claude').stages.implement.model.resolved.id).toBe(
       'claude-sonnet-5-5',
