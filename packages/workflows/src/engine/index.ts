@@ -298,6 +298,19 @@ function workflowWarnings(
     : [`${source.file} changed after this run started: the frozen copy in ${run.dir} is used`]
 }
 
+/** The status a resumed run ends in without launching anything; undefined when steps remain. */
+function settledStatus(
+  run: RunDirectory,
+  state: RunStateFile,
+  exhausted: ReturnType<typeof exhaustedLoop>,
+): 'failed' | 'parked' | 'complete' | undefined {
+  if (exhausted !== undefined)
+    return state.steps[exhausted[0]]?.state === 'failed' ? 'failed' : 'parked'
+  return frozenWorkflow(run).steps.every(step => state.steps[step.id]?.state === 'ok')
+    ? 'complete'
+    : undefined
+}
+
 async function resume(
   run: RunDirectory,
   saved: RunStateFile,
@@ -314,16 +327,17 @@ async function resume(
   const exhausted = exhaustedLoop(state)
   if (options.moreRounds !== undefined)
     state = withMoreRounds(run, state, exhausted, { ...options, moreRounds: options.moreRounds })
-  else if (exhausted !== undefined) {
-    if (state !== saved) await writeState(run, state)
-    return { status: state.steps[exhausted[0]]?.state === 'failed' ? 'failed' : 'parked', warnings }
+  const settled = settledStatus(
+    run,
+    state,
+    options.moreRounds === undefined ? exhausted : undefined,
+  )
+  if (settled === undefined) {
+    await writeState(run, { ...state, steps: reopenedSteps(state) })
+    return { status: 'resumed', warnings }
   }
-  if (frozenWorkflow(run).steps.every(step => state.steps[step.id]?.state === 'ok')) {
-    if (state !== saved) await writeState(run, state)
-    return { status: 'complete', warnings }
-  }
-  await writeState(run, { ...state, steps: reopenedSteps(state) })
-  return { status: 'resumed', warnings }
+  if (state !== saved) await writeState(run, state)
+  return { status: settled, warnings }
 }
 
 // A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
