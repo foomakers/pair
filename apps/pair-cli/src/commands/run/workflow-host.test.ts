@@ -108,7 +108,12 @@ beforeEach(() => {
   project = fs.mkdtempSync(join(tmpdir(), 'pair-workflow-'))
   lines = []
   launched = []
-  for (const skill of ['pair-process-implement', 'pair-process-review', 'pair-process-fix', 'my-skill'])
+  for (const skill of [
+    'pair-process-implement',
+    'pair-process-review',
+    'pair-process-fix',
+    'my-skill',
+  ])
     write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
   write('.pair/adoption/tech/way-of-working.md', REGISTRY)
   write('.pair/adoption/tech/workflows/quick.yaml', QUICK)
@@ -210,7 +215,10 @@ describe('skill and options of a step (AC-4, AC-5)', () => {
   it('runs the skill named by `skill` with the options of `with`, then asks for the result of the kind', async () => {
     write(
       '.pair/adoption/tech/workflows/quick.yaml',
-      QUICK.replace('kind: review', 'kind: generic\n    skill: my-skill\n    with:\n      depth: 2'),
+      QUICK.replace(
+        'kind: review',
+        'kind: generic\n    skill: my-skill\n    with:\n      depth: 2',
+      ),
     )
     const mine = () => fenced({ status: 'ok', summary: 'noted' })
     expect(await run(['quick'], { ...OK, 'my-skill': mine })).toBe(0)
