@@ -111,15 +111,13 @@ function entriesOf(c: Configuration, { steps, aliases }: CheckContext): [Path, E
   ]
 }
 
-/** What the workflow adds: an unknown step id warns; an undeclared alias and an engine used and not installed refuse. */
-function checkWorkflow(
+/** Loop entries may only override max; max is only for loops. */
+function loopOptionErrors(
   c: Configuration,
   steps: NonNullable<CheckContext['steps']>,
-  aliases: CheckContext['aliases'],
-  { facts, at }: Ctx,
-): Found {
-  const ids = new Set(steps.map(s => s.id))
-  const loopOptions = Object.entries(c.steps ?? {}).flatMap(([id, entry]) => {
+  at: Issue,
+): WorkflowError[] {
+  return Object.entries(c.steps ?? {}).flatMap(([id, entry]) => {
     const step = steps.find(one => one.id === id)
     if (step?.kind === 'loop')
       return (['engine', 'model', 'effort'] as const)
@@ -131,6 +129,17 @@ function checkWorkflow(
       ? []
       : [at(['steps', id, 'max'], `max is only allowed for a loop id`, 'remove max or name a loop')]
   })
+}
+
+/** What the workflow adds: an unknown step id warns; an undeclared alias and an engine used and not installed refuse. */
+function checkWorkflow(
+  c: Configuration,
+  steps: NonNullable<CheckContext['steps']>,
+  aliases: CheckContext['aliases'],
+  { facts, at }: Ctx,
+): Found {
+  const ids = new Set(steps.map(s => s.id))
+  const loopOptions = loopOptionErrors(c, steps, at)
   const warnings = Object.keys(c.steps ?? {})
     .filter(id => !ids.has(id))
     .map(id =>

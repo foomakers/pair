@@ -2,6 +2,7 @@ import {
   errorAt,
   parseWorkflow,
   stepSchema,
+  type KindName,
   type Step,
   type Workflow,
   type WorkflowError,
@@ -100,86 +101,110 @@ const safetyErrors: Check = (workflow, step, deps, path) =>
 
 const CHECKS: readonly Check[] = [skillErrors, withErrors, gateErrors, safetyErrors]
 
-function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowError[] {
-  const available = new Set(deps.launchInputs)
-  const checkStep = (step: Step, path: readonly string[]): WorkflowError[] => {
-    if (step.kind === 'loop') {
-      const errors: WorkflowError[] = []
-      for (const key of ['until', 'max', 'on-max', 'steps'] as const)
-        if (step[key] === undefined)
-          errors.push(
-            errorAt(workflow, path, { problem: `missing key '${key}'`, fix: `add '${key}'` }),
-          )
-      if (step.until !== undefined && !step.steps?.some(child => child.id === step.until))
-        errors.push(
-          errorAt(workflow, [...path, 'until'], {
-            problem: `unknown until step '${step.until}'`,
-            fix: 'name a step of this loop',
-          }),
-        )
-      if (step['on-failed'] !== undefined)
-        errors.push(
-          errorAt(workflow, [...path, 'on-failed'], {
-            problem: 'on-failed is not allowed on a loop',
-            fix: 'remove it',
-          }),
-        )
-      for (const key of ['skill', 'uses', 'with'] as const)
-        if (step[key] !== undefined)
-          errors.push(
-            errorAt(workflow, [...path, key], {
-              problem: `${key} is not allowed on a loop`,
-              fix: `remove '${key}'`,
-            }),
-          )
-      for (const child of step.steps ?? []) {
-        const childPath = [...path, 'steps', child.id]
-        const raw = Object.fromEntries(Object.entries(child).filter(([key]) => key !== 'id'))
-        errors.push(
-          ...violations(stepSchema, raw).map(found =>
-            errorAt(workflow, [...childPath, ...found.path], found),
-          ),
-        )
-        if (child.kind === 'loop')
-          errors.push(
-            errorAt(workflow, childPath, {
-              problem: 'nested loop is not allowed',
-              fix: 'move this loop outside the parent loop',
-            }),
-          )
-        else {
-          if (child['on-failed'] !== undefined)
-            errors.push(
-              errorAt(workflow, [...childPath, 'on-failed'], {
-                problem: 'on-failed is not allowed inside a loop',
-                fix: 'remove it',
-              }),
-            )
-          errors.push(...checkStep(child, childPath))
-        }
-      }
-      return errors
-    }
-    const kind = kindByName[step.kind]
-    const misplaced = (['until', 'max', 'on-max', 'steps'] as const)
-      .filter(key => step[key] !== undefined)
-      .map(key =>
+const LOOP_ONLY = ['until', 'max', 'on-max', 'steps'] as const
+
+function loopOwnErrors(workflow: Workflow, step: Step, path: readonly string[]): WorkflowError[] {
+  const errors: WorkflowError[] = []
+  for (const key of LOOP_ONLY)
+    if (step[key] === undefined)
+      errors.push(errorAt(workflow, path, { problem: `missing key '${key}'`, fix: `add '${key}'` }))
+  if (step.until !== undefined && !step.steps?.some(child => child.id === step.until))
+    errors.push(
+      errorAt(workflow, [...path, 'until'], {
+        problem: `unknown until step '${step.until}'`,
+        fix: 'name a step of this loop',
+      }),
+    )
+  if (step['on-failed'] !== undefined)
+    errors.push(
+      errorAt(workflow, [...path, 'on-failed'], {
+        problem: 'on-failed is not allowed on a loop',
+        fix: 'remove it',
+      }),
+    )
+  for (const key of ['skill', 'uses', 'with'] as const)
+    if (step[key] !== undefined)
+      errors.push(
         errorAt(workflow, [...path, key], {
-          problem: `${key} is only allowed on a loop`,
+          problem: `${key} is not allowed on a loop`,
           fix: `remove '${key}'`,
         }),
       )
-    const unmet = (kind.inputs.required ?? [])
-      .filter(input => !available.has(input))
-      .map(input =>
-        errorAt(workflow, path, {
-          problem: `input '${input}' is neither a launch argument nor an output of an earlier step`,
-          fix: `put a step that returns '${input}' before it`,
-        }),
-      )
-    fieldsOf(kind.outputs).forEach(output => available.add(output))
-    return [...misplaced, ...unmet, ...CHECKS.flatMap(check => check(workflow, step, deps, path))]
-  }
+  return errors
+}
+
+type CheckStep = (step: Step, path: readonly string[]) => WorkflowError[]
+
+function loopChildErrors(
+  workflow: Workflow,
+  child: Step,
+  childPath: readonly string[],
+  checkStep: CheckStep,
+): WorkflowError[] {
+  const raw = Object.fromEntries(Object.entries(child).filter(([key]) => key !== 'id'))
+  const errors = violations(stepSchema, raw).map(found =>
+    errorAt(workflow, [...childPath, ...found.path], found),
+  )
+  if (child.kind === 'loop')
+    return [
+      ...errors,
+      errorAt(workflow, childPath, {
+        problem: 'nested loop is not allowed',
+        fix: 'move this loop outside the parent loop',
+      }),
+    ]
+  if (child['on-failed'] !== undefined)
+    errors.push(
+      errorAt(workflow, [...childPath, 'on-failed'], {
+        problem: 'on-failed is not allowed inside a loop',
+        fix: 'remove it',
+      }),
+    )
+  return [...errors, ...checkStep(child, childPath)]
+}
+
+interface Scope {
+  readonly workflow: Workflow
+  readonly deps: ValidationDeps
+  readonly available: Set<string>
+}
+
+function plainStepErrors(
+  { workflow, deps, available }: Scope,
+  step: Step & { kind: KindName },
+  path: readonly string[],
+): WorkflowError[] {
+  const kind = kindByName[step.kind]
+  const misplaced = LOOP_ONLY.filter(key => step[key] !== undefined).map(key =>
+    errorAt(workflow, [...path, key], {
+      problem: `${key} is only allowed on a loop`,
+      fix: `remove '${key}'`,
+    }),
+  )
+  const unmet = (kind.inputs.required ?? [])
+    .filter(input => !available.has(input))
+    .map(input =>
+      errorAt(workflow, path, {
+        problem: `input '${input}' is neither a launch argument nor an output of an earlier step`,
+        fix: `put a step that returns '${input}' before it`,
+      }),
+    )
+  fieldsOf(kind.outputs).forEach(output => available.add(output))
+  return [...misplaced, ...unmet, ...CHECKS.flatMap(check => check(workflow, step, deps, path))]
+}
+
+function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowError[] {
+  const available = new Set(deps.launchInputs)
+  const scope = { workflow, deps, available }
+  const checkStep: CheckStep = (step, path) =>
+    step.kind === 'loop'
+      ? [
+          ...loopOwnErrors(workflow, step, path),
+          ...(step.steps ?? []).flatMap(child =>
+            loopChildErrors(workflow, child, [...path, 'steps', child.id], checkStep),
+          ),
+        ]
+      : plainStepErrors(scope, step as Step & { kind: KindName }, path)
   return workflow.steps.flatMap(step => checkStep(step, ['steps', step.id]))
 }
 

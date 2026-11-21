@@ -498,15 +498,9 @@ async function runOnConsole(
   }
 }
 
-/** The run itself, under the lock: start or resume, the worktree, then the steps. */
-async function drive(
-  config: RunCommandConfig,
-  opened: Opened,
-  services: Services,
-): Promise<number> {
-  const { resolved, request, runDir } = opened
-  const { fs, deps } = services
-  const started = await start({ files: fs, dir: runDir }, resolved.source, {
+/** The options `start` opens the run with. */
+function startOptions({ resolved, request }: Opened) {
+  return {
     card: request.card,
     restart: request.restart,
     reconfigure: request.reconfigure === true,
@@ -522,7 +516,37 @@ async function drive(
         }),
       },
     }),
-  })
+  }
+}
+
+/** The exit code of a run that has nothing to launch, with its message; undefined when steps remain. */
+function stopOf(status: string, request: Opened['request']): number | undefined {
+  if (status === 'parked') {
+    console.log(
+      `  Run: loop reached max — resume with: ${resumeCommand(request)} --more-rounds <n>`,
+    )
+    return 0
+  }
+  if (status === 'failed') {
+    console.log('  Run: loop exhausted and failed. Pass --restart to start over.')
+    return 1
+  }
+  if (status === 'complete') {
+    console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
+    return 0
+  }
+  return undefined
+}
+
+/** The run itself, under the lock: start or resume, the worktree, then the steps. */
+async function drive(
+  config: RunCommandConfig,
+  opened: Opened,
+  services: Services,
+): Promise<number> {
+  const { resolved, request, runDir } = opened
+  const { fs, deps } = services
+  const started = await start({ files: fs, dir: runDir }, resolved.source, startOptions(opened))
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   console.log(`  Run dir: ${runDir} (${started.status})`)
   const effective = readEffective(fs, runDir)
@@ -533,20 +557,8 @@ async function drive(
     runDir,
     deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   )
-  if (started.status === 'parked') {
-    console.log(
-      `  Run: loop reached max — resume with: ${resumeCommand(request)} --more-rounds <n>`,
-    )
-    return 0
-  }
-  if (started.status === 'failed') {
-    console.log('  Run: loop exhausted and failed. Pass --restart to start over.')
-    return 1
-  }
-  if (started.status === 'complete') {
-    console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
-    return 0
-  }
+  const stopped = stopOf(started.status, request)
+  if (stopped !== undefined) return stopped
   const worktree = await (deps.workflow?.prepareWorktree ?? cycleWorktree)({
     fs,
     project: resolved.project,
