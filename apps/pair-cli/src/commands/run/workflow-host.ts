@@ -500,25 +500,12 @@ async function drive(
   console.log(`  Run dir: ${runDir} (${started.status})`)
   const effective = readEffective(fs, runDir)
   printSettings(resolved, effective)
-  // A frozen copy no configuration re-resolved now: its engines were not probed by preflight.
-  if (effective !== undefined && resolved.configuration === undefined) {
-    const { errors } = checkAgainstEngines(effective, {
-      file: join(runDir, 'configuration.yaml'),
-      facts: engineFacts(
-        resolved.project,
-        deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
-      ),
-      steps: resolved.workflow.steps,
-      aliases: resolved.workflow.aliases,
-    })
-    if (errors.length > 0) throw new Error(errors.map(formatError).join('\n'))
-  }
-  // A resumed run that froze no configuration launches on the run's own engine, which preflight did not check.
-  if (effective === undefined && resolved.configuration !== undefined)
-    assertEngineAvailable(
-      resolved.engine,
-      deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
-    )
+  probeUnchecked(
+    resolved,
+    effective,
+    runDir,
+    deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
+  )
   if (started.status === 'complete') {
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
     return 0
@@ -538,6 +525,27 @@ async function drive(
     launcher({ config, resolved, services, worktree, effective }),
     services,
   )
+}
+
+/** Engines preflight did not probe on a resume: the run's own when no configuration was frozen, the frozen copy's when none resolved now. */
+function probeUnchecked(
+  resolved: Resolved,
+  effective: Configuration | undefined,
+  runDir: string,
+  probe: ExecutableProbe,
+): void {
+  if (effective === undefined) {
+    if (resolved.configuration !== undefined) assertEngineAvailable(resolved.engine, probe)
+    return
+  }
+  if (resolved.configuration !== undefined) return
+  const { errors } = checkAgainstEngines(effective, {
+    file: join(runDir, 'configuration.yaml'),
+    facts: engineFacts(resolved.project, probe),
+    steps: resolved.workflow.steps,
+    aliases: resolved.workflow.aliases,
+  })
+  if (errors.length > 0) throw new Error(errors.map(formatError).join('\n'))
 }
 
 /** The run's frozen configuration, read back from its copy: the copy wins over the source file (design §6). */

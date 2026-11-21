@@ -164,10 +164,13 @@ describe('validation (AC-4)', () => {
   })
 
   it('an effort that is not a plain level word is an error', () => {
-    const { errors } = checkAgainstEngines(parsed(BASE.replace('effort: high', "effort: 'high\"; rm'")), {
-      file: FILE,
-      facts: facts(),
-    })
+    const { errors } = checkAgainstEngines(
+      parsed(BASE.replace('effort: high', "effort: 'high\"; rm'")),
+      {
+        file: FILE,
+        facts: facts(),
+      },
+    )
     expect(errors.map(e => e.key)).toEqual(['aliases.judge.effort'])
   })
 

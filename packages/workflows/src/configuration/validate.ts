@@ -80,7 +80,11 @@ function checkEntry(path: Path, entry: Entry, engine: string, { facts, at }: Ctx
   if (issue) found[issue.level].push(at([...path, 'model'], issue.problem, issue.fix))
   if (entry.effort !== undefined && !EFFORT_FORM.test(entry.effort))
     found.errors.push(
-      at([...path, 'effort'], `'${entry.effort}' is not an effort level`, 'use a word like low, medium, high'),
+      at(
+        [...path, 'effort'],
+        `'${entry.effort}' is not an effort level`,
+        'use a word like low, medium, high',
+      ),
     )
   else if (entry.effort !== undefined && !facts.supportsEffort(engine))
     found.warnings.push(

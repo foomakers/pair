@@ -303,7 +303,7 @@ describe('frozen copy and resume (AC-7)', () => {
     expect(launched).toEqual([])
   })
 
-  it('a resume on a frozen copy no configuration resolves now checks the copy\'s engines', async () => {
+  it("a resume on a frozen copy no configuration resolves now checks the copy's engines", async () => {
     writeConfig(
       'mine',
       CONFIG.replace(
