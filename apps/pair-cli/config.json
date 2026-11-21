@@ -105,7 +105,8 @@
         "pair-contracts/opaque-card-ids.test.mjs",
         "pair-contracts/owner-approval-bound.test.mjs",
         "pair-contracts/pm-agnostic-conformance.test.mjs",
-        "pair-contracts/word-limits.test.mjs"
+        "pair-contracts/word-limits.test.mjs",
+        "pair-contracts/analyze-workflow-runs.test.mjs"
       ],
       "targets": [{ "path": ".claude/workflows/", "mode": "canonical" }],
       "description": "Batch orchestration workflows (Claude Code only; inert elsewhere)"
