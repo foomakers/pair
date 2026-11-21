@@ -509,6 +509,7 @@ async function drive(
     card: request.card,
     restart: request.restart,
     reconfigure: request.reconfigure === true,
+    ...(request.moreRounds !== undefined && { moreRounds: request.moreRounds, requestedBy: process.env['USER'] ?? 'unknown' }),
     ...(resolved.configuration && {
       configuration: {
         text: resolved.configuration.text,
@@ -528,6 +529,14 @@ async function drive(
     runDir,
     deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   )
+  if (started.status === 'parked') {
+    console.log(`  Run: loop reached max — resume with: ${resumeCommand(request)} --more-rounds <n>`)
+    return 0
+  }
+  if (started.status === 'failed') {
+    console.log('  Run: loop exhausted and failed. Pass --restart to start over.')
+    return 1
+  }
   if (started.status === 'complete') {
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
     return 0

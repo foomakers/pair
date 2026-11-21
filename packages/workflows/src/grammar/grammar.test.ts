@@ -117,7 +117,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 7,
         key: 'steps.implement.when',
         problem: "unknown key 'when'",
-        fix: 'use one of kind, skill, uses, with, on-failed, alias, state',
+        fix: 'use one of kind, skill, uses, with, on-failed, alias, state, until, max, on-max, steps',
       },
     ],
     [
@@ -127,7 +127,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 10,
         key: 'steps.review.kind',
         problem: 'unknown value "merge"',
-        fix: 'use one of "implement", "review", "fix", "generic"',
+        fix: 'use one of "implement", "review", "fix", "generic", "loop"',
       },
     ],
     [
@@ -282,7 +282,7 @@ describe('parseWorkflow (AC-2)', () => {
   it('formats an error as file:line: key: problem — fix', () => {
     const { errors } = parseWorkflow(seeded('kind: review', 'kind: merge'), 'quick.yaml')
     expect(errors.map(formatError)).toEqual([
-      'quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic"',
+      'quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic", "loop"',
     ])
   })
 })

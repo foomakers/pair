@@ -43,12 +43,12 @@ export const entrySchema: JsonSchema = {
   properties: { engine: text, model: text, effort: text },
 }
 
-const stepSchema: JsonSchema = {
+export const stepSchema: JsonSchema = {
   type: 'object',
   required: ['kind'],
   additionalProperties: false,
   properties: {
-    kind: { enum: KIND_NAMES, description: 'What the step does and what it returns.' },
+    kind: { enum: [...KIND_NAMES, 'loop'], description: 'What the step does and what it returns.' },
     skill: {
       type: 'string',
       pattern: SKILL_NAME,
@@ -70,6 +70,10 @@ const stepSchema: JsonSchema = {
       description:
         "The card's board state the host sets for the step (a macrostate), or `none`; overrides the kind's default.",
     },
+    until: { type: 'string', pattern: STEP_ID },
+    max: { type: 'integer', minimum: 1 },
+    'on-max': { enum: ['escalate', 'fail'] },
+    steps: { type: 'object', minProperties: 1, propertyNames: { pattern: STEP_ID }, additionalProperties: {} },
   },
 }
 
@@ -110,7 +114,7 @@ export interface WorkflowError {
 
 export interface Step {
   readonly id: string
-  readonly kind: KindName
+  readonly kind: KindName | 'loop'
   readonly skill?: string
   /** Reserved for including a workflow (#699); the validator refuses it as a skill name. */
   readonly uses?: string
@@ -120,6 +124,10 @@ export interface Step {
   readonly alias?: string
   /** The card's board state the host sets for the step; `none` sets nothing. */
   readonly state?: CardState | 'none'
+  readonly until?: string
+  readonly max?: number
+  readonly 'on-max'?: 'escalate' | 'fail'
+  readonly steps?: readonly Step[]
 }
 
 export interface Workflow {
@@ -237,7 +245,12 @@ export function nameError(
   ]
 }
 
-type RawStep = Omit<Step, 'id'>
+type RawStep = Omit<Step, 'id' | 'steps'> & { steps?: Record<string, RawStep> }
+
+const parseStep = ([id, raw]: [string, RawStep]): Step => {
+  const { steps, ...rest } = raw
+  return { ...rest, id, ...(steps !== undefined && { steps: Object.entries(steps).map(parseStep) }) }
+}
 
 /** A YAML source read under the package's strict rules: its value and the line of every key, or the syntax errors. */
 export type StrictSource =
@@ -284,6 +297,6 @@ export function parseWorkflow(text: string, file: string): ParsedWorkflow {
     )
   if (undeclared.length > 0) return { errors: undeclared }
 
-  const steps = Object.entries(value.steps).map(([id, step]) => ({ id, ...step }))
+  const steps = Object.entries(value.steps).map(parseStep)
   return { workflow: { ...value, steps, file, lines }, errors: [] }
 }

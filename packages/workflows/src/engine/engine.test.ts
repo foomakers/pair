@@ -170,6 +170,105 @@ describe('engine: a linear run (AC-1)', () => {
   })
 })
 
+describe('loop rounds (#670 AC-1–AC-6)', () => {
+  const text = `version: 1
+name: quick
+steps:
+  implement:
+    kind: implement
+  rounds:
+    kind: loop
+    until: review
+    max: 2
+    on-max: escalate
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+`
+  const source = { text, file: 'workflows/quick.yaml' }
+  const findings = [{ id: 'a', severity: 'Major', title: 'gap', blocking: true }]
+  const failedReview = { status: 'failed', summary: 'gap', verdict: 'changes-requested', reviewedHead: HEAD, findings }
+  const fixed = { status: 'ok', summary: 'fixed', head: HEAD, resolutions: [{ id: 'a', status: 'resolved', reason: 'fixed' }] }
+
+  async function opened() {
+    const run = open()
+    await start(run, source, { card: '627' })
+    await next(run)
+    await record(run, 'implement', IMPLEMENTED)
+    return run
+  }
+
+  it('exits on the until result before later steps', async () => {
+    const run = await opened()
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 1, inputs: { pr: 12, head: HEAD } })
+    await record(run, 'rounds/review', REVIEWED)
+    expect(await next(run)).toEqual({ ready: [], run: 'done' })
+    expect(run.files.existsSync(`${DIR}/steps/rounds/review/round-1/result.json`)).toBe(true)
+  })
+
+  it('passes failed review outputs to fix, then begins the next round with its latest head', async () => {
+    const run = await opened()
+    await next(run)
+    await record(run, 'rounds/review', failedReview)
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/fix', round: 1, inputs: { findings } })
+    await record(run, 'rounds/fix', fixed)
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 2, inputs: { head: HEAD } })
+  })
+
+  it('counts another failed step as a spent round and parks at max', async () => {
+    const run = await opened()
+    await next(run)
+    await record(run, 'rounds/review', failedReview)
+    await next(run)
+    await record(run, 'rounds/fix', { ...fixed, status: 'failed', reason: 'gate' })
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 2 })
+    await record(run, 'rounds/review', failedReview)
+    await next(run)
+    await record(run, 'rounds/fix', fixed)
+    expect((await next(run)).run).toBe('parked')
+    expect(stateOf(run).steps.rounds).toMatchObject({ state: 'needs-human', outputs: { findings } })
+    expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
+    expect(await start(run, source, { card: '627', moreRounds: 1, requestedBy: 'rucka' })).toEqual({ status: 'resumed', warnings: [] })
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 3 })
+  })
+
+  it('resumes needs-human at the same step and round', async () => {
+    const run = await opened()
+    await next(run)
+    await record(run, 'rounds/review', { status: 'needs-human', summary: 'decision' })
+    expect((await next(run)).run).toBe('parked')
+    await start(run, source, { card: '627' })
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 1 })
+  })
+
+  it('fails after max when on-max is fail', async () => {
+    const run = open()
+    const failSource = { text: text.replace('max: 2', 'max: 1').replace('on-max: escalate', 'on-max: fail'), file: source.file }
+    await start(run, failSource, { card: '627' })
+    await next(run)
+    await record(run, 'implement', IMPLEMENTED)
+    await next(run)
+    await record(run, 'rounds/review', failedReview)
+    await next(run)
+    await record(run, 'rounds/fix', fixed)
+    expect((await next(run)).run).toBe('failed')
+    expect(await start(run, failSource, { card: '627' })).toEqual({ status: 'failed', warnings: [] })
+  })
+
+  it('exits when until is the last step', async () => {
+    const run = open()
+    const lastSource = { text: text.replace('until: review', 'until: fix'), file: source.file }
+    await start(run, lastSource, { card: '627' })
+    await next(run)
+    await record(run, 'implement', IMPLEMENTED)
+    await next(run)
+    await record(run, 'rounds/review', failedReview)
+    await next(run)
+    await record(run, 'rounds/fix', fixed)
+    expect((await next(run)).run).toBe('done')
+  })
+})
+
 describe('engine: outcomes and resume (AC-6)', () => {
   async function runUntilReview(result: unknown) {
     const run = open()

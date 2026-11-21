@@ -21,7 +21,7 @@ export interface CheckContext {
   readonly lines?: Lines
   readonly facts: EngineFacts
   /** The steps of the running workflow; absent: only what the file says is checked. */
-  readonly steps?: readonly Pick<Step, 'id' | 'alias'>[]
+  readonly steps?: readonly (Pick<Step, 'id' | 'alias'> & { readonly kind?: Step['kind'] })[]
   /** The aliases the running workflow declares, with its defaults. */
   readonly aliases?: Workflow['aliases']
   /** `--engine`, when passed. */
@@ -119,6 +119,12 @@ function checkWorkflow(
   { facts, at }: Ctx,
 ): Found {
   const ids = new Set(steps.map(s => s.id))
+  const loopOptions = Object.entries(c.steps ?? {}).flatMap(([id, entry]) => {
+    const step = steps.find(one => one.id === id)
+    if (step?.kind === 'loop')
+      return (['engine', 'model', 'effort'] as const).filter(key => entry[key] !== undefined).map(key => at(['steps', id, key], `only max can be overridden for loop '${id}'`, `remove '${key}'`))
+    return entry.max === undefined ? [] : [at(['steps', id, 'max'], `max is only allowed for a loop id`, 'remove max or name a loop')]
+  })
   const warnings = Object.keys(c.steps ?? {})
     .filter(id => !ids.has(id))
     .map(id =>
@@ -137,7 +143,7 @@ function checkWorkflow(
         "remove it, or declare it in the workflow's aliases",
       ),
     )
-  const used = new Set(steps.map(s => settingsFor(c, s, aliases).engine))
+  const used = new Set(steps.filter(s => s.kind !== 'loop').map(s => settingsFor(c, s, aliases).engine))
   const notInstalled = [...used]
     .filter(engine => facts.known(engine) && !facts.installed(engine))
     .map(engine =>
@@ -147,7 +153,7 @@ function checkWorkflow(
         `install ${engine}, or choose another configuration`,
       ),
     )
-  return { errors: [...undeclared, ...notInstalled], warnings }
+  return { errors: [...loopOptions, ...undeclared, ...notInstalled], warnings }
 }
 
 /** The checks of design §5 that need the engines. A file that parsed has the right shape already. */

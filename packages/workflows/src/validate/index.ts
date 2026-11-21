@@ -1,4 +1,4 @@
-import { errorAt, parseWorkflow, type Step, type Workflow, type WorkflowError } from '../grammar'
+import { errorAt, parseWorkflow, stepSchema, type Step, type Workflow, type WorkflowError } from '../grammar'
 import { fieldsOf, kindByName } from '../kinds'
 import { textsOf, violations } from '../schema'
 
@@ -25,6 +25,7 @@ export interface Validation {
 type Check = (workflow: Workflow, step: Step, deps: ValidationDeps) => WorkflowError[]
 
 const skillErrors: Check = (workflow, step, deps) => {
+  if (step.kind === 'loop') return []
   if (step.uses !== undefined)
     return [
       errorAt(workflow, ['steps', step.id, 'uses'], {
@@ -50,11 +51,12 @@ const skillErrors: Check = (workflow, step, deps) => {
 }
 
 const withErrors: Check = (workflow, step) =>
-  violations(kindByName[step.kind].with, step.with ?? {}).map(found =>
+  (step.kind === 'loop' ? [] : violations(kindByName[step.kind].with, step.with ?? {})).map(found =>
     errorAt(workflow, ['steps', step.id, 'with', ...found.path], found),
   )
 
 const gateErrors: Check = (workflow, step, deps) => {
+  if (step.kind === 'loop') return []
   const gates = step.with?.['gates']
   if (kindByName[step.kind].with.properties?.['gates'] === undefined || !Array.isArray(gates))
     return []
@@ -88,8 +90,33 @@ const CHECKS: readonly Check[] = [skillErrors, withErrors, gateErrors, safetyErr
 
 function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowError[] {
   const available = new Set(deps.launchInputs)
-  return workflow.steps.flatMap(step => {
+  const checkStep = (step: Step, path: readonly string[]): WorkflowError[] => {
+    if (step.kind === 'loop') {
+      const errors: WorkflowError[] = []
+      for (const key of ['until', 'max', 'on-max', 'steps'] as const)
+        if (step[key] === undefined) errors.push(errorAt(workflow, path, { problem: `missing key '${key}'`, fix: `add '${key}'` }))
+      if (step.until !== undefined && !step.steps?.some(child => child.id === step.until))
+        errors.push(errorAt(workflow, [...path, 'until'], { problem: `unknown until step '${step.until}'`, fix: 'name a step of this loop' }))
+      if (step['on-failed'] !== undefined)
+        errors.push(errorAt(workflow, [...path, 'on-failed'], { problem: 'on-failed is not allowed on a loop', fix: 'remove it' }))
+      for (const key of ['skill', 'uses', 'with'] as const)
+        if (step[key] !== undefined) errors.push(errorAt(workflow, [...path, key], { problem: `${key} is not allowed on a loop`, fix: `remove '${key}'` }))
+      for (const child of step.steps ?? []) {
+        const childPath = [...path, 'steps', child.id]
+        const raw = Object.fromEntries(Object.entries(child).filter(([key]) => key !== 'id'))
+        errors.push(...violations(stepSchema, raw).map(found => errorAt(workflow, [...childPath, ...found.path], found)))
+        if (child.kind === 'loop') errors.push(errorAt(workflow, childPath, { problem: 'nested loop is not allowed', fix: 'move this loop outside the parent loop' }))
+        else {
+          if (child['on-failed'] !== undefined) errors.push(errorAt(workflow, [...childPath, 'on-failed'], { problem: 'on-failed is not allowed inside a loop', fix: 'remove it' }))
+          errors.push(...checkStep(child, childPath))
+        }
+      }
+      return errors
+    }
     const kind = kindByName[step.kind]
+    const misplaced = (['until', 'max', 'on-max', 'steps'] as const)
+      .filter(key => step[key] !== undefined)
+      .map(key => errorAt(workflow, [...path, key], { problem: `${key} is only allowed on a loop`, fix: `remove '${key}'` }))
     const unmet = (kind.inputs.required ?? [])
       .filter(input => !available.has(input))
       .map(input =>
@@ -99,8 +126,9 @@ function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowErro
         }),
       )
     fieldsOf(kind.outputs).forEach(output => available.add(output))
-    return [...unmet, ...CHECKS.flatMap(check => check(workflow, step, deps))]
-  })
+    return [...misplaced, ...unmet, ...CHECKS.flatMap(check => check(workflow, step, deps))]
+  }
+  return workflow.steps.flatMap(step => checkStep(step, ['steps', step.id]))
 }
 
 /** `on-failed: continue` on the last step: nothing consumes the failure. */

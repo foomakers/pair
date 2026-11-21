@@ -32,6 +32,7 @@ export const runCommandMetadata = {
       description:
         'US-652: with a workflow name, archive the run directory and start the run over (a complete run is otherwise left as it is)',
     },
+    { flags: '--more-rounds <n>', description: 'Grant n further rounds to a workflow loop parked at max' },
     {
       flags: '--config <name|file>',
       description:

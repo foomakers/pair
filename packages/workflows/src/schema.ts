@@ -14,6 +14,7 @@ export interface JsonSchema {
   readonly additionalProperties?: boolean | JsonSchema
   readonly propertyNames?: { readonly pattern: string }
   readonly minProperties?: number
+  readonly minimum?: number
   readonly items?: JsonSchema
 }
 
@@ -61,6 +62,8 @@ function scalarViolations(schema: JsonSchema, value: unknown, path: Path): Viola
         fix: `write a value matching ${schema.pattern}`,
       },
     ]
+  if (schema.minimum !== undefined && typeof value === 'number' && value < schema.minimum)
+    return [{ path, problem: `${show(value)} is below ${schema.minimum}`, fix: `use at least ${schema.minimum}` }]
   return []
 }
 
