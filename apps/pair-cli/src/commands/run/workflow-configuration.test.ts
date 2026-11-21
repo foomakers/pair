@@ -32,13 +32,18 @@ const REVIEWED = fenced({
 })
 const QUICK = `version: 1
 name: quick
+aliases:
+  build: { effort: medium }
+  judge: { effort: high }
 steps:
   implement:
     kind: implement
+    alias: build
     with:
       gates: [quality-gate]
   review:
     kind: review
+    alias: judge
 `
 const REGISTRY = `### Custom Gate Registry
 
@@ -127,8 +132,8 @@ afterEach(() => {
 const CONFIG = `version: 1
 name: mine
 defaults: { engine: claude, model: claude-sonnet-5-5, effort: medium }
-kinds:
-  review: { model: claude-opus-5-5, effort: high }
+aliases:
+  judge: { model: claude-opus-5-5, effort: high }
 `
 const writeConfig = (name = 'mine', text = CONFIG) =>
   write(
@@ -144,7 +149,7 @@ describe('settings per step, printed with their source (AC-1)', () => {
     expect(launched.map(one => one.model)).toEqual(['claude-sonnet-5-5', 'claude-opus-5-5'])
     expect(launched.map(one => one.effort)).toEqual(['medium', 'high'])
     expect(lines).toContain(
-      '    review: engine=claude (defaults) model=claude-opus-5-5 (kind) effort=high (kind)',
+      '    review: engine=claude (defaults) model=claude-opus-5-5 (alias) effort=high (alias)',
     )
   })
 
@@ -234,23 +239,23 @@ describe('validation of the configuration (AC-4)', () => {
 describe('override (AC-6)', () => {
   it('deep-merges over the file, runs with it and records it in state.json', async () => {
     writeConfig()
-    const override = '{"kinds":{"review":{"model":"claude-haiku-5-5"}}}'
+    const override = '{"aliases":{"judge":{"model":"claude-haiku-5-5"}}}'
     await run(['quick'], OK, { config: 'mine', configOverride: override })
     expect(launched.map(one => one.model)).toEqual(['claude-sonnet-5-5', 'claude-haiku-5-5'])
     const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as {
       configuration: { override: unknown }
     }
     expect(state.configuration.override).toEqual({
-      kinds: { review: { model: 'claude-haiku-5-5' } },
+      aliases: { judge: { model: 'claude-haiku-5-5' } },
     })
   })
 
   it('refuses an invalid merge, and an override with no base and no defaults', async () => {
     writeConfig()
     expect(
-      await run(['quick'], OK, { config: 'mine', configOverride: '{"kinds":{"nope":{}}}' }),
+      await run(['quick'], OK, { config: 'mine', configOverride: '{"aliases":{"ghost":{}}}' }),
     ).toBe(1)
-    expect(await run(['quick'], OK, { configOverride: '{"kinds":{"review":{"model":"m"}}}' })).toBe(
+    expect(await run(['quick'], OK, { configOverride: '{"aliases":{"judge":{"model":"m"}}}' })).toBe(
       1,
     )
     expect(launched).toEqual([])
@@ -278,6 +283,21 @@ describe('frozen copy and resume (AC-7)', () => {
     await run(['quick'], OK, { config: 'mine', reconfigure: true })
     expect(launched.map(one => one.model)).toEqual(['claude-haiku-5-5'])
   })
+
+  it('a run started with no configuration says so on resume when one now resolves, and checks its engine', async () => {
+    await run(['quick'], { ...OK, 'pair-process-review': FAIL })
+    writeConfig(
+      'mine',
+      CONFIG.replace('engine: claude, model: claude-sonnet-5-5', 'engine: codex, model: gpt-6-sol')
+        .replace('claude-opus-5-5', 'gpt-6-astra'),
+    )
+    lines.length = 0
+    launched = []
+    const codexOnly = { engineAvailable: (engine: string) => engine === 'codex' }
+    expect(await run(['quick'], OK, { config: 'mine' }, codexOnly)).toBe(1)
+    expect(lines.some(line => line.includes('started with no configuration'))).toBe(true)
+    expect(launched).toEqual([])
+  })
 })
 
 describe('the key telemetry and its flag (AC-9)', () => {
@@ -294,16 +314,16 @@ describe('the key telemetry and its flag (AC-9)', () => {
   })
 })
 
-describe('the six shipped configurations (AC-8)', () => {
+describe('the shipped configurations (AC-8)', () => {
   it.each(['claude', 'codex'])(
-    '%s cheap, medium and high parse and name themselves',
+    '%s base, cheap, medium and high parse and name themselves',
     async family => {
       const dir = join(
         __dirname,
         '../../../../../packages/knowledge-hub/dataset/.pair/adoption/tech/configurations',
       )
-      for (const level of ['cheap', 'medium', 'high']) {
-        const file = join(dir, `${family}-${level}.yaml`)
+      for (const level of ['', '-cheap', '-medium', '-high']) {
+        const file = join(dir, `${family}${level}.yaml`)
         const parsed = parseConfiguration(fs.readFileSync(file), file)
         expect(parsed.errors).toEqual([])
         expect(parsed.configuration?.defaults.engine).toBe(family)

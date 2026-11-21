@@ -1,9 +1,12 @@
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   applyOverride,
   checkAgainstEngines,
   describeSettings,
   firstExisting,
   parseConfiguration,
+  parseWorkflow,
   selectConfiguration,
   settingsFor,
   type Configuration,
@@ -14,11 +17,16 @@ const FILE = '/p/claude-medium.yaml'
 const BASE = `version: 1
 name: claude-medium
 defaults: { engine: claude, model: claude-sonnet-5-5, effort: medium }
-kinds:
-  review: { model: claude-opus-5-5, effort: high }
+aliases:
+  judge: { model: claude-opus-5-5, effort: high }
 steps:
   implement: { effort: low }
 `
+/** The aliases a workflow declares, with its defaults. */
+const DECLARED = {
+  build: { model: 'claude-haiku-5-5' },
+  judge: { model: 'claude-sonnet-5-5', effort: 'medium' },
+}
 const parsed = (text = BASE): Configuration => {
   const result = parseConfiguration(text, FILE)
   if (result.configuration === undefined) throw new Error(JSON.stringify(result.errors))
@@ -35,23 +43,31 @@ const facts = (over: Partial<EngineFacts> = {}): EngineFacts => ({
 describe('settings of a step (AC-1)', () => {
   const c = parsed()
   it.each([
-    ['step over kind and defaults', { id: 'implement', kind: 'implement' as const }, 'low', 'step'],
-    ['kind over defaults', { id: 'code-review', kind: 'review' as const }, 'high', 'kind'],
-    ['defaults', { id: 'x', kind: 'fix' as const }, 'medium', 'defaults'],
-  ])('%s', (_, step, effort, source) => {
-    const s = settingsFor(c, step)
-    expect(s.effort).toBe(effort)
-    expect(s.sources.effort).toBe(source)
+    ['step over everything', { id: 'implement', alias: 'build' }, 'claude-haiku-5-5', 'low'],
+    ['configuration alias over workflow default', { id: 'review', alias: 'judge' }, 'claude-opus-5-5', 'high'],
+    ['workflow default over defaults', { id: 'fix', alias: 'build' }, 'claude-haiku-5-5', 'medium'],
+    ['defaults with no alias', { id: 'x' }, 'claude-sonnet-5-5', 'medium'],
+  ])('%s', (_, step, model, effort) => {
+    expect(settingsFor(c, step, DECLARED)).toMatchObject({ model, effort })
+  })
+
+  it('names the layer of each field', () => {
+    expect(describeSettings('fix', settingsFor(c, { id: 'fix', alias: 'build' }, DECLARED))).toBe(
+      'fix: engine=claude (defaults) model=claude-haiku-5-5 (workflow) effort=medium (defaults)',
+    )
+    expect(
+      describeSettings('implement', settingsFor(c, { id: 'implement', alias: 'judge' }, DECLARED)),
+    ).toBe('implement: engine=claude (defaults) model=claude-opus-5-5 (alias) effort=low (step)')
   })
 
   it('resolves each field on its own, with mixed engines', () => {
-    const s = settingsFor(
-      parsed(`${BASE}  review: { engine: codex }\n`.replace('steps:\n', 'steps:\n')),
-      { id: 'review', kind: 'review' },
-    )
+    const s = settingsFor(parsed(`${BASE}  review: { engine: codex }\n`), {
+      id: 'review',
+      alias: 'judge',
+    })
     expect(s).toMatchObject({ engine: 'codex', model: 'claude-opus-5-5', effort: 'high' })
     expect(describeSettings('review', s)).toBe(
-      'review: engine=codex (step) model=claude-opus-5-5 (kind) effort=high (kind)',
+      'review: engine=codex (step) model=claude-opus-5-5 (alias) effort=high (alias)',
     )
   })
 })
@@ -116,7 +132,7 @@ describe('validation (AC-4)', () => {
       ),
     ],
     ['wrong type', BASE.replace('effort: medium', 'effort: 3')],
-    ['unknown kind', BASE.replace('review:', 'plan:')],
+    ['a kinds section', BASE.replace('aliases:', 'kinds:')],
     ['name differs from file', BASE.replace('name: claude-medium', 'name: other')],
     ['an anchor', BASE.replace('defaults:', 'defaults: &a')],
     ['no defaults', 'version: 1\nname: claude-medium\n'],
@@ -129,7 +145,7 @@ describe('validation (AC-4)', () => {
       file: FILE,
       facts: facts({ models: () => ['claude-sonnet-5-5'] }),
     })
-    expect(errors.map(e => e.key)).toEqual(['kinds.review.model'])
+    expect(errors.map(e => e.key)).toEqual(['aliases.judge.model'])
   })
 
   it('no list: a malformed id is an error, a well-formed one a warning', () => {
@@ -144,8 +160,23 @@ describe('validation (AC-4)', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('an alias the workflow does not declare is an error', () => {
+    const steps = [{ id: 'implement', alias: 'build' }]
+    const declared = { errors: checkAgainstEngines(parsed(), { file: FILE, steps, aliases: DECLARED, facts: facts() }).errors }
+    expect(declared.errors).toEqual([])
+    const { errors } = checkAgainstEngines(parsed(), {
+      file: FILE,
+      steps,
+      aliases: { build: {} },
+      facts: facts(),
+    })
+    expect(errors.map(e => [e.key, e.problem])).toEqual([
+      ['aliases.judge', "alias 'judge' is not one the workflow declares"],
+    ])
+  })
+
   it('an engine used but not installed refuses; an unknown step id and an unsupported effort warn', () => {
-    const steps = [{ id: 'implement', kind: 'implement' as const }]
+    const steps = [{ id: 'implement' }]
     const result = checkAgainstEngines(parsed(`${BASE}  ghost: { effort: low }\n`), {
       file: FILE,
       steps,
@@ -157,12 +188,13 @@ describe('validation (AC-4)', () => {
     )
   })
 
-  it('an engine only an unused kind names is not required installed', () => {
-    const steps = [{ id: 'implement', kind: 'implement' as const }]
-    const text = BASE.replace('review: {', 'review: { engine: codex,')
+  it('an engine only an unused alias names is not required installed', () => {
+    const steps = [{ id: 'implement', alias: 'build' }]
+    const text = BASE.replace('judge: {', 'judge: { engine: codex,')
     const result = checkAgainstEngines(parsed(text), {
       file: FILE,
       steps,
+      aliases: DECLARED,
       facts: facts({ installed: e => e === 'claude' }),
     })
     expect(result.errors).toEqual([])
@@ -172,14 +204,14 @@ describe('validation (AC-4)', () => {
 describe('override (AC-6)', () => {
   const base = { ...parsed() }
   it('deep-merges field by field and validates the result', () => {
-    const out = applyOverride(base, '{"kinds":{"review":{"model":"m2"}}}', FILE)
+    const out = applyOverride(base, '{"aliases":{"judge":{"model":"m2"}}}', FILE)
     if ('problem' in out) throw new Error(out.problem)
-    expect(out.parsed.configuration?.kinds?.review).toEqual({ model: 'm2', effort: 'high' })
+    expect(out.parsed.configuration?.aliases?.['judge']).toEqual({ model: 'm2', effort: 'high' })
     expect(out.parsed.configuration?.defaults.model).toBe('claude-sonnet-5-5')
   })
 
   it('an invalid merge is refused with errors', () => {
-    const out = applyOverride(base, '{"kinds":{"nope":{}}}', FILE)
+    const out = applyOverride(base, '{"aliases":{"judge":{"speed":1}}}', FILE)
     expect('parsed' in out && out.parsed.errors.length).toBeGreaterThan(0)
   })
 
@@ -188,7 +220,7 @@ describe('override (AC-6)', () => {
   })
 
   it('with no base, needs a complete defaults', () => {
-    const bare = applyOverride(undefined, '{"kinds":{"review":{"model":"m"}}}', 'override.yaml')
+    const bare = applyOverride(undefined, '{"aliases":{"judge":{"model":"m"}}}', 'override.yaml')
     expect('parsed' in bare && bare.parsed.errors.length).toBeGreaterThan(0)
     const whole = applyOverride(undefined, '{"defaults":{"engine":"claude"}}', 'override.yaml')
     expect('parsed' in whole && whole.parsed.errors).toEqual([])
@@ -203,5 +235,67 @@ describe('key telemetry (AC-9)', () => {
     expect(
       parseConfiguration(`${BASE}telemetry: yes please\n`, FILE).errors.length,
     ).toBeGreaterThan(0)
+  })
+})
+
+describe('the shipped set with quick (AC-8, AC-11)', () => {
+  const tech = join(__dirname, '../../../knowledge-hub/dataset/.pair/adoption/tech')
+  const quickFile = join(tech, 'workflows/quick.yaml')
+  const { workflow } = parseWorkflow(readFileSync(quickFile, 'utf8'), quickFile)
+  const shipped = (name: string): Configuration => {
+    const file = join(tech, 'configurations', `${name}.yaml`)
+    const result = parseConfiguration(readFileSync(file, 'utf8'), file)
+    if (result.configuration === undefined) throw new Error(JSON.stringify(result.errors))
+    return result.configuration
+  }
+
+  it('quick declares build (implement, fix) and judge (review)', () => {
+    expect(Object.keys(workflow?.aliases ?? {})).toEqual(['build', 'judge'])
+    expect(workflow?.steps.map(step => [step.id, step.alias])).toEqual([
+      ['implement', 'build'],
+      ['review', 'judge'],
+      ['fix', 'build'],
+    ])
+  })
+
+  it('ships the six profile equivalents and the two base configurations', () => {
+    expect(readdirSync(join(tech, 'configurations')).sort()).toEqual(
+      [
+        'claude',
+        'claude-cheap',
+        'claude-high',
+        'claude-medium',
+        'codex',
+        'codex-cheap',
+        'codex-high',
+        'codex-medium',
+      ].map(name => `${name}.yaml`),
+    )
+  })
+
+  // Expected: today's six profiles per stage (implement, review, fix); `claude` and `codex` as their medium.
+  const SONNET = 'claude-sonnet-5-5'
+  const OPUS = 'claude-opus-5-5'
+  it.each([
+    ['claude-cheap', 'claude', [[SONNET, 'medium'], [SONNET, 'high'], ['claude-haiku-5-5', 'medium']]],
+    ['claude-medium', 'claude', [[SONNET, 'medium'], [OPUS, 'high'], [SONNET, 'medium']]],
+    ['claude-high', 'claude', [[OPUS, 'high'], [OPUS, 'high'], [OPUS, 'high']]],
+    ['claude', 'claude', [[SONNET, 'medium'], [OPUS, 'high'], [SONNET, 'medium']]],
+    ['codex-cheap', 'codex', [[undefined, 'medium'], [undefined, 'high'], [undefined, 'low']]],
+    ['codex-medium', 'codex', [['gpt-6-sol', 'medium'], ['gpt-6-astra', 'high'], ['gpt-6-sol', 'medium']]],
+    ['codex-high', 'codex', [['gpt-6-sol', 'high'], ['gpt-6-astra', 'high'], ['gpt-6-sol', 'high']]],
+    ['codex', 'codex', [['gpt-6-sol', 'medium'], ['gpt-6-astra', 'high'], ['gpt-6-sol', 'medium']]],
+  ])('%s runs quick clean, every step on %s', (name, engine, expected) => {
+    const c = shipped(name)
+    const steps = workflow?.steps ?? []
+    expect(
+      checkAgainstEngines(c, { file: name, steps, aliases: workflow?.aliases, facts: facts() }).errors,
+    ).toEqual([])
+    expect(
+      steps.map(step => {
+        const s = settingsFor(c, step, workflow?.aliases)
+        return [s.engine, s.model, s.effort]
+      }),
+    ).toEqual(expected.map(([model, effort]) => [engine, model, effort]))
   })
 })

@@ -409,7 +409,7 @@ describe('engine: on-failed (#708 AC-7)', () => {
 })
 
 describe('engine: frozen configuration (#672 AC-7)', () => {
-  const A = { text: 'name: a\n', override: { kinds: {} } }
+  const A = { text: 'name: a\n', override: { aliases: {} } }
   const B = { text: 'name: b\n' }
   const read = (run: RunDirectory) => stateOf(run) as { configuration?: unknown }
 
@@ -440,10 +440,11 @@ describe('engine: frozen configuration (#672 AC-7)', () => {
     expect(statesOf(run)).toEqual({ implement: 'ok', review: 'pending' })
   })
 
-  it('a run started without a configuration has none', async () => {
+  it('a run started without a configuration keeps none, and its resume says one now applies', async () => {
     const run = open()
     await start(run, SOURCE, { card: '627' })
-    await start(run, SOURCE, { card: '627', configuration: A })
+    const resumed = await start(run, SOURCE, { card: '627', configuration: A })
     expect(frozenConfiguration(run)).toBeUndefined()
+    expect(resumed.warnings.join()).toContain('started with no configuration')
   })
 })

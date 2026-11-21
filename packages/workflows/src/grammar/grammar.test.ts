@@ -17,6 +17,46 @@ const seeded = (from: string, to: string) => QUICK.replace(from, to)
 const PLAIN = 'write the value in full, as plain YAML'
 const STEP_ID = '^[a-z][a-z0-9-]*$'
 
+describe('workflow aliases (#672 AC-11)', () => {
+  const ALIASED = QUICK.replace(
+    'steps:\n',
+    'aliases:\n  build: { effort: medium }\n  judge: { engine: claude, model: claude-opus-5-5, effort: high }\nsteps:\n',
+  )
+    .replace('kind: implement\n', 'kind: implement\n    alias: build\n')
+    .replace('kind: review\n', 'kind: review\n    alias: judge\n')
+
+  it('reads the declared aliases and the alias of each step', () => {
+    const { workflow, errors } = parseWorkflow(ALIASED, 'workflows/quick.yaml')
+    expect(errors).toEqual([])
+    expect(workflow?.aliases).toEqual({
+      build: { effort: 'medium' },
+      judge: { engine: 'claude', model: 'claude-opus-5-5', effort: 'high' },
+    })
+    expect(workflow?.steps.map(step => step.alias)).toEqual(['build', 'judge'])
+  })
+
+  it.each([
+    [
+      'a step citing an undeclared alias',
+      ALIASED.replace('alias: judge', 'alias: ghost'),
+      { key: 'steps.review.alias', problem: "alias 'ghost' is not declared in aliases" },
+    ],
+    [
+      'a step citing an alias with no aliases at all',
+      QUICK.replace('kind: review\n', 'kind: review\n    alias: judge\n'),
+      { key: 'steps.review.alias', problem: "alias 'judge' is not declared in aliases" },
+    ],
+    [
+      'an unknown key in an alias default',
+      ALIASED.replace('build: { effort: medium }', 'build: { effort: medium, speed: 1 }'),
+      { key: 'aliases.build.speed', problem: "unknown key 'speed'" },
+    ],
+  ])('refuses %s', (_, text, expected) => {
+    const { errors } = parseWorkflow(text, 'workflows/quick.yaml')
+    expect(errors).toEqual([expect.objectContaining(expected)])
+  })
+})
+
 describe('parseWorkflow (AC-2)', () => {
   it('reads a valid file into steps in file order', () => {
     const { workflow, errors } = parseWorkflow(QUICK, 'workflows/quick.yaml')
@@ -41,7 +81,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 3,
         key: 'descripton',
         problem: "unknown key 'descripton'",
-        fix: 'use one of version, name, description, steps',
+        fix: 'use one of version, name, description, aliases, steps',
       },
     ],
     [
@@ -51,7 +91,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 7,
         key: 'steps.implement.when',
         problem: "unknown key 'when'",
-        fix: 'use one of kind, skill, uses, with, on-failed',
+        fix: 'use one of kind, skill, uses, with, on-failed, alias',
       },
     ],
     [
