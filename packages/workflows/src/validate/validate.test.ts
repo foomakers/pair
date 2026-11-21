@@ -1,7 +1,10 @@
 import { validate, type ValidationDeps } from '.'
 
 const deps: ValidationDeps = {
-  skillExists: name => ['pair-process-implement', 'pair-process-review', 'my-skill'].includes(name),
+  skillExists: name =>
+    ['pair-process-implement', 'pair-process-review', 'pair-process-fix', 'my-skill'].includes(
+      name,
+    ),
   gateKeys: ['quality-gate', 'smoke-tests'],
   launchInputs: ['card'],
   isSafeText: text => !text.includes('`') && !text.includes('\n'),
@@ -167,5 +170,25 @@ describe('validate (AC-3, AC-5)', () => {
       "input 'card' is neither a launch argument nor an output of an earlier step",
       "input 'card' is neither a launch argument nor an output of an earlier step",
     ])
+  })
+})
+
+describe('validate: on-failed (#708 AC-7)', () => {
+  it('warns, without refusing, on the last step', () => {
+    const { errors, warnings } = check(
+      QUICK.replace('kind: review', 'kind: review\n    on-failed: continue'),
+    )
+    expect(errors).toEqual([])
+    expect(warnings.map(one => one.key)).toEqual(['steps.review.on-failed'])
+  })
+
+  it('accepts continue before the last step without a warning', () => {
+    const text = QUICK.replace('kind: implement', 'kind: implement\n    on-failed: continue')
+    expect(check(text).warnings).toEqual([])
+  })
+
+  it('refuses any other value', () => {
+    const { errors } = check(QUICK.replace('kind: review', 'kind: review\n    on-failed: retry'))
+    expect(errors.map(one => one.key)).toEqual(['steps.review.on-failed'])
   })
 })

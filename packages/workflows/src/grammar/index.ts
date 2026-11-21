@@ -27,6 +27,11 @@ const stepSchema: JsonSchema = {
       description: 'Reserved for including a workflow (#699); never a skill name.',
     },
     with: { type: 'object', description: 'Options of the step; the kind declares the keys.' },
+    'on-failed': {
+      enum: ['stop', 'continue'],
+      description:
+        'What a `failed` step does to the run. `stop` (default) stops it; `continue` records the failure and runs the next step.',
+    },
   },
 }
 
@@ -66,6 +71,7 @@ export interface Step {
   /** Reserved for including a workflow (#699); the validator refuses it as a skill name. */
   readonly uses?: string
   readonly with?: Readonly<Record<string, unknown>>
+  readonly 'on-failed'?: 'stop' | 'continue'
 }
 
 export interface Workflow {

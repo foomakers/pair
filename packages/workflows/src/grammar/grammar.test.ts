@@ -51,7 +51,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 7,
         key: 'steps.implement.when',
         problem: "unknown key 'when'",
-        fix: 'use one of kind, skill, uses, with',
+        fix: 'use one of kind, skill, uses, with, on-failed',
       },
     ],
     [

@@ -222,8 +222,15 @@ export async function next(
 ): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
   const state = requireState(run)
   const { steps } = frozenWorkflow(run)
-  const step = steps.find(one => state.steps[one.id]?.state !== 'ok')
-  if (step === undefined) return { ready: [], run: 'done' }
+  const skipped = (one: Step) =>
+    state.steps[one.id]?.state === 'failed' && one['on-failed'] === 'continue'
+  const step = steps.find(one => state.steps[one.id]?.state !== 'ok' && !skipped(one))
+  // The last step decides the run: a failure that was let through only counts when nothing follows it.
+  if (step === undefined)
+    return {
+      ready: [],
+      run: state.steps[steps[steps.length - 1]?.id ?? '']?.state === 'failed' ? 'failed' : 'done',
+    }
   const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
   if (halted !== undefined) return { ready: [], run: halted }
   const attempt = (state.steps[step.id]?.executions ?? 0) + 1

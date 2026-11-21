@@ -344,3 +344,66 @@ describe('engine: outcomes and resume (AC-6)', () => {
     )
   })
 })
+
+describe('engine: on-failed (#708 AC-7)', () => {
+  const FIX = { status: 'ok', summary: 'fixed', head: HEAD, resolutions: [] }
+  const CHANGES = {
+    status: 'failed',
+    summary: 'blocking',
+    reason: 'blocking-findings',
+    verdict: 'changes-requested',
+    reviewedHead: HEAD,
+    findings: [{ id: 'F1', severity: 'Major', title: 't', blocking: true }],
+  }
+  const text = (policy: string) =>
+    `${QUICK.replace('kind: review', `kind: review${policy}`)}  fix:\n    kind: fix\n`
+  const opened = async (policy: string) => {
+    const run = open()
+    await start(run, { text: text(policy), file: 'workflows/quick.yaml' }, { card: '627' })
+    await record(run, 'implement', IMPLEMENTED)
+    await next(run)
+    await record(run, 'review', CHANGES)
+    return run
+  }
+
+  it.each([
+    ['stop', '', 'failed'],
+    ['continue', '\n    on-failed: continue', 'running'],
+  ])('a failed step with %s leaves the run %s', async (_name, policy, run) => {
+    expect((await next(await opened(policy))).run).toBe(run)
+  })
+
+  it('hands the next step the outputs of the failed one, and the last step decides the run', async () => {
+    const run = await opened('\n    on-failed: continue')
+    const { ready } = await next(run)
+    expect(ready[0]).toMatchObject({ id: 'fix', inputs: { findings: CHANGES.findings, pr: 12 } })
+    await record(run, 'fix', FIX)
+    expect((await next(run)).run).toBe('done')
+  })
+
+  it('a failed last step with continue still fails the run', async () => {
+    const run = await opened('\n    on-failed: continue')
+    await next(run)
+    await record(run, 'fix', {
+      status: 'failed',
+      summary: 'x',
+      reason: 'gate',
+      head: HEAD,
+      resolutions: [],
+    })
+    expect((await next(run)).run).toBe('failed')
+  })
+
+  it('needs-human parks the run whatever on-failed says', async () => {
+    const run = open()
+    await start(
+      run,
+      { text: text('\n    on-failed: continue'), file: 'workflows/quick.yaml' },
+      { card: '627' },
+    )
+    await record(run, 'implement', IMPLEMENTED)
+    await next(run)
+    await record(run, 'review', { status: 'needs-human', summary: 'x', reason: 'decide' })
+    expect((await next(run)).run).toBe('parked')
+  })
+})
