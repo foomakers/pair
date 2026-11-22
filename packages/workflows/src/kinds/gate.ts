@@ -22,7 +22,7 @@ export const gate: StepKind = {
         type: 'array',
         items: { type: 'string' },
         description:
-          'Keys of the Custom Gate Registry: their commands run in the card worktree, in order. Never a shell line.',
+          'Entries run in the card worktree, in order: a key of the Custom Gate Registry, `target:<name>` (the registry rows of that target) or `command:<shell line>`.',
       },
       checks: {
         type: 'array',

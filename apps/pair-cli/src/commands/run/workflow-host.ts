@@ -9,6 +9,7 @@ import {
   frozenConfiguration,
   parseFrozenConfiguration,
   readGateRegistry,
+  readGateTargets,
   runSteps,
   settingsFor,
   start,
@@ -213,6 +214,9 @@ function resolveWorkflowRun(
     gateKeys: Object.keys(
       readGateRegistry(fs.existsSync(registry) ? fs.readFileSync(registry) : ''),
     ),
+    gateTargets: Object.keys(
+      readGateTargets(fs.existsSync(registry) ? fs.readFileSync(registry) : ''),
+    ),
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
   })
@@ -407,6 +411,7 @@ function hostKindsOf({ resolved, request, worktree }: Opened, fs: FileSystemServ
     perform: performHostKind(
       readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
       worktree ?? resolved.cwd,
+      readGateTargets(fs.existsSync(way) ? fs.readFileSync(way) : ''),
     ),
   }
 }

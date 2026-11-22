@@ -12,11 +12,16 @@ const UNWIRED = (what: string): StepResult => ({
  * The steps `pair run` executes itself, no agent: a gate's registry commands run in the card worktree.
  * `checks`, `approval` and `merge` read or write the platform and fail until their adapter is wired.
  */
-export function performHostKind(registry: Readonly<Record<string, string>>, worktree: string) {
+export function performHostKind(
+  registry: Readonly<Record<string, string>>,
+  worktree: string,
+  targets: Readonly<Record<string, readonly string[]>> = {},
+) {
   return async (step: StepLaunch): Promise<StepResult> => {
     if (step.kind !== 'gate') return UNWIRED(`a ${step.kind} step`)
     return runGate(step.with, {
       registry,
+      targets,
       run: async command => {
         const r = await runHostProcess('sh', ['-c', command], worktree, { timeout: 0 })
         return { code: r.status ?? 1, output: `${r.stdout}${r.stderr}`.trim() }

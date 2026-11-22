@@ -104,3 +104,31 @@ export function readGateRegistry(text: string): Readonly<Record<string, string>>
       .filter(([name]) => name),
   ) as Record<string, string>
 }
+
+/** The keys of each target, in row order. A blank Target belongs to every target; no Target column, no target. */
+export function readGateTargets(text: string): Readonly<Record<string, readonly string[]>> {
+  const lines = text.split('\n')
+  const start = lines.findIndex(line => /^#+\s+Custom Gate Registry\s*$/.test(line))
+  if (start < 0) return {}
+  const rest = lines.slice(start + 1)
+  const next = rest.findIndex(line => /^#+\s/.test(line))
+  const table = (next < 0 ? rest : rest.slice(0, next)).filter(line => line.trim().startsWith('|'))
+  const header = cells(table[0] ?? '')
+  const [key, target] = [header.indexOf('Key'), header.indexOf('Target')]
+  if (key < 0 || target < 0) return {}
+  const rows = table
+    .slice(2)
+    .map(cells)
+    .map(row => ({
+      key: code(row[key]),
+      targets: (row[target] ?? '').split(',').map(t => code(t.trim())).filter(Boolean),
+    }))
+    .filter(row => row.key)
+  const names = [...new Set(rows.flatMap(row => row.targets))]
+  return Object.fromEntries(
+    names.map(name => [
+      name,
+      rows.filter(row => row.targets.length === 0 || row.targets.includes(name)).map(row => row.key),
+    ]),
+  )
+}

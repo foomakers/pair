@@ -139,9 +139,9 @@ Gate 2 runs a **subset** in CI: the `smoke` job in `ci.yml` runs `run-all.sh --c
 
 | Order | Key            | Gate           | Command             | Scope Key | Target    | Required | Description                                          |
 | ----- | -------------- | -------------- | ------------------- | --------- | --------- | -------- | ---------------------------------------------------- |
-| 1     | gate-increment | Increment gate | `pnpm gate:increment` | quality   | increment | Yes      | ts:check, test, lint of the changed packages (turbo cache) |
-| 2     | gate-pr        | PR gate        | `pnpm gate:pr`      | quality   | pr        | Yes      | build, test, formatting check (never fix)            |
-| 3     | gate-review    | Review gate    | `pnpm gate:review`  | quality   | review    | Yes      | same as the PR gate, configurable apart              |
+| 1     | gate-increment | Increment gate | `pnpm gate:increment` | quality   | increment | Yes      | test, lint of the changed packages (turbo cache); ts:check runs in pre-commit |
+| 2     | gate-pr        | PR gate        | `pnpm gate:pr`      | quality   | pr        | Yes      | the full quality-gate, once before the PR; not in pre-push |
+| 3     | gate-review    | Review gate    | `pnpm gate:review`  | quality   | review    | Yes      | changed packages vs main, plus conformance and docs checks |
 | 4     | gate-release   | Release gate   | `pnpm gate:release` | testing   | release   | Yes      | smoke tests and Playwright E2E                       |
 
 ---

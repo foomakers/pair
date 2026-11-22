@@ -10,7 +10,7 @@ One optional change in the v0.5 → v0.6 jump: gates are grouped by **target**, 
 - Custom Gate Registry (`.pair/adoption/tech/way-of-working.md`) gains a **Target** column: `increment` (a task or commit), `pr`, `review`, `release`. Blank = every target; a registry without the column behaves as before.
 - Skills pass a target to `/verify-quality`: `/implement` → `increment`, `/publish-pr` → `pr`, `/review` → `review`. Which command a target runs is only in the registry.
 - Optional `### Gate Targets` table (`Skill | Targets`) overrides a skill's targets; run by hand, the skill keeps its default.
-- Local hooks that run tests (husky) duplicate the targets: move those checks into registry rows.
+- A check that a local hook (husky) already runs does not belong in the registry rows of the same moment: keep lean checks in the hook, drop them from the registry.
 
 ## Prompt
 
@@ -29,8 +29,9 @@ and report what you skipped.
 3. Where the project has a script that runs only what changed (turbo
    `--filter=[HEAD]`, nx affected, a diff-based test run), use it for
    `increment` so cache and differential runs apply.
-4. If git hooks (husky or similar) run tests or gates, remove them from the
-   hooks: the targets run them. Keep cheap non-test checks.
+4. If a git hook (husky or similar) already runs a check, do not repeat it in a
+   registry row of the same moment: keep lean checks in the hook, leave them
+   out of the registry rows.
 5. Optional: add a `### Gate Targets` table (`Skill | Targets`) only to change
    a skill's default target for this project.
 ```
@@ -38,6 +39,6 @@ and report what you skipped.
 ## Verify
 
 - [ ] The registry has a `Target` column and every row has a value (or is blank on purpose)
-- [ ] No command runs both from a git hook and from a target
+- [ ] No check runs both from a git hook and from a target row of the same moment
 - [ ] `increment` rows are incremental or cached
 - [ ] Re-running the prompt makes no further changes

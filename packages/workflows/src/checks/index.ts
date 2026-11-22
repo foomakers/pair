@@ -87,15 +87,24 @@ export type RunCommand = (
 /** Runs the registry commands of `keys` in order; the first failure, or `undefined` when all pass. */
 async function runRegistry(
   keys: readonly string[],
-  deps: { readonly registry: Readonly<Record<string, string>>; readonly run: RunCommand },
+  deps: {
+    readonly registry: Readonly<Record<string, string>>
+    readonly targets?: Readonly<Record<string, readonly string[]>>
+    readonly run: RunCommand
+  },
 ): Promise<StepResult | undefined> {
-  for (const key of keys) {
-    const command = deps.registry[key]
+  const entries = keys.flatMap(entry => {
+    if (!entry.startsWith('target:')) return [entry]
+    const rows = deps.targets?.[entry.slice(7)]
+    return rows === undefined ? [entry] : rows
+  })
+  for (const key of entries) {
+    const command = key.startsWith('command:') ? key.slice(8) : deps.registry[key]
     if (command === undefined)
       return {
         status: 'failed',
         reason: 'unknown-gate',
-        summary: `gate key '${key}' is not in the registry`,
+        summary: `gate '${key}' is not in the registry`,
       }
     const { code, output } = await deps.run(command)
     if (code !== 0)
@@ -118,6 +127,7 @@ export async function runGate(
   },
   deps: {
     readonly registry: Readonly<Record<string, string>>
+    readonly targets?: Readonly<Record<string, readonly string[]>>
     readonly run: RunCommand
     /** The platform facts; absent, a gate with `checks` fails `no-platform-adapter` rather than assume. */
     readonly facts?: FactReader

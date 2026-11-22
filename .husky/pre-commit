@@ -6,7 +6,8 @@
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX GIT_NAMESPACE GIT_CEILING_DIRECTORIES GIT_IMPLICIT_WORK_TREE GIT_DISCOVERY_ACROSS_FILESYSTEM
 
 # Local pre-commit is differential: run a check only when the staged files can affect it.
-# ts:check and tests run by the gate targets (increment per task, pr at publish), never here: no double run.
+# The full gate stays in pre-push and CI.
 staged=$(git diff --cached --name-only)
+if echo "$staged" | grep -qE '\.(ts|tsx|mts|cts|js|mjs|cjs|json)$'; then pnpm ts:check || exit 1; fi
 # docs:staleness is cheap (~3.4s). Offline-safe: without `gh` the planned-marker lookup warns and skips.
 if echo "$staged" | grep -qE '\.(md|mdx)$|^docs/|^\.claude/|^packages/knowledge-hub/'; then pnpm docs:staleness || exit 1; fi

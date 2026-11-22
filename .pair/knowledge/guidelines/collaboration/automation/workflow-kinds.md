@@ -91,7 +91,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Outputs**, required when `status` is `ok`
   - The common fields only.
 - **Options** (`with`)
-  - `gates`: `array of string` — Keys of the Custom Gate Registry: their commands run in the card worktree, in order. Never a shell line.
+  - `gates`: `array of string` — Entries run in the card worktree, in order: a key of the Custom Gate Registry, `target:<name>` (the registry rows of that target) or `command:<shell line>`.
   - `checks`: `array of "ci-green" | "head-unchanged" | "review-approved" | "prerequisites-done"` — Ready-made checks: ci-green, head-unchanged, review-approved, prerequisites-done.
   - `timeout-minutes`: `integer` — How long `ci-green` waits. Default 30.
 - **Returns `needs-human` when**

@@ -17,6 +17,8 @@ export interface ValidationDeps {
   readonly skillExists: (name: string) => boolean
   /** The keys of the Custom Gate Registry. */
   readonly gateKeys: readonly string[]
+  /** The targets of the Custom Gate Registry. */
+  readonly gateTargets?: readonly string[]
   /** The inputs the launch provides (`card`). */
   readonly launchInputs: readonly string[]
   /** The host's prompt-safety check: every text of the file that reaches an agent passes it. */
@@ -75,12 +77,19 @@ const gateErrors: Check = (workflow, step, deps, path) => {
   if (kindByName[step.kind].with.properties?.['gates'] === undefined || !Array.isArray(gates))
     return []
   const known = deps.gateKeys
+  const ok = (entry: string) =>
+    (entry.startsWith('command:') && entry.length > 8) ||
+    (entry.startsWith('target:') && (deps.gateTargets ?? []).includes(entry.slice(7)))
   return gates.flatMap((key: unknown, index) =>
-    typeof key !== 'string' || known.includes(key)
+    typeof key !== 'string' || known.includes(key) || ok(key)
       ? []
       : [
           errorAt(workflow, [...path, 'with', 'gates', index], {
-            problem: `unknown gate key '${key}'`,
+            problem: key.startsWith('target:')
+              ? `unknown gate target '${key.slice(7)}'`
+              : key === 'command:'
+                ? 'an empty gate command'
+                : `unknown gate key '${key}'`,
             fix:
               known.length > 0
                 ? `use one of ${known.join(', ')}`
