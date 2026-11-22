@@ -37,6 +37,11 @@ describe('workflow authoring commands (AC-7)', () => {
     expect(result.status).not.toBe(0)
     expect(JSON.parse(result.stdout).errors.length).toBeGreaterThan(0)
   })
+  it('accepts configured gate targets in the project workflow', () => {
+    const root = resolve(__dirname, '../../../..')
+    const result = run(root, 'validate', join(root, '.pair/adoption/tech/workflows/quick.yaml'))
+    expect(JSON.parse(result.stdout).errors).toEqual([])
+  })
   it('validates a shipped workflow with configuration and returns resolved settings (AC-5, AC-6)', () => {
     const root = resolve(__dirname, '../../../..')
     const base = resolve(root, 'packages/knowledge-hub/dataset/.pair/adoption/tech')
