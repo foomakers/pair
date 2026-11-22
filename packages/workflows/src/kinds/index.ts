@@ -121,14 +121,19 @@ export function readGateTargets(text: string): Readonly<Record<string, readonly 
     .map(cells)
     .map(row => ({
       key: code(row[key]),
-      targets: (row[target] ?? '').split(',').map(t => code(t.trim())).filter(Boolean),
+      targets: (row[target] ?? '')
+        .split(',')
+        .map(t => code(t.trim()))
+        .filter(Boolean),
     }))
     .filter(row => row.key)
   const names = [...new Set(rows.flatMap(row => row.targets))]
   return Object.fromEntries(
     names.map(name => [
       name,
-      rows.filter(row => row.targets.length === 0 || row.targets.includes(name)).map(row => row.key),
+      rows
+        .filter(row => row.targets.length === 0 || row.targets.includes(name))
+        .map(row => row.key),
     ]),
   )
 }

@@ -49,10 +49,7 @@ describe('gate: gates entries are keys, target:<name> or command:<line>', () => 
     expect(ran).toEqual(['one'])
   })
   it('fails on a target the registry does not hold', async () => {
-    const result = await runGate(
-      { gates: ['target:release'] },
-      { registry, targets, run: run() },
-    )
+    const result = await runGate({ gates: ['target:release'] }, { registry, targets, run: run() })
     expect(result).toMatchObject({ status: 'failed', reason: 'unknown-gate' })
     expect(ran).toEqual([])
   })
