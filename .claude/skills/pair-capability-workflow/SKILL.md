@@ -7,6 +7,12 @@ author: Foomakers
 
 # Workflow authoring
 
+## Arguments
+
+| Argument | Description |
+| --- | --- |
+| mode | `create`, `configure`, or `explain` |
+
 Accept `create`, `configure`, or `explain`. First read `.pair/knowledge/guidelines/collaboration/automation/workflow-schema.md` and `workflow-kinds.md` in the same directory. Inspect project and shipped workflows and configurations, the project's mapping in `pair.config.json`, and installed skills. Use these references and files as the grammar, not memory. Use only installed skills; report a requested missing skill instead of inventing one. If a request cannot be expressed, name what is missing and propose the closest alternative, saying what it covers and what it does not.
 
 If `pair-cli` is unavailable, propose installing pair-cli and stop validation until it is available.
