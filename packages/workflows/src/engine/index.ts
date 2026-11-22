@@ -481,6 +481,8 @@ function loopChild(
   return { child: child as Step & { kind: KindName }, id: `${step.id}/${child.id}` }
 }
 
+const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
+
 /** The launch of the loop child that is next, or the halt that stops the run. */
 async function nextInLoop(
   run: RunDirectory,
@@ -506,7 +508,7 @@ async function nextInLoop(
     kind: child.kind,
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
-    ...(child.gates && { gates: child.gates }),
+    ...gatesOf(child),
     inputs: pick(producedBefore(state, steps, step), child.kind),
     attempt,
     round,
@@ -622,7 +624,7 @@ async function nextPlain(
     kind: step.kind,
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
-    ...(step.gates && { gates: step.gates }),
+    ...gatesOf(step),
     inputs: inputsOf(step, steps, state),
     attempt,
   }
