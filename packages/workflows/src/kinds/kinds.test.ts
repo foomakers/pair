@@ -113,4 +113,7 @@ describe('implement kind: do everything automatable (unattended principle)', () 
     expect(guidance).toMatch(/gates?[^.]*after the last task/i)
     expect(guidance).toMatch(/never interrupt/i)
   })
+  it('forbids ending the turn while an automatable task is left', () => {
+    expect(guidance).toMatch(/do not end your turn[^.]*task/i)
+  })
 })
