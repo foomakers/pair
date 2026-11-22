@@ -226,7 +226,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 ### Step 2.7: Verify Quality
 
 1. **Act**: Compose `/verify-quality` with `$scope` set to the packages the task touched (ts:check, tests and lint of those packages) — never the full gate per task: it takes minutes and runs once at closing, inside `/publish-pr` (Phase 1).
-2. **Verify**: All quality gates pass. If any gate fails → **HALT**. Developer must fix before proceeding.
+2. **Verify**: All quality gates pass. A failure caused by this card's work (the task's own code, or a test of a task not yet implemented) is yours to fix: continue the cycle until green, never a stop. **HALT** only when the cause lies outside the card. A red test of a pending task is the RED phase, not a failed gate.
 
 ### Step 2.8: Task Completion
 
@@ -376,7 +376,7 @@ Implementation stops immediately when:
 - **Checkpoint/branch divergence** (Step 0.0) — checkpoint names a branch the repo does not have; report and stop, do not guess a branch
 - **Story not loaded or incomplete** (Phase 0)
 - **Task specifications incomplete** (Step 2.2)
-- **Quality gate failure** (Step 2.7) — developer must fix
+- **Quality gate failure** (Step 2.7) — only when the cause lies outside the card; otherwise fix it and continue
 - **New dependency rejected by /assess-stack** (Step 2.4)
 - **Commit template not found** (Step 2.8 / Step 3.1) — cannot commit without template
 - **`/publish-pr` not installed** (Step 3.3) — implement composes the PR sequence, never re-implements it
