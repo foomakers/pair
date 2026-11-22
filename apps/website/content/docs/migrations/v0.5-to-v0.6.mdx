@@ -1,0 +1,43 @@
+---
+title: "v0.5 → v0.6: Gate Targets"
+description: Migration prompt for the Custom Gate Registry Target column, per-target gate scripts and the optional Gate Targets table.
+---
+
+One optional change in the v0.5 → v0.6 jump: gates are grouped by **target**, so each skill runs the gates of its own moment. Nothing breaks if you skip it.
+
+## Changed
+
+- Custom Gate Registry (`.pair/adoption/tech/way-of-working.md`) gains a **Target** column: `increment` (a task or commit), `pr`, `review`, `release`. Blank = every target; a registry without the column behaves as before.
+- Skills pass a target to `/verify-quality`: `/implement` → `increment`, `/publish-pr` → `pr`, `/review` → `review`. Which command a target runs is only in the registry.
+- Optional `### Gate Targets` table (`Skill | Targets`) overrides a skill's targets; run by hand, the skill keeps its default.
+- Local hooks that run tests (husky) duplicate the targets: move those checks into registry rows.
+
+## Prompt
+
+```text
+You are migrating this project's `.pair/` structure to pair v0.6 (gate targets).
+Work only inside `.pair/adoption/`. Perform each step only if not already done,
+and report what you skipped.
+
+1. In `.pair/adoption/tech/way-of-working.md`, find the Custom Gate Registry
+   table. If it has no `Target` column, add one after `Scope Key`.
+2. For each row set Target: quick, incremental checks (types, unit tests, lint
+   of the changed code) -> `increment`; the full pre-merge gate -> `pr`; what a
+   reviewer needs -> `review` (may equal `pr`); slow suites (smoke, E2E) ->
+   `release`. A row that serves several moments lists them, comma-separated.
+   Use a single row per command: do not duplicate commands in the same target.
+3. Where the project has a script that runs only what changed (turbo
+   `--filter=[HEAD]`, nx affected, a diff-based test run), use it for
+   `increment` so cache and differential runs apply.
+4. If git hooks (husky or similar) run tests or gates, remove them from the
+   hooks: the targets run them. Keep cheap non-test checks.
+5. Optional: add a `### Gate Targets` table (`Skill | Targets`) only to change
+   a skill's default target for this project.
+```
+
+## Verify
+
+- [ ] The registry has a `Target` column and every row has a value (or is blank on purpose)
+- [ ] No command runs both from a git hook and from a target
+- [ ] `increment` rows are incremental or cached
+- [ ] Re-running the prompt makes no further changes

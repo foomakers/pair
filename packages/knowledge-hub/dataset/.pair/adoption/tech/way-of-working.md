@@ -41,9 +41,9 @@ The "Merge" column only bites when `Review enforcement` is `enabled` (above). Di
 
 Custom gates run **after** the standard gates (Lint, Type Check, Test). Add rows to extend the quality pipeline.
 
-| Order | Key        | Gate       | Command             | Scope Key  | Required | Description |
-| ----- | ---------- | ---------- | ------------------- | ---------- | -------- | ----------- |
-| 1     | formatting | Formatting | `pnpm format:check` | formatting | Yes      | Blocking check. `No` (advisory) was coherent only while this row ran an auto-fixer: a check that neither fixes nor blocks leaves the violation in the push. Provide the script (or point the cell at your project's equivalent). |
+| Order | Key        | Gate       | Command             | Scope Key  | Target | Required | Description |
+| ----- | ---------- | ---------- | ------------------- | ---------- | ---- | -------- | ----------- |
+| 1     | formatting | Formatting | `pnpm format:check` | formatting | pr   | Yes      | Blocking check. `No` (advisory) was coherent only while this row ran an auto-fixer: a check that neither fixes nor blocks leaves the violation in the push. Provide the script (or point the cell at your project's equivalent). |
 
 ## Merge Strategy
 

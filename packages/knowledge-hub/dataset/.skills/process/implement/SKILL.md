@@ -225,7 +225,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 ### Step 2.7: Verify Quality
 
-1. **Act**: Compose `/verify-quality` with `$scope` set to the packages the task touched (ts:check, tests and lint of those packages) — never the full gate per task: it takes minutes and runs once at closing, inside `/publish-pr` (Phase 1).
+1. **Act**: Compose `/verify-quality` with `$target: increment`, `$caller: implement` and `$scope` set to the packages the task touched — the gates of that target, never those of the pull request: they run once at closing, inside `/publish-pr` (Phase 1). Which command each target runs is the adoption's, never this skill's.
 2. **Verify**: All quality gates pass. A failure caused by this card's work (the task's own code, or a test of a task not yet implemented) is yours to fix: continue the cycle until green, never a stop. **HALT** only when the cause lies outside the card. A red test of a pending task is the RED phase, not a failed gate.
 
 ### Step 2.8: Task Completion
