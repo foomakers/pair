@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { join } from 'path'
+import { parse } from 'yaml'
 import { fileSystemService as fs } from '@pair/content-ops'
 import { readGateRegistry, readGateTargets, validate } from '@pair/workflows'
 import { isSafePromptText } from './prompt-safety'
@@ -25,6 +26,13 @@ const errorsOf = (root: string) =>
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
   }).errors
+
+const commandGates = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') return false
+  return Object.entries(value).some(([key, child]) =>
+    key === 'gates' && Array.isArray(child) && child.some(item => typeof item === 'string' && item.startsWith('command:')) || commandGates(child),
+  )
+}
 
 describe('the shipped quick workflow: what already holds (r0-2)', () => {
   it('c1 the generated mirror of the page is the dataset page', () => {
@@ -56,8 +64,10 @@ describe('the shipped quick workflow: what already holds (r0-2)', () => {
   it('c6 no shipped workflow carries a command: gate (ADR-036)', () => {
     const dir = '.pair/adoption/tech/workflows'
     const files = fs.readdirSync(join(DATASET, dir)).map(f => join(dir, f.name))
-    const direct = files.filter(f => /^\s*-\s*['"]?command:/m.test(read(DATASET, f)))
+    const direct = files.filter(f => commandGates(parse(read(DATASET, f))))
 
     expect(direct).toEqual([])
+    expect(commandGates(parse("steps: {check: {gates: ['command:echo ok']}}"))).toBe(true)
+    expect(commandGates(parse('steps: {check: {gates: [target:pr]}}'))).toBe(false)
   })
 })
