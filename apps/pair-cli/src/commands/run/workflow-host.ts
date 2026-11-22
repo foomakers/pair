@@ -715,6 +715,20 @@ function approvalQuestion(step: ReturnType<typeof addressedSteps>[number]): stri
     : ''
 }
 
+function dryRunExecution(resolved: Resolved, step: ReturnType<typeof addressedSteps>[number]): string {
+  const host = step.kind === 'loop' || kindByName[step.kind].host === true
+  const settings = host ? undefined : stepSettings(resolved, resolved.configuration?.configuration, step)
+  return settings
+    ? ` engine=${settings.engine} model=${settings.model ?? '(engine default)'}${settings.effort ? ` effort=${settings.effort}` : ''}`
+    : ' host'
+}
+
+function dryRunExhaustion(step: ReturnType<typeof addressedSteps>[number]): string {
+  return step.kind === 'loop'
+    ? ` on-max=${step['on-max']}${step['on-max'] === 'escalate' ? ' (human escalation)' : ' (fails)'}`
+    : ''
+}
+
 export async function handleWorkflowRun(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
@@ -726,11 +740,10 @@ export async function handleWorkflowRun(
   printPlan(resolved.workflow)
   if (config.dryRun) {
     addressedSteps(resolved.workflow).forEach(step => {
-      const skill =
-        step.kind === 'loop' ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
-      const settings = stepSettings(resolved, resolved.configuration?.configuration, step)
+      const host = step.kind === 'loop' || kindByName[step.kind].host === true
+      const skill = host ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
       console.log(
-        `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''} engine=${settings.engine} model=${settings.model ?? '(engine default)'}${settings.effort ? ` effort=${settings.effort}` : ''}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${approvalQuestion(step)}`,
+        `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''}${dryRunExecution(resolved, step)}${dryRunExhaustion(step)}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${approvalQuestion(step)}`,
       )
     })
     console.log('  Dry run: the workflow is valid; nothing was launched.')

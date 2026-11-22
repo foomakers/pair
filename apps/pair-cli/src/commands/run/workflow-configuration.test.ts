@@ -206,6 +206,7 @@ it('dry run distinguishes loop failure from escalation (US-677 AC-6)', async () 
   write('.pair/adoption/tech/workflows/quick.yaml', `version: 1
 name: quick
 steps:
+  implement: { kind: implement }
   rounds:
     kind: loop
     until: review
