@@ -40,7 +40,7 @@
     "test-audit:prepush": "pnpm --filter @pair/dev-tools test-audit:prepush",
     "test-audit:mutation": "pnpm --filter @pair/dev-tools test-audit:mutation",
     "test-audit:redundancy": "pnpm --filter @pair/dev-tools test-audit:redundancy",
-    "gate:increment": "turbo run test lint --filter=[HEAD]",
+    "gate:increment": "turbo run test lint --filter=[HEAD~1]",
     "gate:push": "turbo run ts:check test lint --filter=[origin/main]",
     "gate:pr": "pnpm quality-gate",
     "gate:review": "pnpm gate:push && pnpm skills:conformance && pnpm docs:staleness",
