@@ -209,14 +209,11 @@ function resolveWorkflowRun(
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
   const source = locateWorkflow(fs, { cwd, main }, request.name)
   const registry = join(main, WAY_OF_WORKING)
+  const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
   const checked = validate(source.text, source.file, {
     skillExists: createSkillProbe(fs, project, cwd),
-    gateKeys: Object.keys(
-      readGateRegistry(fs.existsSync(registry) ? fs.readFileSync(registry) : ''),
-    ),
-    gateTargets: Object.keys(
-      readGateTargets(fs.existsSync(registry) ? fs.readFileSync(registry) : ''),
-    ),
+    gateKeys: Object.keys(readGateRegistry(registryText)),
+    gateTargets: Object.keys(readGateTargets(registryText)),
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
   })
