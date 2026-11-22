@@ -164,7 +164,7 @@ describe('settings per step, printed with their source (AC-1)', () => {
 })
 
 it.each(['darwin', 'linux'] as const)(
-  'dry run previews resolved steps on platform %s (US-677 AC-6)',
+  'dry run previews resolved steps on platform %s (darwin, linux; US-677 AC-6)',
   async platform => {
     const original = Object.getOwnPropertyDescriptor(process, 'platform')!
     Object.defineProperty(process, 'platform', { ...original, value: platform })
