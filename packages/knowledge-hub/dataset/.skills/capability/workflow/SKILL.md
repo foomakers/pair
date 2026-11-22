@@ -22,14 +22,14 @@ If `pair-cli` is unavailable, propose installing pair-cli and stop validation un
 Validate in an isolated temporary project: copy the project's relevant adoption files, configuration, installed skill references and `pair.config.json` there, place the proposed workflow under `.pair/adoption/tech/workflows/<workflow>.yaml`, and use that project as the working directory. Run:
 
 ```sh
-pair-cli run <workflow> --dry-run
+pair-cli run <workflow> --card 1 --dry-run
 ```
 
 For a proposed configuration, place its temporary copy in the isolated project and add `--config <temporary-configuration>` to the command. Preserve the intended filename and project context so the launcher resolves the same skills, gates and settings. Correct errors and validate again, at most three times; if errors remain, show them and stop. Never write an invalid file. Show warnings and obtain confirmation before writing. Show a diff before replacing an existing file. Copy only the validated temporary file after an explicit yes. Shipped files are never edited; create a project override instead.
 
 ## Create
 
-If no starting point is named, propose the closest shipped workflow. Ask only unanswered questions, one at a time with a recommendation; do not ask about defaults. Show the complete YAML and explain the same content in words. Validate it as above, then write the approved copy to `.pair/adoption/tech/workflows/`. Offer `configure`, then print the in-session workflow launch skill if installed and `pair run <workflow>` for the terminal.
+If no starting point is named, propose the closest shipped workflow. Ask only unanswered questions, one at a time with a recommendation; do not ask about defaults. Show the complete YAML and explain the same content in words. Validate it as above, then write the approved copy to `.pair/adoption/tech/workflows/`. Offer `configure`, then print the in-session workflow launch skill if installed and `pair-cli run <workflow> --card <id>` for the terminal.
 
 ## Configure
 
