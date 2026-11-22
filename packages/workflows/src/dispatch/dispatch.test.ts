@@ -34,6 +34,8 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- pr: integer',
         '- head: string matching ^[0-9a-f]{40}$',
         'Required when status is "ok": branch, pr, head.',
+        '',
+        'This is an unattended run in one session. Never ask for confirmation. Do RED, GREEN and REFACTOR in this session, with one commit unless the card asks for more. Return status "needs-human" only in these cases: A task is incomplete or needs a decision the card does not record. A quality gate stays red and the fix is outside the card.',
       ].join('\n'),
     )
   })
@@ -89,6 +91,8 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- status: "ok" | "failed" | "needs-human"',
         '- summary: string',
         '- reason: string (optional)',
+        '',
+        'This is an unattended run in one session. Never ask for confirmation. Return status "needs-human" only in these cases: ' + kindByName.generic.escalations.join(' '),
       ].join('\n'),
     )
   })
