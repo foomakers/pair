@@ -38,7 +38,7 @@ export const implement: StepKind = {
     },
   },
   guidance:
-    'Do RED, GREEN and REFACTOR in this session, with one commit unless the card asks for more. Do every task that can be automated. A task that needs a person (manual, interactive, a real run with human approval) is skipped, never a reason to stop: finish all the others, publish the PR and list the skipped tasks in the result.',
+    'Do RED, GREEN and REFACTOR in this session, with one commit unless the card asks for more. Do every task that can be automated. A task that needs a person (manual, interactive, a real run with human approval) is skipped, never a reason to stop: finish all the others, publish the PR and list the skipped tasks in the result. Run the gates once, after the last task is committed, never before; they take minutes: wait until they finish, never interrupt them.',
   escalations: [
     'A decision the card does not record blocks every remaining task.',
     'A quality gate stays red and the fix is outside the card.',
