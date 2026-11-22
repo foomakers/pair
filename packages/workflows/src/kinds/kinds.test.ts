@@ -63,6 +63,13 @@ describe('readGateRegistry', () => {
     })
   })
 
+  it('ignores the Target column: the key still maps to its command', () => {
+    const text = table('| Order | Key | Gate | Command | Target |', [
+      '| 1 | gate-pr | PR | `pnpm gate:pr` | pr |',
+    ])
+    expect(readGateRegistry(text)).toEqual({ 'gate-pr': 'pnpm gate:pr' })
+  })
+
   it('reads the registry table only: not the prose around it, not the table of the next section', () => {
     const text = [
       '### Custom Gate Registry',

@@ -38,6 +38,7 @@ Executable form of the **`implement`** step. A **direct** invocation while a ste
 | Argument | Required | Description                                                                                                                                                                                                                             |
 | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$story` | No       | Story ID to implement, supplied by the invocation (e.g. `/pair-process-implement #256`). If omitted, detected from session context or the current branch (`feature/US-<id>-*`). This is the id the resume probe (Step 0.0) uses and the closing phase forwards to `/pair-capability-checkpoint` and `/pair-capability-publish-pr`. If it cannot be resolved when a checkpoint operation needs it → **HALT**. |
+| `$gates` | No       | `none` = run no quality gate of this skill's own (Step 2.7 and the closing `/pair-capability-publish-pr`): the caller runs them. Default: run them. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
 
@@ -225,8 +226,9 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 ### Step 2.7: Verify Quality
 
-1. **Act**: Compose `/pair-capability-verify-quality` with `$target: increment`, `$caller: implement` and `$scope` set to the packages the task touched — the gates of that target, never those of the pull request: they run once at closing, inside `/pair-capability-publish-pr` (Phase 1). Which command each target runs is the adoption's, never this skill's.
-2. **Verify**: All quality gates pass. A failure caused by this card's work (the task's own code, or a test of a task not yet implemented) is yours to fix: continue the cycle until green, never a stop. **HALT** only when the cause lies outside the card. A red test of a pending task is the RED phase, not a failed gate.
+1. **Skip**: `$gates: none` — the caller runs the gates; go to the commit step.
+2. **Act**: Compose `/pair-capability-verify-quality` with `$target: increment`, `$caller: implement` and `$scope` set to the packages the task touched — the gates of that target, never those of the pull request: they run once at closing, inside `/pair-capability-publish-pr` (Phase 1). Which command each target runs is the adoption's, never this skill's.
+3. **Verify**: All quality gates pass. A failure caused by this card's work (the task's own code, or a test of a task not yet implemented) is yours to fix: continue the cycle until green, never a stop. **HALT** only when the cause lies outside the card. A red test of a pending task is the RED phase, not a failed gate.
 
 ### Step 2.8: Task Completion
 
