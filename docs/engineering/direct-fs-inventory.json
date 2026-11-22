@@ -1,14 +1,14 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
-  "scanned": 1077,
-  "files": 402,
-  "distinctContents": 367,
+  "scanned": 1080,
+  "files": 405,
+  "distinctContents": 370,
   "dispositionCounts": {
-    "standalone-script": 15,
+    "standalone-script": 16,
     "os-guarantee": 25,
     "type-contract": 13,
     "in-flight-churn": 245,
-    "repo-contract": 103,
+    "repo-contract": 105,
     "boundary-adapter": 1
   },
   "limits": [
@@ -6987,6 +6987,63 @@
       "reason": "Standalone test runner discovers real files before package builds and falls back to native Node discovery.",
       "decision": "Exact-path exception for bootstrap test runner.",
       "testCategory": "real-filesystem-boundary"
+    },
+    {
+      "path": "packages/knowledge-hub/dataset/.skills/capability/workflow/scripts/workflow.mjs",
+      "hash": "a197dd6dbabfaac937c17c90446411ba25f38393062a0e5d2fc2a208b09fc5cc",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "standalone-script",
+      "producer": "packages/knowledge-hub/dataset/.skills/capability/workflow/scripts/workflow.mjs",
+      "sourceSymbols": ["existsSync", "readFileSync", "readdirSync", "realpathSync"],
+      "observedOperations": ["existsSync", "readFileSync", "readdirSync", "realpathSync"],
+      "operationConsumer": "existsSync/readFileSync/readdirSync/realpathSync to list and validate workflow files; consumed by the published skill",
+      "reason": "Published workflow skill helper invoked by Node without installing workspace packages",
+      "decision": "Retain direct fs inside the independently shipped Node script",
+      "testCategory": "installed-script-smoke"
+    },
+    {
+      "path": "packages/knowledge-hub/src/conformance/workflow-authoring.test.ts",
+      "hash": "8c54b77da827e8ae33f24c1cac3d2fa86aaded0f76c3b66e771af12a5fcdbb16",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "packages/knowledge-hub/src/conformance/workflow-authoring.test.ts",
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "see observedOperations",
+      "reason": "Assertions over real checked-in repository files and temp fixtures; an in-memory copy would only prove its own seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
+    },
+    {
+      "path": "packages/knowledge-hub/src/conformance/workflow-commands.test.ts",
+      "hash": "ae0d6b8e0c669ef49706848d82a9428c83355a08d79df5502325386677da0174",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "packages/knowledge-hub/src/conformance/workflow-commands.test.ts",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "writeFileSync"],
+      "operationConsumer": "see observedOperations",
+      "reason": "Assertions over real checked-in repository files and temp fixtures; an in-memory copy would only prove its own seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
     }
   ]
 }
