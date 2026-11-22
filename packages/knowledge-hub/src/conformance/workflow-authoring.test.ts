@@ -33,6 +33,9 @@ describe('workflow authoring (AC-1–8)', () => {
     expect(skill).toContain('named workflows and named configurations from the main checkout')
     expect(skill).toContain('non-Git directory, use the current directory')
     expect(skill).toContain('approved destination in the main checkout')
+    expect(skill).toContain('temporary linked worktree')
+    expect(skill).toContain('without `--config`')
+    expect(skill).toContain('path-selected configurations in the temporary worktree')
   })
   it('routes authoring and launching separately', () => {
     const assistant = read('plugin/skills/pair-assistant/SKILL.md')
