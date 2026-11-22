@@ -14,6 +14,8 @@ export interface StepKind {
   readonly outputs: JsonSchema
   /** The options the step accepts under `with`. */
   readonly with: JsonSchema
+  /** What the agent is told to do in an unattended run, besides the result block. */
+  readonly guidance?: string
   /** The documented cases in which the step returns `needs-human`. */
   readonly escalations: readonly string[]
   /**

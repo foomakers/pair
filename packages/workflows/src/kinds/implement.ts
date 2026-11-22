@@ -37,6 +37,8 @@ export const implement: StepKind = {
       },
     },
   },
+  guidance:
+    'Do RED, GREEN and REFACTOR in this session, with one commit unless the card asks for more.',
   escalations: [
     'A task is incomplete or needs a decision the card does not record.',
     'A quality gate stays red and the fix is outside the card.',
