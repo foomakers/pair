@@ -52,4 +52,12 @@ describe('the shipped quick workflow: what already holds (r0-2)', () => {
       formatting: 'pnpm format:check',
     })
   })
+
+  it('c6 no shipped workflow carries a command: gate (ADR-036)', () => {
+    const dir = '.pair/adoption/tech/workflows'
+    const files = fs.readdirSync(join(DATASET, dir)).map(f => join(dir, f.name))
+    const direct = files.filter(f => /^\s*-\s*['"]?command:/m.test(read(DATASET, f)))
+
+    expect(direct).toEqual([])
+  })
 })
