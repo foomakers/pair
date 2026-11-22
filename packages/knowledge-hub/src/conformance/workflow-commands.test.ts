@@ -40,13 +40,14 @@ describe('workflow authoring commands (AC-7)', () => {
   it('validates a shipped workflow with configuration and returns resolved settings (AC-5, AC-6)', () => {
     const root = resolve(__dirname, '../../../..')
     const base = resolve(root, 'packages/knowledge-hub/dataset/.pair/adoption/tech')
-    const result = run(
-      root,
+    const bin = mkdtempSync(join(tmpdir(), 'workflow-engines-'))
+    writeFileSync(join(bin, 'codex'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+    const result = spawnSync(process.execPath, [script,
       'validate',
       join(base, 'workflows/quick.yaml'),
       '--config',
       join(base, 'configurations/codex.yaml'),
-    )
+    ], { cwd: root, encoding: 'utf8', env: { ...process.env, PATH: `${bin}:/usr/bin:/bin` } })
     expect(result.status).toBe(0)
     const output = JSON.parse(result.stdout)
     expect(output.errors).toEqual([])
