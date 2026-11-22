@@ -163,6 +163,77 @@ describe('settings per step, printed with their source (AC-1)', () => {
   })
 })
 
+it.each(['darwin', 'linux'] as const)(
+  'dry run previews resolved steps on platform %s (darwin, linux; US-677 AC-6)',
+  async platform => {
+    const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { ...original, value: platform })
+    try {
+      write(
+        '.pair/adoption/tech/workflows/quick.yaml',
+        `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 1
+    on-max: escalate
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+  approve:
+    kind: approval
+    when: { has: [risk:red] }
+    with: { question: Ship it? }
+`,
+      )
+      writeConfig(
+        'mine',
+        'version: 1\nname: mine\ndefaults: { engine: codex, model: gpt-5, effort: high }\n',
+      )
+      expect(await run(['quick'], OK, { config: 'mine', dryRun: true })).toBe(0)
+      const output = lines.join('\n')
+      expect(output).toContain('rounds: loop host on-max=escalate (human escalation)')
+      expect(output).toContain('approve: approval host')
+      expect(output.split('\n').find(line => line.includes('approve: approval'))).not.toContain(
+        'engine=',
+      )
+      expect(output).toContain('rounds/review')
+      expect(output).toContain('pair-process-review')
+      expect(output).toContain('engine=codex')
+      expect(output).toContain('model=gpt-5')
+      expect(output).toContain('risk:red')
+      expect(output).toContain('Ship it?')
+      expect(launched).toEqual([])
+    } finally {
+      Object.defineProperty(process, 'platform', original)
+    }
+  },
+)
+
+it('dry run distinguishes loop failure from escalation (US-677 AC-6)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 1
+    on-max: fail
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+`,
+  )
+  expect(await run(['quick'], OK, { dryRun: true })).toBe(0)
+  expect(lines.join('\n')).toContain('rounds: loop host on-max=fail (fails)')
+})
+
 describe('loop blocks (#670)', () => {
   it('resolves settings per inner step; the loop has no kind of its own', async () => {
     write(

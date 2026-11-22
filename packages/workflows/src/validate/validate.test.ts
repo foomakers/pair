@@ -72,6 +72,11 @@ steps:
   })
 
   it.each([
+    [
+      'loop gates',
+      loop.replace('    max: 2', '    gates: [quality-gate]\n    max: 2'),
+      'gates is not allowed on a loop',
+    ],
     ['missing max', loop.replace('    max: 2\n', ''), "missing key 'max'"],
     ['missing on-max', loop.replace('    on-max: escalate\n', ''), "missing key 'on-max'"],
     [

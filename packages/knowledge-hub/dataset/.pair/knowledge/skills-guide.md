@@ -15,10 +15,10 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 11 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 35 | Atomic units — perform a single focused operation |
+| **Capability** | 36 | Atomic units — perform a single focused operation |
 | **Workflow** | 7 | Delivery stages — dispatched by the batch engine, one mutation boundary each |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 55 (11 process + 35 capability + 7 workflow + 2 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 56 (11 process + 36 capability + 7 workflow + 2 navigator).
 
 ## Full Catalog
 
@@ -42,7 +42,13 @@ Process skills compose capability skills. Capability skills are independently in
 >
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (35)
+### Capability Skills (36)
+
+#### Workflow Authoring (1)
+
+| Skill | Scope |
+|-------|-------|
+| `/workflow` | Create, configure and explain workflows from the validating grammar |
 
 #### Domain Modeling Skills (2)
 

@@ -1,0 +1,16 @@
+---
+title: Create a workflow
+description: Describe, configure and explain workflows with pair.
+---
+
+## Steps
+
+Ask `/pair-capability-workflow` to create a workflow from a description. It discovers the current grammar and available files, proposes YAML and explains it in words. For example, ask for a variant of `quick` that omits the fix step. The skill validates a temporary copy and asks before saving it.
+
+Use `configure` to choose engines and models for a workflow and update its configuration mapping. Use `explain` to see each step, its skill, engine and model, and human approval points.
+
+## Verify
+
+The skill uses installed skills only. It explains requests the grammar cannot express and describes the nearest alternative. It shows warnings and diffs before asking for approval, never writes invalid files, and creates project overrides instead of editing shipped files.
+
+The interactive Matt Pocock worked example is planned after merge in #702.

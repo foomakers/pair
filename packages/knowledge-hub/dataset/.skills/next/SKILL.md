@@ -7,7 +7,7 @@ author: Foomakers
 
 # /next — Project Navigator
 
-Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 55-skill catalog across all lifecycle phases.
+Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 56-skill catalog across all lifecycle phases.
 
 ## Arguments (optional)
 
@@ -53,9 +53,9 @@ A **macro-phase mode** runs one branch of the process end to end behind a single
 
 The scope is **stateless across steps**. Every run — and every step of a mode session — re-queries the PM tool and **re-evaluates** `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (e.g. a review raises `risk:yellow` → `risk:red`), the next step's selection reflects the change immediately. `/next` never reuses a selection computed in a previous step.
 
-## Skill Catalog (55 skills)
+## Skill Catalog (56 skills)
 
-The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 11 process + 35 capability + 7 workflow + `/next` and `/loop` (the two bare, uncategorized navigator skills) = 54. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
+The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 11 process + 36 capability + 7 workflow + `/next` and `/loop` (the two bare, uncategorized navigator skills) = 56. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
 
 ### Process Skills (11)
 
@@ -106,6 +106,7 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/analyze-delivery-metrics` | Analysis     | Delivery/AI metrics for a period (bug resolution, PR lead time, adoption) → one period panel |
 | `/analyze-test-speed`    | Analysis        | Test/pre-push speed report: bottlenecks, causes, gains |
 | `/analyze-test-prune`    | Analysis        | Test prune candidates report (mutation in a disposable worktree) |
+| `/workflow` | Authoring | Create, configure and explain workflows from the validating grammar |
 | `/analyze-workflow-runs` | Analysis        | Cost, time, passes, comparison and trend of workflow runs, from their telemetry |
 | `/estimate`              | Planning        | Estimate story using adopted methodology                                     |
 | `/setup-gates`           | Configuration   | Configure CI/CD quality gates                                                |
@@ -385,4 +386,4 @@ See [graceful degradation](../../.pair/knowledge/guidelines/technical-standards/
 - Plain `/next` (without `--mode`) is read-only: it inspects state but never modifies files, PM tool data, or code-host data. With `--mode` it still writes nothing itself — the granular skills it invokes do, exactly as when invoked directly.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: nearly all of the 55 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/checkpoint`, rows 12-16 including `/grill`) or process-skill composition. `/publish-pr` will be reachable via `/implement` once wired (not yet composed), so `/next` cannot surface it today. `/brainstorm` is a human-initiated discovery entry point — it opens a theme the backlog does not yet contain, which no board-state condition can detect — so it is catalogued here but never suggested by the cascade. `/analyze-delivery-metrics` is the same shape for the same reason: a retro/period report is wanted on a cadence the board does not express, so it is catalogued and reachable on demand, never cascade-suggested.
+- **Full catalog coverage**: nearly all of the 56 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/checkpoint`, rows 12-16 including `/grill`) or process-skill composition. `/publish-pr` will be reachable via `/implement` once wired (not yet composed), so `/next` cannot surface it today. `/brainstorm` is a human-initiated discovery entry point — it opens a theme the backlog does not yet contain, which no board-state condition can detect — so it is catalogued here but never suggested by the cascade. `/analyze-delivery-metrics` is the same shape for the same reason: a retro/period report is wanted on a cadence the board does not express, so it is catalogued and reachable on demand, never cascade-suggested.

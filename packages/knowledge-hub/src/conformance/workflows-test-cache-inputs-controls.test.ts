@@ -14,6 +14,8 @@ const ROOT = join(__dirname, '../../../..')
 const PACKAGE_DIR = 'packages/workflows'
 const PAGE =
   'packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md'
+const SCHEMA_PAGE =
+  'packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-schema.md'
 const TEST_TASKS = ['@pair/workflows#test', '@pair/workflows#test:coverage']
 const GUARD_TASKS = ['@pair/knowledge-hub#test', '@pair/knowledge-hub#test:coverage']
 
@@ -128,6 +130,7 @@ describe('the @pair/workflows test tasks keep what they had (r0-5 controls)', ()
       // Rows of the table boundary.test.ts feeds its own predicate: strings, never imported.
       'boundary.test.ts: apps/pair-cli/src/commands/run/engines',
       'boundary.test.ts: knowledge-hub/dataset/x.md',
+      `describe/reference.test.ts: ${SCHEMA_PAGE}`,
       `kinds/reference.test.ts: ${PAGE}`,
     ])
   })

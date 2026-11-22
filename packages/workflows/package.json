@@ -23,7 +23,8 @@
     "lint:fix": "lint-fix",
     "mdlint:check": "markdownlint-check",
     "mdlint:fix": "markdownlint-fix",
-    "kinds:reference": "ts-node -T src/kinds/reference-cli.ts > ../knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md"
+    "kinds:reference": "ts-node -T src/kinds/reference-cli.ts > ../knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md",
+    "schema:reference": "ts-node -T src/describe/reference-cli.ts > ../knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-schema.md"
   },
   "dependencies": {
     "yaml": "catalog:"

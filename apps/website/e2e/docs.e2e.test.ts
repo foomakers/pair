@@ -928,6 +928,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/guides/card-states',
     '/docs/guides/classify-risk',
     '/docs/guides/configure-harness',
+    '/docs/guides/create-workflow',
     '/docs/guides/customize-for-your-team',
     '/docs/guides/customize-templates',
     '/docs/guides/deliver-a-card',

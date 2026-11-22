@@ -5,6 +5,7 @@ import {
   checkAgainstEngines,
   describeSettings,
   formatError,
+  kindByName,
   addressedSteps,
   frozenConfiguration,
   parseFrozenConfiguration,
@@ -708,6 +709,31 @@ async function preflight(resolved: Resolved, card: string, services: Services): 
   return read.title
 }
 
+function approvalQuestion(step: ReturnType<typeof addressedSteps>[number]): string {
+  return step.kind === 'approval'
+    ? ` question=${JSON.stringify(step.with?.['question'] ?? '(approval required)')}`
+    : ''
+}
+
+function dryRunExecution(
+  resolved: Resolved,
+  step: ReturnType<typeof addressedSteps>[number],
+): string {
+  const host = step.kind === 'loop' || kindByName[step.kind].host === true
+  const settings = host
+    ? undefined
+    : stepSettings(resolved, resolved.configuration?.configuration, step)
+  return settings
+    ? ` engine=${settings.engine} model=${settings.model ?? '(engine default)'}${settings.effort ? ` effort=${settings.effort}` : ''}`
+    : ' host'
+}
+
+function dryRunExhaustion(step: ReturnType<typeof addressedSteps>[number]): string {
+  return step.kind === 'loop'
+    ? ` on-max=${step['on-max']}${step['on-max'] === 'escalate' ? ' (human escalation)' : ' (fails)'}`
+    : ''
+}
+
 export async function handleWorkflowRun(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
@@ -718,6 +744,13 @@ export async function handleWorkflowRun(
   if (resolved === undefined) return 1
   printPlan(resolved.workflow)
   if (config.dryRun) {
+    addressedSteps(resolved.workflow).forEach(step => {
+      const host = step.kind === 'loop' || kindByName[step.kind].host === true
+      const skill = host ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
+      console.log(
+        `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''}${dryRunExecution(resolved, step)}${dryRunExhaustion(step)}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${approvalQuestion(step)}`,
+      )
+    })
     console.log('  Dry run: the workflow is valid; nothing was launched.')
     return 0
   }

@@ -119,7 +119,7 @@
 - `$BASE_URL/docs/support/general-faq`
 - `$BASE_URL/docs/support/troubleshooting`
 
-**Guides** (21 pages):
+**Guides** (22 pages):
 
 - `$BASE_URL/docs/guides`
 - `$BASE_URL/docs/guides/adopt-existing-repo`
@@ -132,6 +132,7 @@
 - `$BASE_URL/docs/guides/customize-templates`
 - `$BASE_URL/docs/guides/deliver-a-card`
 - `$BASE_URL/docs/guides/deliver-many-cards`
+- `$BASE_URL/docs/guides/create-workflow`
 - `$BASE_URL/docs/guides/delivery-metrics`
 - `$BASE_URL/docs/guides/external-kb`
 - `$BASE_URL/docs/guides/hooks-and-severities`
@@ -169,13 +170,13 @@
 
 ### Expected Result
 
-- All 114 URLs return HTTP 200
+- All 115 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 114 pages
+- Total: 115 pages
 
 ---
 

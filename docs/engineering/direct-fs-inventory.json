@@ -1,14 +1,14 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
-  "scanned": 1077,
-  "files": 402,
-  "distinctContents": 367,
+  "scanned": 1078,
+  "files": 403,
+  "distinctContents": 368,
   "dispositionCounts": {
     "standalone-script": 15,
     "os-guarantee": 25,
     "type-contract": 13,
     "in-flight-churn": 245,
-    "repo-contract": 103,
+    "repo-contract": 104,
     "boundary-adapter": 1
   },
   "limits": [
@@ -6987,6 +6987,25 @@
       "reason": "Standalone test runner discovers real files before package builds and falls back to native Node discovery.",
       "decision": "Exact-path exception for bootstrap test runner.",
       "testCategory": "real-filesystem-boundary"
+    },
+    {
+      "path": "packages/knowledge-hub/src/conformance/workflow-authoring.test.ts",
+      "hash": "3e3b5b6a215b6183be3cd4ec16fb032a8b7ad8cd58c572b19324b54a203ac774",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "repo-contract",
+      "producer": "packages/knowledge-hub/src/conformance/workflow-authoring.test.ts",
+      "sourceSymbols": ["readFileSync"],
+      "observedOperations": ["readFileSync"],
+      "operationConsumer": "see observedOperations",
+      "reason": "Assertions over real checked-in repository files and temp fixtures; an in-memory copy would only prove its own seed.",
+      "decision": "Exact-path exception; no migration.",
+      "testCategory": "repo-file-contract"
     }
   ]
 }
