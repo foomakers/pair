@@ -68,7 +68,8 @@
       "outputs": [],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md"
+        "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md",
+        "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-schema.md"
       ]
     },
     // #518: regenerate-mirrors.test.ts runs the script over the BUILT pair CLI and never builds
@@ -92,7 +93,8 @@
       "outputs": ["coverage/**"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md"
+        "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md",
+        "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-schema.md"
       ]
     },
     "@pair/knowledge-hub#test:coverage": {
