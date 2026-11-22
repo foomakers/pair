@@ -28,6 +28,12 @@ describe('workflow authoring (AC-1–8)', () => {
     expect(skill).toMatch(/never write.*invalid/i)
     expect(skill).toMatch(/engine.*model/i)
   })
+  it('stages the launcher lookup roots and destination (AC-1, AC-5, AC-7)', () => {
+    const skill = read('.skills/capability/workflow/SKILL.md')
+    expect(skill).toContain('named workflows and named configurations from the main checkout')
+    expect(skill).toContain('non-Git directory, use the current directory')
+    expect(skill).toContain('approved destination in the main checkout')
+  })
   it('routes authoring and launching separately', () => {
     const assistant = read('plugin/skills/pair-assistant/SKILL.md')
     expect(assistant).toMatch(/\|[^\n]*create[^\n]*workflow[^\n]*\|[^\n]*pair-capability-workflow/i)
