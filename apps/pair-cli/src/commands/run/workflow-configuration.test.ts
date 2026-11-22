@@ -190,6 +190,9 @@ steps:
   )
   expect(await run(['quick'], OK, { config: 'mine', dryRun: true })).toBe(0)
   const output = lines.join('\n')
+  expect(output).toContain('rounds: loop host on-max=escalate (human escalation)')
+  expect(output).toContain('approve: approval host')
+  expect(output.split('\n').find(line => line.includes('approve: approval'))).not.toContain('engine=')
   expect(output).toContain('rounds/review')
   expect(output).toContain('pair-process-review')
   expect(output).toContain('engine=codex')
@@ -197,6 +200,23 @@ steps:
   expect(output).toContain('risk:red')
   expect(output).toContain('Ship it?')
   expect(launched).toEqual([])
+})
+
+it('dry run distinguishes loop failure from escalation (US-677 AC-6)', async () => {
+  write('.pair/adoption/tech/workflows/quick.yaml', `version: 1
+name: quick
+steps:
+  rounds:
+    kind: loop
+    until: review
+    max: 1
+    on-max: fail
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+`)
+  expect(await run(['quick'], OK, { dryRun: true })).toBe(0)
+  expect(lines.join('\n')).toContain('rounds: loop host on-max=fail (fails)')
 })
 
 describe('loop blocks (#670)', () => {
