@@ -19,7 +19,7 @@ If `pair-cli` is unavailable, propose installing pair-cli and stop validation un
 
 ## Validate
 
-Validate in an isolated temporary project: copy the project's relevant adoption files, configuration, installed skill references and `pair.config.json` there, place the proposed workflow under `.pair/adoption/tech/workflows/<workflow>.yaml`, and use that project as the working directory. Run:
+Validate in an isolated temporary project outside any Git repository. Resolve the launcher’s main checkout: use the current checkout if it is the main checkout; in a linked worktree use `git config --path --get pair.mainCheckout` when set, otherwise the parent of `git rev-parse --path-format=absolute --git-common-dir`. Verify it is the main checkout; if resolution fails, stop. Copy the main checkout `.pair/adoption/tech/way-of-working.md` into the temporary project (including its absence), so gate keys and targets match. Copy the current directory project’s other relevant adoption files, configuration, installed skill references and `pair.config.json` there, preserving paths and relative references; do not overwrite the main checkout registry. Place the proposed workflow under `.pair/adoption/tech/workflows/<workflow>.yaml`, and use that project as the working directory. Run:
 
 ```sh
 pair-cli run <workflow> --card 1 --dry-run
