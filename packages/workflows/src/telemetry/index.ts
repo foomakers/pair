@@ -14,7 +14,7 @@ import type { StepStatus } from '../kinds'
 export { TELEMETRY_FILE }
 
 /** The version of the record format of a run's `telemetry.jsonl` (ADR-033). A change of shape raises it. */
-export const TELEMETRY_SCHEMA = 1
+export const TELEMETRY_SCHEMA = 2
 
 /** Where a number comes from. Never a number without its origin. */
 export type TokenSource = 'measured' | 'estimated' | 'unknown'
@@ -78,6 +78,7 @@ export interface StepTelemetry extends RunIdentity {
   readonly reason?: string
   /** The execution number of this step in the run. */
   readonly attempt: number
+  readonly round?: number
 }
 
 /** A sum of entries: an estimate when any summed entry is one. */
@@ -99,7 +100,7 @@ export interface RunTelemetry extends RunIdentity {
 
 /** What a host knows about one execution of a step. */
 export interface StepExecution {
-  readonly step: Pick<StepLaunch, 'id' | 'kind' | 'uses' | 'attempt'>
+  readonly step: Pick<StepLaunch, 'id' | 'kind' | 'uses' | 'attempt' | 'round'>
   readonly host: TelemetryHost
   /** The engine, model and effort actually used. */
   readonly settings: {
@@ -153,6 +154,7 @@ export async function recordStep(run: RunDirectory, execution: StepExecution): P
     status: execution.status,
     ...(reason !== undefined && { reason }),
     attempt: step.attempt,
+    ...(step.round !== undefined && { round: step.round }),
   }
   await write(run, [...steps, record])
 }

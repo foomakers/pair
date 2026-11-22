@@ -38,6 +38,48 @@ const facts = (over: Partial<EngineFacts> = {}): EngineFacts => ({
   ...over,
 })
 
+describe('loop max override (#670 AC-8)', () => {
+  const text = `${BASE}  rounds: { max: 5 }\n`
+  it('accepts max for a loop id', () => {
+    const configuration = parsed(text)
+    expect(
+      checkAgainstEngines(configuration, {
+        file: FILE,
+        facts: facts(),
+        steps: [{ id: 'rounds', kind: 'loop' }],
+        aliases: DECLARED,
+      }).errors,
+    ).toEqual([])
+  })
+
+  it('refuses max for an ordinary step and other options for a loop', () => {
+    const configuration = parsed(text)
+    expect(
+      checkAgainstEngines(configuration, {
+        file: FILE,
+        facts: facts(),
+        steps: [{ id: 'rounds', kind: 'review' }],
+      }).errors.map(e => e.problem),
+    ).toContain('max is only allowed for a loop id')
+    const other = parsed(`${BASE}  rounds: { max: 5, model: codex-x }\n`)
+    expect(
+      checkAgainstEngines(other, {
+        file: FILE,
+        facts: facts(),
+        steps: [{ id: 'rounds', kind: 'loop' }],
+      }).errors.map(e => e.problem),
+    ).toContain("only max can be overridden for loop 'rounds'")
+  })
+
+  it('refuses another loop key in configuration', () => {
+    expect(
+      parseConfiguration(`${BASE}  rounds: { until: review }\n`, FILE).errors.some(e =>
+        e.problem.includes("unknown key 'until'"),
+      ),
+    ).toBe(true)
+  })
+})
+
 describe('settings of a step (AC-1)', () => {
   const c = parsed()
   it.each([

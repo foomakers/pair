@@ -826,6 +826,7 @@ pair-cli run [workflow] [options]
 | `--config <name\|file>`         | With a workflow name: the configuration (engine, model, effort per step). Else `pair.config.json` `workflows.<workflow>.configuration`, then `workflows.default.configuration`, then the engine default |
 | `--config-override <json>`      | With a workflow name: a JSON object deep-merged over the configuration, validated and recorded in the run |
 | `--reconfigure`                 | With a workflow name and `--config` and/or `--config-override`: replace the run's frozen configuration; steps already `ok` are not run again |
+| `--more-rounds <n>`             | With a workflow name: grant n further rounds to a loop parked at `max`; the run resumes in that loop |
 | `--engine <id>`                 | Engine to drive: `pi`, `opencode`, `claude` or `codex`. Precedence: flag > `pair.config.json` > schema default |
 | `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back: a missing skill is an error                     |
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
@@ -1006,7 +1007,7 @@ pair-cli run quick --card 627
 | Card not found or closed        | Refused before any launch                                                         |
 
 With a workflow name the command takes `--card`, `--engine`, `--config`, `--config-override`,
-`--reconfigure`, `--run-id`, `--restart`, `--dry-run`,
+`--reconfigure`, `--more-rounds`, `--run-id`, `--restart`, `--dry-run`,
 `--cwd`, `--autonomous`, `--approve-project-trust`, `--telemetry` / `--no-telemetry`, the timeouts
 and the output flags. `--profile`
 and `--workflow-config` are refused: a workflow run is configured with `--config`. The flags of the

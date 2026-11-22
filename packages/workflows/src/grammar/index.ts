@@ -11,9 +11,10 @@ export type CardState = (typeof CARD_STATES)[number]
 
 /** The card state a step sets, and when: Ready and Done as the step ends `ok`, the others as it starts. */
 export function cardStateOf(step: {
-  readonly kind: KindName
+  readonly kind: KindName | 'loop'
   readonly state?: CardState | 'none'
 }): { readonly state: CardState; readonly when: 'start' | 'end' } | undefined {
+  // A loop has no kind of its own: its inner steps set the state.
   const state =
     step.state ??
     ({ implement: 'In Progress', fix: 'In Progress', review: 'Review' } as const)[
@@ -43,12 +44,12 @@ export const entrySchema: JsonSchema = {
   properties: { engine: text, model: text, effort: text },
 }
 
-const stepSchema: JsonSchema = {
+export const stepSchema: JsonSchema = {
   type: 'object',
   required: ['kind'],
   additionalProperties: false,
   properties: {
-    kind: { enum: KIND_NAMES, description: 'What the step does and what it returns.' },
+    kind: { enum: [...KIND_NAMES, 'loop'], description: 'What the step does and what it returns.' },
     skill: {
       type: 'string',
       pattern: SKILL_NAME,
@@ -69,6 +70,15 @@ const stepSchema: JsonSchema = {
       enum: [...CARD_STATES, 'none'],
       description:
         "The card's board state the host sets for the step (a macrostate), or `none`; overrides the kind's default.",
+    },
+    until: { type: 'string', pattern: STEP_ID },
+    max: { type: 'integer', minimum: 1 },
+    'on-max': { enum: ['escalate', 'fail'] },
+    steps: {
+      type: 'object',
+      minProperties: 1,
+      propertyNames: { pattern: STEP_ID },
+      additionalProperties: {},
     },
   },
 }
@@ -110,7 +120,7 @@ export interface WorkflowError {
 
 export interface Step {
   readonly id: string
-  readonly kind: KindName
+  readonly kind: KindName | 'loop'
   readonly skill?: string
   /** Reserved for including a workflow (#699); the validator refuses it as a skill name. */
   readonly uses?: string
@@ -120,6 +130,10 @@ export interface Step {
   readonly alias?: string
   /** The card's board state the host sets for the step; `none` sets nothing. */
   readonly state?: CardState | 'none'
+  readonly until?: string
+  readonly max?: number
+  readonly 'on-max'?: 'escalate' | 'fail'
+  readonly steps?: readonly Step[]
 }
 
 export interface Workflow {
@@ -134,6 +148,13 @@ export interface Workflow {
   /** Line of every key and list item, by JSON-encoded path. Read through `errorAt`. */
   readonly lines: Readonly<Record<string, number>>
 }
+
+/** Loop children have run-wide ids; the loop itself stays addressable for configuration. */
+export const addressedSteps = (workflow: Workflow): readonly Step[] =>
+  workflow.steps.flatMap(step => [
+    step,
+    ...(step.steps ?? []).map(child => ({ ...child, id: `${step.id}/${child.id}` })),
+  ])
 
 export type ParsedWorkflow =
   | { readonly workflow: Workflow; readonly errors: readonly [] }
@@ -237,7 +258,16 @@ export function nameError(
   ]
 }
 
-type RawStep = Omit<Step, 'id'>
+type RawStep = Omit<Step, 'id' | 'steps'> & { steps?: Record<string, RawStep> }
+
+const parseStep = ([id, raw]: [string, RawStep]): Step => {
+  const { steps, ...rest } = raw
+  return {
+    ...rest,
+    id,
+    ...(steps !== undefined && { steps: Object.entries(steps).map(parseStep) }),
+  }
+}
 
 /** A YAML source read under the package's strict rules: its value and the line of every key, or the syntax errors. */
 export type StrictSource =
@@ -270,20 +300,33 @@ export function parseWorkflow(text: string, file: string): ParsedWorkflow {
       errorAt({ file, lines }, found.path, found),
     ),
     ...nameError(value, file, lines),
+    ...Object.entries(value?.steps ?? {}).flatMap(([id, step]) =>
+      Object.entries(step?.steps ?? {}).flatMap(([childId, child]) =>
+        violations(stepSchema, child).map(found =>
+          errorAt({ file, lines }, ['steps', id, 'steps', childId, ...found.path], found),
+        ),
+      ),
+    ),
   ]
   if (errors.length > 0) return { errors }
   const undeclared = Object.entries(value.steps)
+    .flatMap(([id, step]) => [
+      [['steps', id], step] as const,
+      ...Object.entries(step.steps ?? {}).map(
+        ([childId, child]) => [['steps', id, 'steps', childId], child] as const,
+      ),
+    ])
     .filter(
       ([, step]) => step.alias !== undefined && !Object.hasOwn(value.aliases ?? {}, step.alias),
     )
-    .map(([id, step]) =>
-      errorAt({ file, lines }, ['steps', id, 'alias'], {
+    .map(([path, step]) =>
+      errorAt({ file, lines }, [...path, 'alias'], {
         problem: `alias '${String(step.alias)}' is not declared in aliases`,
         fix: `declare ${String(step.alias)} under aliases, or cite a declared alias`,
       }),
     )
   if (undeclared.length > 0) return { errors: undeclared }
 
-  const steps = Object.entries(value.steps).map(([id, step]) => ({ id, ...step }))
+  const steps = Object.entries(value.steps).map(parseStep)
   return { workflow: { ...value, steps, file, lines }, errors: [] }
 }

@@ -24,6 +24,83 @@ steps:
 const check = (text: string, over: Partial<ValidationDeps> = {}) =>
   validate(text, 'quick.yaml', { ...deps, ...over })
 
+describe('loop validation (#670 AC-7)', () => {
+  const loop = `version: 1
+name: quick
+steps:
+  rounds:
+    kind: loop
+    until: review
+    max: 2
+    on-max: escalate
+    steps:
+      review: { kind: generic, skill: my-skill }
+      fix: { kind: generic, skill: my-skill }
+`
+
+  it('does not expose outputs of children skipped on loop exit (#670-loop-outputs)', () => {
+    const text = `version: 1
+name: quick
+steps:
+  rounds:
+    kind: loop
+    until: first
+    max: 2
+    on-max: escalate
+    steps:
+      first: { kind: generic, skill: my-skill }
+      review: { kind: review }
+  fix: { kind: fix }
+`
+    const errors = check(text, { launchInputs: ['card', 'pr', 'head'] }).errors
+    expect(errors.some(error => error.problem.includes("input 'findings'"))).toBe(true)
+  })
+
+  it.each([
+    ['review:', 'steps.rounds.steps.review'],
+    ['review: { kind: typo }', 'steps.rounds.steps.review.kind'],
+  ])('diagnoses malformed child %s (#670-child-validation)', (child, key) => {
+    const result = check(loop.replace('review: { kind: generic, skill: my-skill }', child))
+    expect(
+      result.errors.some(
+        error => error.file === 'quick.yaml' && error.line > 0 && error.key === key,
+      ),
+    ).toBe(true)
+  })
+
+  it('accepts a bounded loop', () => {
+    expect(check(loop).errors).toEqual([])
+  })
+
+  it.each([
+    ['missing max', loop.replace('    max: 2\n', ''), "missing key 'max'"],
+    ['missing on-max', loop.replace('    on-max: escalate\n', ''), "missing key 'on-max'"],
+    [
+      'unknown until',
+      loop.replace('until: review', 'until: absent'),
+      "unknown until step 'absent'",
+    ],
+    [
+      'on-failed child',
+      loop.replace(
+        'review: { kind: generic, skill: my-skill }',
+        'review: { kind: generic, skill: my-skill, on-failed: continue }',
+      ),
+      'on-failed is not allowed inside a loop',
+    ],
+    [
+      'nested loop',
+      loop.replace(
+        'fix: { kind: generic, skill: my-skill }',
+        'fix: { kind: loop, until: a, max: 1, on-max: fail, steps: { a: { kind: generic, skill: my-skill } } }',
+      ),
+      'nested loop is not allowed',
+    ],
+  ])('refuses %s', (_name, text, problem) => {
+    expect(check(text).errors.some(error => error.problem === problem)).toBe(true)
+  })
+})
+
 describe('validate (AC-3, AC-5)', () => {
   it('accepts a coherent workflow', () => {
     const { workflow, errors, warnings } = check(QUICK)

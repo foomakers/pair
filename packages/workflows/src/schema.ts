@@ -14,6 +14,7 @@ export interface JsonSchema {
   readonly additionalProperties?: boolean | JsonSchema
   readonly propertyNames?: { readonly pattern: string }
   readonly minProperties?: number
+  readonly minimum?: number
   readonly items?: JsonSchema
 }
 
@@ -34,33 +35,48 @@ function typeOf(value: unknown): string {
   return Number.isInteger(value) ? 'integer' : typeof value
 }
 
+type Scalar = (schema: JsonSchema, value: unknown) => { problem: string; fix: string } | undefined
+
+const SCALAR_CHECKS: readonly Scalar[] = [
+  (schema, value) =>
+    schema.type !== undefined && typeOf(value) !== schema.type
+      ? {
+          problem: `expected ${schema.type}, found ${value === null ? 'null' : `${typeOf(value)} ${show(value)}`}`,
+          fix: `write a value of type ${schema.type}`,
+        }
+      : undefined,
+  (schema, value) =>
+    'const' in schema && value !== schema.const
+      ? { problem: `unknown value ${show(value)}`, fix: `use ${show(schema.const)}` }
+      : undefined,
+  (schema, value) =>
+    schema.enum !== undefined && !schema.enum.includes(value)
+      ? {
+          problem: `unknown value ${show(value)}`,
+          fix: `use one of ${schema.enum.map(show).join(', ')}`,
+        }
+      : undefined,
+  (schema, value) =>
+    schema.pattern !== undefined && !new RegExp(schema.pattern).test(String(value))
+      ? {
+          problem: `${show(value)} does not match ${schema.pattern}`,
+          fix: `write a value matching ${schema.pattern}`,
+        }
+      : undefined,
+  (schema, value) =>
+    schema.minimum !== undefined && typeof value === 'number' && value < schema.minimum
+      ? {
+          problem: `${show(value)} is below ${schema.minimum}`,
+          fix: `use at least ${schema.minimum}`,
+        }
+      : undefined,
+]
+
 function scalarViolations(schema: JsonSchema, value: unknown, path: Path): Violation[] {
-  if (schema.type !== undefined && typeOf(value) !== schema.type)
-    return [
-      {
-        path,
-        problem: `expected ${schema.type}, found ${value === null ? 'null' : `${typeOf(value)} ${show(value)}`}`,
-        fix: `write a value of type ${schema.type}`,
-      },
-    ]
-  if ('const' in schema && value !== schema.const)
-    return [{ path, problem: `unknown value ${show(value)}`, fix: `use ${show(schema.const)}` }]
-  if (schema.enum !== undefined && !schema.enum.includes(value))
-    return [
-      {
-        path,
-        problem: `unknown value ${show(value)}`,
-        fix: `use one of ${schema.enum.map(show).join(', ')}`,
-      },
-    ]
-  if (schema.pattern !== undefined && !new RegExp(schema.pattern).test(String(value)))
-    return [
-      {
-        path,
-        problem: `${show(value)} does not match ${schema.pattern}`,
-        fix: `write a value matching ${schema.pattern}`,
-      },
-    ]
+  for (const check of SCALAR_CHECKS) {
+    const found = check(schema, value)
+    if (found) return [{ path, ...found }]
+  }
   return []
 }
 

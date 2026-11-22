@@ -41,13 +41,31 @@ Each step:
 
 | Key    | Required                     | Meaning                                                                         |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------- |
-| `kind` | Yes                          | `implement`, `review`, `fix` or `generic`.                                           |
+| `kind` | Yes                          | `implement`, `review`, `fix`, `generic` or `loop`. |
 | `skill` | Only for `generic`          | The skill that runs. A typed kind has a default skill; `skill` replaces it.     |
 | `with` | No                           | Options of the step. The kind declares the keys it accepts.                     |
 | `on-failed` | No                      | `stop` (default) or `continue`: what a `failed` step does to the run.           |
 | `alias` | No                          | One of `aliases`: the settings the step runs with. A step citing an undeclared alias is an error. |
 
 A step id starts with a lower-case letter and continues with lower-case letters, digits and hyphens: it names a directory of the run.
+
+### Loop
+
+```yaml
+steps:
+  rounds:
+    kind: loop
+    until: review
+    max: 3
+    on-max: escalate
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+```
+
+`until` names a child step. `max` is a positive number of rounds started. `on-max` is `escalate` (park with the last `until` output) or `fail`. All three keys and a non-empty `steps` map are required. Child ids are addressed as `rounds/review` and `rounds/fix`.
+
+An `ok` result from `until` exits immediately, skipping later steps. A failed `until` lets later steps receive its outputs. A failed other step ends the round. `needs-human` parks at the same step and round. On an exhausted escalation, a plain relaunch does nothing; `--more-rounds <n>` grants and records further rounds. Nested loops and `on-failed` inside a loop are errors. Each child result is saved under `steps/<loop>/<child>/round-<n>/result.json`.
 
 ## Rules
 
@@ -57,10 +75,10 @@ A step id starts with a lower-case letter and continues with lower-case letters,
 - Every error names the file, the line, the key and the fix:
 
 ```text
-quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic"
+quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic", "loop"
 ```
 
-Not in version 1: `context`, `interactive`, `prompt`, `loop`, `gate`, `approval`, `merge`, `when`, and a step that uses another workflow.
+Not in version 1: `context`, `interactive`, `prompt`, `gate`, `approval`, `merge`, `when`, and a step that uses another workflow.
 
 ## Validation
 

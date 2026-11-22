@@ -9,7 +9,7 @@ export interface Configuration {
   readonly name: string
   readonly defaults: Entry & { readonly engine: string }
   readonly aliases?: Readonly<Record<string, Entry>>
-  readonly steps?: Readonly<Record<string, Entry>>
+  readonly steps?: Readonly<Record<string, Entry & { readonly max?: number }>>
   /** Switches the run's telemetry on or off; a flag overrides it. */
   readonly telemetry?: boolean
 }
@@ -23,7 +23,13 @@ export const configurationSchemaV1: JsonSchema = {
     name: { type: 'string', description: 'Equals the file name without its extension.' },
     defaults: { ...entry, required: ['engine'] },
     aliases: { type: 'object', propertyNames: { pattern: STEP_ID }, additionalProperties: entry },
-    steps: { type: 'object', additionalProperties: entry },
+    steps: {
+      type: 'object',
+      additionalProperties: {
+        ...entry,
+        properties: { ...entry.properties, max: { type: 'integer', minimum: 1 } },
+      },
+    },
     telemetry: { type: 'boolean' },
   },
 }

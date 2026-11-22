@@ -54,6 +54,7 @@
 - [ADR-032: Step kinds, contracts and result collection](.pair/adoption/tech/adr/adr-032-step-kinds-contracts-and-result-collection.md)
 - [ADR-033: One telemetry file per workflow run](.pair/adoption/tech/adr/adr-033-workflow-run-telemetry-file.md)
 - [ADR-034: Workflow configuration: files, model ids, replace not merge](.pair/adoption/tech/adr/adr-034-workflow-configuration-files.md)
+- [ADR-035: Bounded workflow loops](.pair/adoption/tech/adr/adr-035-bounded-workflow-loops.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Bounded Context Catalog (Grouped)](.pair/adoption/tech/boundedcontext/README.md)

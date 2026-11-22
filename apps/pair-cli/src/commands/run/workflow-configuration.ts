@@ -1,6 +1,7 @@
 import { join, resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import {
+  addressedSteps,
   applyOverride,
   checkAgainstEngines,
   configurationText,
@@ -142,7 +143,7 @@ export function resolveConfiguration(input: ConfigurationInput): ConfigurationOu
   const checked = checkAgainstEngines(configuration, {
     file,
     facts: engineFacts(input.project, input.probe),
-    steps: input.workflow.steps,
+    steps: addressedSteps(input.workflow),
     aliases: input.workflow.aliases,
     engineFlag: input.engineFlag,
   })

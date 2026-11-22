@@ -22,6 +22,7 @@ telemetry: true # optional; switches the run's telemetry on or off
 ```
 
 - An entry takes `engine`, `model`, `effort`. `defaults` needs `engine`.
+- A loop id under `steps` takes only `max`, a positive integer. No other loop key can be overridden.
 - `model` is the real model id. There are no model classes.
 - Same parsing rules as a workflow: YAML 1.2, no anchors, tags or duplicate keys. Unknown keys are errors.
 

@@ -5,6 +5,7 @@ import {
   checkAgainstEngines,
   describeSettings,
   formatError,
+  addressedSteps,
   frozenConfiguration,
   parseFrozenConfiguration,
   readGateRegistry,
@@ -391,7 +392,7 @@ interface Opened {
 
 /** The step of the workflow with this id. */
 const stepOf = (resolved: Resolved, id: string) =>
-  resolved.workflow.steps.find(step => step.id === id) ?? { id, kind: 'generic' as const }
+  addressedSteps(resolved.workflow).find(step => step.id === id) ?? { id, kind: 'generic' as const }
 
 /** The engine the settings of a step name. */
 const engineIdOf = (opened: Opened, id: string): keyof typeof ENGINES => {
@@ -446,6 +447,32 @@ async function setCardState(
   }
 }
 
+/** The ending of a run parked or failed on an exhausted loop, drawn on the console; undefined otherwise. */
+function exhaustedEnding(
+  { resolved, request, runDir }: Opened,
+  outcome: RunOutcome,
+  sink: ConsoleSink,
+  fs: Services['fs'],
+): number | undefined {
+  const state = JSON.parse(fs.readFileSync(join(runDir, 'state.json'))) as {
+    loops?: Record<string, { exhausted?: boolean }>
+    steps: Record<string, { summary?: string; state: string }>
+  }
+  const exhausted = resolved.workflow.steps.find(step => state.loops?.[step.id]?.exhausted)
+  if (exhausted === undefined || outcome.run === 'done') return undefined
+  const last = state.steps[`${exhausted.id}/${exhausted.until}`]
+  const why = `${state.steps[exhausted.id]?.summary}; last until: ${last?.state} — ${last?.summary}`
+  sink.event({
+    event: 'card-end',
+    card: request.card,
+    status: outcome.run === 'failed' ? 'failed' : 'awaiting-human',
+    reason: why,
+  })
+  const flag = outcome.run === 'failed' ? '--restart' : '--more-rounds <n>'
+  console.log(`  Run: ${why}. Resume with: ${resumeCommand(request)} ${flag}`)
+  return outcome.run === 'failed' ? 1 : 0
+}
+
 /** The steps, drawn on the run's console: the card line, one line per step outcome, the ending. */
 async function runOnConsole(
   config: RunCommandConfig,
@@ -490,11 +517,51 @@ async function runOnConsole(
       telemetryOf(config, opened),
     )
     await Promise.all(pending)
-    return conclude(outcome, request, sink)
+    return exhaustedEnding(opened, outcome, sink, fs) ?? conclude(outcome, request, sink)
   } finally {
     sink.finish()
     restore()
   }
+}
+
+/** The options `start` opens the run with. */
+function startOptions({ resolved, request }: Opened) {
+  return {
+    card: request.card,
+    restart: request.restart,
+    reconfigure: request.reconfigure === true,
+    ...(request.moreRounds !== undefined && {
+      moreRounds: request.moreRounds,
+      requestedBy: process.env['USER'] ?? 'unknown',
+    }),
+    ...(resolved.configuration && {
+      configuration: {
+        text: resolved.configuration.text,
+        ...(resolved.configuration.override !== undefined && {
+          override: resolved.configuration.override,
+        }),
+      },
+    }),
+  }
+}
+
+/** The exit code of a run that has nothing to launch, with its message; undefined when steps remain. */
+function stopOf(status: string, request: Opened['request']): number | undefined {
+  if (status === 'parked') {
+    console.log(
+      `  Run: loop reached max — resume with: ${resumeCommand(request)} --more-rounds <n>`,
+    )
+    return 0
+  }
+  if (status === 'failed') {
+    console.log('  Run: loop exhausted and failed. Pass --restart to start over.')
+    return 1
+  }
+  if (status === 'complete') {
+    console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
+    return 0
+  }
+  return undefined
 }
 
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
@@ -505,19 +572,7 @@ async function drive(
 ): Promise<number> {
   const { resolved, request, runDir } = opened
   const { fs, deps } = services
-  const started = await start({ files: fs, dir: runDir }, resolved.source, {
-    card: request.card,
-    restart: request.restart,
-    reconfigure: request.reconfigure === true,
-    ...(resolved.configuration && {
-      configuration: {
-        text: resolved.configuration.text,
-        ...(resolved.configuration.override !== undefined && {
-          override: resolved.configuration.override,
-        }),
-      },
-    }),
-  })
+  const started = await start({ files: fs, dir: runDir }, resolved.source, startOptions(opened))
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   console.log(`  Run dir: ${runDir} (${started.status})`)
   const effective = readEffective(fs, runDir)
@@ -528,10 +583,8 @@ async function drive(
     runDir,
     deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   )
-  if (started.status === 'complete') {
-    console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
-    return 0
-  }
+  const stopped = stopOf(started.status, request)
+  if (stopped !== undefined) return stopped
   const worktree = await (deps.workflow?.prepareWorktree ?? cycleWorktree)({
     fs,
     project: resolved.project,
@@ -591,11 +644,13 @@ function printSettings(resolved: Resolved, effective: Configuration | undefined)
   console.log(
     `  Configuration: ${effective.name}${resolved.configuration ? ` — ${resolved.configuration.source}` : ' — frozen copy'}`,
   )
-  resolved.workflow.steps.forEach(step =>
-    console.log(
-      `    ${describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))}`,
-    ),
-  )
+  addressedSteps(resolved.workflow)
+    .filter(step => step.kind !== 'loop')
+    .forEach(step =>
+      console.log(
+        `    ${describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))}`,
+      ),
+    )
 }
 
 function printPlan(workflow: Workflow): void {

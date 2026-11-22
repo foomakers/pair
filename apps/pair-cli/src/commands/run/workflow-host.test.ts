@@ -415,6 +415,102 @@ describe('resume (AC-6)', () => {
   })
 })
 
+describe('workflow loops (#670)', () => {
+  const loop = `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 1
+    on-max: escalate
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+`
+  const findings = [{ id: 'f', severity: 'Major', title: 'gap', blocking: true }]
+  const failedReview = fenced({
+    status: 'failed',
+    summary: 'gap',
+    verdict: 'changes-requested',
+    reviewedHead: HEAD,
+    findings,
+  })
+  const fixed = fenced({
+    status: 'ok',
+    summary: 'fixed',
+    head: HEAD,
+    resolutions: [{ id: 'f', status: 'resolved', reason: 'fixed' }],
+  })
+
+  it('parks at max, requires more rounds, then finishes', async () => {
+    write('.pair/adoption/tech/workflows/quick.yaml', loop)
+    let reviews = 0
+    const skills = {
+      ...OK,
+      'pair-process-review': () => (++reviews === 1 ? failedReview : REVIEWED),
+      'pair-process-fix': () => fixed,
+    }
+    expect(await run(['quick'], skills)).toBe(0)
+    expect(states()).toMatchObject({
+      rounds: 'needs-human',
+      'rounds/review': 'failed',
+      'rounds/fix': 'ok',
+    })
+    launched = []
+    expect(await run(['quick'], skills)).toBe(0)
+    expect(launched).toHaveLength(0)
+    expect(await run(['quick'], skills, { moreRounds: '1' })).toBe(0)
+    expect(states()).toMatchObject({ rounds: 'ok', 'rounds/review': 'ok' })
+    expect(
+      JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))).loops.rounds.grants[0],
+    ).toMatchObject({ rounds: 1 })
+  })
+
+  it.each(['escalate', 'fail'])(
+    'reports exhaustion and the last until outcome on %s (#670-exhaustion-message)',
+    async action => {
+      write(
+        '.pair/adoption/tech/workflows/quick.yaml',
+        loop.replace('on-max: escalate', `on-max: ${action}`),
+      )
+      await run(['quick'], {
+        ...OK,
+        'pair-process-review': () => failedReview,
+        'pair-process-fix': () => fixed,
+      })
+      const output = lines.join('\n')
+      expect(output).toContain('loop rounds reached 1 rounds')
+      expect(output).toContain('gap')
+      expect(output).toContain(action === 'escalate' ? '--more-rounds <n>' : '--restart')
+    },
+  )
+
+  it('applies a configuration max override to the loop id', async () => {
+    write('.pair/adoption/tech/workflows/quick.yaml', loop)
+    write(
+      '.pair/adoption/tech/configurations/loop.yaml',
+      'version: 1\nname: loop\ndefaults: { engine: claude }\nsteps: { rounds: { max: 1 } }\n',
+    )
+    let reviews = 0
+    const skills = {
+      ...OK,
+      'pair-process-review': () => (++reviews === 1 ? failedReview : REVIEWED),
+      'pair-process-fix': () => fixed,
+    }
+    expect(
+      await run(['quick'], skills, {
+        config: 'loop',
+        configOverride: '{"steps":{"rounds":{"max":2}}}',
+      }),
+    ).toBe(0)
+    const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json')))
+    expect(state.loops.rounds).toMatchObject({ max: 2, round: 2 })
+    expect(state.steps.rounds.state).toBe('ok')
+  })
+})
+
 describe('the run directory (AC-7)', () => {
   it('holds the frozen workflow and the state, and keeps using the frozen copy when the file changes', async () => {
     const failing = () => fenced({ status: 'failed', summary: 'gate red' })

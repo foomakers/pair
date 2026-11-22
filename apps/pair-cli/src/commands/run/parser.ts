@@ -81,6 +81,7 @@ export interface RunWorkflowRequest {
   readonly configOverride?: string
   /** `--reconfigure`: replace the run's frozen configuration. */
   readonly reconfigure?: true
+  readonly moreRounds?: number
 }
 
 export interface RunCommandConfig {
@@ -210,6 +211,7 @@ interface ParseRunOptions {
   config?: string
   configOverride?: string
   reconfigure?: boolean
+  moreRounds?: string | number
 }
 
 function parsePositiveInteger(flag: string, raw: string | number): number {
@@ -807,6 +809,7 @@ function resolveWorkflowRun(
         '--restart was passed without a workflow name: it restarts `pair-cli run <workflow> --card <id>`',
       )
     refuseStrayConfiguration(options)
+    if (options.moreRounds !== undefined) throw new Error('--more-rounds needs a workflow name')
     return undefined
   }
   const workflow = promptSafeText(name, 'the workflow name')!
@@ -829,12 +832,17 @@ function resolveWorkflowRun(
   if (card === undefined)
     throw new Error(`\`pair-cli run ${workflow}\` needs --card <id>: a workflow runs on one card`)
   const runId = identifierText(options.runId, '--run-id')
+  const moreRounds =
+    options.moreRounds === undefined
+      ? undefined
+      : parsePositiveInteger('--more-rounds', options.moreRounds)
   return {
     name: workflow,
     card,
     ...(runId !== undefined && { runId }),
     restart: options.restart === true,
     ...configurationOf(options),
+    ...(moreRounds !== undefined && { moreRounds }),
   }
 }
 

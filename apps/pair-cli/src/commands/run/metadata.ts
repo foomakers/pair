@@ -33,6 +33,10 @@ export const runCommandMetadata = {
         'US-652: with a workflow name, archive the run directory and start the run over (a complete run is otherwise left as it is)',
     },
     {
+      flags: '--more-rounds <n>',
+      description: 'Grant n further rounds to a workflow loop parked at max',
+    },
+    {
       flags: '--config <name|file>',
       description:
         'US-672: with a workflow name, the configuration (engine, model, effort per step): a name under `.pair/adoption/tech/configurations/` (else the knowledge-base default) or the path of a file. Without it: `pair.config.json` `workflows.<workflow>.configuration`, then `workflows.default.configuration`, then the engine default',
