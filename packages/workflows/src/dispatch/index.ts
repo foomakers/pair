@@ -60,7 +60,9 @@ const unattendedBlock = (kind: StepKind): string =>
   [
     'This is an unattended run in one session. Never ask for confirmation.',
     ...(kind.guidance === undefined ? [] : [kind.guidance]),
-    `Return status "needs-human" only in these cases: ${kind.escalations.join(' ')}`,
+    kind.escalations.length === 0
+      ? 'Never return status "needs-human".'
+      : `Return status "needs-human" only in these cases: ${kind.escalations.join(' ')}`,
   ].join(' ')
 
 /**
