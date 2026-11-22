@@ -123,4 +123,16 @@ describe('implement kind: do everything automatable (unattended principle)', () 
   it('forbids ending the turn while an automatable task is left', () => {
     expect(guidance).toMatch(/do not end your turn[^.]*task/i)
   })
+  it('does not tell the agent a partial result is a failure up front (#733)', () => {
+    expect(guidance).not.toMatch(/partial result is a failure/i)
+    expect(guidance).not.toMatch(/one turn does the whole card/i)
+  })
+  it('asks for one pull request, a commit per task and parks a task it cannot finish (#733)', () => {
+    expect(guidance).toMatch(/one pull request/i)
+    expect(guidance).toMatch(/commit per task/i)
+    expect(guidance).toMatch(/parked/i)
+  })
+  it('fails only once every task has been attempted (#733)', () => {
+    expect(guidance).toMatch(/status "failed" only once every task has been attempted/i)
+  })
 })
