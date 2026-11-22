@@ -152,7 +152,7 @@ function loopOwnErrors(workflow: Workflow, step: Step, path: readonly string[]):
         fix: 'remove it',
       }),
     )
-  for (const key of ['skill', 'uses', 'with'] as const)
+  for (const key of ['skill', 'uses', 'with', 'gates'] as const)
     if (step[key] !== undefined)
       errors.push(
         errorAt(workflow, [...path, key], {
