@@ -30,6 +30,7 @@ const {
   list,
   validate,
   readGateRegistry,
+  readGateTargets,
   parseConfiguration,
   checkAgainstEngines,
   addressedSteps,
@@ -68,6 +69,7 @@ try {
       skillExists: name =>
         ['.claude/skills', '.skills'].some(dir => existsSync(join(cwd, dir, name, 'SKILL.md'))),
       gateKeys: Object.keys(readGateRegistry(safeRead(join(project, 'way-of-working.md')))),
+      gateTargets: Object.keys(readGateTargets(safeRead(join(project, 'way-of-working.md')))),
       launchInputs: ['card'],
       isSafeText: text => !/[`\n\r]/.test(text) && !text.includes('$('),
     })
