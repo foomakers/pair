@@ -1,5 +1,5 @@
 ---
-name: pair-capability-workflow
+name: workflow
 description: "Creates, configures and explains workflows from the validating grammar."
 version: 0.1.0
 author: Foomakers
@@ -23,13 +23,13 @@ Resolve the launcher’s main checkout: use the current checkout if it is the ma
 
 Stage outside the real project. For a linked worktree, initialize a temporary Git repository, make an empty commit and add a temporary linked worktree; ensure Git resolves the temporary main checkout from that worktree, including by setting `pair.mainCheckout` to the temporary main if needed. When the current directory is the main checkout or a non-Git directory, use one temporary non-Git directory for both roots. Copy the main checkout `way-of-working.md` and named workflows and named configurations from the main checkout into the temporary main, preserving paths and absence. Copy the current directory project's `pair.config.json`, installed skill references, path-selected files and relevant settings into the temporary worktree, preserving paths and absence. Keep path-selected configurations in the temporary worktree even when a named configuration has the same relative path in the temporary main. Preserve relative references; translate absolute paths in the staged mapping to their corresponding temporary paths, without changing the proposed final mapping. Do not copy a main-only file into the worktree or vice versa.
 
-Stage the proposed workflow at its intended main-checkout named path, or its intended explicit path in the temporary worktree. Stage a proposed configuration at its intended named path in the temporary main or path-selected location in the temporary worktree. Stage the proposed `pair.config.json` mapping in the temporary worktree. Run from the staged current root (the temporary worktree when linked) without `--config` so the proposed mapping is tested, using the same workflow name or explicit path intended for launch:
+Stage the proposed workflow at its intended main-checkout named path, or its intended explicit path in the temporary worktree. Stage a proposed configuration at its intended named path in the temporary main or path-selected location in the temporary worktree. Stage the proposed `pair.config.json` mapping in the temporary worktree. Run from the staged current root (the temporary worktree when linked) without `--config` so the proposed mapping is tested. Use the intended workflow name or relative path; translate an absolute workflow argument to the staged workflow path:
 
 ```sh
 pair-cli run <workflow> --card 1 --dry-run
 ```
 
-Preserve the intended filename and project context so the launcher resolves the same skills, gates and settings. Correct errors and validate again, at most three times; if errors remain, show them and stop. Never write an invalid file. Show warnings and obtain confirmation before writing. Show a diff before replacing an existing file. Copy only the validated temporary file after an explicit yes to its approved destination in the main checkout for a named workflow or configuration; explicit paths resolve from the current directory. Apply the approved mapping to the current directory's `pair.config.json`. Shipped files are never edited; create a project override instead.
+Preserve the intended filename and project context so the launcher resolves the same skills, gates and settings. Compare the workflow path printed by the launcher with the staged proposal's resolved path; verify the resolved workflow file is the staged proposal before writing. If they differ or cannot be verified, stop. Correct errors and validate again, at most three times; if errors remain, show them and stop. Never write an invalid file. Show warnings and obtain confirmation before writing. Show a diff before replacing an existing file. Copy only the validated temporary file after an explicit yes to its approved destination in the main checkout for a named workflow or configuration; explicit paths resolve from the current directory. Apply the approved mapping to the current directory's `pair.config.json`. Shipped files are never edited; create a project override instead.
 
 ## Create
 
