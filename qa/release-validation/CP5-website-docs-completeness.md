@@ -107,10 +107,11 @@
 - `$BASE_URL/docs/reference/specs/kb-source-resolution`
 - `$BASE_URL/docs/reference/templates-catalog`
 
-**Migrations** (2 pages):
+**Migrations** (3 pages):
 
 - `$BASE_URL/docs/migrations`
 - `$BASE_URL/docs/migrations/v0.4-to-v0.5`
+- `$BASE_URL/docs/migrations/v0.5-to-v0.6`
 
 **Support** (3 pages):
 
@@ -168,13 +169,13 @@
 
 ### Expected Result
 
-- All 113 URLs return HTTP 200
+- All 114 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 113 pages
+- Total: 114 pages
 
 ---
 
