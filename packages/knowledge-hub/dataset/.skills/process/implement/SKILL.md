@@ -225,7 +225,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 ### Step 2.7: Verify Quality
 
-1. **Act**: Compose `/verify-quality` with `$scope = all`.
+1. **Act**: Compose `/verify-quality` with `$scope` set to the packages the task touched (ts:check, tests and lint of those packages) — never the full gate per task: it takes minutes and runs once at closing, inside `/publish-pr` (Phase 1).
 2. **Verify**: All quality gates pass. If any gate fails → **HALT**. Developer must fix before proceeding.
 
 ### Step 2.8: Task Completion

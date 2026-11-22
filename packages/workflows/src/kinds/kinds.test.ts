@@ -109,9 +109,8 @@ describe('implement kind: do everything automatable (unattended principle)', () 
   it('does not let an incomplete task alone trigger needs-human', () => {
     expect(escalations.join(' ')).not.toMatch(/task is incomplete/)
   })
-  it('runs the gates once, after the last task, and waits for them', () => {
-    expect(guidance).toMatch(/gates?[^.]*after the last task/i)
-    expect(guidance).toMatch(/never interrupt/i)
+  it('leaves the quality gates to the skill', () => {
+    expect(guidance).not.toMatch(/gate/i)
   })
   it('forbids ending the turn while an automatable task is left', () => {
     expect(guidance).toMatch(/do not end your turn[^.]*task/i)
