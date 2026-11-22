@@ -112,6 +112,39 @@ async function gated(
   return (await host.runGates(step.gates ?? [], step)) ?? result
 }
 
+/** Launches the agent; a red gate sends the step back to it with the gate output, up to `GATE_RETRIES`. */
+async function launchGated(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  sent: { message: string; exchange: Exchange },
+): Promise<StepResult> {
+  const { message, exchange } = sent
+  const kind = kindByName[step.kind]
+  let prompt = message
+  for (let retry = 0; ; retry++) {
+    exchange.sent = prompt
+    const final = await host.launch(step, prompt, usage => {
+      exchange.usage = usage
+    })
+    if (final === undefined)
+      return record(run, step.id, {
+        status: 'failed',
+        reason: 'no-result',
+        summary: 'the agent ended without a final message',
+      })
+    exchange.final = final
+    const read = readResult(final, kind)
+    const result = await gated(host, step, read)
+    if (retry < GATE_RETRIES && read.status === 'ok' && result.reason?.startsWith('gate-failed'))
+      prompt = `${message}\n\nThe host ran the quality gates after your last result and one is red. Fix it, then end your turn with the result block again.\n${(result.detail ?? result.summary).slice(-4000)}`
+    else return record(run, step.id, result, final)
+  }
+}
+
+/** How many times a red gate sends the step back to its agent before the step fails. */
+const GATE_RETRIES = 2
+
 async function execute(
   host: WorkflowHost,
   run: RunDirectory,
@@ -143,18 +176,7 @@ async function execute(
     const summary = (error as Error).message
     return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
   }
-  exchange.sent = message
-  const final = await host.launch(step, message, usage => {
-    exchange.usage = usage
-  })
-  if (final === undefined)
-    return record(run, step.id, {
-      status: 'failed',
-      reason: 'no-result',
-      summary: 'the agent ended without a final message',
-    })
-  exchange.final = final
-  return record(run, step.id, await gated(host, step, readResult(final, kind)), final)
+  return launchGated(host, run, step, { message, exchange })
 }
 
 /**
