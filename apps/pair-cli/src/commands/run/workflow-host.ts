@@ -715,9 +715,14 @@ function approvalQuestion(step: ReturnType<typeof addressedSteps>[number]): stri
     : ''
 }
 
-function dryRunExecution(resolved: Resolved, step: ReturnType<typeof addressedSteps>[number]): string {
+function dryRunExecution(
+  resolved: Resolved,
+  step: ReturnType<typeof addressedSteps>[number],
+): string {
   const host = step.kind === 'loop' || kindByName[step.kind].host === true
-  const settings = host ? undefined : stepSettings(resolved, resolved.configuration?.configuration, step)
+  const settings = host
+    ? undefined
+    : stepSettings(resolved, resolved.configuration?.configuration, step)
   return settings
     ? ` engine=${settings.engine} model=${settings.model ?? '(engine default)'}${settings.effort ? ` effort=${settings.effort}` : ''}`
     : ' host'
