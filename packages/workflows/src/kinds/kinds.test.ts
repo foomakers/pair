@@ -116,6 +116,10 @@ describe('implement kind: do everything automatable (unattended principle)', () 
   it('leaves the quality gates to the skill', () => {
     expect(guidance).not.toMatch(/gate/i)
   })
+  it('does not fail on review findings left open after the PR is published (the review and fix steps own them)', () => {
+    expect(guidance).toMatch(/findings[^.]*open[^.]*not a failure/i)
+    expect(guidance).toMatch(/status "ok"/)
+  })
   it('forbids ending the turn while an automatable task is left', () => {
     expect(guidance).toMatch(/do not end your turn[^.]*task/i)
   })
