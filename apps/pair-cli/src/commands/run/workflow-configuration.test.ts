@@ -39,8 +39,7 @@ steps:
   implement:
     kind: implement
     alias: build
-    with:
-      gates: [quality-gate]
+    gates: [quality-gate]
   review:
     kind: review
     alias: judge
@@ -49,7 +48,7 @@ const REGISTRY = `### Custom Gate Registry
 
 | Order | Key | Gate | Command |
 | --- | --- | --- | --- |
-| 1 | quality-gate | Quality Gate | \`pnpm quality-gate\` |
+| 1 | quality-gate | Quality Gate | \`true\` |
 `
 
 /** A fake skill answers with the agent's final message, `undefined` when the agent dies, or throws on a crash. */
@@ -84,7 +83,11 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
         : { outcome: 'success', detail: 'terminal event: success' }
     },
     readCard: async () => ({ title: 'A card' }),
-    prepareWorktree: async ({ main, card }) => join(main, 'worktrees', card),
+    prepareWorktree: async ({ main, card }) => {
+      const dir = join(main, 'worktrees', card)
+      fs.mkdirSync(dir, { recursive: true })
+      return dir
+    },
     engineAvailable: () => true,
     ...over,
   }

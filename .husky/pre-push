@@ -5,4 +5,5 @@
 # temp dir would re-initialise THIS repository (core.bare=true). Scrubbed once, for everything the hook runs.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX GIT_NAMESPACE GIT_CEILING_DIRECTORIES GIT_IMPLICIT_WORK_TREE GIT_DISCOVERY_ACROSS_FILESYSTEM
 
-pnpm quality-gate
+# Lean on purpose: changed packages vs main (turbo cache). The full quality-gate is the `pr` target and CI.
+pnpm gate:push

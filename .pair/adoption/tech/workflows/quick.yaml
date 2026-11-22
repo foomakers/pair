@@ -9,8 +9,7 @@ steps:
   implement:
     kind: implement
     alias: build
-    with:
-      gates: [quality-gate]
+    gates: [target:increment]
   review:
     kind: review
     alias: judge
@@ -18,6 +17,8 @@ steps:
   fix:
     kind: fix
     alias: build
+    gates: [target:increment]
     when: { output: review.verdict, is: [changes-requested] }
-    with:
-      gates: [quality-gate]
+  gate:
+    kind: gate
+    with: { gates: [target:pr] }

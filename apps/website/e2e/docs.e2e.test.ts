@@ -954,6 +954,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/integrations/windsurf',
     '/docs/migrations',
     '/docs/migrations/v0.4-to-v0.5',
+    '/docs/migrations/v0.5-to-v0.6',
     '/docs/pm-tools',
     '/docs/pm-tools/azure-devops',
     '/docs/pm-tools/custom',

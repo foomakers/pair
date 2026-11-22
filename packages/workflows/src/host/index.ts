@@ -59,6 +59,8 @@ export interface WorkflowHost {
   card?(): Promise<CardFacts>
   /** Runs a step of a host kind (`gate`, `approval`, `merge`): the result it returns, no agent. */
   perform?(step: StepLaunch): Promise<unknown>
+  /** Runs the `gates` of a step that ended `ok`: `undefined` when all pass, else the failed result. */
+  runGates?(entries: readonly string[], step: StepLaunch): Promise<StepResult | undefined>
   /** Sees every step start and every recorded result, in order. */
   report?(event: StepEvent): void
 }
@@ -94,6 +96,55 @@ interface Exchange {
   usage?: Usage
 }
 
+/** The result of a step, unless it is `ok` and its `gates` are not all green. */
+async function gated(
+  host: WorkflowHost,
+  step: StepLaunch,
+  result: StepResult,
+): Promise<StepResult> {
+  if (result.status !== 'ok' || (step.gates ?? []).length === 0) return result
+  if (host.runGates === undefined)
+    return {
+      status: 'failed',
+      reason: 'no-executor',
+      summary: 'the host cannot run the gates of a step',
+    }
+  return (await host.runGates(step.gates ?? [], step)) ?? result
+}
+
+/** Launches the agent; a red gate sends the step back to it with the gate output, up to `GATE_RETRIES`. */
+async function launchGated(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  sent: { message: string; exchange: Exchange },
+): Promise<StepResult> {
+  const { message, exchange } = sent
+  const kind = kindByName[step.kind]
+  let prompt = message
+  for (let retry = 0; ; retry++) {
+    exchange.sent = prompt
+    const final = await host.launch(step, prompt, usage => {
+      exchange.usage = usage
+    })
+    if (final === undefined)
+      return record(run, step.id, {
+        status: 'failed',
+        reason: 'no-result',
+        summary: 'the agent ended without a final message',
+      })
+    exchange.final = final
+    const read = readResult(final, kind)
+    const result = await gated(host, step, read)
+    if (retry < GATE_RETRIES && read.status === 'ok' && result.reason?.startsWith('gate-failed'))
+      prompt = `${message}\n\nThe host ran the quality gates after your last result and one is red. Fix it, then end your turn with the result block again.\n${(result.detail ?? result.summary).slice(-4000)}`
+    else return record(run, step.id, result, final)
+  }
+}
+
+/** How many times a red gate sends the step back to its agent before the step fails. */
+const GATE_RETRIES = 2
+
 async function execute(
   host: WorkflowHost,
   run: RunDirectory,
@@ -112,7 +163,7 @@ async function execute(
             reason: 'no-executor',
             summary: `the host cannot run a ${step.kind} step`,
           }
-        : await host.perform(step),
+        : await gated(host, step, (await host.perform(step)) as StepResult),
     )
   }
   let message: string
@@ -125,18 +176,7 @@ async function execute(
     const summary = (error as Error).message
     return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
   }
-  exchange.sent = message
-  const final = await host.launch(step, message, usage => {
-    exchange.usage = usage
-  })
-  if (final === undefined)
-    return record(run, step.id, {
-      status: 'failed',
-      reason: 'no-result',
-      summary: 'the agent ended without a final message',
-    })
-  exchange.final = final
-  return record(run, step.id, readResult(final, kind), final)
+  return launchGated(host, run, step, { message, exchange })
 }
 
 /**

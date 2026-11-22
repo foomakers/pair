@@ -121,7 +121,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 7,
         key: 'steps.implement.retry',
         problem: "unknown key 'retry'",
-        fix: 'use one of kind, skill, when, uses, with, on-failed, alias, state, until, max, on-max, steps',
+        fix: 'use one of kind, skill, when, uses, with, gates, on-failed, alias, state, until, max, on-max, steps',
       },
     ],
     [

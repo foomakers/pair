@@ -23,7 +23,7 @@ import { BASE_SYNC_FIX, llmsDerivedTitle, pushSnapshot, artifactPaths as artifac
 export const CLI_URL = new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url).href
 export const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url))
 export function sh(cwd, ...args) {
-  const r = spawnSync(args[0], args.slice(1), { cwd, encoding: 'utf8' })
+  const r = spawnSync(args[0], args.slice(1), { cwd, encoding: 'utf8', maxBuffer: 1 << 28 })
   if (r.status !== 0) throw new Error(`${args.join(' ')}: ${r.stderr}`)
   return r.stdout.replace(/\n$/, '')
 }

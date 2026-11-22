@@ -15,8 +15,7 @@ name: quick
 steps:
   implement:
     kind: implement
-    with:
-      gates: [quality-gate]
+    gates: [quality-gate]
   review:
     kind: review
 `
@@ -122,7 +121,7 @@ describe('validate (AC-3, AC-5)', () => {
       'a skill that is not installed',
       QUICK.replace('kind: review', 'kind: review\n    skill: missing-skill'),
       {
-        line: 10,
+        line: 9,
         key: 'steps.review.skill',
         problem: "skill 'missing-skill' is not installed",
         fix: "install it, or name an installed skill in 'skill'",
@@ -132,7 +131,7 @@ describe('validate (AC-3, AC-5)', () => {
       'a generic step with no skill',
       QUICK.replace('kind: review', 'kind: generic'),
       {
-        line: 8,
+        line: 7,
         key: 'steps.review',
         problem: 'a generic step has no default skill',
         fix: "add 'skill' with the skill to run",
@@ -142,7 +141,7 @@ describe('validate (AC-3, AC-5)', () => {
       '`uses` with a skill name',
       QUICK.replace('kind: review', 'kind: review\n    uses: my-skill'),
       {
-        line: 10,
+        line: 9,
         key: 'steps.review.uses',
         problem: "'uses' does not name a skill: 'my-skill'",
         fix: 'write skill: my-skill',
@@ -162,18 +161,18 @@ describe('validate (AC-3, AC-5)', () => {
       'a gate key the registry does not hold',
       QUICK.replace('[quality-gate]', '[quality-gate, e2e]'),
       {
-        line: 7,
-        key: 'steps.implement.with.gates.1',
+        line: 6,
+        key: 'steps.implement.gates.1',
         problem: "unknown gate key 'e2e'",
         fix: 'use one of quality-gate, smoke-tests',
       },
     ],
     [
       'a gate key in a list written one item per line',
-      QUICK.replace('gates: [quality-gate]', 'gates:\n        - quality-gate\n        - e2e'),
+      QUICK.replace('gates: [quality-gate]', 'gates:\n      - quality-gate\n      - e2e'),
       {
-        line: 9,
-        key: 'steps.implement.with.gates.1',
+        line: 8,
+        key: 'steps.implement.gates.1',
         problem: "unknown gate key 'e2e'",
         fix: 'use one of quality-gate, smoke-tests',
       },
@@ -185,7 +184,7 @@ describe('validate (AC-3, AC-5)', () => {
         'kind: generic\n    skill: my-skill\n    with:\n      notes:\n        - fine\n        - text: "a`b"',
       ),
       {
-        line: 14,
+        line: 13,
         key: 'steps.review.with.notes.1.text',
         problem: '"a`b" is not safe to hand to an agent',
         fix: 'write short plain text: no backtick, no $(, no line break',
@@ -193,12 +192,12 @@ describe('validate (AC-3, AC-5)', () => {
     ],
     [
       'an option the kind does not declare',
-      QUICK.replace('gates: [quality-gate]', 'gate: quality-gate'),
+      QUICK.replace('kind: review', 'kind: review\n    with:\n      floor: Major'),
       {
-        line: 7,
-        key: 'steps.implement.with.gate',
-        problem: "unknown key 'gate'",
-        fix: 'use one of gates',
+        line: 10,
+        key: 'steps.review.with.floor',
+        problem: "unknown key 'floor'",
+        fix: 'use one of blocking',
       },
     ],
     [
@@ -208,7 +207,7 @@ describe('validate (AC-3, AC-5)', () => {
         'kind: generic\n    skill: my-skill\n    with:\n      note: "a`b"',
       ),
       {
-        line: 12,
+        line: 11,
         key: 'steps.review.with.note',
         problem: '"a`b" is not safe to hand to an agent',
         fix: 'write short plain text: no backtick, no $(, no line break',

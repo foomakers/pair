@@ -15,7 +15,7 @@ Story #680. Approval, escalation, deterministic gates and merge live in autonomy
 ## Decision
 
 - Three kinds run by the host with no agent: `gate` (registry keys and four closed checks), `approval` (parks; answers by flag, card comment or native review), `merge` (merges, closes, cascades, cleans up; `head-moved` when the head changed).
-- A gate names a Custom Gate Registry key, never a shell line.
+- A gate entry is a Custom Gate Registry key, `target:<name>` (the registry rows of that target) or `command:<shell line>`. Shipped dataset workflows carry no `command:` entry: their gates come from the registry, so the shipped workflow hides no command. A workflow installed in a project may use `command:`; the project owns that file and its commands are visible in it.
 - An approval counts only when the platform authorizes its author; the workflow holds no names.
 - `when` (card facts, or an earlier step's output) on any step but a loop and its `until` step; a non-matching step is `skipped`. A transition is a deterministic `when`, not a prompt.
 - The validator warns, never blocks, on a `merge` with no approval, review or `head-unchanged` gate before it.

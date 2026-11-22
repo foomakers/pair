@@ -58,7 +58,7 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     // appears in the frontmatter description and the composed-skills table long before
     // any phase, so a global indexOf comparison would pass on any arrangement.
     const realignIdx = p1.search(/pre-publish/)
-    const gateIdx = p1.search(/Compose `\/verify-quality`/)
+    const gateIdx = p1.search(/ompose `\/verify-quality`/)
     expect(realignIdx).toBeGreaterThanOrEqual(0)
     expect(gateIdx).toBeGreaterThan(realignIdx)
   })

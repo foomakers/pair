@@ -72,6 +72,8 @@ export interface StepLaunch {
   readonly kind: KindName
   readonly uses: string
   readonly with: Readonly<Record<string, unknown>>
+  /** Validation the host runs after the step ends `ok`. */
+  readonly gates?: readonly string[]
   readonly inputs: Readonly<Record<string, unknown>>
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
@@ -479,6 +481,8 @@ function loopChild(
   return { child: child as Step & { kind: KindName }, id: `${step.id}/${child.id}` }
 }
 
+const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
+
 /** The launch of the loop child that is next, or the halt that stops the run. */
 async function nextInLoop(
   run: RunDirectory,
@@ -504,6 +508,7 @@ async function nextInLoop(
     kind: child.kind,
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
+    ...gatesOf(child),
     inputs: pick(producedBefore(state, steps, step), child.kind),
     attempt,
     round,
@@ -619,6 +624,7 @@ async function nextPlain(
     kind: step.kind,
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
+    ...gatesOf(step),
     inputs: inputsOf(step, steps, state),
     attempt,
   }

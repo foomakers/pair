@@ -9,6 +9,7 @@ import {
   frozenConfiguration,
   parseFrozenConfiguration,
   readGateRegistry,
+  readGateTargets,
   runSteps,
   settingsFor,
   start,
@@ -66,7 +67,7 @@ import {
   resolveBranch,
   runSetupCommand,
 } from './cycle-wiring'
-import { performHostKind } from './workflow-kinds'
+import { performHostKind, runStepGates } from './workflow-kinds'
 import {
   createCycleScriptsBridge,
   locateCycleScripts,
@@ -208,11 +209,11 @@ function resolveWorkflowRun(
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
   const source = locateWorkflow(fs, { cwd, main }, request.name)
   const registry = join(main, WAY_OF_WORKING)
+  const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
   const checked = validate(source.text, source.file, {
     skillExists: createSkillProbe(fs, project, cwd),
-    gateKeys: Object.keys(
-      readGateRegistry(fs.existsSync(registry) ? fs.readFileSync(registry) : ''),
-    ),
+    gateKeys: Object.keys(readGateRegistry(registryText)),
+    gateTargets: Object.keys(readGateTargets(registryText)),
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
   })
@@ -407,6 +408,12 @@ function hostKindsOf({ resolved, request, worktree }: Opened, fs: FileSystemServ
     perform: performHostKind(
       readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
       worktree ?? resolved.cwd,
+      readGateTargets(fs.existsSync(way) ? fs.readFileSync(way) : ''),
+    ),
+    runGates: runStepGates(
+      readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
+      worktree ?? resolved.cwd,
+      readGateTargets(fs.existsSync(way) ? fs.readFileSync(way) : ''),
     ),
   }
 }

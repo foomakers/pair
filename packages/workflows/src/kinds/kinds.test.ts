@@ -3,8 +3,6 @@ import { violations } from '../schema'
 
 describe('kind `with` options (AC-5)', () => {
   it.each([
-    ['implement', { gates: ['quality-gate'] }],
-    ['implement', { gates: [] }],
     ['implement', {}],
     ['review', { blocking: 'Major' }],
     ['generic', { anything: { nested: [1, 2] } }],
@@ -13,9 +11,8 @@ describe('kind `with` options (AC-5)', () => {
   })
 
   it.each([
-    ['implement', { gate: ['quality-gate'] }, "unknown key 'gate'"],
+    ['implement', { gates: ['quality-gate'] }, "unknown key 'gates'"],
     ['review', { floor: 'Major' }, "unknown key 'floor'"],
-    ['implement', { gates: 'quality-gate' }, 'expected array, found string "quality-gate"'],
     ['review', { blocking: 'Trivial' }, 'unknown value "Trivial"'],
   ] as const)('%s refuses %j', (kind, options, problem) => {
     expect(violations(kindByName[kind].with, options).map(found => found.problem)).toEqual([
@@ -66,6 +63,13 @@ describe('readGateRegistry', () => {
     })
   })
 
+  it('ignores the Target column: the key still maps to its command', () => {
+    const text = table('| Order | Key | Gate | Command | Target |', [
+      '| 1 | gate-pr | PR | `pnpm gate:pr` | pr |',
+    ])
+    expect(readGateRegistry(text)).toEqual({ 'gate-pr': 'pnpm gate:pr' })
+  })
+
   it('reads the registry table only: not the prose around it, not the table of the next section', () => {
     const text = [
       '### Custom Gate Registry',
@@ -97,5 +101,26 @@ describe('readGateRegistry', () => {
     ['no registry section', '## Quality Gates\n'],
   ])('has no keys for %s', (_name, text) => {
     expect(readGateRegistry(text)).toEqual({})
+  })
+})
+
+describe('implement kind: do everything automatable (unattended principle)', () => {
+  const { guidance, escalations } = kindByName.implement
+  it('tells the agent to skip a task that needs a person and finish the rest', () => {
+    expect(guidance).toMatch(/needs a person/)
+    expect(guidance).toMatch(/skip/i)
+  })
+  it('does not let an incomplete task alone trigger needs-human', () => {
+    expect(escalations.join(' ')).not.toMatch(/task is incomplete/)
+  })
+  it('leaves the quality gates to the skill', () => {
+    expect(guidance).not.toMatch(/gate/i)
+  })
+  it('does not fail on review findings left open after the PR is published (the review and fix steps own them)', () => {
+    expect(guidance).toMatch(/findings[^.]*open[^.]*not a failure/i)
+    expect(guidance).toMatch(/status "ok"/)
+  })
+  it('forbids ending the turn while an automatable task is left', () => {
+    expect(guidance).toMatch(/do not end your turn[^.]*task/i)
   })
 })

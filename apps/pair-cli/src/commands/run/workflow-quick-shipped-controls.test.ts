@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { join } from 'path'
 import { fileSystemService as fs } from '@pair/content-ops'
-import { readGateRegistry, validate } from '@pair/workflows'
+import { readGateRegistry, readGateTargets, validate } from '@pair/workflows'
 import { isSafePromptText } from './prompt-safety'
 
 /**
@@ -21,6 +21,7 @@ const errorsOf = (root: string) =>
   validate(read(root, QUICK), QUICK, {
     skillExists: () => true,
     gateKeys: Object.keys(readGateRegistry(read(root, WAY_OF_WORKING))),
+    gateTargets: Object.keys(readGateTargets(read(root, WAY_OF_WORKING))),
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
   }).errors
@@ -50,5 +51,13 @@ describe('the shipped quick workflow: what already holds (r0-2)', () => {
     expect(readGateRegistry(read(DATASET, WAY_OF_WORKING))).toMatchObject({
       formatting: 'pnpm format:check',
     })
+  })
+
+  it('c6 no shipped workflow carries a command: gate (ADR-036)', () => {
+    const dir = '.pair/adoption/tech/workflows'
+    const files = fs.readdirSync(join(DATASET, dir)).map(f => join(dir, f.name))
+    const direct = files.filter(f => /^\s*-\s*['"]?command:/m.test(read(DATASET, f)))
+
+    expect(direct).toEqual([])
   })
 })

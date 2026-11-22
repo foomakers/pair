@@ -1,0 +1,50 @@
+---
+title: "v0.5 → v0.6: Gate Targets"
+description: Migration prompt for the Custom Gate Registry Target column, per-target gate scripts and the optional Gate Targets table.
+---
+
+One optional change in the v0.5 → v0.6 jump: gates are grouped by **target**, so each skill runs the gates of its own moment. Nothing breaks if you skip it.
+
+## Changed
+
+- Custom Gate Registry (`.pair/adoption/tech/way-of-working.md`) gains a **Target** column: `increment` (a task or commit), `pr`, `review`, `release`. Blank = every target; a registry without the column behaves as before.
+- Skills pass a target to `/verify-quality`: `/implement` → `increment`, `/publish-pr` → `pr`, `/review` → `review`. Which command a target runs is only in the registry.
+- Optional `### Gate Targets` table (`Skill | Targets`) overrides a skill's targets; run by hand, the skill keeps its default.
+- A check that a local hook (husky) already runs does not belong in the registry rows of the same moment: keep lean checks in the hook, drop them from the registry.
+
+## Prompt
+
+```text
+You are migrating this project's `.pair/` structure to pair v0.6 (gate targets).
+Work only inside `.pair/adoption/`. Perform each step only if not already done,
+and report what you skipped.
+
+1. In `.pair/adoption/tech/way-of-working.md`, find the Custom Gate Registry
+   table. If it has no `Target` column, add one after `Scope Key`.
+2. For each row set Target: quick, incremental checks (types, unit tests, lint
+   of the changed code) -> `increment`; the full pre-merge gate -> `pr`; what a
+   reviewer needs -> `review` (may equal `pr`); slow suites (smoke, E2E) ->
+   `release`. A row that serves several moments lists them, comma-separated.
+   Use a single row per command: do not duplicate commands in the same target.
+3. Where the project has a script that runs only what changed (turbo
+   `--filter=[HEAD]`, nx affected, a diff-based test run), use it for
+   `increment` so cache and differential runs apply.
+4. If a git hook (husky or similar) already runs a check, do not repeat it in a
+   registry row of the same moment: keep lean checks in the hook, leave them
+   out of the registry rows.
+5. In a workflow, declare `gates:` on the step they validate (entries: a registry
+   key, `target:<name>` or `command:<shell line>`): the host runs them after the
+   step ends `ok`, each under a timeout (`PAIR_GATE_TIMEOUT_MS`, default 10 min),
+   and a red one fails the step. `with.gates` is gone from `implement`: move it
+   to `gates:`. A skill called by hand takes `$gates: none` to run no gate.
+6. Optional: add a `### Gate Targets` table (`Skill | Targets`) only to change
+   a skill's default target for this project.
+```
+
+## Verify
+
+- [ ] The registry has a `Target` column and every row has a value (or is blank on purpose)
+- [ ] No check runs both from a git hook and from a target row of the same moment
+- [ ] `increment` rows are incremental or cached
+- [ ] No workflow step still sets `with.gates` on `implement`
+- [ ] Re-running the prompt makes no further changes

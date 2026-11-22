@@ -160,6 +160,7 @@ Projects can define additional quality gates beyond the standard ones (Lint, Typ
 | Gate        | Human-readable gate name                                                           |
 | Command     | Shell command to execute (e.g., `pnpm format:check`) — a gate step must not WRITE   |
 | Scope Key   | Maps to `/verify-quality` `$scope` argument for selective execution                |
+| Target      | What the gate verifies, comma-separated: `increment` (a task or commit), `pr` (a pull request, before publishing and in CI), `review` (what the reviewer needs), `release` (a release). Blank = every target |
 | Required    | `Yes` = failure → FAIL verdict; `No` (Advisory) = failure → WARNING, not a blocker |
 | Description | Brief explanation of what the gate checks                                          |
 
@@ -167,6 +168,8 @@ Projects can define additional quality gates beyond the standard ones (Lint, Typ
 
 - **Required** (`Yes`): Gate failure contributes to overall FAIL. The composing skill decides the consequence (e.g., `/implement` HALTs, `/review` reports as finding).
 - **Advisory** (`No`): Gate failure produces a WARNING. Does not block the pipeline. Useful for auto-fixers (formatting) or informational checks.
+
+**Targets**: a composing skill runs the gates of its own target, at the moment it is competent for: `/implement` and `/fix` run `increment` after each task, `/publish-pr` runs `pr` once, `/review` runs `review`, a release process runs `release`. `/verify-quality` takes it as `$target` (default: every target, the behaviour before the column existed) and filters the rows whose Target holds it, then by `$scope`. An adoption may override a skill's targets in a `### Gate Targets` table (`Skill | Targets`) without changing the skill: run by hand, the skill keeps its default. A workflow declares `gates:` on a step (entries: a registry key, `target:<name>` or `command:<shell line>`); the host runs them once the step ends `ok`, each under a timeout (`PAIR_GATE_TIMEOUT_MS`, default 10 min: a gate that slow is a configuration problem), and a red one fails the step. It then tells the agent to run none, and a skill takes `$gates: none` when its own gates would duplicate them.
 
 **Standard gates** (Lint, Type Check, Test) are built into `/verify-quality` and always Required. Do not duplicate them in the Custom Gate Registry.
 

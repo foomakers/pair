@@ -212,7 +212,7 @@ For each missing adoption file (in order: architecture → tech-stack → infras
    Record the answer as `Review enforcement: disabled|enabled`. **No answer, or quick mode ⇒ `disabled`** — the tier below has no project-state signal to read, and a default that blocks turns a fresh install into a repository nobody can merge into.
 
 5. **Act**: For each quality gate (standard + custom):
-   - Add entry to the Custom Gate Registry in `way-of-working.md` with: Order, Key (unique, kebab-case), Gate name, Command, Scope Key, Required flag, Description
+   - Add entry to the Custom Gate Registry in `way-of-working.md` with: Order, Key (unique, kebab-case), Gate name, Command, Scope Key, Target, Required flag, Description
    - Create placeholder script entries (in `package.json` scripts or technology-specific equivalent) so the gate infrastructure is executable from day one
 
 6. **Act**: Record quality gate decisions via `/record-decision`:

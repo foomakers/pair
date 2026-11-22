@@ -26,9 +26,9 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `pr`: `integer` — The number of the pull request.
   - `head`: `string matching ^[0-9a-f]{40}$` — The pushed head, a 40-hex sha.
 - **Options** (`with`)
-  - `gates`: `array of string` — Keys of the Custom Gate Registry, run before the push. Absent or `[]` = none.
+  - None.
 - **Returns `needs-human` when**
-  - A task is incomplete or needs a decision the card does not record.
+  - A decision the card does not record blocks every remaining task.
   - A quality gate stays red and the fix is outside the card.
 
 ## review
@@ -91,7 +91,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Outputs**, required when `status` is `ok`
   - The common fields only.
 - **Options** (`with`)
-  - `gates`: `array of string` — Keys of the Custom Gate Registry: their commands run in the card worktree, in order. Never a shell line.
+  - `gates`: `array of string` — Entries run in the card worktree, in order: a key of the Custom Gate Registry, `target:<name>` (the registry rows of that target) or `command:<shell line>`.
   - `checks`: `array of "ci-green" | "head-unchanged" | "review-approved" | "prerequisites-done"` — Ready-made checks: ci-green, head-unchanged, review-approved, prerequisites-done.
   - `timeout-minutes`: `integer` — How long `ci-green` waits. Default 30.
 - **Returns `needs-human` when**
