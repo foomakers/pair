@@ -231,6 +231,8 @@ This map is judgment rather than syntax, which is why it is worth stating. Confi
 | their registry config validated | `validate-config` | asset registries + KB structure |
 | the shared KB cache inspected or reclaimed | `kb-cache` | list or prune; options from `--help` |
 | words or estimated tokens of their pair files counted | `tokens` | per area; options from `--help` |
+| create, change, explain or configure a workflow | `/pair-capability-workflow` | invoke the authoring skill |
+| run a workflow in the session | `pair run <workflow>` | use the terminal until the session launch skill exists |
 | to change how pair behaves in this project | **Configure** (below) | autonomy, hooks, profiles, adoption files |
 | to know this project's standards, process or decisions | `.pair/llms.txt` → the file it points to | never answer from memory when the project has its own record |
 | to know what to work on next | `/pair-next` | invoke it — it reads adoption files and PM state; never reimplement it here |
