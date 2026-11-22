@@ -29,8 +29,12 @@ const errorsOf = (root: string) =>
 
 const commandGates = (value: unknown): boolean => {
   if (!value || typeof value !== 'object') return false
-  return Object.entries(value).some(([key, child]) =>
-    key === 'gates' && Array.isArray(child) && child.some(item => typeof item === 'string' && item.startsWith('command:')) || commandGates(child),
+  return Object.entries(value).some(
+    ([key, child]) =>
+      (key === 'gates' &&
+        Array.isArray(child) &&
+        child.some(item => typeof item === 'string' && item.startsWith('command:'))) ||
+      commandGates(child),
   )
 }
 

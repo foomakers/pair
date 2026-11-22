@@ -42,12 +42,17 @@ describe('workflow authoring commands (AC-7)', () => {
     const base = resolve(root, 'packages/knowledge-hub/dataset/.pair/adoption/tech')
     const bin = mkdtempSync(join(tmpdir(), 'workflow-engines-'))
     writeFileSync(join(bin, 'codex'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
-    const result = spawnSync(process.execPath, [script,
-      'validate',
-      join(base, 'workflows/quick.yaml'),
-      '--config',
-      join(base, 'configurations/codex.yaml'),
-    ], { cwd: root, encoding: 'utf8', env: { ...process.env, PATH: `${bin}:/usr/bin:/bin` } })
+    const result = spawnSync(
+      process.execPath,
+      [
+        script,
+        'validate',
+        join(base, 'workflows/quick.yaml'),
+        '--config',
+        join(base, 'configurations/codex.yaml'),
+      ],
+      { cwd: root, encoding: 'utf8', env: { ...process.env, PATH: `${bin}:/usr/bin:/bin` } },
+    )
     expect(result.status).toBe(0)
     const output = JSON.parse(result.stdout)
     expect(output.errors).toEqual([])
