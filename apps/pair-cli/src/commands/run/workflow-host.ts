@@ -5,6 +5,7 @@ import {
   checkAgainstEngines,
   describeSettings,
   formatError,
+  kindByName,
   addressedSteps,
   frozenConfiguration,
   parseFrozenConfiguration,
@@ -718,6 +719,14 @@ export async function handleWorkflowRun(
   if (resolved === undefined) return 1
   printPlan(resolved.workflow)
   if (config.dryRun) {
+    addressedSteps(resolved.workflow).forEach(step => {
+      const skill =
+        step.kind === 'loop' ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
+      const settings = stepSettings(resolved, resolved.configuration?.configuration, step)
+      console.log(
+        `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''} engine=${settings.engine} model=${settings.model ?? '(engine default)'}${settings.effort ? ` effort=${settings.effort}` : ''}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${step.kind === 'approval' ? ` question=${JSON.stringify(step.with?.question ?? '(approval required)')}` : ''}`,
+      )
+    })
     console.log('  Dry run: the workflow is valid; nothing was launched.')
     return 0
   }

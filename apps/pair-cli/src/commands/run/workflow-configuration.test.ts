@@ -164,7 +164,9 @@ describe('settings per step, printed with their source (AC-1)', () => {
 })
 
 it('dry run shows resolved loop steps and conditional approval (US-677 AC-6)', async () => {
-  write('.pair/adoption/tech/workflows/quick.yaml', `version: 1
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    `version: 1
 name: quick
 steps:
   implement: { kind: implement }
@@ -180,8 +182,12 @@ steps:
     kind: approval
     when: { has: [risk:red] }
     with: { question: Ship it? }
-`)
-  writeConfig('mine', 'version: 1\nname: mine\ndefaults: { engine: codex, model: gpt-5, effort: high }\n')
+`,
+  )
+  writeConfig(
+    'mine',
+    'version: 1\nname: mine\ndefaults: { engine: codex, model: gpt-5, effort: high }\n',
+  )
   expect(await run(['quick'], OK, { config: 'mine', dryRun: true })).toBe(0)
   const output = lines.join('\n')
   expect(output).toContain('rounds/review')
