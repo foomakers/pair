@@ -8,8 +8,10 @@ const read = (path: string) => readFileSync(join(dataset, path), 'utf8')
 describe('workflow authoring (AC-1–8)', () => {
   it('requires discovery, validation, approval and honest alternatives', () => {
     const skill = read('.skills/capability/workflow/SKILL.md')
-    for (const command of ['schema', 'kinds', 'list', 'validate'])
-      expect(skill).toContain(`workflow.mjs ${command}`)
+    for (const reference of ['workflow-schema.md', 'workflow-kinds.md'])
+      expect(skill).toContain(reference)
+    expect(skill).toContain('pair-cli run <workflow> --dry-run')
+    expect(skill).toMatch(/install.*pair-cli/i)
     for (const phrase of [
       'three times',
       'explicit yes',
