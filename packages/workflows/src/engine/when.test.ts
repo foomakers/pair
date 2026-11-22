@@ -82,6 +82,10 @@ describe('when on an output (#680 AC-9)', () => {
     expect(after).toMatchObject({ run: 'done', skipped: [{ id: 'fix', kind: 'fix' }] })
     expect(states(run).fix).toBe('skipped')
   })
+  it('runs the step when the producer failed and returned no such output', async () => {
+    const { after } = await afterReview({ status: 'failed', summary: 'crashed', reason: 'crash' })
+    expect(after.ready.map(s => s.id)).toEqual(['fix'])
+  })
   it('runs the step when the output is in the list', async () => {
     const { after } = await afterReview({
       ...REVIEWED('changes-requested'),

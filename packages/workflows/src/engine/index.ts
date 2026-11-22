@@ -546,6 +546,19 @@ export interface SkippedStep {
   readonly kind: KindName
 }
 
+/** Why the named output is not in the list; an output the producer never returned (it failed or crashed) is no mismatch. */
+function outputMismatch(
+  output: string,
+  is: readonly unknown[] | undefined,
+  state: RunStateFile,
+): string | undefined {
+  const [stepId, name] = output.split('.') as [string, string]
+  const value = state.steps[stepId]?.outputs?.[name]
+  return value === undefined || is?.includes(value)
+    ? undefined
+    : `${output} is ${JSON.stringify(value)}`
+}
+
 /** Why `when` does not match now, or `undefined` when the step runs. */
 async function whenMismatch(
   when: When | undefined,
@@ -556,10 +569,7 @@ async function whenMismatch(
   const { output, is, ...filter } = when
   if (Object.keys(filter).length > 0 && card !== undefined && !matches(filter, await card()))
     return `card does not match ${JSON.stringify(filter)}`
-  if (output === undefined) return undefined
-  const [stepId, name] = output.split('.') as [string, string]
-  const value = state.steps[stepId]?.outputs?.[name]
-  return is?.includes(value) ? undefined : `${output} is ${JSON.stringify(value)}`
+  return output === undefined ? undefined : outputMismatch(output, is, state)
 }
 
 /** Writes `skipped` for the step about to start when its `when` does not match; a loop checks its next child. */
