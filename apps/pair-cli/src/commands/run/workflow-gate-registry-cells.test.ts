@@ -18,8 +18,7 @@ name: quick
 steps:
   implement:
     kind: implement
-    with:
-      gates: [quality-gate]
+    gates: [quality-gate]
   review:
     kind: review
 `
@@ -43,7 +42,11 @@ const dryRun = (wayOfWorking: string, quick = QUICK) => {
       throw new Error('a dry run launched an agent')
     },
     readCard: async () => ({ title: 'A card' }),
-    prepareWorktree: async ({ main, card }) => join(main, 'worktrees', card),
+    prepareWorktree: async ({ main, card }) => {
+      const dir = join(main, 'worktrees', card)
+      fs.mkdirSync(dir, { recursive: true })
+      return dir
+    },
     engineAvailable: () => true,
   }
   return handleRunCommand(

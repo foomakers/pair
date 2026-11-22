@@ -67,7 +67,7 @@ import {
   resolveBranch,
   runSetupCommand,
 } from './cycle-wiring'
-import { performHostKind } from './workflow-kinds'
+import { performHostKind, runStepGates } from './workflow-kinds'
 import {
   createCycleScriptsBridge,
   locateCycleScripts,
@@ -409,6 +409,11 @@ function hostKindsOf({ resolved, request, worktree }: Opened, fs: FileSystemServ
   return {
     card: () => readCardFacts(request.card, resolved.cwd),
     perform: performHostKind(
+      readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
+      worktree ?? resolved.cwd,
+      readGateTargets(fs.existsSync(way) ? fs.readFileSync(way) : ''),
+    ),
+    runGates: runStepGates(
       readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
       worktree ?? resolved.cwd,
       readGateTargets(fs.existsSync(way) ? fs.readFileSync(way) : ''),

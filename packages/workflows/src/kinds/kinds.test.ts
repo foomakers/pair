@@ -3,8 +3,6 @@ import { violations } from '../schema'
 
 describe('kind `with` options (AC-5)', () => {
   it.each([
-    ['implement', { gates: ['quality-gate'] }],
-    ['implement', { gates: [] }],
     ['implement', {}],
     ['review', { blocking: 'Major' }],
     ['generic', { anything: { nested: [1, 2] } }],
@@ -13,9 +11,8 @@ describe('kind `with` options (AC-5)', () => {
   })
 
   it.each([
-    ['implement', { gate: ['quality-gate'] }, "unknown key 'gate'"],
+    ['implement', { gates: ['quality-gate'] }, "unknown key 'gates'"],
     ['review', { floor: 'Major' }, "unknown key 'floor'"],
-    ['implement', { gates: 'quality-gate' }, 'expected array, found string "quality-gate"'],
     ['review', { blocking: 'Trivial' }, 'unknown value "Trivial"'],
   ] as const)('%s refuses %j', (kind, options, problem) => {
     expect(violations(kindByName[kind].with, options).map(found => found.problem)).toEqual([

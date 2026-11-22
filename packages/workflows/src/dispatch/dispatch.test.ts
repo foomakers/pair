@@ -118,6 +118,15 @@ describe('buildMessage (AC-4, AC-5)', () => {
   })
 })
 
+describe('a step with gates (#729 AC-7)', () => {
+  it('tells the agent the host runs the gates, so it runs none', () => {
+    const step = { ...implement, with: {}, gates: ['target:pr'] }
+    expect(buildMessage(step, kindByName.implement, { style: 'slash', ...safe })).toContain(
+      'The host runs the quality gates after you finish: run none yourself.',
+    )
+  })
+})
+
 describe('readResult (AC-4)', () => {
   const implemented = {
     status: 'ok',

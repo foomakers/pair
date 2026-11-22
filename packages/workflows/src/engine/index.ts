@@ -72,6 +72,8 @@ export interface StepLaunch {
   readonly kind: KindName
   readonly uses: string
   readonly with: Readonly<Record<string, unknown>>
+  /** Validation the host runs after the step ends `ok`. */
+  readonly gates?: readonly string[]
   readonly inputs: Readonly<Record<string, unknown>>
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
@@ -504,6 +506,7 @@ async function nextInLoop(
     kind: child.kind,
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
+    ...(child.gates && { gates: child.gates }),
     inputs: pick(producedBefore(state, steps, step), child.kind),
     attempt,
     round,
@@ -619,6 +622,7 @@ async function nextPlain(
     kind: step.kind,
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
+    ...(step.gates && { gates: step.gates }),
     inputs: inputsOf(step, steps, state),
     attempt,
   }

@@ -25,3 +25,24 @@ describe('gate entries', () => {
     expect(problems(entry)).toEqual([problem])
   })
 })
+
+describe('gates as a step attribute (#729 AC-7)', () => {
+  const at = (step: string) =>
+    validate(`version: 1\nname: q\nsteps:\n  s: ${step}\n`, 'q.yaml', deps).errors.map(
+      e => `${e.key}: ${e.problem}`,
+    )
+  it('accepts entries on any kind, and a gate with only `gates`', () => {
+    expect(at("{ kind: implement, gates: ['target:pr', quality-gate, 'command:x'] }")).toEqual([])
+    expect(at("{ kind: gate, gates: ['target:pr'] }")).toEqual([])
+  })
+  it('refuses an unknown entry where it is written', () => {
+    expect(at("{ kind: implement, gates: ['target:nope'] }")).toEqual([
+      "steps.s.gates.0: unknown gate target 'nope'",
+    ])
+  })
+  it('no longer takes `with.gates` on implement and fix', () => {
+    expect(at('{ kind: implement, with: { gates: [quality-gate] } }')[0]).toContain(
+      "unknown key 'gates'",
+    )
+  })
+})

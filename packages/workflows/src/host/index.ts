@@ -59,6 +59,8 @@ export interface WorkflowHost {
   card?(): Promise<CardFacts>
   /** Runs a step of a host kind (`gate`, `approval`, `merge`): the result it returns, no agent. */
   perform?(step: StepLaunch): Promise<unknown>
+  /** Runs the `gates` of a step that ended `ok`: `undefined` when all pass, else the failed result. */
+  runGates?(entries: readonly string[], step: StepLaunch): Promise<StepResult | undefined>
   /** Sees every step start and every recorded result, in order. */
   report?(event: StepEvent): void
 }
@@ -94,6 +96,22 @@ interface Exchange {
   usage?: Usage
 }
 
+/** The result of a step, unless it is `ok` and its `gates` are not all green. */
+async function gated(
+  host: WorkflowHost,
+  step: StepLaunch,
+  result: StepResult,
+): Promise<StepResult> {
+  if (result.status !== 'ok' || (step.gates ?? []).length === 0) return result
+  if (host.runGates === undefined)
+    return {
+      status: 'failed',
+      reason: 'no-executor',
+      summary: 'the host cannot run the gates of a step',
+    }
+  return (await host.runGates(step.gates ?? [], step)) ?? result
+}
+
 async function execute(
   host: WorkflowHost,
   run: RunDirectory,
@@ -112,7 +130,7 @@ async function execute(
             reason: 'no-executor',
             summary: `the host cannot run a ${step.kind} step`,
           }
-        : await host.perform(step),
+        : await gated(host, step, (await host.perform(step)) as StepResult),
     )
   }
   let message: string
@@ -136,7 +154,7 @@ async function execute(
       summary: 'the agent ended without a final message',
     })
   exchange.final = final
-  return record(run, step.id, readResult(final, kind), final)
+  return record(run, step.id, await gated(host, step, readResult(final, kind)), final)
 }
 
 /**

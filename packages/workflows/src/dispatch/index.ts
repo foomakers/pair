@@ -56,9 +56,10 @@ function section(title: string, values: Readonly<Record<string, unknown>>): stri
 }
 
 /** What a step in a workflow run is told: one session, no confirmations, stop only for the kind's escalations. */
-const unattendedBlock = (kind: StepKind): string =>
+const unattendedBlock = (kind: StepKind, gated: boolean): string =>
   [
     'This is an unattended run in one session. Never ask for confirmation.',
+    ...(gated ? ['The host runs the quality gates after you finish: run none yourself.'] : []),
     ...(kind.guidance === undefined ? [] : [kind.guidance]),
     kind.escalations.length === 0
       ? 'Never return status "needs-human".'
@@ -83,7 +84,7 @@ export function buildMessage(step: StepLaunch, kind: StepKind, options: MessageO
     '',
     resultBlock(kind),
     '',
-    unattendedBlock(kind),
+    unattendedBlock(kind, (step.gates ?? []).length > 0),
   ].join('\n')
 }
 

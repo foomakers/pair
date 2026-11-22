@@ -25,18 +25,7 @@ export const implement: StepKind = {
       },
     },
   },
-  with: {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      gates: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
-          'Keys of the Custom Gate Registry, run before the push. Absent or `[]` = none.',
-      },
-    },
-  },
+  with: { type: 'object', additionalProperties: false, properties: {} },
   guidance:
     'Do RED, GREEN and REFACTOR in this session, with one commit unless the card asks for more. Do every task that can be automated. A task that needs a person (manual, interactive, a real run with human approval) is skipped, never a reason to stop: finish all the others, publish the PR and list the skipped tasks in the result. Do not end your turn while any automatable task is left: one turn does the whole card, and a partial result is a failure, not a report.',
   escalations: [

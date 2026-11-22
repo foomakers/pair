@@ -101,6 +101,12 @@ export const stepSchema: JsonSchema = {
       description: 'Reserved for including a workflow (#699); never a skill name.',
     },
     with: { type: 'object', description: 'Options of the step; the kind declares the keys.' },
+    gates: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'Optional validation the host runs after the step ends `ok`: a registry key, `target:<name>` or `command:<shell line>`. A red one fails the step. Absent = none.',
+    },
     'on-failed': {
       enum: ['stop', 'continue'],
       description:
@@ -166,6 +172,8 @@ export interface Step {
   /** Reserved for including a workflow (#699); the validator refuses it as a skill name. */
   readonly uses?: string
   readonly with?: Readonly<Record<string, unknown>>
+  /** Validation the host runs after the step ends `ok`. */
+  readonly gates?: readonly string[]
   readonly when?: When
   readonly 'on-failed'?: 'stop' | 'continue'
   /** One of the workflow's `aliases`: what a configuration sets for the step. */

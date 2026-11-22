@@ -26,7 +26,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `pr`: `integer` — The number of the pull request.
   - `head`: `string matching ^[0-9a-f]{40}$` — The pushed head, a 40-hex sha.
 - **Options** (`with`)
-  - `gates`: `array of string` — Keys of the Custom Gate Registry, run before the push. Absent or `[]` = none.
+  - None.
 - **Returns `needs-human` when**
   - A decision the card does not record blocks every remaining task.
   - A quality gate stays red and the fix is outside the card.

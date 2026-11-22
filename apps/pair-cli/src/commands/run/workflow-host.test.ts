@@ -33,8 +33,7 @@ name: quick
 steps:
   implement:
     kind: implement
-    with:
-      gates: [quality-gate]
+    gates: [quality-gate]
   review:
     kind: review
 `
@@ -42,7 +41,7 @@ const REGISTRY = `### Custom Gate Registry
 
 | Order | Key | Gate | Command |
 | --- | --- | --- | --- |
-| 1 | quality-gate | Quality Gate | \`pnpm quality-gate\` |
+| 1 | quality-gate | Quality Gate | \`true\` |
 `
 
 /** A fake skill answers with the agent's final message, `undefined` when the agent dies, or throws on a crash. */
@@ -87,7 +86,11 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
         : { outcome: 'success', detail: 'terminal event: success' }
     },
     readCard: async () => ({ title: 'A card' }),
-    prepareWorktree: async ({ main, card }) => join(main, 'worktrees', card),
+    prepareWorktree: async ({ main, card }) => {
+      const dir = join(main, 'worktrees', card)
+      fs.mkdirSync(dir, { recursive: true })
+      return dir
+    },
     engineAvailable: () => true,
     ...over,
   }
@@ -292,17 +295,17 @@ describe('validation before any launch (AC-2, AC-3)', () => {
     [
       'an unknown kind',
       QUICK.replace('kind: review', 'kind: deploy'),
-      'quick.yaml:9: steps.review.kind: unknown value "deploy"',
+      'quick.yaml:8: steps.review.kind: unknown value "deploy"',
     ],
     [
       'an unknown gate key',
       QUICK.replace('[quality-gate]', '[e2e]'),
-      "quick.yaml:7: steps.implement.with.gates.0: unknown gate key 'e2e' — fix: use one of quality-gate",
+      "quick.yaml:6: steps.implement.gates.0: unknown gate key 'e2e' — fix: use one of quality-gate",
     ],
     [
       'a skill that is not installed',
       QUICK.replace('kind: review', 'kind: review\n    skill: nowhere'),
-      "quick.yaml:10: steps.review.skill: skill 'nowhere' is not installed",
+      "quick.yaml:9: steps.review.skill: skill 'nowhere' is not installed",
     ],
   ])('refuses %s, naming file, line and fix, and launches nothing', async (_name, text, error) => {
     write('.pair/adoption/tech/workflows/quick.yaml', text)
