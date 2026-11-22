@@ -1,5 +1,5 @@
 ---
-name: workflow
+name: pair-capability-workflow
 description: "Creates, configures and explains workflows from the validating grammar."
 version: 0.1.0
 author: Foomakers
