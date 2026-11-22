@@ -81,6 +81,24 @@ describe('a red gate goes back to the agent (#729 AC-10)', () => {
     detail,
   })
 
+  it('sums measured usage across gate retries (#726 AC-8)', async () => {
+    const files = createMemoryFiles()
+    await start({ files, dir: DIR }, { text: TEXT(", gates: ['command:x']"), file: 'quick.yaml' }, { card: '729' })
+    let attempts = 0
+    await runSteps({
+      files,
+      style: { skill: name => name } as never,
+      isSafeText: () => true,
+      launch: async (_step, _message, meter) => {
+        meter({ read: ++attempts === 1 ? 2000 : 3000, cached: 0, written: 0 })
+        return OK
+      },
+      runGates: async () => attempts === 1 ? red('red') : undefined,
+    }, DIR, { host: 'pair-run', settings: () => ({ engine: 'test' }) })
+    const record = JSON.parse(files.readFileSync(`${DIR}/telemetry.jsonl`).split('\n')[0]!)
+    expect(record.tokens.read).toEqual({ value: 5000, source: 'measured' })
+  })
+
   it('relaunches the step with the gate output, and the step is ok once the gate passes', async () => {
     const sent: string[] = []
     let calls = 0
