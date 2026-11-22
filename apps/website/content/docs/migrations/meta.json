@@ -1,7 +1,4 @@
 {
   "title": "Migrations",
-  "pages": [
-    "v0.4-to-v0.5",
-    "v0.5-to-v0.6"
-  ]
+  "pages": ["v0.4-to-v0.5", "v0.5-to-v0.6"]
 }
