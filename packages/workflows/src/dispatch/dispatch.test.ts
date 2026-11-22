@@ -92,7 +92,8 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- summary: string',
         '- reason: string (optional)',
         '',
-        'This is an unattended run in one session. Never ask for confirmation. Return status "needs-human" only in these cases: ' + kindByName.generic.escalations.join(' '),
+        'This is an unattended run in one session. Never ask for confirmation. Return status "needs-human" only in these cases: ' +
+          kindByName.generic.escalations.join(' '),
       ].join('\n'),
     )
   })
