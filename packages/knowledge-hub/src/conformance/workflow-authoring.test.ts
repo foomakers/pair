@@ -37,7 +37,9 @@ describe('workflow authoring (AC-1–8)', () => {
     expect(skill).toContain('without `--config`')
     expect(skill).toContain('path-selected configurations in the temporary worktree')
     expect(skill).toContain('translate an absolute workflow argument to the staged workflow path')
-    expect(skill).toContain('verify the resolved workflow file is the staged proposal before writing')
+    expect(skill).toContain(
+      'verify the resolved workflow file is the staged proposal before writing',
+    )
   })
   it('routes authoring and launching separately', () => {
     const assistant = read('plugin/skills/pair-assistant/SKILL.md')
