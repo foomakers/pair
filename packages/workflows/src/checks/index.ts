@@ -46,8 +46,9 @@ async function ciGreen(facts: FactReader, options: CheckOptions): Promise<Verdic
     const ci = await facts.ci()
     if (ci === 'green') return undefined
     if (ci === 'red') return 'ci-red'
-    if (now() >= deadline) return 'ci-timeout'
-    await sleep(pollMs)
+    const remaining = deadline - now()
+    if (remaining <= 0) return 'ci-timeout'
+    await sleep(Math.min(pollMs, remaining))
   }
 }
 

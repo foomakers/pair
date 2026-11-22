@@ -94,6 +94,7 @@ interface Exchange {
   sent: string
   final: string
   usage?: Usage
+  unmeasured?: boolean
 }
 
 /** The result of a step, unless it is `ok` and its `gates` are not all green. */
@@ -123,17 +124,26 @@ async function launchGated(
   const kind = kindByName[step.kind]
   let prompt = message
   for (let retry = 0; ; retry++) {
-    exchange.sent = prompt
+    exchange.sent += prompt
+    let attemptUsage: Usage | undefined
     const final = await host.launch(step, prompt, usage => {
-      exchange.usage = usage
+      attemptUsage = usage
     })
+    if (attemptUsage !== undefined) {
+      const prior = exchange.usage ?? { read: 0, cached: 0, written: 0 }
+      exchange.usage = {
+        read: prior.read + attemptUsage.read,
+        cached: prior.cached + attemptUsage.cached,
+        written: prior.written + attemptUsage.written,
+      }
+    } else exchange.unmeasured = true
     if (final === undefined)
       return record(run, step.id, {
         status: 'failed',
         reason: 'no-result',
         summary: 'the agent ended without a final message',
       })
-    exchange.final = final
+    exchange.final += final
     const read = readResult(final, kind)
     const result = await gated(host, step, read)
     if (retry < GATE_RETRIES && read.status === 'ok' && result.reason?.startsWith('gate-failed'))
@@ -223,13 +233,13 @@ async function executeMetered(
   const startedAt = writer.now()
   const exchange: Exchange = { sent: '', final: '' }
   const result = await execute(host, run, step, exchange)
-  const { sent, final, usage } = exchange
+  const { sent, final, usage, unmeasured } = exchange
   await writer.step({
     step,
     startedAt,
     durationMs: writer.now().getTime() - startedAt.getTime(),
     // A host that cannot measure: the estimate from the two texts.
-    tokens: usage === undefined ? estimated(sent, final) : measured(usage),
+    tokens: usage === undefined || unmeasured ? estimated(sent, final) : measured(usage),
     status: result.status,
     ...(result.reason !== undefined && { reason: result.reason }),
   })
