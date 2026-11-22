@@ -709,6 +709,12 @@ async function preflight(resolved: Resolved, card: string, services: Services): 
   return read.title
 }
 
+function approvalQuestion(step: ReturnType<typeof addressedSteps>[number]): string {
+  return step.kind === 'approval'
+    ? ` question=${JSON.stringify(step.with?.['question'] ?? '(approval required)')}`
+    : ''
+}
+
 export async function handleWorkflowRun(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
@@ -724,7 +730,7 @@ export async function handleWorkflowRun(
         step.kind === 'loop' ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
       const settings = stepSettings(resolved, resolved.configuration?.configuration, step)
       console.log(
-        `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''} engine=${settings.engine} model=${settings.model ?? '(engine default)'}${settings.effort ? ` effort=${settings.effort}` : ''}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${step.kind === 'approval' ? ` question=${JSON.stringify(step.with?.question ?? '(approval required)')}` : ''}`,
+        `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''} engine=${settings.engine} model=${settings.model ?? '(engine default)'}${settings.effort ? ` effort=${settings.effort}` : ''}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${approvalQuestion(step)}`,
       )
     })
     console.log('  Dry run: the workflow is valid; nothing was launched.')
