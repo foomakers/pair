@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { join } from 'path'
 import { fileSystemService as fs } from '@pair/content-ops'
-import { readGateRegistry, validate } from '@pair/workflows'
+import { readGateRegistry, readGateTargets, validate } from '@pair/workflows'
 import { isSafePromptText } from './prompt-safety'
 
 /**
@@ -21,6 +21,7 @@ const errorsOf = (root: string) =>
   validate(read(root, QUICK), QUICK, {
     skillExists: () => true,
     gateKeys: Object.keys(readGateRegistry(read(root, WAY_OF_WORKING))),
+    gateTargets: Object.keys(readGateTargets(read(root, WAY_OF_WORKING))),
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
   }).errors
