@@ -22,6 +22,8 @@ describe('workflow authoring (AC-1–8)', () => {
       'closest alternative',
     ])
       expect(skill.toLowerCase()).toContain(phrase)
+    expect(skill).toMatch(/main checkout[\s\S]*way-of-working\.md/i)
+    expect(skill).toMatch(/current.directory[\s\S]*pair\.config\.json/i)
     expect(skill).toMatch(/temporary/i)
     expect(skill).toMatch(/never write.*invalid/i)
     expect(skill).toMatch(/engine.*model/i)
