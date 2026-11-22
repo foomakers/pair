@@ -291,8 +291,8 @@ describe('validation before any launch (AC-2, AC-3)', () => {
   it.each([
     [
       'an unknown kind',
-      QUICK.replace('kind: review', 'kind: merge'),
-      'quick.yaml:9: steps.review.kind: unknown value "merge"',
+      QUICK.replace('kind: review', 'kind: deploy'),
+      'quick.yaml:9: steps.review.kind: unknown value "deploy"',
     ],
     [
       'an unknown gate key',

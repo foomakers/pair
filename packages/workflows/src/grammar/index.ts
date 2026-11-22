@@ -3,7 +3,15 @@ import { isAlias, isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, vi
 import { violations, type JsonSchema, type Path } from '../schema'
 
 /** The step kinds of grammar v1. A kind's contract lives in `kinds/`. */
-export const KIND_NAMES = ['implement', 'review', 'fix', 'generic'] as const
+export const KIND_NAMES = [
+  'implement',
+  'review',
+  'fix',
+  'generic',
+  'gate',
+  'approval',
+  'merge',
+] as const
 export type KindName = (typeof KIND_NAMES)[number]
 /** The macrostates of a card, as the adopted state mapping names them. */
 export const CARD_STATES = ['Draft', 'Ready', 'In Progress', 'Review', 'Done'] as const
@@ -17,7 +25,7 @@ export function cardStateOf(step: {
   // A loop has no kind of its own: its inner steps set the state.
   const state =
     step.state ??
-    ({ implement: 'In Progress', fix: 'In Progress', review: 'Review' } as const)[
+    ({ implement: 'In Progress', fix: 'In Progress', review: 'Review', merge: 'Done' } as const)[
       step.kind as 'implement'
     ]
   return state === undefined || state === 'none'
@@ -44,6 +52,34 @@ export const entrySchema: JsonSchema = {
   properties: { engine: text, model: text, effort: text },
 }
 
+/** The card facts a `when` reads, same form as `select.filter`; or the output of an earlier step. */
+export interface When {
+  readonly has?: readonly string[]
+  readonly lacks?: readonly string[]
+  readonly status?: readonly string[]
+  readonly assignee?: readonly string[]
+  /** `<step>.<name>`: an output of an earlier step, matched against `is`. */
+  readonly output?: string
+  readonly is?: readonly unknown[]
+}
+
+/** `<step>.<name>` or `<loop>/<step>.<name>`. */
+const OUTPUT_REF = '^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)?\\.[A-Za-z][A-Za-z0-9]*$'
+const names = { type: 'array', items: text } as const
+export const whenSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  minProperties: 1,
+  properties: {
+    has: names,
+    lacks: names,
+    status: names,
+    assignee: names,
+    output: { type: 'string', pattern: OUTPUT_REF },
+    is: { type: 'array' },
+  },
+}
+
 export const stepSchema: JsonSchema = {
   type: 'object',
   required: ['kind'],
@@ -54,6 +90,11 @@ export const stepSchema: JsonSchema = {
       type: 'string',
       pattern: SKILL_NAME,
       description: 'The skill that runs. Optional for a typed kind, required for `generic`.',
+    },
+    when: {
+      ...whenSchema,
+      description:
+        'Runs the step only when the card matches (`has`, `lacks`, `status`, `assignee`; AND between keys, any-of inside a list), or when `output` of an earlier step is one of `is`. Else the step is `skipped`.',
     },
     uses: {
       type: 'string',
@@ -125,6 +166,7 @@ export interface Step {
   /** Reserved for including a workflow (#699); the validator refuses it as a skill name. */
   readonly uses?: string
   readonly with?: Readonly<Record<string, unknown>>
+  readonly when?: When
   readonly 'on-failed'?: 'stop' | 'continue'
   /** One of the workflow's `aliases`: what a configuration sets for the step. */
   readonly alias?: string

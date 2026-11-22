@@ -30,6 +30,10 @@ describe('card state of a step (#672 AC-13)', () => {
     ['review', undefined, { state: 'Review', when: 'start' }],
     ['generic', undefined, undefined],
     ['review', 'none', undefined],
+    ['merge', undefined, { state: 'Done', when: 'end' }],
+    ['merge', 'none', undefined],
+    ['merge', 'Review', { state: 'Review', when: 'start' }],
+    ['gate', undefined, undefined],
     ['generic', 'Done', { state: 'Done', when: 'end' }],
     ['generic', 'Ready', { state: 'Ready', when: 'end' }],
     ['implement', 'Review', { state: 'Review', when: 'start' }],
@@ -112,22 +116,22 @@ describe('parseWorkflow (AC-2)', () => {
     ],
     [
       'an unknown step key',
-      seeded('    with:\n      gates: [quality-gate]', '    when: always'),
+      seeded('    with:\n      gates: [quality-gate]', '    retry: always'),
       {
         line: 7,
-        key: 'steps.implement.when',
-        problem: "unknown key 'when'",
-        fix: 'use one of kind, skill, uses, with, on-failed, alias, state, until, max, on-max, steps',
+        key: 'steps.implement.retry',
+        problem: "unknown key 'retry'",
+        fix: 'use one of kind, skill, when, uses, with, on-failed, alias, state, until, max, on-max, steps',
       },
     ],
     [
       'an unknown kind',
-      seeded('kind: review', 'kind: merge'),
+      seeded('kind: review', 'kind: deploy'),
       {
         line: 10,
         key: 'steps.review.kind',
-        problem: 'unknown value "merge"',
-        fix: 'use one of "implement", "review", "fix", "generic", "loop"',
+        problem: 'unknown value "deploy"',
+        fix: 'use one of "implement", "review", "fix", "generic", "gate", "approval", "merge", "loop"',
       },
     ],
     [
@@ -280,9 +284,9 @@ describe('parseWorkflow (AC-2)', () => {
   })
 
   it('formats an error as file:line: key: problem — fix', () => {
-    const { errors } = parseWorkflow(seeded('kind: review', 'kind: merge'), 'quick.yaml')
+    const { errors } = parseWorkflow(seeded('kind: review', 'kind: deploy'), 'quick.yaml')
     expect(errors.map(formatError)).toEqual([
-      'quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic", "loop"',
+      'quick.yaml:10: steps.review.kind: unknown value "deploy" — fix: use one of "implement", "review", "fix", "generic", "gate", "approval", "merge", "loop"',
     ])
   })
 })
