@@ -99,3 +99,14 @@ describe('readGateRegistry', () => {
     expect(readGateRegistry(text)).toEqual({})
   })
 })
+
+describe('implement kind: do everything automatable (unattended principle)', () => {
+  const { guidance, escalations } = kindByName.implement
+  it('tells the agent to skip a task that needs a person and finish the rest', () => {
+    expect(guidance).toMatch(/needs a person/)
+    expect(guidance).toMatch(/skip/i)
+  })
+  it('does not let an incomplete task alone trigger needs-human', () => {
+    expect(escalations.join(' ')).not.toMatch(/task is incomplete/)
+  })
+})

@@ -28,7 +28,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Options** (`with`)
   - `gates`: `array of string` — Keys of the Custom Gate Registry, run before the push. Absent or `[]` = none.
 - **Returns `needs-human` when**
-  - A task is incomplete or needs a decision the card does not record.
+  - A decision the card does not record blocks every remaining task.
   - A quality gate stays red and the fix is outside the card.
 
 ## review
