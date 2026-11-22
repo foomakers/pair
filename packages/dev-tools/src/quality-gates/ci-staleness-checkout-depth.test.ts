@@ -128,7 +128,12 @@ describe('every workflow job that runs the docs-staleness gate checks out histor
   // member silently disappears and this row says so instead.
   it('derives the root scripts that reach the gate from package.json, closure and all', () => {
     const scripts = rootScripts()
-    expect([...scriptsReachingTheGate(scripts)].sort()).toEqual(['docs:staleness', 'quality-gate'])
+    expect([...scriptsReachingTheGate(scripts)].sort()).toEqual([
+      'docs:staleness',
+      'gate:pr',
+      'gate:review',
+      'quality-gate',
+    ])
     expect(scripts['quality-gate'], 'the chain b3 depends on').toContain(`pnpm ${GATE_SCRIPT}`)
     // A path segment is not a script invocation.
     expect(
