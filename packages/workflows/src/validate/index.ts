@@ -8,6 +8,7 @@ import {
   type WorkflowError,
 } from '../grammar'
 import { fieldsOf, kindByName } from '../kinds'
+import { addressedSteps } from '../grammar'
 import { textsOf, violations } from '../schema'
 
 /** What the validator asks of its caller: the package reads no skill directory and no adoption file itself. */
@@ -38,7 +39,7 @@ type Check = (
 ) => WorkflowError[]
 
 const skillErrors: Check = (workflow, step, deps, path) => {
-  if (step.kind === 'loop') return []
+  if (step.kind === 'loop' || kindByName[step.kind].host === true) return []
   if (step.uses !== undefined)
     return [
       errorAt(workflow, [...path, 'uses'], {
@@ -99,7 +100,18 @@ const safetyErrors: Check = (workflow, step, deps, path) =>
       }),
     )
 
-const CHECKS: readonly Check[] = [skillErrors, withErrors, gateErrors, safetyErrors]
+/** A `gate` runs something: `gates`, `checks` or both. */
+const gateNeedsWork: Check = (workflow, step, _deps, path) =>
+  step.kind === 'gate' && step.with?.['gates'] === undefined && step.with?.['checks'] === undefined
+    ? [
+        errorAt(workflow, path, {
+          problem: 'a gate has neither gates nor checks',
+          fix: "add 'with.gates' (registry keys) or 'with.checks'",
+        }),
+      ]
+    : []
+
+const CHECKS: readonly Check[] = [skillErrors, withErrors, gateErrors, gateNeedsWork, safetyErrors]
 
 const LOOP_ONLY = ['until', 'max', 'on-max', 'steps'] as const
 
@@ -167,13 +179,60 @@ interface Scope {
   readonly workflow: Workflow
   readonly deps: ValidationDeps
   readonly available: Set<string>
+  /** Outputs only a step with `when` produces: it may be skipped, so no later step may need them. */
+  readonly optional: Set<string>
+}
+
+function outputErrors(
+  workflow: Workflow,
+  output: string,
+  path: readonly string[],
+  earlier: ReadonlySet<string>,
+): WorkflowError[] {
+  const [id = '', name = ''] = output.split('.')
+  const target = addressedSteps(workflow).find(one => one.id === id)
+  const at = (problem: string, fix: string) => [
+    errorAt(workflow, [...path, 'when', 'output'], { problem, fix }),
+  ]
+  if (!earlier.has(id) || target === undefined || target.kind === 'loop')
+    return at(`'${id}' is not a step before this one`, 'name an earlier step')
+  const declared = fieldsOf(kindByName[target.kind].outputs)
+  return declared.includes(name)
+    ? []
+    : at(`step '${id}' has no output '${name}'`, `use one of ${declared.join(', ')}`)
+}
+
+/** Where `when.output` points: an earlier step (`id` or `loop/id`) and an output it declares. */
+function whenErrors(
+  { workflow }: Scope,
+  step: Step,
+  path: readonly string[],
+  earlier: ReadonlySet<string>,
+): WorkflowError[] {
+  const { when } = step
+  if (when === undefined) return []
+  const at = (key: string, problem: string, fix: string) =>
+    errorAt(workflow, [...path, 'when', key], { problem, fix })
+  const errors: WorkflowError[] = []
+  if ((when.output === undefined) !== (when.is === undefined))
+    errors.push(
+      at(
+        when.output === undefined ? 'is' : 'output',
+        "'output' and 'is' go together",
+        "write both 'output' and 'is'",
+      ),
+    )
+  if (when.output !== undefined) errors.push(...outputErrors(workflow, when.output, path, earlier))
+  return errors
 }
 
 function plainStepErrors(
-  { workflow, deps, available }: Scope,
+  scope: Scope,
   step: Step & { kind: KindName },
   path: readonly string[],
+  earlier: ReadonlySet<string>,
 ): WorkflowError[] {
+  const { workflow, deps, available, optional } = scope
   const kind = kindByName[step.kind]
   const misplaced = LOOP_ONLY.filter(key => step[key] !== undefined).map(key =>
     errorAt(workflow, [...path, key], {
@@ -185,22 +244,54 @@ function plainStepErrors(
     .filter(input => !available.has(input))
     .map(input =>
       errorAt(workflow, path, {
-        problem: `input '${input}' is neither a launch argument nor an output of an earlier step`,
-        fix: `put a step that returns '${input}' before it`,
+        problem: optional.has(input)
+          ? `input '${input}' is only produced by a step with 'when', which may be skipped`
+          : `input '${input}' is neither a launch argument nor an output of an earlier step`,
+        fix: optional.has(input)
+          ? `remove 'when' from the step that returns '${input}'`
+          : `put a step that returns '${input}' before it`,
       }),
     )
-  fieldsOf(kind.outputs).forEach(output => available.add(output))
-  return [...misplaced, ...unmet, ...CHECKS.flatMap(check => check(workflow, step, deps, path))]
+  fieldsOf(kind.outputs).forEach(output =>
+    step.when === undefined ? available.add(output) : available.has(output) || optional.add(output),
+  )
+  return [
+    ...misplaced,
+    ...unmet,
+    ...whenErrors(scope, step, path, earlier),
+    ...CHECKS.flatMap(check => check(workflow, step, deps, path)),
+  ]
 }
 
 function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowError[] {
   const available = new Set(deps.launchInputs)
-  const scope = { workflow, deps, available }
+  const scope = { workflow, deps, available, optional: new Set<string>() }
+  const seen = new Set<string>()
   const checkStep: CheckStep = (step, path) => {
-    if (step.kind !== 'loop') return plainStepErrors(scope, step as Step & { kind: KindName }, path)
+    const id = path.filter((_, index) => index % 2 === 1).join('/')
+    const earlier = new Set(seen)
+    seen.add(id)
+    if (step.kind !== 'loop')
+      return plainStepErrors(scope, step as Step & { kind: KindName }, path, earlier)
     let exitInputs = new Set(available)
     const errors = [
       ...loopOwnErrors(workflow, step, path),
+      ...(step.when === undefined
+        ? []
+        : [
+            errorAt(workflow, [...path, 'when'], {
+              problem: 'when is not allowed on a loop',
+              fix: 'put when on a step inside it',
+            }),
+          ]),
+      ...(step.steps ?? [])
+        .filter(child => child.id === step.until && child.when !== undefined)
+        .map(child =>
+          errorAt(workflow, [...path, 'steps', child.id, 'when'], {
+            problem: `when is not allowed on the until step '${child.id}'`,
+            fix: 'remove it: the loop needs the until step to run',
+          }),
+        ),
       ...(step.steps ?? []).flatMap(child => {
         const found = loopChildErrors(workflow, child, [...path, 'steps', child.id], checkStep)
         if (child.id === step.until) exitInputs = new Set(available)
@@ -227,6 +318,38 @@ function warnings(workflow: Workflow): WorkflowError[] {
     : []
 }
 
+/** `merge` with no approval, review or head check before it: the engine blocks nothing, so say it. */
+function mergeWarnings(workflow: Workflow): WorkflowError[] {
+  const flat = addressedSteps(workflow).filter(step => step.kind !== 'loop')
+  return flat.flatMap((step, index) => {
+    if (step.kind !== 'merge') return []
+    const before = flat.slice(0, index)
+    const lastChange = before.reduce(
+      (at, one, i) => (one.kind === 'implement' || one.kind === 'fix' ? i : at),
+      -1,
+    )
+    const missing = [
+      before.some(one => one.kind === 'approval') ? '' : 'approval step',
+      lastChange >= 0 && !before.slice(lastChange).some(one => one.kind === 'review')
+        ? 'review after the last code-changing step'
+        : '',
+      before.some(
+        one =>
+          one.kind === 'gate' &&
+          (one.with?.['checks'] as string[] | undefined)?.includes('head-unchanged'),
+      )
+        ? ''
+        : "gate with the 'head-unchanged' check",
+    ].filter(Boolean)
+    return missing.map(what =>
+      errorAt(workflow, ['steps', step.id.split('/')[0] ?? step.id], {
+        problem: `merge has no ${what}`,
+        fix: `add a ${what} before the merge, or accept that it merges without`,
+      }),
+    )
+  })
+}
+
 /**
  * The one validator: form (the grammar) then coherence (skills, inputs, options, gate keys).
  * `pair run <workflow>` calls it before any launch, and `--dry-run` calls nothing else.
@@ -237,5 +360,9 @@ export function validate(text: string, file: string, deps: ValidationDeps): Vali
   const errors = coherenceErrors(parsed.workflow, deps)
   return errors.length > 0
     ? { errors, warnings: [] }
-    : { workflow: parsed.workflow, errors: [], warnings: warnings(parsed.workflow) }
+    : {
+        workflow: parsed.workflow,
+        errors: [],
+        warnings: [...warnings(parsed.workflow), ...mergeWarnings(parsed.workflow)],
+      }
 }

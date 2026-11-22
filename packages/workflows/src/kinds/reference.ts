@@ -18,7 +18,11 @@ function fields(schema: JsonSchema, marked = false): string[] {
 function section(name: (typeof KIND_NAMES)[number]): string[] {
   const kind = kindByName[name]
   const skill =
-    kind.defaultSkill === undefined ? 'none: `skill` is required' : `\`${kind.defaultSkill}\``
+    kind.host === true
+      ? 'none: the host runs it, no agent'
+      : kind.defaultSkill === undefined
+        ? 'none: `skill` is required'
+        : `\`${kind.defaultSkill}\``
   return [
     `## ${name}`,
     '',

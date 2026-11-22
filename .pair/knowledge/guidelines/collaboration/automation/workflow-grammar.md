@@ -67,6 +67,39 @@ steps:
 
 An `ok` result from `until` exits immediately, skipping later steps. A failed `until` lets later steps receive its outputs. A failed other step ends the round. `needs-human` parks at the same step and round. On an exhausted escalation, a plain relaunch does nothing; `--more-rounds <n>` grants and records further rounds. Nested loops and `on-failed` inside a loop are errors. Each child result is saved under `steps/<loop>/<child>/round-<n>/result.json`.
 
+### Steps the host runs
+
+`gate`, `approval` and `merge` run no agent and spend no token: the host executes them. Their options are in the [kind reference](workflow-kinds.md).
+
+```yaml
+  checks:
+    kind: gate
+    with: { gates: [quality-gate], checks: [ci-green, head-unchanged] }
+  approve:
+    kind: approval
+    with: { question: Merge this PR? }
+  merge:
+    kind: merge
+    with: { method: squash }
+```
+
+- **`gate`**: `gates` are keys of the Custom Gate Registry, run in the card worktree in the given order (never a shell line). `checks` are `ci-green` (waits, 30 minutes by default, `with.timeout-minutes`), `head-unchanged`, `review-approved`, `prerequisites-done`. The first failure fails the step with the command output or the check's reason. At least one of `gates` or `checks`.
+- **`approval`**: parks the run and comments once on the card. Answers: `--approve` / `--reject "reason"`, a card comment starting `/approve` or `/reject reason`, a native PR review. An answer counts only when the platform authorizes its author; others are ignored and reported. The workflow holds no names.
+- **`merge`**: merges the PR (`squash` default, `merge`, `rebase`), closes the story, cascades, cleans up. Fails `head-moved` if the PR head is not the `head` it received, and with the platform's reason if the platform refuses. Sets the card to Done when `ok` (key `state` overrides).
+
+### `when` and `skipped`
+
+```yaml
+  approve:
+    kind: approval
+    when: { has: [risk:red, risk:yellow] }
+  fix:
+    kind: fix
+    when: { output: review.verdict, is: [changes-requested] }
+```
+
+`when` is valid on any step except a loop and the `until` step of a loop. Card facts: `has`, `lacks`, `status`, `assignee` (AND between keys, any-of inside a list), read when the step is about to start. Output form: `output: <step>.<name>` (a loop child is `loop/step.name`) with `is: [...]`. A step whose `when` does not match is `skipped`: a sixth state, shown in the output, producing no outputs, and the run goes on. A later step that needs an output only a skippable step produces is an error. A transition is a deterministic `when`, not a prompt.
+
 ## Rules
 
 - YAML 1.2, declarative only: an anchor, an alias, a tag or a duplicate key is an error.
@@ -75,10 +108,10 @@ An `ok` result from `until` exits immediately, skipping later steps. A failed `u
 - Every error names the file, the line, the key and the fix:
 
 ```text
-quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic", "loop"
+quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic", "gate", "approval", "merge", "loop"
 ```
 
-Not in version 1: `context`, `interactive`, `prompt`, `gate`, `approval`, `merge`, `when`, and a step that uses another workflow.
+Not in version 1: `context`, `interactive`, `prompt`, and a step that uses another workflow.
 
 ## Validation
 
@@ -91,6 +124,7 @@ A workflow is validated before any step is launched, and by `--dry-run`, which l
 | Coherence | Every input of a step is a launch argument (`--card`) or an output of an earlier step.            |
 | Coherence | Every key under `with` is declared by the kind.                                                   |
 | Coherence | Every key in `with.gates` is a `Key` of the Custom Gate Registry in `way-of-working.md`.          |
+| Coherence | A `gate` has `gates` or `checks`; `when.output` names an earlier step and an output it declares; `when` is not on a loop or its `until` step. |
 | Coherence | Every text under `with` is short plain text: no backtick, no `$(`, no line break.                 |
 
 An error refuses the workflow. A warning does not.
@@ -121,3 +155,6 @@ An error refuses the workflow. A warning does not.
 | The run is launched again           | It resumes at the first step that is not `ok`.                    |
 | The workflow file changed meanwhile | The frozen copy is used; a warning says so.                       |
 | The run is complete                 | Nothing runs. `--restart` archives the directory and starts over. |
+| `merge` with no `approval` step before it | The engine blocks nothing; the file says so. |
+| `merge` with no `review` after the last `implement` or `fix` | Same. |
+| `merge` with no `gate` carrying `head-unchanged` before it | Same. |

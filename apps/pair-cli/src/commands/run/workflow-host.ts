@@ -59,7 +59,14 @@ import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './
 import { finalTextOf, type IterationResult } from './stream-reader'
 import { observeEngineEvent, type EngineObservation } from './telemetry'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
-import { mainCheckoutOrCwd, readRunnableCard, resolveBranch, runSetupCommand } from './cycle-wiring'
+import {
+  mainCheckoutOrCwd,
+  readCardFacts,
+  readRunnableCard,
+  resolveBranch,
+  runSetupCommand,
+} from './cycle-wiring'
+import { performHostKind } from './workflow-kinds'
 import {
   createCycleScriptsBridge,
   locateCycleScripts,
@@ -388,6 +395,20 @@ interface Opened {
   readonly title: string
   /** The run's frozen configuration (the copy on disk), when it has one. */
   readonly effective?: Configuration | undefined
+  /** The card's worktree, where gate commands run. */
+  readonly worktree?: string
+}
+
+/** What the package asks of this host besides an agent: the card's facts, and the steps it runs itself. */
+function hostKindsOf({ resolved, request, worktree }: Opened, fs: FileSystemService) {
+  const way = join(resolved.main, WAY_OF_WORKING)
+  return {
+    card: () => readCardFacts(request.card, resolved.cwd),
+    perform: performHostKind(
+      readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
+      worktree ?? resolved.cwd,
+    ),
+  }
 }
 
 /** The step of the workflow with this id. */
@@ -500,6 +521,7 @@ async function runOnConsole(
         isSafeText: isSafePromptText,
         styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
+        ...hostKindsOf(opened, fs),
         report: event => {
           if (event.state === 'running')
             sink.event({ event: 'stage', card: request.card, stage: event.step })
@@ -596,7 +618,7 @@ async function drive(
   console.log(`  Worktree: ${worktree}`)
   return runOnConsole(
     config,
-    { ...opened, effective },
+    { ...opened, effective, worktree },
     launcher({ config, resolved, services, worktree, effective }),
     services,
   )

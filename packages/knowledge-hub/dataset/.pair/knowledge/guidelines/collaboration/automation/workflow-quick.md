@@ -27,6 +27,7 @@ steps:
   fix:
     kind: fix
     alias: build
+    when: { output: review.verdict, is: [changes-requested] }
 ```
 
 `implement` and `fix` run with the alias `build`, `review` with `judge`. A configuration sets their engine, model and effort: `pair-cli run quick --card 627 --config codex`. See [workflow-configuration.md](workflow-configuration.md).

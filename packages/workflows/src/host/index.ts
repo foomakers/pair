@@ -8,6 +8,7 @@ import {
   type StepLaunch,
 } from '../engine'
 import type { KindName } from '../grammar'
+import type { CardFacts } from '../select'
 import { kindByName, type StepResult, type StepStatus } from '../kinds'
 import {
   closeRun,
@@ -24,7 +25,7 @@ import {
 export interface StepEvent {
   readonly step: string
   readonly kind: KindName
-  readonly state: 'running' | StepStatus
+  readonly state: 'running' | 'skipped' | StepStatus
   readonly summary?: string
   readonly reason?: string
   readonly detail?: string
@@ -54,6 +55,10 @@ export interface WorkflowHost {
     message: string,
     meter: (usage: Usage) => void,
   ): Promise<string | undefined>
+  /** The card as it is now: what a step's `when` reads. Absent: a `when` on card facts matches. */
+  card?(): Promise<CardFacts>
+  /** Runs a step of a host kind (`gate`, `approval`, `merge`): the result it returns, no agent. */
+  perform?(step: StepLaunch): Promise<unknown>
   /** Sees every step start and every recorded result, in order. */
   report?(event: StepEvent): void
 }
@@ -96,6 +101,20 @@ async function execute(
   exchange: Exchange = { sent: '', final: '' },
 ): Promise<StepResult> {
   const kind = kindByName[step.kind]
+  if (kind.host === true) {
+    exchange.sent = JSON.stringify(step.with)
+    return record(
+      run,
+      step.id,
+      host.perform === undefined
+        ? {
+            status: 'failed',
+            reason: 'no-executor',
+            summary: `the host cannot run a ${step.kind} step`,
+          }
+        : await host.perform(step),
+    )
+  }
   let message: string
   try {
     message = buildMessage(step, kind, {
@@ -187,6 +206,14 @@ async function ended(
   return { run: outcome, ...(last !== undefined && { last }) }
 }
 
+/** The next step, reporting every step passed over because its `when` did not match. */
+async function advance(host: WorkflowHost, run: RunDirectory) {
+  const found = await next(run, host.card?.bind(host))
+  for (const { id, kind } of found.skipped ?? [])
+    host.report?.({ step: id, kind, state: 'skipped', summary: 'skipped: when did not match' })
+  return found
+}
+
 /** The host loop over a started run: `next` → launch → `record`, until the run is no longer running. */
 export async function runSteps(
   host: WorkflowHost,
@@ -198,7 +225,7 @@ export async function runSteps(
   if (writer === undefined) await reopenRun(run).catch(() => undefined)
   let last: StepEvent | undefined
   for (;;) {
-    const { ready, run: state } = await next(run)
+    const { ready, run: state } = await advance(host, run)
     const step = ready[0]
     if (state !== 'running' || step === undefined) return ended(state, last, writer)
     host.report?.({ step: step.id, kind: step.kind, state: 'running' })

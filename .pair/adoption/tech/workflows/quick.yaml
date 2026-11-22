@@ -18,5 +18,6 @@ steps:
   fix:
     kind: fix
     alias: build
+    when: { output: review.verdict, is: [changes-requested] }
     with:
       gates: [quality-gate]

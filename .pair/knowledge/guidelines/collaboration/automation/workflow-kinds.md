@@ -80,3 +80,45 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - A free object, passed to the skill as written.
 - **Returns `needs-human` when**
   - Whatever the skill named by `skill` documents.
+
+## gate
+
+- **Default skill**: none: the host runs it, no agent
+- **Inputs**
+  - `card`: `string` — The card.
+  - `pr`: `integer` — The pull request, for the checks that read it.
+  - `head`: `string` — The head the earlier steps produced.
+- **Outputs**, required when `status` is `ok`
+  - The common fields only.
+- **Options** (`with`)
+  - `gates`: `array of string` — Keys of the Custom Gate Registry: their commands run in the card worktree, in order. Never a shell line.
+  - `checks`: `array of "ci-green" | "head-unchanged" | "review-approved" | "prerequisites-done"` — Ready-made checks: ci-green, head-unchanged, review-approved, prerequisites-done.
+  - `timeout-minutes`: `integer` — How long `ci-green` waits. Default 30.
+- **Returns `needs-human` when**
+
+## approval
+
+- **Default skill**: none: the host runs it, no agent
+- **Inputs**
+  - `card`: `string` — The card.
+  - `pr`: `integer` — The pull request, whose native reviews count.
+- **Outputs**, required when `status` is `ok`
+  - `approvedBy`: `string` — The login that approved.
+- **Options** (`with`)
+  - `question`: `string` — What is asked of the approver.
+- **Returns `needs-human` when**
+  - Always, until an authorized login approves or rejects.
+
+## merge
+
+- **Default skill**: none: the host runs it, no agent
+- **Inputs**
+  - `card`: `string` — The card, closed after the merge.
+  - `pr`: `integer` — The pull request to merge.
+  - `head`: `string` — The head the PR must still have.
+- **Outputs**, required when `status` is `ok`
+  - `merged`: `boolean` — Whether the PR is merged.
+  - `mergeCommit`: `string` — The merge commit sha.
+- **Options** (`with`)
+  - `method`: `"squash" | "merge" | "rebase"` — Merge method. Default `squash`.
+- **Returns `needs-human` when**

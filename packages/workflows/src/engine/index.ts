@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 import { basename, join } from 'node:path'
-import { parseWorkflow, type KindName, type Step, type Workflow } from '../grammar'
+import { parseWorkflow, type KindName, type Step, type When, type Workflow } from '../grammar'
 import { parseFrozenConfiguration } from '../configuration'
 import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
+import { matches, type CardFacts } from '../select'
 
 /**
  * The disk, as the engine needs it: the run directory and nothing else. A structural subset of the
@@ -30,7 +31,8 @@ export const FROZEN_CONFIGURATION = 'configuration.yaml'
 /** The run's telemetry, when it is on: written by `../telemetry`, archived with the run. */
 export const TELEMETRY_FILE = 'telemetry.jsonl'
 
-export type StepState = 'pending' | 'running' | StepStatus
+/** `skipped`: the step's `when` did not match when it was about to start; it produces no outputs. */
+export type StepState = 'pending' | 'running' | 'skipped' | StepStatus
 export type RunState = 'running' | 'done' | 'failed' | 'parked'
 
 export interface StepRecord {
@@ -306,7 +308,9 @@ function settledStatus(
 ): 'failed' | 'parked' | 'complete' | undefined {
   if (exhausted !== undefined)
     return state.steps[exhausted[0]]?.state === 'failed' ? 'failed' : 'parked'
-  return frozenWorkflow(run).steps.every(step => state.steps[step.id]?.state === 'ok')
+  return frozenWorkflow(run).steps.every(step =>
+    ['ok', 'skipped'].includes(state.steps[step.id]?.state ?? ''),
+  )
     ? 'complete'
     : undefined
 }
@@ -430,7 +434,7 @@ const HALTED: Partial<Record<StepState, RunState>> = { failed: 'failed', 'needs-
 /** A step the run is past: `ok`, or `failed` with `on-failed: continue`. */
 const settled = (state: RunStateFile, step: Step): boolean => {
   const at = state.steps[step.id]?.state
-  return at === 'ok' || (at === 'failed' && step['on-failed'] === 'continue')
+  return at === 'ok' || at === 'skipped' || (at === 'failed' && step['on-failed'] === 'continue')
 }
 
 /** The state of a run with nothing left to launch: the last step decides. */
@@ -468,7 +472,7 @@ function loopChild(
 ): { child: Step & { kind: KindName }; id: string } {
   const child = step.steps?.find(one => {
     const at = state.steps[`${step.id}/${one.id}`]?.state
-    return at !== 'ok' && at !== 'failed'
+    return at !== 'ok' && at !== 'failed' && at !== 'skipped'
   })
   if (child === undefined) throw new Error(`run-state-unreadable: loop ${step.id} has no next step`)
   if (child.kind === 'loop') throw new Error('nested loop is not launchable')
@@ -513,16 +517,89 @@ async function nextInLoop(
  */
 export async function next(
   run: RunDirectory,
-): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
+  card?: () => Promise<CardFacts>,
+  skipped: SkippedStep[] = [],
+): Promise<{
+  readonly ready: readonly StepLaunch[]
+  readonly run: RunState
+  readonly skipped?: readonly SkippedStep[]
+}> {
   const state = requireState(run)
   const { steps } = frozenWorkflow(run)
   const step = steps.find(one => !settled(state, one))
-  if (step === undefined) return { ready: [], run: finalState(state, steps) }
+  if (step === undefined) return { ready: [], run: finalState(state, steps), ...seen(skipped) }
   const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
-  if (halted !== undefined) return { ready: [], run: halted }
-  return step.kind === 'loop'
+  if (halted !== undefined) return { ready: [], run: halted, ...seen(skipped) }
+  const skip = await skipIfNotWhen(run, state, step, card)
+  if (skip !== undefined) return next(run, card, [...skipped, skip])
+  const launched = await (step.kind === 'loop'
     ? nextInLoop(run, state, steps, step)
-    : nextPlain(run, state, steps, step)
+    : nextPlain(run, state, steps, step))
+  return { ...launched, ...seen(skipped) }
+}
+
+const seen = (skipped: SkippedStep[]) => (skipped.length > 0 ? { skipped } : {})
+
+/** A step the run passed over because its `when` did not match. */
+export interface SkippedStep {
+  readonly id: string
+  readonly kind: KindName
+}
+
+/** Why the named output is not in the list; an output the producer never returned (it failed or crashed) is no mismatch. */
+function outputMismatch(
+  output: string,
+  is: readonly unknown[] | undefined,
+  state: RunStateFile,
+): string | undefined {
+  const [stepId, name] = output.split('.') as [string, string]
+  const value = state.steps[stepId]?.outputs?.[name]
+  return value === undefined || is?.includes(value)
+    ? undefined
+    : `${output} is ${JSON.stringify(value)}`
+}
+
+/** Why `when` does not match now, or `undefined` when the step runs. */
+async function whenMismatch(
+  when: When | undefined,
+  state: RunStateFile,
+  card: (() => Promise<CardFacts>) | undefined,
+): Promise<string | undefined> {
+  if (when === undefined) return undefined
+  const { output, is, ...filter } = when
+  if (Object.keys(filter).length > 0 && card !== undefined && !matches(filter, await card()))
+    return `card does not match ${JSON.stringify(filter)}`
+  return output === undefined ? undefined : outputMismatch(output, is, state)
+}
+
+/** Writes `skipped` for the step about to start when its `when` does not match; a loop checks its next child. */
+async function skipIfNotWhen(
+  run: RunDirectory,
+  state: RunStateFile,
+  step: Step,
+  card: (() => Promise<CardFacts>) | undefined,
+): Promise<SkippedStep | undefined> {
+  const inLoop = step.kind === 'loop'
+  const child = inLoop ? loopChild(state, step).child : undefined
+  const target = child ?? step
+  const id = inLoop ? `${step.id}/${target.id}` : step.id
+  const why = await whenMismatch(target.when, state, card)
+  if (why === undefined) return undefined
+  const entry: StepRecord = {
+    state: 'skipped',
+    summary: 'skipped: when did not match',
+    reason: why,
+  }
+  const recorded = { ...state.steps, [id]: entry }
+  const progress = inLoop
+    ? advanceLoop({ state, outer: step, childId: target.id, status: 'ok', outputs: {} }, recorded)
+    : { steps: recorded, loops: state.loops }
+  await writeState(run, {
+    ...state,
+    steps: progress.steps,
+    ...(progress.loops !== undefined && { loops: progress.loops }),
+  })
+  return { id, kind: target.kind as KindName }
 }
 
 async function nextPlain(
