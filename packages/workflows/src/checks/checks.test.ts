@@ -112,4 +112,20 @@ describe('gate checks (#680 AC-2)', () => {
     expect(result.reason).toBe('ci-timeout')
     expect(t).toBe(120_000)
   })
+  it('does not wait past the configured timeout (#726 AC-1)', async () => {
+    let t = 0
+    const result = await runGate(
+      { checks: ['ci-green'], 'timeout-minutes': 1 },
+      {
+        registry,
+        run: run(),
+        facts: facts({ ci: async () => 'pending' }),
+        sleep: async ms => void (t += ms),
+        now: () => t,
+        pollMs: 40_000,
+      },
+    )
+    expect(result.reason).toBe('ci-timeout')
+    expect(t).toBe(60_000)
+  })
 })
