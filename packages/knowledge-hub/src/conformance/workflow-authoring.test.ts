@@ -10,7 +10,7 @@ describe('workflow authoring (AC-1–8)', () => {
     const skill = read('.skills/capability/workflow/SKILL.md')
     for (const reference of ['workflow-schema.md', 'workflow-kinds.md'])
       expect(skill).toContain(reference)
-    expect(skill).toContain('pair-cli run <workflow> --dry-run')
+    expect(skill).toContain('pair-cli run <workflow> --card 1 --dry-run')
     expect(skill).toMatch(/install.*pair-cli/i)
     for (const phrase of [
       'three times',
@@ -29,6 +29,6 @@ describe('workflow authoring (AC-1–8)', () => {
   it('routes authoring and launching separately', () => {
     const assistant = read('plugin/skills/pair-assistant/SKILL.md')
     expect(assistant).toMatch(/\|[^\n]*create[^\n]*workflow[^\n]*\|[^\n]*pair-capability-workflow/i)
-    expect(assistant).toMatch(/\|[^\n]*run[^\n]*workflow[^\n]*\|[^\n]*pair run/i)
+    expect(assistant).toContain('pair-cli run <workflow> --card <id>')
   })
 })
