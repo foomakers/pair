@@ -581,3 +581,8 @@ test('verify-chain --base accepts the story base REF a PR-entry first review is 
   assert.deepEqual(JSON.parse(cli('no-such-ref').stdout).breaches, [{ code: 'base-not-a-sha' }])
   rmSync(cwd, { recursive: true, force: true })
 })
+
+test('sh: carries a child output larger than the default 1 MiB buffer (#729 AC-3: no ENOBUFS)', () => {
+  const out = sh(tmpdir(), process.execPath, '-e', 'process.stdout.write("x".repeat(2 * 1024 * 1024))')
+  assert.equal(out.length, 2 * 1024 * 1024)
+})
