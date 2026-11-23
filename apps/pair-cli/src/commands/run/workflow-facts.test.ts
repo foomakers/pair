@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { fileSystemService as fs } from '@pair/content-ops'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -17,9 +17,9 @@ const pr = (number: number) => ({
 })
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'pair-workflow-facts-'))
+  dir = fs.mkdtempSync(join(tmpdir(), 'pair-workflow-facts-'))
   const bin = join(dir, 'fake-gh')
-  writeFileSync(
+  fs.writeFileSync(
     bin,
     `#!/usr/bin/env node
 const a = process.argv.slice(2)
@@ -38,8 +38,8 @@ else if (a.some(v => v.includes('/check-runs'))) json({check_runs: JSON.parse(pr
 else if (a.some(v => v.includes('/status'))) json({statuses: []})
 else throw Error('Unexpected GH call: '+a.join(' '))
 `,
-    { mode: 0o700 },
   )
+  fs.chmodSync(bin, 0o700)
   vi.stubEnv('PAIR_GH_BIN', bin)
   vi.stubEnv('PAIR_TEST_PULLS', JSON.stringify([pr(735)]))
   vi.stubEnv('PAIR_TEST_CHECKS', '[]')
@@ -51,7 +51,7 @@ else throw Error('Unexpected GH call: '+a.join(' '))
 
 afterEach(() => {
   vi.unstubAllEnvs()
-  rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true })
 })
 
 const facts = (cwd: string, checks: string[] = []) =>

@@ -54,6 +54,11 @@ Board facts come from the adopted view only: GitHub's `pm-project` project, Line
 | `findCards`       | pm-tool        | `findCards({ repo, search })` → an array of matching cards                                                       |
 | `listCards`       | pm-tool        | `listCards({ repo })` → all user-story cards as `{ id }` rows for the board audit; paginate instead of silently truncating |
 | `linkedPr`        | code-host      | `linkedPr({ id, repo })` → `open`, `merged`, `closed-unmerged`, `none`, `unknown` for unreadable linkage, or `{ gap: 'pr-link-ambiguous', prs, candidates }` when a PR mentioning the card links several cards (`resolveLinked` in the adapter kit); only same-repository PRs count (a fork's PR never links); several linked PRs resolve merged > open > closed-unmerged; read the PR listing once per adapter instance; the audit treats `unknown` as a gap |
+| `workflowPr` | code-host | `workflowPr({ id, repo })` → the unique linked PR number. Throws when absent or ambiguous. |
+| `workflowActor` | code-host | `workflowActor()` → `{ login, human }` for the authenticated caller. |
+| `workflowPrDetails` | code-host | `workflowPrDetails({ pr, repo })` → `{ pr, head, author, branch, merged, mergeCommit, draft }` for the linked PR. |
+| `workflowReviews` | code-host | `workflowReviews({ pr, repo })` → native reviews as `{ login, human, at, state, head, body }` rows. |
+| `workflowReviewIdentity` | code-host | `workflowReviewIdentity({ repo })` → the configured review bot login or `null` when no review bot is adopted. |
 | `readPermission`  | code-host      | `readPermission({ repo, user })` → the user's current repository role (`admin`, `maintain`, `write`, …) or `null` when unreadable; the board workflow authorizes only admin/maintain/write |
 | `syncEpic`        | pm-tool        | `syncEpic({ id, repo })` → `{ confirmed, parent?, changed?, gap?, error? }`; finds the existing parent and its children, then lists and ticks the epic's Sub-Issues checklist. It never sets a parent |
 | `updateCard`      | pm-tool        | `updateCard({ repo, id, body })` → `{ id }`                                                                       |
