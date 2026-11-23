@@ -130,6 +130,8 @@ export const stepSchema: JsonSchema = {
   },
 }
 
+const WORKFLOW_OUTPUT_PROPERTIES = { from: { type: 'string', pattern: STEP_ID } } as const
+
 /** Grammar v1 as JSON Schema. Execution order is the order of `steps` in the file. */
 export const workflowSchemaV1: JsonSchema = {
   type: 'object',
@@ -139,6 +141,12 @@ export const workflowSchemaV1: JsonSchema = {
     version: { const: 1, description: 'The grammar version.' },
     name: { type: 'string', description: 'Equals the file name without its extension.' },
     description: { type: 'string' },
+    outputs: {
+      type: 'object',
+      required: Object.keys(WORKFLOW_OUTPUT_PROPERTIES),
+      additionalProperties: false,
+      properties: WORKFLOW_OUTPUT_PROPERTIES,
+    },
     aliases: {
       type: 'object',
       propertyNames: { pattern: STEP_ID },
@@ -201,6 +209,7 @@ export interface Workflow {
   readonly version: 1
   readonly name: string
   readonly description?: string
+  readonly outputs?: { readonly from: string }
   /** The declared aliases, each with its defaults. */
   readonly aliases?: Readonly<Record<string, Entry>>
   /** In file order: the execution order. */

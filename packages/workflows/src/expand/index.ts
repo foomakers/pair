@@ -1,4 +1,5 @@
 import { errorAt, parseWorkflow, type Step, type Workflow, type WorkflowError } from '../grammar'
+import { kindByName } from '../kinds'
 
 export interface WorkflowSource {
   readonly text: string
@@ -27,49 +28,105 @@ function recordOrigins(
   }
 }
 
+type ExpansionState = {
+  errors: WorkflowError[]
+  origins: Record<string, { file: string; line: number }>
+  outputSteps: Record<string, string>
+  resolve: (name: string) => WorkflowSource | undefined
+}
+
+type StepContext = { workflow: Workflow; step: Step; id: string }
+
+function forwardOptions(step: Step, selected: Step, steps: readonly Step[]): Step[] {
+  return steps.map((child, index) => ({
+    ...child,
+    ...(child === selected && step.with && { with: { ...child.with, ...step.with } }),
+    ...(index === steps.length - 1 && step['on-failed'] && { 'on-failed': step['on-failed'] }),
+  }))
+}
+
+function compatibleOutput(step: Step, selected: Step): boolean {
+  const callerKind = step.kind === 'loop' ? undefined : kindByName[step.kind]
+  const outputKind = selected && selected.kind !== 'loop' ? kindByName[selected.kind] : undefined
+  const required = callerKind?.outputs.required ?? []
+  const compatible =
+    outputKind && required.every(field => (outputKind.outputs.required ?? []).includes(field))
+  return Boolean(
+    (step.kind === 'generic' || compatible) && (!step.with || selected.kind === step.kind),
+  )
+}
+
+function includeSteps(state: ExpansionState, context: StepContext, included: Workflow): Step[] {
+  const { workflow, step, id } = context
+  const outputId = included.outputs && `${id}/${included.outputs.from}`
+  const selected = outputId
+    ? included.steps.find(candidate => candidate.id === (state.outputSteps[outputId] ?? outputId))
+    : included.steps.at(-1)
+  if (!selected || !compatibleOutput(step, selected)) {
+    state.errors.push(
+      errorAt(workflow, ['steps', step.id], {
+        problem: 'include output is missing or incompatible with the caller',
+        fix: 'select a compatible output step and use matching kinds for with',
+      }),
+    )
+    return []
+  }
+  state.outputSteps[id] = selected.id
+  return forwardOptions(step, selected, included.steps)
+}
+
+function expandStep(state: ExpansionState, context: StepContext, chain: readonly string[]): Step[] {
+  const { workflow, step, id } = context
+  const target = step.uses === undefined ? undefined : state.resolve(step.uses)
+  if (!target) {
+    recordOrigins(state.origins, workflow, step, id)
+    return [{ ...step, id }]
+  }
+  if (chain.includes(target.file) || chain.length >= 4) {
+    state.errors.push(
+      errorAt(workflow, ['steps', step.id, 'uses'], {
+        problem: chain.includes(target.file)
+          ? `circular include: ${[...chain, target.file].join(' -> ')}`
+          : 'include depth exceeds 3',
+        fix: 'remove the include cycle or reduce depth',
+      }),
+    )
+    return []
+  }
+  const included = visit(state, target, `${id}/`, [...chain, target.file])
+  return included ? includeSteps(state, context, included) : []
+}
+
+function visit(
+  state: ExpansionState,
+  input: WorkflowSource,
+  prefix: string,
+  chain: readonly string[],
+): Workflow | undefined {
+  const parsed = parseWorkflow(input.text, input.file)
+  if (!parsed.workflow) {
+    state.errors.push(...parsed.errors)
+    return undefined
+  }
+  const workflow = parsed.workflow
+  return {
+    ...workflow,
+    steps: workflow.steps.flatMap(step =>
+      expandStep(state, { workflow, step, id: `${prefix}${step.id}` }, chain),
+    ),
+  }
+}
+
 /** Replace includes in source order, retaining the location of each resulting step. */
 export function expand(
   source: WorkflowSource,
   resolve: (name: string) => WorkflowSource | undefined,
 ): Expansion {
-  const errors: WorkflowError[] = []
-  const origins: Record<string, { file: string; line: number }> = {}
-  function visit(
-    input: WorkflowSource,
-    prefix: string,
-    chain: readonly string[],
-  ): Workflow | undefined {
-    const parsed = parseWorkflow(input.text, input.file)
-    if (!parsed.workflow) {
-      errors.push(...parsed.errors)
-      return undefined
-    }
-    const workflow = parsed.workflow
-    const steps: Step[] = []
-    for (const step of workflow.steps) {
-      const id = `${prefix}${step.id}`
-      const target = step.uses === undefined ? undefined : resolve(step.uses)
-      if (target) {
-        if (chain.includes(target.file) || chain.length >= 4) {
-          errors.push(
-            errorAt(workflow, ['steps', step.id, 'uses'], {
-              problem: chain.includes(target.file)
-                ? `circular include: ${[...chain, target.file].join(' -> ')}`
-                : 'include depth exceeds 3',
-              fix: 'remove the include cycle or reduce depth',
-            }),
-          )
-          continue
-        }
-        const included = visit(target, `${id}/`, [...chain, target.file])
-        if (included) steps.push(...included.steps)
-      } else {
-        steps.push({ ...step, id })
-        recordOrigins(origins, workflow, step, id)
-      }
-    }
-    return { ...workflow, steps }
+  const state: ExpansionState = { errors: [], origins: {}, outputSteps: {}, resolve }
+  const workflow = visit(state, source, '', [source.file])
+  return {
+    ...(workflow && state.errors.length === 0 && { workflow }),
+    errors: state.errors,
+    origins: state.origins,
   }
-  const workflow = visit(source, '', [source.file])
-  return { ...(workflow && errors.length === 0 && { workflow }), errors, origins }
 }

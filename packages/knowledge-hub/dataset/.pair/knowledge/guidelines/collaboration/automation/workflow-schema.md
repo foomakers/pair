@@ -26,6 +26,19 @@ These schemas come from the workflow validator.
       "description": {
         "type": "string"
       },
+      "outputs": {
+        "type": "object",
+        "required": [
+          "from"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          }
+        }
+      },
       "aliases": {
         "type": "object",
         "propertyNames": {
