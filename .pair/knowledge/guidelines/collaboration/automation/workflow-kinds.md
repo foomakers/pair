@@ -66,7 +66,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `findings`: `array of string` — Finding ids. When present only these are fixed.
   - `gates`: `array of string` — Keys of the Custom Gate Registry, run in order before the push. Absent or `[]` = none.
 - **Returns `needs-human` when**
-  - A finding needs a product decision.
+  - A remaining finding needs a human decision or action.
   - A finding contradicts an acceptance criterion of the card.
 
 ## generic
