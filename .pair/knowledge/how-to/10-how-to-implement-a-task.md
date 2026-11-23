@@ -68,7 +68,9 @@ Based on [task template](../guidelines/collaboration/templates/task-template.md)
 
 **Non-Development Tasks (Direct Implementation):** Documentation, Configuration, Research
 
-### TDD Session Management (Development Tasks Only)
+### TDD Session Management (Interactive Development Tasks)
+
+For unattended implementation, the implementation skill runs the same ordered phases within one invocation. Observe the expected RED failure before changing production code, then verify GREEN before continuing.
 
 Follow [TDD guidelines](../guidelines/testing/test-strategy/tdd-test-driven-development.md) with strict Red-Green-Refactor methodology:
 
@@ -78,7 +80,7 @@ Follow [TDD guidelines](../guidelines/testing/test-strategy/tdd-test-driven-deve
 
 3. **REFACTOR Phase** — Improve code structure without changing behavior. Both test and production code may be cleaned up. All tests must remain green. Session ends when refactoring objectives are complete.
 
-**CRITICAL**: NEVER modify both tests and implementation code in the same session.
+**CRITICAL**: During interactive implementation, keep test and implementation changes in separate sessions.
 
 ### Direct Implementation (Non-Development Tasks)
 

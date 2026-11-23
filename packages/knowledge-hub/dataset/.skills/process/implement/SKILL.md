@@ -1,7 +1,7 @@
 ---
 name: implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /verify-quality, /record-decision, /checkpoint, /publish-pr."
-version: 0.7.5
+version: 0.7.6
 author: Foomakers
 ---
 
@@ -184,10 +184,10 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 1. **New features → add tests autonomously.** Write unit tests without asking.
 2. **Modifying existing tests → ask developer with evidence.** Show what changes and why, get approval before modifying any existing test.
-3. **No code+test changes in the same session.** When changing production code, do NOT modify tests until all existing tests pass. Separate RED, GREEN, and REFACTOR into distinct sessions:
-   - **RED session**: Write or modify ONLY test code. Tests MUST fail. No implementation code changes.
-   - **GREEN session**: Write or modify ONLY implementation code. Write minimal code to make tests pass. No test code changes.
-   - **REFACTOR session**: Improve structure without changing behavior. Both test and production code may be cleaned up. All tests must remain green.
+3. **Keep RED, GREEN, and REFACTOR distinct.** In an interactive invocation, use separate sessions for the phases below. In an unattended invocation, execute the same phases in order within the current session. Run the regression test and observe the expected failure before editing production code. Then make it pass and verify the task before moving to the next one. A phase boundary does not require a human or end an unattended invocation:
+   - **RED phase**: Write or modify ONLY test code. Tests MUST fail. No implementation code changes.
+   - **GREEN phase**: Write or modify ONLY implementation code. Write minimal code to make tests pass. No test code changes.
+   - **REFACTOR phase**: Improve structure without changing behavior. Both test and production code may be cleaned up. All tests must remain green.
 4. **Every module file must have a corresponding unit test file.** 1:1 mapping between source modules and test files.
 5. **Avoid mocks — prefer in-memory test doubles.** Use dependency injection with in-memory implementations (e.g., `InMemoryFileSystemService` instead of mocking `fs`).
 
