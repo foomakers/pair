@@ -8,6 +8,7 @@ import {
   type StepLaunch,
 } from '../engine'
 import type { KindName } from '../grammar'
+import { violations } from '../schema'
 import type { CardFacts } from '../select'
 import { kindByName, type StepResult, type StepStatus } from '../kinds'
 import {
@@ -162,6 +163,14 @@ async function execute(
   exchange: Exchange = { sent: '', final: '' },
 ): Promise<StepResult> {
   const kind = kindByName[step.kind]
+  const missing = violations(kind.inputs, step.inputs)
+  if (missing.length > 0)
+    return record(run, step.id, {
+      status: 'failed',
+      reason: 'invalid-input',
+      summary: `The ${step.kind} step is missing valid inputs`,
+      detail: missing.map(issue => issue.path.join('.') + ': ' + issue.problem).join('; '),
+    })
   if (kind.host === true) {
     exchange.sent = JSON.stringify(step.with)
     return record(

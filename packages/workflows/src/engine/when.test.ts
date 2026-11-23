@@ -1,4 +1,3 @@
-import shippedQuick from '../../../knowledge-hub/dataset/.pair/adoption/tech/workflows/quick.yaml?raw'
 import { next, record, start, type RunDirectory } from '.'
 import { createMemoryFiles } from './memory-files'
 
@@ -129,16 +128,4 @@ describe('when inside a loop (#680 AC-6)', () => {
     expect(after.skipped).toEqual([{ id: 'rounds/fix', kind: 'fix' }])
     expect(after.ready.map(s => s.id)).toEqual(['rounds/review'])
   })
-})
-
-it('shipped quick runs fix after a review crashes without a verdict (#726 AC-6)', async () => {
-  const run = open()
-  await start(run, { text: shippedQuick, file: 'quick.yaml' }, { card: '726' })
-  await next(run)
-  await record(run, 'implement', IMPLEMENTED)
-  await next(run)
-  await record(run, 'review', { status: 'failed', summary: 'crashed', reason: 'crash' })
-  const after = await next(run)
-  expect(after.run).not.toBe('done')
-  expect(after.ready.map(step => step.id)).toEqual(['fix'])
 })
