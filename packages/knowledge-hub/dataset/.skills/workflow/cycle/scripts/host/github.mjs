@@ -7,7 +7,7 @@
 //
 // Transport: `gh` from PATH, or `transport.ghBin` / PAIR_GH_BIN (a test's recorder). `gh`
 // authenticates itself; this file never reads a token.
-import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, prLinks, resolveLinked } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, prLinks, resolveLinked, selectLink } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const STATE_LABELS = ['pr-state:to-be-reviewed', 'pr-state:ready-to-merge', 'pr-state:not-approved']
@@ -92,6 +92,15 @@ export default defineAdapter({
       return boards.get(slug)
     }
     const pulls = new Map()
+    const linkedRows = repo => {
+      // One listing per repository per adapter instance: an audit asks for every card.
+      const key = apiRepo(repo)
+      if (!pulls.has(key)) pulls.set(key, listPages(`${key}/pulls?state=all`))
+      // Same-repository PRs only (Maintainer Decision): a fork's PR never moves or closes a card.
+      const sameRepo = pr => Boolean(pr.head?.repo?.full_name) && pr.head.repo.full_name === pr.base?.repo?.full_name
+      const state = pr => (pr.merged_at ? 'merged' : pr.state === 'open' ? 'open' : pr.state === 'closed' ? 'closed-unmerged' : 'unknown')
+      return pulls.get(key).filter(sameRepo).map(pr => ({ number: pr.number, links: prLinks({ body: pr.body, branch: pr.head?.ref }), state: state(pr) }))
+    }
 
     const listComments = ({ pr, repo }) => {
       const out = gh(['api', '--paginate', `${apiRepo(repo)}/issues/${pr}/comments`])
@@ -264,13 +273,15 @@ export default defineAdapter({
         return listPages(`${apiRepo(repo)}/issues?state=all`).filter(issue => !issue.pull_request && (/^## Story Statement\s*$/m.test(String(issue.body ?? '')) || (label && issue.labels?.some(item => item.name === label)))).map(issue => ({ id: String(issue.number) }))
       },
       linkedPr({ id, repo }) {
-        // One listing per repository per adapter instance: an audit asks for every card.
-        const key = apiRepo(repo)
-        if (!pulls.has(key)) pulls.set(key, listPages(`${key}/pulls?state=all`))
-        // Same-repository PRs only (Maintainer Decision): a fork's PR never moves or closes a card.
-        const sameRepo = pr => Boolean(pr.head?.repo?.full_name) && pr.head.repo.full_name === pr.base?.repo?.full_name
-        const state = pr => (pr.merged_at ? 'merged' : pr.state === 'open' ? 'open' : pr.state === 'closed' ? 'closed-unmerged' : 'unknown')
-        return resolveLinked(pulls.get(key).filter(sameRepo).map(pr => ({ number: pr.number, links: prLinks({ body: pr.body, branch: pr.head?.ref }), state: state(pr) })), id)
+        return resolveLinked(linkedRows(repo), id)
+      },
+      workflowPr({ id, repo }) {
+        const rows = linkedRows(repo)
+        const link = resolveLinked(rows, id)
+        if (link?.gap) throw new Error(`ambiguous link for card ${id}: PRs ${link.prs.map(n => '#' + n).join(', ')}`)
+        const hits = rows.filter(row => row.state !== 'closed-unmerged' && selectLink(row.links)?.id === String(id))
+        if (hits.length !== 1) throw new Error(`expected one PR for card ${id}; found ${hits.length}${hits.length ? ': ' + hits.map(row => '#' + row.number).join(', ') : ''}`)
+        return hits[0].number
       },
       createCard({ repo, title, body }) {
         const out = gh(['issue', 'create', '--repo', resolveRepo(repo), '--title', title, '--body', body])

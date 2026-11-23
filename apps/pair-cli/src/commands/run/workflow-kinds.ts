@@ -1,4 +1,4 @@
-import { runGate, type StepLaunch, type StepResult } from '@pair/workflows'
+import { runGate, type FactReader, type StepLaunch, type StepResult } from '@pair/workflows'
 import { runHostProcess } from './host-process'
 
 /** What the host reads from the platform for the `checks` of a gate; not wired yet, so a check fails loudly. */
@@ -49,6 +49,7 @@ export function performHostKind(
   registry: Readonly<Record<string, string>>,
   worktree: string,
   targets: Readonly<Record<string, readonly string[]>> = {},
+  factsFor?: (step: StepLaunch) => FactReader,
 ) {
   return async (step: StepLaunch): Promise<StepResult> => {
     if (step.kind !== 'gate') return UNWIRED(`a ${step.kind} step`)
@@ -56,6 +57,7 @@ export function performHostKind(
       registry,
       targets,
       run: gateRunner(worktree),
+      ...(factsFor === undefined ? {} : { facts: factsFor(step) }),
     })
   }
 }

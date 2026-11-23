@@ -88,6 +88,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `card`: `string` — The card.
   - `pr`: `integer` — The pull request, for the checks that read it.
   - `head`: `string` — The head the earlier steps produced.
+  - `reviewedHead`: `string` — The head verified by the review step.
 - **Outputs**, required when `status` is `ok`
   - The common fields only.
 - **Options** (`with`)

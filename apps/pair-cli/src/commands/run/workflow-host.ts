@@ -71,6 +71,7 @@ import {
   runSetupCommand,
 } from './cycle-wiring'
 import { performHostKind, runStepGates } from './workflow-kinds'
+import { workflowFacts } from './workflow-facts'
 import {
   createCycleScriptsBridge,
   locateCycleScripts,
@@ -496,6 +497,12 @@ function hostKindsOf({ resolved, request, worktree }: Opened, fs: FileSystemServ
       readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
       worktree ?? resolved.cwd,
       readGateTargets(fs.existsSync(way) ? fs.readFileSync(way) : ''),
+      step =>
+        workflowFacts(
+          () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir,
+          resolved.cwd,
+          step,
+        ),
     ),
     runGates: runStepGates(
       readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),

@@ -13,8 +13,8 @@ function forbiddenImports(path: string, source: string): string[] {
   return [...source.matchAll(SPECIFIER)]
     .map(match => match[1] as string)
     .filter(specifier => {
-      // A test may read a published page as text, to prove it is not stale.
-      if (isTest && specifier.endsWith('.md?raw')) return false
+      // Tests may read published documentation and workflow fixtures as text.
+      if (isTest && /\.(md|yaml)\?raw$/.test(specifier)) return false
       if (specifier.startsWith('.'))
         return posix.normalize(posix.join(posix.dirname(path), specifier)).startsWith('..')
       return !ALLOWED.has(specifier) && !(isTest && TEST_ONLY.has(specifier))

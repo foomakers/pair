@@ -11,6 +11,7 @@ export const gate: StepKind = {
       card: { type: 'string', description: 'The card.' },
       pr: { type: 'integer', description: 'The pull request, for the checks that read it.' },
       head: { type: 'string', description: 'The head the earlier steps produced.' },
+      reviewedHead: { type: 'string', description: 'The head verified by the review step.' },
     },
   },
   outputs: { type: 'object', description: 'The common fields only.' },
