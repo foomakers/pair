@@ -709,16 +709,15 @@ it.each(['unchanged', 'moved', 'returned'] as const)(
   async scenario => {
     const moved = scenario !== 'unchanged'
     const newHead = scenario === 'returned' ? HEAD : 'b'.repeat(40)
+    const delivery = '.pair/adoption/tech/workflows/delivery.yaml'
+    write(delivery, fs.readFileSync(join(__dirname, '../../../../..', delivery)))
     write(
-      '.pair/adoption/tech/workflows/delivery.yaml',
-      `version: 1
-name: delivery
-steps:
-  implement: { kind: implement }
-  review: { kind: review }
-  gate: { kind: gate, with: { checks: [head-unchanged, ci-green] } }
-  approval: { kind: approval }
-  merge: { kind: merge }
+      '.pair/adoption/tech/way-of-working.md',
+      `### Custom Gate Registry
+
+| Order | Key | Gate | Command | Scope Key | Target | Required | Description |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | adopted | PR gate | \`touch adopted-pr-gate\` | quality | pr | Yes | Project gate |
 `,
     )
     write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Fixture host bridge\n')
@@ -733,7 +732,6 @@ const head = existsSync('move-head') ? '${newHead}' : '${HEAD}'
 let value
 switch (action) {
   case 'head': value = head; break
-  case 'ci': value = 'green'; break
   case 'approval-target': value = {pr:12,head}; break
   case 'approval-notice': appendFileSync('approval-notices.log', 'one\\n'); value = {}; break
   case 'approval-answers': value = data.flag ? [{...data.flag,login:'maintainer',channel:'flag'}] : []; break
@@ -757,6 +755,7 @@ console.log(JSON.stringify(value))
 `,
     )
     expect(await run(['delivery'])).toBe(0)
+    expect(fs.existsSync(join(project, 'worktrees/627/adopted-pr-gate'))).toBe(true)
     expect(states('delivery-627')).toMatchObject({
       gate: 'ok',
       approval: 'needs-human',

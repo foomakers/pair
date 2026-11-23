@@ -10,7 +10,8 @@ steps:
   gate:
     kind: gate
     with:
-      checks: [head-unchanged, ci-green, review-approved, prerequisites-done]
+      gates: [target:pr]
+      checks: [head-unchanged]
   approval:
     kind: approval
     with: { question: 'Approve merging this reviewed head?' }
