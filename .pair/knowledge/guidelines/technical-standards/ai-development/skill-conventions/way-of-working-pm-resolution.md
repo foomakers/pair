@@ -114,7 +114,7 @@ Who an item or a pull request is **assigned to**. This is a resolution rule rath
 
 1. **Check**: did the caller pass `$assignee`? Use it.
 2. **Skip**: otherwise read the adoption default from `## Assignment` in [way-of-working.md](../../../../../../.pair/adoption/tech/way-of-working.md) — **which key depends on the side the write is on** (routing table above):
-   - **PM-tool write** (the item assignee) → `default-assignee`.
+   - **PM-tool write** (the item assignee) → `default-assignee`, **on update only**. A **create** never reads it: a card is assigned when development is taken in charge, so it is filed unassigned and without a warning.
    - **Code-host write** (the pull request assignee) → **`code-host-assignee` when declared, else `default-assignee`** (step 2b). This branch is the whole reason the key exists: on a split project the two tools rarely spell the same human the same way, and handing the code host the PM tool's login gets it **rejected** — the PR is then published unassigned with a warning, the exact invisibility this rule removes.
 
    **An empty value is absent**, not an empty-string assignee — for either key.

@@ -122,18 +122,19 @@ Skills never write board-specific labels — `$status` is always a canonical mac
 
 The board is read **filtered by assignee**, so an item with no assignee is invisible there even when it is open, green and carries a PR (the Assignment rule in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)). This step resolves **who**; the field or flag that actually writes it belongs to the implementation guide resolved in Step 5 — **never invent one**: one rule stated here, every mechanic in its adapter.
 
-1. **Check**: Resolve the assignee in one order — **the argument first, then the adoption default, then none**:
+1. **Check**: Resolve the assignee in one order — **the argument first, then (update only) the adoption default, then none**. **Create mode never applies the adoption default**: a card is assigned when development is taken in charge, not when it is filed.
    - `$assignee`, when the caller passed one;
-   - else the adoption's `default-assignee` — [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Assignment` (schema and cascade: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)). This is a **PM-tool** write, so it reads that key and never `code-host-assignee` — the split-configuration key belongs to the code-host branch of the same cascade (`/pair-capability-publish-pr`, the PR assignee). **An empty value is absent, not an empty-string assignee.**
+   - else, **on update only**, the adoption's `default-assignee` — [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Assignment` (schema and cascade: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)). This is a **PM-tool** write, so it reads that key and never `code-host-assignee` — the split-configuration key belongs to the code-host branch of the same cascade (`/pair-capability-publish-pr`, the PR assignee). **An empty value is absent, not an empty-string assignee.**
    - else none.
 2. **Act (resolved)**: carry it into Step 7 and write it **as part of the create and of the update, never as a follow-up step**.
-3. **Act (nothing resolved, or the tool rejects what was resolved)**: **write the item without an assignee and warn** — **never a HALT**:
+3. **Act (create with no `$assignee`)**: write the item unassigned, no warning: it is assigned when development starts.
+4. **Act (update with nothing resolved, or the tool rejects what was resolved)**: **write the item without an assignee and warn** — **never a HALT**:
 
    > Item written without an assignee — it will be **invisible in an assignee-filtered view**. Pass `$assignee`, or declare `default-assignee` under `## Assignment` in way-of-working.md.
 
    An item created and half-visible beats an item not created, so this bookkeeping field **never sinks the item**. A **rejected** assignee (not a collaborator, typo, deactivated account) takes this same branch: report what the tool answered and **never drop it silently**.
-4. **Act — never the authenticated user.** The default comes from the declared adoption field, not from whoever is running the command: an agent running under a **bot token** would assign every item to the bot, satisfying the letter of the Assignment rule while defeating its purpose.
-5. **Verify**: either an assignee is resolved and carried into Step 7, or the warning above was surfaced — and in both cases the item is still written.
+5. **Act — never the authenticated user.** The default comes from the declared adoption field, not from whoever is running the command: an agent running under a **bot token** would assign every item to the bot, satisfying the letter of the Assignment rule while defeating its purpose.
+6. **Verify**: either an assignee is resolved and carried into Step 7, the create is deliberately unassigned, or the warning above was surfaced — and in both cases the item is still written.
 
 ### Step 7: Create or Update Issue
 
