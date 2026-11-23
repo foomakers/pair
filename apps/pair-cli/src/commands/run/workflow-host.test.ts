@@ -45,7 +45,7 @@ const REGISTRY = `### Custom Gate Registry
 `
 
 /** A fake skill answers with the agent's final message, `undefined` when the agent dies, or throws on a crash. */
-type FakeSkill = () => string | undefined
+type FakeSkill = (input: SpawnIterationInput) => string | undefined
 type Launched = Pick<SpawnIterationInput, 'promptText' | 'cwd' | 'autonomyArgs'>
 
 let project: string
@@ -79,7 +79,7 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
         cwd: input.cwd,
         autonomyArgs: input.autonomyArgs,
       })
-      const text = (skills[skillOf(input.promptText)] as FakeSkill)()
+      const text = (skills[skillOf(input.promptText)] as FakeSkill)(input)
       if (text !== undefined) input.onEvent?.({ type: 'result', subtype: 'success', result: text })
       return text === undefined
         ? { outcome: 'failed', detail: 'timed out (idle): no engine event for 1800s' }
@@ -704,10 +704,14 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
   })
 })
 
-it('passes the reviewed head through gate, approval and merge without relaunching agent steps (#726)', async () => {
-  write(
-    '.pair/adoption/tech/workflows/delivery.yaml',
-    `version: 1
+it.each(['unchanged', 'moved', 'returned'] as const)(
+  'only reuses approval while the reviewed head is current (head moved: %s, #726)',
+  async scenario => {
+    const moved = scenario !== 'unchanged'
+    const newHead = scenario === 'returned' ? HEAD : 'b'.repeat(40)
+    write(
+      '.pair/adoption/tech/workflows/delivery.yaml',
+      `version: 1
 name: delivery
 steps:
   implement: { kind: implement }
@@ -716,24 +720,34 @@ steps:
   approval: { kind: approval }
   merge: { kind: merge }
 `,
-  )
-  write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Fixture host bridge\n')
-  write(
-    '.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs',
-    `
-import { appendFileSync } from 'node:fs'
+    )
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Fixture host bridge\n')
+    write(
+      '.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs',
+      `
+import { appendFileSync, existsSync } from 'node:fs'
 const [, , action, card, raw] = process.argv
 if (card !== '627') throw new Error('Wrong card')
 const data = raw === undefined ? {} : JSON.parse(raw)
+const head = existsSync('move-head') ? '${newHead}' : '${HEAD}'
 let value
 switch (action) {
-  case 'head': value = '${HEAD}'; break
+  case 'head': value = head; break
   case 'ci': value = 'green'; break
-  case 'approval-target': value = {pr:12,head:'${HEAD}'}; break
+  case 'approval-target': value = {pr:12,head}; break
   case 'approval-notice': appendFileSync('approval-notices.log', 'one\\n'); value = {}; break
   case 'approval-answers': value = data.flag ? [{...data.flag,login:'maintainer',channel:'flag'}] : []; break
   case 'merge':
-    if (data.head !== '${HEAD}' || data.approvedBy !== 'maintainer' || data.pr !== 12)
+    if (existsSync('move-on-merge') && !existsSync('move-head')) {
+      appendFileSync('move-head', 'new PR head')
+      value = {status:'failed',reason:'head-moved',summary:'PR head moved'}
+      break
+    }
+    if (data.head !== head) {
+      value = {status:'failed',reason:'head-moved',summary:'PR head moved'}
+      break
+    }
+    if (data.head !== head || data.approvedBy !== 'maintainer' || data.pr !== 12)
       throw new Error('Wrong merge handoff')
     value = {status:'ok',summary:'Merged and closed',merged:true,mergeCommit:'${HEAD}'}
     break
@@ -741,19 +755,39 @@ switch (action) {
 }
 console.log(JSON.stringify(value))
 `,
-  )
-  expect(await run(['delivery'])).toBe(0)
-  expect(states('delivery-627')).toMatchObject({
-    gate: 'ok',
-    approval: 'needs-human',
-    merge: 'pending',
-  })
-  expect(await run(['delivery'])).toBe(0)
-  expect(fs.readFileSync(join(project, 'approval-notices.log'))).toBe('one\n')
-  expect(await run(['delivery'], OK, { approve: '627' })).toBe(0)
-  expect(states('delivery-627')).toMatchObject({ gate: 'ok', approval: 'ok', merge: 'ok' })
-  expect(launched.map(one => skillOf(one.promptText))).toEqual([
-    'pair-process-implement',
-    'pair-process-review',
-  ])
-})
+    )
+    expect(await run(['delivery'])).toBe(0)
+    expect(states('delivery-627')).toMatchObject({
+      gate: 'ok',
+      approval: 'needs-human',
+      merge: 'pending',
+    })
+    expect(await run(['delivery'])).toBe(0)
+    expect(fs.readFileSync(join(project, 'approval-notices.log'))).toBe('one\n')
+    if (moved) {
+      write('move-on-merge', 'new PR head')
+      expect(await run(['delivery'], OK, { approve: '627' })).toBe(1)
+      const recheck = {
+        ...OK,
+        'pair-process-review': (input: SpawnIterationInput) => {
+          expect(input.promptText).toContain(newHead)
+          return REVIEWED.replaceAll(HEAD, newHead)
+        },
+      }
+      expect(await run(['delivery'], recheck), lines.join('\n')).toBe(0)
+      expect(states('delivery-627')).toMatchObject({
+        gate: 'ok',
+        approval: 'needs-human',
+        merge: 'pending',
+      })
+      expect(fs.readFileSync(join(project, 'approval-notices.log'))).toBe('one\none\n')
+    }
+    expect(await run(['delivery'], OK, { approve: '627' })).toBe(0)
+    expect(states('delivery-627')).toMatchObject({ gate: 'ok', approval: 'ok', merge: 'ok' })
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([
+      'pair-process-implement',
+      'pair-process-review',
+      ...(moved ? ['pair-process-review'] : []),
+    ])
+  },
+)

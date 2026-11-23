@@ -26,6 +26,7 @@ import {
   type RunOutcome,
   type StepEvent,
   type StepLaunch,
+  type StepReplay,
   type StepSettings,
   type Usage,
   type Workflow,
@@ -680,10 +681,11 @@ async function runOnConsole(
 }
 
 /** The options `start` opens the run with. */
-function startOptions({ resolved, request }: Opened) {
+function startOptions({ resolved, request }: Opened, replay?: StepReplay) {
   return {
     card: request.card,
     restart: request.restart,
+    ...(replay !== undefined && { replay }),
     reconfigure: request.reconfigure === true,
     ...(request.moreRounds !== undefined && {
       moreRounds: request.moreRounds,
@@ -731,6 +733,49 @@ function parkedApproval(opened: Opened, fs: FileSystemService): string | undefin
   return parked[0]?.id
 }
 
+function savedWorkflow(
+  { request, runDir }: Pick<Opened, 'request' | 'runDir'>,
+  fs: FileSystemService,
+): { workflow: Workflow; state: RunStateFile } | undefined {
+  const statePath = join(runDir, STATE_FILE)
+  const source = join(runDir, FROZEN_WORKFLOW)
+  if (request.restart || !fs.existsSync(statePath) || !fs.existsSync(source)) return undefined
+  const state = JSON.parse(fs.readFileSync(statePath)) as RunStateFile
+  if (state.card !== request.card) return undefined
+  const { workflow } = parseWorkflow(
+    fs.readFileSync(source),
+    join(runDir, `${state.workflow.name}.yaml`),
+  )
+  return workflow === undefined ? undefined : { workflow, state }
+}
+
+async function refreshMergeInputs(
+  opened: Opened,
+  fs: FileSystemService,
+): Promise<StepReplay | undefined> {
+  const saved = savedWorkflow(opened, fs)
+  if (saved === undefined || saved.workflow.steps.some(step => step.kind === 'loop'))
+    return undefined
+  const { workflow, state } = saved
+  const { resolved, request } = opened
+  const merge = workflow.steps.findIndex(
+    step => step.kind === 'merge' && state.steps[step.id]?.reason === 'head-moved',
+  )
+  if (merge < 0) return undefined
+  const earlier = workflow.steps.slice(0, merge).reverse()
+  const review = earlier.find(step => step.kind === 'review')
+  const published = earlier.find(step => typeof state.steps[step.id]?.outputs?.['pr'] === 'number')
+  if (review === undefined || published === undefined) return undefined
+  const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
+  const platform = approvalPlatform((action, card, data) =>
+    workflowOperation(locate, resolved.cwd, { action, card, data }),
+  )
+  const current = await platform.target(request.card)
+  if (current.pr !== state.steps[published.id]?.outputs?.['pr'])
+    throw new Error('The workflow PR changed; start a new run for that PR')
+  return { from: review.id, inputs: { head: current.head } }
+}
+
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
 async function drive(
   config: RunCommandConfig,
@@ -742,7 +787,12 @@ async function drive(
   if (opened.closureOnly && !(await canResumeClosure(opened, fs)))
     throw new Error('The closed card no longer has a resumable merge')
   const flagStep = parkedApproval(opened, fs)
-  const started = await start({ files: fs, dir: runDir }, resolved.source, startOptions(opened))
+  const replay = await refreshMergeInputs(opened, fs)
+  const started = await start(
+    { files: fs, dir: runDir },
+    resolved.source,
+    startOptions(opened, replay),
+  )
   const sourcesFile = join(runDir, 'sources.json')
   if (started.status === 'started') {
     fs.writeFileSync(sourcesFile, JSON.stringify(resolved.sources, null, 2))
@@ -862,14 +912,9 @@ async function canResumeClosure(
   opened: Omit<Opened, 'title'>,
   fs: FileSystemService,
 ): Promise<boolean> {
-  const { resolved, request, runDir } = opened
-  const statePath = join(runDir, STATE_FILE)
-  const workflowPath = join(runDir, FROZEN_WORKFLOW)
-  if (request.restart || !fs.existsSync(statePath) || !fs.existsSync(workflowPath)) return false
-  const state = JSON.parse(fs.readFileSync(statePath)) as RunStateFile
-  const { workflow } = parseWorkflow(fs.readFileSync(workflowPath), workflowPath)
-  if (workflow === undefined || state.card !== request.card) return false
-  if (!onlyMergeRemains(workflow, state)) return false
+  const saved = savedWorkflow(opened, fs)
+  if (saved === undefined || !onlyMergeRemains(saved.workflow, saved.state)) return false
+  const { resolved, request } = opened
   const scriptDir = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
   return (
     (await workflowOperation(scriptDir, resolved.cwd, {

@@ -27,6 +27,12 @@ export interface ApprovalPlatform {
   answers(card: string, target: Park, flag?: WorkflowFlagAnswer): Promise<readonly Answer[]>
 }
 
+function parkKey(run: RunDirectory, step: StepLaunch, target: ApprovalTarget): string {
+  const identity = [run.dir, step.id, step.round, target]
+  if (step.replayAttempt !== undefined) identity.push(step.replayAttempt)
+  return createHash('sha256').update(JSON.stringify(identity)).digest('hex')
+}
+
 export function approvalRunner(
   run: RunDirectory,
   platform: ApprovalPlatform,
@@ -42,9 +48,7 @@ export function approvalRunner(
         summary: 'Approval PR no longer matches the linked PR',
         reason: 'pr-changed',
       }
-    const key = createHash('sha256')
-      .update(JSON.stringify([run.dir, step.id, step.round, live]))
-      .digest('hex')
+    const key = parkKey(run, step, live)
     const dir = join(run.dir, 'steps', step.id, 'approval')
     const path = join(dir, key + '.json')
     await run.files.mkdir(dir, { recursive: true })

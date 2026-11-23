@@ -56,6 +56,7 @@ export interface RunStateFile {
   readonly steps: Readonly<Record<string, StepRecord>>
   readonly loops?: Readonly<Record<string, LoopRecord>>
   readonly latest?: Readonly<Record<string, unknown>>
+  readonly replay?: StepReplay
 }
 
 export interface LoopRecord {
@@ -78,6 +79,8 @@ export interface StepLaunch {
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
   readonly round?: number
+  /** Distinguishes a replay from earlier executions that used the same inputs. */
+  readonly replayAttempt?: number
 }
 
 export const hashOf = (text: string): string =>
@@ -136,6 +139,12 @@ function frozenWorkflow(run: RunDirectory): Workflow {
   return workflow
 }
 
+/** Refresh inputs at a step boundary without rerunning the completed prefix. */
+export interface StepReplay {
+  readonly from: string
+  readonly inputs: Readonly<Record<string, unknown>>
+}
+
 export interface StartOptions {
   readonly card: string
   /** Archive what the run directory holds and start over. */
@@ -148,6 +157,7 @@ export interface StartOptions {
   readonly reconfigure?: boolean
   readonly moreRounds?: number
   readonly requestedBy?: string
+  readonly replay?: StepReplay
 }
 
 /** The frozen configuration of a run, when it has one. */
@@ -334,6 +344,7 @@ async function resume(
   const exhausted = exhaustedLoop(state)
   if (options.moreRounds !== undefined)
     state = withMoreRounds(run, state, exhausted, { ...options, moreRounds: options.moreRounds })
+  if (options.replay !== undefined) state = replayFrom(run, state, options.replay)
   const settled = settledStatus(
     run,
     state,
@@ -345,6 +356,19 @@ async function resume(
   }
   if (state !== saved) await writeState(run, state)
   return { status: settled, warnings }
+}
+
+function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay): RunStateFile {
+  const steps = frozenWorkflow(run).steps
+  const from = steps.findIndex(step => step.id === replay.from)
+  if (from < 0 || steps.some(step => step.kind === 'loop'))
+    throw new Error('run-replay-invalid: expected a top-level step in a workflow without loops')
+  const records = { ...state.steps }
+  for (const step of steps.slice(from)) {
+    const executions = records[step.id]?.executions
+    records[step.id] = { state: 'pending', ...(executions !== undefined && { executions }) }
+  }
+  return { ...state, steps: records, replay }
 }
 
 // A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
@@ -424,6 +448,9 @@ function inputsOf(
   state: RunStateFile,
 ): Record<string, unknown> {
   const earlier = steps.slice(0, steps.indexOf(step)).map(one => state.steps[one.id]?.outputs ?? {})
+  const replayAt = steps.findIndex(one => one.id === state.replay?.from)
+  if (state.replay !== undefined && replayAt >= 0 && replayAt <= earlier.length)
+    earlier.splice(replayAt, 0, state.replay.inputs)
   const produced: Record<string, unknown> = Object.assign({ card: state.card }, ...earlier)
   if (step.kind === 'loop') throw new Error('loop is not directly launchable')
   const declared = fieldsOf(kindByName[step.kind].inputs)
@@ -617,6 +644,8 @@ async function nextPlain(
 ): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
   if (step.kind === 'loop') throw new Error('loop is not directly launchable')
   const attempt = launches(state, step.id)
+  const replayAttempt =
+    state.replay === undefined ? undefined : state.steps[state.replay.from]?.executions
   await writeState(run, {
     ...state,
     steps: { ...state.steps, [step.id]: { state: 'running', executions: attempt } },
@@ -629,6 +658,7 @@ async function nextPlain(
     ...gatesOf(step),
     inputs: inputsOf(step, steps, state),
     attempt,
+    ...(replayAttempt !== undefined && { replayAttempt }),
   }
   return { ready: [launch], run: 'running' }
 }
