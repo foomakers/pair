@@ -181,17 +181,21 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 #### TDD Discipline Rules:
 
 1. **New features → add tests autonomously.** Write unit tests without asking.
-2. **Modifying existing tests → ask developer with evidence.** Show what changes and why, get approval before modifying any existing test.
+2. **Changing an existing test's behavior contract → ask with evidence** when the approved story and adopted policy do not authorize the change. Preserve existing controls, and keep diagnostic expectations in sync with explicitly approved contract changes.
 3. **No code+test changes in the same session.** When changing production code, do NOT modify tests until all existing tests pass. Separate RED, GREEN, and REFACTOR into distinct sessions:
-   - **RED session**: Write or modify ONLY test code. Tests MUST fail. No implementation code changes.
+   - **RED session**: Write or modify ONLY test code. Reproduce the expected failure for missing behavior and retain passing controls. If the behavior already works, verify it and continue without a GREEN phase for that behavior.
    - **GREEN session**: Write or modify ONLY implementation code. Write minimal code to make tests pass. No test code changes.
    - **REFACTOR session**: Improve structure without changing behavior. Both test and production code may be cleaned up. All tests must remain green.
 4. **Every module file must have a corresponding unit test file.** 1:1 mapping between source modules and test files.
 5. **Avoid mocks — prefer in-memory test doubles.** Use dependency injection with in-memory implementations (e.g., `InMemoryFileSystemService` instead of mocking `fs`).
 
-**Before ending RED:** Run the regression test and confirm that it fails for the expected reason. Compose `/pair-capability-checkpoint $mode=write $task-map=true` with `$tdd-handoff` containing the active task ID, next phase GREEN, test file, exact command and observed failure. Leave the task pending. Verify the checkpoint was persisted and report that a manual relaunch in a fresh session starts GREEN. When a workflow requests a structured result, report `needs-human` for that manual relaunch. If persistence fails, report the failure and return the checkpoint text for recovery.
+**Before ending RED:** Run the regression test and confirm that it fails for the expected reason. Compose `/pair-capability-checkpoint $mode=write $task-map=true` with `$tdd-handoff` containing the active task ID, next phase GREEN, test file, exact command and observed failure. Leave the task pending. Verify the checkpoint was persisted, then continue through a fresh session below. If persistence fails, report the failure and return the checkpoint text for recovery.
 
-**After GREEN:** If more regression tests are needed, end the session after verifying the recorded test passes. Update `/pair-capability-checkpoint` with `$tdd-handoff=clear`, keep the task pending, and name the next RED action in Remaining Todos. Verify the old handoff was removed before asking for a fresh session. If the task is ready for verification and completion, continue at Step 2.4 and clear the handoff at Step 2.8.
+**After GREEN:** Verify the recorded test passes. If more work needs a separate RED or REFACTOR session, clear the handoff with `/pair-capability-checkpoint $tdd-handoff=clear` and record the next phase, task and action in Remaining Todos. If the task is ready for verification and completion, continue at Step 2.4 and clear the handoff at Step 2.8.
+
+**Fresh TDD sessions:** The caller of this skill coordinates the task and keeps the invocation open across phase boundaries. When the next phase must run in a fresh session, use the harness's fresh-session or subagent tool from this caller, with no inherited conversation. Pass only the story, worktree, checkpoint path and the requested phase. Direct the worker to run this skill's rules for that phase only, record the outcome and next action in the checkpoint, and return to the caller without starting another session. Wait for the worker, verify the checkpoint and its test evidence, then continue verification or launch the next phase in a sibling session. Use the same split when moving from a completed GREEN task to RED for the next task.
+
+If the harness cannot launch a fresh session, preserve the checkpoint and report `fresh-session-unavailable` (structured `failed` where requested). Stop if the checkpoint and evidence fail to advance. Use `needs-human` only for a specific action or decision that the project requires a person to perform. A phase transition with a verified checkpoint is handled within this skill.
 
 #### For Non-Development Tasks (Direct Implementation):
 
@@ -240,7 +244,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 1. **Check**: Is the commit strategy `commit-per-task`?
 2. **Skip**: If `commit-per-story`, there is no inter-task confirmation and no commit here — but **still apply item 7 (tick and queue) and item 8** for the task just completed, then go to item 9. The tick-and-queue is not a property of the commit strategy: a 4-task `commit-per-story` story whose gate goes red on T3 (Step 2.7 → HALT) would otherwise queue only the failure, and the body would still show `- [ ] T1`, `- [ ] T2` over finished work — the state where "on task 3 of 4" and "failed on task 2" look identical, which is what this loop exists to end. Step 1.3 auto-selects this strategy for every single-task story, so it is the common path, not an exotic one. (The tick records the task's **work** as done, not a commit: on this strategy the single commit lands at Step 3.1. What the tick does **not** become is standalone completion evidence — Step 2.1 accepts a `commit-per-story` ✅ only while the commit or the working-tree change backs it, so a tick that survives a discarded worktree is re-attempted, not trusted.)
-3. **Act** (BLOCKING): Present task summary and **ask developer for confirmation BEFORE committing**:
+3. **Act**: Present the task summary. If the adopted commit policy or an explicit developer authorization permits this commit, go to item 5. Otherwise, ask the developer for confirmation:
 
    ```text
    TASK DONE:
@@ -250,8 +254,6 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
    ```
 
    Ask: _"Task T-N done. OK to commit or changes needed?"_
-
-   **This confirmation is required for EVERY task** — commit-per-task exists precisely to give the developer a checkpoint between tasks.
 
 4. **Verify**: Developer confirms. If changes needed → apply changes, re-run quality (Step 2.7), ask again.
 5. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
@@ -283,7 +285,7 @@ The task cycle is done. The closing phase writes the checkpoint (handoff artifac
 
 1. **Check**: Is the commit strategy `commit-per-story`?
 2. **Skip**: If `commit-per-task`, all commits already exist. Move to **Step 3.1b** — the batch still has to be flushed; the recommended strategy is not the one that reports nothing.
-3. **Act** (BLOCKING): Present summary and **ask developer for confirmation BEFORE committing**:
+3. **Act**: Present the summary. If the adopted commit policy or an explicit developer authorization permits this commit, go to item 5. Otherwise, ask the developer for confirmation:
 
    ```text
    ALL TASKS DONE:
