@@ -7,8 +7,15 @@ const [, , action, card, raw] = process.argv
 const allowed = new Set(['admin', 'maintain', 'write'])
 const sameLogin = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase()
 const failed = (reason, summary = 'Workflow merge refused') => ({ status: 'failed', reason, summary })
+const permission = (code, login) => allowed.has(code.readPermission({ user: login }))
+const humanLogin = (login, bot) => /^[A-Za-z0-9-]+$/.test(login ?? '') && !sameLogin(login, bot)
+const originalComment = row => row.authorIsUser && !row.performedViaApp && row.createdAt === row.updatedAt
+const soloAnswer = (code, target, comment) =>
+  originalComment(comment) && sameLogin(comment.authorLogin, target.author)
+  && code.workflowApprovalToken({ head: target.head, author: target.author, comment })
+
 const workflowMerge = (host, card, input) => {
-  const { code } = host
+  const { code, pm } = host
   const pr = code.workflowPr({ id: card })
   if (pr !== input.pr) return failed('pr-changed')
   let current = code.workflowPrDetails({ pr })
@@ -16,8 +23,9 @@ const workflowMerge = (host, card, input) => {
   if (!current.merged) {
     if (current.draft) return failed('pr-is-draft')
     const author = input.approvedBy
-    if (!/^[A-Za-z0-9-]+$/.test(author ?? '') || sameLogin(author, current.author)
-      || sameLogin(author, code.workflowReviewIdentity({})) || !allowed.has(code.readPermission({ user: author })))
+    if (!humanLogin(author, code.workflowReviewIdentity({})) || !permission(code, author)
+      || (sameLogin(author, current.author)
+        && !pm.listCardComments({ id: card }).some(comment => soloAnswer(code, current, comment))))
       return failed('approval-no-longer-authorized')
     code.merge({ pr, strategy: input.method ?? 'squash', headSha: input.head })
     current = code.workflowPrDetails({ pr })
@@ -51,13 +59,17 @@ try {
       if (park.pr !== pr || park.head !== target.head) throw new Error('Approval target moved')
       const since = Date.parse(park.since)
       const bot = code.workflowReviewIdentity({})
-      const authorized = row => row.human && /^[A-Za-z0-9-]+$/.test(row.login ?? '')
-        && !sameLogin(row.login, target.author) && !sameLogin(row.login, bot)
-        && Date.parse(row.at) >= since && allowed.has(code.readPermission({ user: row.login }))
-      const comments = pm.listCardComments({ id: card }).map(row => ({
-        login: row.authorLogin, human: row.authorIsUser && !row.performedViaApp && row.createdAt === row.updatedAt,
-        at: row.createdAt, body: row.body, channel: 'comment',
-      })).filter(row => /^\s*\/(approve|reject)(?:\s|$)/.test(row.body))
+      const authorized = row => row.human && humanLogin(row.login, bot)
+        && Date.parse(row.at) >= since && permission(code, row.login)
+        && (!sameLogin(row.login, target.author) || row.solo)
+      const comments = pm.listCardComments({ id: card }).flatMap(row => {
+        if (!originalComment(row) || Date.parse(row.createdAt) < since) return []
+        const answer = { login: row.authorLogin, human: true, at: row.createdAt, body: row.body, channel: 'comment' }
+        if (sameLogin(row.authorLogin, target.author))
+          return humanLogin(row.authorLogin, bot) && soloAnswer(code, target, row)
+            ? [{ ...answer, solo: true, body: '/approve ' + target.head }] : []
+        return /^\s*\/(approve|reject)(?:\s|$)/.test(row.body) ? [answer] : []
+      })
       const reviews = code.workflowReviews({ pr }).filter(row =>
         row.head === target.head && ['APPROVED', 'CHANGES_REQUESTED'].includes(row.state)
       ).map(row => ({ ...row, channel: 'review' }))

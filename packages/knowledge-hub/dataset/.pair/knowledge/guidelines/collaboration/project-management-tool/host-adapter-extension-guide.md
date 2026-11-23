@@ -59,6 +59,7 @@ Board facts come from the adopted view only: GitHub's `pm-project` project, Line
 | `workflowPrDetails` | code-host | `workflowPrDetails({ pr, repo })` → `{ pr, head, author, branch, merged, mergeCommit, draft }` for the linked PR. |
 | `workflowReviews` | code-host | `workflowReviews({ pr, repo })` → native reviews as `{ login, human, at, state, head, body }` rows. |
 | `workflowReviewIdentity` | code-host | `workflowReviewIdentity({ repo })` → the configured review bot login or `null` when no review bot is adopted. |
+| `workflowApprovalToken` | code-host | `workflowApprovalToken({ repo, head, author, comment })` → whether the adopted solo approval policy recognizes the author’s comment for this head. |
 | `readPermission`  | code-host      | `readPermission({ repo, user })` → the user's current repository role (`admin`, `maintain`, `write`, …) or `null` when unreadable; the board workflow authorizes only admin/maintain/write |
 | `syncEpic`        | pm-tool        | `syncEpic({ id, repo })` → `{ confirmed, parent?, changed?, gap?, error? }`; finds the existing parent and its children, then lists and ticks the epic's Sub-Issues checklist. It never sets a parent |
 | `updateCard`      | pm-tool        | `updateCard({ repo, id, body })` → `{ id }`                                                                       |

@@ -7,6 +7,7 @@
 //
 // Transport: `gh` from PATH, or `transport.ghBin` / PAIR_GH_BIN (a test's recorder). `gh`
 // authenticates itself; this file never reads a token.
+import { fileURLToPath } from 'node:url'
 import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, prLinks, resolveLinked, selectLink } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
@@ -111,7 +112,7 @@ export default defineAdapter({
         throw new HostError('invalid-json', { message: e.message, command: 'gh api --paginate' })
       }
       // The author as the host reports it (US-647) — the CREATOR — and the timestamps that prove the body was never edited since.
-      return pages.flat().map(c => ({ id: c.id, body: String(c.body ?? ''), url: c.html_url, authorLogin: c.user?.login, authorIsUser: c.user?.type === 'User', performedViaApp: Boolean(c.performed_via_github_app), createdAt: c.created_at, updatedAt: c.updated_at }))
+      return pages.flat().map(c => ({ id: c.id, body: String(c.body ?? ''), url: c.html_url, authorLogin: c.user?.login, authorIsUser: c.user?.type === 'User', authorAssociation: c.author_association, performedViaApp: Boolean(c.performed_via_github_app), createdAt: c.created_at, updatedAt: c.updated_at }))
     }
     const readCheck = ({ sha, repo, context = CHECK_CONTEXT }) => {
       const combined = JSON.parse(gh(['api', `${apiRepo(repo)}/commits/${sha}/status`]))
@@ -300,10 +301,29 @@ export default defineAdapter({
       },
       workflowReviewIdentity({ repo }) {
         const text = adoption()
-        if (!/Review identity[^\n]*:\s*`?bot-user/i.test(text)) return null
+        if (!/Review identity[^\n]*:\s*`?(?:bot-user|user)\b/i.test(text)) return null
         const login = gh(['variable', 'get', 'REVIEW_IDENTITY_LOGIN', '--repo', resolveRepo(repo)]).trim()
         if (!login) throw new Error('REVIEW_IDENTITY_LOGIN unavailable')
         return login
+      },
+      workflowApprovalToken({ repo, head, author, comment }) {
+        let optIn
+        try {
+          optIn = gh(['variable', 'get', 'PAIR_SOLO_APPROVAL_TOKEN', '--repo', resolveRepo(repo)])
+        } catch (error) {
+          if (/HTTP 404\b/i.test(String(error.message))) return false
+          throw error
+        }
+        if (optIn.replace(/\s/g, '').toLowerCase() !== 'true') return false
+        const policy = fileURLToPath(new URL('../../../../../.pair/knowledge/assets/pr-state.sh', import.meta.url))
+        const args = ['-c', 'source "$1" || exit; export HEAD_SHA="$2" PR_AUTHOR="$3" SOLO_APPROVAL_TOKEN=true; jq -r "$(human_token_approval_login_jq_filter)"', 'pair-approval', policy, head, author]
+        const input = JSON.stringify([{
+          user: { login: comment.authorLogin, type: comment.authorIsUser ? 'User' : '' },
+          author_association: comment.authorAssociation,
+          performed_via_github_app: comment.performedViaApp || null,
+          body: comment.body,
+        }])
+        return runCli({ bin: 'bash', args, input, label: 'approval-policy' }).trim() === comment.authorLogin
       },
       createCard({ repo, title, body }) {
         const out = gh(['issue', 'create', '--repo', resolveRepo(repo), '--title', title, '--body', body])

@@ -27,9 +27,12 @@ const json = value => console.log(JSON.stringify(value))
 if (a.some(v => v.includes('/pulls?state=all'))) console.log(process.env.PAIR_TEST_PULLS)
 else if (a[0] === 'pr' && a[1] === 'view') console.log(process.env.PAIR_TEST_HEAD ?? '${sha}')
 else if(a[0] === 'repo' && a[1] === 'view') console.log('foomakers/pair')
+else if (a[0] === 'pr' && a[1] === 'merge') require('node:fs').writeFileSync('merge-call.json', JSON.stringify(a))
 else if (a[0] === 'api' && a[1] === 'user') json(JSON.parse(process.env.PAIR_TEST_ACTOR))
 else if (a.some(v => v.endsWith('/pulls/735'))) json({number:735,head:{sha:'${sha}',ref:'feature/US-726-test'},user:{login:'author'},draft:process.env.PAIR_TEST_DRAFT==='true'})
-else if (a.some(v => v.includes('/collaborators/'))) json({permission: a.some(v => v.includes('/maintainer/')) ? 'write' : 'read'})
+else if (a.some(v => v.includes('/collaborators/'))) json({permission: a.some(v => v.includes('/maintainer/') || v.includes('/author/')) ? 'write' : 'read'})
+else if (a[0] === 'variable' && a[2] === 'PAIR_SOLO_APPROVAL_TOKEN') console.log(process.env.PAIR_TEST_SOLO ?? 'false')
+else if (a[0] === 'variable' && a[2] === 'REVIEW_IDENTITY_LOGIN') console.log('maintainer')
 else if (a.some(v => v.includes('/reviews'))) console.log(process.env.PAIR_TEST_REVIEWS)
 else if (a.some(v => v.endsWith('/issues/726/comments'))) console.log(process.env.PAIR_TEST_COMMENTS)
 else if (a[0] === 'issue' && a[2] === '726') console.log('## Dependencies\\n\\n**Prerequisite Stories**: #42')
@@ -185,4 +188,81 @@ it('refuses to merge a draft or a moved head before any mutation (#726 T-12)', a
     status: 'failed',
     reason: 'pr-is-draft',
   })
+})
+
+it('accepts only a current-head approval token from the author when solo approval is enabled (#726 AC-3)', async () => {
+  const at = '2026-11-23T08:01:00Z'
+  const comment = (body: string) => ({
+    user: { login: 'author', type: 'User' },
+    author_association: 'OWNER',
+    created_at: at,
+    updated_at: at,
+    body,
+  })
+  const approvals = approvalPlatform((action, card, data) =>
+    workflowOperation(() => scripts, dir, { action, card, data }),
+  )
+  const park = { pr: 735, head: sha, since: '2026-11-23T08:00:00Z', notified: true }
+  vi.stubEnv('PAIR_TEST_ACTOR', JSON.stringify({ login: 'author', type: 'User' }))
+  vi.stubEnv('PAIR_TEST_COMMENTS', JSON.stringify([comment('/approve ' + sha)]))
+  await expect(approvals.answers('726', park)).resolves.toEqual([])
+  vi.stubEnv('PAIR_TEST_SOLO', 'True')
+  vi.stubEnv(
+    'PAIR_TEST_COMMENTS',
+    JSON.stringify([comment('/approve ' + 'b'.repeat(40)), comment('> /approve ' + sha)]),
+  )
+  await expect(approvals.answers('726', park, { verdict: 'approved' })).resolves.toEqual([])
+  vi.stubEnv('PAIR_TEST_COMMENTS', JSON.stringify([comment('/approve ' + sha)]))
+  await expect(approvals.answers('726', park)).resolves.toEqual([
+    { channel: 'comment', login: 'author', verdict: 'approved', note: sha },
+  ])
+})
+
+it('excludes the adopted machine account when review identity is written as user (#726 AC-3)', async () => {
+  fs.mkdirSync(join(dir, '.pair/adoption/tech'), { recursive: true })
+  fs.writeFileSync(
+    join(dir, '.pair/adoption/tech/way-of-working.md'),
+    '**Review identity**: `user`\n',
+  )
+  vi.stubEnv('PAIR_TEST_ACTOR', JSON.stringify({ login: 'maintainer', type: 'User' }))
+  const approvals = approvalPlatform((action, card, data) =>
+    workflowOperation(() => scripts, dir, { action, card, data }),
+  )
+  const park = { pr: 735, head: sha, since: '2026-11-23T08:00:00Z', notified: true }
+  await expect(approvals.answers('726', park, { verdict: 'approved' })).resolves.toEqual([])
+})
+
+it('rechecks the solo token at merge and requests the exact approved head (#726 AC-3/4)', async () => {
+  const at = '2026-11-23T08:01:00Z'
+  vi.stubEnv(
+    'PAIR_TEST_COMMENTS',
+    JSON.stringify([
+      {
+        user: { login: 'author', type: 'User' },
+        author_association: 'OWNER',
+        created_at: at,
+        updated_at: at,
+        body: '/approve ' + sha,
+      },
+    ]),
+  )
+  const merge = () =>
+    workflowOperation(() => scripts, dir, {
+      action: 'merge',
+      card: '726',
+      data: { pr: 735, head: sha, approvedBy: 'author', root: dir },
+    })
+  const log = join(dir, 'merge-call.json')
+  await expect(merge()).resolves.toMatchObject({ reason: 'approval-no-longer-authorized' })
+  expect(fs.existsSync(log)).toBe(false)
+  vi.stubEnv('PAIR_TEST_SOLO', 'true')
+  await expect(merge()).resolves.toMatchObject({ reason: 'merge-not-confirmed' })
+  expect(JSON.parse(fs.readFileSync(log))).toEqual([
+    'pr',
+    'merge',
+    '735',
+    '--squash',
+    '--match-head-commit',
+    sha,
+  ])
 })
