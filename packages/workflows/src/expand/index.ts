@@ -33,6 +33,7 @@ type ExpansionState = {
   origins: Record<string, { file: string; line: number }>
   outputSteps: Record<string, string>
   resolve: (name: string) => WorkflowSource | undefined
+  skillExists: (name: string) => boolean
 }
 
 type StepContext = { workflow: Workflow; step: Step; id: string }
@@ -82,6 +83,15 @@ function expandStep(state: ExpansionState, context: StepContext, chain: readonly
     recordOrigins(state.origins, workflow, step, id)
     return [{ ...step, id }]
   }
+  if (step.uses && state.skillExists(step.uses)) {
+    state.errors.push(
+      errorAt(workflow, ['steps', step.id, 'uses'], {
+        problem: `workflow and skill name clash: ${step.uses}`,
+        fix: 'rename the workflow or skill',
+      }),
+    )
+    return []
+  }
   if (chain.includes(target.file) || chain.length >= 4) {
     state.errors.push(
       errorAt(workflow, ['steps', step.id, 'uses'], {
@@ -121,8 +131,9 @@ function visit(
 export function expand(
   source: WorkflowSource,
   resolve: (name: string) => WorkflowSource | undefined,
+  skillExists: (name: string) => boolean = () => false,
 ): Expansion {
-  const state: ExpansionState = { errors: [], origins: {}, outputSteps: {}, resolve }
+  const state: ExpansionState = { errors: [], origins: {}, outputSteps: {}, resolve, skillExists }
   const workflow = visit(state, source, '', [source.file])
   return {
     ...(workflow && state.errors.length === 0 && { workflow }),

@@ -376,7 +376,7 @@ function mergeWarnings(workflow: Workflow): WorkflowError[] {
  */
 export function validate(text: string, file: string, deps: ValidationDeps): Validation {
   const parsed = deps.resolveWorkflow
-    ? expand({ text, file }, deps.resolveWorkflow)
+    ? expand({ text, file }, deps.resolveWorkflow, deps.skillExists)
     : parseWorkflow(text, file)
   if (parsed.workflow === undefined) return { errors: parsed.errors, warnings: [] }
   const locate = (error: WorkflowError): WorkflowError => {
