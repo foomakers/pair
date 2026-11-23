@@ -129,3 +129,11 @@ describe('gate checks (#680 AC-2)', () => {
     expect(t).toBe(60_000)
   })
 })
+
+it('fails a check when platform facts cannot be read (#726 AC-1)', async () => {
+  const result = await runGate(
+    { checks: ['ci-green'] },
+    { registry, run: run(), facts: facts({ ci: async () => { throw new Error('offline') } }) },
+  )
+  expect(result).toMatchObject({ status: 'failed', reason: 'fact-unreadable', detail: 'offline' })
+})

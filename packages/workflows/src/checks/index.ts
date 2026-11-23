@@ -74,8 +74,12 @@ export async function runChecks(
   options: CheckOptions = {},
 ): Promise<StepResult> {
   for (const name of names) {
-    const reason = await verdicts[name](facts, options)
-    if (reason !== undefined) return { status: 'failed', reason, summary: `check ${name} failed` }
+    try {
+      const reason = await verdicts[name](facts, options)
+      if (reason !== undefined) return { status: 'failed', reason, summary: `check ${name} failed` }
+    } catch (error) {
+      return { status: 'failed', reason: 'fact-unreadable', summary: `check ${name} failed`, detail: error instanceof Error ? error.message : String(error) }
+    }
   }
   return { status: 'ok', summary: `${names.length} check(s) passed` }
 }
