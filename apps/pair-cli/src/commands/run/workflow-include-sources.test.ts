@@ -5,14 +5,21 @@ import { fileSystemService as fs } from '@pair/content-ops'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 
-it('records include source hashes when a run starts (699 AC-7)', async () => {
+const platforms = ['darwin', 'linux'] as const
+
+it.each(platforms)('records include source hashes on platform %s (699 AC-7)', async platform => {
   const project = fs.mkdtempSync(join(tmpdir(), 'pair-include-sources-'))
   const write = (path: string, text: string) => {
     const target = join(project, path)
     fs.mkdirSync(join(target, '..'), { recursive: true })
     fs.writeFileSync(target, text)
   }
+  const originalPlatform = Object.getOwnPropertyDescriptor(
+    process,
+    'platform',
+  ) as PropertyDescriptor
   try {
+    Object.defineProperty(process, 'platform', { ...originalPlatform, value: platform })
     write('.claude/skills/my-skill/SKILL.md', '# skill\n')
     write(
       '.pair/adoption/tech/workflows/root.yaml',
@@ -46,9 +53,12 @@ it('records include source hashes when a run starts (699 AC-7)', async () => {
     )
     expect(result).toBe(0)
     const sources = fs.readFileSync(join(project, '.pair/working/runs/root-699/sources.json'))
-    expect(sources).toContain('shared.yaml')
-    expect(sources).toMatch(/[0-9a-f]{64}/)
+    expect(JSON.parse(sources)).toEqual({
+      [join(project, '.pair/adoption/tech/workflows/shared.yaml')]:
+        expect.stringMatching(/^[0-9a-f]{64}$/),
+    })
   } finally {
+    Object.defineProperty(process, 'platform', originalPlatform)
     fs.rmSync(project, { recursive: true, force: true })
   }
 })
