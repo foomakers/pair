@@ -193,6 +193,14 @@ describe('validation (AC-4)', () => {
     expect(errors.map(e => e.key)).toEqual(['aliases.judge.model'])
   })
 
+  it('accepts a model confirmed by a non-exhaustive engine cache', () => {
+    const result = checkAgainstEngines(parsed(), {
+      file: FILE,
+      facts: facts({ recognizesModel: (_engine, model) => model === 'claude-opus-5-5' }),
+    })
+    expect(result.warnings.map(w => w.key)).not.toContain('aliases.judge.model')
+  })
+
   it('no list: a malformed id is an error, a well-formed one a warning', () => {
     expect(
       checkAgainstEngines(parsed(BASE.replace('claude-opus-5-5', 'big model')), {

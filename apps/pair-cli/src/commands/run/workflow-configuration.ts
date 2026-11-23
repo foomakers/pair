@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { join, resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import {
@@ -24,14 +25,39 @@ import { withRunAgentRunner } from './run-context'
 
 export const CONFIGURATIONS_DIR = '.pair/adoption/tech/configurations'
 
-/** The engines this CLI knows, as the package's injected facts. No engine declares a model list today: a model is checked by its form only (ADR-034). */
-export function engineFacts(project: Config, probe: ExecutableProbe): EngineFacts {
+/** The cache provides positive evidence for models it lists. */
+function codexModelSlugs(fs: FileSystemService | undefined): Set<string> {
+  try {
+    const dir = process.env['CODEX_HOME'] || join(homedir(), '.codex')
+    const cache: unknown = fs && JSON.parse(fs.readFileSync(join(dir, 'models_cache.json')))
+    if (!cache || typeof cache !== 'object' || !('models' in cache) || !Array.isArray(cache.models))
+      return new Set()
+    return new Set(
+      cache.models.flatMap((model: unknown) =>
+        model && typeof model === 'object' && 'slug' in model && typeof model.slug === 'string'
+          ? [model.slug]
+          : [],
+      ),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+/** The engines this CLI knows, as the package's injected facts. */
+export function engineFacts(
+  project: Config,
+  probe: ExecutableProbe,
+  fs?: FileSystemService,
+): EngineFacts {
+  const codex = codexModelSlugs(fs)
   return {
     known: isEngineId,
     installed: id =>
       isEngineId(id) &&
       probe(withRunAgentRunner(resolveEngine({ flag: id }), project).engine.command),
     models: () => undefined,
+    recognizesModel: (engine, model) => engine === 'codex' && codex.has(model),
     supportsEffort: id => isEngineId(id) && ENGINES[id].effortArgs !== undefined,
   }
 }
@@ -142,7 +168,7 @@ export function resolveConfiguration(input: ConfigurationInput): ConfigurationOu
   if (configuration === undefined) return { errors: [], warnings: [] }
   const checked = checkAgainstEngines(configuration, {
     file,
-    facts: engineFacts(input.project, input.probe),
+    facts: engineFacts(input.project, input.probe, input.fs),
     steps: addressedSteps(input.workflow),
     aliases: input.workflow.aliases,
     engineFlag: input.engineFlag,
