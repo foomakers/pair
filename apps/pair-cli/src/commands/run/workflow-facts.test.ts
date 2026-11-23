@@ -25,7 +25,7 @@ beforeEach(() => {
 const a = process.argv.slice(2)
 const json = value => console.log(JSON.stringify(value))
 if (a.some(v => v.includes('/pulls?state=all'))) console.log(process.env.PAIR_TEST_PULLS)
-else if (a[0] === 'pr' && a[1] === 'view') console.log('${sha}')
+else if (a[0] === 'pr' && a[1] === 'view') console.log(process.env.PAIR_TEST_HEAD ?? '${sha}')
 else if(a[0] === 'repo' && a[1] === 'view') console.log('foomakers/pair')
 else if (a[0] === 'api' && a[1] === 'user') json(JSON.parse(process.env.PAIR_TEST_ACTOR))
 else if (a.some(v => v.endsWith('/pulls/735'))) json({number:735,head:{sha:'${sha}',ref:'feature/US-726-test'},user:{login:'author'},draft:process.env.PAIR_TEST_DRAFT==='true'})
@@ -54,12 +54,12 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-const facts = (cwd: string) =>
+const facts = (cwd: string, checks: string[] = []) =>
   workflowFacts(() => scripts, cwd, {
     id: 'gate',
     kind: 'gate',
     uses: '',
-    with: {},
+    with: { checks },
     attempt: 1,
     inputs: { card: '726', reviewedHead: sha },
   })
@@ -95,6 +95,14 @@ it('counts only a successful pair-review signal on the current head (#726 T-3)',
   await expect(facts(dir).reviewApproved()).resolves.toBe(true)
   vi.stubEnv('PAIR_TEST_CHECKS', '[]')
   await expect(facts(dir).reviewApproved()).resolves.toBe(false)
+})
+
+it('refuses facts from a replacement head after the head check (#726 AC-2)', async () => {
+  const gate = facts(dir, ['head-unchanged', 'ci-green', 'review-approved'])
+  await expect(gate.head()).resolves.toBe(sha)
+  vi.stubEnv('PAIR_TEST_HEAD', 'b'.repeat(40))
+  await expect(gate.ci()).rejects.toThrow(/head moved/i)
+  await expect(gate.reviewApproved()).rejects.toThrow(/head moved/i)
 })
 
 it('keeps an open prerequisite blocked until the tracker confirms completion (#726 T-4)', async () => {

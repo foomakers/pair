@@ -26,12 +26,18 @@ export async function workflowOperation(
 }
 
 export function workflowFacts(scriptDir: () => string, cwd: string, step: StepLaunch): FactReader {
+  const checks = step.with['checks']
+  const reviewedHead = step.inputs['reviewedHead']
+  const pinHead = Array.isArray(checks) && checks.includes('head-unchanged')
   const read = (action: string, timeout?: number): Promise<unknown> => {
     const card = step.inputs['card']
     if (typeof card !== 'string' || card.length === 0) throw new Error('workflow card is missing')
     return workflowOperation(scriptDir, cwd, {
       action,
       card,
+      ...(pinHead && (action === 'ci' || action === 'review') && {
+        data: { expectedHead: reviewedHead },
+      }),
       ...(timeout === undefined ? {} : { timeout }),
     })
   }

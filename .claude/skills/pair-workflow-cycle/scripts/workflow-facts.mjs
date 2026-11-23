@@ -73,6 +73,8 @@ try {
     if (typeof code.workflowPr !== 'function') throw new Error('code host cannot resolve workflow PRs')
     const pr = code.workflowPr({ id: card })
     const sha = code.prHead({ pr })
+    if ((action === 'ci' || action === 'review') && raw !== undefined && JSON.parse(raw).expectedHead !== sha)
+      throw new Error('PR head moved since review')
     if (action === 'head') result = sha
     else if (action === 'ci') {
       const checks = code.readCiChecks({ sha, pr }).filter(c => !['pair-review', 'pair-explicit-approval'].includes(c.name))
