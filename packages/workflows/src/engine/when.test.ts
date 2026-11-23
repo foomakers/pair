@@ -129,3 +129,17 @@ describe('when inside a loop (#680 AC-6)', () => {
     expect(after.ready.map(s => s.id)).toEqual(['rounds/review'])
   })
 })
+
+it('shipped quick runs fix after a review crashes without a verdict (#726 AC-6)', async () => {
+  const { readFileSync } = await import('node:fs')
+  const text = readFileSync('../knowledge-hub/dataset/.pair/adoption/tech/workflows/quick.yaml', 'utf8')
+  const run = open()
+  await start(run, { text, file: 'quick.yaml' }, { card: '726' })
+  await next(run)
+  await record(run, 'implement', IMPLEMENTED)
+  await next(run)
+  await record(run, 'review', { status: 'failed', summary: 'crashed', reason: 'crash' })
+  const after = await next(run)
+  expect(after.run).not.toBe('done')
+  expect(after.ready.map(step => step.id)).toEqual(['fix'])
+})
