@@ -1,7 +1,7 @@
 ---
 name: pair-process-implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /pair-capability-verify-quality, /pair-capability-record-decision, /pair-capability-checkpoint, /pair-capability-publish-pr."
-version: 0.7.6
+version: 0.7.4
 author: Foomakers
 ---
 
@@ -146,10 +146,6 @@ Ask: _"Ready to proceed with implementation?"_
 
 Process tasks **sequentially**, one at a time. For each task:
 
-**Unattended task failures.** When no human is available, a technical failure confined to one task ends that task's attempt. Record its ID, failed check or missing prerequisite, and partial work in the checkpoint Task State map. Leave its tracker checkbox unticked. Keep partial work separate from later tasks' validation and commits. Preserve it without staging it with unrelated changes or discarding pre-existing edits. If it cannot be separated safely, report the resulting story-wide blocker.
-
-Resume the dependency scan at Step 2.1 after recording the failure. Pass over the failed task for the rest of this invocation. Mark its still-blocked dependents with their prerequisite and attempt every remaining independent task. This rule applies to a quality failure outside the card when the failing check is scoped to the active task; a shared prerequisite or shared gate that prevents all remaining work still halts. Interactive HALT and confirmation behavior stays as documented below.
-
 ### Step 2.1: Select Next Task
 
 1. **Check**: Scan all tasks in dependency order. Find the first task that is not yet completed.
@@ -184,10 +180,10 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 1. **New features → add tests autonomously.** Write unit tests without asking.
 2. **Modifying existing tests → ask developer with evidence.** Show what changes and why, get approval before modifying any existing test.
-3. **Keep RED, GREEN, and REFACTOR distinct.** In an interactive invocation, use separate sessions for the phases below. In an unattended invocation, execute the same phases in order within the current session. Run the regression test and observe the expected failure before editing production code. Then make it pass and verify the task before moving to the next one. A phase boundary does not require a human or end an unattended invocation:
-   - **RED phase**: Write or modify ONLY test code. Tests MUST fail. No implementation code changes.
-   - **GREEN phase**: Write or modify ONLY implementation code. Write minimal code to make tests pass. No test code changes.
-   - **REFACTOR phase**: Improve structure without changing behavior. Both test and production code may be cleaned up. All tests must remain green.
+3. **No code+test changes in the same session.** When changing production code, do NOT modify tests until all existing tests pass. Separate RED, GREEN, and REFACTOR into distinct sessions:
+   - **RED session**: Write or modify ONLY test code. Tests MUST fail. No implementation code changes.
+   - **GREEN session**: Write or modify ONLY implementation code. Write minimal code to make tests pass. No test code changes.
+   - **REFACTOR session**: Improve structure without changing behavior. Both test and production code may be cleaned up. All tests must remain green.
 4. **Every module file must have a corresponding unit test file.** 1:1 mapping between source modules and test files.
 5. **Avoid mocks — prefer in-memory test doubles.** Use dependency injection with in-memory implementations (e.g., `InMemoryFileSystemService` instead of mocking `fs`).
 
@@ -232,7 +228,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 1. **Skip**: `$gates: none` — the caller runs the gates; go to the commit step.
 2. **Act**: Compose `/pair-capability-verify-quality` with `$target: increment`, `$caller: implement` and `$scope` set to the packages the task touched — the gates of that target, never those of the pull request: they run once at closing, inside `/pair-capability-publish-pr` (Phase 1). Which command each target runs is the adoption's, never this skill's.
-3. **Verify**: All quality gates pass. A failure caused by this card's work (the task's own code, or a test of a task not yet implemented) is yours to fix: continue the cycle until green, never a stop. **HALT** only when the cause lies outside the card, subject to the unattended task-local failure rule in Phase 2. A red test of a pending task is the RED phase, not a failed gate.
+3. **Verify**: All quality gates pass. A failure caused by this card's work (the task's own code, or a test of a task not yet implemented) is yours to fix: continue the cycle until green, never a stop. **HALT** only when the cause lies outside the card. A red test of a pending task is the RED phase, not a failed gate.
 
 ### Step 2.8: Task Completion
 
@@ -324,8 +320,6 @@ The checkpoint is the boundary artifact (R4.2) and the **input contract for `/pa
 1. **Act**: Compose `/pair-capability-checkpoint $mode=write` (pass `$story`). This creates/updates `.pair/working/checkpoints/<story-id>.md` with the five sections: story, branch, tasks done, key decisions, remaining todos.
 2. **Verify**: The checkpoint file exists and captures the completed story state (all tasks done, branch, decisions). This file — not this session's memory — is what the PR is built from.
 3. **Act — if `/pair-capability-checkpoint` is not installed**: synthesize the handoff inline (branch, tasks done, decisions, ACs) and pass it directly to `/pair-capability-publish-pr` as `$handoff`; note the absence in the output.
-
-**Unattended completion after a technical failure.** Before leaving implementation, check the full task inventory against the recorded outcomes. If an independent task is still runnable, return to Step 2.1. After all runnable tasks have been attempted, compose the checkpoint writer with `$task-map=true` using the observed outcomes. If a technical failure remains, report failure with the failed task IDs and reasons, completed work, and blocked dependents. Keep the completed commits and checkpoint for resume. Stop before marking the PR ready for review. A continuation invocation may retry the failed task after the cause is cleared.
 
 ### Step 3.3: Publish the PR via a Handoff-Only Subagent
 
