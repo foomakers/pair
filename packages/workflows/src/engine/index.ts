@@ -129,6 +129,7 @@ function frozenWorkflow(run: RunDirectory): Workflow {
   const { workflow, errors } = parseWorkflow(
     text,
     join(run.dir, `${requireState(run).workflow.name}.yaml`),
+    true,
   )
   if (workflow === undefined)
     throw new Error(`run-state-unreadable: ${path}: ${errors[0]?.problem ?? 'invalid'}`)
@@ -339,7 +340,7 @@ async function resume(
     options.moreRounds === undefined ? exhausted : undefined,
   )
   if (settled === undefined) {
-    await writeState(run, { ...state, steps: reopenedSteps(state) })
+    await writeState(run, { ...state, steps: reopenedSteps(state, frozenWorkflow(run)) })
     return { status: 'resumed', warnings }
   }
   if (state !== saved) await writeState(run, state)
@@ -347,11 +348,12 @@ async function resume(
 }
 
 // A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
-function reopenedSteps(state: RunStateFile): Record<string, StepRecord> {
+function reopenedSteps(state: RunStateFile, workflow: Workflow): Record<string, StepRecord> {
+  const topLevelIds = new Set(workflow.steps.map(step => step.id))
   return Object.fromEntries(
     Object.entries(state.steps).map(([id, step]) => [
       id,
-      step.state === 'ok' || (step.state === 'failed' && id.includes('/'))
+      step.state === 'ok' || (step.state === 'failed' && !topLevelIds.has(id))
         ? step
         : {
             state: 'pending' as const,
@@ -402,7 +404,7 @@ export async function start(
   if (existing !== undefined) return resume(run, existing, source, options)
   if (options.moreRounds !== undefined)
     throw new Error('more-rounds-invalid: no parked loop exists')
-  const { workflow, errors } = parseWorkflow(source.text, source.file)
+  const { workflow, errors } = parseWorkflow(source.text, source.file, true)
   if (workflow === undefined)
     throw new Error(`workflow-invalid: ${errors[0]?.problem ?? source.file}`)
   if (run.files.existsSync(join(run.dir, STATE_FILE))) await archive(run, options.now ?? new Date())
@@ -709,8 +711,10 @@ function launchable(
   run: RunDirectory,
   stepId: string,
 ): { step: Step & { kind: KindName }; outer: Step | undefined; childId: string | undefined } {
-  const [first, childId] = stepId.split('/')
-  const outer = frozenWorkflow(run).steps.find(one => one.id === (first ?? stepId))
+  const steps = frozenWorkflow(run).steps
+  const direct = steps.find(one => one.id === stepId)
+  const outer = direct ?? steps.find(one => one.kind === 'loop' && stepId.startsWith(`${one.id}/`))
+  const childId = direct || !outer ? undefined : stepId.slice(outer.id.length + 1)
   const step = childId === undefined ? outer : outer?.steps?.find(one => one.id === childId)
   if (step === undefined) throw new Error(`step-unknown: ${stepId} is not a step of ${run.dir}`)
   if (step.kind === 'loop')

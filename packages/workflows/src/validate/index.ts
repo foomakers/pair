@@ -7,12 +7,14 @@ import {
   type Workflow,
   type WorkflowError,
 } from '../grammar'
+import { expand, type WorkflowSource } from '../expand'
 import { fieldsOf, kindByName } from '../kinds'
 import { addressedSteps } from '../grammar'
 import { textsOf, violations } from '../schema'
 
 /** What the validator asks of its caller: the package reads no skill directory and no adoption file itself. */
 export interface ValidationDeps {
+  readonly resolveWorkflow?: (name: string) => WorkflowSource | undefined
   /** Whether a skill of that name is installed. */
   readonly skillExists: (name: string) => boolean
   /** The keys of the Custom Gate Registry. */
@@ -373,14 +375,26 @@ function mergeWarnings(workflow: Workflow): WorkflowError[] {
  * `pair run <workflow>` calls it before any launch, and `--dry-run` calls nothing else.
  */
 export function validate(text: string, file: string, deps: ValidationDeps): Validation {
-  const parsed = parseWorkflow(text, file)
+  const parsed = deps.resolveWorkflow
+    ? expand({ text, file }, deps.resolveWorkflow)
+    : parseWorkflow(text, file)
   if (parsed.workflow === undefined) return { errors: parsed.errors, warnings: [] }
-  const errors = coherenceErrors(parsed.workflow, deps)
+  const locate = (error: WorkflowError): WorkflowError => {
+    if (!('origins' in parsed)) return error
+    const path = error.key.split('.')
+    while (path.length > 0) {
+      const origin = parsed.origins[path.join('.')]
+      if (origin) return { ...error, ...origin }
+      path.pop()
+    }
+    return error
+  }
+  const errors = coherenceErrors(parsed.workflow, deps).map(locate)
   return errors.length > 0
     ? { errors, warnings: [] }
     : {
         workflow: parsed.workflow,
         errors: [],
-        warnings: [...warnings(parsed.workflow), ...mergeWarnings(parsed.workflow)],
+        warnings: [...warnings(parsed.workflow), ...mergeWarnings(parsed.workflow)].map(locate),
       }
 }

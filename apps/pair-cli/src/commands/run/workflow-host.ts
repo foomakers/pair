@@ -198,6 +198,43 @@ function configure(
   return undefined
 }
 
+/** Serialize the expanded workflow for the engine's frozen source. */
+function expandedSource(workflow: Workflow): string {
+  const entries = (steps: Workflow['steps']): Record<string, unknown> =>
+    Object.fromEntries(
+      steps.map(({ id, steps: children, ...step }) => [
+        id,
+        { ...step, ...(children && { steps: entries(children) }) },
+      ]),
+    )
+  const { version, name, description, aliases, steps } = workflow
+  return `${JSON.stringify({ version, name, description, aliases, steps: entries(steps) }, null, 2)}\n`
+}
+
+function checkWorkflow(
+  fs: Services['fs'],
+  project: ReturnType<typeof loadConfigWithOverrides>['config'],
+  { cwd, main }: { cwd: string; main: string },
+  source: { text: string; file: string },
+) {
+  const registry = join(main, WAY_OF_WORKING)
+  const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
+  return validate(source.text, source.file, {
+    skillExists: createSkillProbe(fs, project, cwd),
+    gateKeys: Object.keys(readGateRegistry(registryText)),
+    gateTargets: Object.keys(readGateTargets(registryText)),
+    launchInputs: ['card'],
+    isSafeText: isSafePromptText,
+    resolveWorkflow: name => {
+      try {
+        return locateWorkflow(fs, { cwd, main }, name)
+      } catch {
+        return undefined
+      }
+    },
+  })
+}
+
 /** Workflow, validation and engine: everything decided before the card is read or anything is launched. */
 function resolveWorkflowRun(
   config: RunCommandConfig,
@@ -209,15 +246,7 @@ function resolveWorkflowRun(
   const main = mainCheckoutOrCwd(cwd)
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
   const source = locateWorkflow(fs, { cwd, main }, request.name)
-  const registry = join(main, WAY_OF_WORKING)
-  const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
-  const checked = validate(source.text, source.file, {
-    skillExists: createSkillProbe(fs, project, cwd),
-    gateKeys: Object.keys(readGateRegistry(registryText)),
-    gateTargets: Object.keys(readGateTargets(registryText)),
-    launchInputs: ['card'],
-    isSafeText: isSafePromptText,
-  })
+  const checked = checkWorkflow(fs, project, { cwd, main }, source)
   console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
   checked.warnings.forEach(warning => console.log(`  Warning: ${formatError(warning)}`))
   if (checked.workflow === undefined) {
@@ -240,7 +269,9 @@ function resolveWorkflowRun(
   if (configured === undefined) return undefined
   return {
     workflow: checked.workflow,
-    source,
+    source: checked.workflow.steps.some(step => step.id.includes('/'))
+      ? { ...source, text: expandedSource(checked.workflow) }
+      : source,
     project,
     engine,
     ...(configured.plan && { configuration: configured.plan }),

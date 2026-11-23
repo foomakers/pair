@@ -155,6 +155,17 @@ export const workflowSchemaV1: JsonSchema = {
   },
 }
 
+const expandedWorkflowSchema: JsonSchema = {
+  ...workflowSchemaV1,
+  properties: {
+    ...workflowSchemaV1.properties,
+    steps: {
+      ...workflowSchemaV1.properties?.['steps'],
+      propertyNames: { pattern: `${STEP_ID.slice(0, -1)}(/[a-z][a-z0-9-]*)*$` },
+    },
+  },
+}
+
 /** A refusal: where in which file, what is wrong, and what to write instead. */
 export interface WorkflowError {
   readonly file: string
@@ -338,7 +349,7 @@ export function parseStrict(text: string, file: string): StrictSource {
 }
 
 /** Parses one workflow file: a typed `Workflow`, or every error found, each with file, line, key and fix. */
-export function parseWorkflow(text: string, file: string): ParsedWorkflow {
+export function parseWorkflow(text: string, file: string, expanded = false): ParsedWorkflow {
   const source = parseStrict(text, file)
   if (source.lines === undefined) return { errors: source.errors }
   const { lines } = source
@@ -346,7 +357,7 @@ export function parseWorkflow(text: string, file: string): ParsedWorkflow {
     steps: Record<string, RawStep>
   }
   const errors = [
-    ...violations(workflowSchemaV1, value).map(found =>
+    ...violations(expanded ? expandedWorkflowSchema : workflowSchemaV1, value).map(found =>
       errorAt({ file, lines }, found.path, found),
     ),
     ...nameError(value, file, lines),
