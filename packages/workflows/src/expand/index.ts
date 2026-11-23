@@ -76,12 +76,34 @@ function includeSteps(state: ExpansionState, context: StepContext, included: Wor
   return forwardOptions(step, selected, included.steps)
 }
 
+function expandLoop(state: ExpansionState, context: StepContext, chain: readonly string[]): Step {
+  const { workflow, step, id } = context
+  if (!step.steps) return { ...step, id }
+  const children = step.steps.flatMap(child => {
+    if (!child.uses || !state.resolve(child.uses)) return [child]
+    const childState: ExpansionState = { ...state, origins: {} }
+    const expanded = expandStep(childState, { workflow, step: child, id: child.id }, chain)
+    for (const result of expanded) {
+      const source = `steps.${result.id}`
+      for (const [key, origin] of Object.entries(childState.origins)) {
+        if (key === source || key.startsWith(`${source}.`))
+          state.origins[`steps.${id}.steps.${result.id}${key.slice(source.length)}`] = origin
+      }
+    }
+    return expanded
+  })
+  const until = [...children]
+    .reverse()
+    .find(child => child.id === step.until || child.id.startsWith(`${step.until}/`))
+  return { ...step, id, steps: children, ...(until && { until: until.id }) }
+}
+
 function expandStep(state: ExpansionState, context: StepContext, chain: readonly string[]): Step[] {
   const { workflow, step, id } = context
   const target = step.uses === undefined ? undefined : state.resolve(step.uses)
   if (!target) {
     recordOrigins(state.origins, workflow, step, id)
-    return [{ ...step, id }]
+    return [expandLoop(state, context, chain)]
   }
   if (step.uses && state.skillExists(step.uses)) {
     state.errors.push(

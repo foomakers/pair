@@ -163,13 +163,24 @@ export const workflowSchemaV1: JsonSchema = {
   },
 }
 
+const expandedId = `${STEP_ID.slice(0, -1)}(/[a-z][a-z0-9-]*)*$`
+const expandedStepSchema: JsonSchema = {
+  ...stepSchema,
+  properties: {
+    ...stepSchema.properties,
+    until: { type: 'string', pattern: expandedId },
+    steps: { ...stepSchema.properties?.['steps'], propertyNames: { pattern: expandedId } },
+  },
+}
+
 const expandedWorkflowSchema: JsonSchema = {
   ...workflowSchemaV1,
   properties: {
     ...workflowSchemaV1.properties,
     steps: {
       ...workflowSchemaV1.properties?.['steps'],
-      propertyNames: { pattern: `${STEP_ID.slice(0, -1)}(/[a-z][a-z0-9-]*)*$` },
+      propertyNames: { pattern: expandedId },
+      additionalProperties: expandedStepSchema,
     },
   },
 }
@@ -372,7 +383,7 @@ export function parseWorkflow(text: string, file: string, expanded = false): Par
     ...nameError(value, file, lines),
     ...Object.entries(value?.steps ?? {}).flatMap(([id, step]) =>
       Object.entries(step?.steps ?? {}).flatMap(([childId, child]) =>
-        violations(stepSchema, child).map(found =>
+        violations(expanded ? expandedStepSchema : stepSchema, child).map(found =>
           errorAt({ file, lines }, ['steps', id, 'steps', childId, ...found.path], found),
         ),
       ),
