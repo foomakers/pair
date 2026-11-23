@@ -13,7 +13,15 @@ export const approval: StepKind = {
   },
   outputs: {
     type: 'object',
-    properties: { approvedBy: { type: 'string', description: 'The login that approved.' } },
+    properties: {
+      approvedBy: { type: 'string', description: 'The login that approved.' },
+      approvedHead: {
+        type: 'string',
+        pattern: '^[0-9a-f]{40}$',
+        description: 'The head that was approved.',
+      },
+      approvedPr: { type: 'integer', description: 'The PR that was approved.' },
+    },
   },
   with: {
     type: 'object',

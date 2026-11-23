@@ -2,18 +2,38 @@ import { join } from 'node:path'
 import type { FactReader, StepLaunch } from '@pair/workflows'
 import { runHostProcess } from './host-process'
 
-/** One fresh read through the installed PM/code host adapter. */
+/** Call the installed host adapter without involving the agent. */
+export async function workflowOperation(
+  scriptDir: () => string,
+  cwd: string,
+  {
+    action,
+    card,
+    data,
+    timeout,
+  }: { action: string; card: string; data?: unknown; timeout?: number },
+): Promise<unknown> {
+  const script = join(scriptDir(), 'workflow-facts.mjs')
+  const args = [script, action, card, ...(data === undefined ? [] : [JSON.stringify(data)])]
+  const result = await runHostProcess(process.execPath, args, cwd, {
+    timeout: Math.min(timeout ?? 30_000, 30_000),
+  })
+  if (result.status !== 0)
+    throw new Error(
+      result.error?.message ?? (result.stderr.trim() || 'workflow host operation failed'),
+    )
+  return JSON.parse(result.stdout) as unknown
+}
+
 export function workflowFacts(scriptDir: () => string, cwd: string, step: StepLaunch): FactReader {
-  const read = async (action: string): Promise<unknown> => {
+  const read = (action: string, timeout?: number): Promise<unknown> => {
     const card = step.inputs['card']
     if (typeof card !== 'string' || card.length === 0) throw new Error('workflow card is missing')
-    const script = join(scriptDir(), 'workflow-facts.mjs')
-    const result = await runHostProcess(process.execPath, [script, action, card], cwd)
-    if (result.status !== 0)
-      throw new Error(
-        result.error?.message ?? (result.stderr.trim() || 'workflow fact read failed'),
-      )
-    return JSON.parse(result.stdout) as unknown
+    return workflowOperation(scriptDir, cwd, {
+      action,
+      card,
+      ...(timeout === undefined ? {} : { timeout }),
+    })
   }
   return {
     head: async () => {
@@ -26,8 +46,8 @@ export function workflowFacts(scriptDir: () => string, cwd: string, step: StepLa
       const head = step.inputs['reviewedHead']
       return typeof head === 'string' ? head : undefined
     },
-    ci: async () => {
-      const ci = await read('ci')
+    ci: async timeout => {
+      const ci = await read('ci', timeout)
       if (ci !== 'green' && ci !== 'pending' && ci !== 'red') throw new Error('unreadable CI state')
       return ci
     },

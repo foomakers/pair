@@ -14,7 +14,16 @@ export const gate: StepKind = {
       reviewedHead: { type: 'string', description: 'The head verified by the review step.' },
     },
   },
-  outputs: { type: 'object', description: 'The common fields only.' },
+  outputs: {
+    type: 'object',
+    properties: {
+      gatedHead: {
+        type: 'string',
+        pattern: '^[0-9a-f]{40}$',
+        description: 'Head verified by a passing head-unchanged check, when present.',
+      },
+    },
+  },
   with: {
     type: 'object',
     additionalProperties: false,

@@ -1,0 +1,144 @@
+import { createHash } from 'node:crypto'
+import { join } from 'node:path'
+import {
+  writeAtomic,
+  parseComment,
+  fromReview,
+  type Answer,
+  type RunDirectory,
+  type StepLaunch,
+  type StepResult,
+} from '@pair/workflows'
+
+import type { WorkflowFlagAnswer } from './parser'
+
+export interface ApprovalTarget {
+  readonly pr: number
+  readonly head: string
+}
+interface Park extends ApprovalTarget {
+  readonly since: string
+  readonly notified: boolean
+}
+
+export interface ApprovalPlatform {
+  target(card: string): Promise<ApprovalTarget>
+  notice(card: string, marker: string, body: string): Promise<void>
+  answers(card: string, target: Park, flag?: WorkflowFlagAnswer): Promise<readonly Answer[]>
+}
+
+export function approvalRunner(
+  run: RunDirectory,
+  platform: ApprovalPlatform,
+  flag?: { step: string; answer: WorkflowFlagAnswer },
+) {
+  return async (step: StepLaunch): Promise<StepResult> => {
+    const card = String(step.inputs['card'])
+    const live = await platform.target(card)
+    const pr = step.inputs['pr']
+    if (pr !== undefined && pr !== live.pr)
+      return {
+        status: 'failed',
+        summary: 'Approval PR no longer matches the linked PR',
+        reason: 'pr-changed',
+      }
+    const key = createHash('sha256')
+      .update(JSON.stringify([run.dir, step.id, step.round, live]))
+      .digest('hex')
+    const dir = join(run.dir, 'steps', step.id, 'approval')
+    const path = join(dir, key + '.json')
+    await run.files.mkdir(dir, { recursive: true })
+    const previous = run.files.existsSync(path)
+      ? (JSON.parse(run.files.readFileSync(path)) as Park)
+      : undefined
+    const park = previous ?? { ...live, since: new Date().toISOString(), notified: false }
+    if (previous === undefined) await writeAtomic(run.files, path, JSON.stringify(park))
+    const answer =
+      previous === undefined
+        ? undefined
+        : (await platform.answers(card, park, flag?.step === step.id ? flag.answer : undefined))[0]
+    return answer === undefined
+      ? notifyParked(run, platform, { card, step, park, key, path })
+      : answerResult(answer, live)
+  }
+}
+
+function answerResult(answer: Answer, target: ApprovalTarget): StepResult {
+  if (answer.verdict === 'rejected')
+    return {
+      status: 'failed',
+      summary: `Rejected by ${answer.login}`,
+      reason: answer.note || 'approval-rejected',
+    }
+  return {
+    status: 'ok',
+    summary: `Approved by ${answer.login} via ${answer.channel}`,
+    approvedBy: answer.login,
+    approvedHead: target.head,
+    approvedPr: target.pr,
+  }
+}
+
+async function notifyParked(
+  run: RunDirectory,
+  platform: ApprovalPlatform,
+  {
+    card,
+    step,
+    park,
+    key,
+    path,
+  }: { card: string; step: StepLaunch; park: Park; key: string; path: string },
+): Promise<StepResult> {
+  let reason = `PR #${park.pr} at ${park.head}`
+  if (!park.notified) {
+    try {
+      const question = step.with['question'] ?? 'Approve this workflow to continue?'
+      await platform.notice(
+        card,
+        `<!-- pair-workflow-approval:${key}:${park.since} -->`,
+        `${String(question)}\n\n${reason}. Reply with /approve or /reject followed by a reason, or submit a native review.`,
+      )
+      await writeAtomic(run.files, path, JSON.stringify({ ...park, notified: true }))
+    } catch (error) {
+      reason += `; card comment missing: ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+  return { status: 'needs-human', summary: 'Waiting for an authorized approval', reason }
+}
+
+type Operation = (name: string, card: string, data?: unknown) => Promise<unknown>
+
+export function approvalPlatform(call: Operation): ApprovalPlatform {
+  return {
+    target: async card => {
+      const target = (await call('approval-target', card)) as ApprovalTarget
+      if (!Number.isInteger(target?.pr) || !/^[0-9a-f]{40}$/.test(target?.head))
+        throw new Error('unreadable approval target')
+      return target
+    },
+    notice: async (card, marker, body) => {
+      await call('approval-notice', card, { marker, body })
+    },
+    answers: async (card, park, flag) => {
+      const values = await call('approval-answers', card, { ...park, flag })
+      if (!Array.isArray(values)) throw new Error('unreadable approval answers')
+      return values.map(parseAnswer).filter((answer): answer is Answer => answer !== undefined)
+    },
+  }
+}
+
+function parseAnswer(row: Record<string, unknown>): Answer | undefined {
+  const { login, channel, verdict, note, body, state } = row
+  if (typeof login !== 'string') return undefined
+  if (channel === 'flag') return readFlag(login, verdict, note)
+  const message = typeof body === 'string' ? body : ''
+  if (channel === 'comment') return parseComment(login, message)
+  if (channel === 'review' && typeof state === 'string') return fromReview(login, state, message)
+  return undefined
+}
+
+function readFlag(login: string, verdict: unknown, note: unknown): Answer | undefined {
+  if (verdict !== 'approved' && verdict !== 'rejected') return undefined
+  return { channel: 'flag', login, verdict, ...(typeof note === 'string' && { note }) }
+}

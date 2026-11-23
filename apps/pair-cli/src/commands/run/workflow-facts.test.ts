@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { workflowFacts } from './workflow-facts'
+import { workflowFacts, workflowOperation } from './workflow-facts'
+import { approvalPlatform } from './workflow-approval'
 
 const scripts = join(__dirname, '../../../../../.claude/skills/pair-workflow-cycle/scripts')
 const sha = 'a'.repeat(40)
@@ -25,6 +26,12 @@ const a = process.argv.slice(2)
 const json = value => console.log(JSON.stringify(value))
 if (a.some(v => v.includes('/pulls?state=all'))) console.log(process.env.PAIR_TEST_PULLS)
 else if (a[0] === 'pr' && a[1] === 'view') console.log('${sha}')
+else if(a[0] === 'repo' && a[1] === 'view') console.log('foomakers/pair')
+else if (a[0] === 'api' && a[1] === 'user') json(JSON.parse(process.env.PAIR_TEST_ACTOR))
+else if (a.some(v => v.endsWith('/pulls/735'))) json({number:735,head:{sha:'${sha}',ref:'feature/US-726-test'},user:{login:'author'},draft:process.env.PAIR_TEST_DRAFT==='true'})
+else if (a.some(v => v.includes('/collaborators/'))) json({permission: a.some(v => v.includes('/maintainer/')) ? 'write' : 'read'})
+else if (a.some(v => v.includes('/reviews'))) console.log(process.env.PAIR_TEST_REVIEWS)
+else if (a.some(v => v.endsWith('/issues/726/comments'))) console.log(process.env.PAIR_TEST_COMMENTS)
 else if (a[0] === 'issue' && a[2] === '726') console.log('## Dependencies\\n\\n**Prerequisite Stories**: #42')
 else if (a[0] === 'issue' && a[2] === '42') json(JSON.parse(process.env.PAIR_TEST_CARD))
 else if (a.some(v => v.includes('/check-runs'))) json({check_runs: JSON.parse(process.env.PAIR_TEST_CHECKS)})
@@ -36,6 +43,9 @@ else throw Error('Unexpected GH call: '+a.join(' '))
   vi.stubEnv('PAIR_GH_BIN', bin)
   vi.stubEnv('PAIR_TEST_PULLS', JSON.stringify([pr(735)]))
   vi.stubEnv('PAIR_TEST_CHECKS', '[]')
+  vi.stubEnv('PAIR_TEST_ACTOR', JSON.stringify({ login: 'reader', type: 'User' }))
+  vi.stubEnv('PAIR_TEST_COMMENTS', '[]')
+  vi.stubEnv('PAIR_TEST_REVIEWS', '[]')
   vi.stubEnv('PAIR_TEST_CARD', JSON.stringify({ state: 'OPEN' }))
 })
 
@@ -91,4 +101,80 @@ it('keeps an open prerequisite blocked until the tracker confirms completion (#7
   await expect(facts(dir).openPrerequisites()).resolves.toEqual(['42'])
   vi.stubEnv('PAIR_TEST_CARD', JSON.stringify({ state: 'CLOSED', stateReason: 'COMPLETED' }))
   await expect(facts(dir).openPrerequisites()).resolves.toEqual([])
+})
+
+it('ignores self, app, stale and read-only approvals, and counts a fresh authorized native review (#726 AC-3)', async () => {
+  const at = '2026-11-23T08:01:00Z'
+  const user = (login: string) => ({ login, type: 'User' })
+  const comment = (login: string, when = at) => ({
+    user: user(login),
+    created_at: when,
+    updated_at: when,
+    body: '/approve',
+  })
+  vi.stubEnv(
+    'PAIR_TEST_COMMENTS',
+    JSON.stringify([
+      comment('author'),
+      comment('reader'),
+      comment('maintainer', '2026-11-23T07:59:00Z'),
+      { ...comment('maintainer'), performed_via_github_app: { id: 12 } },
+    ]),
+  )
+  vi.stubEnv(
+    'PAIR_TEST_REVIEWS',
+    JSON.stringify([
+      { user: user('maintainer'), submitted_at: at, state: 'APPROVED', commit_id: 'b'.repeat(40) },
+      { user: user('maintainer'), submitted_at: at, state: 'APPROVED', commit_id: sha },
+    ]),
+  )
+  const approvals = approvalPlatform((action, card, data) =>
+    workflowOperation(() => scripts, dir, { action, card, data }),
+  )
+  await expect(
+    approvals.answers(
+      '726',
+      { pr: 735, head: sha, since: '2026-11-23T08:00:00Z', notified: true },
+      { verdict: 'approved' },
+    ),
+  ).resolves.toEqual([{ channel: 'review', login: 'maintainer', verdict: 'approved' }])
+})
+
+it('accepts a fresh authorized card comment and a flag by the authenticated writer (#726 T-9/10)', async () => {
+  const at = '2026-11-23T08:01:00Z'
+  const park = { pr: 735, head: sha, since: '2026-11-23T08:00:00Z', notified: true }
+  vi.stubEnv(
+    'PAIR_TEST_COMMENTS',
+    JSON.stringify([
+      {
+        user: { login: 'maintainer', type: 'User' },
+        created_at: at,
+        updated_at: at,
+        body: '/reject Fix the gate',
+      },
+    ]),
+  )
+  const approvals = approvalPlatform((action, card, data) =>
+    workflowOperation(() => scripts, dir, { action, card, data }),
+  )
+  await expect(approvals.answers('726', park)).resolves.toEqual([
+    { channel: 'comment', login: 'maintainer', verdict: 'rejected', note: 'Fix the gate' },
+  ])
+  vi.stubEnv('PAIR_TEST_COMMENTS', '[]')
+  vi.stubEnv('PAIR_TEST_ACTOR', JSON.stringify({ login: 'maintainer', type: 'User' }))
+  await expect(approvals.answers('726', park, { verdict: 'approved' })).resolves.toEqual([
+    { channel: 'flag', login: 'maintainer', verdict: 'approved' },
+  ])
+})
+
+it('refuses to merge a draft or a moved head before any mutation (#726 T-12)', async () => {
+  const payload = { pr: 735, head: 'b'.repeat(40), approvedBy: 'maintainer', root: dir }
+  const merge = (data: typeof payload) =>
+    workflowOperation(() => scripts, dir, { action: 'merge', card: '726', data })
+  await expect(merge(payload)).resolves.toMatchObject({ status: 'failed', reason: 'head-moved' })
+  vi.stubEnv('PAIR_TEST_DRAFT', 'true')
+  await expect(merge({ ...payload, head: sha })).resolves.toMatchObject({
+    status: 'failed',
+    reason: 'pr-is-draft',
+  })
 })

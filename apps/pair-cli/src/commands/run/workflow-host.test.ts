@@ -703,3 +703,57 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
     ])
   })
 })
+
+it('passes the reviewed head through gate, approval and merge without relaunching agent steps (#726)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/delivery.yaml',
+    `version: 1
+name: delivery
+steps:
+  implement: { kind: implement }
+  review: { kind: review }
+  gate: { kind: gate, with: { checks: [head-unchanged, ci-green] } }
+  approval: { kind: approval }
+  merge: { kind: merge }
+`,
+  )
+  write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Fixture host bridge\n')
+  write(
+    '.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs',
+    `
+import { appendFileSync } from 'node:fs'
+const [, , action, card, raw] = process.argv
+if (card !== '627') throw new Error('Wrong card')
+const data = raw === undefined ? {} : JSON.parse(raw)
+let value
+switch (action) {
+  case 'head': value = '${HEAD}'; break
+  case 'ci': value = 'green'; break
+  case 'approval-target': value = {pr:12,head:'${HEAD}'}; break
+  case 'approval-notice': appendFileSync('approval-notices.log', 'one\\n'); value = {}; break
+  case 'approval-answers': value = data.flag ? [{...data.flag,login:'maintainer',channel:'flag'}] : []; break
+  case 'merge':
+    if (data.head !== '${HEAD}' || data.approvedBy !== 'maintainer' || data.pr !== 12)
+      throw new Error('Wrong merge handoff')
+    value = {status:'ok',summary:'Merged and closed',merged:true,mergeCommit:'${HEAD}'}
+    break
+  default: throw new Error('Unknown action '+action)
+}
+console.log(JSON.stringify(value))
+`,
+  )
+  expect(await run(['delivery'])).toBe(0)
+  expect(states('delivery-627')).toMatchObject({
+    gate: 'ok',
+    approval: 'needs-human',
+    merge: 'pending',
+  })
+  expect(await run(['delivery'])).toBe(0)
+  expect(fs.readFileSync(join(project, 'approval-notices.log'))).toBe('one\n')
+  expect(await run(['delivery'], OK, { approve: '627' })).toBe(0)
+  expect(states('delivery-627')).toMatchObject({ gate: 'ok', approval: 'ok', merge: 'ok' })
+  expect(launched.map(one => skillOf(one.promptText))).toEqual([
+    'pair-process-implement',
+    'pair-process-review',
+  ])
+})

@@ -90,7 +90,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `head`: `string` — The head the earlier steps produced.
   - `reviewedHead`: `string` — The head verified by the review step.
 - **Outputs**, required when `status` is `ok`
-  - The common fields only.
+  - `gatedHead`: `string matching ^[0-9a-f]{40}$` — Head verified by a passing head-unchanged check, when present.
 - **Options** (`with`)
   - `gates`: `array of string` — Entries run in the card worktree, in order: a key of the Custom Gate Registry, `target:<name>` (the registry rows of that target) or `command:<shell line>`.
   - `checks`: `array of "ci-green" | "head-unchanged" | "review-approved" | "prerequisites-done"` — Ready-made checks: ci-green, head-unchanged, review-approved, prerequisites-done.
@@ -105,6 +105,8 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `pr`: `integer` — The pull request, whose native reviews count.
 - **Outputs**, required when `status` is `ok`
   - `approvedBy`: `string` — The login that approved.
+  - `approvedHead`: `string matching ^[0-9a-f]{40}$` — The head that was approved.
+  - `approvedPr`: `integer` — The PR that was approved.
 - **Options** (`with`)
   - `question`: `string` — What is asked of the approver.
 - **Returns `needs-human` when**
@@ -117,6 +119,11 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `card`: `string` — The card, closed after the merge.
   - `pr`: `integer` — The pull request to merge.
   - `head`: `string` — The head the PR must still have.
+  - `reviewedHead`: `string` — The head verified by the review step.
+  - `gatedHead`: `string` — The head that passed the gate.
+  - `approvedHead`: `string` — The head authorized by the approval step.
+  - `approvedPr`: `integer` — The PR authorized by the approval step.
+  - `approvedBy`: `string` — The authorized approver.
 - **Outputs**, required when `status` is `ok`
   - `merged`: `boolean` — Whether the PR is merged.
   - `mergeCommit`: `string` — The merge commit sha.

@@ -53,11 +53,18 @@ export function performHostKind(
 ) {
   return async (step: StepLaunch): Promise<StepResult> => {
     if (step.kind !== 'gate') return UNWIRED(`a ${step.kind} step`)
-    return runGate(step.with, {
+    const result = await runGate(step.with, {
       registry,
       targets,
       run: gateRunner(worktree),
       ...(factsFor === undefined ? {} : { facts: factsFor(step) }),
     })
+    const head = step.inputs['reviewedHead']
+    return result.status === 'ok' &&
+      typeof head === 'string' &&
+      Array.isArray(step.with['checks']) &&
+      step.with['checks'].includes('head-unchanged')
+      ? { ...result, gatedHead: head }
+      : result
   }
 }
