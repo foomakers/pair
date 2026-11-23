@@ -35,9 +35,10 @@ export function workflowFacts(scriptDir: () => string, cwd: string, step: StepLa
     return workflowOperation(scriptDir, cwd, {
       action,
       card,
-      ...(pinHead && (action === 'ci' || action === 'review') && {
-        data: { expectedHead: reviewedHead },
-      }),
+      ...(pinHead &&
+        (action === 'ci' || action === 'review') && {
+          data: { expectedHead: reviewedHead },
+        }),
       ...(timeout === undefined ? {} : { timeout }),
     })
   }
