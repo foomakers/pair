@@ -1,7 +1,7 @@
 ---
 name: checkpoint
 description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives a context reset. Invoke directly to save or resume progress ('save our progress on #313', 'resume story #256'); composed by a future closing phase of /implement and consumed by /publish-pr (via $mode=resume)."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -16,6 +16,7 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 | `$mode`    | Yes      | `write` — persist/return current state. `resume` — locate and parse the existing checkpoint for a story.                                                              |
 | `$story`   | No       | Story ID. If omitted, detected from session context or the current branch (`feature/US-<id>-*`). If it cannot be detected → **HALT**.                                   |
 | `$persist` | No       | Write mode only. `true` (default) — write/update the file at the default location. `false` — write-free: synthesize and return the checkpoint text without touching the filesystem; the composer decides where it lands. |
+| `$task-map` | No       | Write mode only. `true` requests a structured Task State section. An existing Task State section is carried forward even without this flag. |
 
 ## Core Rules
 
@@ -50,6 +51,18 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
    - **Decisions**: scan [adoption/tech/adr/](../../../.pair/adoption/tech/adr/) and [adoption/decision-log/](../../../.pair/adoption/decision-log/) for files touched since the branch diverged from main.
 4. **Verify**: All five state elements resolved. Anything that cannot be reconstructed confidently is marked `[unknown — needs confirmation]` — never guessed.
 
+#### Optional Task State
+
+When `$task-map=true` or the existing checkpoint contains Task State, use the Task Breakdown as the inventory and its dependency graph where available. After reading the existing checkpoint in Step 4, reconcile each row with fresh inputs. If the inventory cannot be established, report that gap and preserve any existing map rather than writing an incomplete replacement.
+
+- `pending`: work remains and no current blocker or failed attempt is documented. Record any partial work in the detail.
+- `done`: completion has evidence in the current branch, its base or another durable artifact. A checked box alone is insufficient.
+- `failed`: an attempt failed for a documented technical reason.
+- `blocked`: a dependency or an external prerequisite prevents an attempt. Name the prerequisite or task IDs.
+- `needs-human`: the task requires a documented human action. Include any prerequisites still outstanding.
+
+Render exactly one row per current task ID. Require a detail for every state except `pending`; use a dash for an empty detail and escape literal pipes. Reassess earlier states against current evidence, especially when the branch or dependency state changed. An unfinished task with insufficient evidence of an attempt remains `pending`. A legacy summary can supply evidence but never establishes completion by itself. Keep sections 1–5 consistent with the map. This capability records and reports state; the calling skill owns task selection and completion.
+
 ### Step 4: Detect Existing Checkpoint
 
 1. **Check**: Does `.pair/working/checkpoints/<story-id>.md` already exist?
@@ -60,7 +73,7 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 
 ### Step 5: Write / Return Checkpoint
 
-1. **Act**: Render the checkpoint following the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md), filling all five sections.
+1. **Act**: Render the checkpoint following the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md), filling all five sections. Append Task State when requested or carried forward, immediately after section 5.
 2. **Check**: Is `$persist` `false`?
 3. **Skip**: If `$persist` is `true` (default) — write the rendered content to `<story-id>.md` (overwrite in place, per Core Rule) **with the harness's file-write tool, never a shell construct** (`cat >`, heredoc, `echo >`, `tee`): harness guards can block writes under `.pair/working/` or shell redirections. The file-write tool creates `.pair/working/checkpoints/` if missing.
    - **Write refused** (guard, permission, read-only tree): do NOT retry through a shell workaround to bypass the guard and do NOT skip silently. Report `checkpoint-write-blocked` (with the refusal reason) and return the full rendered checkpoint inline (Output Format) so the handoff carries the content itself. The caller embeds it in the handoff/PR body; Path is `checkpoint-write-blocked — content inline`.
@@ -76,14 +89,15 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 
 ### Step 7: Parse Checkpoint
 
-1. **Act**: Parse the five sections in order: Story, Branch, Tasks Done, Key Decisions, Remaining Todos. Ignore a trailing "Template Notes" (or any 6th) section if one is present — it is authoring guidance, not checkpoint state.
+1. **Act**: Parse the five sections in order: Story, Branch, Tasks Done, Key Decisions, Remaining Todos. Recognize the optional `## 6. Task State` table from the template. Ignore other trailing sections. If the table is present, check its columns, task ID uniqueness, state vocabulary and required details. If a current inventory is available, identify missing or obsolete rows. Report malformed or incomplete map data separately and preserve the usable legacy state. If there is no table, resume normally.
 2. **Check**: Are all five sections present and structurally well-formed?
 3. **Skip**: If yes, proceed to Step 8 with full confidence.
-4. **Act**: If any section is missing, empty, or malformed — report exactly what WAS parsed, list what's missing or ambiguous, and ask the caller to confirm before proceeding. Never fill gaps by guessing.
+4. **Act — legacy layout**: A checkpoint can contain a story heading, a `Branch:` line and unnumbered task, decision and todo sections. If the story ID and branch agree with the invocation and Git, use Step 3's read-only evidence to reconstruct the canonical sections in memory. Confirm completed tasks against the current task inventory and durable evidence, and select the first pending task whose known dependencies are met. Include Task State when the inventory is complete. Return the normalized checkpoint and mark it `legacy-layout-reconstructed`. Do not rewrite the file in resume mode.
+5. **Act — unresolved gaps**: If reconstruction cannot verify the required state, report what parsed, list the unresolved gaps, and ask the caller to confirm before proceeding. Never fill gaps by guessing.
 
 ### Step 8: Report Parsed State
 
-1. **Act**: Present the parsed state to the caller (Output Format) — story, branch, tasks done, tasks pending, key decisions.
+1. **Act**: Present the parsed state to the caller (Output Format) — story, branch, tasks done, tasks pending, key decisions and the Task State map if present.
 2. **Verify**: All five sections from Step 7 (or their explicit gap markers) appear in the presented state — the caller can identify the next pending task without re-deriving Tasks Done.
 
 ## Output Format
@@ -175,7 +189,7 @@ When invoked **independently**:
 ## Edge Cases
 
 - **No story context detectable**: **HALT** and ask the caller to pass `$story` explicitly (Step 1).
-- **Corrupted or incomplete checkpoint on resume**: report exactly what was parsed, list what's missing/ambiguous, and ask for confirmation before the caller proceeds (Step 7).
+- **Corrupted or incomplete checkpoint on resume**: report what parsed and what is still missing after the legacy-layout check. Ask for confirmation of unresolved gaps (Step 7).
 - **Checkpoint write refused by a harness guard**: report `checkpoint-write-blocked` and return the content inline in the handoff; never silently skip, never bypass the guard via shell (Step 5).
 - **Multiple checkpoints found for one story**: use the most recently modified file; flag the duplicates to the caller for cleanup (Steps 4 and 6).
 
