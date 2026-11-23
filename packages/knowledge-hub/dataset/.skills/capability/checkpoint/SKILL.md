@@ -17,7 +17,7 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 | `$story`   | No       | Story ID. If omitted, detected from session context or the current branch (`feature/US-<id>-*`). If it cannot be detected → **HALT**.                                   |
 | `$persist` | No       | Write mode only. `true` (default) — write/update the file at the default location. `false` — write-free: synthesize and return the checkpoint text without touching the filesystem; the composer decides where it lands. |
 | `$task-map` | No       | Write mode only. `true` requests a structured Task State section. An existing Task State section is carried forward even without this flag. |
-| `$tdd-handoff` | No | Write mode only. Verified RED evidence for one task and next phase GREEN, or `clear` after that task completes. Omitted preserves a valid existing handoff. |
+| `$tdd-handoff` | No | Write mode only. Verified RED evidence for one task and next phase GREEN, or `clear` after the handoff is consumed. Omitted preserves a valid existing handoff. |
 
 ## Core Rules
 

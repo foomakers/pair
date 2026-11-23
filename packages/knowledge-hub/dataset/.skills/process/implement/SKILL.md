@@ -191,6 +191,8 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 **Before ending RED:** Run the regression test and confirm that it fails for the expected reason. Compose `/checkpoint $mode=write $task-map=true` with `$tdd-handoff` containing the active task ID, next phase GREEN, test file, exact command and observed failure. Leave the task pending. Verify the checkpoint was persisted and report that a manual relaunch in a fresh session starts GREEN. When a workflow requests a structured result, report `needs-human` for that manual relaunch. If persistence fails, report the failure and return the checkpoint text for recovery.
 
+**After GREEN:** If more regression tests are needed, end the session after verifying the recorded test passes. Update `/checkpoint` with `$tdd-handoff=clear`, keep the task pending, and name the next RED action in Remaining Todos. Verify the old handoff was removed before asking for a fresh session. If the task is ready for verification and completion, continue at Step 2.4 and clear the handoff at Step 2.8.
+
 #### For Non-Development Tasks (Direct Implementation):
 
 - **Documentation**: Implement directly following documentation standards.
