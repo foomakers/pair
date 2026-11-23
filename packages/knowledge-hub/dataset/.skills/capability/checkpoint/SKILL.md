@@ -1,7 +1,7 @@
 ---
 name: checkpoint
 description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives a context reset. Invoke directly to save or resume progress ('save our progress on #313', 'resume story #256'); composed by a future closing phase of /implement and consumed by /publish-pr (via $mode=resume)."
-version: 0.5.0
+version: 0.5.1
 author: Foomakers
 ---
 
@@ -17,6 +17,7 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 | `$story`   | No       | Story ID. If omitted, detected from session context or the current branch (`feature/US-<id>-*`). If it cannot be detected → **HALT**.                                   |
 | `$persist` | No       | Write mode only. `true` (default) — write/update the file at the default location. `false` — write-free: synthesize and return the checkpoint text without touching the filesystem; the composer decides where it lands. |
 | `$task-map` | No       | Write mode only. `true` requests a structured Task State section. An existing Task State section is carried forward even without this flag. |
+| `$tdd-handoff` | No | Write mode only. Verified RED evidence for one task and next phase GREEN, or `clear` after that task completes. Omitted preserves a valid existing handoff. |
 
 ## Core Rules
 
@@ -73,7 +74,7 @@ Render exactly one row per current task ID. Require a detail for every state exc
 
 ### Step 5: Write / Return Checkpoint
 
-1. **Act**: Render the checkpoint following the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md), filling all five sections. Append Task State when requested or carried forward, immediately after section 5.
+1. **Act**: Render the checkpoint following the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md), filling all five sections. Append Task State when requested or carried forward after section 5. Render `## TDD Handoff` from `$tdd-handoff` or carry it forward from the existing file. Use the fields in the template. A handoff requires a known branch, a pending task, next phase `GREEN`, a worktree-relative test file, the exact command and its observed expected failure. Report invalid or missing evidence. Omit the section on `clear`.
 2. **Check**: Is `$persist` `false`?
 3. **Skip**: If `$persist` is `true` (default) — write the rendered content to `<story-id>.md` (overwrite in place, per Core Rule) **with the harness's file-write tool, never a shell construct** (`cat >`, heredoc, `echo >`, `tee`): harness guards can block writes under `.pair/working/` or shell redirections. The file-write tool creates `.pair/working/checkpoints/` if missing.
    - **Write refused** (guard, permission, read-only tree): do NOT retry through a shell workaround to bypass the guard and do NOT skip silently. Report `checkpoint-write-blocked` (with the refusal reason) and return the full rendered checkpoint inline (Output Format) so the handoff carries the content itself. The caller embeds it in the handoff/PR body; Path is `checkpoint-write-blocked — content inline`.
@@ -89,7 +90,7 @@ Render exactly one row per current task ID. Require a detail for every state exc
 
 ### Step 7: Parse Checkpoint
 
-1. **Act**: Parse the five sections in order: Story, Branch, Tasks Done, Key Decisions, Remaining Todos. Recognize the optional `## 6. Task State` table from the template. Ignore other trailing sections. If the table is present, check its columns, task ID uniqueness, state vocabulary and required details. If a current inventory is available, identify missing or obsolete rows. Report malformed or incomplete map data separately and preserve the usable legacy state. If there is no table, resume normally.
+1. **Act**: Parse the five sections in order: Story, Branch, Tasks Done, Key Decisions, Remaining Todos. Recognize the optional `## 6. Task State` table and `## TDD Handoff` from the template. Report a malformed handoff separately without discarding the rest of the checkpoint. For a valid handoff, return its fields verbatim to the caller. Ignore other trailing sections. If the table is present, check its columns, task ID uniqueness, state vocabulary and required details. If a current inventory is available, identify missing or obsolete rows. Report malformed or incomplete map data separately and preserve the usable legacy state. If there is no table, resume normally.
 2. **Check**: Are all five sections present and structurally well-formed?
 3. **Skip**: If yes, proceed to Step 8 with full confidence.
 4. **Act — legacy layout**: A checkpoint can contain a story heading, a `Branch:` line and unnumbered task, decision and todo sections. If the story ID and branch agree with the invocation and Git, use Step 3's read-only evidence to reconstruct the canonical sections in memory. Confirm completed tasks against the current task inventory and durable evidence, and select the first pending task whose known dependencies are met. Include Task State when the inventory is complete. Return the normalized checkpoint and mark it `legacy-layout-reconstructed`. Do not rewrite the file in resume mode.

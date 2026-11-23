@@ -1,7 +1,7 @@
 ---
 name: pair-process-implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /pair-capability-verify-quality, /pair-capability-record-decision, /pair-capability-checkpoint, /pair-capability-publish-pr."
-version: 0.7.4
+version: 0.7.5
 author: Foomakers
 ---
 
@@ -56,6 +56,8 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
    - **Stale checkpoint (story already Done)**: warn that the story is already Done and **require explicit developer confirmation** before reusing the checkpoint. Never silently resume a finished story.
    - **Corrupted/incomplete checkpoint**: `/pair-capability-checkpoint` reports what parsed and what is missing — confirm the gaps with the developer before proceeding (never guess).
 5. **Verify**: Either a fresh start is confirmed, or a valid checkpoint is resumed with the first pending task identified. If `/pair-capability-checkpoint` is not installed, fall back to the git+PM-tool resume (Idempotent Re-invocation) and continue.
+
+**Verified RED handoff.** If the checkpoint carries a valid TDD Handoff, resume its active task at Step 2.3 in GREEN. Confirm the story, current branch, task and test file match, then re-run the recorded command and confirm the recorded test ran. The expected failure authorizes GREEN on that task. A passing test means GREEN already landed in the worktree, so proceed to verification. If the evidence differs, stop and report the mismatch. Do not start another RED session for that task.
 
 ### Step 0.1: Load Story
 
@@ -187,6 +189,8 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 4. **Every module file must have a corresponding unit test file.** 1:1 mapping between source modules and test files.
 5. **Avoid mocks — prefer in-memory test doubles.** Use dependency injection with in-memory implementations (e.g., `InMemoryFileSystemService` instead of mocking `fs`).
 
+**Before ending RED:** Run the regression test and confirm that it fails for the expected reason. Compose `/pair-capability-checkpoint $mode=write $task-map=true` with `$tdd-handoff` containing the active task ID, next phase GREEN, test file, exact command and observed failure. Leave the task pending. Verify the checkpoint was persisted and report that a manual relaunch in a fresh session starts GREEN. When a workflow requests a structured result, report `needs-human` for that manual relaunch. If persistence fails, report the failure and return the checkpoint text for recovery.
+
 #### For Non-Development Tasks (Direct Implementation):
 
 - **Documentation**: Implement directly following documentation standards.
@@ -264,7 +268,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
    - Locate the task's checklist item in the **Task Breakdown** section by its **task ID**, and tick it (`- [ ]` → `- [x]`) with the tick-only, diff-checked patch the guideline defines. Mark any **Definition of Done** checkbox now factually satisfied by this task's work (e.g., "SKILL.md created", "template validated") by the same rule — **one write per checkbox**, each with its own read and its own one-line diff check, never two boxes in one body; leave the ones needing reviewer confirmation (e.g., "Code reviewed and merged").
    - **Queue** the task's outcome line for this invocation's batched comment — `ticked`, or the outcome the guideline's vocabulary gives when the tick did not land. The queue is flushed once, at Step 3.1b.
    - **Never blocking**: a locator mismatch, a rejected patch or a failed write is queued and the run continues. A missing tick is a reporting defect, never a reason to stop implementing. The transport is held to it: the tick composes `/pair-capability-write-issue` write mode with **`$on-failure: report`**, so an unresolvable id, a tracker error and an unconfirmed board membership come back as `not-found` / `write-failed` / `membership-unconfirmed` (its Step 8b) instead of a **HALT that would propagate here** and end the story on the task it only annotates. `membership-unconfirmed` says nothing about the tick — the body write landed — so it goes in the batch's `<details>`, not on the task's outcome line.
-8. **Act — persist progress**: If `/pair-capability-checkpoint` is installed, compose `/pair-capability-checkpoint $mode=write` to update `.pair/working/checkpoints/<story-id>.md` with the tasks now done. This keeps the checkpoint current so an interruption after this task resumes from the next pending one (Step 0.0). If `/pair-capability-checkpoint` is not installed, skip — git+PM state still supports the git-based resume.
+8. **Act — persist progress**: If `/pair-capability-checkpoint` is installed, compose `/pair-capability-checkpoint $mode=write` to update `.pair/working/checkpoints/<story-id>.md` with the tasks now done. Pass `$tdd-handoff=clear` once the task named in that handoff is verified and complete. This keeps the checkpoint current so an interruption after this task resumes from the next pending one (Step 0.0). If `/pair-capability-checkpoint` is not installed, skip — git+PM state still supports the git-based resume.
 9. **Check**: Is this the last task?
    - **Yes**: Move to Phase 3 (Closing: checkpoint + PR).
    - **No**: Return to Step 2.1.
