@@ -1,4 +1,5 @@
 import { basename, extname, join, resolve } from 'path'
+import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
 import {
   cardStateOf,
@@ -9,6 +10,7 @@ import {
   addressedSteps,
   frozenConfiguration,
   parseFrozenConfiguration,
+  parseWorkflow,
   readGateRegistry,
   readGateTargets,
   runSteps,
@@ -169,6 +171,7 @@ interface Resolved {
   readonly configuration?: ConfigurationPlan
   readonly main: string
   readonly cwd: string
+  readonly sources: Record<string, string>
 }
 
 /** The configuration of the run, its warnings and refusals printed; `undefined`: refused. */
@@ -214,7 +217,7 @@ function expandedSource(workflow: Workflow): string {
 function checkWorkflow(
   fs: Services['fs'],
   project: ReturnType<typeof loadConfigWithOverrides>['config'],
-  { cwd, main }: { cwd: string; main: string },
+  { cwd, main, sources }: { cwd: string; main: string; sources: Record<string, string> },
   source: { text: string; file: string },
 ) {
   const registry = join(main, WAY_OF_WORKING)
@@ -227,12 +230,36 @@ function checkWorkflow(
     isSafeText: isSafePromptText,
     resolveWorkflow: name => {
       try {
-        return locateWorkflow(fs, { cwd, main }, name)
+        const included = locateWorkflow(fs, { cwd, main }, name)
+        sources[included.file] = createHash('sha256').update(included.text).digest('hex')
+        return included
       } catch {
         return undefined
       }
     },
   })
+}
+
+function resumeWorkflow(
+  fs: Services['fs'],
+  request: RunWorkflowRequest,
+  source: Located,
+  { main, sources }: { main: string; sources: Record<string, string> },
+) {
+  const original = parseWorkflow(source.text, source.file).workflow
+  const runId =
+    request.runId ??
+    `${original?.name ?? basename(source.file, extname(source.file))}-${request.card}`
+  const runDir = join(main, '.pair/working/runs', runId)
+  const frozen = join(runDir, 'workflow.yaml')
+  const manifest = join(runDir, 'sources.json')
+  if (request.restart || !fs.existsSync(frozen) || !fs.existsSync(manifest)) return undefined
+  const recorded = JSON.parse(fs.readFileSync(manifest)) as Record<string, string>
+  for (const file of Object.keys(recorded)) {
+    if (fs.existsSync(file))
+      sources[file] = createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+  }
+  return { ...parseWorkflow(fs.readFileSync(frozen), source.file, true), warnings: [] }
 }
 
 /** Workflow, validation and engine: everything decided before the card is read or anything is launched. */
@@ -246,7 +273,10 @@ function resolveWorkflowRun(
   const main = mainCheckoutOrCwd(cwd)
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
   const source = locateWorkflow(fs, { cwd, main }, request.name)
-  const checked = checkWorkflow(fs, project, { cwd, main }, source)
+  const sources: Record<string, string> = {}
+  const checked =
+    resumeWorkflow(fs, request, source, { main, sources }) ??
+    checkWorkflow(fs, project, { cwd, main, sources }, source)
   console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
   checked.warnings.forEach(warning => console.log(`  Warning: ${formatError(warning)}`))
   if (checked.workflow === undefined) {
@@ -277,6 +307,7 @@ function resolveWorkflowRun(
     ...(configured.plan && { configuration: configured.plan }),
     main,
     cwd,
+    sources,
   }
 }
 
@@ -634,6 +665,15 @@ async function drive(
   const { resolved, request, runDir } = opened
   const { fs, deps } = services
   const started = await start({ files: fs, dir: runDir }, resolved.source, startOptions(opened))
+  const sourcesFile = join(runDir, 'sources.json')
+  if (started.status === 'started') {
+    fs.writeFileSync(sourcesFile, JSON.stringify(resolved.sources, null, 2))
+  } else if (fs.existsSync(sourcesFile)) {
+    const frozen = JSON.parse(fs.readFileSync(sourcesFile)) as Record<string, string>
+    if (JSON.stringify(frozen) !== JSON.stringify(resolved.sources)) {
+      console.log('  Warning: included workflow sources changed since this run started.')
+    }
+  }
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   console.log(`  Run dir: ${runDir} (${started.status})`)
   const effective = readEffective(fs, runDir)
