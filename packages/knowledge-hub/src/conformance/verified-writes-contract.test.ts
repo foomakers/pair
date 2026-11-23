@@ -272,9 +272,18 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
 
   it.each(writeIssueCases)('$corpus: states the cascade in one order (AC2)', ({ content }) => {
     expect(cascadeSection(content)).toContain(
-      'the argument first, then the adoption default, then none',
+      'the argument first, then (update only) the adoption default, then none',
     )
   })
+
+  it.each(writeIssueCases)(
+    '$corpus: a create never applies the adoption default (#738)',
+    ({ content }) => {
+      const body = cascadeSection(content)
+      expect(body).toContain('create mode never applies the adoption default')
+      expect(body).toContain('assigned when development starts')
+    },
+  )
 
   it.each(writeIssueCases)(
     '$corpus: resolves the default from the adoption field',
