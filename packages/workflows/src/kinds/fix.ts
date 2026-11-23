@@ -65,7 +65,7 @@ export const fix: StepKind = {
     },
   },
   escalations: [
-    'A finding needs a product decision.',
+    'A remaining finding needs a human decision or action.',
     'A finding contradicts an acceptance criterion of the card.',
   ],
   rule: {
