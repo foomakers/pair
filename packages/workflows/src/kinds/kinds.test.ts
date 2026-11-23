@@ -103,36 +103,3 @@ describe('readGateRegistry', () => {
     expect(readGateRegistry(text)).toEqual({})
   })
 })
-
-describe('implement kind: do everything automatable (unattended principle)', () => {
-  const { guidance, escalations } = kindByName.implement
-  it('tells the agent to skip a task that needs a person and finish the rest', () => {
-    expect(guidance).toMatch(/needs a person/)
-    expect(guidance).toMatch(/skip/i)
-  })
-  it('does not let an incomplete task alone trigger needs-human', () => {
-    expect(escalations.join(' ')).not.toMatch(/task is incomplete/)
-  })
-  it('leaves the quality gates to the skill', () => {
-    expect(guidance).not.toMatch(/gate/i)
-  })
-  it('does not fail on review findings left open after the PR is published (the review and fix steps own them)', () => {
-    expect(guidance).toMatch(/findings[^.]*open[^.]*not a failure/i)
-    expect(guidance).toMatch(/status "ok"/)
-  })
-  it('forbids ending the turn while an automatable task is left', () => {
-    expect(guidance).toMatch(/do not end your turn[^.]*task/i)
-  })
-  it('does not tell the agent a partial result is a failure up front (#733)', () => {
-    expect(guidance).not.toMatch(/partial result is a failure/i)
-    expect(guidance).not.toMatch(/one turn does the whole card/i)
-  })
-  it('asks for one pull request, a commit per task and parks a task it cannot finish (#733)', () => {
-    expect(guidance).toMatch(/one pull request/i)
-    expect(guidance).toMatch(/commit per task/i)
-    expect(guidance).toMatch(/parked/i)
-  })
-  it('fails only once every task has been attempted (#733)', () => {
-    expect(guidance).toMatch(/status "failed" only once every task has been attempted/i)
-  })
-})

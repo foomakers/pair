@@ -39,6 +39,8 @@ Choose option 2.
 - **Gate keys.** The Custom Gate Registry in `way-of-working.md` gains a unique `Key` column. `implement` takes `with.gates`, a list of those keys; the validator refuses an unknown key. The `gate` kind (#680) will use the same keys.
 - **Kind reference.** `workflow-kinds.md` is generated from the kind objects (`pnpm --filter @pair/workflows kinds:reference`); a test fails when the published page differs.
 
+**Scope clarification (2026-11-23).** Kind contracts describe invocation, data and result validation. The selected skill owns step procedure and completion, as specified in [ADR-031](adr-031-workflows-package-and-hosts.md#workflow-and-skill-responsibilities-2026-11-23). The launch message may pass an interaction mode and handoff boundary. Step-specific escalation policy, task instructions and quality execution belong to the step implementation.
+
 ## Consequences
 
 ### Benefits
