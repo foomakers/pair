@@ -6,7 +6,17 @@ aliases:
   judge: { effort: high }
 steps:
   implement: { kind: implement, alias: build }
-  review: { kind: review, alias: judge }
+  review-rounds:
+    kind: loop
+    until: review
+    max: 3
+    on-max: escalate
+    steps:
+      review: { kind: review, alias: judge }
+      fix:
+        kind: fix
+        alias: build
+        with: { continue-on-gate-failure: true }
   gate:
     kind: gate
     with:

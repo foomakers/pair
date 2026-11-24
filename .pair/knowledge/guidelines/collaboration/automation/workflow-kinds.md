@@ -60,11 +60,13 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Outputs**, required when `status` is `ok` or `failed`
   - `head`: `string matching ^[0-9a-f]{40}$` — The head after the push, or the input head when nothing changed.
   - `resolutions`: `array of { id: string, status: "resolved" | "not-resolved", reason: string }` — One per finding in scope.
+  - `gateFailures`: `array of { gate: string, reason: string }` — Failed gates reported when continuation is enabled.
 - **Rule**: The status is "failed", never "ok", when at least one resolution is "not-resolved".
 - **Options** (`with`)
   - `severity`: `"Critical" | "Major" | "Minor"` — The lowest severity to fix. Default `Minor`, the review's blocking floor. Ignored when `findings` is given.
   - `findings`: `array of string` — Finding ids. When present only these are fixed.
   - `gates`: `array of string` — Keys of the Custom Gate Registry, run in order before the push. Absent or `[]` = none.
+  - `continue-on-gate-failure`: `boolean` — Report failed gates and continue to the normal push. Default: false.
 - **Returns `needs-human` when**
   - A remaining finding needs a human decision or action.
   - A finding contradicts an acceptance criterion of the card.

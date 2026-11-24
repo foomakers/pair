@@ -40,6 +40,15 @@ export const fix: StepKind = {
           },
         },
       },
+      gateFailures: {
+        type: 'array',
+        description: 'Failed gates reported when continuation is enabled.',
+        items: {
+          type: 'object',
+          required: ['gate', 'reason'],
+          properties: { gate: { type: 'string' }, reason: { type: 'string' } },
+        },
+      },
     },
   },
   with: {
@@ -61,6 +70,10 @@ export const fix: StepKind = {
         items: { type: 'string' },
         description:
           'Keys of the Custom Gate Registry, run in order before the push. Absent or `[]` = none.',
+      },
+      'continue-on-gate-failure': {
+        type: 'boolean',
+        description: 'Report failed gates and continue to the normal push. Default: false.',
       },
     },
   },

@@ -30,6 +30,8 @@ Executable form of the **`fix`** step. No how-to guide: the step exists only as 
 
 ## Algorithm
 
+`continue-on-gate-failure` is an optional boolean, default `false`. When enabled, run all supplied gates, record each failure as `{ gate, reason }` in the optional `gateFailures` result, and continue to a normal push with hooks enabled. Report all gate failures in the summary. A red gate alone then permits `ok` after a successful push. Unresolved findings retain their normal status. If the push fails, return `failed` and report the actual remote head.
+
 ### Step 1: Scope
 
 1. Check the PR branch and review head. On resume, keep an existing descendant on the story branch, including local commits. Verify any fixes already there for this review before attempting the remaining findings.
@@ -50,7 +52,7 @@ For each finding, in order:
 
 Verify there is a resolution for each finding in scope before returning. Attempt any outstanding independent finding before running the gates.
 
-1. Run each gate of `gates` in order. A red gate → stop, return `failed` with the command output as `reason`. **Nothing is pushed.**
+1. Run each gate of `gates` in order. With continuation disabled, a red gate returns `failed` with the command output as `reason` and leaves the commits local.
 2. Push the committed fixes even when independent findings remain open. `head` is the SHA after the push (`git rev-parse HEAD`, 40 hex). If there are no new commits, report the current PR head.
 
 ## Result
@@ -65,7 +67,7 @@ End the turn with one JSON object in a fenced `json` block:
 
 `head` and `resolutions` are returned for `ok` and `failed` (on a red gate: the input head, nothing was pushed); `needs-human` may omit them.
 
-Status: `ok` when every finding in scope is `resolved`; `failed` when a gate is red or a finding remains open for a technical reason; `needs-human` when only human actions and their dependents remain. For either stop, report the unresolved finding IDs and reasons.
+Status: `ok` when every finding in scope is `resolved` and the push succeeds or is unnecessary. Return `failed` for a red gate with continuation disabled, a failed push, or an unresolved technical finding. Return `needs-human` when only human actions and their dependents remain. For either stop, report the unresolved finding IDs and reasons.
 
 ## Never
 
