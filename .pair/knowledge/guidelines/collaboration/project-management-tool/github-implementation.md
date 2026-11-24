@@ -212,7 +212,8 @@ gh project list --owner [ORG]
 # Passing it at create time is what makes the item a board member —
 # see "Item Visibility: Membership and Assignee" below for why that matters
 # and for the Step 2b path when this flag is not used.
-gh issue create --assignee "[login]" --project "[project title]"
+gh issue create --project "[project title]"
+# Add --assignee "[login]" only when explicitly supplied.
 gh pr create --assignee "[login]" --project "[project title]"
 ```
 

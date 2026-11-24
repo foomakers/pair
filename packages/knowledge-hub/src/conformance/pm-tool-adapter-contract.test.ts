@@ -678,7 +678,7 @@ describe('KB-wide — create recipes honor assignment policy (gh, az, linear) (#
       if (
         family.tool === 'gh' &&
         file.endsWith('github-implementation.md') &&
-        command.startsWith('gh issue create --title "[title]"')
+        command.startsWith('gh issue create')
       ) {
         expect(command).not.toMatch(/--assignee\b/)
       } else {
