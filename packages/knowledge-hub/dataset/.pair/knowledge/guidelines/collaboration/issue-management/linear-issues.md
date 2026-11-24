@@ -25,7 +25,7 @@ Labels are **per team**: resolve label ids for the adopted team before using the
 
 All examples use the GraphQL API through the **`linear_gql` helper** defined once in [linear-implementation.md → GraphQL API setup](../project-management-tool/linear-implementation.md#quick-setup) — endpoint and credentials live there, and the key is never passed inline on the command line. Define the helper before running anything below. With MCP, call the server's equivalent tool with the same arguments.
 
-> **The authoritative create recipe is the adapter's.** Every `issueCreate` below carries `assigneeId`, because an issue without an assignee is open, green — and invisible in the assignee-filtered view the team reads. The full mechanics (resolving the user id, membership is implicit via `teamId`, when `projectId` becomes part of visibility, what to do when the assignee cannot be resolved) live in [linear-implementation.md → Item Visibility: Membership and Assignee](../project-management-tool/linear-implementation.md#item-visibility-membership-and-assignee). The snippets here are abbreviations of it, never an alternative to it.
+> **The authoritative create recipe is the adapter’s.** Only set an assignee when explicitly supplied; otherwise leave the item unassigned without warning. Unassigned items are absent from assignee-filtered views. For assignment and board membership details, see [linear-implementation.md](../project-management-tool/linear-implementation.md#item-visibility-membership-and-assignee).
 
 ### User Story
 
@@ -33,7 +33,6 @@ All examples use the GraphQL API through the **`linear_gql` helper** defined onc
 linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ success issue { id identifier url } } }",
      "variables":{"i":{"teamId":"<team-id>","title":"[Story title]",
      "description":"[Story body — markdown per user-story-template]",
-     "assigneeId":"<user-id>",
      "parentId":"<epic-id>","labelIds":["<user-story-label-id>"],
      "estimate":5,"priority":2}}}'
 ```

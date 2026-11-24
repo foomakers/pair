@@ -212,7 +212,8 @@ gh project list --owner [ORG]
 # Passing it at create time is what makes the item a board member —
 # see "Item Visibility: Membership and Assignee" below for why that matters
 # and for the Step 2b path when this flag is not used.
-gh issue create --assignee "[login]" --project "[project title]"
+gh issue create --project "[project title]"
+# Add --assignee "[login]" only when explicitly supplied.
 gh pr create --assignee "[login]" --project "[project title]"
 ```
 
@@ -436,15 +437,15 @@ mcp__github__issue_write:
 
 **A missing-scope error is reported, never worked around by dropping `--project`.** Retrying without the flag succeeds and lands on exactly the defect this section exists to remove — open, assigned, green, off the board. Same discipline as the status write below: report it, never silently degrade to a create that skips membership.
 
-The assignee is required by the Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md): the board is read filtered by assignee. Set it **as part of the create**, never as a follow-up step.
+Resolve assignment per [way-of-working.md](../../../../adoption/tech/way-of-working.md): an omitted create assignee stays unassigned without warning. When explicitly supplied, set it as part of the create and report rejection.
 
-#### Create an Issue with its Assignee and its Membership
+#### Create an Issue with its Membership
 
-**Creating does not imply membership.** Both writes belong to the create, because the two failure modes above are independent: an issue created with an assignee and no membership is open, assigned, green and absent from the board — which is the exact defect this section exists to prevent, and it is reachable through the **most common** path, a follow-up issue filed with no status transition.
+**Creating does not imply membership.** Membership is required regardless of assignment, because the two failure modes above are independent: an issue created with an assignee and no membership is open, assigned, green and absent from the board — which is the exact defect this section exists to prevent, and it is reachable through the **most common** path, a follow-up issue filed with no status transition.
 
 ```text
 # MCP-first — NOTE: issue_write has no project field.
-# This call creates the issue and its assignee ONLY.
+# This call creates the issue; include assignees only when explicitly supplied.
 # Step 2b is REQUIRED after it, not optional.
 mcp__github__issue_write:
   method: create
@@ -453,7 +454,7 @@ mcp__github__issue_write:
   title: "[item title]"
   body: "[body — markdown per the item's template]"
   labels: ["[type label]", "[classification labels]"]
-  assignees: ["[login]"]
+  assignees: ["[login]"]  # optional: only when explicitly supplied
 ```
 
 ```bash
@@ -461,7 +462,8 @@ mcp__github__issue_write:
 # ID and never its number, and the project is the one named in way-of-working.md.
 # Needs the `project` OAuth scope (gh auth refresh -s project); without it the
 # command fails and creates NOTHING — report that, never retry without --project.
-gh issue create --title "[title]" --body-file [file] --assignee "[login]" --project "[project title]"
+gh issue create --title "[title]" --body-file [file] --project "[project title]"
+# Add --assignee "[login]" only when explicitly supplied.
 
 # Without --project (or after any MCP create): membership is still missing.
 # Run Step 2b below — it is idempotent, so it is safe to run unconditionally.

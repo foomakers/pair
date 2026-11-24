@@ -203,12 +203,11 @@ GraphQL examples below; with MCP, use the server's equivalent tool with the same
 ### Create
 
 ```bash
-# assigneeId is part of the create, never a follow-up; add projectId too when the
+# Add assigneeId only when explicitly supplied; add projectId too when the
 # adopted board is a project view — see Item Visibility: Membership and Assignee.
 linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ success issue { id identifier url } } }",
        "variables":{"i":{"teamId":"<team-id>","title":"[Story title]",
        "description":"[Story body — markdown per user-story-template]",
-       "assigneeId":"<user-id>",
        "labelIds":["<user-story-label-id>"],"estimate":5,"priority":2}}}'
 ```
 
@@ -227,16 +226,17 @@ linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ suc
 
 **Implicit membership is not the same as "cannot be invisible."** When [way-of-working.md](../../../../adoption/tech/way-of-working.md) names a **project** view rather than the team view as the board the team reads, `projectId` becomes part of visibility and must be set on the create — an issue with the right `teamId` and no `projectId` is then created, assigned, and absent from the view the team actually reads, exactly as on GitHub. Read the adopted board from `way-of-working.md`; only when it is the team view is `projectId` genuinely optional.
 
-**The assignee is not implicit** and is still required — the board is read filtered by assignee (Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md)). Set it **as part of the create**, never as a follow-up step:
+An omitted create assignee stays unassigned without warning. When explicitly supplied, set it as part of the create using `assigneeId`, never as a follow-up step.
 
 ```bash
-# Create with the assignee — resolve the user id first
-linear_gql '{"query":"{ users(filter:{isMe:{eq:true}}) { nodes { id name } } }"}'
+# Resolve the explicitly supplied user by email; use the matching id.
+linear_gql '{"query":"query($email:String!){ users(filter:{email:{eq:$email}}) { nodes { id name email } } }", "variables":{"email":"<explicit-assignee-email>"}}'
 
+# Add "assigneeId":"<user-id>" to the input only when explicitly supplied.
 # projectId is required when way-of-working.md names a project view, not the team
 # view — without it the issue is created, assigned, and absent from that board.
 linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ success issue { identifier } } }",
-       "variables":{"i":{"teamId":"<team-id>","title":"[title]","assigneeId":"<user-id>",
+       "variables":{"i":{"teamId":"<team-id>","title":"[title]",
        "projectId":"<project-id>"}}}'
 
 # Existing issue — assigning is idempotent, so it is safe to run unconditionally

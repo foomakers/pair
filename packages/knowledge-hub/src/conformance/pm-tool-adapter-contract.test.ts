@@ -219,7 +219,23 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
     '$corpus/$file sets the assignee as part of the create, not as a follow-up (AC3)',
     ({ content }) => {
       const body = normalize(section(content, VISIBILITY_HEADING))
-      expect(body).toContain('as part of the create, never as a follow-up step')
+      expect(body).toContain('an omitted create assignee stays unassigned without warning')
+      expect(body).toContain('when explicitly supplied, set it as part of the create')
+    },
+  )
+
+  it.each(adapterCases.filter(({ file }) => file !== 'github-implementation.md'))(
+    '$corpus/$file leaves create assignment optional (R739-05)',
+    ({ content }) => {
+      const body = normalize(section(content, VISIBILITY_HEADING))
+      expect(body).toContain('an omitted create assignee stays unassigned without warning')
+      expect(body).toContain('when explicitly supplied, set it as part of the create')
+      const field = content.includes('az boards work-item create')
+        ? '--assigned-to'
+        : content.includes('linear_gql')
+          ? 'assigneeid'
+          : 'assignee'
+      expect(body).toContain(field)
     },
   )
 
@@ -231,6 +247,16 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
       expect(body).toContain('never drop it silently')
     },
   )
+})
+
+it.each(CORPORA)('$label: Linear resolves the supplied assignee (R739-06, AC-2)', ({ dir }) => {
+  const body = section(
+    readFileSync(join(dir, 'linear-implementation.md'), 'utf-8'),
+    VISIBILITY_HEADING,
+  )
+  expect(body).toContain('email:{eq:$email}')
+  expect(body).toContain('<explicit-assignee-email>')
+  expect(body).not.toContain('isMe:{eq:true}')
 })
 
 const readmeCases = CORPORA.map(({ label, dir }) => ({
@@ -374,13 +400,23 @@ describe('github-implementation.md — the empty item id is an explicit branch (
 })
 
 describe('github-implementation.md — assignee is part of the write (#402 AC3)', () => {
+  it.each(githubCases)(
+    '$corpus: CLI integration leaves issue assignment optional (R739-01)',
+    ({ content }) => {
+      const body = section(content, 'GitHub CLI Integration')
+      expect(body).toMatch(/gh issue create\b(?![^\n]*--assignee)[^\n]*--project/)
+      expect(body).toContain('Add --assignee "[login]" only when explicitly supplied')
+      expect(body).toMatch(/gh pr create\b[^\n]*--assignee/)
+    },
+  )
+
   it.each(githubCases)('$corpus: the create recipe carries the assignee', ({ content }) => {
     const body = section(content, VISIBILITY_HEADING)
     expect(body).toContain('assignees: ["[login]"]')
-    // Pinned as a whole command: a bare `--assignee "[login]"` check was VACUOUS —
-    // the sibling `gh pr create --assignee` line satisfied it even with the flag
-    // deleted from `gh issue create` (found by injection-testing this guard).
-    expect(body).toMatch(/gh issue create\b[^\n]*--assignee "\[login\]"/)
+    // Pin the issue command independently of the sibling PR command.
+    expect(body).toMatch(/gh issue create\b(?![^\n]*--assignee)[^\n]*--project "\[project title\]"/)
+    expect(body).toContain('Add --assignee "[login]" only when explicitly supplied.')
+    expect(body).toContain('assignees: ["[login]"]  # optional: only when explicitly supplied')
   })
 
   it.each(githubCases)('$corpus: adding an assignee is safe to re-run', ({ content }) => {
@@ -482,7 +518,7 @@ describe('github-implementation.md — assignee is part of the write (#402 AC3)'
  * neither `--assignee` nor `--project` — the exact item this story exists to forbid
  * — and an agent reaching them by index or grep saw nothing pointing back at the
  * adapter. Two contradictory recipes per tool is worse than one incomplete one, so
- * the invariant is enforced KB-wide rather than per file.
+ * the policy is enforced KB-wide rather than per file.
  *
  * ALL THREE tracker CLIs are guarded, not just gh: the first cut matched
  * `gh issue create` alone while the prose it protects is tool-wide, so azure's
@@ -586,8 +622,7 @@ function fencedCommands(markdown: string): string[] {
 
 /**
  * One family per tracker CLI. `match` selects the create invocations; `required` is
- * the flag/field without which the created item is invisible in the view the team
- * reads. Each family also carries its own non-empty guard, so a discovery that stops
+ * the assignment flag/field, omitted from default create recipes. Each family also carries its own non-empty guard, so a discovery that stops
  * matching one tool reddens instead of going quietly vacuous.
  */
 const CREATE_FAMILIES = [
@@ -649,7 +684,29 @@ const createRecipeCases = KB_ROOTS.flatMap(
       ).out,
 )
 
-describe('KB-wide — no issue-create recipe omits the assignee (gh, az, linear) (#402)', () => {
+it.each(KB_ROOTS)(
+  '$label: issue recipes make create assignment conditional (R739-07)',
+  ({ dir }) => {
+    for (const tool of ['github', 'azure-devops', 'linear']) {
+      const body = readFileSync(
+        join(dir, `guidelines/collaboration/issue-management/${tool}-issues.md`),
+        'utf-8',
+      )
+      expect(body).toContain('Only set an assignee when explicitly supplied')
+    }
+  },
+)
+
+it('adoption preserves PR assignment and explicit card assignment (R739-07)', () => {
+  const body = readFileSync(
+    join(__dirname, '../../../../.pair/adoption/tech/way-of-working.md'),
+    'utf-8',
+  )
+  expect(body).toContain('cards created without an explicit assignee remain unassigned')
+  expect(body).toContain('PRs retain their default assignee at creation')
+})
+
+describe('KB-wide — create recipes honor assignment policy (gh, az, linear) (#402, #738)', () => {
   it.each(
     KB_ROOTS.flatMap(({ label }) => CREATE_FAMILIES.map(({ tool }) => ({ corpus: label, tool }))),
   )('$corpus: finds the $tool create recipes it means to guard', ({ corpus, tool }) => {
@@ -661,9 +718,16 @@ describe('KB-wide — no issue-create recipe omits the assignee (gh, az, linear)
   })
 
   it.each(createRecipeCases)(
-    '$corpus/$file $tool recipe $occurrence sets the assignee on the create itself',
-    ({ command, family }) => {
-      expect(command, `missing ${family.flag}`).toMatch(family.required)
+    '$corpus/$file $tool recipe $occurrence follows assignment policy',
+    ({ command, family, file }) => {
+      if (
+        file.startsWith('guidelines/collaboration/project-management-tool/') ||
+        file.startsWith('guidelines/collaboration/issue-management/')
+      ) {
+        expect(command).not.toMatch(family.required)
+      } else {
+        expect(command, `missing ${family.flag}`).toMatch(family.required)
+      }
     },
   )
 })

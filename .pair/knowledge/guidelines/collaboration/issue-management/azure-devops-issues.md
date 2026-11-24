@@ -22,7 +22,7 @@ Inherited processes with custom type names override this table in `way-of-workin
 
 ## Creating Work Items
 
-> **The authoritative create recipe is the adapter's.** Every create below carries `--assigned-to`, because a work item without an assignee is open, green — and invisible in the assignee-filtered board view the team reads. The full mechanics (membership is implicit here, but the **area path** still decides whether the team's board shows the item; what to do when the assignee cannot be resolved) live in [azure-devops-implementation.md → Item Visibility: Membership and Assignee](../project-management-tool/azure-devops-implementation.md#item-visibility-membership-and-assignee). The snippets here are abbreviations of it, never an alternative to it.
+> **The authoritative create recipe is the adapter’s.** Only set an assignee when explicitly supplied; otherwise leave the item unassigned without warning. Unassigned items are absent from assignee-filtered views. For assignment and board membership details, see [azure-devops-implementation.md](../project-management-tool/azure-devops-implementation.md#item-visibility-membership-and-assignee).
 
 ### User Story (PBI)
 
@@ -31,7 +31,6 @@ az boards work-item create \
   --type "Product Backlog Item" \
   --title "[Story title]" \
   --description "[Body following the user-story-template]" \
-  --assigned-to "[user@example.com]" \
   --area "[team area path]" \
   --project <project>
 ```
@@ -45,7 +44,6 @@ az boards work-item create \
   --type "Task" \
   --title "[Task title]" \
   --description "[Body following the task-template]" \
-  --assigned-to "[user@example.com]" \
   --area "[team area path]" \
   --project <project>
 ```
@@ -57,7 +55,6 @@ az boards work-item create \
   --type "Bug" \
   --title "[Bug title]" \
   --description "[Reproduction steps, expected vs actual]" \
-  --assigned-to "[user@example.com]" \
   --area "[team area path]" \
   --project <project>
 ```
