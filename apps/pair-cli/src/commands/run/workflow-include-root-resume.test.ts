@@ -53,8 +53,13 @@ it.each([false, true])('warns on changed sources while resuming (699 AC-7, INC-0
         },
       })
     expect(await run()).toBe(1)
-    write('.pair/adoption/tech/workflows/root.yaml', rootOnly ? 'version: 1\nname: root\nsteps:\n  renamed: { kind: generic, uses: shared }\n' : 'invalid: [')
+    if (rootOnly) write('.pair/adoption/tech/workflows/root.yaml', 'version: 1\nname: root\nsteps:\n  renamed: { kind: generic, uses: shared }\n')
     if (!rootOnly) write('.pair/adoption/tech/workflows/shared.yaml', 'invalid: [')
+    if (!rootOnly) {
+      const preview = await handleRunCommand(parseRunCommand({ card: '699', cwd: project, dryRun: true }, ['root']), fs, {})
+      expect(preview).toBe(1)
+      write('.pair/adoption/tech/workflows/root.yaml', 'invalid: [')
+    }
     expect(await run()).toBe(0)
     expect(launches).toBe(2)
     expect(lines.some(line => line.includes('included workflow sources changed'))).toBe(true)
