@@ -217,14 +217,10 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
 
   it.each(adapterCases)(
     '$corpus/$file sets the assignee as part of the create, not as a follow-up (AC3)',
-    ({ content, file }) => {
+    ({ content }) => {
       const body = normalize(section(content, VISIBILITY_HEADING))
-      if (file === 'github-implementation.md') {
-        expect(body).toContain('an omitted create assignee stays unassigned without warning')
-        expect(body).toContain('when explicitly supplied, set it as part of the create')
-      } else {
-        expect(body).toContain('as part of the create, never as a follow-up step')
-      }
+      expect(body).toContain('an omitted create assignee stays unassigned without warning')
+      expect(body).toContain('when explicitly supplied, set it as part of the create')
     },
   )
 
@@ -234,6 +230,8 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
       const body = normalize(section(content, VISIBILITY_HEADING))
       expect(body).toContain('an omitted create assignee stays unassigned without warning')
       expect(body).toContain('when explicitly supplied, set it as part of the create')
+      const field = content.includes('az boards work-item create') ? '--assigned-to' : content.includes('linear_gql') ? 'assigneeid' : 'assignee'
+      expect(body).toContain(field)
     },
   )
 
@@ -685,11 +683,9 @@ describe('KB-wide — create recipes honor assignment policy (gh, az, linear) (#
     '$corpus/$file $tool recipe $occurrence follows assignment policy',
     ({ command, family, file }) => {
       if (
-        family.tool === 'gh' &&
-        file.endsWith('github-implementation.md') &&
-        command.startsWith('gh issue create')
+        file.startsWith('guidelines/collaboration/project-management-tool/')
       ) {
-        expect(command).not.toMatch(/--assignee\b/)
+        expect(command).not.toMatch(family.required)
       } else {
         expect(command, `missing ${family.flag}`).toMatch(family.required)
       }

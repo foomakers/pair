@@ -157,19 +157,19 @@ Azure Boards states differ per process and per team board columns. Skills resolv
 
 **Implicit membership is not the same as "cannot be invisible."** A work item whose **area path** falls outside the area paths configured for the team (Project settings → Team configuration → Areas) is genuinely absent from that team's board — created, assigned, and invisible in the view the team actually reads. So pass `--area` on the create with a path the team's board covers, taking the team named in [way-of-working.md](../../../../adoption/tech/way-of-working.md). This is the Azure analogue of the GitHub membership defect: the field write itself cannot fail, but the item can still land outside the read view.
 
-**The assignee is not implicit** and is still required — the board is read filtered by assignee (Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md)). Set it via `--assigned-to` as part of the create, never as a follow-up step. **If the assignee cannot be resolved** (not a project member, AAD/licensing restriction): **report it** — never drop it silently, which leaves the item invisible in the filtered view.
+An omitted create assignee stays unassigned without warning. When explicitly supplied, set it as part of the create via `--assigned-to`, never as a follow-up step. **If the assignee cannot be resolved** (not a project member, AAD/licensing restriction): **report it** — never drop it silently.
 
 ### Create
 
 ```bash
-# Create a user story (PBI in Scrum process) — assignee set as part of the create
+# Create a user story (PBI in Scrum process)
+# Add --assigned-to "[user@example.com]" only when explicitly supplied.
 # --area: the team's board reads only its configured area paths, so an item
 # outside them is created, assigned, and absent from that board.
 az boards work-item create \
   --type "Product Backlog Item" \
   --title "[Story title]" \
   --description "[Story body — markdown per user-story-template]" \
-  --assigned-to "[user@example.com]" \
   --area "[team area path]" \
   --project <project>
 
