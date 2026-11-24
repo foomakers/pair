@@ -5,7 +5,7 @@ import { fileSystemService as fs } from '@pair/content-ops'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 
-it('resumes the frozen workflow when the root and included sources become invalid (699 AC-7)', async () => {
+it.each([false, true])('warns on changed sources while resuming (699 AC-7, INC-06), rootOnly=%s', async rootOnly => {
   const project = fs.mkdtempSync(join(tmpdir(), 'pair-include-resume-'))
   const write = (path: string, text: string) => {
     const target = join(project, path)
@@ -53,8 +53,8 @@ it('resumes the frozen workflow when the root and included sources become invali
         },
       })
     expect(await run()).toBe(1)
-    write('.pair/adoption/tech/workflows/root.yaml', 'invalid: [')
-    write('.pair/adoption/tech/workflows/shared.yaml', 'invalid: [')
+    write('.pair/adoption/tech/workflows/root.yaml', rootOnly ? 'version: 1\nname: root\nsteps:\n  renamed: { kind: generic, uses: shared }\n' : 'invalid: [')
+    if (!rootOnly) write('.pair/adoption/tech/workflows/shared.yaml', 'invalid: [')
     expect(await run()).toBe(0)
     expect(launches).toBe(2)
     expect(lines.some(line => line.includes('included workflow sources changed'))).toBe(true)
