@@ -48,7 +48,8 @@ export const review: StepKind = {
     properties: {
       publication: {
         enum: ['always', 'first-and-approved', 'never'],
-        description: 'Publish every review, the first and approved reviews, or none. Default: always.',
+        description:
+          'Publish every review, the first and approved reviews, or none. Default: always.',
       },
       blocking: {
         enum: SEVERITIES,
