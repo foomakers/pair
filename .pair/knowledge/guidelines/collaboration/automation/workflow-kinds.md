@@ -40,10 +40,12 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `head`: `string` — The head to review.
 - **Outputs**, required when `status` is `ok` or `failed`
   - `verdict`: `"approved" | "changes-requested"`
+  - `reportPath`: `string` — Local report for this PR and reviewed head.
   - `reviewedHead`: `string matching ^[0-9a-f]{40}$` — The head the verdict is about, a 40-hex sha.
   - `findings`: `array of { id: string, severity: string, title: string, blocking: boolean }` — Every finding. The step is `failed` when at least one is blocking.
 - **Rule**: The status is "failed", never "ok", when at least one finding is blocking or the verdict is "changes-requested".
 - **Options** (`with`)
+  - `publication`: `"always" | "first-and-approved" | "never"` — Publish every review, the first and approved reviews, or none. Default: always.
   - `blocking`: `"Critical" | "Major" | "Minor"` — The lowest severity that makes a finding blocking. Default: the review template's blocking floor.
 - **Returns `needs-human` when**
   - The verdict needs a decision only a person can take.
@@ -56,6 +58,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `card`: `string` — The card the pull request delivers.
   - `pr`: `integer` — The pull request to fix.
   - `head`: `string` — The head the findings are about.
+  - `reportPath`: `string` — Local review report for the reviewed head.
   - `findings`: `array of object` — The review findings: `id`, `severity`, `title`, `blocking`.
 - **Outputs**, required when `status` is `ok` or `failed`
   - `head`: `string matching ^[0-9a-f]{40}$` — The head after the push, or the input head when nothing changed.

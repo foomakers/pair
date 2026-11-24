@@ -20,6 +20,7 @@ export const review: StepKind = {
     required: ['verdict', 'reviewedHead', 'findings'],
     properties: {
       verdict: { enum: ['approved', 'changes-requested'] },
+      reportPath: { type: 'string', description: 'Local report for this PR and reviewed head.' },
       reviewedHead: {
         type: 'string',
         pattern: '^[0-9a-f]{40}$',
@@ -45,6 +46,10 @@ export const review: StepKind = {
     type: 'object',
     additionalProperties: false,
     properties: {
+      publication: {
+        enum: ['always', 'first-and-approved', 'never'],
+        description: 'Publish every review, the first and approved reviews, or none. Default: always.',
+      },
       blocking: {
         enum: SEVERITIES,
         description:

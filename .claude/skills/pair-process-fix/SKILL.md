@@ -42,7 +42,7 @@ Executable form of the **`fix`** step. No how-to guide: the step exists only as 
 
 For each finding, in order:
 
-1. Read the finding on the PR review (body, file, line).
+1. When `reportPath` is supplied, read the finding from that local report, verifying that its PR and reviewed SHA match the inputs before editing. If it is missing or does not match, return `failed` with the mismatch. When absent, read the finding from the PR review (body, file, line).
 2. **Record and continue.** When resolving a finding would contradict an acceptance criterion, needs a product decision, or requires an action only a human can perform, record it as `not-resolved` with the required action. When it depends on another unresolved finding, record that prerequisite. Continue with every independent finding in scope. A technical failure also ends only the affected attempt if its partial edits can be kept separate. Never treat a manual finding as a reason to stop before attempting independent code fixes.
 3. **Bug** → write a failing regression test first and run it to see it fail; commit it (`test:`) before the fix. Then make the minimal fix and see the test pass. Not a bug (docs, naming, structure) → fix directly.
 4. Change nothing outside the finding. Commit per the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)), one commit per finding, naming the finding id.

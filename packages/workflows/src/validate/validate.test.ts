@@ -202,7 +202,7 @@ describe('validate (AC-3, AC-5)', () => {
         line: 10,
         key: 'steps.review.with.floor',
         problem: "unknown key 'floor'",
-        fix: 'use one of blocking',
+        fix: 'use one of publication, blocking',
       },
     ],
     [

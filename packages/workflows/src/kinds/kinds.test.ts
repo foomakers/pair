@@ -5,6 +5,8 @@ describe('kind `with` options (AC-5)', () => {
   it.each([
     ['implement', {}],
     ['review', { blocking: 'Major' }],
+    ['review', { publication: 'never' }],
+    ['review', { publication: 'first-and-approved' }],
     ['generic', { anything: { nested: [1, 2] } }],
   ] as const)('%s accepts %j', (kind, options) => {
     expect(violations(kindByName[kind].with, options)).toEqual([])
@@ -13,6 +15,7 @@ describe('kind `with` options (AC-5)', () => {
   it.each([
     ['implement', { gates: ['quality-gate'] }, "unknown key 'gates'"],
     ['review', { floor: 'Major' }, "unknown key 'floor'"],
+    ['review', { publication: 'sometimes' }, 'unknown value "sometimes"'],
     ['review', { blocking: 'Trivial' }, 'unknown value "Trivial"'],
   ] as const)('%s refuses %j', (kind, options, problem) => {
     expect(violations(kindByName[kind].with, options).map(found => found.problem)).toEqual([

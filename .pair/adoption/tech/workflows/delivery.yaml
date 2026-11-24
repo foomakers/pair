@@ -12,7 +12,7 @@ steps:
     max: 3
     on-max: escalate
     steps:
-      review: { kind: review, alias: judge }
+      review: { kind: review, alias: judge, with: { publication: first-and-approved } }
       fix:
         kind: fix
         alias: build
