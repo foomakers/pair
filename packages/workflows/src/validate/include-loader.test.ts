@@ -26,3 +26,17 @@ steps:
   expect(result.errors).toEqual([])
   expect(result.workflow?.steps.map(step => step.id)).toEqual(['before', 'shared/work', 'after'])
 })
+
+it('rebases output references inside an include (INC-02, AC-1)', () => {
+  const result = validate('version: 1\nname: root\nsteps:\n  use: { kind: generic, uses: shared }\n', 'root.yaml', {
+    skillExists: name => name !== 'shared', gateKeys: [], launchInputs: ['card'], isSafeText: () => true,
+    resolveWorkflow: () => ({ file: 'shared.yaml', text: `version: 1
+name: shared
+steps:
+  judge: { kind: implement }
+  work: { kind: generic, skill: example, when: { output: judge.pr, is: [yes] } }
+` }),
+  })
+  expect(result.errors).toEqual([])
+  expect(result.workflow?.steps[1]?.when?.output).toBe('use/judge.pr')
+})
