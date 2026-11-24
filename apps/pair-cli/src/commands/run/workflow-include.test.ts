@@ -5,7 +5,7 @@ import { fileSystemService as fs } from '@pair/content-ops'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 
-it('expands includes before validation, freezing and execution (699 AC-1)', async () => {
+it.each([false, true])('expands includes before freezing and execution (699 AC-1/8), loop=%s', async loop => {
   const project = fs.mkdtempSync(join(tmpdir(), 'pair-include-'))
   const write = (path: string, text: string) => {
     const target = join(project, path)
@@ -16,7 +16,9 @@ it('expands includes before validation, freezing and execution (699 AC-1)', asyn
     write('.claude/skills/my-skill/SKILL.md', '# skill\n')
     write(
       '.pair/adoption/tech/workflows/root.yaml',
-      'version: 1\nname: root\nsteps:\n  shared: { kind: generic, uses: shared }\n',
+      loop
+        ? 'version: 1\nname: root\nsteps:\n  repeat:\n    kind: loop\n    until: shared\n    max: 1\n    on-max: fail\n    steps:\n      shared: { kind: generic, uses: shared }\n'
+        : 'version: 1\nname: root\nsteps:\n  shared: { kind: generic, uses: shared }\n',
     )
     write(
       '.pair/adoption/tech/workflows/shared.yaml',
