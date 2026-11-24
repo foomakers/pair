@@ -6,6 +6,7 @@
 
 - [Product Requirements Document (PRD)](.pair/adoption/product/PRD.md)
 - [Context Map](.pair/adoption/product/context-map.md)
+- [DDR: "Supervisor" names the workflow's escalation agent](.pair/adoption/product/ddr/ddr-001-supervisor-term.md)
 - [Subdomain Catalog Index](.pair/adoption/product/subdomain/README.md)
 - [Adoption & Guidelines (Supporting Subdomain)](.pair/adoption/product/subdomain/adoption-guidelines.md)
 - [Code & Documentation Generation (Core Subdomain)](.pair/adoption/product/subdomain/code-documentation-generation.md)
@@ -231,6 +232,7 @@
 - [Decision: overrides survive a reset epoch, `manual-infra-commit` is overridable, superseded handoffs are archived by resolve, one driver per run dir, a remote gate failure beats `unprovable`](.pair/adoption/decision-log/2026-11-19-cycle-reset-persistence-manual-infra-commit-and-run-lock.md)
 - [Decision: `FileSystemService` grows the sync primitives migrated code needs; direct `node:fs` stays a rare, jointly decided exception](.pair/adoption/decision-log/2026-11-19-file-system-service-sync-primitives.md)
 - [Decision: Order Recovery Budgets by Durable Events](.pair/adoption/decision-log/2026-11-19-recovery-budget-event-identity.md)
+- [Decision: Temporary CLI Integration Test Exception](.pair/adoption/decision-log/2026-11-24-cli-integration-test-exception.md)
 
 ## How-To Guides
 

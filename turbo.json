@@ -21,6 +21,12 @@
     "dev": {
       "cache": false
     },
+    "test:push": {
+      "passThroughEnv": ["PAIR_PUSH_BASE"],
+      "dependsOn": ["build"],
+      "cache": false,
+      "outputs": []
+    },
     "test": {
       "dependsOn": ["build"],
       "outputs": []

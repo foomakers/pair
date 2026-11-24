@@ -130,6 +130,8 @@ export const stepSchema: JsonSchema = {
   },
 }
 
+const WORKFLOW_OUTPUT_PROPERTIES = { from: { type: 'string', pattern: STEP_ID } } as const
+
 /** Grammar v1 as JSON Schema. Execution order is the order of `steps` in the file. */
 export const workflowSchemaV1: JsonSchema = {
   type: 'object',
@@ -139,6 +141,12 @@ export const workflowSchemaV1: JsonSchema = {
     version: { const: 1, description: 'The grammar version.' },
     name: { type: 'string', description: 'Equals the file name without its extension.' },
     description: { type: 'string' },
+    outputs: {
+      type: 'object',
+      required: Object.keys(WORKFLOW_OUTPUT_PROPERTIES),
+      additionalProperties: false,
+      properties: WORKFLOW_OUTPUT_PROPERTIES,
+    },
     aliases: {
       type: 'object',
       propertyNames: { pattern: STEP_ID },
@@ -151,6 +159,35 @@ export const workflowSchemaV1: JsonSchema = {
       propertyNames: { pattern: STEP_ID },
       additionalProperties: stepSchema,
       description: 'The steps, by id.',
+    },
+  },
+}
+
+const expandedId = `${STEP_ID.slice(0, -1)}(/[a-z][a-z0-9-]*)*$`
+export const expandedStepSchema: JsonSchema = {
+  ...stepSchema,
+  properties: {
+    ...stepSchema.properties,
+    when: {
+      ...whenSchema,
+      properties: {
+        ...whenSchema.properties,
+        output: { type: 'string', pattern: `${expandedId.slice(0, -1)}\\.[A-Za-z][A-Za-z0-9]*$` },
+      },
+    },
+    until: { type: 'string', pattern: expandedId },
+    steps: { ...stepSchema.properties?.['steps'], propertyNames: { pattern: expandedId } },
+  },
+}
+
+const expandedWorkflowSchema: JsonSchema = {
+  ...workflowSchemaV1,
+  properties: {
+    ...workflowSchemaV1.properties,
+    steps: {
+      ...workflowSchemaV1.properties?.['steps'],
+      propertyNames: { pattern: expandedId },
+      additionalProperties: expandedStepSchema,
     },
   },
 }
@@ -190,6 +227,7 @@ export interface Workflow {
   readonly version: 1
   readonly name: string
   readonly description?: string
+  readonly outputs?: { readonly from: string }
   /** The declared aliases, each with its defaults. */
   readonly aliases?: Readonly<Record<string, Entry>>
   /** In file order: the execution order. */
@@ -338,7 +376,7 @@ export function parseStrict(text: string, file: string): StrictSource {
 }
 
 /** Parses one workflow file: a typed `Workflow`, or every error found, each with file, line, key and fix. */
-export function parseWorkflow(text: string, file: string): ParsedWorkflow {
+export function parseWorkflow(text: string, file: string, expanded = false): ParsedWorkflow {
   const source = parseStrict(text, file)
   if (source.lines === undefined) return { errors: source.errors }
   const { lines } = source
@@ -346,13 +384,13 @@ export function parseWorkflow(text: string, file: string): ParsedWorkflow {
     steps: Record<string, RawStep>
   }
   const errors = [
-    ...violations(workflowSchemaV1, value).map(found =>
+    ...violations(expanded ? expandedWorkflowSchema : workflowSchemaV1, value).map(found =>
       errorAt({ file, lines }, found.path, found),
     ),
     ...nameError(value, file, lines),
     ...Object.entries(value?.steps ?? {}).flatMap(([id, step]) =>
       Object.entries(step?.steps ?? {}).flatMap(([childId, child]) =>
-        violations(stepSchema, child).map(found =>
+        violations(expanded ? expandedStepSchema : stepSchema, child).map(found =>
           errorAt({ file, lines }, ['steps', id, 'steps', childId, ...found.path], found),
         ),
       ),

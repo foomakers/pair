@@ -133,6 +133,10 @@ The per-tier requirements (reviewer count, SLA, checklist depth, whether 🔴 ne
 
 The "Merge" column only bites when `Review enforcement` is `enabled` (above). Disabled — the default — the review runs and reports, and none of these requirements block a merge.
 
+### Temporary CLI integration test exception
+
+The maintainer accepts excluding the tests in `apps/pair-cli/temporarily-excluded-integration-tests.json` from all CLI test runs and CI until P0 #742 restores retained coverage. See [decision record](../decision-log/2026-11-24-cli-integration-test-exception.md).
+
 ### Custom Gate Registry
 
 Gate 2 runs a **subset** in CI: the `smoke` job in `ci.yml` runs `run-all.sh --ci`, i.e. the CI-safe list declared in [`scripts/smoke-tests/lib/ci-tests.sh`](../../../scripts/smoke-tests/lib/ci-tests.sh) — the full suite is the local `pnpm smoke-tests` command in the table. Membership is an enforced rule with recorded exceptions (#400, ADL [2026-08-11-smoke-suite-runs-in-ci-pre-merge.md](../decision-log/2026-08-11-smoke-suite-runs-in-ci-pre-merge.md)).

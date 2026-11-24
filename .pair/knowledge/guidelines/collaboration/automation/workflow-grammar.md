@@ -42,12 +42,46 @@ Each step:
 | Key    | Required                     | Meaning                                                                         |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------- |
 | `kind` | Yes                          | `implement`, `review`, `fix`, `generic` or `loop`. |
+| `uses` | No | Name of a workflow to include in place of this step. |
 | `skill` | Only for `generic`          | The skill that runs. A typed kind has a default skill; `skill` replaces it.     |
 | `with` | No                           | Options of the step. The kind declares the keys it accepts.                     |
 | `on-failed` | No                      | `stop` (default) or `continue`: what a `failed` step does to the run.           |
 | `alias` | No                          | One of `aliases`: the settings the step runs with. A step citing an undeclared alias is an error. |
 
 A step id starts with a lower-case letter and continues with lower-case letters, digits and hyphens: it names a directory of the run.
+
+### Include a workflow
+
+A `uses` step expands before validation and execution. For example, `shared.yaml` selects the output step:
+
+```yaml
+version: 1
+name: shared
+outputs:
+  from: repair
+steps:
+  repair:
+    kind: fix
+  check:
+    kind: generic
+    skill: check
+```
+
+A caller can include it:
+
+```yaml
+steps:
+  fix:
+    kind: fix
+    uses: shared
+    with:
+      gates: [quality-gate]
+    on-failed: stop
+```
+
+The expanded IDs are `fix/repair`, then `fix/check`. `outputs.from` selects `repair`; without it the last step supplies outputs. A typed caller requires the selected step to supply its kind's outputs; a generic caller skips that check. `with` applies to the selected step when it has the caller's kind; `on-failed` applies to the last step. `context`, `prompt`, `interactive`, `when`, `gates` and `state` are rejected on a caller; put them on included steps instead.
+
+Includes may nest up to three levels; cycles, unknown names and workflow/skill name clashes fail validation. An include may introduce a loop outside a loop, but loops cannot nest, including through an include. Configuration can target expanded IDs such as `fix/repair`. `--dry-run` shows the expanded order; a run freezes it and warns on resume if an included source changes.
 
 ### Loop
 
@@ -111,7 +145,7 @@ An `ok` result from `until` exits immediately, skipping later steps. A failed `u
 quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic", "gate", "approval", "merge", "loop"
 ```
 
-Not in version 1: `context`, `interactive`, `prompt`, and a step that uses another workflow.
+Not in version 1: `context`, `interactive` and `prompt`.
 
 ## Validation
 
@@ -120,7 +154,7 @@ A workflow is validated before any step is launched, and by `--dry-run`, which l
 | Part      | What is checked                                                                                   |
 | --------- | ------------------------------------------------------------------------------------------------- |
 | Form      | The rules above.                                                                                  |
-| Coherence | `skill` names an installed skill; a `generic` step has `skill`; `uses` is refused (it is for including a workflow). |
+| Coherence | `skill` names an installed skill; a `generic` step has `skill` unless it includes a workflow with `uses`. |
 | Coherence | Every input of a step is a launch argument (`--card`) or an output of an earlier step.            |
 | Coherence | Every key under `with` is declared by the kind.                                                   |
 | Coherence | Every key in `with.gates` is a `Key` of the Custom Gate Registry in `way-of-working.md`.          |

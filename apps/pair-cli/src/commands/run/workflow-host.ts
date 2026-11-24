@@ -1,4 +1,5 @@
 import { basename, extname, join, resolve } from 'path'
+import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
 import {
   cardStateOf,
@@ -9,6 +10,7 @@ import {
   addressedSteps,
   frozenConfiguration,
   parseFrozenConfiguration,
+  parseWorkflow,
   readGateRegistry,
   readGateTargets,
   runSteps,
@@ -169,6 +171,7 @@ interface Resolved {
   readonly configuration?: ConfigurationPlan
   readonly main: string
   readonly cwd: string
+  readonly sources: Record<string, string>
 }
 
 /** The configuration of the run, its warnings and refusals printed; `undefined`: refused. */
@@ -198,6 +201,89 @@ function configure(
   return undefined
 }
 
+/** Serialize the expanded workflow for the engine's frozen source. */
+function expandedSource(workflow: Workflow): string {
+  const entries = (steps: Workflow['steps']): Record<string, unknown> =>
+    Object.fromEntries(
+      steps.map(({ id, steps: children, ...step }) => [
+        id,
+        { ...step, ...(children && { steps: entries(children) }) },
+      ]),
+    )
+  const { version, name, description, aliases, steps } = workflow
+  return `${JSON.stringify({ version, name, description, aliases, steps: entries(steps) }, null, 2)}\n`
+}
+
+function checkWorkflow(
+  fs: Services['fs'],
+  project: ReturnType<typeof loadConfigWithOverrides>['config'],
+  { cwd, main, sources }: { cwd: string; main: string; sources: Record<string, string> },
+  source: { text: string; file: string },
+) {
+  const registry = join(main, WAY_OF_WORKING)
+  const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
+  return validate(source.text, source.file, {
+    skillExists: createSkillProbe(fs, project, cwd),
+    gateKeys: Object.keys(readGateRegistry(registryText)),
+    gateTargets: Object.keys(readGateTargets(registryText)),
+    launchInputs: ['card'],
+    isSafeText: isSafePromptText,
+    availableWorkflows: [
+      join(main, WORKFLOWS_DIR),
+      ...(() => {
+        try {
+          return [join(getKnowledgeHubDatasetPath(fs), WORKFLOWS_DIR)]
+        } catch {
+          return []
+        }
+      })(),
+    ].flatMap(dir =>
+      fs.existsSync(dir)
+        ? fs
+            .readdirSync(dir)
+            .filter(entry => entry.isFile() && entry.name.endsWith('.yaml'))
+            .map(entry => entry.name.slice(0, -5))
+        : [],
+    ),
+    resolveWorkflow: name => {
+      try {
+        const included = locateWorkflow(fs, { cwd, main }, name)
+        sources[included.file] = createHash('sha256').update(included.text).digest('hex')
+        return included
+      } catch {
+        return undefined
+      }
+    },
+  })
+}
+
+function resumeWorkflow(
+  fs: Services['fs'],
+  request: RunWorkflowRequest,
+  source: Located,
+  { main, sources }: { main: string; sources: Record<string, string> },
+) {
+  const original = parseWorkflow(source.text, source.file).workflow
+  const runId =
+    request.runId ??
+    `${original?.name ?? basename(source.file, extname(source.file))}-${request.card}`
+  const runDir = join(main, '.pair/working/runs', runId)
+  const frozen = join(runDir, 'workflow.yaml')
+  const manifest = join(runDir, 'sources.json')
+  if (request.restart || !fs.existsSync(frozen) || !fs.existsSync(manifest)) return undefined
+  const recorded = JSON.parse(fs.readFileSync(manifest)) as Record<string, string>
+  for (const file of Object.keys(recorded)) {
+    if (fs.existsSync(file))
+      sources[file] = createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+  }
+  return { ...parseWorkflow(fs.readFileSync(frozen), source.file, true), warnings: [] }
+}
+
+const hasExpansion = (workflow: Workflow) =>
+  workflow.steps.some(
+    step => step.id.includes('/') || step.steps?.some(child => child.id.includes('/')),
+  )
+
 /** Workflow, validation and engine: everything decided before the card is read or anything is launched. */
 function resolveWorkflowRun(
   config: RunCommandConfig,
@@ -209,15 +295,12 @@ function resolveWorkflowRun(
   const main = mainCheckoutOrCwd(cwd)
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
   const source = locateWorkflow(fs, { cwd, main }, request.name)
-  const registry = join(main, WAY_OF_WORKING)
-  const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
-  const checked = validate(source.text, source.file, {
-    skillExists: createSkillProbe(fs, project, cwd),
-    gateKeys: Object.keys(readGateRegistry(registryText)),
-    gateTargets: Object.keys(readGateTargets(registryText)),
-    launchInputs: ['card'],
-    isSafeText: isSafePromptText,
-  })
+  const sources: Record<string, string> = {
+    [source.file]: createHash('sha256').update(source.text).digest('hex'),
+  }
+  const checked =
+    (config.dryRun ? undefined : resumeWorkflow(fs, request, source, { main, sources })) ??
+    checkWorkflow(fs, project, { cwd, main, sources }, source)
   console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
   checked.warnings.forEach(warning => console.log(`  Warning: ${formatError(warning)}`))
   if (checked.workflow === undefined) {
@@ -240,12 +323,15 @@ function resolveWorkflowRun(
   if (configured === undefined) return undefined
   return {
     workflow: checked.workflow,
-    source,
+    source: hasExpansion(checked.workflow)
+      ? { ...source, text: expandedSource(checked.workflow) }
+      : source,
     project,
     engine,
     ...(configured.plan && { configuration: configured.plan }),
     main,
     cwd,
+    sources,
   }
 }
 
@@ -603,6 +689,15 @@ async function drive(
   const { resolved, request, runDir } = opened
   const { fs, deps } = services
   const started = await start({ files: fs, dir: runDir }, resolved.source, startOptions(opened))
+  const sourcesFile = join(runDir, 'sources.json')
+  if (started.status === 'started') {
+    fs.writeFileSync(sourcesFile, JSON.stringify(resolved.sources, null, 2))
+  } else if (fs.existsSync(sourcesFile)) {
+    const frozen = JSON.parse(fs.readFileSync(sourcesFile)) as Record<string, string>
+    if (JSON.stringify(frozen) !== JSON.stringify(resolved.sources)) {
+      console.log('  Warning: included workflow sources changed since this run started.')
+    }
+  }
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   console.log(`  Run dir: ${runDir} (${started.status})`)
   const effective = readEffective(fs, runDir)

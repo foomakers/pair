@@ -1,18 +1,21 @@
 import {
   errorAt,
   parseWorkflow,
-  stepSchema,
+  expandedStepSchema,
   type KindName,
   type Step,
   type Workflow,
   type WorkflowError,
 } from '../grammar'
+import { expand, type WorkflowSource } from '../expand'
 import { fieldsOf, kindByName } from '../kinds'
 import { addressedSteps } from '../grammar'
 import { textsOf, violations } from '../schema'
 
 /** What the validator asks of its caller: the package reads no skill directory and no adoption file itself. */
 export interface ValidationDeps {
+  readonly resolveWorkflow?: (name: string) => WorkflowSource | undefined
+  readonly availableWorkflows?: readonly string[]
   /** Whether a skill of that name is installed. */
   readonly skillExists: (name: string) => boolean
   /** The keys of the Custom Gate Registry. */
@@ -40,15 +43,24 @@ type Check = (
   path: readonly string[],
 ) => WorkflowError[]
 
+const unknownUses: Check = (workflow, step, deps, path) => {
+  const name = step.uses ?? ''
+  const skill = deps.skillExists(name)
+  return [
+    errorAt(workflow, [...path, 'uses'], {
+      problem: skill ? `'uses' does not name a skill: '${name}'` : `unknown workflow '${name}'`,
+      fix: skill
+        ? `write skill: ${name}`
+        : deps.availableWorkflows?.length
+          ? `use one of ${deps.availableWorkflows.join(', ')}`
+          : 'add the named workflow',
+    }),
+  ]
+}
+
 const skillErrors: Check = (workflow, step, deps, path) => {
+  if (step.uses !== undefined) return unknownUses(workflow, step, deps, path)
   if (step.kind === 'loop' || kindByName[step.kind].host === true) return []
-  if (step.uses !== undefined)
-    return [
-      errorAt(workflow, [...path, 'uses'], {
-        problem: `'uses' does not name a skill: '${step.uses}'`,
-        fix: `write skill: ${step.uses}`,
-      }),
-    ]
   const skill = step.skill ?? kindByName[step.kind].defaultSkill
   if (skill === undefined)
     return [
@@ -172,7 +184,7 @@ function loopChildErrors(
   checkStep: CheckStep,
 ): WorkflowError[] {
   const raw = Object.fromEntries(Object.entries(child).filter(([key]) => key !== 'id'))
-  const errors = violations(stepSchema, raw).map(found =>
+  const errors = violations(expandedStepSchema, raw).map(found =>
     errorAt(workflow, [...childPath, ...found.path], found),
   )
   if (child.kind === 'loop')
@@ -373,14 +385,26 @@ function mergeWarnings(workflow: Workflow): WorkflowError[] {
  * `pair run <workflow>` calls it before any launch, and `--dry-run` calls nothing else.
  */
 export function validate(text: string, file: string, deps: ValidationDeps): Validation {
-  const parsed = parseWorkflow(text, file)
+  const parsed = deps.resolveWorkflow
+    ? expand({ text, file }, deps.resolveWorkflow, deps.skillExists)
+    : parseWorkflow(text, file)
   if (parsed.workflow === undefined) return { errors: parsed.errors, warnings: [] }
-  const errors = coherenceErrors(parsed.workflow, deps)
+  const locate = (error: WorkflowError): WorkflowError => {
+    if (!('origins' in parsed)) return error
+    const path = error.key.split('.')
+    while (path.length > 0) {
+      const origin = parsed.origins[path.join('.')]
+      if (origin) return { ...error, ...origin }
+      path.pop()
+    }
+    return error
+  }
+  const errors = coherenceErrors(parsed.workflow, deps).map(locate)
   return errors.length > 0
     ? { errors, warnings: [] }
     : {
         workflow: parsed.workflow,
         errors: [],
-        warnings: [...warnings(parsed.workflow), ...mergeWarnings(parsed.workflow)],
+        warnings: [...warnings(parsed.workflow), ...mergeWarnings(parsed.workflow)].map(locate),
       }
 }

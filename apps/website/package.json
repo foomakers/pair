@@ -14,6 +14,7 @@
     "a11y:report": "playwright test -c playwright-ct.config.ts --grep @a11y-report --reporter=list",
     "a11y:report:html": "playwright test -c playwright-ct.config.ts --grep @a11y-report --reporter=html && echo '\n→ Report: playwright-report/index.html\n  Open: npx playwright show-report'",
     "test": "vitest run && pnpm ct",
+    "test:push": "vitest run --changed \"$PAIR_PUSH_BASE\" --passWithNoTests && pnpm ct",
     "test:coverage": "vitest run --coverage",
     "postinstall": "fumadocs-mdx",
     "ts:check": "tsc --noEmit",
