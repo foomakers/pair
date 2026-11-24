@@ -245,6 +245,13 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
   )
 })
 
+it.each(CORPORA)('$label: Linear resolves the supplied assignee (R739-06, AC-2)', ({ dir }) => {
+  const body = section(readFileSync(join(dir, 'linear-implementation.md'), 'utf-8'), VISIBILITY_HEADING)
+  expect(body).toContain('email:{eq:$email}')
+  expect(body).toContain('<explicit-assignee-email>')
+  expect(body).not.toContain('isMe:{eq:true}')
+})
+
 const readmeCases = CORPORA.map(({ label, dir }) => ({
   corpus: label,
   content: readFileSync(join(dir, 'README.md'), 'utf-8'),
