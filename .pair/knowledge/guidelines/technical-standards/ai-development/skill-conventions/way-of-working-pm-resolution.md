@@ -114,12 +114,12 @@ Who an item or a pull request is **assigned to**. This is a resolution rule rath
 
 1. **Check**: did the caller pass `$assignee`? Use it.
 2. **Skip**: otherwise read the adoption default from `## Assignment` in [way-of-working.md](../../../../../../.pair/adoption/tech/way-of-working.md) — **which key depends on the side the write is on** (routing table above):
-   - **PM-tool write** (the item assignee) → `default-assignee`, **on update only**. A **create** never reads it: a card is assigned when development is taken in charge, so it is filed unassigned and without a warning.
+   - **PM-tool write** (the item assignee) → `default-assignee`, **on update only**. A **create** never reads it: a card, including a follow-up merely filed during other work, is filed unassigned and without a warning. Assignment when development is taken in charge is tracked in [#723](https://github.com/foomakers/pair/issues/723).
    - **Code-host write** (the pull request assignee) → **`code-host-assignee` when declared, else `default-assignee`** (step 2b). This branch is the whole reason the key exists: on a split project the two tools rarely spell the same human the same way, and handing the code host the PM tool's login gets it **rejected** — the PR is then published unassigned with a warning, the exact invisibility this rule removes.
 
    **An empty value is absent**, not an empty-string assignee — for either key.
-3. **Act**: otherwise **none** — the item or PR is still written, **unassigned**, with a warning naming the consequence (invisible in an assignee-filtered view). **Never a HALT**: an item created and half-visible beats an item not created.
-4. **Verify**: an assignee was resolved and written *as part of* the create/update, or the warning was surfaced.
+3. **Act**: otherwise **none** — except for a deliberately unassigned create, the item or PR is still written, **unassigned**, with a warning naming the consequence (invisible in an assignee-filtered view). **Never a HALT**: an item created and half-visible beats an item not created.
+4. **Verify**: an assignee was resolved and written *as part of* the create/update, or the create was deliberately unassigned without warning, or the warning was surfaced.
 
 One order, stated once — **the argument first, then the adoption default, then none** — and both writers apply it unchanged (`/pair-capability-write-issue` for the item, `/pair-capability-publish-pr` for the PR), each reading the default for **its own side** per step 2. A cascade defined twice is a cascade that drifts, and the drift is silent: the failure mode is an invisible item, not an error.
 
