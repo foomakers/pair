@@ -11,6 +11,7 @@
     "prettier:fix": "prettier-fix",
     "prettier:check": "prettier-check",
     "test": "vitest run && pnpm check:links",
+    "test:push": "vitest run --changed \"$PAIR_PUSH_BASE\" --passWithNoTests && pnpm check:links",
     "test:coverage": "vitest run --coverage",
     "ts:check": "tsc --noEmit",
     "lint": "lint",

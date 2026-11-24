@@ -38,6 +38,7 @@
     "dev": "ts-node src/cli.ts",
     "telemetry:report": "node dist/commands/run/telemetry-report.js",
     "test": "vitest run",
+    "test:push": "vitest run --changed \"$PAIR_PUSH_BASE\" --passWithNoTests",
     "test:coverage": "vitest run --coverage",
     "ts:check": "tsc --noEmit",
     "lint": "lint",

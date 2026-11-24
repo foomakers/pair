@@ -41,7 +41,7 @@
     "test-audit:mutation": "pnpm --filter @pair/dev-tools test-audit:mutation",
     "test-audit:redundancy": "pnpm --filter @pair/dev-tools test-audit:redundancy",
     "gate:increment": "turbo run test lint --filter=[HEAD~1] && pnpm prettier:check",
-    "gate:push": "turbo run ts:check test lint --filter=[origin/main]",
+    "gate:push": "PAIR_PUSH_BASE=$(git rev-parse --verify @{upstream} 2>/dev/null || git merge-base HEAD origin/main) && export PAIR_PUSH_BASE && turbo run ts:check test:push lint --filter=\"[$PAIR_PUSH_BASE]\"",
     "gate:pr": "pnpm quality-gate",
     "gate:review": "pnpm gate:push && pnpm skills:conformance && pnpm docs:staleness",
     "gate:release": "pnpm smoke-tests && pnpm e2e",
