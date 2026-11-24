@@ -14,7 +14,6 @@ import {
   STATE_FILE,
   type RunStateFile,
   parseFrozenConfiguration,
-  parseWorkflow,
   readGateRegistry,
   readGateTargets,
   runSteps,
@@ -754,8 +753,7 @@ async function refreshMergeInputs(
   fs: FileSystemService,
 ): Promise<StepReplay | undefined> {
   const saved = savedWorkflow(opened, fs)
-  if (saved === undefined || saved.workflow.steps.some(step => step.kind === 'loop'))
-    return undefined
+  if (saved === undefined) return undefined
   const { workflow, state } = saved
   const { resolved, request } = opened
   const merge = workflow.steps.findIndex(
@@ -763,7 +761,11 @@ async function refreshMergeInputs(
   )
   if (merge < 0) return undefined
   const earlier = workflow.steps.slice(0, merge).reverse()
-  const review = earlier.find(step => step.kind === 'review')
+  const review = earlier.find(
+    step =>
+      step.kind === 'review' ||
+      (step.kind === 'loop' && step.steps?.some(child => child.kind === 'review')),
+  )
   const published = earlier.find(step => typeof state.steps[step.id]?.outputs?.['pr'] === 'number')
   if (review === undefined || published === undefined) return undefined
   const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir

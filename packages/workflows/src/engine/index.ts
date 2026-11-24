@@ -361,14 +361,22 @@ async function resume(
 function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay): RunStateFile {
   const steps = frozenWorkflow(run).steps
   const from = steps.findIndex(step => step.id === replay.from)
-  if (from < 0 || steps.some(step => step.kind === 'loop'))
-    throw new Error('run-replay-invalid: expected a top-level step in a workflow without loops')
+  if (from < 0) throw new Error('run-replay-invalid: expected a top-level step')
   const records = { ...state.steps }
+  const loops = { ...state.loops }
   for (const step of steps.slice(from)) {
     const executions = records[step.id]?.executions
     records[step.id] = { state: 'pending', ...(executions !== undefined && { executions }) }
+    if (step.kind === 'loop') {
+      delete loops[step.id]
+      for (const child of step.steps ?? []) {
+        const id = `${step.id}/${child.id}`
+        const count = records[id]?.executions
+        records[id] = { state: 'pending', ...(count !== undefined && { executions: count }) }
+      }
+    }
   }
-  return { ...state, steps: records, replay }
+  return { ...state, steps: records, loops, latest: {}, replay }
 }
 
 // A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
@@ -524,6 +532,12 @@ async function nextInLoop(
   if (childHalt !== undefined) return { ready: [], run: childHalt }
   const attempt = launches(state, id)
   const round = state.loops?.[step.id]?.round ?? 1
+  const replayAttempt =
+    state.replay === undefined
+      ? undefined
+      : (state.steps[state.replay.from]?.executions ??
+        Object.entries(state.steps).find(([id]) => id.startsWith(`${state.replay?.from}/`))?.[1]
+          .executions)
   await writeState(run, {
     ...state,
     steps: {
@@ -538,9 +552,18 @@ async function nextInLoop(
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
     ...gatesOf(child),
-    inputs: pick(producedBefore(state, steps, step), child.kind),
+    inputs: pick(
+      {
+        ...producedBefore(state, steps, step),
+        ...(state.replay?.from === step.id && state.steps[step.id]?.state === 'pending'
+          ? state.replay.inputs
+          : {}),
+      },
+      child.kind,
+    ),
     attempt,
     round,
+    ...(replayAttempt !== undefined && { replayAttempt }),
   }
   return { ready: [launch], run: 'running' }
 }
@@ -645,7 +668,11 @@ async function nextPlain(
   if (step.kind === 'loop') throw new Error('loop is not directly launchable')
   const attempt = launches(state, step.id)
   const replayAttempt =
-    state.replay === undefined ? undefined : state.steps[state.replay.from]?.executions
+    state.replay === undefined
+      ? undefined
+      : (state.steps[state.replay.from]?.executions ??
+        Object.entries(state.steps).find(([id]) => id.startsWith(`${state.replay?.from}/`))?.[1]
+          .executions)
   await writeState(run, {
     ...state,
     steps: { ...state.steps, [step.id]: { state: 'running', executions: attempt } },
