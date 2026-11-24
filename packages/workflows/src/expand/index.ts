@@ -84,7 +84,11 @@ function expandLoop(state: ExpansionState, context: StepContext, chain: readonly
     if (!child.uses || !state.resolve(child.uses))
       return [rebaseStep(child, `${id.slice(0, id.length - step.id.length)}${child.id}`)]
     const childState: ExpansionState = { ...state, origins: {} }
-    const expanded = expandStep(childState, { workflow, step: child, id: `${id}/${child.id}` }, chain)
+    const expanded = expandStep(
+      childState,
+      { workflow, step: child, id: `${id}/${child.id}` },
+      chain,
+    )
     for (const result of expanded) {
       const source = `steps.${result.id}`
       const localId = result.id.slice(id.length + 1)
