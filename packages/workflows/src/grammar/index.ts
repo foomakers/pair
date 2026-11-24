@@ -164,7 +164,7 @@ export const workflowSchemaV1: JsonSchema = {
 }
 
 const expandedId = `${STEP_ID.slice(0, -1)}(/[a-z][a-z0-9-]*)*$`
-const expandedStepSchema: JsonSchema = {
+export const expandedStepSchema: JsonSchema = {
   ...stepSchema,
   properties: {
     ...stepSchema.properties,

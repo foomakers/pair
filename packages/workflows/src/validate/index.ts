@@ -1,7 +1,7 @@
 import {
   errorAt,
   parseWorkflow,
-  stepSchema,
+  expandedStepSchema,
   type KindName,
   type Step,
   type Workflow,
@@ -184,7 +184,7 @@ function loopChildErrors(
   checkStep: CheckStep,
 ): WorkflowError[] {
   const raw = Object.fromEntries(Object.entries(child).filter(([key]) => key !== 'id'))
-  const errors = violations(stepSchema, raw).map(found =>
+  const errors = violations(expandedStepSchema, raw).map(found =>
     errorAt(workflow, [...childPath, ...found.path], found),
   )
   if (child.kind === 'loop')
