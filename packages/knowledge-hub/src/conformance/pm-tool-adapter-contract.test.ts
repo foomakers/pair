@@ -230,7 +230,11 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
       const body = normalize(section(content, VISIBILITY_HEADING))
       expect(body).toContain('an omitted create assignee stays unassigned without warning')
       expect(body).toContain('when explicitly supplied, set it as part of the create')
-      const field = content.includes('az boards work-item create') ? '--assigned-to' : content.includes('linear_gql') ? 'assigneeid' : 'assignee'
+      const field = content.includes('az boards work-item create')
+        ? '--assigned-to'
+        : content.includes('linear_gql')
+          ? 'assigneeid'
+          : 'assignee'
       expect(body).toContain(field)
     },
   )
@@ -246,7 +250,10 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
 })
 
 it.each(CORPORA)('$label: Linear resolves the supplied assignee (R739-06, AC-2)', ({ dir }) => {
-  const body = section(readFileSync(join(dir, 'linear-implementation.md'), 'utf-8'), VISIBILITY_HEADING)
+  const body = section(
+    readFileSync(join(dir, 'linear-implementation.md'), 'utf-8'),
+    VISIBILITY_HEADING,
+  )
   expect(body).toContain('email:{eq:$email}')
   expect(body).toContain('<explicit-assignee-email>')
   expect(body).not.toContain('isMe:{eq:true}')
@@ -393,12 +400,15 @@ describe('github-implementation.md — the empty item id is an explicit branch (
 })
 
 describe('github-implementation.md — assignee is part of the write (#402 AC3)', () => {
-  it.each(githubCases)('$corpus: CLI integration leaves issue assignment optional (R739-01)', ({ content }) => {
-    const body = section(content, 'GitHub CLI Integration')
-    expect(body).toMatch(/gh issue create\b(?![^\n]*--assignee)[^\n]*--project/)
-    expect(body).toContain('Add --assignee "[login]" only when explicitly supplied')
-    expect(body).toMatch(/gh pr create\b[^\n]*--assignee/)
-  })
+  it.each(githubCases)(
+    '$corpus: CLI integration leaves issue assignment optional (R739-01)',
+    ({ content }) => {
+      const body = section(content, 'GitHub CLI Integration')
+      expect(body).toMatch(/gh issue create\b(?![^\n]*--assignee)[^\n]*--project/)
+      expect(body).toContain('Add --assignee "[login]" only when explicitly supplied')
+      expect(body).toMatch(/gh pr create\b[^\n]*--assignee/)
+    },
+  )
 
   it.each(githubCases)('$corpus: the create recipe carries the assignee', ({ content }) => {
     const body = section(content, VISIBILITY_HEADING)
@@ -674,15 +684,24 @@ const createRecipeCases = KB_ROOTS.flatMap(
       ).out,
 )
 
-it.each(KB_ROOTS)('$label: issue recipes make create assignment conditional (R739-07)', ({ dir }) => {
-  for (const tool of ['github', 'azure-devops', 'linear']) {
-    const body = readFileSync(join(dir, `guidelines/collaboration/issue-management/${tool}-issues.md`), 'utf-8')
-    expect(body).toContain('Only set an assignee when explicitly supplied')
-  }
-})
+it.each(KB_ROOTS)(
+  '$label: issue recipes make create assignment conditional (R739-07)',
+  ({ dir }) => {
+    for (const tool of ['github', 'azure-devops', 'linear']) {
+      const body = readFileSync(
+        join(dir, `guidelines/collaboration/issue-management/${tool}-issues.md`),
+        'utf-8',
+      )
+      expect(body).toContain('Only set an assignee when explicitly supplied')
+    }
+  },
+)
 
 it('adoption preserves PR assignment and explicit card assignment (R739-07)', () => {
-  const body = readFileSync(join(__dirname, '../../../../.pair/adoption/tech/way-of-working.md'), 'utf-8')
+  const body = readFileSync(
+    join(__dirname, '../../../../.pair/adoption/tech/way-of-working.md'),
+    'utf-8',
+  )
   expect(body).toContain('cards created without an explicit assignee remain unassigned')
   expect(body).toContain('PRs retain their default assignee at creation')
 })
