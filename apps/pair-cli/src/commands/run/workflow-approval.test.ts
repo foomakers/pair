@@ -1,7 +1,7 @@
 import { createMemoryFiles } from '@pair/workflows'
 import { expect, it, vi } from 'vitest'
 import { parseRunCommand } from './parser'
-import { approvalRunner, type ApprovalPlatform } from './workflow-approval'
+import { approvalPlatform, approvalRunner, type ApprovalPlatform } from './workflow-approval'
 
 const head = 'a'.repeat(40)
 const step = {
@@ -61,4 +61,21 @@ it('rejects an approval flag naming another card before dispatch (#726 T-9)', ()
   expect(() => parseRunCommand({ card: '726', approve: '727' }, ['delivery'])).toThrow(
     /728|727|another card/,
   )
+})
+
+it('reports and retries a structured notice failure (#726 AC-2)', async () => {
+  let notices = 0
+  const platform = approvalPlatform(async action => {
+    if (action === 'approval-target') return { pr: 735, head }
+    if (action === 'approval-answers') return []
+    notices++
+    return notices === 1 ? { error: 'marker-ambiguous' } : { action: 'created' }
+  })
+  const run = approvalRunner({ dir: '/run', files: createMemoryFiles() }, platform)
+  expect(await run(step)).toMatchObject({
+    status: 'needs-human',
+    reason: expect.stringContaining('card comment missing'),
+  })
+  expect(await run(step)).toMatchObject({ status: 'needs-human' })
+  expect(notices).toBe(2)
 })

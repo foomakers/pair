@@ -122,7 +122,9 @@ export function approvalPlatform(call: Operation): ApprovalPlatform {
       return target
     },
     notice: async (card, marker, body) => {
-      await call('approval-notice', card, { marker, body })
+      const result = await call('approval-notice', card, { marker, body })
+      if (result && typeof result === 'object' && 'error' in result)
+        throw new Error(String(result.error))
     },
     answers: async (card, park, flag) => {
       const values = await call('approval-answers', card, { ...park, flag })
