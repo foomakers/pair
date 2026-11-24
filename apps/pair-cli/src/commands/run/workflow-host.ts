@@ -1,3 +1,4 @@
+import { savedWorkflow } from './workflow-saved-state'
 import { recoverWorktree } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
@@ -10,9 +11,7 @@ import {
   kindByName,
   addressedSteps,
   frozenConfiguration,
-  FROZEN_WORKFLOW,
   parseWorkflow,
-  STATE_FILE,
   type RunStateFile,
   parseFrozenConfiguration,
   readGateRegistry,
@@ -746,27 +745,11 @@ function parkedApproval(opened: Opened, fs: FileSystemService): string | undefin
   return parked[0]?.id
 }
 
-function savedWorkflow(
-  { request, runDir }: Pick<Opened, 'request' | 'runDir'>,
-  fs: FileSystemService,
-): { workflow: Workflow; state: RunStateFile } | undefined {
-  const statePath = join(runDir, STATE_FILE)
-  const source = join(runDir, FROZEN_WORKFLOW)
-  if (request.restart || !fs.existsSync(statePath) || !fs.existsSync(source)) return undefined
-  const state = JSON.parse(fs.readFileSync(statePath)) as RunStateFile
-  if (state.card !== request.card) return undefined
-  const { workflow } = parseWorkflow(
-    fs.readFileSync(source),
-    join(runDir, `${state.workflow.name}.yaml`),
-  )
-  return workflow === undefined ? undefined : { workflow, state }
-}
-
 async function refreshMergeInputs(
   opened: Opened,
   fs: FileSystemService,
 ): Promise<StepReplay | undefined> {
-  const saved = savedWorkflow(opened, fs)
+  const saved = savedWorkflow(opened.request, opened.runDir, fs)
   if (saved === undefined) return undefined
   const { workflow, state } = saved
   const { resolved, request } = opened
@@ -937,7 +920,7 @@ async function canResumeClosure(
   opened: Omit<Opened, 'title'>,
   fs: FileSystemService,
 ): Promise<boolean> {
-  const saved = savedWorkflow(opened, fs)
+  const saved = savedWorkflow(opened.request, opened.runDir, fs)
   if (saved === undefined || !onlyMergeRemains(saved.workflow, saved.state)) return false
   const { resolved, request } = opened
   const scriptDir = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
