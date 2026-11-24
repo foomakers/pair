@@ -109,6 +109,13 @@ function expandStep(state: ExpansionState, context: StepContext, chain: readonly
     recordOrigins(state.origins, workflow, step, id)
     return [expandLoop(state, { ...context, step: rebased }, chain)]
   }
+  if (step.when) {
+    state.errors.push(errorAt(workflow, ['steps', step.id, 'when'], {
+      problem: 'when is not supported on an include',
+      fix: 'move the condition into the included workflow',
+    }))
+    return []
+  }
   if (step.uses && state.skillExists(step.uses)) {
     state.errors.push(
       errorAt(workflow, ['steps', step.id, 'uses'], {
