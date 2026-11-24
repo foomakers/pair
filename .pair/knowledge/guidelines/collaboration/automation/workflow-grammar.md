@@ -79,7 +79,7 @@ steps:
     on-failed: stop
 ```
 
-The expanded IDs are `fix/repair`, then `fix/check`. `outputs.from` selects `repair`; without it the last step supplies outputs. A typed caller requires the selected step to supply its kind's outputs; a generic caller skips that check. `with` applies to the selected step when it has the caller's kind; `on-failed` applies to the last step. `context`, `prompt` and `interactive` are rejected on a caller.
+The expanded IDs are `fix/repair`, then `fix/check`. `outputs.from` selects `repair`; without it the last step supplies outputs. A typed caller requires the selected step to supply its kind's outputs; a generic caller skips that check. `with` applies to the selected step when it has the caller's kind; `on-failed` applies to the last step. `context`, `prompt`, `interactive`, `when`, `gates` and `state` are rejected on a caller; put them on included steps instead.
 
 Includes may nest up to three levels; cycles, unknown names and workflow/skill name clashes fail validation. An include may introduce a loop outside a loop, but loops cannot nest, including through an include. Configuration can target expanded IDs such as `fix/repair`. `--dry-run` shows the expanded order; a run freezes it and warns on resume if an included source changes.
 

@@ -113,11 +113,12 @@ function expandStep(state: ExpansionState, context: StepContext, chain: readonly
     recordOrigins(state.origins, workflow, step, id)
     return [expandLoop(state, { ...context, step: rebaseStep(step, id) }, chain)]
   }
-  if (step.when) {
+  const unsupported = (['when', 'gates', 'state'] as const).find(key => step[key] !== undefined)
+  if (unsupported) {
     state.errors.push(
-      errorAt(workflow, ['steps', step.id, 'when'], {
-        problem: 'when is not supported on an include',
-        fix: 'move the condition into the included workflow',
+      errorAt(workflow, ['steps', step.id, unsupported], {
+        problem: `${unsupported} is not supported on an include`,
+        fix: `move ${unsupported} into the included workflow`,
       }),
     )
     return []
