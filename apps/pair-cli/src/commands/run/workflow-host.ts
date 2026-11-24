@@ -290,7 +290,7 @@ function resolveWorkflowRun(
   const main = mainCheckoutOrCwd(cwd)
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
   const source = locateWorkflow(fs, { cwd, main }, request.name)
-  const sources: Record<string, string> = {}
+  const sources: Record<string, string> = { [source.file]: createHash('sha256').update(source.text).digest('hex') }
   const checked =
     resumeWorkflow(fs, request, source, { main, sources }) ??
     checkWorkflow(fs, project, { cwd, main, sources }, source)
