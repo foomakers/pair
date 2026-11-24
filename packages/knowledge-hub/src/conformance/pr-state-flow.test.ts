@@ -572,6 +572,11 @@ describe('the 🔴 approval predicate is shipped once, not transliterated (round
 })
 
 describe('BOTH merge paths carry the synthesis precondition (round 3)', () => {
+  it('implement completes the PR handoff while review is pending (#738)', () => {
+    expect(IMPLEMENT).toMatch(/review is pending[\s\S]{0,200}implementation is complete/i)
+    expect(IMPLEMENT).toMatch(/do not enter phase 4/i)
+  })
+
   it('implement Phase 4 Step 4.1 re-synthesizes and HALTs instead of counting approvals', () => {
     expect(POST_REVIEW_MERGE).toContain('merge_allowed')
     expect(POST_REVIEW_MERGE).toContain('resolve_pr_state')

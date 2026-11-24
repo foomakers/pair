@@ -405,7 +405,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 4. **Tasks**: scans task checklist and git log to identify completed tasks, and does **not re-run them** — this is **not the `skipped` outcome** (Step 2.1): a task an earlier invocation completed is neither re-written nor queued, so a re-invocation that finds everything done reaches Step 3.1b with an empty queue and posts nothing.
 5. **PR**: the closing phase re-composes `/pair-capability-publish-pr`, which detects an existing PR and updates it in place — never a duplicate. A subagent that failed mid-PR is recovered this way (the checkpoint stays valid, the rerun is idempotent).
 6. **Quality gates**: re-runs all gates (fast if already passing).
-7. **Merge**: if a PR exists and its state synthesizes to `ready-to-merge`, proceeds directly to Phase 4 (merge); otherwise Phase 4's Step 4.1 HALTs with the unmet condition.
+7. **Merge**: if a PR exists and its state synthesizes to `ready-to-merge`, proceed to Phase 4 (merge). If all implementation tasks are complete and the PR is published but review is pending or requests changes, implementation is complete: return the PR, branch and current head; do not enter Phase 4. Review and remediation remain separate work. For other unmet merge conditions, Phase 4's Step 4.1 HALTs with the unmet condition.
 
 The skill resumes from the first incomplete step — never re-does completed work.
 
