@@ -168,6 +168,7 @@ const expandedStepSchema: JsonSchema = {
   ...stepSchema,
   properties: {
     ...stepSchema.properties,
+    when: { ...whenSchema, properties: { ...whenSchema.properties, output: { type: 'string', pattern: `${expandedId.slice(0, -1)}\\.[A-Za-z][A-Za-z0-9]*$` } } },
     until: { type: 'string', pattern: expandedId },
     steps: { ...stepSchema.properties?.['steps'], propertyNames: { pattern: expandedId } },
   },
