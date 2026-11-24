@@ -40,3 +40,11 @@ steps:
   expect(result.errors).toEqual([])
   expect(result.workflow?.steps[1]?.when?.output).toBe('use/judge.pr')
 })
+
+it('rejects conditions on include callers (INC-03, AC-1)', () => {
+  const result = validate('version: 1\nname: root\nsteps:\n  use: { kind: generic, uses: shared, when: { output: prior.pr, is: [yes] } }\n', 'root.yaml', {
+    skillExists: name => name !== 'shared', gateKeys: [], launchInputs: ['card'], isSafeText: () => true,
+    resolveWorkflow: () => ({ file: 'shared.yaml', text: 'version: 1\nname: shared\nsteps:\n  work: { kind: generic, skill: example }\n' }),
+  })
+  expect(result.errors.some(error => error.problem.includes('when') && error.problem.includes('include'))).toBe(true)
+})
