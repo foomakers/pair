@@ -217,9 +217,14 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
 
   it.each(adapterCases)(
     '$corpus/$file sets the assignee as part of the create, not as a follow-up (AC3)',
-    ({ content }) => {
+    ({ content, file }) => {
       const body = normalize(section(content, VISIBILITY_HEADING))
-      expect(body).toContain('as part of the create, never as a follow-up step')
+      if (file === 'github-implementation.md') {
+        expect(body).toContain('an omitted create assignee stays unassigned without warning')
+        expect(body).toContain('when explicitly supplied, set it as part of the create')
+      } else {
+        expect(body).toContain('as part of the create, never as a follow-up step')
+      }
     },
   )
 
@@ -377,10 +382,10 @@ describe('github-implementation.md — assignee is part of the write (#402 AC3)'
   it.each(githubCases)('$corpus: the create recipe carries the assignee', ({ content }) => {
     const body = section(content, VISIBILITY_HEADING)
     expect(body).toContain('assignees: ["[login]"]')
-    // Pinned as a whole command: a bare `--assignee "[login]"` check was VACUOUS —
-    // the sibling `gh pr create --assignee` line satisfied it even with the flag
-    // deleted from `gh issue create` (found by injection-testing this guard).
-    expect(body).toMatch(/gh issue create\b[^\n]*--assignee "\[login\]"/)
+    // Pin the issue command independently of the sibling PR command.
+    expect(body).toMatch(/gh issue create\b(?![^\n]*--assignee)[^\n]*--project "\[project title\]"/)
+    expect(body).toContain('Add --assignee "[login]" only when explicitly supplied.')
+    expect(body).toContain('assignees: ["[login]"]  # optional: only when explicitly supplied')
   })
 
   it.each(githubCases)('$corpus: adding an assignee is safe to re-run', ({ content }) => {
@@ -649,7 +654,7 @@ const createRecipeCases = KB_ROOTS.flatMap(
       ).out,
 )
 
-describe('KB-wide — no issue-create recipe omits the assignee (gh, az, linear) (#402)', () => {
+describe('KB-wide — create recipes honor assignment policy (gh, az, linear) (#402, #738)', () => {
   it.each(
     KB_ROOTS.flatMap(({ label }) => CREATE_FAMILIES.map(({ tool }) => ({ corpus: label, tool }))),
   )('$corpus: finds the $tool create recipes it means to guard', ({ corpus, tool }) => {
@@ -661,9 +666,17 @@ describe('KB-wide — no issue-create recipe omits the assignee (gh, az, linear)
   })
 
   it.each(createRecipeCases)(
-    '$corpus/$file $tool recipe $occurrence sets the assignee on the create itself',
-    ({ command, family }) => {
-      expect(command, `missing ${family.flag}`).toMatch(family.required)
+    '$corpus/$file $tool recipe $occurrence follows assignment policy',
+    ({ command, family, file }) => {
+      if (
+        family.tool === 'gh' &&
+        file.endsWith('github-implementation.md') &&
+        command.startsWith('gh issue create --title "[title]"')
+      ) {
+        expect(command).not.toMatch(/--assignee\b/)
+      } else {
+        expect(command, `missing ${family.flag}`).toMatch(family.required)
+      }
     },
   )
 })
