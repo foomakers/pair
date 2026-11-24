@@ -228,6 +228,23 @@ function checkWorkflow(
     gateTargets: Object.keys(readGateTargets(registryText)),
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
+    availableWorkflows: [
+      join(main, WORKFLOWS_DIR),
+      ...(() => {
+        try {
+          return [join(getKnowledgeHubDatasetPath(fs), WORKFLOWS_DIR)]
+        } catch {
+          return []
+        }
+      })(),
+    ].flatMap(dir =>
+      fs.existsSync(dir)
+        ? fs
+            .readdirSync(dir)
+            .filter(entry => entry.isFile() && entry.name.endsWith('.yaml'))
+            .map(entry => entry.name.slice(0, -5))
+        : [],
+    ),
     resolveWorkflow: name => {
       try {
         const included = locateWorkflow(fs, { cwd, main }, name)

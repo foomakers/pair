@@ -101,19 +101,22 @@ function expandLoop(state: ExpansionState, context: StepContext, chain: readonly
 function expandStep(state: ExpansionState, context: StepContext, chain: readonly string[]): Step[] {
   const { workflow, step, id } = context
   const prefix = id.slice(0, id.length - step.id.length)
-  const rebased = step.when?.output && prefix
-    ? { ...step, when: { ...step.when, output: `${prefix}${step.when.output}` } }
-    : step
+  const rebased =
+    step.when?.output && prefix
+      ? { ...step, when: { ...step.when, output: `${prefix}${step.when.output}` } }
+      : step
   const target = step.uses === undefined ? undefined : state.resolve(step.uses)
   if (!target) {
     recordOrigins(state.origins, workflow, step, id)
     return [expandLoop(state, { ...context, step: rebased }, chain)]
   }
   if (step.when) {
-    state.errors.push(errorAt(workflow, ['steps', step.id, 'when'], {
-      problem: 'when is not supported on an include',
-      fix: 'move the condition into the included workflow',
-    }))
+    state.errors.push(
+      errorAt(workflow, ['steps', step.id, 'when'], {
+        problem: 'when is not supported on an include',
+        fix: 'move the condition into the included workflow',
+      }),
+    )
     return []
   }
   if (step.uses && state.skillExists(step.uses)) {

@@ -36,7 +36,7 @@ it('rejects a workflow and skill sharing an include name (AC-4)', () => {
 
 it.each([
   { target: 'one', expectedFile: 'three.yaml', diagnostic: 'include depth exceeds 3' },
-  { target: 'missing', expectedFile: 'root.yaml', diagnostic: "does not name a skill: 'missing'" },
+  { target: 'missing', expectedFile: 'root.yaml', diagnostic: "unknown workflow 'missing'" },
 ])('rejects the invalid include chain starting with $target (AC-4)', entry => {
   const root = include('root', entry.target)
   const sources = [

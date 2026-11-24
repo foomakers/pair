@@ -15,6 +15,7 @@ import { textsOf, violations } from '../schema'
 /** What the validator asks of its caller: the package reads no skill directory and no adoption file itself. */
 export interface ValidationDeps {
   readonly resolveWorkflow?: (name: string) => WorkflowSource | undefined
+  readonly availableWorkflows?: readonly string[]
   /** Whether a skill of that name is installed. */
   readonly skillExists: (name: string) => boolean
   /** The keys of the Custom Gate Registry. */
@@ -43,14 +44,20 @@ type Check = (
 ) => WorkflowError[]
 
 const skillErrors: Check = (workflow, step, deps, path) => {
-  if (step.kind === 'loop' || kindByName[step.kind].host === true) return []
   if (step.uses !== undefined)
     return [
       errorAt(workflow, [...path, 'uses'], {
-        problem: `'uses' does not name a skill: '${step.uses}'`,
-        fix: `write skill: ${step.uses}`,
+        problem: deps.skillExists(step.uses)
+          ? `'uses' does not name a skill: '${step.uses}'`
+          : `unknown workflow '${step.uses}'`,
+        fix: deps.skillExists(step.uses)
+          ? `write skill: ${step.uses}`
+          : deps.availableWorkflows?.length
+            ? `use one of ${deps.availableWorkflows.join(', ')}`
+            : 'add the named workflow',
       }),
     ]
+  if (step.kind === 'loop' || kindByName[step.kind].host === true) return []
   const skill = step.skill ?? kindByName[step.kind].defaultSkill
   if (skill === undefined)
     return [
