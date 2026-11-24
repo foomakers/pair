@@ -229,8 +229,8 @@ linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ suc
 An omitted create assignee stays unassigned without warning. When explicitly supplied, set it as part of the create using `assigneeId`, never as a follow-up step.
 
 ```bash
-# When an assignee is explicitly supplied, resolve that user id first
-linear_gql '{"query":"{ users(filter:{isMe:{eq:true}}) { nodes { id name } } }"}'
+# Resolve the explicitly supplied user by email; use the matching id.
+linear_gql '{"query":"query($email:String!){ users(filter:{email:{eq:$email}}) { nodes { id name email } } }", "variables":{"email":"<explicit-assignee-email>"}}'
 
 # Add "assigneeId":"<user-id>" to the input only when explicitly supplied.
 # projectId is required when way-of-working.md names a project view, not the team
