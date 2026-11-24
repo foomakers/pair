@@ -3,7 +3,7 @@ name: delivery
 description: Implement, review, check, approve and merge one card.
 aliases:
   build: { effort: medium }
-  judge: { effort: high }
+  judge: { effort: medium }
 steps:
   implement: { kind: implement, alias: build }
   review-rounds:
