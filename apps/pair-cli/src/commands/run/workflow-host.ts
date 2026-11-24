@@ -1,3 +1,4 @@
+import { recoverWorktree } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
@@ -157,13 +158,26 @@ export function locateWorkflow(
 /** The cycle's own worktree mechanism: `<worktree root>/<card>`, the card's branch, the setup command on a fresh one. */
 async function cycleWorktree(input: WorktreeInput): Promise<string> {
   const location = locateCycleScripts(input.fs, input.project, input.cwd)
-  const made = createCycleScriptsBridge(location, input.cwd).worktree({
-    main: input.main,
-    story: input.card,
-    branch: resolveBranch(input.card, input.title, undefined, input.cwd),
-    base: readCycleDefaults(location).baseBranch,
-    worktreeRoot: resolveCycleWorktreeRoot(location, input.main, undefined),
-  })
+  const bridge = createCycleScriptsBridge(location, input.cwd)
+  const resolve = (pr?: number) => resolveBranch(input.card, input.title, pr, input.cwd)
+  const made = await recoverWorktree(
+    resolve(),
+    branch =>
+      bridge.worktree({
+        main: input.main,
+        story: input.card,
+        branch,
+        base: readCycleDefaults(location).baseBranch,
+        worktreeRoot: resolveCycleWorktreeRoot(location, input.main, undefined),
+      }),
+    async () => {
+      const platform = approvalPlatform((action, card, data) =>
+        workflowOperation(() => location.scriptsDir, input.cwd, { action, card, data }),
+      )
+      return (await platform.target(input.card)).pr
+    },
+    resolve,
+  )
   const failed = made.created ? await runSetupCommand(input.main, made.path) : undefined
   if (failed !== undefined) throw new Error(`worktree-setup-failed: ${failed}`)
   return made.path
