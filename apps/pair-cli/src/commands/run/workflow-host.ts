@@ -299,7 +299,7 @@ function resolveWorkflowRun(
   if (configured === undefined) return undefined
   return {
     workflow: checked.workflow,
-    source: checked.workflow.steps.some(step => step.id.includes('/'))
+    source: addressedSteps(checked.workflow).some(step => step.id.includes('/'))
       ? { ...source, text: expandedSource(checked.workflow) }
       : source,
     project,
