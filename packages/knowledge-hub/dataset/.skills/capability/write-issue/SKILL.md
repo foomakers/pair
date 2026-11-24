@@ -123,7 +123,7 @@ Skills never write board-specific labels — `$status` is always a canonical mac
 The board is read **filtered by assignee**, so an item with no assignee is invisible there even when it is open, green and carries a PR (the Assignment rule in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)). This step resolves **who**; the field or flag that actually writes it belongs to the implementation guide resolved in Step 5 — **never invent one**: one rule stated here, every mechanic in its adapter.
 
 1. **Check**: Resolve the assignee in one order — **the argument first, then (update only) the adoption default, then none**. **Create mode never applies the adoption default**: a card is assigned when development is taken in charge, not when it is filed.
-   - `$assignee`, when the caller passed one;
+   - `$assignee`, when the caller passed one, on create and update;
    - else, **on update only**, the adoption's `default-assignee` — [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Assignment` (schema and cascade: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)). This is a **PM-tool** write, so it reads that key and never `code-host-assignee` — the split-configuration key belongs to the code-host branch of the same cascade (`/publish-pr`, the PR assignee). **An empty value is absent, not an empty-string assignee.**
    - else none.
 2. **Act (resolved)**: carry it into Step 7 and write it **as part of the create and of the update, never as a follow-up step**.
