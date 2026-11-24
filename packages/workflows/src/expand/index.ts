@@ -81,7 +81,8 @@ function expandLoop(state: ExpansionState, context: StepContext, chain: readonly
   const { workflow, step, id } = context
   if (!step.steps) return { ...step, id }
   const children = step.steps.flatMap(child => {
-    if (!child.uses || !state.resolve(child.uses)) return [rebaseStep(child, `${id.slice(0, id.length - step.id.length)}${child.id}`)]
+    if (!child.uses || !state.resolve(child.uses))
+      return [rebaseStep(child, `${id.slice(0, id.length - step.id.length)}${child.id}`)]
     const childState: ExpansionState = { ...state, origins: {} }
     const expanded = expandStep(childState, { workflow, step: child, id: child.id }, chain)
     for (const result of expanded) {
@@ -209,7 +210,9 @@ export function expand(
   }
   return {
     ...(workflow &&
-      state.errors.length === 0 && { workflow: { ...workflow, steps: workflow.steps.map(bind), aliases: state.aliases } }),
+      state.errors.length === 0 && {
+        workflow: { ...workflow, steps: workflow.steps.map(bind), aliases: state.aliases },
+      }),
     errors: state.errors,
     origins: state.origins,
   }

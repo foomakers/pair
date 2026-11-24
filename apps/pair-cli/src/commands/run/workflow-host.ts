@@ -279,6 +279,11 @@ function resumeWorkflow(
   return { ...parseWorkflow(fs.readFileSync(frozen), source.file, true), warnings: [] }
 }
 
+const hasExpansion = (workflow: Workflow) =>
+  workflow.steps.some(
+    step => step.id.includes('/') || step.steps?.some(child => child.id.includes('/')),
+  )
+
 /** Workflow, validation and engine: everything decided before the card is read or anything is launched. */
 function resolveWorkflowRun(
   config: RunCommandConfig,
@@ -318,7 +323,7 @@ function resolveWorkflowRun(
   if (configured === undefined) return undefined
   return {
     workflow: checked.workflow,
-    source: addressedSteps(checked.workflow).some(step => step.id.includes('/'))
+    source: hasExpansion(checked.workflow)
       ? { ...source, text: expandedSource(checked.workflow) }
       : source,
     project,

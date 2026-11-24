@@ -92,7 +92,9 @@ it('does not report source drift for an unchanged ordinary loop (INC-10)', async
   let succeeds = false
   try {
     write('.claude/skills/my-skill/SKILL.md', '# skill\n')
-    write('.pair/adoption/tech/workflows/root.yaml', `version: 1
+    write(
+      '.pair/adoption/tech/workflows/root.yaml',
+      `version: 1
 name: root
 steps:
   loop:
@@ -102,22 +104,34 @@ steps:
     on-max: fail
     steps:
       work: { kind: generic, skill: my-skill }
-`)
-    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => void lines.push(args.join(' ')))
-    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => void lines.push(args.join(' ')))
+`,
+    )
+    vi.spyOn(console, 'log').mockImplementation(
+      (...args: unknown[]) => void lines.push(args.join(' ')),
+    )
+    vi.spyOn(console, 'error').mockImplementation(
+      (...args: unknown[]) => void lines.push(args.join(' ')),
+    )
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-    const run = () => handleRunCommand(parseRunCommand({ card: '699', cwd: project }, ['root']), fs, {
-      workflow: {
-        readCard: async () => ({ title: 'A card' }),
-        engineAvailable: () => true,
-        prepareWorktree: async () => project,
-        runIteration: async input => {
-          const result = !succeeds ? '{"status":"failed","summary":"retry","reason":"retry"}' : '{"status":"ok","summary":"done"}'
-          input.onEvent?.({ type: 'result', subtype: 'success', result: `\`\`\`json\n${result}\n\`\`\`` })
-          return { outcome: 'success', detail: 'success' }
+    const run = () =>
+      handleRunCommand(parseRunCommand({ card: '699', cwd: project }, ['root']), fs, {
+        workflow: {
+          readCard: async () => ({ title: 'A card' }),
+          engineAvailable: () => true,
+          prepareWorktree: async () => project,
+          runIteration: async input => {
+            const result = !succeeds
+              ? '{"status":"failed","summary":"retry","reason":"retry"}'
+              : '{"status":"ok","summary":"done"}'
+            input.onEvent?.({
+              type: 'result',
+              subtype: 'success',
+              result: `\`\`\`json\n${result}\n\`\`\``,
+            })
+            return { outcome: 'success', detail: 'success' }
+          },
         },
-      },
-    })
+      })
     await run()
     const runDir = join(project, '.pair/working/runs/root-699')
     const original = fs.readFileSync(join(project, '.pair/adoption/tech/workflows/root.yaml'))

@@ -37,12 +37,15 @@ describe('include caller contract (AC-2, AC-3)', () => {
     expect(run('kind: generic', '  work: { kind: fix }').errors).toEqual([])
   })
 
-  it.each(['context: [story]', 'prompt: hello', 'interactive: true', 'gates: [quality-gate]', 'state: none'])(
-    'rejects caller %s',
-    option => {
-      expect(run(`kind: fix, ${option}`, '  work: { kind: fix }').errors.length).toBeGreaterThan(0)
-    },
-  )
+  it.each([
+    'context: [story]',
+    'prompt: hello',
+    'interactive: true',
+    'gates: [quality-gate]',
+    'state: none',
+  ])('rejects caller %s', option => {
+    expect(run(`kind: fix, ${option}`, '  work: { kind: fix }').errors.length).toBeGreaterThan(0)
+  })
 
   it('rejects with when the selected step has a different kind', () => {
     expect(
