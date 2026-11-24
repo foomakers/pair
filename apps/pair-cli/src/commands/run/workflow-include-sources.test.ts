@@ -54,6 +54,8 @@ it.each(platforms)('records include source hashes on platform %s (699 AC-7)', as
     expect(result).toBe(0)
     const sources = fs.readFileSync(join(project, '.pair/working/runs/root-699/sources.json'))
     expect(JSON.parse(sources)).toEqual({
+      [join(project, '.pair/adoption/tech/workflows/root.yaml')]:
+        expect.stringMatching(/^[0-9a-f]{64}$/),
       [join(project, '.pair/adoption/tech/workflows/shared.yaml')]:
         expect.stringMatching(/^[0-9a-f]{64}$/),
     })
