@@ -675,6 +675,19 @@ const createRecipeCases = KB_ROOTS.flatMap(
       ).out,
 )
 
+it.each(KB_ROOTS)('$label: issue recipes make create assignment conditional (R739-07)', ({ dir }) => {
+  for (const tool of ['github', 'azure-devops', 'linear']) {
+    const body = readFileSync(join(dir, `guidelines/collaboration/issue-management/${tool}-issues.md`), 'utf-8')
+    expect(body).toContain('Only set an assignee when explicitly supplied')
+  }
+})
+
+it('adoption preserves PR assignment and explicit card assignment (R739-07)', () => {
+  const body = readFileSync(join(__dirname, '../../../../.pair/adoption/tech/way-of-working.md'), 'utf-8')
+  expect(body).toContain('cards created without an explicit assignee remain unassigned')
+  expect(body).toContain('PRs retain their default assignee at creation')
+})
+
 describe('KB-wide — create recipes honor assignment policy (gh, az, linear) (#402, #738)', () => {
   it.each(
     KB_ROOTS.flatMap(({ label }) => CREATE_FAMILIES.map(({ tool }) => ({ corpus: label, tool }))),
