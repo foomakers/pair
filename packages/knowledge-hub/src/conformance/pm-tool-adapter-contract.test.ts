@@ -228,6 +228,15 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
     },
   )
 
+  it.each(adapterCases.filter(({ file }) => file !== 'github-implementation.md'))(
+    '$corpus/$file leaves create assignment optional (R739-05)',
+    ({ content }) => {
+      const body = normalize(section(content, VISIBILITY_HEADING))
+      expect(body).toContain('an omitted create assignee stays unassigned without warning')
+      expect(body).toContain('when explicitly supplied, set it as part of the create')
+    },
+  )
+
   it.each(adapterCases)(
     '$corpus/$file reports an unresolvable assignee instead of dropping it',
     ({ content }) => {
