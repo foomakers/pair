@@ -288,6 +288,15 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
   )
 
   it.each(writeIssueCases)(
+    '$corpus: an explicit assignee applies on create and update (#738 AC2, AC5)',
+    ({ content }) => {
+      expect(cascadeSection(content)).toContain(
+        '$assignee, when the caller passed one, on create and update',
+      )
+    },
+  )
+
+  it.each(writeIssueCases)(
     '$corpus: resolves the default from the adoption field',
     ({ content }) => {
       const body = cascadeSection(content)
