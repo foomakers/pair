@@ -12,9 +12,9 @@ const include = '{ kind: generic, uses: shared }'
 
 function check(root: ReturnType<typeof source>, shared: ReturnType<typeof source>) {
   return validate(root.text, root.file, {
-    skillExists: name => name === 'ok',
+    skillExists: name => name === 'ok' || name === 'pair-process-implement',
     gateKeys: [],
-    launchInputs: [],
+    launchInputs: ['card'],
     isSafeText: () => true,
     resolveWorkflow: name => (name === 'shared' ? shared : undefined),
   })
@@ -100,4 +100,49 @@ it('keeps source locations distinct when loop and outer includes use the same ch
       }),
     ]),
   )
+})
+
+it('binds included loop children by full address without shadowing top-level callers (INC-02)', () => {
+  const root = source('root', `  reuse: { kind: implement, uses: outer }
+  after: { kind: implement, when: { output: reuse.pr, is: [1] } }
+  rounds:
+    kind: loop
+    until: done
+    max: 2
+    on-max: fail
+    steps:
+      reuse: { kind: implement, uses: shared }
+      next: { kind: implement, when: { output: rounds/reuse.pr, is: [1] } }
+      done: { kind: implement }`)
+  const shared = source('shared', `  build: { kind: implement }
+  check: { kind: implement, when: { output: build.pr, is: [1] } }
+  final: { kind: implement }`)
+  const outer = source('outer', '  different: { kind: implement }')
+  const result = validate(root.text, root.file, {
+    skillExists: name => name === 'pair-process-implement',
+    gateKeys: [],
+    launchInputs: ['card'],
+    isSafeText: () => true,
+    resolveWorkflow: name => ({ outer, shared })[name],
+  })
+  expect(result.errors).toEqual([])
+  expect(result.workflow!.steps[1]!.when!.output).toBe('reuse/different.pr')
+  expect(result.workflow!.steps[2]!.steps![1]!.when!.output).toBe('rounds/reuse/build.pr')
+  expect(result.workflow!.steps[2]!.steps![3]!.when!.output).toBe('rounds/reuse/final.pr')
+})
+
+it('validates a loop condition in an included workflow (INC-02)', () => {
+  const root = source('root', '  reuse: { kind: generic, uses: shared }')
+  const shared = source('shared', `  rounds:
+    kind: loop
+    until: done
+    max: 2
+    on-max: fail
+    steps:
+      build: { kind: implement }
+      next: { kind: implement, when: { output: rounds/build.pr, is: [1] } }
+      done: { kind: implement }`)
+  const result = check(root, shared)
+  expect(result.errors).toEqual([])
+  expect(result.workflow?.steps[0]?.steps?.[1]?.when?.output).toBe('reuse/rounds/build.pr')
 })
