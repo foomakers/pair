@@ -778,6 +778,23 @@ async function refreshMergeInputs(
   return { from: review.id, inputs: { head: current.head } }
 }
 
+function recordIncludeSources(
+  fs: FileSystemService,
+  runDir: string,
+  sources: Readonly<Record<string, string>>,
+  status: string,
+): void {
+  const sourcesFile = join(runDir, 'sources.json')
+  if (status === 'started') {
+    fs.writeFileSync(sourcesFile, JSON.stringify(sources, null, 2))
+  } else if (fs.existsSync(sourcesFile)) {
+    const frozen = JSON.parse(fs.readFileSync(sourcesFile)) as Record<string, string>
+    if (JSON.stringify(frozen) !== JSON.stringify(sources)) {
+      console.log('  Warning: included workflow sources changed since this run started.')
+    }
+  }
+}
+
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
 async function drive(
   config: RunCommandConfig,
@@ -795,15 +812,7 @@ async function drive(
     resolved.source,
     startOptions(opened, replay),
   )
-  const sourcesFile = join(runDir, 'sources.json')
-  if (started.status === 'started') {
-    fs.writeFileSync(sourcesFile, JSON.stringify(resolved.sources, null, 2))
-  } else if (fs.existsSync(sourcesFile)) {
-    const frozen = JSON.parse(fs.readFileSync(sourcesFile)) as Record<string, string>
-    if (JSON.stringify(frozen) !== JSON.stringify(resolved.sources)) {
-      console.log('  Warning: included workflow sources changed since this run started.')
-    }
-  }
+  recordIncludeSources(fs, runDir, resolved.sources, started.status)
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   console.log(`  Run dir: ${runDir} (${started.status})`)
   const effective = readEffective(fs, runDir)
