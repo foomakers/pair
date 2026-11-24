@@ -43,20 +43,23 @@ type Check = (
   path: readonly string[],
 ) => WorkflowError[]
 
+const unknownUses: Check = (workflow, step, deps, path) => {
+  const name = step.uses ?? ''
+  const skill = deps.skillExists(name)
+  return [
+    errorAt(workflow, [...path, 'uses'], {
+      problem: skill ? `'uses' does not name a skill: '${name}'` : `unknown workflow '${name}'`,
+      fix: skill
+        ? `write skill: ${name}`
+        : deps.availableWorkflows?.length
+          ? `use one of ${deps.availableWorkflows.join(', ')}`
+          : 'add the named workflow',
+    }),
+  ]
+}
+
 const skillErrors: Check = (workflow, step, deps, path) => {
-  if (step.uses !== undefined)
-    return [
-      errorAt(workflow, [...path, 'uses'], {
-        problem: deps.skillExists(step.uses)
-          ? `'uses' does not name a skill: '${step.uses}'`
-          : `unknown workflow '${step.uses}'`,
-        fix: deps.skillExists(step.uses)
-          ? `write skill: ${step.uses}`
-          : deps.availableWorkflows?.length
-            ? `use one of ${deps.availableWorkflows.join(', ')}`
-            : 'add the named workflow',
-      }),
-    ]
+  if (step.uses !== undefined) return unknownUses(workflow, step, deps, path)
   if (step.kind === 'loop' || kindByName[step.kind].host === true) return []
   const skill = step.skill ?? kindByName[step.kind].defaultSkill
   if (skill === undefined)

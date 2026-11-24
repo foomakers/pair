@@ -99,17 +99,19 @@ function expandLoop(state: ExpansionState, context: StepContext, chain: readonly
   return { ...step, id, steps: children, ...(until && { until: until.id }) }
 }
 
+function rebaseStep(step: Step, id: string): Step {
+  const prefix = id.slice(0, id.length - step.id.length)
+  return step.when?.output && prefix
+    ? { ...step, when: { ...step.when, output: `${prefix}${step.when.output}` } }
+    : step
+}
+
 function expandStep(state: ExpansionState, context: StepContext, chain: readonly string[]): Step[] {
   const { workflow, step, id } = context
-  const prefix = id.slice(0, id.length - step.id.length)
-  const rebased =
-    step.when?.output && prefix
-      ? { ...step, when: { ...step.when, output: `${prefix}${step.when.output}` } }
-      : step
   const target = step.uses === undefined ? undefined : state.resolve(step.uses)
   if (!target) {
     recordOrigins(state.origins, workflow, step, id)
-    return [expandLoop(state, { ...context, step: rebased }, chain)]
+    return [expandLoop(state, { ...context, step: rebaseStep(step, id) }, chain)]
   }
   if (step.when) {
     state.errors.push(
