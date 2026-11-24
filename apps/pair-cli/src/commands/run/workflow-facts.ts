@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import type { FactReader, StepLaunch } from '@pair/workflows'
 import { runHostProcess } from './host-process'
+import { operationTimeout } from './workflow-facts-budget'
 
 /** Call the installed host adapter without involving the agent. */
 export async function workflowOperation(
@@ -16,7 +17,7 @@ export async function workflowOperation(
   const script = join(scriptDir(), 'workflow-facts.mjs')
   const args = [script, action, card, ...(data === undefined ? [] : [JSON.stringify(data)])]
   const result = await runHostProcess(process.execPath, args, cwd, {
-    timeout: Math.min(timeout ?? 30_000, 30_000),
+    timeout: operationTimeout(action, timeout),
   })
   if (result.status !== 0)
     throw new Error(
