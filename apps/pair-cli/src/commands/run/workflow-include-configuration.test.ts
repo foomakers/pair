@@ -5,7 +5,7 @@ import { fileSystemService as fs } from '@pair/content-ops'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 
-it('applies configuration to an expanded step ID (699 AC-5)', async () => {
+it.each([false, true])('applies included settings (699 AC-5, INC-05), alias=%s', async alias => {
   const project = fs.mkdtempSync(join(tmpdir(), 'pair-include-config-'))
   const write = (path: string, text: string) => {
     const target = join(project, path)
@@ -21,11 +21,13 @@ it('applies configuration to an expanded step ID (699 AC-5)', async () => {
     )
     write(
       '.pair/adoption/tech/workflows/shared.yaml',
-      'version: 1\nname: shared\nsteps:\n  work: { kind: generic, skill: my-skill }\n',
+      alias
+        ? 'version: 1\nname: shared\naliases:\n  worker: { model: chosen-model }\nsteps:\n  work: { kind: generic, skill: my-skill, alias: worker }\n'
+        : 'version: 1\nname: shared\nsteps:\n  work: { kind: generic, skill: my-skill }\n',
     )
     write(
       '.pair/adoption/tech/configurations/mine.yaml',
-      'version: 1\nname: mine\ndefaults: { engine: claude, model: default-model }\nsteps:\n  shared/work: { model: chosen-model }\n',
+      alias ? 'version: 1\nname: mine\ndefaults: { engine: claude, model: default-model }\n' : 'version: 1\nname: mine\ndefaults: { engine: claude, model: default-model }\nsteps:\n  shared/work: { model: chosen-model }\n',
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
