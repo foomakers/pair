@@ -379,6 +379,13 @@ describe('github-implementation.md — the empty item id is an explicit branch (
 })
 
 describe('github-implementation.md — assignee is part of the write (#402 AC3)', () => {
+  it.each(githubCases)('$corpus: CLI integration leaves issue assignment optional (R739-01)', ({ content }) => {
+    const body = section(content, 'GitHub CLI Integration')
+    expect(body).toMatch(/gh issue create\b(?![^\n]*--assignee)[^\n]*--project/)
+    expect(body).toContain('Add --assignee "[login]" only when explicitly supplied')
+    expect(body).toMatch(/gh pr create\b[^\n]*--assignee/)
+  })
+
   it.each(githubCases)('$corpus: the create recipe carries the assignee', ({ content }) => {
     const body = section(content, VISIBILITY_HEADING)
     expect(body).toContain('assignees: ["[login]"]')
