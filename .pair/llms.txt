@@ -6,6 +6,7 @@
 
 - [Product Requirements Document (PRD)](.pair/adoption/product/PRD.md)
 - [Context Map](.pair/adoption/product/context-map.md)
+- [DDR: "Supervisor" names the workflow's escalation agent](.pair/adoption/product/ddr/ddr-001-supervisor-term.md)
 - [Subdomain Catalog Index](.pair/adoption/product/subdomain/README.md)
 - [Adoption & Guidelines (Supporting Subdomain)](.pair/adoption/product/subdomain/adoption-guidelines.md)
 - [Code & Documentation Generation (Core Subdomain)](.pair/adoption/product/subdomain/code-documentation-generation.md)
