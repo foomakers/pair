@@ -508,7 +508,7 @@ describe('github-implementation.md — assignee is part of the write (#402 AC3)'
  * neither `--assignee` nor `--project` — the exact item this story exists to forbid
  * — and an agent reaching them by index or grep saw nothing pointing back at the
  * adapter. Two contradictory recipes per tool is worse than one incomplete one, so
- * the invariant is enforced KB-wide rather than per file.
+ * the policy is enforced KB-wide rather than per file.
  *
  * ALL THREE tracker CLIs are guarded, not just gh: the first cut matched
  * `gh issue create` alone while the prose it protects is tool-wide, so azure's
@@ -612,8 +612,7 @@ function fencedCommands(markdown: string): string[] {
 
 /**
  * One family per tracker CLI. `match` selects the create invocations; `required` is
- * the flag/field without which the created item is invisible in the view the team
- * reads. Each family also carries its own non-empty guard, so a discovery that stops
+ * the assignment flag/field, omitted from default create recipes. Each family also carries its own non-empty guard, so a discovery that stops
  * matching one tool reddens instead of going quietly vacuous.
  */
 const CREATE_FAMILIES = [
@@ -703,7 +702,8 @@ describe('KB-wide — create recipes honor assignment policy (gh, az, linear) (#
     '$corpus/$file $tool recipe $occurrence follows assignment policy',
     ({ command, family, file }) => {
       if (
-        file.startsWith('guidelines/collaboration/project-management-tool/')
+        file.startsWith('guidelines/collaboration/project-management-tool/') ||
+        file.startsWith('guidelines/collaboration/issue-management/')
       ) {
         expect(command).not.toMatch(family.required)
       } else {
