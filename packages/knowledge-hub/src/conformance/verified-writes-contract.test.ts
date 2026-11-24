@@ -282,6 +282,8 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
       const body = cascadeSection(content)
       expect(body).toContain('create mode never applies the adoption default')
       expect(body).toContain('assigned when development starts')
+      expect(body).toContain('write the item unassigned, no warning')
+      expect(body).toContain('update with nothing resolved, or the tool rejects what was resolved')
     },
   )
 
