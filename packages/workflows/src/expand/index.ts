@@ -158,17 +158,23 @@ function visit(
   const workflow = parsed.workflow
   const names: Record<string, string> = {}
   for (const [name, entry] of Object.entries(workflow.aliases ?? {})) {
-    let scoped = prefix ? `include-${Array.from(prefix + name, c => c.charCodeAt(0).toString(16)).join('-')}` : name
+    let scoped = prefix
+      ? `include-${Array.from(prefix + name, c => c.charCodeAt(0).toString(16)).join('-')}`
+      : name
     while (Object.hasOwn(state.aliases, scoped)) scoped += '-x'
     names[name] = scoped
     state.aliases[scoped] = entry
   }
-  const scope = (step: Step): Step => ({ ...step, ...(step.alias && { alias: names[step.alias] ?? step.alias }), ...(step.steps && { steps: step.steps.map(scope) }) })
+  const scope = (step: Step): Step => ({
+    ...step,
+    ...(step.alias && { alias: names[step.alias] ?? step.alias }),
+    ...(step.steps && { steps: step.steps.map(scope) }),
+  })
   return {
     ...workflow,
-    steps: workflow.steps.map(scope).flatMap(step =>
-      expandStep(state, { workflow, step, id: `${prefix}${step.id}` }, chain),
-    ),
+    steps: workflow.steps
+      .map(scope)
+      .flatMap(step => expandStep(state, { workflow, step, id: `${prefix}${step.id}` }, chain)),
   }
 }
 
@@ -178,10 +184,18 @@ export function expand(
   resolve: (name: string) => WorkflowSource | undefined,
   skillExists: (name: string) => boolean = () => false,
 ): Expansion {
-  const state: ExpansionState = { errors: [], origins: {}, outputSteps: {}, aliases: {}, resolve, skillExists }
+  const state: ExpansionState = {
+    errors: [],
+    origins: {},
+    outputSteps: {},
+    aliases: {},
+    resolve,
+    skillExists,
+  }
   const workflow = visit(state, source, '', [source.file])
   return {
-    ...(workflow && state.errors.length === 0 && { workflow: { ...workflow, aliases: state.aliases } }),
+    ...(workflow &&
+      state.errors.length === 0 && { workflow: { ...workflow, aliases: state.aliases } }),
     errors: state.errors,
     origins: state.origins,
   }
