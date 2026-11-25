@@ -2,6 +2,7 @@ import { buildMessage, readResult, type InvocationStyle } from '../dispatch'
 import {
   next,
   record,
+  stageSuccess,
   type RunDirectory,
   type RunFiles,
   type RunState,
@@ -64,8 +65,8 @@ export interface WorkflowHost {
   runGates?(entries: readonly string[], step: StepLaunch): Promise<StepResult | undefined>
   /** The result's observable platform facts. */
   readResultFacts?(step: StepLaunch, result: StepResult): Promise<ResultFacts>
-  /** Confirms required side effects before success becomes durable. */
-  beforeSuccess?(step: StepLaunch): Promise<void>
+  /** Confirms the Ready transition before success becomes durable. */
+  confirmReady?(): Promise<void>
   /** Sees every step start and every recorded result, in order. */
   report?(event: StepEvent): void
   transition?(event: StepEvent): Promise<void>
@@ -140,9 +141,16 @@ async function recordResult(
   { result, output }: { result: StepResult; output?: string },
 ): Promise<StepResult> {
   let final = result
-  if (host.beforeSuccess && settle(kindByName[step.kind], result).status === 'ok') {
+  if (step.pendingSuccess !== undefined && !host.confirmReady)
+    return record(run, step.id, unconfirmed('the host cannot confirm the Ready transition'))
+  if (
+    step.confirmReady &&
+    host.confirmReady &&
+    settle(kindByName[step.kind], result).status === 'ok'
+  ) {
+    await stageSuccess(run, step.id, result)
     try {
-      await host.beforeSuccess(step)
+      await host.confirmReady()
     } catch (error) {
       final = unconfirmed((error as Error).message)
     }
@@ -202,6 +210,8 @@ async function execute(
   step: StepLaunch,
   exchange: Exchange = { sent: '', final: '' },
 ): Promise<StepResult> {
+  if (step.pendingSuccess !== undefined)
+    return recordResult(host, run, step, { result: step.pendingSuccess })
   const kind = kindByName[step.kind]
   if (kind.host === true) {
     exchange.sent = JSON.stringify(step.with)

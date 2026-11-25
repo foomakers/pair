@@ -1,6 +1,14 @@
 import { createHash } from 'node:crypto'
 import { basename, join } from 'node:path'
-import { parseWorkflow, type KindName, type Step, type When, type Workflow } from '../grammar'
+import { readResult } from '../dispatch'
+import {
+  cardStateOf,
+  parseWorkflow,
+  type KindName,
+  type Step,
+  type When,
+  type Workflow,
+} from '../grammar'
 import { parseFrozenConfiguration } from '../configuration'
 import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 import { matches, type CardFacts } from '../select'
@@ -44,6 +52,8 @@ export interface StepRecord {
   readonly reason?: string
   readonly detail?: string
   readonly outputs?: Readonly<Record<string, unknown>>
+  /** A confirmed result waiting for the host's Ready transition. */
+  readonly pendingSuccess?: StepResult
 }
 
 /** `state.json`: the only source for `next`. */
@@ -78,6 +88,8 @@ export interface StepLaunch {
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
   readonly round?: number
+  readonly confirmReady?: true
+  readonly pendingSuccess?: StepResult
 }
 
 export const hashOf = (text: string): string =>
@@ -331,6 +343,40 @@ export function completedRun(
   )
 }
 
+// Older runs saved the failed transition and the original agent result separately.
+const legacyReadyFailure = (saved: StepRecord) =>
+  saved.state === 'failed' &&
+  saved.reason === 'result-not-confirmed' &&
+  /^card state .+ not set: /.test(saved.detail ?? '')
+
+function pendingReadyResult(
+  run: RunDirectory,
+  step: Step,
+  saved?: StepRecord,
+): StepResult | undefined {
+  if (saved === undefined || step.kind === 'loop') return undefined
+  if (saved.pendingSuccess !== undefined) return saved.pendingSuccess
+  if (cardStateOf(step)?.state !== 'Ready' || !legacyReadyFailure(saved)) return undefined
+  const log = join(resultDir(run, step.id, undefined), 'output.log')
+  if (!run.files.existsSync(log)) return undefined
+  const result = readResult(run.files.readFileSync(log), kindByName[step.kind])
+  return result.status === 'ok' ? result : undefined
+}
+
+/** The last confirmed board status before an unfinished Ready transition in this run. */
+export function pendingBoardStatus(
+  run: RunDirectory,
+  identity: { card: string; workflow: string },
+): string | undefined {
+  const state = readState(run)
+  if (state?.card !== identity.card || state.workflow.name !== identity.workflow) return undefined
+  for (const step of frozenWorkflow(run).steps) {
+    const status = pendingReadyResult(run, step, state.steps[step.id])?.['boardStatus']
+    if (typeof status === 'string') return status
+  }
+  return undefined
+}
+
 async function resume(
   run: RunDirectory,
   saved: RunStateFile,
@@ -353,7 +399,7 @@ async function resume(
     options.moreRounds === undefined ? exhausted : undefined,
   )
   if (settled === undefined) {
-    await writeState(run, { ...state, steps: reopenedSteps(state, frozenWorkflow(run)) })
+    await writeState(run, { ...state, steps: reopenedSteps(run, state, frozenWorkflow(run)) })
     return { status: 'resumed', warnings }
   }
   if (state !== saved) await writeState(run, state)
@@ -361,18 +407,28 @@ async function resume(
 }
 
 // A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
-function reopenedSteps(state: RunStateFile, workflow: Workflow): Record<string, StepRecord> {
-  const topLevelIds = new Set(workflow.steps.map(step => step.id))
+function reopenedSteps(
+  run: RunDirectory,
+  state: RunStateFile,
+  workflow: Workflow,
+): Record<string, StepRecord> {
+  const topLevel = new Map(workflow.steps.map(step => [step.id, step]))
   return Object.fromEntries(
-    Object.entries(state.steps).map(([id, step]) => [
-      id,
-      step.state === 'ok' || (step.state === 'failed' && !topLevelIds.has(id))
-        ? step
-        : {
-            state: 'pending' as const,
-            ...(step.executions !== undefined && { executions: step.executions }),
-          },
-    ]),
+    Object.entries(state.steps).map(([id, saved]) => {
+      const step = topLevel.get(id)
+      if (saved.state === 'ok' || (saved.state === 'failed' && step === undefined))
+        return [id, saved]
+      const pendingSuccess =
+        step === undefined ? saved.pendingSuccess : pendingReadyResult(run, step, saved)
+      return [
+        id,
+        {
+          state: 'pending',
+          ...(saved.executions !== undefined && { executions: saved.executions }),
+          ...(pendingSuccess !== undefined && { pendingSuccess }),
+        },
+      ]
+    }),
   )
 }
 
@@ -498,6 +554,12 @@ function loopChild(
 
 const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 
+const pendingOf = (saved?: StepRecord) =>
+  saved?.pendingSuccess === undefined ? {} : { pendingSuccess: saved.pendingSuccess }
+
+const readyOf = (step: Step) =>
+  cardStateOf(step)?.state === 'Ready' ? { confirmReady: true as const } : {}
+
 /** The launch of the loop child that is next, or the halt that stops the run. */
 async function nextInLoop(
   run: RunDirectory,
@@ -510,12 +572,13 @@ async function nextInLoop(
   if (childHalt !== undefined) return { ready: [], run: childHalt }
   const attempt = launches(state, id)
   const round = state.loops?.[step.id]?.round ?? 1
+  const pending = pendingOf(state.steps[id])
   await writeState(run, {
     ...state,
     steps: {
       ...state.steps,
       [step.id]: { state: 'running', round },
-      [id]: { state: 'running', executions: attempt, round },
+      [id]: { state: 'running', executions: attempt, round, ...pending },
     },
   })
   const launch: StepLaunch = {
@@ -524,6 +587,8 @@ async function nextInLoop(
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
     ...gatesOf(child),
+    ...readyOf(child),
+    ...pending,
     inputs: pick(producedBefore(state, steps, step), child.kind),
     attempt,
     round,
@@ -603,6 +668,7 @@ async function skipIfNotWhen(
   const child = inLoop ? loopChild(state, step).child : undefined
   const target = child ?? step
   const id = inLoop ? `${step.id}/${target.id}` : step.id
+  if (state.steps[id]?.pendingSuccess !== undefined) return undefined
   const why = await whenMismatch(target.when, state, card)
   if (why === undefined) return undefined
   const entry: StepRecord = {
@@ -630,9 +696,10 @@ async function nextPlain(
 ): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
   if (step.kind === 'loop') throw new Error('loop is not directly launchable')
   const attempt = launches(state, step.id)
+  const pending = pendingOf(state.steps[step.id])
   await writeState(run, {
     ...state,
-    steps: { ...state.steps, [step.id]: { state: 'running', executions: attempt } },
+    steps: { ...state.steps, [step.id]: { state: 'running', executions: attempt, ...pending } },
   })
   const launch: StepLaunch = {
     id: step.id,
@@ -640,6 +707,8 @@ async function nextPlain(
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
     ...gatesOf(step),
+    ...readyOf(step),
+    ...pending,
     inputs: inputsOf(step, steps, state),
     attempt,
   }
@@ -753,6 +822,21 @@ async function writeResult(
 const loopRound = (state: RunStateFile, outer: Step | undefined): number | undefined =>
   state.loops?.[outer?.id ?? '']?.round
 
+/** Preserve the confirmed result before the host attempts a remote Ready write. */
+export async function stageSuccess(
+  run: RunDirectory,
+  id: string,
+  result: StepResult,
+): Promise<void> {
+  const state = requireState(run)
+  const step = state.steps[id]
+  if (step?.state !== 'running' || step.pendingSuccess !== undefined) return
+  await writeState(run, {
+    ...state,
+    steps: { ...state.steps, [id]: { ...step, pendingSuccess: result } },
+  })
+}
+
 /** The `state.json` entry of a settled result. */
 function recordOf(
   { status, summary, reason, detail }: StepResult,
@@ -794,7 +878,11 @@ export async function record(
       .filter(name => name in settled)
       .map(name => [name, settled[name]]),
   )
-  const entry = recordOf(settled, outputs, round, state.steps[stepId]?.executions)
+  const previous = state.steps[stepId]
+  const entry = {
+    ...recordOf(settled, outputs, round, previous?.executions),
+    ...(status === 'failed' ? pendingOf(previous) : {}),
+  }
   const { steps, loops } =
     childId !== undefined && outer?.kind === 'loop'
       ? advanceLoop({ state, outer, childId, status, outputs }, { ...state.steps, [stepId]: entry })

@@ -66,6 +66,7 @@ import { acquireRunLock } from './run-lock'
 import { acquireCardLock } from './card-lock'
 import type { BatchOutcome } from './workflow-batch'
 import {
+  matchesWorkflowCard,
   readWorkflowCard,
   readWorkflowPrHead,
   readWorkflowCards,
@@ -594,9 +595,8 @@ async function setCardState(
 
 function cardTransitions({ request, resolved }: Opened, services: Services) {
   return {
-    async beforeSuccess(step: StepLaunch) {
-      if (cardStateOf(stepOf(resolved, step.id))?.state === 'Ready')
-        await setCardState(request.card, 'Ready', resolved, services)
+    async confirmReady() {
+      await setCardState(request.card, 'Ready', resolved, services)
     },
     async transition(event: StepEvent) {
       const set = cardStateOf(stepOf(resolved, event.step))
@@ -921,18 +921,22 @@ function configuredSelection(resolved: Resolved) {
 
 async function acceptsCard(
   resolved: Resolved,
-  card: string,
+  request: RunWorkflowRequest,
+  runDir: string,
   { fs, deps }: Services,
 ): Promise<boolean> {
   const selection = configuredSelection(resolved)
   if (selection === undefined) return true
   const { cards } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
     { fs, ...resolved },
-    { cards: [card] },
+    { cards: [request.card] },
   )
   const found = cards[0]
   if (found?.error !== undefined) throw new Error(found.error)
-  return found !== undefined && !found.closed && selection.accepts(found)
+  const run = request.restart
+    ? undefined
+    : { files: fs, dir: runDir, workflow: resolved.workflow.name, main: resolved.main }
+  return found !== undefined && matchesWorkflowCard(found, selection.accepts, run)
 }
 
 function completedWorkflow(
@@ -975,7 +979,7 @@ async function openCard(
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
     return undefined
   }
-  if (batch === undefined && !(await acceptsCard(resolved, request.card, services))) {
+  if (batch === undefined && !(await acceptsCard(resolved, request, runDir, services))) {
     console.log(`  #${request.card}: not-applicable — selection filter`)
     return undefined
   }

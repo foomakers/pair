@@ -15,7 +15,12 @@ import { mainCheckoutOrCwd } from './cycle-wiring'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { runPool } from './parallel'
 import { inPooledCard } from './pooled-card'
-import { readWorkflowCards, type WorkflowCard, type WorkflowSelection } from './workflow-facts'
+import {
+  matchesWorkflowCard,
+  readWorkflowCards,
+  type WorkflowCard,
+  type WorkflowSelection,
+} from './workflow-facts'
 import { handleWorkflowRun, resolveWorkflowRun, type Services } from './workflow-host'
 import type { RunCommandConfig, RunWorkflowBatch } from './parser'
 
@@ -105,17 +110,18 @@ type BatchRequest = { config: RunCommandConfig; request: RunWorkflowBatch; servi
 
 function selectCards(
   cards: readonly WorkflowCard[],
-  selection: ReturnType<typeof effectiveSelection>,
+  ordering: ReturnType<typeof effectiveSelection>['order'],
+  accepts: (card: WorkflowCard) => boolean,
   completed: (id: string) => boolean,
 ) {
   const prior = new Map<string, BatchOutcome>()
   const excluded: BatchOutcome[] = []
-  const selected = orderCards(cards, selection.order).filter(card => {
+  const selected = orderCards(cards, ordering).filter(card => {
     if (card.error !== undefined) {
       prior.set(card.id, { id: card.id, outcome: 'failed', reason: card.error })
     } else if (completed(card.id)) {
       prior.set(card.id, { id: card.id, outcome: 'skipped', reason: 'workflow already complete' })
-    } else if (card.closed || !selection.accepts(card)) {
+    } else if (!accepts(card)) {
       excluded.push({
         id: card.id,
         outcome: 'not-applicable',
@@ -161,10 +167,17 @@ async function planBatch(
   )
   const runs = join(resolved.main, '.pair/working/runs')
   const runId = (id: string) => `${request.runId ?? workflow}-${id}`
+  const runOf = (id: string) => ({
+    files: fs,
+    dir: join(runs, runId(id)),
+    workflow,
+    main: resolved.main,
+  })
   const completed = (id: string) =>
-    !request.restart &&
-    completedRun({ files: fs, dir: join(runs, runId(id)) }, { card: id, workflow })
-  const candidates = selectCards(cards, selection, completed)
+    !request.restart && completedRun(runOf(id), { card: id, workflow })
+  const accepts = (card: WorkflowCard) =>
+    matchesWorkflowCard(card, selection.accepts, request.restart ? undefined : runOf(card.id))
+  const candidates = selectCards(cards, selection.order, accepts, completed)
   return {
     ...candidates,
     selected: await loadDependencies(candidates, readDependencies),

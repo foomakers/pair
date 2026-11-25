@@ -1,10 +1,10 @@
-import type { CardFacts } from '@pair/workflows'
+import { pendingBoardStatus, type CardFacts } from '@pair/workflows'
 import { locateCycleScripts } from './cycle-scripts'
 import { runHostProcess } from './host-process'
 import { join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
-import { readStateMapping, resolveMacrostate } from './card-readiness'
+import { MACROSTATES, readStateMapping, resolveMacrostate } from './card-readiness'
 
 type Platform = { fs: FileSystemService; project: Config; cwd: string; main: string }
 
@@ -33,6 +33,23 @@ export interface WorkflowSelection {
   readonly cards: readonly WorkflowCard[]
   readonly assignee?: string
   readonly readDependencies?: (ids: readonly string[]) => Promise<readonly DependencyFacts[]>
+}
+
+/** Match current scope, preserving the board status of a confirmed step awaiting its Ready write. */
+export function matchesWorkflowCard(
+  card: WorkflowCard,
+  accepts: (facts: CardFacts) => boolean,
+  run?: { files: FileSystemService; dir: string; workflow: string; main: string },
+): boolean {
+  if (card.closed) return false
+  if (accepts(card)) return true
+  const statusIndex = MACROSTATES.findIndex(state => state === card.status)
+  if (run === undefined || statusIndex < MACROSTATES.indexOf('Ready')) return false
+  const previous = pendingBoardStatus(run, { card: card.id, workflow: run.workflow })
+  if (previous === undefined) return false
+  const mapping = readStateMapping(run.files, run.main)
+  const status = resolveMacrostate(previous, mapping)
+  return status !== undefined && accepts({ ...card, status })
 }
 
 const unreadableCard = {

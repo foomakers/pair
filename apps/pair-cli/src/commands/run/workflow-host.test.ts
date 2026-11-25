@@ -710,6 +710,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     ['successful transitions', undefined, false],
     ['a refused Ready write (R744-01)', 'refused', false],
     ['an applied Ready write with no confirmation (R744-01)', 'unconfirmed', false],
+    ['an unconfirmed Ready write saved by an older version (R744-01)', 'legacy', false],
     ['canonical board states (R744-01)', undefined, true],
   ] as const)('completes and skips cards with %s', async (_name, failure, canonical) => {
     const source = '.pair/adoption/tech/workflows/refinement.yaml'
@@ -731,6 +732,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     const bodies = new Map<string, string>()
     const prerequisiteAtLaunch: string[] = []
     let failReady = failure !== undefined
+    const applied = failure === 'unconfirmed' || failure === 'legacy'
     const readSelection = async () => ({
       cards: ids.map(id => ({
         id,
@@ -750,7 +752,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
         getState: async id => status.get(id) ?? null,
         async setState(id, value) {
           if (id === '9' && failReady) {
-            if (failure === 'unconfirmed') status.set(id, value)
+            if (applied) status.set(id, value)
             throw new Error('Ready write unconfirmed')
           }
           status.set(id, value)
@@ -797,10 +799,18 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     ])
     expect(await handleRunCommand(command, fs, { workflow })).toBe(failReady ? 1 : 0)
     if (failReady) {
-      expect(status.get('9')).toBe(failure === 'unconfirmed' ? ready : draft)
+      expect(status.get('9')).toBe(applied ? ready : draft)
       expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'failed' })
       expect(lines.some(line => line.includes('#12: waiting'))).toBe(true)
       expect(lines.some(line => line.includes('Ready write unconfirmed'))).toBe(true)
+      if (failure === 'legacy') {
+        const path = join(runDir('refinement-9'), 'state.json')
+        const snapshot = JSON.parse(fs.readFileSync(path)) as {
+          steps: { tasks: { pendingSuccess?: unknown } }
+        }
+        delete snapshot.steps.tasks.pendingSuccess
+        fs.writeFileSync(path, JSON.stringify(snapshot))
+      }
       failReady = false
       expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
       expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'ok' })
