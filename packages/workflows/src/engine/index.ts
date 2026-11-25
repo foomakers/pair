@@ -83,6 +83,8 @@ export interface StepRecord {
   /** How many times the step was launched in this run. */
   readonly executions?: number
   readonly attempts?: readonly FaultAttempt[]
+  /** Process retries still available for this running or interrupted execution. */
+  readonly remainingRetries?: number
   readonly summary?: string
   readonly reason?: string
   readonly detail?: string
@@ -675,17 +677,39 @@ function reopenedSteps(
         (child ? childSettled(step, saved.state) : stepSettled(step, saved.state))
       )
         return [id, saved]
-      return [id, reopenStep(run, saved, child ? undefined : step)]
+      return [id, reopenStep(run, saved, child ? undefined : step, step?.retries)]
     }),
   )
 }
 
-function reopenStep(run: RunDirectory, saved: StepRecord, step: Step | undefined): StepRecord {
+function legacyBudget(saved: StepRecord, retries: number | undefined): number | undefined {
+  if (saved.state !== 'running' || retries === undefined) return undefined
+  // Older states only recorded the fault attempts. Count the consecutive faults before
+  // the interrupted attempt in this round, up to the configured budget.
+  let remaining = retries
+  let expected = (saved.executions ?? 1) - 1
+  for (const fault of (saved.attempts ?? []).slice().reverse()) {
+    if (fault.attempt > expected) continue
+    if (remaining === 0 || fault.round !== saved.round || fault.attempt !== expected) break
+    remaining--
+    expected--
+  }
+  return remaining
+}
+
+function reopenStep(
+  run: RunDirectory,
+  saved: StepRecord,
+  step: Step | undefined,
+  retries: number | undefined,
+): StepRecord {
   const pendingSuccess =
     step === undefined ? saved.pendingSuccess : pendingTransitionResult(run, step, saved)
+  const remainingRetries = saved.remainingRetries ?? legacyBudget(saved, retries)
   return {
     state: 'pending',
     ...executionHistory(saved),
+    ...(remainingRetries !== undefined && { remainingRetries }),
     ...retryBoardStatusOf(saved),
     ...(pendingSuccess !== undefined && { pendingSuccess }),
   }
@@ -875,8 +899,7 @@ export async function recordFault(
   run: RunDirectory,
   step: StepLaunch,
   diagnosis: Diagnosis,
-  retry: boolean,
-): Promise<StepLaunch> {
+): Promise<StepLaunch | undefined> {
   const state = requireState(run)
   const previous = state.steps[step.id]
   if (previous?.state !== 'running' || previous.executions !== step.attempt)
@@ -886,12 +909,14 @@ export async function recordFault(
     ...(previous.attempts ?? []),
     { ...diagnosis, attempt, ...(round !== undefined && { round }) },
   ]
-  const executions = retry ? attempt + 1 : attempt
+  const remaining = previous.remainingRetries ?? step.retries ?? 0
+  const executions = remaining > 0 ? attempt + 1 : attempt
+  const remainingRetries = Math.max(remaining - 1, 0)
   await writeState(run, {
     ...state,
-    steps: { ...state.steps, [step.id]: { ...previous, executions, attempts } },
+    steps: { ...state.steps, [step.id]: { ...previous, executions, attempts, remainingRetries } },
   })
-  return { ...step, attempt: executions }
+  return remaining > 0 ? { ...step, attempt: executions } : undefined
 }
 
 export function faultsOf(run: RunDirectory): StepFaults[] {
@@ -953,6 +978,8 @@ async function reserveLaunch(
   const { id, kind, attempt, round } = launch
   const summary = await check?.(launch)
   if (summary !== undefined) return { ready: [], run: 'running', held: { id, kind, summary } }
+  const saved = state.steps[id]
+  const remainingRetries = saved?.remainingRetries ?? launch.retries
   await writeState(run, {
     ...state,
     steps: {
@@ -960,8 +987,9 @@ async function reserveLaunch(
       ...(loop !== undefined && { [loop.id]: { state: 'running' as const, round: loop.round } }),
       [id]: {
         state: 'running',
-        ...executionHistory(state.steps[id]),
+        ...executionHistory(saved),
         executions: attempt,
+        ...(remainingRetries !== undefined && { remainingRetries }),
         ...(round !== undefined && { round }),
         ...pendingOf(launch),
         ...retryBoardStatusOf(launch),

@@ -36,9 +36,16 @@ function startTest(steps: string, answers: readonly (AgentLaunchResult | Error)[
     },
   }
   const text = `version: 1\nname: quick\nsteps:\n${steps}\n`
+  const statePath = '/run/state.json'
+  const state = () => JSON.parse(files.readFileSync(statePath)) as RunStateFile
   return {
     sent,
-    state: () => JSON.parse(files.readFileSync('/run/state.json')) as RunStateFile,
+    state,
+    useLegacyState: () =>
+      files.writeFile(
+        statePath,
+        JSON.stringify(state(), (key, value) => (key === 'remainingRetries' ? undefined : value)),
+      ),
     telemetry: () =>
       files
         .readFileSync('/run/telemetry.jsonl')
@@ -77,9 +84,13 @@ describe('#704: process retries', () => {
     },
   )
 
-  it.each([1, 2])(
-    '#704 F2: resumes with the unspent part of a budget of %i (AC-2)',
-    async retries => {
+  it.each([
+    { retries: 1, legacy: false },
+    { retries: 2, legacy: false },
+    { retries: 1, legacy: true },
+  ])(
+    '#704 F2: resumes with the unspent part of a budget of $retries (AC-2, legacy=$legacy)',
+    async ({ retries, legacy }) => {
       const test = startTest(work(`, retries: ${retries}`), [
         crash,
         new Error('interrupted'),
@@ -88,6 +99,7 @@ describe('#704: process retries', () => {
       ])
       await expect(test.run()).rejects.toThrow('interrupted')
       expect(test.state().steps['work']).toMatchObject({ state: 'running', executions: 2 })
+      if (legacy) await test.useLegacyState()
 
       expect(await test.run()).toMatchObject({ run: retries === 1 ? 'parked' : 'done' })
       expect(test.sent.map(attempt => attempt.attempt)).toEqual(

@@ -361,7 +361,6 @@ async function launchWithRetries(
   exchange: Exchange,
   onRetry: OnRetry | undefined,
 ): Promise<AgentReply> {
-  let remaining = exchange.step.retries ?? 0
   for (;;) {
     delete exchange.usage
     delete exchange.diagnosis
@@ -373,11 +372,10 @@ async function launchWithRetries(
     exchange.final = 'final' in launched ? launched.final : ''
     const reply = replyOf(launched, step.kind, Date.now() - start)
     if (!('fault' in reply)) return reply
-    const next = await recordFault(run, step, reply.fault, remaining > 0)
+    const next = await recordFault(run, step, reply.fault)
     exchange.diagnosis = reply.fault
-    if (remaining === 0) return reply
+    if (next === undefined) return reply
     await onRetry?.(faultResult(step, reply))
-    remaining--
     exchange.step = next
   }
 }
