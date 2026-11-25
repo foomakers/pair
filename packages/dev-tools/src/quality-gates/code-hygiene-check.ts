@@ -33,6 +33,7 @@ export const PATTERNS: HygienePattern[] = [
   { label: '@ts-ignore', regex: '@ts-' + 'ignore' },
   { label: '@ts-nocheck', regex: '@ts-' + 'nocheck' },
   { label: 'eslint-disable', regex: 'eslint-' + 'disable' },
+  { label: 'oxlint-disable', regex: 'oxlint-' + 'disable' },
   { label: 'test.skip', regex: '\\btest\\.' + 'skip\\b' },
   { label: 'it.skip', regex: '\\bit\\.' + 'skip\\b' },
   { label: 'describe.skip', regex: '\\bdescribe\\.' + 'skip\\b' },

@@ -104,6 +104,12 @@ const WRITE_MODE_FORMATTERS: readonly { readonly name: string; readonly pattern:
   { name: 'prettier --write', pattern: /\bprettier\b[^&|;{}\n]*\s(?:--write|-w)\b/ },
   { name: 'markdownlint --fix', pattern: /\bmarkdownlint\b[^&|;{}\n]*\s--fix\b/ },
   { name: 'eslint --fix', pattern: /\beslint\b[^&|;{}\n]*\s--fix\b/ },
+  ...['--fix', '--fix-suggestions', '--fix-dangerously'].map(flag => ({
+    name: `oxlint ${flag}`,
+    pattern: new RegExp(
+      String.raw`(?:^|[\s/])(?:oxlint(?:\.mjs)?|lint(?:\.sh)?)(?=\s)[^&|;{}\n]*\s${flag}(?![\w-])`,
+    ),
+  })),
   // `\bsync-version\b` also matches the `sync-version-in-docs(.ts)` spelling, since
   // `-` is a word boundary — one entry covers the script name and the module path.
   // The `--check` lookahead deliberately crosses `{` and `}`, unlike the CLI patterns
@@ -283,7 +289,7 @@ export function checkRootGate(packageJsonText: string): GateCheckResult {
 
   const expanded = expandScriptReferences(scripts, gate)
 
-  const offenders = findWriteModeFormatters(expanded)
+  const offenders = findWriteModeFormatters(`${gate}\n${expanded}`)
   if (offenders.length > 0) return writeModeFailure(offenders, expanded)
 
   if (!referencesScript(expanded, GUARD_SCRIPT)) {

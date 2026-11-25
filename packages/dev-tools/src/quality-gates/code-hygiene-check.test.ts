@@ -52,6 +52,14 @@ describe('scanPattern', () => {
 })
 
 describe('runHygieneCheck', () => {
+  it.each(['eslint-', 'oxlint-'])('checks %s suppression markers', tool => {
+    const marker = tool + 'disable'
+    const { violations } = runHygieneCheck(PATTERNS, FILE_GLOBS, 'self.ts', command => {
+      return command.includes(marker) ? 'src/a.ts:5:// ' + marker : ''
+    })
+    expect(violations.get(marker)).toEqual(['  src/a.ts:5'])
+  })
+
   it('aggregates violations across patterns and totals the match count', () => {
     const patterns: HygienePattern[] = [
       { label: 'marker-one', regex: 'marker-one' },

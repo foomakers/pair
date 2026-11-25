@@ -402,8 +402,8 @@ const finish = code => {
 const t = setTimeout(() => { timedOut = true; killTree(); setTimeout(() => finish(-1), 200) }, Number(ms))
 c.on('error', e => { err += String(e); finish(-1) })
 c.on('exit', code => setTimeout(() => finish(code), 100))`
-function runBounded(argv, cwd, timeoutMs) {
-  const r = spawnSync(process.execPath, ['-e', RUNNER, cwd, String(timeoutMs), ...argv], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs + 10000, killSignal: 'SIGKILL', env: cleanGitEnv() })
+function runBounded(argv, cwd, timeoutMs, env = {}) {
+  const r = spawnSync(process.execPath, ['-e', RUNNER, cwd, String(timeoutMs), ...argv], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs + 10000, killSignal: 'SIGKILL', env: { ...cleanGitEnv(), ...env } })
   try {
     const j = JSON.parse(r.stdout)
     return { status: j.timedOut ? -1 : (j.status ?? -1), stdout: j.stdout, stderr: `${j.stderr}${j.timedOut ? `\ntimed out after ${timeoutMs}ms` : ''}` }
@@ -460,6 +460,26 @@ function owningPackage(file, cwd) {
 const ESLINT_SUMMARY = /^\s*✖ \d+ problems?\b/m
 const ESLINT_MESSAGE = /^\s+\d+:\d+\s+(error|warning)\b/m
 const mentions = (output, abs, relPkg, relRoot) => [abs, relPkg, relRoot].some(p => p && output.includes(p))
+function oxlintErrorPaths({ status, stdout, stderr }, dir) {
+  if (status !== 1 || stderr.trim()) return null
+  let report
+  try {
+    report = JSON.parse(stdout)
+  } catch {
+    return null
+  }
+  const diagnostics = report?.diagnostics
+  if (!Number.isInteger(report?.number_of_files) || report.number_of_files < 1 || !Array.isArray(diagnostics)) return null
+  const errors = []
+  for (const message of diagnostics) {
+    if (!message || typeof message.filename !== 'string' || !message.filename || typeof message.message !== 'string' || !['warning', 'error'].includes(message.severity)) return null
+    if (message.code === 'typescript(tsconfig-error)') return null
+    const locatedSyntaxError = message.code === null && message.severity === 'error' && Array.isArray(message.labels) && message.labels.some(label => Number.isInteger(label?.span?.line) && Number.isInteger(label?.span?.column))
+    if (typeof message.code !== 'string' && !locatedSyntaxError) return null
+    if (message.severity === 'error') errors.push(resolve(dir, message.filename))
+  }
+  return errors.length ? errors : null
+}
 function runPackageLint({ files, cwd, timeoutMs }) {
   const pm = ['pnpm-workspace.yaml', 'pnpm-lock.yaml'].some(f => existsSync(join(cwd, f))) ? 'pnpm' : 'npm'
   const byPkg = new Map()
@@ -477,12 +497,15 @@ function runPackageLint({ files, cwd, timeoutMs }) {
       return { refusal: { reason: 'package-json-unparseable', path: join(rel, 'package.json'), detail: String(e.message ?? e) } }
     }
     if (typeof scripts.lint !== 'string') continue
-    const r = runBounded([pm, 'run', ...(pm === 'npm' ? ['--silent'] : []), 'lint'], dir, timeoutMs)
+    const r = runBounded([pm, '--silent', 'run', 'lint'], dir, timeoutMs, { PAIR_LINT_REPORT: 'json' })
     const output = `${r.stdout ?? ''}\n${r.stderr ?? ''}`
     if (r.status !== 0) {
-      const hit = listed.find(f => mentions(output, join(cwd, f), relative(dir, join(cwd, f)), f))
-      if (hit) return { refusal: { reason: 'static-gate-failed', gate: 'package:lint', path: hit, exitCode: r.status, output: tail(output) } }
-      if (!ESLINT_SUMMARY.test(output) || !ESLINT_MESSAGE.test(output)) return { refusal: { reason: 'static-gate-failed', gate: 'package:lint', path: listed[0], exitCode: r.status, output: tail(output) } }
+      const oxlint = oxlintErrorPaths(r, dir)
+      const legacy = r.status === 1 && ESLINT_SUMMARY.test(output) && ESLINT_MESSAGE.test(output)
+      const hit = oxlint
+        ? listed.find(f => oxlint.includes(resolve(cwd, f)))
+        : listed.find(f => mentions(output, join(cwd, f), relative(dir, join(cwd, f)), f))
+      if (hit || (!oxlint && !legacy)) return { refusal: { reason: 'static-gate-failed', gate: 'package:lint', path: hit ?? listed[0], exitCode: r.status, output: tail(output) } }
     }
     results.push({ gate: 'package:lint', path: rel, exitCode: 0, scoped: r.status !== 0 })
   }

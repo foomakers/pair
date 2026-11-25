@@ -108,6 +108,17 @@ describe('the pre-push gate never runs a write-mode step (#394)', () => {
     expect(findWriteModeFormatters('eslint . && other-tool --fix')).toEqual([])
   })
 
+  it.each(['--fix', '--fix-suggestions', '--fix-dangerously'])('flags Oxlint %s', flag => {
+    expect(findWriteModeFormatters(`pnpm exec oxlint . ${flag}`)).toEqual([`oxlint ${flag}`])
+    expect(findWriteModeFormatters(`node tools/oxlint-config/bin/oxlint.mjs . ${flag}`)).toEqual([
+      `oxlint ${flag}`,
+    ])
+    expect(findWriteModeFormatters(`./tools/oxlint-config/bin/lint.sh ${flag}`)).toEqual([
+      `oxlint ${flag}`,
+    ])
+    expect(findWriteModeFormatters(`oxlint . && other-tool ${flag}`)).toEqual([])
+  })
+
   // The invariant is "no step reachable from the gate WRITES", and formatters are not
   // the only writers this repo already has. `pnpm sync-version` → sync-version-in-docs.ts
   // writeFileSync's every .md/.mdx it walks, i.e. it rewrites version strings in docs the
