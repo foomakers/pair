@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
+import { PassThrough } from 'node:stream'
 import { basename, join } from 'path'
 import {
   hashOf,
@@ -800,6 +801,36 @@ it.each([
   expect(runIteration).toHaveBeenCalledTimes(row.attempts)
   const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
   expect(state.steps['implement']).toMatchObject({ state: 'blocked', reason: row.reason })
+})
+
+it('#704 F6: the default live terminal prints the final stderr tail (AC-4)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
+  )
+  const tty = Object.assign(new PassThrough(), { isTTY: true, columns: 80, rows: 24 })
+  let output = ''
+  tty.on('data', text => {
+    output += String(text)
+  })
+  vi.spyOn(process, 'stdout', 'get').mockReturnValue(tty as unknown as typeof process.stdout)
+
+  expect(
+    await run(
+      ['quick'],
+      OK,
+      {},
+      {
+        runIteration: async () => ({
+          outcome: 'failed',
+          detail: 'engine exited',
+          process: { exitCode: 1, signal: null, elapsedMs: 42, stderrTail: ['Connection refused'] },
+        }),
+      },
+    ),
+  ).toBe(0)
+  expect(output).toContain('Process fault — implement attempt 1')
+  expect(output).toContain('    stderr: Connection refused\n')
 })
 
 it('#704 AC-4: quick retries a killed agent and records both diagnoses', async () => {
