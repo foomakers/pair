@@ -21,6 +21,15 @@ const malformed = { final: 'no JSON' }
 
 function startTest(steps: string, answers: readonly (AgentLaunchResult | Error)[]) {
   const files = createMemoryFiles()
+  const rename = files.rename
+  let interruptedResult: string | undefined
+  files.rename = async (from, to) => {
+    if (to === interruptedResult) {
+      interruptedResult = undefined
+      throw new Error('result write interrupted')
+    }
+    await rename(from, to)
+  }
   const run = { dir: '/run', files }
   const sent: { attempt: number; round?: number | undefined; message: string }[] = []
   const host: WorkflowHost = {
@@ -41,6 +50,9 @@ function startTest(steps: string, answers: readonly (AgentLaunchResult | Error)[
   return {
     sent,
     state,
+    interruptResultWrite: (id: string) => {
+      interruptedResult = `/run/steps/${id}/result.json`
+    },
     useLegacyState: () =>
       files.writeFile(
         statePath,
@@ -83,6 +95,21 @@ describe('#704: process retries', () => {
       expect(test.sent).toHaveLength(2)
     },
   )
+
+  it.each([
+    { path: 'work', steps: work(', retries: 0') },
+    {
+      path: 'loop/work/round-1',
+      steps: `  loop:\n    kind: loop\n    until: work\n    max: 1\n    on-max: fail\n    steps:\n    ${work(', retries: 0')}`,
+    },
+  ])('#704 F2: finalizes the recorded fault at $path on resume (AC-2, AC-3)', async row => {
+    const test = startTest(row.steps, [crash, ok])
+    test.interruptResultWrite(row.path)
+    await expect(test.run()).rejects.toThrow('result write interrupted')
+
+    expect(await test.run()).toMatchObject({ run: 'parked', last: { reason: 'fault' } })
+    expect(test.sent.map(attempt => attempt.attempt)).toEqual([1])
+  })
 
   it.each([
     { retries: 1, legacy: false },
