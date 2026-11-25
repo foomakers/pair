@@ -227,7 +227,7 @@ test('github readComment returns the comment`s CANONICAL identity (numeric id, r
   )
 })
 
-test('R744-02: a foreign child or blocker never aliases the same local number', () => {
+test('R744-02 and R744-06: scope open children and blockers by repository', () => {
   const issue = (repo, number) => ({ number, state: 'open', repository_url: `https://api.github.com/repos/${repo}` })
   const local = issue('Acme/App', 7)
   const foreign = issue('Acme/Other', 7)
@@ -236,11 +236,13 @@ test('R744-02: a foreign child or blocker never aliases the same local number', 
     [`${paths}/10/sub_issues`]: [local],
     [`${paths}/11/sub_issues`]: [foreign],
     [`${paths}/12/dependencies/blocked_by`]: [local, foreign],
+    [`${paths}/13/sub_issues`]: [{ ...foreign, state: 'closed' }, local],
   } })
   const pm = github.instantiate({ ghBin: gh.ghBin })
   assert.deepEqual(pm.childCards({ id: 10, repo: 'acme/app' }), [{ id: '7', closed: false }])
   assert.throws(() => pm.childCards({ id: 11, repo: 'acme/app' }), /card-out-of-scope: Acme\/Other#7/)
   assert.deepEqual(pm.blockedBy({ id: 12, repo: 'acme/app' }), ['7', 'Acme/Other#7'])
+  assert.deepEqual(pm.childCards({ id: 13, repo: 'acme/app' }), [{ id: '7', closed: false }])
 })
 
 const wowDir = text => {
