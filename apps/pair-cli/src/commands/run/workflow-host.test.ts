@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
 import { join } from 'path'
-import { start } from '@pair/workflows'
+import { hashOf, start } from '@pair/workflows'
+import { fileSystemService as disk } from '@pair/content-ops'
 import { readCardFacts } from './cycle-wiring'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 // @ts-expect-error Vite loads the adopted definition as fixture text.
@@ -680,6 +682,60 @@ describe('telemetry, switched by flag (US-697 AC-5)', () => {
     deny.mockRestore()
     expect(await run(['quick'], OK, options)).toBe(0)
     expect(fs.readFileSync(file)).toBe(current)
+  })
+
+  it('#728 AC-3 F5: preserves state and telemetry modes under umask 077', async () => {
+    const dir = disk.mkdtempSync(join(tmpdir(), 'pair-legacy-run-'))
+    const text = `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 2
+    on-max: escalate
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+`
+    const statePath = join(dir, 'state.json')
+    const telemetryPath = join(dir, 'telemetry.jsonl')
+    const state = {
+      schemaVersion: 1,
+      workflow: { name: 'quick', hash: hashOf(text) },
+      card: '627',
+      steps: { implement: { state: 'ok' }, rounds: { state: 'needs-human' } },
+      loops: { rounds: { round: 2, max: 2, exhausted: true } },
+    }
+    const telemetry = { schema: 2, type: 'step', step: 'review', status: 'needs-human' }
+    const previousUmask = process.umask(0o077)
+    try {
+      disk.writeFileSync(join(dir, 'workflow.yaml'), text)
+      disk.writeFileSync(statePath, JSON.stringify(state))
+      disk.writeFileSync(telemetryPath, `${JSON.stringify(telemetry)}\n`)
+      for (const path of [statePath, telemetryPath]) disk.chmodSync(path, 0o640)
+
+      const started = await start(
+        { dir, files: disk },
+        { text, file: 'quick.yaml' },
+        { card: '627' },
+      )
+      expect(started).toEqual({ status: 'parked', warnings: [] })
+      expect(JSON.parse(disk.readFileSync(statePath))).toMatchObject({
+        steps: { rounds: { state: 'needs-decision' } },
+      })
+      expect(JSON.parse(disk.readFileSync(telemetryPath))).toEqual({
+        ...telemetry,
+        status: 'needs-decision',
+      })
+      expect([statePath, telemetryPath].map(path => disk.statSync(path).mode & 0o777)).toEqual([
+        0o640, 0o640,
+      ])
+    } finally {
+      process.umask(previousUmask)
+      disk.rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
