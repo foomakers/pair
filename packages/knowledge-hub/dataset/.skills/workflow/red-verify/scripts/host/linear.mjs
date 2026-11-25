@@ -181,7 +181,10 @@ export default defineAdapter({
         return { id, number: id, inScope: !team || key === team }
       },
       readCard(ref, { fields } = {}) {
-        const v = view(issue(ref))
+        const extra = [fields?.includes('assignees') ? 'assignee { email }' : '', fields?.includes('createdAt') ? 'createdAt' : ''].join(' ')
+        const i = issue(ref, 'readCard', extra)
+        const login = i.assignee?.email
+        const v = { ...view(i), assignees: login ? [{ login }] : [], createdAt: i.createdAt }
         return fields ? Object.fromEntries(fields.map(f => [f, v[f]])) : { body: v.body }
       },
       findCards({ search } = {}) {

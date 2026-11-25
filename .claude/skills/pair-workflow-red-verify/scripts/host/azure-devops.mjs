@@ -190,7 +190,9 @@ export default defineAdapter({
       readCard(id, { fields } = {}) {
         const wi = showCard(id)
         if (!fields) return { body: bodyOf(wi) }
-        const card = asCard(wi)
+        const assigned = wi?.fields?.['System.AssignedTo']
+        const login = typeof assigned === 'string' ? /<([^>]+)>\s*$/.exec(assigned)?.[1] ?? assigned.trim() : assigned?.uniqueName
+        const card = { ...asCard(wi), assignees: login ? [{ login }] : [], createdAt: wi?.fields?.['System.CreatedDate'] }
         return Object.fromEntries(fields.map(f => [f, card[f]]))
       },
       findCards({ repo, search }) {
