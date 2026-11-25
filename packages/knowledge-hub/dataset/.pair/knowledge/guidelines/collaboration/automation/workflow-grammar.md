@@ -204,6 +204,13 @@ An error refuses the workflow. A warning does not.
 | ------- | ---- |
 | `on-failed: continue` on the last step | Nothing consumes the failure. |
 
+## Worked examples
+
+- [Quick](workflow-examples/quick.yaml) uses the original defaults and runs a fix after a review requests changes.
+- [Escalating](workflow-examples/escalating.yaml) retries a failed implementation with a stronger model.
+- [Converge](workflow-examples/converge.yaml) routes an exhausted loop to one last attempt and posts the reason for a decision.
+- [Delivery](workflow-examples/delivery.yaml) skips approval and merge when its host reports a blocked gate.
+
 ## What a run leaves on disk
 
 ```text

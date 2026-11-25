@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted (amended 2026-11-25 — exhausted outcome in [ADR-037](adr-037-workflow-escalation.md))
 
 ## Date
 
-2026-11-21
+2026-11-21 (amended 2026-11-25)
 
 ## Context
 
@@ -14,9 +14,9 @@ Story #670 needs review and fix to repeat from the workflow file. The linear eng
 
 ## Decision
 
-- A `loop` is one outer step with an ordered child map, a required `until` child, positive `max`, and `on-max: escalate | fail`. No expression language or nested loop.
-- `until: ok` exits immediately. Its failed result passes outputs to following children. Failure of another child starts the next round. `needs-human` resumes at that child in the same round.
-- Rounds started count against `max`. Escalation parks with the last `until` outputs; failure stops. Only `--more-rounds <n>` extends a parked exhausted loop, with requester and time in state.
+- A `loop` has an ordered child map, a required `until` child, a positive `max`, and either an `escalate.exhausted` rule or `on-max: escalate | fail`. Nested loops are invalid.
+- `until: ok` exits immediately. By default, its failed result passes outputs to following children, and failure of another child starts the next round. `blocked` and `needs-decision` park at the child and resume in the same round. Explicit child rules can change whether the run continues.
+- Rounds started count against `max`. On `exhausted`, the loop retains the last `until` outputs. Use `escalate.exhausted` to continue or park. Legacy `on-max: escalate` parks and `on-max: fail` fails the run. `--more-rounds <n>` extends a parked exhausted loop and records the requester and time.
 - Child executions have prefixed ids and round-specific results. State and telemetry carry the round. Telemetry schema 2 adds `round`; the reader accepts historical schema 1 and schema 2.
 - A configuration may change only `steps.<loop-id>.max`. The frozen configuration sets the initial bound; `--reconfigure` may replace it.
 

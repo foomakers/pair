@@ -1,0 +1,20 @@
+version: 1
+name: delivery
+steps:
+  implement:
+    kind: implement
+    escalate:
+      failed: stop
+      blocked: stop
+      needs-decision: { do: stop, comment: 'Decision needed: {reason}' }
+  review: { kind: review }
+  gate:
+    kind: gate
+    with: { checks: [head-unchanged] }
+    escalate: { blocked: continue }
+  approval:
+    kind: approval
+    when: { output: gate.status, is: [ok] }
+  merge:
+    kind: merge
+    when: { output: gate.status, is: [ok] }
