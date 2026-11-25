@@ -12,6 +12,8 @@ import type { Config } from '#registry'
 import { getKnowledgeHubDatasetPath } from '#config/kb-resolver'
 import { isSafePromptText } from './prompt-safety'
 import { createSkillProbe } from './skill-probe'
+import { locateCycleScripts } from './cycle-scripts'
+import { canCommentOnCard } from './workflow-facts'
 
 const WORKFLOWS_DIR = '.pair/adoption/tech/workflows'
 export const WAY_OF_WORKING = '.pair/adoption/tech/way-of-working.md'
@@ -57,6 +59,8 @@ export function checkWorkflow(
     gateTargets: Object.keys(readGateTargets(registryText)),
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
+    canCommentOnCard: () =>
+      canCommentOnCard(() => locateCycleScripts(fs, project, cwd).scriptsDir, cwd),
     availableWorkflows: [
       join(main, WORKFLOWS_DIR),
       ...(() => {

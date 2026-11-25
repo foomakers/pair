@@ -44,6 +44,7 @@ import {
   type StepSettings,
   type Usage,
   type Workflow,
+  type WorkflowHost,
   type WorkflowsConfig,
 } from '@pair/workflows'
 import { loadConfigWithOverrides } from '#config'
@@ -607,7 +608,10 @@ function hostCardFacts(resolved: Resolved, cardId: string, { fs, deps }: Service
 function hostKindsOf(
   { resolved, request, runDir, worktree, flagStep }: Opened,
   services: Services,
-) {
+): Pick<
+  WorkflowHost,
+  'card' | 'readResultFacts' | 'assignCard' | 'commentOnCard' | 'warn' | 'perform' | 'runGates'
+> {
   const { fs } = services
   const path = join(resolved.main, WAY_OF_WORKING)
   const way = fs.existsSync(path) ? fs.readFileSync(path) : ''
@@ -615,26 +619,27 @@ function hostKindsOf(
   const targets = readGateTargets(way)
   const cwd = worktree ?? resolved.cwd
   const scriptDir = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
+  const call = (action: string, card: string, data?: unknown) =>
+    workflowOperation(scriptDir, resolved.cwd, { action, card, data })
   const gate = performHostKind(registry, cwd, targets, step =>
     workflowFacts(scriptDir, resolved.cwd, step),
   )
   const approval = approvalRunner(
     { dir: runDir, files: fs },
-    approvalPlatform((action, card, data) =>
-      workflowOperation(scriptDir, resolved.cwd, { action, card, data }),
-    ),
+    approvalPlatform(call),
     flagStep !== undefined && request.flagAnswer !== undefined
       ? { step: flagStep, answer: request.flagAnswer }
       : undefined,
   )
-  const merge = workflowMerge(
-    (action, card, data) => workflowOperation(scriptDir, resolved.cwd, { action, card, data }),
-    resolved.main,
-  )
+  const merge = workflowMerge(call, resolved.main)
   return {
     ...hostCardFacts(resolved, request.card, services),
     assignCard: (assign: Assignment) =>
       assignWorkflowCard(scriptDir, resolved.cwd, request.card, assign),
+    commentOnCard: async ({ card, marker, body }) => {
+      await call('comment-on-card', card, { marker, body })
+    },
+    warn: (message: string) => console.log(`  Warning: ${message}`),
     perform: async (step: StepLaunch) => {
       if (step.kind !== 'approval' && step.kind !== 'merge') return gate(step)
       try {

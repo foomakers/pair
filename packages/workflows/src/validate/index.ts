@@ -28,8 +28,8 @@ export interface ValidationDeps {
   readonly launchInputs: readonly string[]
   /** The host's prompt-safety check: every text of the file that reaches an agent passes it. */
   readonly isSafeText: (value: string) => boolean
-  /** Whether the host can write escalation comments on the card. */
-  readonly canCommentOnCard?: boolean
+  /** Whether the host can write escalation comments on the card, queried only when needed. */
+  readonly canCommentOnCard?: boolean | (() => boolean)
 }
 
 export interface Validation {
@@ -519,7 +519,7 @@ export function validate(text: string, file: string, deps: ValidationDeps): Vali
         errors: [],
         warnings: [
           ...warnings(parsed.workflow),
-          ...escalationWarnings(parsed.workflow, deps.canCommentOnCard === true),
+          ...escalationWarnings(parsed.workflow, deps.canCommentOnCard),
           ...mergeWarnings(parsed.workflow),
         ].map(locate),
       }

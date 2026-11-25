@@ -36,7 +36,7 @@ function ruleWarnings(
   workflow: Workflow,
   step: Step,
   path: readonly string[],
-  canCommentOnCard: boolean,
+  canCommentOnCard: () => boolean,
 ): WorkflowError[] {
   if (step.escalate === undefined) return []
   const at = [...path, 'escalate']
@@ -50,7 +50,7 @@ function ruleWarnings(
             fix: `remove escalate.${status}`,
           }),
         ]),
-    ...(typeof rule === 'object' && !canCommentOnCard
+    ...(typeof rule === 'object' && !canCommentOnCard()
       ? [
           errorAt(workflow, [...at, status, 'comment'], {
             problem: 'the host does not support card comments',
@@ -73,7 +73,12 @@ function ruleWarnings(
   return warnings
 }
 
-export function escalationWarnings(workflow: Workflow, canCommentOnCard: boolean): WorkflowError[] {
+export function escalationWarnings(
+  workflow: Workflow,
+  support: boolean | (() => boolean) = false,
+): WorkflowError[] {
+  let supported = typeof support === 'boolean' ? support : undefined
+  const canCommentOnCard = () => (supported ??= typeof support === 'function' && support())
   const producers = new Map(addressedSteps(workflow).map(step => [step.id, step]))
   const check = (step: Step, path: readonly string[]) => [
     ...ruleWarnings(workflow, step, path, canCommentOnCard),

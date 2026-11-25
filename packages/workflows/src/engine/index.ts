@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { basename, join } from 'node:path'
 import { readResult } from '../dispatch'
 import {
@@ -65,6 +65,7 @@ export type EngineOutcome = {
   | {
       readonly status: Exclude<StepStatus, 'ok'>
       readonly rule: EscalationRule
+      readonly round?: number
       readonly reason?: string
     }
   | {
@@ -97,6 +98,8 @@ export interface RunStateFile {
   readonly card: string
   /** Labels used for configuration selection when this run started. */
   readonly cardLabels?: readonly string[]
+  /** Allocated before the first escalation comment and preserved on resume. */
+  readonly instanceId?: string
   /** Present when the run froze a configuration; `override` is the `--config-override` applied, as given. */
   readonly configuration?: { readonly hash: string; readonly override?: unknown } | undefined
   readonly steps: Readonly<Record<string, StepRecord>>
@@ -236,6 +239,17 @@ export interface RunIdentity {
 export function identityOf(run: RunDirectory): RunIdentity {
   const { workflow, card } = requireState(run)
   return { run: basename(run.dir), workflow: workflow.name, card }
+}
+
+export async function escalationCommentTarget(
+  run: RunDirectory,
+  { id, round, status }: EngineOutcome,
+): Promise<{ card: string; marker: string }> {
+  const state = requireState(run)
+  const instanceId = state.instanceId ?? randomUUID()
+  if (state.instanceId === undefined) await writeState(run, { ...state, instanceId })
+  const key = hashOf(JSON.stringify([instanceId, id, round, status]))
+  return { card: state.card, marker: `<!-- pair:workflow-escalation ${key} -->` }
 }
 
 /** The frozen copy, parsed. It was valid when `start` froze it. */
@@ -1235,11 +1249,23 @@ function retryAfter(status: StepStatus, previous?: StepRecord, invalidate?: bool
 const recordOptions = (value: string | RecordOptions | undefined): RecordOptions =>
   typeof value === 'string' ? { output: value } : (value ?? {})
 
-function observeEscalation(run: RunDirectory, id: string, step: Step, result: StepResult): void {
+function observeEscalation(
+  run: RunDirectory,
+  { id, round }: { id: string; round: number | undefined },
+  step: Step,
+  result: StepResult,
+): void {
   const { status, summary, reason } = result
   const rule = explicitEscalation(step, status)
   if (status !== 'ok' && rule !== undefined)
-    run.observeOutcome?.({ id, status, rule, summary, ...(reason !== undefined && { reason }) })
+    run.observeOutcome?.({
+      id,
+      status,
+      rule,
+      summary,
+      ...(round !== undefined && { round }),
+      ...(reason !== undefined && { reason }),
+    })
 }
 
 /**
@@ -1284,7 +1310,7 @@ export async function record(
     steps,
     ...(loops !== undefined && { loops, latest: { ...state.latest, ...outputs } }),
   })
-  observeEscalation(run, stepId, step, settled)
+  observeEscalation(run, { id: stepId, round }, step, settled)
   observeExhaustion(run, progress)
   return settled
 }

@@ -1,5 +1,6 @@
 import { buildMessage, readResult, type InvocationStyle } from '../dispatch'
 import {
+  escalationCommentTarget,
   next,
   priorRefinement,
   record,
@@ -65,6 +66,10 @@ export interface WorkflowHost {
   card?(): Promise<CardFacts>
   /** Applies the step's directive before it starts. Returns a reason when the card is held. */
   assignCard?(assignment: Assignment): Promise<string | undefined>
+  /** Upsert an escalation comment using its stable marker on the card. */
+  commentOnCard?(comment: { card: string; marker: string; body: string }): Promise<void>
+  /** Reports a failed escalation comment. */
+  warn?(message: string): void
   /** Runs a step of a host kind (`gate`, `approval`, `merge`): the result it returns, no agent. */
   perform?(step: StepLaunch): Promise<unknown>
   /** Runs the `gates` of a step that ended `ok`: `undefined` when all pass, else the failed result. */
@@ -360,8 +365,28 @@ function escalationOf(outcome: EngineOutcome | undefined): Pick<StepExecution, '
   return action === undefined ? {} : { escalate: { status: outcome.status, do: action } }
 }
 
-async function flushOutcomes(outcomes: EngineOutcome[], writer: Writer): Promise<void> {
-  for (const outcome of outcomes.splice(0)) {
+async function commentOnEscalation(
+  host: WorkflowHost,
+  run: RunDirectory,
+  outcome: EngineOutcome,
+): Promise<void> {
+  if (typeof outcome.rule !== 'object') return
+  try {
+    if (host.commentOnCard === undefined) throw new Error('the host does not support card comments')
+    const body = outcome.rule.comment.replaceAll(
+      '{reason}',
+      () => outcome.reason ?? 'no reason given',
+    )
+    await host.commentOnCard({ ...(await escalationCommentTarget(run, outcome)), body })
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    host.warn?.(`${outcome.id}: escalation comment was not written (${reason})`)
+  }
+}
+
+async function flushOutcomes(host: WorkflowHost, run: ObservedRun, writer: Writer): Promise<void> {
+  for (const outcome of run.outcomes.splice(0)) {
+    await commentOnEscalation(host, run, outcome)
     if (writer === undefined || outcome.status !== 'exhausted') continue
     const { id, round, reason, status } = outcome
     await writer.step({
@@ -495,7 +520,7 @@ async function runStep(
     })
   } else await emitStep(host, starting(step))
   const { status, summary, reason, detail } = await executeMetered(host, run, launch, writer)
-  await flushOutcomes(run.outcomes, writer)
+  await flushOutcomes(host, run, writer)
   const result = {
     step: step.id,
     kind: step.kind,
@@ -520,7 +545,7 @@ export async function runSteps(
   let last: StepEvent | undefined
   for (;;) {
     const { ready, state, event } = await advance(host, run)
-    await flushOutcomes(run.outcomes, writer)
+    await flushOutcomes(host, run, writer)
     const step = ready[0]
     if (state !== 'running' || step === undefined) return ended(state, event ?? last, writer)
     last = await runStep(host, run, step, writer)

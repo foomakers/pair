@@ -72,9 +72,12 @@ try {
     const expected = JSON.parse(raw)
     const target = host.code.workflowPrDetails({ pr })
     result = pr === expected.pr && target.head === expected.head && target.merged === true
-  } else if (action === 'approval-notice') {
+  } else if (action === 'card-comment-support') {
+    result = Object.hasOwn(host.pm, 'commentOnCard')
+  } else if (action === 'approval-notice' || action === 'comment-on-card') {
     const { marker, body } = JSON.parse(raw)
     result = host.pm.commentOnCard({ id: card, marker, body })
+    if (action === 'comment-on-card' && result?.error) throw new Error(result.error)
   } else if (action === 'approval-target' || action === 'approval-answers') {
     const { code, pm } = host
     const pr = code.workflowPr({ id: card })

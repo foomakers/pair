@@ -174,6 +174,21 @@ it('refuses multiple linked PRs and names them (#726 T-1)', async () => {
 })
 
 it.each([
+  ['prefers the open PR over a historical merge', 'open'],
+  ['falls back to the lone merged PR when there is no open PR', 'merged'],
+] as const)('%s (#728 T-9)', async (_name, state) => {
+  const merged = { state: 'closed', merged_at: '2026-11-25T08:00:00Z' }
+  github.pulls = [
+    { ...pr(736), ...(state === 'open' ? merged : { state: 'closed' }) },
+    { ...pr(735), ...(state === 'merged' && merged) },
+  ]
+
+  await expect(
+    workflowOperation(() => scripts, dir, { action: 'approval-target', card: '726' }),
+  ).resolves.toEqual({ pr: 735, head: sha })
+})
+
+it.each([
   [[], 'pending'],
   [[{ name: 'tests', status: 'in_progress' }], 'pending'],
   [[{ name: 'tests', status: 'completed', conclusion: 'success' }], 'green'],

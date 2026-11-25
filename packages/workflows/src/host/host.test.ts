@@ -234,6 +234,125 @@ const statesOf = (host: WorkflowHost) =>
     ).map(([id, step]) => [id, step.state]),
   )
 
+describe('#728 AC-8: escalation comments', () => {
+  const source = {
+    ...SOURCE,
+    text: `${QUICK}    escalate:
+      needs-decision: { do: stop, comment: 'Decision: {reason}. Confirm: {reason}.' }
+      blocked: { do: stop, comment: 'Blocked: {reason}.' }
+  later: { kind: implement }
+`,
+  }
+  const card = '627'
+  const result = (status = 'needs-decision', reason?: string) =>
+    fenced({ status, summary: 'waiting', ...(reason !== undefined && { reason }) })
+  type Comment = { card: string; marker: string; body: string }
+
+  it('uses one card comment for the same stop and new comments for a new status and restart', async () => {
+    const answers = [
+      result('needs-decision', 'pick A or B'),
+      result('needs-decision', 'pick A or B'),
+      result('blocked'),
+      result('needs-decision', 'pick A or B'),
+    ]
+    const fake = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => answers.shift(),
+    })
+    const comments = new Map<string, Comment>()
+    const host = {
+      ...fake.host,
+      commentOnCard: async (comment: Comment) => {
+        expect(statesOf(host).review).toMatch(/^(needs-decision|blocked)$/)
+        comments.set(comment.marker, comment)
+      },
+    }
+    const run = { files: host.files, dir: DIR }
+    const stop = async (restart = false) => {
+      await start(run, source, { card, restart })
+      expect((await runSteps(host, DIR)).run).toBe('parked')
+    }
+
+    await stop()
+    await stop()
+    const afterRetry = [...comments.values()]
+    expect.soft(afterRetry).toEqual([
+      {
+        card,
+        marker: expect.stringMatching(/\S/),
+        body: 'Decision: pick A or B. Confirm: pick A or B.',
+      },
+    ])
+    await stop()
+    await stop(true)
+    expect([...comments.values()].map(comment => comment.body)).toEqual([
+      'Decision: pick A or B. Confirm: pick A or B.',
+      'Blocked: no reason given.',
+      'Decision: pick A or B. Confirm: pick A or B.',
+    ])
+    expect(fake.launched.map(step => step.step)).not.toContain('later')
+  })
+
+  it.each(['absent', 'unavailable'] as const)(
+    'keeps the workflow parked and warns when the comment host is %s',
+    async capability => {
+      const fake = fakeHost({
+        'pair-process-implement': () => IMPLEMENTED,
+        'pair-process-review': () => result(),
+      })
+      const warn = vi.fn()
+      const commentOnCard = vi.fn(async (_comment: Comment) => {
+        throw new Error('permission denied')
+      })
+      const host = { ...fake.host, warn, ...(capability === 'unavailable' && { commentOnCard }) }
+
+      await start({ files: host.files, dir: DIR }, source, { card })
+      expect((await runSteps(host, DIR)).run).toBe('parked')
+      expect(statesOf(host)).toMatchObject({ review: 'needs-decision', later: 'pending' })
+      if (capability === 'unavailable') expect.soft(commentOnCard).toHaveBeenCalledOnce()
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(/comment.*(?:not written|could not be written)/i),
+      )
+    },
+  )
+
+  it('posts again when another round exhausts the loop, including after a skipped final step', async () => {
+    const text = `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 1
+    escalate: { exhausted: { do: stop, comment: 'Review did not converge.' } }
+    steps:
+      review: { kind: review }
+      fix: { kind: implement, when: { output: implement.status, is: [failed] } }
+`
+    const fake = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => result('failed'),
+    })
+    const comments = new Map<string, string>()
+    const host = {
+      ...fake.host,
+      commentOnCard: async ({ marker, body }: Comment) => void comments.set(marker, body),
+    }
+    const run = { files: host.files, dir: DIR }
+    const telemetry = { host: 'pair-run' as const, settings: () => ({ engine: 'claude' }) }
+    const loop = { ...SOURCE, text }
+
+    await start(run, loop, { card })
+    expect((await runSteps(host, DIR, telemetry)).run).toBe('parked')
+    expect((await start(run, loop, { card })).status).toBe('parked')
+    expect.soft([...comments.values()]).toEqual(['Review did not converge.'])
+    await start(run, loop, { card, moreRounds: 1 })
+    expect((await runSteps(host, DIR, telemetry)).run).toBe('parked')
+    expect([...comments.values()]).toEqual(['Review did not converge.', 'Review did not converge.'])
+  })
+})
+
 describe('runSteps: a linear run (AC-1)', () => {
   it('runs the steps in file order, reports each outcome and leaves every step ok', async () => {
     const { host, events, launched } = fakeHost({

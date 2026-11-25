@@ -181,6 +181,24 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+it('reports a missing escalation comment to the console while the run stays parked (#728 AC-8)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    `${QUICK}    escalate: { needs-decision: { do: stop, comment: 'Decision: {reason}' } }\n`,
+  )
+
+  expect(
+    await run(['quick'], {
+      ...OK,
+      'pair-process-review': () =>
+        fenced({ status: 'needs-decision', summary: 'waiting', reason: 'pick A or B' }),
+    }),
+  ).toBe(0)
+
+  expect(states()['review']).toBe('needs-decision')
+  expect(lines.join('\n')).toMatch(/comment.*(?:not written|could not be written)/i)
+})
+
 const MAPPING = `## State Mapping
 
 | Board State | Macrostate |

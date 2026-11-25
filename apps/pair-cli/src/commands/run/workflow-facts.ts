@@ -1,7 +1,22 @@
+import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import type { Assignment, FactReader, StepLaunch } from '@pair/workflows'
 import { runHostProcess } from './host-process'
 import { operationTimeout } from './workflow-facts-budget'
+
+/** Ask the installed adapter about local capability without contacting the tracker. */
+export function canCommentOnCard(scriptDir: () => string, cwd: string): boolean {
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [join(scriptDir(), 'workflow-facts.mjs'), 'card-comment-support'],
+      { cwd, encoding: 'utf8', timeout: 5_000 },
+    )
+    return result.status === 0 && result.stdout.trim() === 'true'
+  } catch {
+    return false
+  }
+}
 
 /** Call the installed host adapter without involving the agent. */
 export async function workflowOperation(
