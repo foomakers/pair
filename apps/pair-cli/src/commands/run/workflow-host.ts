@@ -1,5 +1,5 @@
 import { savedWorkflow } from './workflow-saved-state'
-import { recoverWorktree } from './workflow-worktree'
+import { prepareReplayHead, recoverWorktree } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
@@ -810,6 +810,19 @@ async function drive(
     throw new Error('The closed card no longer has a resumable merge')
   const flagStep = parkedApproval(opened, fs)
   const replay = await refreshReplayInputs(opened, fs)
+  const prepare = async () =>
+    opened.closureOnly
+      ? resolved.main
+      : await (deps.workflow?.prepareWorktree ?? cycleWorktree)({
+          fs,
+          project: resolved.project,
+          cwd: resolved.cwd,
+          main: resolved.main,
+          card: request.card,
+          title: opened.title,
+        })
+  const replayTree = replay === undefined ? undefined : await prepare()
+  if (replayTree !== undefined) await prepareReplayHead(replayTree, String(replay?.inputs['head']))
   const started = await start(
     { files: fs, dir: runDir },
     resolved.source,
@@ -828,16 +841,7 @@ async function drive(
   )
   const stopped = stopOf(started.status, request)
   if (stopped !== undefined) return stopped
-  const worktree = opened.closureOnly
-    ? resolved.main
-    : await (deps.workflow?.prepareWorktree ?? cycleWorktree)({
-        fs,
-        project: resolved.project,
-        cwd: resolved.cwd,
-        main: resolved.main,
-        card: request.card,
-        title: opened.title,
-      })
+  const worktree = replayTree ?? (await prepare())
   console.log(`  Worktree: ${worktree}`)
   return runOnConsole(
     config,

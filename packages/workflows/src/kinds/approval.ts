@@ -8,6 +8,8 @@ export const approval: StepKind = {
     required: ['card'],
     properties: {
       card: { type: 'string', description: 'The card.' },
+      reviewedHead: { type: 'string', description: 'The head verified by a preceding review.' },
+      gatedHead: { type: 'string', description: 'The head verified by a preceding gate.' },
       pr: { type: 'integer', description: 'The pull request, whose native reviews count.' },
     },
   },

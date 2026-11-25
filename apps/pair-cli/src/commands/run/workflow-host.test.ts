@@ -797,7 +797,9 @@ it.each([
       }
       if (bin === 'git') {
         if (args[0] === 'status') return success(obstacle === 'dirty' ? '?? local-work' : '')
-        if (args[0] === 'rev-parse') return success(localHead)
+        if (args[0] === 'rev-parse')
+          return success(args.includes('FETCH_HEAD') ? currentHead : localHead)
+        if (args[0] === 'symbolic-ref') return success('refs/heads/feature/US-627-x')
         if (args[0] === 'merge-base')
           return { ...success(), status: obstacle === 'divergent' ? 1 : 0 }
         if (args[0] === 'merge') {
@@ -876,7 +878,7 @@ it.each([
         },
       }
       if (obstacle !== undefined) {
-        expect(await run(['delivery'], recheck)).toBe(1)
+        await expect(run(['delivery'], recheck)).rejects.toThrow('replay-worktree')
         expect(reviewInputs).toHaveLength(0)
         expect(localHead).toBe(HEAD)
         obstacle = undefined

@@ -15,6 +15,7 @@ steps:
       checks: [head-unchanged]
   approval:
     kind: approval
+    on-resume: { reason: head-moved, step: review }
     with: { question: 'Approve merging this reviewed head?' }
   merge:
     kind: merge

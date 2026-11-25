@@ -47,6 +47,16 @@ export function approvalRunner(
         summary: 'Approval PR no longer matches the linked PR',
         reason: 'pr-changed',
       }
+    if (
+      [step.inputs['reviewedHead'], step.inputs['gatedHead']].some(
+        head => head !== undefined && head !== live.head,
+      )
+    )
+      return {
+        status: 'failed',
+        summary: 'Review or gate covered an earlier head',
+        reason: 'head-moved',
+      }
     const key = parkKey(run, step, live)
     const dir = join(run.dir, 'steps', step.id, 'approval')
     const path = join(dir, key + '.json')
