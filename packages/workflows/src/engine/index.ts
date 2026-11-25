@@ -55,6 +55,8 @@ export interface StepRecord {
   readonly outputs?: Readonly<Record<string, unknown>>
   /** A confirmed result waiting for the host's Ready transition. */
   readonly pendingSuccess?: StepResult
+  /** Selection status before a Ready transition whose staged result became stale. */
+  readonly retryBoardStatus?: string
 }
 
 /** `state.json`: the only source for `next`. */
@@ -91,6 +93,7 @@ export interface StepLaunch {
   readonly round?: number
   readonly confirmReady?: true
   readonly pendingSuccess?: StepResult
+  readonly retryBoardStatus?: string
 }
 
 export const hashOf = (text: string): string =>
@@ -372,7 +375,8 @@ export function pendingBoardStatus(
   const state = readState(run)
   if (state?.card !== identity.card || state.workflow.name !== identity.workflow) return undefined
   for (const step of frozenWorkflow(run).steps) {
-    const status = pendingReadyResult(run, step, state.steps[step.id])?.['boardStatus']
+    const saved = state.steps[step.id]
+    const status = saved?.retryBoardStatus ?? pendingReadyResult(run, step, saved)?.['boardStatus']
     if (typeof status === 'string') return status
   }
   return undefined
@@ -438,6 +442,7 @@ function reopenedSteps(
         {
           state: 'pending',
           ...(saved.executions !== undefined && { executions: saved.executions }),
+          ...retryBoardStatusOf(saved),
           ...(pendingSuccess !== undefined && { pendingSuccess }),
         },
       ]
@@ -570,6 +575,12 @@ const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 const pendingOf = (saved?: StepRecord) =>
   saved?.pendingSuccess === undefined ? {} : { pendingSuccess: saved.pendingSuccess }
 
+const retryBoardStatusOf = (saved?: StepRecord) =>
+  saved?.retryBoardStatus === undefined ? {} : { retryBoardStatus: saved.retryBoardStatus }
+
+const awaitingReady = (saved?: StepRecord) =>
+  saved?.pendingSuccess !== undefined || saved?.retryBoardStatus !== undefined
+
 const readyOf = (step: Step) =>
   cardStateOf(step)?.state === 'Ready' ? { confirmReady: true as const } : {}
 
@@ -585,7 +596,8 @@ async function nextInLoop(
   if (childHalt !== undefined) return { ready: [], run: childHalt }
   const attempt = launches(state, id)
   const round = state.loops?.[step.id]?.round ?? 1
-  const pending = pendingOf(state.steps[id])
+  const saved = state.steps[id]
+  const pending = { ...pendingOf(saved), ...retryBoardStatusOf(saved) }
   await writeState(run, {
     ...state,
     steps: {
@@ -681,7 +693,7 @@ async function skipIfNotWhen(
   const child = inLoop ? loopChild(state, step).child : undefined
   const target = child ?? step
   const id = inLoop ? `${step.id}/${target.id}` : step.id
-  if (state.steps[id]?.pendingSuccess !== undefined) return undefined
+  if (awaitingReady(state.steps[id])) return undefined
   const why = await whenMismatch(target.when, state, card)
   if (why === undefined) return undefined
   const entry: StepRecord = {
@@ -709,7 +721,8 @@ async function nextPlain(
 ): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
   if (step.kind === 'loop') throw new Error('loop is not directly launchable')
   const attempt = launches(state, step.id)
-  const pending = pendingOf(state.steps[step.id])
+  const saved = state.steps[step.id]
+  const pending = { ...pendingOf(saved), ...retryBoardStatusOf(saved) }
   await writeState(run, {
     ...state,
     steps: { ...state.steps, [step.id]: { state: 'running', executions: attempt, ...pending } },
@@ -868,6 +881,25 @@ function recordOf(
   }
 }
 
+type RecordOptions = {
+  readonly output?: string | undefined
+  readonly invalidatePendingSuccess?: boolean | undefined
+}
+
+function retryAfter(status: StepStatus, previous?: StepRecord, invalidate?: boolean) {
+  if (status === 'ok') return {}
+  const retryBoardStatus =
+    previous?.retryBoardStatus ??
+    (invalidate ? previous?.pendingSuccess?.['boardStatus'] : undefined)
+  return {
+    ...(status === 'failed' && !invalidate ? pendingOf(previous) : {}),
+    ...(typeof retryBoardStatus === 'string' && { retryBoardStatus }),
+  }
+}
+
+const recordOptions = (value: string | RecordOptions | undefined): RecordOptions =>
+  typeof value === 'string' ? { output: value } : (value ?? {})
+
 /**
  * Records the result of a step: validated against its kind (a result that breaks the contract is
  * recorded `failed`, `invalid-result`), written to `steps/<id>/result.json`, then to `state.json`.
@@ -877,8 +909,9 @@ export async function record(
   run: RunDirectory,
   stepId: string,
   result: unknown,
-  output?: string,
+  outputOrOptions?: string | RecordOptions,
 ): Promise<StepResult> {
+  const { output, invalidatePendingSuccess } = recordOptions(outputOrOptions)
   const state = requireState(run)
   const { step, outer, childId } = launchable(run, stepId)
   const kind = kindByName[step.kind]
@@ -894,7 +927,7 @@ export async function record(
   const previous = state.steps[stepId]
   const entry = {
     ...recordOf(settled, outputs, round, previous?.executions),
-    ...(status === 'failed' ? pendingOf(previous) : {}),
+    ...retryAfter(status, previous, invalidatePendingSuccess),
   }
   const { steps, loops } =
     childId !== undefined && outer?.kind === 'loop'

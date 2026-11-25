@@ -736,6 +736,16 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     let failRead = false
     let failReady = failure !== undefined
     const applied = failure === 'unconfirmed' || failure === 'legacy'
+    function prepareCard(id: string, refine: boolean) {
+      if (refine) {
+        bodies.set(id, '## Acceptance Criteria\n\n## Technical Analysis\n\n## Assumptions')
+        return { riskTag: 'risk:green', openQuestions: [] }
+      }
+      const body = bodies.get(id) ?? ''
+      if (body.includes('**T-2**:')) return { tasks: 2 }
+      bodies.set(id, `${body}\n\n## Task Breakdown\n\n- [ ] **T-1**: Add a test`)
+      return { tasks: 1 }
+    }
     const readSelection = async () => ({
       cards: ids.map(id => ({
         id,
@@ -775,18 +785,10 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
       async runIteration(input) {
         const id = /- card: (\d+)/.exec(input.promptText)?.[1] ?? ''
         const current = status.get(id)
-        const refresh = bodies.get(id)?.includes('**T-2**:') ?? false
         launched.push(input)
-        expect(current).toBe(refresh && applied ? ready : draft)
         if (id === '12') prerequisiteAtLaunch.push(states('refinement-9')['tasks'] ?? '')
-        const refine = skillOf(input.promptText) === 'pair-process-refine-story'
-        if (!refresh)
-          bodies.set(
-            id,
-            refine
-              ? '## Acceptance Criteria\n\n## Technical Analysis\n\n## Assumptions'
-              : `${bodies.get(id) ?? ''}\n\n## Task Breakdown\n\n- [ ] **T-1**: Add a test`,
-          )
+        const result = prepareCard(id, skillOf(input.promptText) === 'pair-process-refine-story')
+        expect(current).toBe(result.tasks === 2 && applied ? ready : draft)
         input.onEvent?.({
           type: 'result',
           subtype: 'success',
@@ -794,7 +796,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
             status: 'ok',
             summary: 'Prepared',
             boardStatus: current,
-            ...(refine ? { riskTag: 'risk:green', openQuestions: [] } : { tasks: refresh ? 2 : 1 }),
+            ...result,
           }),
         })
         return { outcome: 'success', detail: 'terminal event: success' }
@@ -803,8 +805,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     const command = parseRunCommand({ cwd: project, card: ids.join(','), parallel: '2' }, [
       'refinement',
     ])
-    expect(await handleRunCommand(command, fs, { workflow })).toBe(failReady ? 1 : 0)
-    if (failReady) {
+    async function retryReady() {
       const afterFailure = applied ? ready : draft
       expect(status.get('9')).toBe(afterFailure)
       expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'failed' })
@@ -845,6 +846,8 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
       expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'ok' })
       expect(launched).toHaveLength(stale === 'tasks' ? 7 : 6)
     }
+    expect(await handleRunCommand(command, fs, { workflow })).toBe(failReady ? 1 : 0)
+    if (failReady) await retryReady()
     expect(prerequisiteAtLaunch).toEqual(['ok', 'ok'])
     expect([...status.values()]).toEqual([ready, ready, ready])
     expect(new Set(launched.map(step => step.cwd)).size).toBe(3)

@@ -143,7 +143,7 @@ export async function readWorkflowPrHead(at: Platform, pr: number): Promise<stri
 }
 
 export function readWorkflowCard(at: Platform, card: string) {
-  return readPlatform<Pick<WorkflowCard, 'body' | 'labels' | 'boardState'>>(at, [
+  return readPlatform<Pick<WorkflowCard, 'body' | 'labels' | 'boardState' | 'boardError'>>(at, [
     'workflow-card',
     '--story',
     card,

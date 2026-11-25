@@ -524,6 +524,7 @@ function hostKindsOf({ resolved, request, worktree }: Opened, { fs, deps }: Serv
         if (step.kind === 'implement')
           return { head: await readWorkflowPrHead({ fs, ...resolved }, Number(result['pr'])) }
         const card = await readCard()
+        if (card.boardError !== undefined) throw new Error(card.boardError)
         return { card: { ...card, boardStatus: card.boardState } }
       }),
     perform: performHostKind(
