@@ -729,14 +729,25 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
   })
 })
 
-it.each(['unchanged', 'moved', 'returned', 'gate', 'fix', 'no-route'] as const)(
+it.each([
+  'unchanged',
+  'moved',
+  'returned',
+  'gate',
+  'parked',
+  'dirty',
+  'divergent',
+  'fix',
+  'no-route',
+] as const)(
   'replays only a changed review boundary (%s, 726-ac4-head-move-resume)',
   async scenario => {
     const moved = scenario !== 'unchanged'
     const newHead = scenario === 'returned' ? HEAD : 'b'.repeat(40)
     const fixedHead = 'c'.repeat(40)
     let currentHead = HEAD
-    let staleWorktree = scenario === 'gate'
+    let localHead = HEAD
+    let obstacle: string | undefined
     let moveAt = scenario === 'gate' ? 'head' : undefined
     let notices = 0
     let gates = 0
@@ -784,8 +795,18 @@ it.each(['unchanged', 'moved', 'returned', 'gate', 'fix', 'no-route'] as const)(
         gates++
         return success()
       }
-      if (bin === 'git')
-        return success(args[0] === 'rev-parse' ? (staleWorktree ? HEAD : currentHead) : '')
+      if (bin === 'git') {
+        if (args[0] === 'status') return success(obstacle === 'dirty' ? '?? local-work' : '')
+        if (args[0] === 'rev-parse') return success(localHead)
+        if (args[0] === 'merge-base')
+          return { ...success(), status: obstacle === 'divergent' ? 1 : 0 }
+        if (args[0] === 'merge') {
+          expect(args).toEqual(['merge', '--ff-only', currentHead])
+          expect(obstacle).toBeUndefined()
+          localHead = currentHead
+        }
+        return success()
+      }
       expect(bin).toBe(process.execPath)
       const [, action, card, raw] = args
       expect(card).toBe('627')
@@ -812,8 +833,10 @@ it.each(['unchanged', 'moved', 'returned', 'gate', 'fix', 'no-route'] as const)(
         expect(await run(['delivery'])).toBe(0)
         expect(notices).toBe(1)
         if (moved) {
-          moveAt = 'merge'
+          moveAt = scenario === 'parked' ? 'approval-target' : 'merge'
           expect(await run(['delivery'], OK, { approve: '627' })).toBe(1)
+          expect(notices).toBe(1)
+          if (scenario === 'dirty' || scenario === 'divergent') obstacle = scenario
         }
       }
     }
@@ -847,16 +870,16 @@ it.each(['unchanged', 'moved', 'returned', 'gate', 'fix', 'no-route'] as const)(
         },
         'pair-process-fix': (input: SpawnIterationInput) => {
           fixInputs.push(input.promptText)
+          localHead = fixedHead
           currentHead = fixedHead
           return fenced({ status: 'ok', summary: 'Fixed', head: fixedHead, resolutions: [] })
         },
       }
-      if (scenario === 'gate') {
-        expect(await run(['delivery'], recheck), lines.join('\n')).toBe(1)
-        expect(lines.join('\n')).toContain('gate-worktree-mismatch')
-        expect(gates).toBe(0)
-        expect(notices).toBe(0)
-        staleWorktree = false
+      if (obstacle !== undefined) {
+        expect(await run(['delivery'], recheck)).toBe(1)
+        expect(reviewInputs).toHaveLength(0)
+        expect(localHead).toBe(HEAD)
+        obstacle = undefined
       }
       expect(await run(['delivery'], recheck), lines.join('\n')).toBe(0)
       expect(reviewInputs).toHaveLength(scenario === 'fix' ? 2 : 1)
