@@ -1125,6 +1125,50 @@ it.each(['refine', 'tasks'])(
   },
 )
 
+function fakeWorkflowBoard(boardFailure?: string, failSelected = false) {
+  write(
+    '.pair/adoption/tech/way-of-working.md',
+    REGISTRY + '\n- `pm-tool`: `github`\n- `pm-project`: `Pair`\n',
+  )
+  const skill = '.claude/skills/pair-workflow-cycle'
+  write(`${skill}/SKILL.md`, '# Cycle\n')
+  fs.symlinkSync(
+    join(__dirname, '../../../../../', skill, 'scripts'),
+    join(project, skill, 'scripts'),
+  )
+  const reads = join(project, 'dependencies.log')
+  const gh = join(project, 'gh')
+  write(
+    'gh',
+    `#!/usr/bin/env node
+const fs = require('node:fs')
+const [command, action, id] = process.argv.slice(2)
+const out = value => process.stdout.write(JSON.stringify(value))
+if (command === 'repo') process.stdout.write('acme/pair')
+else if (command === 'project') out({ projects: ${JSON.stringify(boardFailure ? [{ id: 'P1', title: 'Pair' }] : [])} })
+else if (command === 'issue' && action === 'view') {
+  if (!process.argv.includes('-q')) out({ title: 'Story ' + id, body: '', labels: id === '9' ? [{ name: 'wanted' }] : [], state: 'OPEN' })
+} else if (command === 'api' && action === 'graphql') {
+  if (process.argv.includes('n=' + process.env.PAIR_TEST_BOARD_OUTAGE)) {
+    process.stderr.write('HTTP 503\\nRetry-After: 0\\n')
+    process.exitCode = 1
+  } else out({ data: { repository: { issue: { projectItems: { nodes: [
+    { project: { id: 'P1' }, fieldValueByName: { name: 'Draft' } },
+  ] } } } } })
+} else if (command === 'api' && action.includes('/dependencies/blocked_by?')) {
+  const card = action.split('/').at(-3)
+  fs.appendFileSync(${JSON.stringify(reads)}, card + '\\n')
+  if (card === '10' || ${failSelected}) { process.stderr.write('dependency unavailable'); process.exitCode = 1 }
+  else out([])
+} else process.exitCode = 3
+`,
+  )
+  fs.chmodSync(gh, 0o755)
+  vi.stubEnv('PAIR_GH_BIN', gh)
+  vi.stubEnv('PAIR_TEST_BOARD_OUTAGE', boardFailure)
+  return reads
+}
+
 it.each<{
   failSelected?: boolean
   status?: 'Draft'
@@ -1150,45 +1194,7 @@ it.each<{
         '.pair/adoption/tech/workflows/quick.yaml',
         `${QUICK}select: { filter: { status: [${configuredStatus}] } }\n`,
       )
-    write(
-      '.pair/adoption/tech/way-of-working.md',
-      REGISTRY + '\n- `pm-tool`: `github`\n- `pm-project`: `Pair`\n',
-    )
-    const skill = '.claude/skills/pair-workflow-cycle'
-    write(`${skill}/SKILL.md`, '# Cycle\n')
-    fs.symlinkSync(
-      join(__dirname, '../../../../../', skill, 'scripts'),
-      join(project, skill, 'scripts'),
-    )
-    const reads = join(project, 'dependencies.log')
-    const gh = join(project, 'gh')
-    write(
-      'gh',
-      `#!/usr/bin/env node
-const fs = require('node:fs')
-const [command, action, id] = process.argv.slice(2)
-const out = value => process.stdout.write(JSON.stringify(value))
-if (command === 'repo') process.stdout.write('acme/pair')
-else if (command === 'project') out({ projects: ${JSON.stringify(boardFailure ? [{ id: 'P1', title: 'Pair' }] : [])} })
-else if (command === 'issue' && action === 'view') {
-  if (!process.argv.includes('-q')) out({ title: 'Story ' + id, body: '', labels: id === '9' ? [{ name: 'wanted' }] : [], state: 'OPEN' })
-} else if (command === 'api' && action === 'graphql') {
-  if (process.argv.includes('n=' + ${JSON.stringify(boardFailure ?? '')})) {
-    process.stderr.write('HTTP 503\\nRetry-After: 0\\n')
-    process.exitCode = 1
-  } else out({ data: { repository: { issue: { projectItems: { nodes: [
-    { project: { id: 'P1' }, fieldValueByName: { name: 'Draft' } },
-  ] } } } } })
-} else if (command === 'api' && action.includes('/dependencies/blocked_by?')) {
-  const card = action.split('/').at(-3)
-  fs.appendFileSync(${JSON.stringify(reads)}, card + '\\n')
-  if (card === '10' || ${failSelected}) { process.stderr.write('dependency unavailable'); process.exitCode = 1 }
-  else out([])
-} else process.exitCode = 3
-`,
-    )
-    fs.chmodSync(gh, 0o755)
-    vi.stubEnv('PAIR_GH_BIN', gh)
+    const reads = fakeWorkflowBoard(boardFailure, failSelected)
     try {
       const command = parseRunCommand(
         {
@@ -1212,3 +1218,45 @@ else if (command === 'issue' && action === 'view') {
     }
   },
 )
+
+it('R744-15: resumes a status-conditioned step after a board outage', async () => {
+  fakeWorkflowBoard('9')
+  try {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      `version: 1
+name: quick
+steps:
+  label: { kind: generic, skill: my-skill, when: { has: [wanted] } }
+  excluded: { kind: generic, skill: my-skill, when: { has: [missing], status: [Draft] } }
+  check: { kind: generic, skill: my-skill, when: { status: [Draft] } }
+  ready: { kind: generic, skill: my-skill, when: { status: [Ready] } }
+`,
+    )
+    const skills = { 'my-skill': () => fenced({ status: 'ok', summary: 'Checked' }) }
+    const options = { card: '9' }
+    expect(await run(['quick'], skills, options), lines.join('\n')).toBe(1)
+    expect(lines.join('\n')).toMatch(
+      /check: failed.*board-unreadable: .* after 4 attempts: HTTP 503/,
+    )
+    expect(states('quick-9')).toEqual({
+      label: 'ok',
+      excluded: 'skipped',
+      check: 'pending',
+      ready: 'pending',
+    })
+    expect(launched).toHaveLength(1)
+
+    vi.stubEnv('PAIR_TEST_BOARD_OUTAGE', undefined)
+    expect(await run(['quick'], skills, options), lines.join('\n')).toBe(0)
+    expect(states('quick-9')).toEqual({
+      label: 'ok',
+      excluded: 'skipped',
+      check: 'ok',
+      ready: 'skipped',
+    })
+    expect(launched).toHaveLength(2)
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
