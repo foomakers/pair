@@ -988,9 +988,13 @@ ${design ? 'Design: not required' : ''}
   } else expect(lines.some(line => line.includes('unmet: Design flag'))).toBe(true)
 })
 
-it.each([false, true])(
-  'R744-05: only selected cards read dependencies (selected read fails: %s)',
-  async failSelected => {
+it.each([
+  { failSelected: false, requiresStatus: false },
+  { failSelected: true, requiresStatus: false },
+  { failSelected: false, requiresStatus: true },
+])(
+  'R744-05/R744-10: selection before dependencies ($failSelected, $requiresStatus)',
+  async ({ failSelected, requiresStatus }) => {
     write(
       '.pair/adoption/tech/way-of-working.md',
       REGISTRY + '\n- `pm-tool`: `github`\n- `pm-project`: `Pair`\n',
@@ -1025,12 +1029,21 @@ else if (command === 'issue' && action === 'view') {
     vi.stubEnv('PAIR_GH_BIN', gh)
     try {
       const command = parseRunCommand(
-        { cwd: project, card: '9,10', filter: 'wanted', dryRun: true },
+        {
+          cwd: project,
+          card: '9,10',
+          filter: 'wanted',
+          dryRun: true,
+          ...(requiresStatus && { status: 'Draft' }),
+        },
         ['quick'],
       )
-      expect(await handleRunCommand(command, fs)).toBe(failSelected ? 1 : 0)
+      expect(await handleRunCommand(command, fs)).toBe(failSelected || requiresStatus ? 1 : 0)
       expect(lines.some(line => line.includes('#10: not-applicable'))).toBe(true)
-      expect(fs.readFileSync(reads)).toBe('9\n')
+      if (requiresStatus) {
+        expect(lines.some(line => /#9: failed.*board-unresolved/.test(line))).toBe(true)
+        expect(fs.existsSync(reads)).toBe(false)
+      } else expect(fs.readFileSync(reads)).toBe('9\n')
     } finally {
       vi.unstubAllEnvs()
     }
