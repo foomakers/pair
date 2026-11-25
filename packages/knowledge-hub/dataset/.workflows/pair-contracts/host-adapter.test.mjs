@@ -201,6 +201,7 @@ const save = () => fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(S))
 const out = data => { process.stdout.write(JSON.stringify(data)); process.exit(0) }
 const fail = message => { process.stderr.write(message); process.exit(1) }
 const assigneesOf = issue => ({ assignees: issue.assignees.map(login => ({ login })) })
+if (a[0] === 'repo' && a[1] === 'view' && S.repo) { process.stdout.write(S.repo); process.exit(0) }
 if (a[0] === 'issue' && a[1] === 'view' && a[a.indexOf('--json') + 1] === 'assignees') {
   const issue = S.issues[a[2]]
   if (issue.assignmentWritten && issue.rejectReadBack) fail('gh: Forbidden (HTTP 403)')
@@ -360,6 +361,24 @@ test('#723 assignment: unassign clears every owner', () => {
   assert.equal(assign('unassign').status, 'assigned')
   assert.deepEqual(issue().assignees, [])
 })
+
+for (const login of ['me', 'unassign']) {
+  test(`#723 F5: skill assigns the literal login ${login} and records the takeover`, () => {
+    const gh = fakeGh({ repo: 'acme/app', login: 'runner', assignable: [login], issues: { 7: { assignees: ['alice'] } } })
+    const script = join(REPO, '.claude', 'skills', 'pair-workflow-cycle', 'scripts', 'workflow-facts.mjs')
+    const skill = readFileSync(join(REPO, '.claude', 'skills', 'pair-process-implement', 'SKILL.md'), 'utf8')
+    const recipe = /'(\{"(login|assign)":"<login>"\})'/.exec(skill)?.[1]
+    // The old wording passed explicit logins as workflow directives.
+    const payload = (recipe ?? '{"assign":"<login>"}').replace('<login>', login)
+    const result = spawnSync(process.execPath, [script, 'assign-card', '7', payload], {
+      cwd: gh.dir, env: { ...process.env, PAIR_GH_BIN: gh.ghBin }, encoding: 'utf8',
+    })
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(JSON.parse(result.stdout).status, 'assigned')
+    assert.deepEqual(gh.state().issues[7].assignees, [login])
+    assert.equal(gh.state().issues[7].assignmentComments[0].body, `Reassigned to ${login} from alice.`)
+  })
+}
 
 test('#723 assignment: an unassignable login warns and preserves owners without a write', () => {
   const { assign, issue, writes } = assignment({ assignable: ['missing-user'], issueAssignable: [], assignees: ['owner'] })
