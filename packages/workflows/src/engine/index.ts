@@ -1087,7 +1087,7 @@ function observeExhaustion(run: RunDirectory, { exhaustion }: Progress): void {
 }
 
 /** The round is over and the loop goes on: max stops it, otherwise the children run again. */
-function closeRound({ state, outer }: Advance, { steps, loops }: Progress): Progress {
+function closeRound({ state, outer, outputs }: Advance, { steps, loops }: Progress): Progress {
   const outerId = outer.id
   const loop = loops?.[outerId]
   if (loop === undefined) throw new Error(`run-state-unreadable: loop ${outerId} has no round`)
@@ -1100,7 +1100,7 @@ function closeRound({ state, outer }: Advance, { steps, loops }: Progress): Prog
         ...steps,
         [outerId]: {
           state: 'exhausted',
-          outputs: loop.untilResult ?? {},
+          outputs: { ...loop.untilResult, ...state.latest, ...outputs },
           reason,
           summary,
         },
