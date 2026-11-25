@@ -497,6 +497,68 @@ steps:
   },
 )
 
+it.each([
+  {
+    active: 'priority, cost',
+    riskTag: 'priority:green',
+    labels: ['priority:green', 'cost:red', 'user story'],
+    exit: 0,
+  },
+  {
+    active: 'risk',
+    riskTag: 'risk:green',
+    labels: ['risk:green', 'risk:red'],
+    exit: 1,
+  },
+  {
+    active: 'priority',
+    riskTag: 'priority:green',
+    labels: ['priority:green', 'priority:red'],
+    exit: 1,
+  },
+  {
+    active: 'priority',
+    riskTag: 'risk:green',
+    labels: ['risk:green'],
+    exit: 1,
+  },
+])(
+  'R744-27 (#678 AC-7): confirms $riskTag among $labels for Active: $active',
+  async ({ active, riskTag, labels, exit }) => {
+    write('.pair/adoption/tech/risk-matrix.md', `## Tag Projection\n\nActive: ${active}\n`)
+    write(
+      '.pair/adoption/tech/workflows/refinement.yaml',
+      `version: 1
+name: refinement
+steps:
+  refine:
+    kind: refine-story
+    with: { mode: autonomous }
+`,
+    )
+    write('.claude/skills/pair-process-refine-story/SKILL.md', '# Refine story\n')
+    let boardStatus = 'Draft'
+    const body = '## Acceptance Criteria\n\n## Technical Analysis\n\n## Assumptions'
+    const skills = {
+      'pair-process-refine-story': () =>
+        fenced({ status: 'ok', summary: 'Prepared', boardStatus, riskTag, openQuestions: [] }),
+    }
+    const workflow: Partial<WorkflowHostDependencies> = {
+      readResultFacts: async () => ({ card: { boardStatus, labels, body } }),
+      board: {
+        getState: async () => boardStatus,
+        setState: async (_id, state) => {
+          boardStatus = state
+        },
+      },
+    }
+
+    expect(await run(['refinement'], skills, {}, workflow)).toBe(exit)
+    expect(states('refinement-627')).toEqual({ refine: exit === 0 ? 'ok' : 'failed' })
+    if (exit === 1) expect(lines.join('\n')).toContain('riskTag')
+  },
+)
+
 it.each(['refused', 'unconfirmed'])(
   'R744-25 (#678 AC-9): retries a %s Review transition before completing refinement',
   async failure => {
