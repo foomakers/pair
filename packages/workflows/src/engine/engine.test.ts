@@ -512,6 +512,19 @@ describe('engine: outcomes and resume (AC-6)', () => {
     expect(resumed.ready[0]?.inputs).toEqual({ card: '627', pr: 12, head: HEAD })
   })
 
+  it('#728 AC-3 F2: keeps a legacy step parked until explicit resume', async () => {
+    const run = await runUntilReview({ status: 'needs-decision', summary: 'a decision is needed' })
+    const path = `${DIR}/state.json`
+    const saved = stateOf(run)
+    saved.steps['review'] = { ...saved.steps['review'], state: 'needs-human' }
+    run.files.entries.set(path, JSON.stringify(saved))
+
+    expect(await next(run)).toEqual({ run: 'parked', ready: [] })
+    expect(stateOf(run).steps['review']).toEqual({ ...saved.steps['review'], state: 'needs-decision' })
+    expect((await start(run, SOURCE, { card: '627' })).status).toBe('resumed')
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'review', attempt: 2 })
+  })
+
   it('records a result that breaks the kind contract as failed, invalid-result', async () => {
     const run = open()
     await start(run, SOURCE, { card: '627' })
