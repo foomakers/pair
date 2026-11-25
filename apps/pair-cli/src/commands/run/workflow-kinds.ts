@@ -1,7 +1,13 @@
-import { runGate, type FactReader, type StepLaunch, type StepResult } from '@pair/workflows'
+import {
+  runChecks,
+  runGate,
+  type FactReader,
+  type StepLaunch,
+  type StepResult,
+} from '@pair/workflows'
 import { runHostProcess } from './host-process'
 
-/** What the host reads from the platform for the `checks` of a gate; not wired yet, so a check fails loudly. */
+/** A deterministic step that needs an unavailable platform adapter. */
 const UNWIRED = (what: string): StepResult => ({
   status: 'failed',
   reason: 'no-platform-adapter',
@@ -41,10 +47,54 @@ export function runStepGates(
   }
 }
 
-/**
- * The steps `pair run` executes itself, no agent: a gate's registry commands run in the card worktree.
- * `checks`, `approval` and `merge` read or write the platform and fail until their adapter is wired.
- */
+async function worktreeMismatch(
+  worktree: string,
+  reviewedHead: string,
+): Promise<StepResult | undefined> {
+  const head = await runHostProcess('git', ['rev-parse', '--verify', 'HEAD'], worktree)
+  if (head.status === 0 && head.stdout.trim() === reviewedHead) {
+    const tree = await runHostProcess(
+      'git',
+      ['status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none'],
+      worktree,
+    )
+    if (tree.status === 0 && tree.stdout === '') return undefined
+  }
+  return {
+    status: 'failed',
+    reason: 'gate-worktree-mismatch',
+    summary: `Local gates require a clean worktree at the reviewed commit ${reviewedHead}`,
+  }
+}
+
+function reviewedGateHead(step: StepLaunch): string | undefined {
+  const head = step.inputs['reviewedHead']
+  const checks = step.with['checks']
+  return typeof head === 'string' && Array.isArray(checks) && checks.includes('head-unchanged')
+    ? head
+    : undefined
+}
+
+async function runBoundGate(
+  run: () => Promise<StepResult>,
+  head: string,
+  worktree: string | undefined,
+  facts: FactReader | undefined,
+): Promise<StepResult> {
+  if (worktree !== undefined) {
+    if (facts === undefined) return UNWIRED('the head-unchanged check')
+    const current = await runChecks(['head-unchanged'], facts)
+    if (current.status !== 'ok') return current
+    const mismatch = await worktreeMismatch(worktree, head)
+    if (mismatch !== undefined) return mismatch
+  }
+  const result = await run()
+  if (result.status !== 'ok') return result
+  const mismatch = worktree === undefined ? undefined : await worktreeMismatch(worktree, head)
+  return mismatch ?? { ...result, gatedHead: head }
+}
+
+/** The gate kind runs registry commands in the card worktree and reads platform facts. */
 export function performHostKind(
   registry: Readonly<Record<string, string>>,
   worktree: string,
@@ -53,18 +103,18 @@ export function performHostKind(
 ) {
   return async (step: StepLaunch): Promise<StepResult> => {
     if (step.kind !== 'gate') return UNWIRED(`a ${step.kind} step`)
-    const result = await runGate(step.with, {
-      registry,
-      targets,
-      run: gateRunner(worktree),
-      ...(factsFor === undefined ? {} : { facts: factsFor(step) }),
-    })
-    const head = step.inputs['reviewedHead']
-    return result.status === 'ok' &&
-      typeof head === 'string' &&
-      Array.isArray(step.with['checks']) &&
-      step.with['checks'].includes('head-unchanged')
-      ? { ...result, gatedHead: head }
-      : result
+    const facts = factsFor?.(step)
+    const run = () =>
+      runGate(step.with, {
+        registry,
+        targets,
+        run: gateRunner(worktree),
+        ...(facts === undefined ? {} : { facts }),
+      })
+    const head = reviewedGateHead(step)
+    if (head === undefined) return run()
+    const entries = step.with['gates']
+    const local = Array.isArray(entries) && entries.length > 0
+    return runBoundGate(run, head, local ? worktree : undefined, facts)
   }
 }
