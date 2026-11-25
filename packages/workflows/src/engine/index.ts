@@ -16,6 +16,9 @@ export interface RunFiles {
   writeFile(path: string, content: string): Promise<void>
   mkdir(path: string, options?: { recursive?: boolean }): Promise<void>
   rename(from: string, to: string): Promise<void>
+  statSync?(path: string): { mode: number }
+  chmod?(path: string, mode: number): Promise<void>
+  unlink?(path: string): Promise<void>
 }
 
 /** One run: `.pair/working/runs/<run-id>/` of the main checkout. */
@@ -87,14 +90,34 @@ export interface StepLaunch {
 export const hashOf = (text: string): string =>
   `sha256:${createHash('sha256').update(text).digest('hex')}`
 
+function existingMode(files: RunFiles, path: string): number | undefined {
+  if (files.chmod === undefined || !files.existsSync(path)) return undefined
+  return files.statSync?.(path).mode
+}
+
 /** Temp file, then rename: a reader never sees half a file. */
-export async function writeAtomic(files: RunFiles, path: string, content: string): Promise<void> {
-  await files.writeFile(`${path}.tmp`, content)
-  await files.rename(`${path}.tmp`, path)
+export async function writeAtomic(
+  files: RunFiles,
+  path: string,
+  content: string,
+  { preserveMode = false }: { preserveMode?: boolean } = {},
+): Promise<void> {
+  const temp = `${path}.tmp`
+  const mode = preserveMode ? existingMode(files, path) : undefined
+  await files.writeFile(temp, content)
+  try {
+    if (mode !== undefined) await files.chmod?.(temp, mode & 0o777)
+    await files.rename(temp, path)
+  } catch (error) {
+    if (mode !== undefined) await files.unlink?.(temp).catch(() => undefined)
+    throw error
+  }
 }
 
 const writeState = (run: RunDirectory, state: RunStateFile): Promise<void> =>
-  writeAtomic(run.files, join(run.dir, STATE_FILE), `${JSON.stringify(state, null, 2)}\n`)
+  writeAtomic(run.files, join(run.dir, STATE_FILE), `${JSON.stringify(state, null, 2)}\n`, {
+    preserveMode: true,
+  })
 
 function readState(run: RunDirectory): RunStateFile | undefined {
   const path = join(run.dir, STATE_FILE)
@@ -130,7 +153,7 @@ async function migrateRunTelemetry(run: RunDirectory): Promise<void> {
     return
   }
   const migrated = migrateTelemetryStatuses(text)
-  if (migrated !== text) await writeAtomic(run.files, path, migrated)
+  if (migrated !== text) await writeAtomic(run.files, path, migrated, { preserveMode: true })
 }
 
 function requireState(run: RunDirectory): RunStateFile {

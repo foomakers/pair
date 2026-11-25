@@ -129,7 +129,14 @@ function stepsOf(run: RunDirectory): StepTelemetry[] {
 }
 
 const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetry)[]) =>
-  writeAtomic(run.files, fileOf(run), records.map(record => `${JSON.stringify(record)}\n`).join(''))
+  writeAtomic(
+    run.files,
+    fileOf(run),
+    records.map(record => `${JSON.stringify(record)}\n`).join(''),
+    {
+      preserveMode: true,
+    },
+  )
 
 /** Appends the record of one execution of a step to the run's `telemetry.jsonl`. */
 export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {
