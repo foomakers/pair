@@ -136,6 +136,39 @@ An `ok` result from `until` exits immediately, skipping later steps. A failed `u
 
 `when` is valid on any step except a loop and the `until` step of a loop. Card facts: `has`, `lacks`, `status`, `assignee` (AND between keys, any-of inside a list), read when the step is about to start. Output form: `output: <step>.<name>` (a loop child is `loop/step.name`) with `is: [...]`. A step whose `when` does not match is `skipped`: a sixth state, shown in the output, producing no outputs, and the run goes on. A later step that needs an output only a skippable step produces is an error. A transition is a deterministic `when`, not a prompt.
 
+## Card assignment
+
+When implementing a card directly, omit `$assignee` to claim an unassigned card as the authenticated runner. Use `$assignee=<login>` to assign that user or `$assignee=@me` to assign yourself, even if someone else holds the card. Use `$assignee=none` to leave assignment unchanged.
+
+```text
+/pair-process-implement $story=123
+/pair-process-implement $story=123 $assignee=alice
+/pair-process-implement $story=123 $assignee=none
+```
+
+In a workflow, `assign` applies when a step starts. `me` claims an unassigned card as the authenticated runner and skips a card held by another login. A login explicitly assigns that user, `none` leaves assignment unchanged, and `unassign` clears it.
+
+In this `quick.yaml`, implementation inherits `me`, review assigns Alice, and the final gate clears assignment when it starts.
+
+```yaml
+version: 1
+name: quick
+assign: me
+aliases: { build: { effort: medium }, judge: { effort: high } }
+steps:
+  implement: { kind: implement, alias: build }
+  review: { kind: review, alias: judge, assign: alice, on-failed: continue }
+  checks: { kind: gate, assign: unassign, with: { checks: [review-approved] } }
+```
+
+A configuration's step value takes precedence over its default, followed by the workflow's step value and then its default. The run prints the resolved value and source. This override leaves assignment unchanged at every step of the example. The command uses `pair` as a local alias for the installed `pair-cli` command.
+
+```bash
+pair run quick --card 123 --config-override '{"assign":"none"}'
+```
+
+See [workflow configuration](workflow-configuration.md) for configuration files and overrides.
+
 ## Rules
 
 - YAML 1.2, declarative only: an anchor, an alias, a tag or a duplicate key is an error.

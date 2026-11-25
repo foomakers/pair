@@ -234,6 +234,7 @@
 - [Decision: Order Recovery Budgets by Durable Events](.pair/adoption/decision-log/2026-11-19-recovery-budget-event-identity.md)
 - [Decision: Cards are assigned when development starts, not at creation](.pair/adoption/decision-log/2026-11-23-assign-on-start.md)
 - [Decision: Temporary CLI Integration Test Exception](.pair/adoption/decision-log/2026-11-24-cli-integration-test-exception.md)
+- [Decision: Work-start assignment follows the authenticated runner](.pair/adoption/decision-log/2026-11-25-assign-work-to-authenticated-runner.md)
 - [Decision: Preserve assignment on card updates](.pair/adoption/decision-log/2026-11-25-preserve-assignment-on-card-update.md)
 
 ## How-To Guides

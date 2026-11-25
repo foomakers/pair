@@ -62,7 +62,7 @@ The machine-readable half of the Assignment rule at the top of this file (the ra
 - No `code-host-assignee`: PM tool and code host are both GitHub here, one identifier for both — so the PR-side branch of the cascade (`code-host-assignee`, else `default-assignee`) falls through to the value above.
 - The same resolved login is the ONLY author whose fenced decision comment (a maintainer decision, amendment, custody override or reset on the card or the PR) resumes a parked delivery run (`cycle-state.mjs decisions`, US-647); no `--maintainer` flag overrides it, and any other author's comment is ignored and recorded. See [ADL 2026-11-15](../decision-log/2026-11-15-maintainer-decision-comments-resume-a-run.md).
 
-Development activation claims an unassigned card for the authenticated runner. See the assignment and split-tool rules in [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
+Development activation claims an unassigned card for the authenticated runner identified by the PM adapter's identity lookup, exposed by `whoami`. A token that authenticates as a bot account claims the card for the reported bot login. If the lookup cannot resolve a login, assignment warns and leaves the card unchanged. Use an explicit login to assign a human. See the [bot account assignment decision](../decision-log/2026-11-25-assign-work-to-authenticated-runner.md) and the [assignment and split-tool rules](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
 
 ## Manual Testing
 
