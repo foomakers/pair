@@ -71,6 +71,22 @@ test('#693 R3 fix mode fails on an error introduced by an applied fix', t => {
   assert.deepEqual(fixed.diagnostics.map(item => item.code), ['eslint(no-unused-expressions)'])
 })
 
+for (const [name, source, expected, status] of [
+  ['negative zero comparison', 'export const isPositive = x => x > -0\n', 'export const isPositive = x => x > -0\n', 1],
+  ['script var', 'var x = 1; console.log(x)\n', 'const x = 1; console.log(x)\n', 0],
+  ['reassigned var', 'var x = 1; x++; console.log(x)\n', 'let x = 1; x++; console.log(x)\n', 0],
+  ['loop binding', 'for (var x of [1]) { console.log(x) }\n', 'for (const x of [1]) { console.log(x) }\n', 0],
+  ['referenced before declaration', 'console.log(x); var x = 1\n', 'console.log(x); var x = 1\n', 1],
+]) {
+  test(`#693 R4 preserves ESLint fix behavior for ${name}`, t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const file = join(cwd, 'fixture.js')
+    writeFileSync(file, source)
+    const fixed = lint(cwd, '--workspace', '--fix')
+    assert.deepEqual([readFileSync(file, 'utf8'), fixed.status], [expected, status])
+  })
+}
+
 test('#693 AC-1 preserves TypeScript assertions and enforces unsafe optional chaining', t => {
   const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
   writeFileSync(join(cwd, 'asserted.ts'), 'export const assert = (r?: { prop: string }) => (r?.prop as string).startsWith("a")\n')
