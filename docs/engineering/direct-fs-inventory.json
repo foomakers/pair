@@ -1,13 +1,13 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1078,
-  "files": 403,
-  "distinctContents": 368,
+  "files": 402,
+  "distinctContents": 367,
   "dispositionCounts": {
     "standalone-script": 15,
     "os-guarantee": 25,
     "type-contract": 13,
-    "in-flight-churn": 245,
+    "in-flight-churn": 244,
     "repo-contract": 104,
     "boundary-adapter": 1
   },
