@@ -277,9 +277,10 @@ export default defineAdapter({
         return Array.isArray(rows) ? rows : []
       },
       childCards({ id, repo }) {
-        return issueRelations(id, 'sub_issues', repo).map(({ id, closed, foreign }) => {
+        return issueRelations(id, 'sub_issues', repo).flatMap(({ id, closed, foreign }) => {
+          if (closed && foreign) return []
           if (foreign) throw new HostError('invalid-input', { message: `card-out-of-scope: ${foreign}` })
-          return { id, closed }
+          return [{ id, closed }]
         })
       },
       blockedBy({ id, repo }) {
