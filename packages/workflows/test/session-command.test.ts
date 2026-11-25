@@ -1074,7 +1074,9 @@ it('R754-06: starts from a redirected skills target and resolves prefixed names'
   rmSync(join(main, cycle), { recursive: true })
   expect(JSON.parse(successful(['validate', 'quick']))).toMatchObject({ workflow: 'quick' })
   const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
-  expect(advance(lease)).toMatchObject({ ready: [{ id: 'draft', uses: 'pair-fixture-draft' }] })
+  expect(advance(lease)).toMatchObject({
+    ready: [{ id: 'draft', uses: 'team-pair-fixture-draft' }],
+  })
 })
 
 it.each([
