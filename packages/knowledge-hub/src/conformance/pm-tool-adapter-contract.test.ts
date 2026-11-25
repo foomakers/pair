@@ -702,7 +702,7 @@ it('adoption preserves PR assignment and explicit card assignment (R739-07)', ()
     join(__dirname, '../../../../.pair/adoption/tech/way-of-working.md'),
     'utf-8',
   )
-  expect(body).toContain('cards created without an explicit assignee remain unassigned')
+  expect(body).toContain('create an unassigned card or preserve the existing assignment on update')
   expect(body).toContain('PRs retain their default assignee at creation')
 })
 
