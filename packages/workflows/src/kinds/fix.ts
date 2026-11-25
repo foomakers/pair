@@ -85,14 +85,14 @@ export const fix: StepKind = {
       'A remaining finding needs a human decision, such as when it contradicts an acceptance criterion of the card.',
   },
   rule: {
-    text: 'The status is "failed", never "ok", when at least one resolution is "not-resolved".',
+    text: 'When a resolution is "not-resolved", choose "failed", "blocked" or "needs-decision" according to the reason.',
     broken: ({ resolutions }) => {
       const open = (resolutions as readonly { id: string; status: string }[]).filter(
         one => one.status !== 'resolved',
       )
       return open.length === 0
         ? undefined
-        : `status: "ok" with unresolved finding(s) ${open.map(one => one.id).join(', ')}, expected "failed"`
+        : `status: "ok" with unresolved finding(s) ${open.map(one => one.id).join(', ')}, expected "failed", "blocked" or "needs-decision"`
     },
   },
 }
