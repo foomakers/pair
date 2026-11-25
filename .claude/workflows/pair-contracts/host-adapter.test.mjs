@@ -181,8 +181,7 @@ process.stderr.write('unexpected az call: ' + a.join(' ')); process.exit(3)
   }
 }
 
-// A minimal stateful `gh` recorder for the three methods GitHub gained (prHead, merge, closeAndCascade)
-// and the card read the shared hash consumes.
+// A stateful `gh` recorder for PR, card and assignment operations.
 function fakeGh(seed = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'gh-fake-'))
   const state = join(dir, 'state.json')
@@ -197,11 +196,55 @@ const a = process.argv.slice(2)
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
 const S = JSON.parse(fs.readFileSync(${JSON.stringify(state)}, 'utf8'))
 const save = () => fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(S))
+const out = data => { process.stdout.write(JSON.stringify(data)); process.exit(0) }
+const fail = message => { process.stderr.write(message); process.exit(1) }
+const assigneesOf = issue => ({ assignees: issue.assignees.map(login => ({ login })) })
+if (a[0] === 'issue' && a[1] === 'view' && a[a.indexOf('--json') + 1] === 'assignees') {
+  const issue = S.issues[a[2]]
+  if (issue.assignmentWritten && issue.rejectReadBack) fail('gh: Forbidden (HTTP 403)')
+  out(assigneesOf(issue))
+}
 if (a[0] === 'issue' && a[1] === 'view') { const i = S.issues[a[2]]; if (!i) { process.stderr.write('Could not resolve to an issue'); process.exit(1) } process.stdout.write(i.body); process.exit(0) }
 if (a[0] === 'issue' && a[1] === 'close') { S.issues[a[2]].state = 'closed'; save(); process.exit(0) }
 if (a[0] === 'pr' && a[1] === 'view') { process.stdout.write(S.prs[a[2]].head + '\\n'); process.exit(0) }
 if (a[0] === 'pr' && a[1] === 'merge') { S.prs[a[2]].merged = a.slice(3); save(); process.exit(0) }
 if (a[0] === 'api') {
+  const methodFlag = a.findIndex(arg => ['-X', '--method'].includes(arg))
+  const method = methodFlag === -1 ? 'GET' : a[methodFlag + 1]
+  const endpoint = a.find(arg => arg.startsWith('repos/')) || ''
+  if (a[1] === 'user') { process.stdout.write(S.login); process.exit(0) }
+  const assignable = /^repos\\/[^/]+\\/[^/]+\\/assignees\\/([^/]+)$/.exec(endpoint)
+  if (assignable) {
+    if (!S.assignable?.includes(decodeURIComponent(assignable[1]))) fail('gh: Not Found (HTTP 404)')
+    process.exit(0)
+  }
+  const issueRoute = /^repos\\/[^/]+\\/[^/]+\\/issues\\/(\\d+)(?:\\/(assignees|comments))?$/.exec(endpoint)
+  if (issueRoute && S.issues[issueRoute[1]]?.assignees) {
+    const issue = S.issues[issueRoute[1]]
+    const resource = issueRoute[2]
+    if (resource === 'comments') {
+      if (method !== 'POST') out(issue.assignmentComments || [])
+      const body = JSON.parse(fs.readFileSync(0, 'utf8')).body
+      const comment = { id: 555, body, html_url: 'https://github.com/acme/app/issues/7#issuecomment-555' }
+      issue.assignmentComments = [...(issue.assignmentComments || []), comment]
+      save()
+      out(comment)
+    }
+    if (method === 'GET') {
+      if (issue.assignmentWritten && issue.rejectReadBack) fail('gh: Forbidden (HTTP 403)')
+      out(assigneesOf(issue))
+    }
+    if (issue.rejectWrite) fail('gh: Forbidden (HTTP 403)')
+    const { assignees } = JSON.parse(fs.readFileSync(0, 'utf8'))
+    issue.assignmentWritten = true
+    if (!issue.ignoreWrite) {
+      if (method === 'PATCH') issue.assignees = assignees
+      if (method === 'POST') issue.assignees = [...new Set([...issue.assignees, ...assignees, ...(issue.raceWith || [])])]
+      if (method === 'DELETE') issue.assignees = issue.assignees.filter(login => !assignees.includes(login))
+    }
+    save()
+    out(assigneesOf(issue))
+  }
   const relation = S.relations?.[a[1].split('?')[0]]
   if (relation) { process.stdout.write(JSON.stringify(relation)); process.exit(0) }
   const cm = /^repos\\/[^/]+\\/[^/]+\\/issues\\/comments\\/(\\d+)$/.exec(a[1])
@@ -216,6 +259,101 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(3)
   chmodSync(join(dir, 'gh'), 0o755)
   return { dir, ghBin: join(dir, 'gh'), state: () => JSON.parse(readFileSync(state, 'utf8')), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
 }
+
+const assignment = ({ login = 'runner', assignable = ['alice', login], assignees = [], ...options } = {}) => {
+  const id = 7
+  const repo = 'acme/app'
+  const gh = fakeGh({ login, assignable, issues: { [id]: { assignees, ...options } } })
+  const pm = github.instantiate({ ghBin: gh.ghBin })
+  const issue = () => gh.state().issues[id]
+  const writes = () => gh.calls().filter(args => args.some(arg => ['PATCH', 'POST', 'DELETE'].includes(arg)))
+  const assign = value => pm.assignCard({ id, repo, ...(value === undefined ? {} : { assign: value }) })
+  return { assign, issue, writes, calls: gh.calls }
+}
+
+// #723 T-3: AC-2, AC-3, AC-4, AC-5, AC-6, AC-10 and the story's assignment edge cases.
+for (const [intent, login] of [[undefined, 'runner'], ['me', 'bot-pair']]) {
+  test(`#723 assignment: claim an empty card as the authenticated ${login} and read it back`, () => {
+    const { assign, issue, calls } = assignment({ login })
+    assert.equal(assign(intent).status, 'assigned')
+    assert.deepEqual(issue().assignees, [login])
+    const last = calls().at(-1)
+    assert.equal(last[1], 'view')
+    assert.equal(last[last.indexOf('--json') + 1], 'assignees')
+  })
+}
+
+for (const [owners, status] of [
+  [['RUNNER'], 'unchanged'],
+  [['owner', 'runner'], 'unchanged'],
+  [['retired-user'], 'held'],
+  [['owner', 'reviewer'], 'held'],
+]) {
+  test(`#723 assignment: preserve existing assignees ${owners.join(', ')}`, () => {
+    const { assign, issue, writes } = assignment({ assignees: owners })
+    const result = assign()
+    assert.equal(result.status, status)
+    if (status === 'held') assert.deepEqual(result.owners, owners)
+    assert.deepEqual(writes(), [])
+    assert.deepEqual(issue().assignees, owners)
+  })
+}
+
+test('#723 assignment: none leaves the card untouched without consulting GitHub', () => {
+  const { assign, issue, calls } = assignment({ assignees: ['owner'] })
+  assert.equal(assign('none').status, 'unchanged')
+  assert.deepEqual(calls(), [])
+  assert.deepEqual(issue().assignees, ['owner'])
+})
+
+for (const [intent, login] of [['alice', 'alice'], ['@me', 'runner']]) {
+  test(`#723 assignment: explicit ${intent} replaces the owners and names them in the card comment`, () => {
+    const { assign, issue } = assignment({ assignees: ['owner', 'reviewer'] })
+    assert.equal(assign(intent).status, 'assigned')
+    assert.deepEqual(issue().assignees, [login])
+    assert.equal(issue().assignmentComments.length, 1)
+    assert.match(issue().assignmentComments[0].body, /\bowner\b/)
+    assert.match(issue().assignmentComments[0].body, /\breviewer\b/)
+  })
+}
+
+test('#723 assignment: unassign clears every owner', () => {
+  const { assign, issue } = assignment({ assignees: ['owner', 'reviewer'] })
+  assert.equal(assign('unassign').status, 'assigned')
+  assert.deepEqual(issue().assignees, [])
+})
+
+test('#723 assignment: an unassignable login warns and preserves owners without a write', () => {
+  const { assign, issue, writes } = assignment({ assignees: ['owner'] })
+  const result = assign('missing-user')
+  assert.equal(result.status, 'warning')
+  assert.match(result.reason, /missing-user/i)
+  assert.deepEqual(writes(), [])
+  assert.deepEqual(issue().assignees, ['owner'])
+})
+
+for (const [fault, owners] of [
+  ['rejectWrite', ['owner']],
+  ['rejectReadBack', ['alice']],
+  ['ignoreWrite', ['owner']],
+]) {
+  test(`#723 assignment: ${fault} reports a warning and does not publish a takeover comment`, () => {
+    const { assign, issue } = assignment({ assignees: ['owner'], [fault]: true })
+    const result = assign('alice')
+    assert.equal(result.status, 'warning')
+    assert.match(result.reason, /\S/)
+    assert.deepEqual(issue().assignees, owners)
+    assert.equal(issue().assignmentComments, undefined)
+  })
+}
+
+test('#723 assignment: release only the runner when the read-back discovers a racing owner', () => {
+  const { assign, issue } = assignment({ raceWith: ['other-runner'] })
+  const result = assign()
+  assert.equal(result.status, 'held')
+  assert.deepEqual(result.owners, ['other-runner'])
+  assert.deepEqual(issue().assignees, ['other-runner'])
+})
 
 test('github readComment returns the comment`s CANONICAL identity (numeric id, repo from html_url) and its created/updated times — whatever spelling the ref used', () => {
   const comment = { id: 555, html_url: 'https://github.com/Acme/App/pull/7#issuecomment-555', issue_url: 'https://api.github.com/repos/Acme/App/issues/7', body: 'b', user: { login: 'rucka', type: 'User' }, created_at: '2026-11-15T10:00:00Z', updated_at: '2026-11-15T10:05:00Z' }

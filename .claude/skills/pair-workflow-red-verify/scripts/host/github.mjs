@@ -322,6 +322,60 @@ export default defineAdapter({
         }
         return parseJson(gh([...base, '--json', fields.join(',')]), { command: 'gh issue view' })
       },
+      assignCard({ id, repo, assign = 'me' }) {
+        if (assign === 'none') return { status: 'unchanged' }
+        try {
+          const number = /^#?(\d+)$/.exec(String(id))?.[1]
+          if (!number) throw new Error('Assignment needs a GitHub issue number')
+          const slug = resolveRepo(repo)
+          const readOwners = () => {
+            const assignees = this.readCard(number, { repo: slug, fields: ['assignees'] })?.assignees
+            if (!Array.isArray(assignees) || assignees.some(owner => typeof owner?.login !== 'string' || !owner.login))
+              throw new Error(`Could not read assignees on #${number}`)
+            return assignees.map(owner => owner.login)
+          }
+          const implicit = assign === 'me'
+          const clear = assign === 'unassign'
+          const login = clear ? null : implicit || assign === '@me' ? this.resolveUser() : assign
+          if (!clear && (typeof login !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]*(?:\[bot\])?$/.test(login)))
+            throw new Error(`Invalid assignee login ${JSON.stringify(login)}`)
+          const isTarget = owner => login !== null && owner.toLowerCase() === login.toLowerCase()
+          const before = readOwners()
+          if (implicit && before.length)
+            return before.some(isTarget) ? { status: 'unchanged' } : { status: 'held', owners: before }
+          if (clear ? before.length === 0 : before.length === 1 && isTarget(before[0]))
+            return { status: 'unchanged' }
+          if (!clear && !implicit) gh(['api', `repos/${slug}/assignees/${encodeURIComponent(login)}`])
+
+          const issue = `repos/${slug}/issues/${number}`
+          const write = (method, path, body) => gh(['api', '-X', method, path, '--input', '-'], { input: JSON.stringify(body) })
+          const assignees = clear ? [] : [login]
+          // Claim additively so a concurrent owner can be seen on the read-back.
+          if (implicit) write('POST', `${issue}/assignees`, { assignees })
+          else write('PATCH', issue, { assignees })
+          const after = readOwners()
+          if (implicit && after.some(owner => !isTarget(owner))) {
+            const owners = after.filter(owner => !isTarget(owner))
+            try {
+              if (after.some(isTarget)) {
+                write('DELETE', `${issue}/assignees`, { assignees })
+                if (readOwners().some(isTarget)) throw new Error(`Could not confirm release of ${login}`)
+              }
+            } catch (error) {
+              return { status: 'held', owners, reason: error.message }
+            }
+            return { status: 'held', owners }
+          }
+          if (clear ? after.length !== 0 : after.length !== 1 || !isTarget(after[0]))
+            throw new Error(`Could not confirm assignment on #${number}. Current owners are ${after.join(', ') || 'none'}.`)
+          const previous = before.filter(owner => !isTarget(owner))
+          if (!clear && previous.length)
+            write('POST', `${issue}/comments`, { body: `Reassigned to ${login} from ${previous.join(', ')}.` })
+          return { status: 'assigned' }
+        } catch (error) {
+          return { status: 'warning', reason: error.message }
+        }
+      },
       // Board facts (cardState) come from the adopted project only; an unresolved board holds no item.
       // The user's repository role (`admin`, `maintain`, `write`, …) as the server reports it now; null when
       // unreadable — the board workflow's authorization (#642 Maintainer Decision) treats null as deny.
