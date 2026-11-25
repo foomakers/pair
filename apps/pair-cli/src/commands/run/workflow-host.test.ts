@@ -16,6 +16,10 @@ import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/del
 import quickDefinition from '../../../../../packages/knowledge-hub/dataset/.pair/adoption/tech/workflows/quick.yaml?raw'
 // @ts-expect-error Vite loads the portable definition as fixture text.
 import portableQuick from '../../../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-examples/quick.yaml?raw'
+// @ts-expect-error Vite loads the recorded engine stream as fixture text.
+import piSuccess from './__fixtures__/pi-success.jsonl?raw'
+// @ts-expect-error Vite loads the recorded engine stream as fixture text.
+import openCodeSuccess from './__fixtures__/opencode-success.jsonl?raw'
 import baseConfig from '../../../config.json'
 import { acquireRunLock } from './run-lock'
 import { handleRunCommand } from './handler'
@@ -728,6 +732,51 @@ it.each([
       ),
     ).toBe(0)
     expect(limits).toEqual([seconds])
+  },
+)
+
+function replayEngine(input: SpawnIterationInput, stream: string) {
+  const program = `require('node:fs').writeFileSync(1, ${JSON.stringify(stream)})`
+  return spawnIteration({
+    ...input,
+    cwd: tmpdir(),
+    engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', program, '--'] },
+  })
+}
+
+it.each([
+  [
+    'pi with endTurn',
+    'pi',
+    piSuccess as string,
+    'CONTINUE-TOKEN: pair-loop --root 212 --iteration 5',
+  ],
+  [
+    'pi with stop',
+    'pi',
+    (piSuccess as string).replace('"stopReason":"endTurn"', '"stopReason":"stop"'),
+    'CONTINUE-TOKEN: pair-loop --root 212 --iteration 5',
+  ],
+  ['opencode', 'opencode', openCodeSuccess as string, 'LOOP RUN: stop reason nothing eligible'],
+] as const)(
+  '#704 F4: records the work result from %s without a retry (AC-2)',
+  async (_label, engine, fixture, original) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
+    )
+    const final = fenced({ status: 'blocked', summary: 'Waiting for the maintainer' })
+    const stream = fixture.replace(JSON.stringify(original), () => JSON.stringify(final))
+    const runIteration = vi.fn((input: SpawnIterationInput) => replayEngine(input, stream))
+
+    expect(await run(['quick'], OK, { engine, approveProjectTrust: true }, { runIteration })).toBe(
+      0,
+    )
+    expect(runIteration).toHaveBeenCalledTimes(1)
+    expect(states()['implement']).toBe('blocked')
+    expect(lines).toEqual(
+      expect.arrayContaining([expect.stringContaining('Waiting for the maintainer')]),
+    )
   },
 )
 
