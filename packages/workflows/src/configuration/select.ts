@@ -1,6 +1,14 @@
-/** `pair.config.json` → `workflows`: per workflow, a configuration name or a map engine → name. */
+type ConfigurationChoice = string | Readonly<Record<string, string>>
+
+/** `pair.config.json` → `workflows`: per-workflow configurations and card label overrides. */
 export type WorkflowsConfig = Readonly<
-  Record<string, { readonly configuration?: string | Readonly<Record<string, string>> }>
+  Record<
+    string,
+    {
+      readonly configuration?: ConfigurationChoice
+      readonly tiers?: Readonly<Record<string, ConfigurationChoice>>
+    }
+  >
 >
 
 export interface Selection {
@@ -19,24 +27,55 @@ export interface SelectionInput {
   readonly engine: string
   readonly workflows?: WorkflowsConfig | undefined
   readonly workflow: string
+  readonly labels?: readonly string[] | undefined
 }
 
-/** Order (design §3): `--config`, `workflows.<workflow>`, `workflows.default`, none. Throws on a map without the engine. */
+function configurationTiers(workflows: WorkflowsConfig | undefined, workflow: string) {
+  const key = workflows && Object.hasOwn(workflows, workflow) ? workflow : 'default'
+  return { key, tiers: workflows?.[key]?.tiers ?? {} }
+}
+
+export function hasConfigurationTiers(workflows: WorkflowsConfig | undefined, workflow: string) {
+  return Object.keys(configurationTiers(workflows, workflow).tiers).length > 0
+}
+
+function matchingTier({ workflows, workflow, labels }: SelectionInput) {
+  if (!labels?.length) return undefined
+  const { key, tiers } = configurationTiers(workflows, workflow)
+  const tier = Object.entries(tiers).find(([label]) => labels.includes(label))
+  if (!tier) return undefined
+  const [label, choice] = tier
+  return { choice, via: `pair.config.json workflows.${key}.tiers.${label}` }
+}
+
+function resolveChoice(
+  choice: ConfigurationChoice,
+  engine: string,
+  via: string,
+  mapSource = via,
+): Selection {
+  if (typeof choice === 'string') return { name: choice, via }
+  const name = Object.hasOwn(choice, engine) ? choice[engine] : undefined
+  if (name === undefined)
+    throw new Error(
+      `configuration-not-found: ${mapSource} has no entry for engine '${engine}' ` +
+        `(it has ${Object.keys(choice).join(', ')}) — add one or pass --config`,
+    )
+  return { name, via }
+}
+
+/** Order: `--config`, matching tier, workflow configuration, default configuration. */
 export function selectConfiguration(input: SelectionInput): Selection | undefined {
   if (input.flag !== undefined) return { name: input.flag, via: '--config' }
   const engine = input.engineFlag ?? input.engine
+  const tier = matchingTier(input)
+  if (tier) return resolveChoice(tier.choice, engine, tier.via)
+
   for (const key of [input.workflow, 'default']) {
-    const chosen = input.workflows?.[key]?.configuration
-    if (chosen === undefined) continue
+    const choice = input.workflows?.[key]?.configuration
+    if (choice === undefined) continue
     const via = `pair.config.json workflows.${key}`
-    if (typeof chosen === 'string') return { name: chosen, via }
-    const name = chosen[engine]
-    if (name === undefined)
-      throw new Error(
-        `configuration-not-found: ${via}.configuration has no entry for engine '${engine}' ` +
-          `(it has ${Object.keys(chosen).join(', ')}) — add one or pass --config`,
-      )
-    return { name, via }
+    return resolveChoice(choice, engine, via, `${via}.configuration`)
   }
   return undefined
 }

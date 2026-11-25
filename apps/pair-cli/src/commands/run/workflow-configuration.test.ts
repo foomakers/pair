@@ -345,6 +345,275 @@ describe('validation of the configuration (AC-4)', () => {
   })
 })
 
+describe('#707 AC-5 workflow tier validation', () => {
+  const withTiers = (tiers: Record<string, string | Record<string, string>>) => {
+    write(
+      'pair.config.json',
+      JSON.stringify({ workflows: { quick: { configuration: 'mine', tiers } } }),
+    )
+    writeConfig()
+  }
+
+  it.each([
+    ['an unmatched label', { 'risk:red': 'missing-tier-config' }, /risk:red.*missing-tier-config/],
+    [
+      'another engine arm',
+      { 'risk:green': { claude: 'mine', codex: 'missing-tier-config' } },
+      /risk:green.*missing-tier-config/,
+    ],
+    ['a malformed label', { ' risk:red ': 'mine' }, /label/i],
+  ] as const)('refuses %s before any launch', async (_case, tiers, diagnostic) => {
+    withTiers(tiers)
+    const code = await run(
+      ['quick'],
+      OK,
+      {},
+      {
+        readCard: async () => ({ title: 'A card', labels: ['risk:green'] }),
+      },
+    )
+    expect(code, lines.join('\n')).toBe(1)
+    expect(lines.join('\n')).toContain('workflows.quick.tiers')
+    expect(lines.join('\n')).toMatch(diagnostic)
+    expect(launched).toEqual([])
+  })
+
+  it('runs with a valid name and engine map when no label matches', async () => {
+    withTiers({ 'risk:green': 'mine', 'risk:red': { claude: 'mine', codex: 'cx' } })
+    writeConfig('cx', CONFIG.replace('engine: claude', 'engine: codex'))
+    expect(await run(['quick'])).toBe(0)
+    expect(launched[0]?.model).toBe('claude-sonnet-5-5')
+  })
+})
+
+describe('#707 T-3 workflow tier selection (AC-1, AC-2)', () => {
+  const tierSource = 'pair.config.json workflows.quick.tiers.risk:red'
+  const fallbackSource = '(pair.config.json workflows.quick)'
+  const cardWithLabels = (labels: string[]) => ({
+    id: '627',
+    title: 'A card',
+    body: '',
+    labels,
+    boardState: null,
+    closed: false,
+    prerequisites: [],
+  })
+  const readCardFacts = (labels: string[]) =>
+    vi
+      .fn<NonNullable<WorkflowHostDependencies['readSelection']>>()
+      .mockResolvedValue({ cards: [cardWithLabels(labels)] })
+
+  function writeMapping(tiers?: Record<string, string>) {
+    write(
+      'pair.config.json',
+      JSON.stringify({ workflows: { quick: { configuration: 'mine', tiers } } }),
+    )
+    writeConfig()
+  }
+
+  beforeEach(() => {
+    writeMapping({ 'risk:red': 'tier' })
+    writeConfig(
+      'tier',
+      CONFIG.replace('claude-sonnet-5-5', 'tier-build').replace('claude-opus-5-5', 'tier-judge'),
+    )
+  })
+
+  it.each([
+    { entry: 'named', argv: ['quick'] },
+    { entry: 'mapped', argv: [] },
+  ])('launches the $entry run with its tier and prints the label source', async ({ argv }) => {
+    const readSelection = readCardFacts(['risk:red'])
+
+    expect(await run(argv, OK, {}, { readSelection }), lines.join('\n')).toBe(0)
+
+    expect(launched.map(one => one.model)).toEqual(['tier-build', 'tier-judge'])
+    expect(lines.join('\n')).toContain(tierSource)
+    expect(readSelection).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      expect.objectContaining({ cards: ['627'] }),
+    )
+  })
+
+  it('previews the selected tier and its source without launching', async () => {
+    const readSelection = readCardFacts(['risk:red'])
+
+    expect(await run(['quick'], OK, { dryRun: true }, { readSelection })).toBe(0)
+
+    expect(lines.join('\n')).toContain(tierSource)
+    expect(lines.join('\n')).toContain('model=tier-build')
+    expect(launched).toEqual([])
+  })
+
+  it('707-F1: applies the tier filter before loading batch dependencies', async () => {
+    writeConfig('tier', `${CONFIG}select: { filter: { has: [release-approved] } }\n`)
+    const readDependencies = vi.fn(async (ids: readonly string[]) =>
+      ids.map(id => ({ id, prerequisites: [] })),
+    )
+    const readSelection = async () => ({
+      cards: [
+        cardWithLabels(['risk:red', 'release-approved']),
+        { ...cardWithLabels(['risk:red']), id: '628' },
+        { ...cardWithLabels([]), id: '629' },
+      ],
+      readDependencies,
+    })
+
+    expect(await run(['quick'], OK, { card: '627,628,629', dryRun: true }, { readSelection })).toBe(
+      0,
+    )
+
+    expect(lines.join('\n')).toContain('#628: not-applicable — selection filter')
+    expect(readDependencies).toHaveBeenCalledExactlyOnceWith(['627', '629'])
+  })
+
+  it.each([
+    { name: '707-F2: all tiered', labels: ['risk:red'], exit: 0, eligible: '627, 628' },
+    { name: '707-F2: included fallback', labels: [], exit: 1, eligible: '627' },
+    {
+      name: '707-F3: fallback excluded by label',
+      labels: [],
+      filter: 'risk:red',
+      exit: 0,
+      eligible: '627',
+    },
+  ])('$name when the fallback lacks the engine', async row => {
+    write(
+      'pair.config.json',
+      JSON.stringify({
+        workflows: { quick: { configuration: { claude: 'mine' }, tiers: { 'risk:red': 'tier' } } },
+      }),
+    )
+    writeConfig('tier', CONFIG.replace('engine: claude', 'engine: codex'))
+    const readSelection = async () => ({
+      cards: [cardWithLabels(['risk:red']), { ...cardWithLabels(row.labels), id: '628' }],
+    })
+
+    const exit = await run(
+      ['quick'],
+      OK,
+      { card: '627,628', engine: 'codex', filter: row.filter, dryRun: true },
+      { readSelection },
+    )
+
+    const output = lines.join('\n')
+    expect(output).toContain(`Dry run: ${row.eligible};`)
+    expect(exit).toBe(row.exit)
+    const diagnostic =
+      "pair.config.json workflows.quick.configuration has no entry for engine 'codex'"
+    if (row.exit === 1)
+      expect(output).toContain(`#628: failed — configuration-not-found: ${diagnostic}`)
+    else expect(output).not.toContain(diagnostic)
+    if (row.filter) expect(output).toContain('#628: not-applicable — selection filter')
+  })
+
+  it.each(['tracker request', 'card lookup'])(
+    'warns and uses the fallback after a failed %s',
+    async failure => {
+      const readSelection = readCardFacts([])
+      const message = 'card facts unavailable'
+      if (failure === 'tracker request') readSelection.mockRejectedValue(new Error(message))
+      else readSelection.mockResolvedValue({ cards: [{ ...cardWithLabels([]), error: message }] })
+
+      expect(await run(['quick'], OK, {}, { readSelection }), lines.join('\n')).toBe(0)
+
+      expect(launched[0]?.model).toBe('claude-sonnet-5-5')
+      expect(lines.join('\n')).toContain(fallbackSource)
+      expect(lines.find(line => line.includes('Warning:') && line.includes(message))).toBeDefined()
+    },
+  )
+
+  it('records the start labels and retains the chosen tier when resuming', async () => {
+    const readSelection = readCardFacts(['risk:red', 'team:cli'])
+    const failedReview = () => fenced({ status: 'failed', summary: 'red', reason: 'quality-gate' })
+    expect(
+      await run(['quick'], { ...OK, 'pair-process-review': failedReview }, {}, { readSelection }),
+    ).toBe(1)
+    const state = fs.readFileSync(join(runDir(), 'state.json'))
+    readSelection.mockResolvedValue({ cards: [cardWithLabels(['risk:green'])] })
+    launched = []
+    lines.length = 0
+
+    expect(await run(['quick'], OK, {}, { readSelection }), lines.join('\n')).toBe(0)
+
+    expect(launched.map(one => one.model)).toEqual(['tier-judge'])
+    expect(lines.join('\n')).toContain(tierSource)
+    expect(readSelection).toHaveBeenCalledOnce()
+    expect(state).toContain('"risk:red"')
+    expect(state).toContain('"team:cli"')
+  })
+
+  it.each([
+    { context: 'no tiers', tiers: undefined, options: {} },
+    { context: '--config', tiers: { 'risk:red': 'tier' }, options: { config: 'mine' } },
+  ])(
+    'launches with the usual configuration and skips the label read with $context',
+    async ({ tiers, options }) => {
+      writeMapping(tiers)
+      const readSelection = readCardFacts(['risk:red'])
+
+      expect(await run(['quick'], OK, options, { readSelection }), lines.join('\n')).toBe(0)
+
+      expect(launched[0]?.model).toBe('claude-sonnet-5-5')
+      expect(readSelection).not.toHaveBeenCalled()
+    },
+  )
+
+  it('regression #707: previews the tier on a fresh install with no State Mapping table', async () => {
+    write(
+      '.pair/adoption/tech/way-of-working.md',
+      `${REGISTRY}\n## State Mapping\n\nOptional. Add a table if the board uses different names.\n`,
+    )
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Host bridge fixture')
+    write(
+      'pair.config.json',
+      JSON.stringify({
+        run: { agents: { claude: { command: process.execPath } } },
+        workflows: { quick: { configuration: 'mine', tiers: { 'risk:red': 'tier' } } },
+      }),
+    )
+    const card = { ...cardWithLabels(['risk:red']), boardState: 'In Progress' }
+    vi.spyOn(hostProcess, 'runHostProcess').mockImplementation(async (bin, [script, ...args]) => {
+      const available: Record<string, unknown> = {
+        'workflow-cards --cards 627': { cards: [card] },
+        'workflow-card --story 627': card,
+      }
+      const command = args.join(' ')
+      const result =
+        bin === process.execPath && script?.endsWith('cycle-state.mjs')
+          ? available[command]
+          : undefined
+      return result === undefined
+        ? { status: 1, stdout: '', stderr: `Unexpected host process: ${bin} ${command}` }
+        : { status: 0, stdout: JSON.stringify(result), stderr: '' }
+    })
+
+    const exitCode = process.exitCode
+    try {
+      await runCli([
+        process.execPath,
+        'pair-cli',
+        'run',
+        'quick',
+        '--card',
+        '627',
+        '--engine',
+        'claude',
+        '--dry-run',
+        '--cwd',
+        project,
+      ])
+    } finally {
+      process.exitCode = exitCode
+    }
+
+    const output = lines.join('\n')
+    expect(output).toContain(tierSource)
+    expect(output).toContain('model=tier-build')
+    expect(output).toContain('Dry run:')
+  })
+})
+
 describe('override (AC-6)', () => {
   it('deep-merges over the file, runs with it and records it in state.json', async () => {
     writeConfig()

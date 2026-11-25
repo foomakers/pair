@@ -74,6 +74,8 @@ export interface RunStateFile {
   readonly schemaVersion: typeof STATE_SCHEMA_VERSION
   readonly workflow: { readonly name: string; readonly hash: string }
   readonly card: string
+  /** Labels used for configuration selection when this run started. */
+  readonly cardLabels?: readonly string[]
   /** Present when the run froze a configuration; `override` is the `--config-override` applied, as given. */
   readonly configuration?: { readonly hash: string; readonly override?: unknown } | undefined
   readonly steps: Readonly<Record<string, StepRecord>>
@@ -237,6 +239,7 @@ export interface StepReplay {
 
 export interface StartOptions {
   readonly card: string
+  readonly cardLabels?: readonly string[]
   /** Archive what the run directory holds and start over. */
   readonly restart?: boolean
   /** The clock, for the name of the archive. */
@@ -612,6 +615,7 @@ function initialState(workflow: Workflow, text: string, options: StartOptions): 
     schemaVersion: STATE_SCHEMA_VERSION,
     workflow: { name: workflow.name, hash: hashOf(text) },
     card: options.card,
+    ...(options.cardLabels !== undefined && { cardLabels: options.cardLabels }),
     ...(configuration !== undefined && { configuration: configurationRecord(configuration) }),
     steps: Object.fromEntries(
       workflow.steps.flatMap(step => [

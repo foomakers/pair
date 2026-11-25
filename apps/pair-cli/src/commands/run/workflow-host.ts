@@ -1,4 +1,4 @@
-import { savedWorkflow } from './workflow-saved-state'
+import { savedRunState, savedWorkflow } from './workflow-saved-state'
 import { prepareReplayHead, recoverWorktree } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
@@ -11,6 +11,7 @@ import {
   checkAgainstEngines,
   describeSettings,
   formatError,
+  hasConfigurationTiers,
   hasLegacyRunTelemetry,
   kindByName,
   addressedSteps,
@@ -41,6 +42,7 @@ import {
   type StepSettings,
   type Usage,
   type Workflow,
+  type WorkflowsConfig,
 } from '@pair/workflows'
 import { loadConfigWithOverrides } from '#config'
 import type { Config } from '#registry'
@@ -73,7 +75,12 @@ import {
 import { createExecutableProbe } from './path-probe'
 import { createSkillProbe } from './skill-probe'
 import { ENGINES, isEngineId, type EngineDefinition } from './engines'
-import { engineFacts, resolveConfiguration, type ConfigurationPlan } from './workflow-configuration'
+import {
+  engineFacts,
+  resolveConfiguration,
+  workflowTierErrors,
+  type ConfigurationPlan,
+} from './workflow-configuration'
 import { isSafePromptText } from './prompt-safety'
 import { acquireRunLock } from './run-lock'
 import { acquireCardLock } from './card-lock'
@@ -212,36 +219,56 @@ interface Resolved {
   readonly engine: ResolvedEngine
   /** The configuration this run launches with, when one applies. */
   readonly configuration?: ConfigurationPlan
+  readonly cardLabels?: readonly string[] | undefined
   readonly main: string
   readonly cwd: string
   readonly sources: Record<string, string>
 }
 
-/** The configuration of the run, its warnings and refusals printed; `undefined`: refused. */
-function configure(
+function reportConfigurationErrors(errors: readonly string[]): void {
+  errors.forEach(error => console.error(`  ${error}`))
+  console.error(`  Refused: ${String(errors.length)} error(s); nothing was launched.`)
+}
+
+export function workflowConfiguration(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
   services: Services,
-  at: Pick<Resolved, 'cwd' | 'main' | 'project' | 'engine'> & { workflow: Workflow },
-): { plan?: ConfigurationPlan } | undefined {
+  at: Resolved,
+) {
   const { fs } = services
-  const outcome = resolveConfiguration({
+  return resolveConfiguration({
     fs,
     cwd: at.cwd,
     main: at.main,
     project: at.project,
     workflow: at.workflow,
+    labels: at.cardLabels,
     flag: request.config,
     override: request.configOverride,
     engineFlag: config.engine,
     engine: at.engine.engine.id,
     probe: services.deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   })
+}
+
+/** The configuration of the run, its warnings and refusals printed; `undefined`: refused. */
+export function configureWorkflowRun(
+  config: RunCommandConfig,
+  request: RunWorkflowRequest,
+  services: Services,
+  at: Resolved,
+): Resolved | undefined {
+  const outcome = workflowConfiguration(config, request, services, at)
   outcome.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
-  if (outcome.errors.length === 0) return outcome.plan ? { plan: outcome.plan } : {}
-  outcome.errors.forEach(error => console.error(`  ${error}`))
-  console.error(`  Refused: ${String(outcome.errors.length)} error(s); nothing was launched.`)
-  return undefined
+  if (outcome.errors.length > 0) {
+    reportConfigurationErrors(outcome.errors)
+    return undefined
+  }
+  return {
+    ...at,
+    ...(outcome.plan && { configuration: outcome.plan }),
+  }
 }
 
 /** Serialize the expanded workflow for the engine's frozen source. */
@@ -336,8 +363,8 @@ function reportValidation(
   console.error(`  Refused: ${String(checked.errors.length)} error(s); nothing was launched.`)
 }
 
-/** Workflow, validation and engine: everything decided before the card is read or anything is launched. */
-export function resolveWorkflowRun(
+/** Validate the workflow and tier declarations before looking up card labels. */
+export function resolveWorkflowDefinition(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
   services: Services,
@@ -364,14 +391,11 @@ export function resolveWorkflowRun(
     project,
   )
   console.log(`  ${describeEngineResolution(engine)}`)
-  const configured = configure(config, request, services, {
-    cwd,
-    main,
-    project,
-    workflow: checked.workflow,
-    engine,
-  })
-  if (configured === undefined) return undefined
+  const errors = workflowTierErrors({ fs, cwd, main, project })
+  if (errors.length > 0) {
+    reportConfigurationErrors(errors)
+    return undefined
+  }
   return {
     workflow: checked.workflow,
     source: hasExpansion(checked.workflow)
@@ -379,11 +403,54 @@ export function resolveWorkflowRun(
       : source,
     project,
     engine,
-    ...(configured.plan && { configuration: configured.plan }),
     main,
     cwd,
     sources,
   }
+}
+
+export function usesTierLabels(
+  resolved: Resolved,
+  request: Pick<RunWorkflowRequest, 'config'>,
+): boolean {
+  return (
+    request.config === undefined &&
+    hasConfigurationTiers(
+      resolved.project['workflows'] as WorkflowsConfig | undefined,
+      resolved.workflow.name,
+    )
+  )
+}
+
+const workflowRunDir = (resolved: Resolved, request: RunWorkflowRequest) =>
+  join(
+    resolved.main,
+    '.pair/working/runs',
+    request.runId ?? `${resolved.workflow.name}-${request.card}`,
+  )
+
+export function frozenTierLabels(
+  resolved: Resolved,
+  request: RunWorkflowRequest,
+  fs: FileSystemService,
+) {
+  const saved = savedRunState(request, workflowRunDir(resolved, request), fs)
+  return saved?.workflow.name === resolved.workflow.name ? (saved.cardLabels ?? []) : undefined
+}
+
+/** Mapped routing resolves synchronously with the facts already read. */
+export function resolveWorkflowRun(
+  config: RunCommandConfig,
+  request: RunWorkflowRequest,
+  services: Services,
+  { resume = true, card }: { resume?: boolean; card?: WorkflowCard } = {},
+): Resolved | undefined {
+  const resolved = resolveWorkflowDefinition(config, request, services, resume)
+  if (resolved === undefined) return undefined
+  const labels = usesTierLabels(resolved, request)
+    ? (frozenTierLabels(resolved, request, services.fs) ?? card?.labels)
+    : undefined
+  return configureWorkflowRun(config, request, services, { ...resolved, cardLabels: labels })
 }
 
 /** What a recorded step says: its summary, then its reason and detail when it has them. */
@@ -852,6 +919,7 @@ async function runOnConsole(
 function startOptions({ resolved, request }: Opened, replay?: StepReplay) {
   return {
     card: request.card,
+    ...(resolved.cardLabels !== undefined && { cardLabels: resolved.cardLabels }),
     restart: request.restart,
     ...(replay !== undefined && { replay }),
     reconfigure: request.reconfigure === true,
@@ -1170,9 +1238,16 @@ type BatchCard = {
   releases: Set<() => void>
 }
 
-type WorkflowRunRequest = RunWorkflowRequest & { readonly selectionFlags?: Filter }
+type WorkflowRunRequest = RunWorkflowRequest & {
+  readonly selectionFlags?: Filter
+  readonly routedCard?: WorkflowCard
+}
 
 function printWorkflowPreview(resolved: Resolved): number {
+  if (resolved.cardLabels !== undefined && resolved.configuration !== undefined) {
+    const { configuration, source } = resolved.configuration
+    console.log(`  Configuration: ${configuration.name} — ${source}`)
+  }
   addressedSteps(resolved.workflow).forEach(step => {
     const host = step.kind === 'loop' || kindByName[step.kind].host === true
     const skill = host ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
@@ -1199,19 +1274,66 @@ function configuredSelection(resolved: Resolved, selectionFlags: Filter = {}) {
     : effectiveSelection(workflow, configuration, selectionFlags)
 }
 
+type ReadSelectionCard = () => Promise<WorkflowCard | undefined>
+type CardSource = { read: ReadSelectionCard; batch: BatchCard | undefined }
+
+function selectionCardReader(
+  resolved: Resolved,
+  card: string,
+  { fs, deps }: Services,
+): ReadSelectionCard {
+  let reading: ReturnType<ReadSelectionCard> | undefined
+  return () =>
+    (reading ??= (deps.workflow?.readSelection ?? readWorkflowCards)(
+      { fs, ...resolved },
+      { cards: [card] },
+    ).then(({ cards }) => cards[0]))
+}
+
+async function readTierLabels(
+  card: string,
+  read: () => Promise<Pick<WorkflowCard, 'labels' | 'error'> | undefined>,
+): Promise<readonly string[]> {
+  try {
+    const found = await read()
+    if (found === undefined) throw new Error('card facts unavailable')
+    if (found.error !== undefined) throw new Error(found.error)
+    return found.labels
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    console.log(
+      `  Warning: could not read labels for card ${card}: ${reason}. Using the fallback configuration.`,
+    )
+    return []
+  }
+}
+
+async function runTierLabels(
+  resolved: Resolved,
+  request: WorkflowRunRequest,
+  { fs, deps }: Services,
+  { read, batch }: CardSource,
+): Promise<readonly string[] | undefined> {
+  if (!usesTierLabels(resolved, request)) return undefined
+  // An explicit card's labels are usable without resolving the board's status mapping.
+  const readLabels = deps.workflow?.readSelection
+    ? read
+    : () => readWorkflowCard({ fs, ...resolved }, request.card)
+  return (
+    frozenTierLabels(resolved, request, fs) ??
+    (batch?.card ?? request.routedCard)?.labels ??
+    (await readTierLabels(request.card, readLabels))
+  )
+}
+
 async function acceptsCard(
   resolved: Resolved,
   request: WorkflowRunRequest,
-  runDir: string,
-  { fs, deps }: Services,
+  { runDir, fs, read }: { runDir: string; fs: FileSystemService; read: ReadSelectionCard },
 ): Promise<boolean> {
   const selection = configuredSelection(resolved, request.selectionFlags)
   if (selection === undefined) return true
-  const { cards } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
-    { fs, ...resolved },
-    { cards: [request.card] },
-  )
-  const found = cards[0]
+  const found = await read()
   if (found === undefined) return false
   const error = found.error ?? selectionBoardError(found, selection)
   if (error !== undefined) throw new Error(error)
@@ -1244,11 +1366,15 @@ export async function handleWorkflowRun(
   services: Services,
   batch?: BatchCard,
 ): Promise<number> {
-  const resolved = resolveWorkflowRun(config, request, services)
+  const definition = resolveWorkflowDefinition(config, request, services)
+  if (definition === undefined) return 1
+  const card = { read: selectionCardReader(definition, request.card, services), batch }
+  const cardLabels = await runTierLabels(definition, request, services, card)
+  const resolved = configureWorkflowRun(config, request, services, { ...definition, cardLabels })
   if (resolved === undefined) return 1
   printPlan(resolved.workflow)
   if (config.dryRun) return printWorkflowPreview(resolved)
-  const opened = await openCard(resolved, request, services, batch)
+  const opened = await openCard(resolved, request, services, card)
   return opened === undefined ? 0 : runWithCardLock(config, opened, services, batch?.releases)
 }
 
@@ -1256,10 +1382,9 @@ async function openCard(
   resolved: Resolved,
   request: WorkflowRunRequest,
   services: Services,
-  batch?: BatchCard,
+  { read, batch }: CardSource,
 ): Promise<Opened | undefined> {
-  const runId = request.runId ?? `${resolved.workflow.name}-${request.card}`
-  const runDir = join(resolved.main, '.pair/working/runs', runId)
+  const runDir = workflowRunDir(resolved, request)
   const run = { files: services.fs, dir: runDir }
   if (
     batch === undefined &&
@@ -1271,7 +1396,10 @@ async function openCard(
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
     return undefined
   }
-  if (batch === undefined && !(await acceptsCard(resolved, request, runDir, services))) {
+  if (
+    batch === undefined &&
+    !(await acceptsCard(resolved, request, { runDir, fs: services.fs, read }))
+  ) {
     console.log(`  #${request.card}: not-applicable — selection filter`)
     return undefined
   }

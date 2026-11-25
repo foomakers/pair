@@ -1,6 +1,48 @@
 import { errorAt, type Lines, type Step, type Workflow, type WorkflowError } from '../grammar'
 import type { Configuration, Entry } from './schema'
+import { isConfigurationPath } from './select'
 import { settingsFor } from './settings'
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+// Numeric object keys can be enumerated ahead of other labels, breaking file order.
+const INVALID_TIER_LABEL = /^\d+$|[\p{Cc}\p{Zl}\p{Zp}]/u
+
+function checkTierReference(
+  field: string,
+  name: unknown,
+  exists: (name: string) => boolean,
+): string[] {
+  if (typeof name !== 'string' || name.trim() === '' || isConfigurationPath(name))
+    return [`${field}: expected a configuration name`]
+  return exists(name) ? [] : [`configuration-not-found: ${field} refers to '${name}'`]
+}
+
+/** Check every tier and engine arm before the run selects a configuration. */
+export function checkWorkflowTiers(
+  workflows: unknown,
+  exists: (name: string) => boolean,
+): string[] {
+  if (!isObject(workflows)) return []
+  return Object.entries(workflows).flatMap(([workflow, mapping]) => {
+    if (!isObject(mapping) || !Object.hasOwn(mapping, 'tiers')) return []
+    const path = `workflows.${workflow}.tiers`
+    if (!isObject(mapping['tiers'])) return [`${path}: expected a map of labels`]
+    return Object.entries(mapping['tiers']).flatMap(([label, choice]) => {
+      if (label === '' || label !== label.trim() || INVALID_TIER_LABEL.test(label))
+        return [
+          `${path}: invalid label ${JSON.stringify(label)}. Use a trimmed, single-line label with a nondigit and no control characters.`,
+        ]
+      const field = `${path}.${label}`
+      return isObject(choice)
+        ? Object.entries(choice).flatMap(([engine, name]) =>
+            checkTierReference(`${field}.${engine}`, name, exists),
+          )
+        : checkTierReference(field, choice, exists)
+    })
+  })
+}
 
 /** What the host knows about its engines; the package holds no engine table. */
 export interface EngineFacts {

@@ -3,6 +3,59 @@ import { handleValidateConfigCommand } from './handler'
 import type { ValidateConfigCommandConfig } from './parser'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 
+describe('#707 AC-5 workflow tier validation', () => {
+  const cwd = '/test-project'
+  const configuration = (name: string, engine: string) =>
+    `version: 1\nname: ${name}\ndefaults: { engine: ${engine} }\n`
+
+  const validate = (tiers: Record<string, string | Record<string, string>>) => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/test-module/config.json': JSON.stringify({
+          asset_registries: {
+            knowledge: {
+              source: '.pair/knowledge',
+              behavior: 'mirror',
+              description: 'Knowledge base',
+              targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+            },
+          },
+        }),
+        [`${cwd}/pair.config.json`]: JSON.stringify({ workflows: { quick: { tiers } } }),
+        [`${cwd}/.pair/adoption/tech/configurations/mine.yaml`]: configuration('mine', 'claude'),
+        [`${cwd}/.pair/adoption/tech/configurations/cx.yaml`]: configuration('cx', 'codex'),
+      },
+      '/test-module',
+      cwd,
+    )
+    return handleValidateConfigCommand({ command: 'validate-config' }, fs)
+  }
+
+  test.each([
+    ['a configuration name', 'missing-tier-config'],
+    ['an engine map reference', { claude: 'mine', codex: 'missing-tier-config' }],
+  ])('reports a missing file in %s', async (_case, target) => {
+    await expect(validate({ 'risk:red': target })).rejects.toThrow(
+      /workflows\.quick\.tiers\.risk:red.*missing-tier-config/,
+    )
+  })
+
+  test.each(['', ' risk:red ', 'risk:\nred', '10'])(
+    'rejects the malformed tier label %j',
+    async label => {
+      await expect(validate({ [label]: 'mine' })).rejects.toThrow(
+        /workflows\.quick\.tiers[\s\S]*label/i,
+      )
+    },
+  )
+
+  test('accepts a valid label with a configuration name and a valid engine map', async () => {
+    await expect(
+      validate({ 'maintenance task': 'mine', 'risk:red': { claude: 'mine', codex: 'cx' } }),
+    ).resolves.toBeUndefined()
+  })
+})
+
 describe('handleValidateConfigCommand - unit tests', () => {
   // Removed positive test - loadConfigWithOverrides integration too complex for unit test
   // Covered by E2E tests instead

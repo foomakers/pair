@@ -415,3 +415,74 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
     ).toEqual(expected.map(([model, effort]) => [engine, model, effort]))
   })
 })
+
+describe('risk-tier configuration selection (#707)', () => {
+  const workflows = {
+    quick: {
+      configuration: 'claude-medium',
+      tiers: {
+        'risk:red': { claude: 'claude-high', codex: 'codex-high' },
+        'risk:green': 'claude-cheap',
+      },
+    },
+    standard: { configuration: 'claude-medium' },
+    review: { tiers: { 'risk:yellow': 'claude-high' } },
+    default: {
+      configuration: 'claude',
+      tiers: { 'risk:red': 'claude-high' },
+    },
+  }
+  const input = { engine: 'claude', workflow: 'quick', workflows }
+
+  it.each([
+    {
+      behavior: 'chooses a matching label over the workflow configuration (AC-1)',
+      given: { ...input, labels: ['risk:green'] },
+      expected: { name: 'claude-cheap', via: 'pair.config.json workflows.quick.tiers.risk:green' },
+    },
+    {
+      behavior: 'chooses the first match in config order using the selected engine (AC-1)',
+      given: { ...input, engineFlag: 'codex', labels: ['risk:green', 'risk:red'] },
+      expected: { name: 'codex-high', via: 'pair.config.json workflows.quick.tiers.risk:red' },
+    },
+    {
+      behavior: 'chooses a default tier when the workflow has no mapping (AC-1, AC-6)',
+      given: { ...input, workflow: 'delivery', labels: ['risk:red'] },
+      expected: { name: 'claude-high', via: 'pair.config.json workflows.default.tiers.risk:red' },
+    },
+    {
+      behavior: 'uses the workflow configuration when no tier matches (AC-2)',
+      given: { ...input, labels: ['risk:yellow'] },
+      expected: { name: 'claude-medium', via: 'pair.config.json workflows.quick' },
+    },
+    {
+      behavior: 'uses an existing workflow configuration without tiers (AC-2)',
+      given: { ...input, workflow: 'standard', labels: ['risk:red'] },
+      expected: { name: 'claude-medium', via: 'pair.config.json workflows.standard' },
+    },
+    {
+      behavior: 'uses the default configuration after a named mapping has no match (AC-2)',
+      given: { ...input, workflow: 'review', labels: ['risk:red'] },
+      expected: { name: 'claude', via: 'pair.config.json workflows.default' },
+    },
+    {
+      behavior: 'uses the default configuration when card labels are unavailable (AC-2)',
+      given: { ...input, workflow: 'delivery' },
+      expected: { name: 'claude', via: 'pair.config.json workflows.default' },
+    },
+    {
+      behavior: 'gives the explicit configuration priority over a matching tier (AC-3)',
+      given: { ...input, flag: 'mine', labels: ['risk:red'] },
+      expected: { name: 'mine', via: '--config' },
+    },
+  ])('$behavior', ({ given, expected }) => {
+    expect(selectConfiguration(given)).toEqual(expected)
+  })
+
+  it('rejects the selected tier when it has no entry for the engine (AC-4)', () => {
+    const given = { ...input, engine: 'pi', labels: ['risk:red', 'risk:green'] }
+    expect(() => selectConfiguration(given)).toThrow(
+      "configuration-not-found: pair.config.json workflows.quick.tiers.risk:red has no entry for engine 'pi'",
+    )
+  })
+})
