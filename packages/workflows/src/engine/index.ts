@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { basename, join } from 'node:path'
 import { readResult } from '../dispatch'
 import {
+  addressedSteps,
   cardStateOf,
   parseWorkflow,
   type KindName,
@@ -375,6 +376,18 @@ export function pendingBoardStatus(
     if (typeof status === 'string') return status
   }
   return undefined
+}
+
+/** The latest successful refinement before a task-planning step. */
+export function priorRefinement(run: RunDirectory, id: string): StepRecord['outputs'] {
+  const state = requireState(run)
+  let outputs: StepRecord['outputs']
+  for (const step of addressedSteps(frozenWorkflow(run))) {
+    if (step.id === id) break
+    const saved = state.steps[step.id]
+    if (step.kind === 'refine-story' && saved?.state === 'ok') outputs = saved.outputs
+  }
+  return outputs
 }
 
 async function resume(

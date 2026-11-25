@@ -595,6 +595,9 @@ async function setCardState(
 
 function cardTransitions({ request, resolved }: Opened, services: Services) {
   return {
+    isReadyBoardStatus(status: string | null) {
+      return isAtLeast(status, 'Ready', readStateMapping(services.fs, resolved.main))
+    },
     async confirmReady() {
       await setCardState(request.card, 'Ready', resolved, services)
     },

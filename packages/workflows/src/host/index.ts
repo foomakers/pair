@@ -1,6 +1,7 @@
 import { buildMessage, readResult, type InvocationStyle } from '../dispatch'
 import {
   next,
+  priorRefinement,
   record,
   stageSuccess,
   type RunDirectory,
@@ -65,6 +66,8 @@ export interface WorkflowHost {
   runGates?(entries: readonly string[], step: StepLaunch): Promise<StepResult | undefined>
   /** The result's observable platform facts. */
   readResultFacts?(step: StepLaunch, result: StepResult): Promise<ResultFacts>
+  /** Whether the observed board status shows that the Ready transition has already landed. */
+  isReadyBoardStatus?(status: string | null): boolean
   /** Confirms the Ready transition before success becomes durable. */
   confirmReady?(): Promise<void>
   /** Sees every step start and every recorded result, in order. */
@@ -124,14 +127,43 @@ async function confirmed(
   host: WorkflowHost,
   step: StepLaunch,
   result: StepResult,
+  retry?: RunDirectory,
 ): Promise<StepResult> {
-  if (result.status !== 'ok' || !hasResultFacts(step.kind) || host.readResultFacts === undefined)
-    return result
+  if (result.status !== 'ok' || !hasResultFacts(step.kind)) return result
+  if (host.readResultFacts === undefined)
+    return retry ? unconfirmed('the host cannot revalidate the staged result') : result
   try {
-    return confirmResult(step.kind, result, await host.readResultFacts(step, result))
+    const facts = await host.readResultFacts(step, result)
+    return retry === undefined
+      ? confirmResult(step.kind, result, facts)
+      : confirmStagedResult(step, result, facts, { host, run: retry })
   } catch (error) {
     return unconfirmed((error as Error).message)
   }
+}
+
+function confirmStagedResult(
+  step: StepLaunch,
+  result: StepResult,
+  facts: ResultFacts,
+  { host, run }: { host: WorkflowHost; run: RunDirectory },
+): StepResult {
+  const card = facts.card
+  if (card === undefined) return confirmResult(step.kind, result, facts)
+  const { boardStatus } = card
+  const declaration = host.isReadyBoardStatus?.(boardStatus) ? { ...result, boardStatus } : result
+  const checked = confirmResult(step.kind, declaration, facts)
+  if (checked.status !== 'ok') return checked
+  const refinement = step.kind === 'plan-tasks' ? priorRefinement(run, step.id) : undefined
+  if (refinement !== undefined) {
+    const checkedRefinement = confirmResult(
+      'refine-story',
+      { ...result, ...refinement, boardStatus },
+      facts,
+    )
+    if (checkedRefinement.status !== 'ok') return checkedRefinement
+  }
+  return result
 }
 
 async function recordResult(
@@ -211,7 +243,9 @@ async function execute(
   exchange: Exchange = { sent: '', final: '' },
 ): Promise<StepResult> {
   if (step.pendingSuccess !== undefined)
-    return recordResult(host, run, step, { result: step.pendingSuccess })
+    return recordResult(host, run, step, {
+      result: await confirmed(host, step, step.pendingSuccess, run),
+    })
   const kind = kindByName[step.kind]
   if (kind.host === true) {
     exchange.sent = JSON.stringify(step.with)
