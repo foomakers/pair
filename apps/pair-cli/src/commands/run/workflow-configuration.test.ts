@@ -425,14 +425,14 @@ describe('#723 T-6 assignment configuration (AC-7, AC-9)', () => {
     printsAssignment('review', 'unassign', 'steps.review.assign')
   })
 
-  it('leaves the assignment up to the skill when neither source declares it', async () => {
+  it('claims for the runner when neither source configures an assignment', async () => {
     write(workflowPath, QUICK)
     writeConfig()
 
     expect(await run(['quick'], OK, { config: 'mine' })).toBe(0)
 
-    expect(assignments).toEqual([])
-    expect(launched[0]?.promptText).not.toContain('- assignee:')
+    expect(assignments).toEqual(['me'])
+    expect(launched[0]?.promptText).toContain('- assignee: none')
     expect(lines.join('\n')).not.toContain('assign=')
   })
 

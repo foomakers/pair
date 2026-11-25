@@ -221,13 +221,13 @@ const NO_AGENT_RESULT: StepResult = {
   summary: 'the agent ended without a final message',
 }
 
-const ownsAssignment = (host: WorkflowHost, step: StepLaunch) =>
-  step.assignment !== undefined &&
-  host.assignCard !== undefined &&
+const assignmentAtStart = (step: StepLaunch): Assignment | undefined =>
   step.pendingSuccess === undefined
+    ? (step.assignment?.value ?? (step.kind === 'implement' ? 'me' : undefined))
+    : undefined
 
 const delegatesAssignment = (host: WorkflowHost, step: StepLaunch) =>
-  step.kind === 'implement' && step.pendingSuccess === undefined && !ownsAssignment(host, step)
+  step.kind === 'implement' && step.pendingSuccess === undefined && host.assignCard === undefined
 
 const starting = (step: StepLaunch): StepEvent => ({
   step: step.id,
@@ -382,11 +382,10 @@ async function ended(
 
 /** The next step, reporting every step passed over because its `when` did not match. */
 async function advance(host: WorkflowHost, run: RunDirectory) {
-  const found = await next(run, host.card?.bind(host), [], async step =>
-    step.assignment !== undefined && step.pendingSuccess === undefined
-      ? host.assignCard?.(step.assignment.value)
-      : undefined,
-  )
+  const found = await next(run, host.card?.bind(host), [], async step => {
+    const assignment = assignmentAtStart(step)
+    return assignment === undefined ? undefined : host.assignCard?.(assignment)
+  })
   for (const { id, kind } of found.skipped ?? [])
     host.report?.({
       step: id,
@@ -431,10 +430,17 @@ async function runStep(
   writer: Writer,
 ): Promise<StepEvent> {
   const launch =
-    step.kind === 'implement' && ownsAssignment(host, step)
-      ? { ...step, with: { ...step.with, assignee: 'none' } }
+    step.kind === 'implement' && host.assignCard !== undefined && step.pendingSuccess === undefined
+      ? {
+          ...step,
+          with: {
+            ...step.with,
+            assignee: 'none',
+            ...(host.transition !== undefined && { 'board-state': 'managed' }),
+          },
+        }
       : step
-  // The implement skill claims ownership before activating the card itself.
+  // A host without an assignment adapter lets the skill claim and activate the card itself.
   if (delegatesAssignment(host, step)) host.report?.(starting(step))
   else await emitStep(host, starting(step))
   const { status, summary, reason, detail } = await executeMetered(host, run, launch, writer)

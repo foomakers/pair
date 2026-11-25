@@ -148,6 +148,8 @@ When implementing a card directly, omit `$assignee` to claim an unassigned card 
 
 In a workflow, `assign` applies when a step starts. `me` claims an unassigned card as the authenticated runner and skips a card held by another login. A login explicitly assigns that user, `none` leaves assignment unchanged, and `unassign` clears it.
 
+For an `implement` step with no effective `assign`, the host uses `me`. The host checks ownership before applying the step's start state or launching the implementation skill.
+
 In this `quick.yaml`, implementation inherits `me`, review assigns Alice, and the final gate clears assignment when it starts.
 
 ```yaml

@@ -447,7 +447,7 @@ ${assign === undefined ? '' : `assign: ${assign}\n`}steps:
       async step => {
         const inLoop = step === 'rounds/review'
         const definition = inLoop
-          ? `${implementOnly()}  rounds:
+          ? `${implementOnly('none')}  rounds:
     kind: loop
     until: review
     max: 1
@@ -494,19 +494,19 @@ ${assign === undefined ? '' : `assign: ${assign}\n`}steps:
 
 describe('#723 T-7 held cards in a batch (AC-4)', () => {
   it.each([
-    { source: 'host assignment', hostManaged: true, routing: '' },
-    { source: 'implement skill', hostManaged: false, routing: '' },
+    { source: 'explicit assignment', declaresAssign: true, routing: '' },
+    { source: 'implicit assignment', declaresAssign: false, routing: '' },
     {
-      source: 'implement skill with on-failed: continue',
-      hostManaged: false,
+      source: 'implicit assignment with on-failed: continue',
+      declaresAssign: false,
       routing: ', on-failed: continue',
     },
   ])(
     'skips for $source, runs independent work, and retries after release',
-    async ({ hostManaged, routing }) => {
+    async ({ declaresAssign, routing }) => {
       const definition = `version: 1
 name: quick
-${hostManaged ? 'assign: me\n' : ''}steps:
+${declaresAssign ? 'assign: me\n' : ''}steps:
   implement: { kind: implement${routing} }
   finish: { kind: generic, skill: my-skill }
 `
@@ -546,10 +546,7 @@ ${hostManaged ? 'assign: me\n' : ''}steps:
       }
       const skills = {
         'my-skill': () => fenced({ status: 'ok', summary: 'Finished' }),
-        'pair-process-implement': ({ cwd }: SpawnIterationInput) =>
-          !hostManaged && held && cwd === join(project, 'worktrees', '627')
-            ? fenced({ status: 'failed', reason: 'card-held', summary: 'Card held by alice' })
-            : IMPLEMENTED,
+        'pair-process-implement': () => IMPLEMENTED,
       }
       const batch = () => run(['quick'], skills, { card: '627,628,629' }, workflow)
       const launches = () =>
@@ -557,14 +554,8 @@ ${hostManaged ? 'assign: me\n' : ''}steps:
       const summary = (id: string) => lines.find(line => line.trimStart().startsWith(`#${id}:`))
 
       expect.soft(await batch()).toBe(0)
-      expect
-        .soft(launches())
-        .toEqual([
-          ...(hostManaged ? [] : ['627:pair-process-implement']),
-          '628:pair-process-implement',
-          '628:my-skill',
-        ])
-      expect.soft(assignmentChecks).toEqual(hostManaged ? ['627', '628', '628'] : [])
+      expect.soft(launches()).toEqual(['628:pair-process-implement', '628:my-skill'])
+      expect.soft(assignmentChecks).toEqual(declaresAssign ? ['627', '628', '628'] : ['627', '628'])
       expect.soft(summary('627')).toMatch(/#627: skipped.*alice.*card-held/)
       expect.soft(boardWrites).not.toContain('627') // #723 AC-4, F1
       expect.soft(boardWrites).toContain('628')
