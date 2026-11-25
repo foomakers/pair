@@ -141,7 +141,7 @@ async function confirmed(
     const checked = confirmResult(step.kind, result, facts)
     return {
       result:
-        checked.status === 'ok' && step.retryBoardStatus !== undefined
+        checked.status === 'ok' && step.confirmReady
           ? confirmPriorRefinement(run, step, result, facts)
           : checked,
     }

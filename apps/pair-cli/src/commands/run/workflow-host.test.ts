@@ -1132,7 +1132,10 @@ it.each(['batch', 'single card'])(
   async route => {
     const backlog = minimalRefinementBoard()
     const card = `${backlog}/12.md`
-    const ready = STORY_BEFORE_TASKS + '\n**Labels**: risk:green\n\n## Assumptions\n' + STORY_TASKS
+    const ready =
+      STORY_BEFORE_TASKS +
+      '\n**Labels**: risk:green\n\n## Acceptance Criteria\n\n## Assumptions\n' +
+      STORY_TASKS
     write(card, ready.replace('Design: not required', ''))
     write(`${backlog}/13.md`, STORY_BEFORE_TASKS + STORY_TASKS)
     const file = join(project, '.pair/adoption/tech/workflows/refinement.yaml')
