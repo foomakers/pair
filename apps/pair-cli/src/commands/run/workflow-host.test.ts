@@ -1215,6 +1215,56 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
   })
 })
 
+it.each(['top-level', 'loop'] as const)(
+  'answers the stopped %s approval after continuing an earlier one (R747-04)',
+  async placement => {
+    const prefix = `version: 1
+name: approvals
+steps:
+  advisory: { kind: approval, escalate: { needs-decision: { do: continue, comment: Advisory } } }
+`
+    const blocking =
+      placement === 'loop'
+        ? `  round:
+    kind: loop
+    until: required
+    max: 1
+    on-max: fail
+    steps:
+      required: { kind: approval }
+`
+        : '  required: { kind: approval }\n'
+    const file = '.pair/adoption/tech/workflows/approvals.yaml'
+    write(file, prefix + blocking)
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Cycle')
+    write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+    const answer = vi.fn((data: Record<string, unknown>) =>
+      data['flag'] ? [{ ...(data['flag'] as object), login: 'maintainer', channel: 'flag' }] : [],
+    )
+    hostProcess.mockImplementation(async (_bin, args) => {
+      const [, action, , raw] = args
+      if (action === 'approval-target') return success(JSON.stringify({ pr: 12, head: HEAD }))
+      if (action === 'approval-answers')
+        return success(JSON.stringify(answer(JSON.parse(raw ?? '{}'))))
+      return success('{}')
+    })
+    const required = placement === 'loop' ? 'round/required' : 'required'
+    const id = 'approvals-627'
+    expect(await run(['approvals'])).toBe(0)
+    expect(states(id)).toMatchObject({ advisory: 'needs-decision', [required]: 'needs-decision' })
+
+    // Resuming uses the frozen policy from the first invocation.
+    write(file, prefix.replace(/advisory: .*/, 'advisory: { kind: approval }') + blocking)
+    expect(await run(['approvals'], OK, { approve: '627' }), lines.join('\n')).toBe(0)
+    expect(states(id)).toMatchObject({ advisory: 'needs-decision', [required]: 'ok' })
+    expect(answer).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        flag: expect.objectContaining({ verdict: 'approved' }),
+      }),
+    )
+  },
+)
+
 it.each([
   'unchanged',
   'moved',

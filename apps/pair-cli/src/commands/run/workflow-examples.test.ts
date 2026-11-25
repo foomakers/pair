@@ -2,8 +2,9 @@ import { join } from 'path'
 import { describe, expect, it, vi } from 'vitest'
 import { fileSystemService as fs } from '@pair/content-ops'
 import { createMemoryFiles, runSteps, start, validate } from '@pair/workflows'
-import type { StepEvent, StepResult, WorkflowHost } from '@pair/workflows'
+import type { StepEvent, StepLaunch, StepResult, WorkflowHost } from '@pair/workflows'
 import { isSafePromptText } from './prompt-safety'
+import { performHostKind } from './workflow-kinds'
 
 const EXAMPLES = join(
   __dirname,
@@ -41,7 +42,7 @@ const FIXED = {
 
 async function simulate(
   name: string,
-  agentResults: Readonly<Record<string, StepResult>>,
+  agentResults: Readonly<Record<string, StepResult | ((step: StepLaunch) => StepResult)>>,
   perform?: WorkflowHost['perform'],
 ) {
   const file = join(EXAMPLES, `${name}.yaml`)
@@ -65,9 +66,10 @@ async function simulate(
       files: run.files,
       style: 'instruction',
       isSafeText: isSafePromptText,
-      launch: async ({ id }) => {
-        const result = agentResults[id]
-        if (result === undefined) throw new Error(`Unexpected agent step ${id}`)
+      launch: async step => {
+        const reply = agentResults[step.id]
+        if (reply === undefined) throw new Error(`Unexpected agent step ${step.id}`)
+        const result = typeof reply === 'function' ? reply(step) : reply
         return `\`\`\`json\n${JSON.stringify(result)}\n\`\`\``
       },
       ...(perform !== undefined && { perform }),
@@ -111,19 +113,31 @@ describe('#728 AC 19: shipped workflow examples', () => {
     ])
   })
 
-  it('converge takes the final fallback after three rounds and comments when it fails', async () => {
+  it('converge hands the last fix head and review findings to its fallback (R747-01)', async () => {
+    const heads = [HEAD, ...['b', 'c', 'd'].map(letter => letter.repeat(40))]
+    const latestFinding = { ...FINDING, title: 'Final round finding' }
+    const fallback = vi.fn<(step: StepLaunch) => StepResult>(() => ({
+      status: 'failed',
+      summary: 'Finding remained unresolved',
+      head: heads[3],
+      resolutions: [{ id: 'f1', status: 'not-resolved', reason: 'Needs a different approach' }],
+    }))
     const { outcome, results, commentOnCard } = await simulate('converge', {
       implement: IMPLEMENTED,
-      'rounds/review': CHANGES_REQUESTED,
-      'rounds/fix': FIXED,
-      'last-chance': {
-        status: 'failed',
-        summary: 'Finding remained unresolved',
-        head: HEAD,
-        resolutions: [{ id: 'f1', status: 'not-resolved', reason: 'Needs a different approach' }],
-      },
+      'rounds/review': ({ round = 1 }) => ({
+        ...CHANGES_REQUESTED,
+        reviewedHead: heads[round - 1],
+        findings: [round === 3 ? latestFinding : FINDING],
+      }),
+      'rounds/fix': ({ round = 1 }) => ({ ...FIXED, head: heads[round] }),
+      'last-chance': fallback,
     })
 
+    expect(fallback).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        inputs: expect.objectContaining({ head: heads[3], findings: [latestFinding] }),
+      }),
+    )
     expect(outcome.run).toBe('failed')
     const round = [
       ['rounds/review', 'failed'],
@@ -144,25 +158,44 @@ describe('#728 AC 19: shipped workflow examples', () => {
     )
   })
 
-  it('delivery skips approval and merge when the gate is blocked', async () => {
-    const perform = vi.fn<NonNullable<WorkflowHost['perform']>>().mockResolvedValue({
-      status: 'blocked',
-      summary: 'Gate evidence unavailable',
-    })
-    const { outcome, results } = await simulate(
-      'delivery',
-      { implement: IMPLEMENTED, review: APPROVED },
-      perform,
-    )
+  it.each([
+    ['unreadable', 'done', 'blocked', 'fact-unreadable'],
+    ['changed', 'failed', 'failed', 'head-changed'],
+  ] as const)(
+    'delivery routes %s gate evidence through the CLI gate (R747-02)',
+    async (head, run, status, reason) => {
+      const perform = vi.fn(
+        performHostKind({}, '/worktree', {}, step => ({
+          head: async () => {
+            if (head === 'unreadable') throw new Error('platform unavailable')
+            return 'b'.repeat(40)
+          },
+          reviewedHead: async () => String(step.inputs['reviewedHead']),
+          ci: async () => 'green',
+          reviewApproved: async () => true,
+          openPrerequisites: async () => [],
+        })),
+      )
+      const { outcome, results } = await simulate(
+        'delivery',
+        { implement: IMPLEMENTED, review: APPROVED },
+        perform,
+      )
 
-    expect(outcome.run).toBe('done')
-    expect(perform).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 'gate' }))
-    expect(results).toEqual([
-      ['implement', 'ok'],
-      ['review', 'ok'],
-      ['gate', 'blocked'],
-      ['approval', 'skipped'],
-      ['merge', 'skipped'],
-    ])
-  })
+      expect(outcome.run).toBe(run)
+      expect(perform).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 'gate' }))
+      await expect(perform.mock.results[0]?.value).resolves.toMatchObject({ status, reason })
+      expect(results).toEqual([
+        ['implement', 'ok'],
+        ['review', 'ok'],
+        ['gate', status],
+        ...(status === 'blocked'
+          ? [
+              ['approval', 'skipped'],
+              ['merge', 'skipped'],
+            ]
+          : []),
+      ])
+    },
+  )
 })

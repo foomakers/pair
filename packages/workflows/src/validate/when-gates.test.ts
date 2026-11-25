@@ -153,8 +153,24 @@ describe('escalation diagnostics (#728 AC-15)', () => {
     ])
   })
 
-  it('keeps the earlier syntax warning-free when it uses implicit defaults', () => {
-    expect(check(implement('on-failed: stop'))).toMatchObject({ errors: [], warnings: [] })
+  it.each(['', 'escalate: {}'])(
+    'warns for every defaulted return with policy %j (R747-05)',
+    rules => {
+      const result = check(implement(rules))
+      expect(result.errors).toEqual([])
+      expect(result.warnings.map(({ problem }) => problem)).toEqual(
+        ['failed', 'blocked', 'needs-decision'].map(
+          status => `'${status}' is unhandled and uses the default action`,
+        ),
+      )
+    },
+  )
+
+  it('only warns about defaulted returns the shorthand does not handle (R747-05)', () => {
+    expect(warned(implement('on-failed: stop'))).toEqual([
+      "'blocked' is unhandled and uses the default action",
+      "'needs-decision' is unhandled and uses the default action",
+    ])
   })
 
   it.each(['exhausted', 'skipped'])('warns when a condition reads impossible status %s', status => {

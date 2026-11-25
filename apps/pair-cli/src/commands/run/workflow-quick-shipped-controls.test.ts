@@ -125,7 +125,7 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
   })
 
   it.each(sources)(
-    '$name quick fixes a blocking review and runs its adopted gates',
+    '$name quick runs its gates and reviews again on the next invocation (R747-03)',
     async ({ root, commands }) => {
       const run = { files: createMemoryFiles(), dir: '/runs/728' }
       const head = 'a'.repeat(40)
@@ -160,28 +160,30 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
           },
         )
       const events: StepEvent[] = []
-      await start(run, { text: read(root, QUICK), file: QUICK }, { card: '728' })
-      const outcome = await runSteps(
-        {
-          files: run.files,
-          style: 'instruction',
-          isSafeText: isSafePromptText,
-          launch: async ({ id }) => {
-            const reply = replies[id]
-            if (reply === undefined) throw new Error(`Unexpected agent step ${id}`)
-            return agentResult(reply)
+      const source = { text: read(root, QUICK), file: QUICK }
+      const execute = () =>
+        runSteps(
+          {
+            files: run.files,
+            style: 'instruction',
+            isSafeText: isSafePromptText,
+            launch: async ({ id }) => {
+              const reply = replies[id]
+              if (reply === undefined) throw new Error(`Unexpected agent step ${id}`)
+              return agentResult(reply)
+            },
+            runGates: async entries => {
+              const result = await gates(entries)
+              return result.status === 'ok' ? undefined : result
+            },
+            perform: async step => gates(step.with['gates'] as readonly string[]),
+            report: event => events.push(event),
           },
-          runGates: async entries => {
-            const result = await gates(entries)
-            return result.status === 'ok' ? undefined : result
-          },
-          perform: async step => gates(step.with['gates'] as readonly string[]),
-          report: event => events.push(event),
-        },
-        run.dir,
-      )
+          run.dir,
+        )
 
-      expect(outcome.run).toBe('done')
+      await start(run, source, { card: '728' })
+      expect((await execute()).run).toBe('done')
       expect(invoked).toEqual(commands)
       expect(
         events.filter(event => event.state !== 'running').map(event => [event.step, event.state]),
@@ -190,6 +192,20 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
         ['review', 'failed'],
         ['fix', 'ok'],
         ['gate', 'ok'],
+      ])
+
+      replies['review'] = {
+        status: 'ok',
+        summary: 'Approved',
+        verdict: 'approved',
+        reviewedHead: head,
+        findings: [],
+      }
+      events.length = 0
+      expect(await start(run, source, { card: '728' })).toMatchObject({ status: 'resumed' })
+      expect((await execute()).run).toBe('done')
+      expect(events.filter(event => event.state === 'running').map(event => event.step)).toEqual([
+        'review',
       ])
     },
   )
