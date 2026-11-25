@@ -5,6 +5,7 @@ import {
   completedRun,
   dependencyGraph,
   effectiveSelection,
+  matches,
   orderCards,
   type CardSelection,
   type Filter,
@@ -26,7 +27,7 @@ import {
   type WorkflowSelection,
 } from './workflow-selection'
 import { handleWorkflowRun, resolveWorkflowRun, type Services } from './workflow-host'
-import type { RunCommandConfig, RunWorkflowBatch } from './parser'
+import type { RunCommandConfig, RunScopeOptions, RunWorkflowBatch } from './parser'
 
 type Outcome = 'done' | 'failed' | 'parked' | 'waiting' | 'skipped' | 'not-applicable'
 export interface BatchOutcome {
@@ -91,12 +92,13 @@ export async function scheduleWorkflowCards<T extends Schedulable>(
 }
 
 const split = (value: string | undefined) => value?.split(',').map(part => part.trim())
-function flagsOf(request: RunWorkflowBatch, assignee?: string): Filter {
+function flagsOf(request: RunScopeOptions, assignee?: string): Filter {
   const status = split(request.status)
   if (status?.some(one => !MACROSTATES.some(state => state === one)))
     throw new Error(`invalid --status: use ${MACROSTATES.join(', ')}`)
   const has = request.filter === '*' ? undefined : split(request.filter)
   const login = request.assignee === '@me' ? assignee : request.assignee
+  if (request.assignee === '@me' && !login) throw new Error('cannot resolve --assignee @me')
   return { ...(status && { status }), ...(has && { has }), ...(login && { assignee: [login] }) }
 }
 
@@ -370,23 +372,23 @@ function legacyCycleRequested(config: RunCommandConfig): boolean {
   ].some(Boolean)
 }
 
-type Routing = Pick<BatchRequest, 'config' | 'services'> & { main: string }
+type Routing = Pick<BatchRequest, 'config' | 'services'> & { main: string; flags: Filter }
 
 function configuredWorkflow(
   name: string,
   card: string,
-  { config, services }: Routing,
+  { config, services, flags }: Routing,
   resume = false,
 ) {
   const request = { name, card, restart: false }
   const resolved = resolveWorkflowRun(config, request, services, resume)
   if (resolved === undefined) throw new Error(`workflow-invalid: ${name}`)
+  const workflow = resolved.workflow.select
+  const configuration = resolved.configuration?.configuration.select
   return {
     request,
-    selection: effectiveSelection(
-      resolved.workflow.select,
-      resolved.configuration?.configuration.select,
-    ),
+    selection: effectiveSelection(workflow, configuration, flags),
+    unscoped: effectiveSelection(workflow, configuration),
   }
 }
 
@@ -395,9 +397,13 @@ const mappedNames = (config: WorkflowsConfig = {}) =>
 
 function mappedCard(found: WorkflowCard | undefined, names: string[], routing: Routing) {
   if (found?.error !== undefined) throw new Error(found.error)
-  if (found === undefined || found.closed) return undefined
+  if (found === undefined || found.closed) return {}
   const { id } = found
-  const { main, services } = routing
+  const { main, services, flags } = routing
+  let excluded = false
+  function trackExclusion(card: WorkflowCard, unscoped: Selection) {
+    excluded ||= !matches(flags, card) && unscoped.accepts(card)
+  }
   for (const name of names) {
     const pending = pendingWorkflowCard(found, {
       files: services.fs,
@@ -407,17 +413,20 @@ function mappedCard(found: WorkflowCard | undefined, names: string[], routing: R
     })
     if (pending === undefined) continue
     const candidate = configuredWorkflow(name, id, routing, true)
-    if (candidate.selection.accepts(pending)) return candidate
+    if (candidate.selection.accepts(pending)) return { selected: candidate }
+    trackExclusion(pending, candidate.unscoped)
   }
   function* candidates(card: WorkflowCard) {
     for (const name of names) {
       const candidate = configuredWorkflow(name, id, routing)
       const error = selectionBoardError(card, candidate.selection)
       if (error !== undefined) throw new Error(error)
+      trackExclusion(card, candidate.unscoped)
       yield candidate
     }
   }
-  return chooseWorkflow(candidates(found), found)
+  const selected = chooseWorkflow(candidates(found), found)
+  return { selected, excluded }
 }
 
 /** Explicitly named workflow mappings opt a project into routing a bare card to YAML. */
@@ -433,14 +442,18 @@ export async function handleMappedWorkflow(
   const names = mappedNames(project['workflows'] as WorkflowsConfig | undefined)
   if (names.length === 0) return undefined
   const main = mainCheckoutOrCwd(cwd)
-  const { cards } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
+  const { cards, assignee } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
     { fs, project, cwd, main },
-    { cards: [card] },
+    { cards: [card], ...config.scope },
   )
-  const selected = mappedCard(cards[0], names, { main, config, services })
-  if (selected === undefined)
-    throw new Error(
-      `workflow-not-applicable: no mapped workflow accepts card ${card}; pass a workflow name explicitly`,
-    )
-  return await handleWorkflowRun(config, selected.request, services)
+  const flags = flagsOf(config.scope, assignee)
+  const { selected, excluded } = mappedCard(cards[0], names, { main, config, services, flags })
+  if (selected !== undefined) return await handleWorkflowRun(config, selected.request, services)
+  if (excluded) {
+    printOutcome({ id: card, outcome: 'not-applicable', reason: 'selection filter' })
+    return 0
+  }
+  throw new Error(
+    `workflow-not-applicable: no mapped workflow accepts card ${card}; pass a workflow name explicitly`,
+  )
 }
