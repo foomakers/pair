@@ -854,6 +854,34 @@ it('#704 F6: the default live terminal prints the final stderr tail (AC-4)', asy
   expect(output).toContain('  stderr: Connection refused\n')
 })
 
+it('#704 F8: telemetry keeps the watchdog limit and redacts stderr (AC-4)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
+  )
+  const program = `require('node:fs').writeSync(2, 'synthetic-secret\\n'); setInterval(() => {}, 1000)`
+  const runIteration = (input: SpawnIterationInput) =>
+    spawnIteration({
+      ...input,
+      cwd: tmpdir(),
+      engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', program, '--'] },
+    })
+
+  expect(
+    await run(['quick'], OK, { telemetry: true, iterationTimeout: '1' }, { runIteration }),
+  ).toBe(0)
+  const [step] = fs.readFileSync(join(runDir(), 'telemetry.jsonl')).trim().split('\n')
+  expect(JSON.parse(step!)).toMatchObject({
+    step: 'implement',
+    attempt: 1,
+    diagnosis: {
+      kind: 'timeout',
+      detail: 'stalled: no terminal event within 1s — the engine was stopped',
+      stderrTail: ['[redacted]'],
+    },
+  })
+})
+
 it('#704 AC-4: quick retries a killed agent and records both diagnoses', async () => {
   write(
     '.pair/adoption/tech/workflows/quick.yaml',
