@@ -420,11 +420,19 @@ async function emitStep(host: WorkflowHost, event: StepEvent): Promise<void> {
 
 function implementationLaunch(host: WorkflowHost, step: StepLaunch): StepLaunch {
   const delegates = host.assignCard === undefined
+  const { assignment } = step
+  const options = { ...step.with }
+  if (!delegates || assignment?.value === 'unassign') {
+    options['assignee'] = 'none'
+  } else if (assignment !== undefined && assignment.source !== 'default') {
+    // Omitting the option uses the skill's claim without overriding an existing owner.
+    if (assignment.value === 'me') delete options['assignee']
+    else options['assignee'] = assignment.value
+  }
   return {
     ...step,
     with: {
-      ...step.with,
-      ...(!delegates && { assignee: 'none' }),
+      ...options,
       ...(host.transition !== undefined && {
         'board-state': delegates ? (step.startState ?? 'none') : 'managed',
       }),
@@ -441,8 +449,15 @@ async function runStep(
   const implementing = step.kind === 'implement' && step.pendingSuccess === undefined
   const launch = implementing ? implementationLaunch(host, step) : step
   // The skill that claims the card also applies its start state before doing work.
-  if (implementing && host.assignCard === undefined) host.report?.(starting(step))
-  else await emitStep(host, starting(step))
+  if (implementing && host.assignCard === undefined) {
+    host.report?.({
+      ...starting(step),
+      ...(step.assignment?.value === 'unassign' && {
+        summary:
+          'Warning: unassign requires the assignCard host hook. Leaving assignment unchanged.',
+      }),
+    })
+  } else await emitStep(host, starting(step))
   const { status, summary, reason, detail } = await executeMetered(host, run, launch, writer)
   const result = {
     step: step.id,
