@@ -912,6 +912,82 @@ steps:
   },
 )
 
+it.each([true, false])('R744-09: a minimal board uses the DoR (design flag: %s)', async design => {
+  const path = '.pair/adoption/tech/workflows/refinement.yaml'
+  write(
+    path,
+    fs.readFileSync(join(__dirname, '../../../../../packages/knowledge-hub/dataset', path)),
+  )
+  write(
+    '.pair/adoption/tech/way-of-working.md',
+    `## State Mapping
+
+| Board State | Macrostate |
+| --- | --- |
+| Todo | Draft |
+| In Progress | In Progress |
+| Done | Done |
+`,
+  )
+  for (const skill of ['pair-process-refine-story', 'pair-process-plan-tasks'])
+    write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
+  const labels = ['risk:green']
+  const result = { status: 'ok', summary: 'Prepared', boardStatus: 'Todo' }
+  let body = `## Story Statement
+
+As a user
+I want to run a workflow
+So that I can refine a story
+
+## Acceptance Criteria
+
+## Technical Analysis
+
+${design ? 'Design: not required' : ''}
+
+## Assumptions`
+  const setState = vi.fn(async () => {})
+  const workflow = deps(
+    {
+      'pair-process-refine-story': () =>
+        fenced({ ...result, riskTag: 'risk:green', openQuestions: [] }),
+      'pair-process-plan-tasks': () => {
+        body += '\n\n## Task Breakdown\n\n- [ ] **T-1**: Add a test'
+        return fenced({ ...result, tasks: 1 })
+      },
+    },
+    {
+      readSelection: async () => ({
+        cards: [
+          {
+            id: '12',
+            title: 'Story 12',
+            body,
+            labels,
+            status: 'Draft',
+            boardState: 'Todo',
+            closed: false,
+            prerequisites: [],
+          },
+        ],
+      }),
+      readResultFacts: async () => ({ card: { boardStatus: 'Todo', labels, body } }),
+      board: { getState: async () => 'Todo', setState },
+    },
+  )
+  const command = parseRunCommand({ cwd: project, card: '12' }, ['refinement'])
+  expect(await handleRunCommand(command, fs, workflow)).toBe(design ? 0 : 1)
+  expect(states('refinement-12')).toEqual({ refine: 'ok', tasks: design ? 'ok' : 'failed' })
+  expect(setState).not.toHaveBeenCalled()
+  if (design) {
+    expect(await handleRunCommand(command, fs, workflow)).toBe(0)
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([
+      'pair-process-refine-story',
+      'pair-process-plan-tasks',
+    ])
+  } else expect(lines.some(line => line.includes('unmet: Design flag'))).toBe(true)
+})
+
 it.each([false, true])(
   'R744-05: only selected cards read dependencies (selected read fails: %s)',
   async failSelected => {
