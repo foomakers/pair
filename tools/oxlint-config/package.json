@@ -1,0 +1,19 @@
+{
+  "name": "@pair/oxlint-config",
+  "version": "0.5.2",
+  "description": "Shared Oxlint policy and commands for the Pair monorepo",
+  "license": "MIT",
+  "bin": {
+    "lint": "./bin/lint.sh",
+    "lint-fix": "./bin/lint-fix.sh",
+    "oxlint": "./bin/oxlint.mjs"
+  },
+  "dependencies": {
+    "@typescript-eslint/eslint-plugin": "catalog:",
+    "eslint-plugin-react": "catalog:",
+    "eslint-plugin-react-hooks": "catalog:",
+    "eslint-plugin-jsx-a11y": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-plugin-eslint": "catalog:"
+  }
+}

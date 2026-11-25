@@ -20,7 +20,7 @@ dataset/
 pnpm --filter @pair/knowledge-hub test           # vitest
 pnpm --filter @pair/knowledge-hub test:coverage   # with coverage
 pnpm --filter @pair/knowledge-hub run check:links # validate markdown links
-pnpm --filter @pair/knowledge-hub lint            # eslint
+pnpm --filter @pair/knowledge-hub lint            # Oxlint
 ```
 
 **Fresh checkout/worktree**: the commands above will fail to resolve the `@pair/content-ops` workspace import until it's built once: `pnpm --filter @pair/content-ops build`. Not needed in CI or after a root `pnpm build`/`turbo build`. See [DEVELOPMENT.md § Turbo Caching](../../DEVELOPMENT.md#turbo-caching).

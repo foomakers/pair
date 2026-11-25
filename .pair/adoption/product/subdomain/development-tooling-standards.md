@@ -8,7 +8,7 @@ Provide shared, off-the-shelf development tooling — linting, formatting, TypeS
 
 **Key Capabilities:**
 
-- Shared ESLint, Prettier, TypeScript and markdownlint configurations, applied identically across all workspace packages
+- Shared Oxlint, Prettier, TypeScript and markdownlint configurations with workspace-specific profiles
 - Visual identity assets and brand guidelines (logo, colors, brand voice)
 - Standard visual-regression/accessibility testing setup built on off-the-shelf tooling (Playwright)
 
@@ -33,4 +33,4 @@ Any contributor can maintain; no specialized domain expertise required beyond fa
 Low — stable, rarely-changing infrastructure; not on the critical path of any feature delivery.
 
 **Implementation Volatility** (Generic subdomains only):
-Low — the underlying tools (ESLint, Prettier, TypeScript, markdownlint, Playwright) are stable, widely-adopted industry standards; switching provider/technology is unlikely and low-cost if it ever happens.
+Low — the underlying tools (Oxlint, Prettier, TypeScript, markdownlint, Playwright) are stable, widely-adopted industry standards; switching provider/technology is unlikely and low-cost if it ever happens.

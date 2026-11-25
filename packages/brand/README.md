@@ -18,7 +18,7 @@ Peer dependencies: `react ^19`, `next-themes ^0.4`, `tailwindcss ^3.4`.
 pnpm --filter @pair/brand dev          # vite dev server (port 5173)
 pnpm --filter @pair/brand test         # vitest + playwright CT
 pnpm --filter @pair/brand a11y:report  # accessibility audit
-pnpm --filter @pair/brand lint         # eslint
+pnpm --filter @pair/brand lint         # Oxlint
 ```
 
 ## Structure

@@ -62,7 +62,7 @@ src/
 pnpm --filter @pair/content-ops build          # tsc build
 pnpm --filter @pair/content-ops test           # vitest
 pnpm --filter @pair/content-ops test:coverage  # with coverage
-pnpm --filter @pair/content-ops lint           # eslint
+pnpm --filter @pair/content-ops lint           # Oxlint
 ```
 
 Tests use `InMemoryFileSystemService` — no disk I/O in unit tests.

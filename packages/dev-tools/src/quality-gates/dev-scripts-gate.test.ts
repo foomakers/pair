@@ -91,6 +91,9 @@ const sandbox = (mutate?: (root: string) => void): string => {
     'packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js',
     '.husky/pre-commit',
     '.husky/pre-push',
+    'apps/pair-cli/.oxlintrc.json',
+    'apps/website/.oxlintrc.json',
+    'docs/engineering/lint-migration-693-cases.json',
   ]) {
     mkdirSync(join(root, file, '..'), { recursive: true })
     cpSync(join(REPO_ROOT, file), join(root, file))
@@ -100,9 +103,11 @@ const sandbox = (mutate?: (root: string) => void): string => {
     join(root, '.claude/skills/pair-workflow-cycle/scripts'),
     { recursive: true },
   )
-  // the prettier wrappers with their installed binary (sealed-manifest-format.test.mjs)
+  // The isolated suites need the installed linter and formatter binaries.
   mkdirSync(join(root, 'tools'))
-  symlinkSync(join(REPO_ROOT, 'tools/prettier-config'), join(root, 'tools/prettier-config'))
+  for (const tool of ['prettier-config', 'oxlint-config']) {
+    symlinkSync(join(REPO_ROOT, 'tools', tool), join(root, 'tools', tool))
+  }
   mutate?.(root)
   return root
 }

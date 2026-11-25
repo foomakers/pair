@@ -1,0 +1,185 @@
+{
+  "plugins": ["typescript"],
+  "categories": {
+    "correctness": "off"
+  },
+  "options": {
+    "reportUnusedDisableDirectives": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.{js,mjs,cjs,ts,tsx}"],
+      "globals": {
+        "__dirname": "readonly",
+        "__filename": "readonly",
+        "process": "readonly",
+        "console": "readonly",
+        "Buffer": "readonly",
+        "global": "readonly",
+        "require": "readonly",
+        "module": "readonly",
+        "exports": "readonly",
+        "setTimeout": "readonly",
+        "clearTimeout": "readonly",
+        "setInterval": "readonly",
+        "clearInterval": "readonly",
+        "setImmediate": "readonly",
+        "clearImmediate": "readonly"
+      },
+      "rules": {
+        "eslint/constructor-super": "error",
+        "eslint/no-async-promise-executor": "error",
+        "eslint/no-case-declarations": "error",
+        "eslint/no-class-assign": "error",
+        "eslint/no-compare-neg-zero": "error",
+        "eslint/no-cond-assign": "error",
+        "eslint/no-const-assign": "error",
+        "eslint/no-constant-condition": "error",
+        "eslint/no-control-regex": "error",
+        "eslint/no-debugger": "error",
+        "eslint/no-delete-var": "error",
+        "eslint/no-dupe-class-members": "error",
+        "eslint/no-dupe-else-if": "error",
+        "eslint/no-dupe-keys": "error",
+        "eslint/no-duplicate-case": "error",
+        "eslint/no-empty": "error",
+        "eslint/no-empty-character-class": "error",
+        "eslint/no-empty-pattern": "error",
+        "eslint/no-ex-assign": "error",
+        "eslint/no-fallthrough": "error",
+        "eslint/no-func-assign": "error",
+        "eslint/no-import-assign": "error",
+        "eslint/no-invalid-regexp": "error",
+        "eslint/no-loss-of-precision": "error",
+        "eslint/no-new-native-nonconstructor": "error",
+        "eslint/no-prototype-builtins": "error",
+        "eslint/no-self-assign": "error",
+        "eslint/no-setter-return": "error",
+        "eslint/no-sparse-arrays": "error",
+        "eslint/no-this-before-super": "error",
+        "eslint/no-undef": "off",
+        "eslint/no-unexpected-multiline": "error",
+        "eslint/no-unsafe-finally": "error",
+        "eslint/no-unsafe-negation": "error",
+        "eslint/no-unused-labels": "error",
+        "eslint/no-unused-private-class-members": "error",
+        "eslint/no-useless-catch": "error",
+        "eslint/no-useless-escape": "error",
+        "eslint/require-yield": "error",
+        "eslint/valid-typeof": "error",
+        "typescript/no-empty-object-type": "error",
+        "typescript/no-explicit-any": "error",
+        "typescript/no-require-imports": "error",
+        "typescript/no-this-alias": "error",
+        "typescript/no-unsafe-function-type": "error",
+        "eslint/no-unused-expressions": "error",
+        "typescript/no-wrapper-object-types": "error",
+        "typescript/prefer-as-const": "error",
+        "typescript/triple-slash-reference": "error",
+        "eslint/no-console": "off",
+        "eslint/complexity": ["error", 10],
+        "eslint/max-depth": ["error", 4],
+        "eslint/max-lines-per-function": ["error", 50],
+        "eslint/no-throw-literal": "error",
+        "eslint-js/for-direction": "error",
+        "eslint-js/getter-return": "error",
+        "eslint-js/no-constant-binary-expression": "error",
+        "eslint-js/no-dupe-args": "error",
+        "eslint-js/no-empty-static-block": "error",
+        "eslint-js/no-global-assign": "error",
+        "eslint-js/no-irregular-whitespace": "error",
+        "eslint-js/no-misleading-character-class": "error",
+        "eslint-js/no-obj-calls": "error",
+        "eslint-js/no-redeclare": "error",
+        "eslint-js/no-regex-spaces": "error",
+        "eslint-js/no-shadow-restricted-names": [
+          "error",
+          {
+            "reportGlobalThis": false
+          }
+        ],
+        "eslint-js/no-unreachable": "error",
+        "eslint-js/no-useless-backreference": "error",
+        "eslint-js/use-isnan": "error",
+        "eslint-js/no-var": "error",
+        "eslint-js/no-unsafe-optional-chaining": "error",
+        "eslint-js/no-octal": "error",
+        "eslint-js/no-with": "error",
+        "eslint-js/no-nonoctal-decimal-escape": "error",
+        "eslint-js/prefer-const": "error",
+        "eslint-js/max-params": ["error", 4],
+        "eslint-js/no-extra-boolean-cast": "error",
+        "legacy-typescript/ban-ts-comment": "error",
+        "legacy-typescript/no-array-constructor": "error",
+        "legacy-typescript/no-duplicate-enum-values": "error",
+        "legacy-typescript/no-misused-new": "error",
+        "legacy-typescript/no-namespace": "error",
+        "legacy-typescript/prefer-namespace-keyword": "error",
+        "legacy-typescript/no-unused-vars": [
+          "error",
+          {
+            "argsIgnorePattern": "^_"
+          }
+        ],
+        "legacy-typescript/no-extra-non-null-assertion": "error",
+        "legacy-typescript/no-non-null-asserted-optional-chain": "error",
+        "legacy-typescript/no-unnecessary-type-constraint": "error",
+        "legacy-typescript/no-unsafe-declaration-merging": "error"
+      }
+    },
+    {
+      "files": ["**/*.test.{js,ts,tsx}", "**/*.spec.{js,ts,tsx}"],
+      "globals": {
+        "__dirname": "readonly",
+        "__filename": "readonly",
+        "process": "readonly",
+        "console": "readonly",
+        "Buffer": "readonly",
+        "global": "readonly",
+        "require": "readonly",
+        "module": "readonly",
+        "exports": "readonly",
+        "setTimeout": "readonly",
+        "clearTimeout": "readonly",
+        "setInterval": "readonly",
+        "clearInterval": "readonly",
+        "setImmediate": "readonly",
+        "clearImmediate": "readonly",
+        "describe": "readonly",
+        "it": "readonly",
+        "test": "readonly",
+        "expect": "readonly",
+        "beforeEach": "readonly",
+        "afterEach": "readonly",
+        "beforeAll": "readonly",
+        "afterAll": "readonly",
+        "vi": "readonly",
+        "window": "readonly",
+        "document": "readonly",
+        "HTMLElement": "readonly",
+        "HTMLButtonElement": "readonly",
+        "HTMLDivElement": "readonly",
+        "Element": "readonly"
+      },
+      "rules": {
+        "eslint/max-lines-per-function": "off"
+      }
+    },
+    {
+      "files": ["**/*.cjs", "**/scripts/**/*.js"],
+      "rules": {
+        "typescript/no-require-imports": "off"
+      }
+    }
+  ],
+  "jsPlugins": [
+    {
+      "name": "eslint-js",
+      "specifier": "oxlint-plugin-eslint"
+    },
+    {
+      "name": "legacy-typescript",
+      "specifier": "@typescript-eslint/eslint-plugin"
+    }
+  ]
+}

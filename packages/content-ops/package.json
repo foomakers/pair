@@ -46,7 +46,7 @@
     "mdlint:fix": "markdownlint-fix"
   },
   "devDependencies": {
-    "@pair/eslint-config": "workspace:*",
+    "@pair/oxlint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
     "@pair/ts-config": "workspace:*",

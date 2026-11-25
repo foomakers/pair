@@ -1,0 +1,17 @@
+{
+  "extends": ["../../tools/oxlint-config/base.json"],
+  "ignorePatterns": [
+    "/dist/",
+    "/build/",
+    "node_modules/",
+    "/*.config.js",
+    "/*.config.ts",
+    "/playwright/",
+    "/test-results/",
+    "/dataset/.workflows/",
+    "/dataset/.skills/**/scripts/**/*.mjs",
+    "*.mts",
+    "*.cts",
+    "*.jsx"
+  ]
+}
