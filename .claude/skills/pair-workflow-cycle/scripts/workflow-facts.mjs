@@ -108,6 +108,10 @@ try {
     result = assignCard()
   } else if (action === 'merge') {
     result = workflowMerge(host, card, JSON.parse(raw))
+  } else if (action === 'linked-pr') {
+    result = host.code.workflowPr({ id: card })
+  } else if (action === 'pr-branch') {
+    result = host.code.workflowPrDetails({ pr: Number(card) }).branch
   } else if (action === 'merge-resume') {
     const pr = host.code.workflowPr({ id: card })
     const expected = JSON.parse(raw)

@@ -48,9 +48,15 @@ function script<T>(scripts: string, cwd: string, file: string, args: string[]): 
   })
   if (result.error) throw result.error
   try {
-    const value = JSON.parse(result.stdout) as T & { error?: string }
+    const value = JSON.parse(result.stdout) as T & {
+      error?: string
+      halt?: string
+      detail?: string
+    }
     if (value.error !== undefined) throw new Error(value.error)
     if (result.status === 0) return value
+    if (value.halt !== undefined && value.detail !== undefined)
+      throw new Error(`${value.halt}: ${value.detail}`)
   } catch (error) {
     if (!(error instanceof SyntaxError)) throw error
   }
@@ -142,32 +148,18 @@ export function sessionWorktree(
           '--worktree-root',
           root,
         ),
-      resolveBranch: pr => (pr === undefined ? undefined : linkedBranch(main, pr)) || defaultBranch,
+      resolveBranch: pr =>
+        pr === undefined
+          ? defaultBranch
+          : script<string>(scripts, main, 'workflow-facts.mjs', ['pr-branch', String(pr)]),
       async linkedPr() {
-        return script<{ pr: number }>(scripts, main, 'workflow-facts.mjs', [
-          'approval-target',
-          story,
-        ]).pr
+        return script<number>(scripts, main, 'workflow-facts.mjs', ['linked-pr', story])
       },
       async setup(_main, cwd) {
         return setup === undefined ? undefined : setupWorktree(setup, cwd)
       },
     },
   )
-}
-
-function linkedBranch(cwd: string, pr: number): string | undefined {
-  const result = spawnSync(
-    'gh',
-    ['pr', 'view', String(pr), '--json', 'headRefName', '-q', '.headRefName'],
-    {
-      cwd,
-      encoding: 'utf8',
-      env: { ...process.env, GH_PROMPT_DISABLED: '1' },
-      timeout: 30_000,
-    },
-  )
-  return result.status === 0 ? result.stdout.trim() : undefined
 }
 
 function setupWorktree(command: string, cwd: string): string | undefined {

@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -12,8 +13,8 @@ import {
 } from 'node:fs'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { delimiter, dirname, join } from 'node:path'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { acquireRunLock } from '../src/cli'
 import { next, record, start } from '../src/engine'
 
@@ -582,7 +583,7 @@ const approvalStep = `  consent:
     with: { question: ${question} }
 `
 
-function installCodeHost(permission: 'read' | 'write') {
+function installCodeHost(permission: 'read' | 'write', prBranch = branch) {
   write(adoptionFile, `${filesystemPm}\n## Git Workflow\n\n- \`code-host\`: \`fixture-code\`\n`)
   write(
     `${cycle}/host/fixture-code.mjs`,
@@ -605,7 +606,7 @@ export default defineAdapter({
       head: state().head,
       merged: state().merges.length > 0,
       mergeCommit: ${JSON.stringify(mergeCommit)},
-      branch: ${JSON.stringify(branch)},
+      branch: ${JSON.stringify(prBranch)},
       author: 'release-author',
     }),
     workflowReviews: () => [],
@@ -626,6 +627,25 @@ export default defineAdapter({
   write(codeState, JSON.stringify({ head, permission, merges: [] }))
   return head
 }
+
+it('#696 AC-1/AC-4: resumes on the registered worktree from the linked PR branch', async () => {
+  const prBranch = 'release/notes'
+  installCodeHost('write', prBranch)
+  git('worktree', 'add', '-b', prBranch, worktree, 'main')
+  await start({ dir: runDir, files }, { file: join(main, workflowFile), text: workflow }, { card })
+
+  const gh = '.pair/working/bin/gh'
+  write(gh, '#!/bin/sh\nexit 1\n')
+  chmodSync(join(main, gh), 0o755)
+  vi.stubEnv('PATH', [dirname(join(main, gh)), process.env['PATH']].join(delimiter))
+  try {
+    const lease = openSession(['resume', runId, '--engine', 'codex'])
+    expect(git('-C', worktree, 'branch', '--show-current').trim()).toBe(prBranch)
+    successful(['stop', runId, ...lease])
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
 
 it('#696 AC-1/AC-4: replays review at the current PR head after a saved gate failure', async () => {
   const reviewedHead = git('rev-parse', 'HEAD').trim()
