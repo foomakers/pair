@@ -29,7 +29,6 @@ import {
   start,
   stepSettled,
   stoppedLoop,
-  validate,
   type Assignment,
   type CardState,
   type Configuration,
@@ -49,7 +48,6 @@ import {
 } from '@pair/workflows'
 import { loadConfigWithOverrides } from '#config'
 import type { Config } from '#registry'
-import { getKnowledgeHubDatasetPath } from '#config/kb-resolver'
 import type { RunCommandConfig, RunWorkflowRequest } from './parser'
 import type { RunHandlerDependencies } from './run-context'
 import {
@@ -76,7 +74,6 @@ import {
   type StateMapping,
 } from './card-readiness'
 import { createExecutableProbe } from './path-probe'
-import { createSkillProbe } from './skill-probe'
 import { ENGINES, isEngineId, type EngineDefinition } from './engines'
 import {
   engineFacts,
@@ -85,6 +82,13 @@ import {
   type ConfigurationPlan,
 } from './workflow-configuration'
 import { isSafePromptText } from './prompt-safety'
+import {
+  WAY_OF_WORKING,
+  checkWorkflow,
+  locateWorkflow,
+  reportValidation,
+  type Located,
+} from './workflow-source'
 import { acquireRunLock } from './run-lock'
 import { acquireCardLock } from './card-lock'
 import type { BatchOutcome } from './workflow-batch'
@@ -121,8 +125,6 @@ import {
  * must not touch: the workflow file, the card, the engine process, the worktree, the lock, the console.
  */
 
-export const WORKFLOWS_DIR = '.pair/adoption/tech/workflows'
-const WAY_OF_WORKING = '.pair/adoption/tech/way-of-working.md'
 const RISK_MATRIX = '.pair/adoption/tech/risk-matrix.md'
 
 /** Injected in tests: no real agent, tracker or git. */
@@ -158,33 +160,6 @@ export interface WorktreeInput {
 export interface Services {
   readonly fs: FileSystemService
   readonly deps: RunHandlerDependencies
-}
-
-interface Located {
-  readonly file: string
-  readonly text: string
-}
-
-/** A path if the argument is an existing file; else the adoption workflow; else the knowledge-base default. */
-export function locateWorkflow(
-  fs: FileSystemService,
-  at: { readonly cwd: string; readonly main: string },
-  name: string,
-): Located {
-  const adopted = join(at.main, WORKFLOWS_DIR, `${name}.yaml`)
-  const candidates = [resolve(at.cwd, name), adopted]
-  try {
-    candidates.push(join(getKnowledgeHubDatasetPath(fs), WORKFLOWS_DIR, `${name}.yaml`))
-  } catch {
-    // no knowledge base beside this CLI: the two project locations are the only candidates
-  }
-  const file = candidates.find(path => fs.existsSync(path) && fs.statSync(path).isFile())
-  if (file === undefined)
-    throw new Error(
-      `workflow-not-found: '${name}' is neither a workflow file nor a workflow name — ` +
-        `looked for ${candidates.join(', ')}. Pass the path of a file, or add ${adopted}.`,
-    )
-  return { file, text: fs.readFileSync(file) }
 }
 
 /** The cycle's own worktree mechanism: `<worktree root>/<card>`, the card's branch, the setup command on a fresh one. */
@@ -287,49 +262,6 @@ function expandedSource(workflow: Workflow): string {
   return `${JSON.stringify({ version, name, description, aliases, select, assign, steps: entries(steps) }, null, 2)}\n`
 }
 
-function checkWorkflow(
-  fs: Services['fs'],
-  project: ReturnType<typeof loadConfigWithOverrides>['config'],
-  { cwd, main, sources }: { cwd: string; main: string; sources: Record<string, string> },
-  source: { text: string; file: string },
-) {
-  const registry = join(main, WAY_OF_WORKING)
-  const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
-  return validate(source.text, source.file, {
-    skillExists: createSkillProbe(fs, project, cwd),
-    gateKeys: Object.keys(readGateRegistry(registryText)),
-    gateTargets: Object.keys(readGateTargets(registryText)),
-    launchInputs: ['card'],
-    isSafeText: isSafePromptText,
-    availableWorkflows: [
-      join(main, WORKFLOWS_DIR),
-      ...(() => {
-        try {
-          return [join(getKnowledgeHubDatasetPath(fs), WORKFLOWS_DIR)]
-        } catch {
-          return []
-        }
-      })(),
-    ].flatMap(dir =>
-      fs.existsSync(dir)
-        ? fs
-            .readdirSync(dir)
-            .filter(entry => entry.isFile() && entry.name.endsWith('.yaml'))
-            .map(entry => entry.name.slice(0, -5))
-        : [],
-    ),
-    resolveWorkflow: name => {
-      try {
-        const included = locateWorkflow(fs, { cwd, main }, name)
-        sources[included.file] = createHash('sha256').update(included.text).digest('hex')
-        return included
-      } catch {
-        return undefined
-      }
-    },
-  })
-}
-
 function resumeWorkflow(
   fs: Services['fs'],
   request: RunWorkflowRequest,
@@ -356,15 +288,6 @@ const hasExpansion = (workflow: Workflow) =>
   workflow.steps.some(
     step => step.id.includes('/') || step.steps?.some(child => child.id.includes('/')),
   )
-
-function reportValidation(
-  checked: ReturnType<typeof checkWorkflow> | NonNullable<ReturnType<typeof resumeWorkflow>>,
-): void {
-  checked.warnings.forEach(warning => console.log(`  Warning: ${formatError(warning)}`))
-  if (checked.workflow !== undefined) return
-  checked.errors.forEach(error => console.error(`  ${formatError(error)}`))
-  console.error(`  Refused: ${String(checked.errors.length)} error(s); nothing was launched.`)
-}
 
 /** Validate the workflow and tier declarations before looking up card labels. */
 export function resolveWorkflowDefinition(

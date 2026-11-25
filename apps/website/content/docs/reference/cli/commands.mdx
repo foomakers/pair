@@ -22,6 +22,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [tokens](#tokens): Count words and estimated tokens per area of a project's pair files
 - [telemetry](#telemetry): Record a manual in-session delivery step or the final card outcome
 - [run](#run): Run a pair skill headlessly on a chosen engine, in a re-invocation loop
+- [workflow](#workflow): Validate a workflow by name or file
 
 ## Rules that apply to every command
 
@@ -797,6 +798,12 @@ pair-cli telemetry <step|card> --card <id> [options]
 pair-cli telemetry step --card 594 --step implement --engine claude --start 2026-11-17T07:50:00Z --end 2026-11-17T08:33:00Z
 pair-cli telemetry card --card 594 --outcome review-approved --end 2026-11-17T09:06:00Z
 ```
+
+## workflow
+
+**Via:** CLI only.
+
+`pair-cli workflow validate <name-or-file>` checks a workflow without launching it.
 
 ## run
 

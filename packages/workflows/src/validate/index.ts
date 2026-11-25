@@ -12,6 +12,7 @@ import {
 import { expand, type WorkflowSource } from '../expand'
 import { fieldsOf, kindByName } from '../kinds'
 import { textsOf, violations } from '../schema'
+import { escalationWarnings } from './escalation-warnings'
 
 /** What the validator asks of its caller: the package reads no skill directory and no adoption file itself. */
 export interface ValidationDeps {
@@ -27,6 +28,8 @@ export interface ValidationDeps {
   readonly launchInputs: readonly string[]
   /** The host's prompt-safety check: every text of the file that reaches an agent passes it. */
   readonly isSafeText: (value: string) => boolean
+  /** Whether the host can write escalation comments on the card. */
+  readonly canCommentOnCard?: boolean
 }
 
 export interface Validation {
@@ -444,12 +447,14 @@ function mergeWarnings(workflow: Workflow): WorkflowError[] {
   return flat.flatMap((step, index) => {
     if (step.kind !== 'merge') return []
     const before = flat.slice(0, index)
+    const approval = before.some(one => one.kind === 'approval')
+    const path = ['steps', step.id.split('/')[0] ?? step.id]
     const lastChange = before.reduce(
       (at, one, i) => (one.kind === 'implement' || one.kind === 'fix' ? i : at),
       -1,
     )
     const missing = [
-      before.some(one => one.kind === 'approval') ? '' : 'approval step',
+      approval ? '' : 'approval step',
       lastChange >= 0 && !before.slice(lastChange).some(one => one.kind === 'review')
         ? 'review after the last code-changing step'
         : '',
@@ -461,12 +466,26 @@ function mergeWarnings(workflow: Workflow): WorkflowError[] {
         ? ''
         : "gate with the 'head-unchanged' check",
     ].filter(Boolean)
-    return missing.map(what =>
-      errorAt(workflow, ['steps', step.id.split('/')[0] ?? step.id], {
+    const guards = missing.map(what =>
+      errorAt(workflow, path, {
         problem: `merge has no ${what}`,
         fix: `add a ${what} before the merge, or accept that it merges without`,
       }),
     )
+    if (approval) return guards
+    return [
+      ...guards,
+      ...before.flatMap(producer =>
+        (['blocked', 'needs-decision'] as const)
+          .filter(status => escalationAction(producer.escalate?.[status]) === 'continue')
+          .map(status =>
+            errorAt(workflow, path, {
+              problem: `merge can follow '${status}' on '${producer.id}' without approval`,
+              fix: `add an approval step before merge or set escalate.${status} to stop`,
+            }),
+          ),
+      ),
+    ]
   })
 }
 
@@ -498,6 +517,10 @@ export function validate(text: string, file: string, deps: ValidationDeps): Vali
     : {
         workflow: parsed.workflow,
         errors: [],
-        warnings: [...warnings(parsed.workflow), ...mergeWarnings(parsed.workflow)].map(locate),
+        warnings: [
+          ...warnings(parsed.workflow),
+          ...escalationWarnings(parsed.workflow, deps.canCommentOnCard === true),
+          ...mergeWarnings(parsed.workflow),
+        ].map(locate),
       }
 }

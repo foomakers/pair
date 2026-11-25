@@ -374,6 +374,19 @@ describe('validate: escalate and on-failed (#728 AC 10)', () => {
   })
 })
 
+describe('invalid escalation and jump rules (#728 AC-16)', () => {
+  it.each([
+    ['escalate: { needs-human: stop }', 'steps.implement.escalate.needs-human'],
+    ['escalate: { failed: retry }', 'steps.implement.escalate.failed'],
+    ['escalate: { failed: { do: goto } }', 'steps.implement.escalate.failed.do'],
+    ['goto: review', 'steps.implement.goto'],
+  ])('refuses %s', (rule, key) => {
+    const result = check(QUICK.replace('    kind: implement', `    kind: implement\n    ${rule}`))
+    expect(result.workflow).toBeUndefined()
+    expect(result.errors).toContainEqual(expect.objectContaining({ key }))
+  })
+})
+
 it.each([
   { step: 'implement', valid: true },
   { step: 'review', valid: false },

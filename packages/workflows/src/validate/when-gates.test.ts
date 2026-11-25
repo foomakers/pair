@@ -132,3 +132,85 @@ describe('when validation (#680 AC-6, AC-9)', () => {
     )
   })
 })
+
+describe('escalation diagnostics (#728 AC-15)', () => {
+  const implement = (rules: string) => `  implement:
+    kind: implement
+    ${rules}
+`
+  const allStops = 'failed: stop, blocked: stop, needs-decision: stop'
+  const delivery = (status: string) =>
+    FULL.replace(
+      '{ kind: implement }',
+      `{ kind: implement, escalate: { ${allStops.replace(`${status}: stop`, `${status}: continue`)} } }`,
+    )
+
+  it('warns about the declared outcome left to its default', () => {
+    const result = check(implement('on-failed: stop\n    escalate: { needs-decision: stop }'))
+    expect(result.errors).toEqual([])
+    expect(result.warnings.map(({ problem }) => problem)).toEqual([
+      expect.stringMatching(/\bblocked\b/i),
+    ])
+  })
+
+  it('keeps the earlier syntax warning-free when it uses implicit defaults', () => {
+    expect(check(implement('on-failed: stop'))).toMatchObject({ errors: [], warnings: [] })
+  })
+
+  it.each(['exhausted', 'skipped'])('warns when a condition reads impossible status %s', status => {
+    const result = check(`  implement: { kind: implement, on-failed: continue }
+  retry: { kind: implement, when: { output: implement.status, is: [${status}] } }
+`)
+    expect(result.errors).toEqual([])
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({
+        file: 'quick.yaml',
+        line: 5,
+        problem: expect.stringContaining(status),
+      }),
+    )
+  })
+
+  it('accepts a condition reading the outcome of a continued failure', () => {
+    expect(
+      check(`  implement: { kind: implement, on-failed: continue }
+  retry: { kind: implement, when: { output: implement.status, is: [failed] } }
+`),
+    ).toMatchObject({ errors: [], warnings: [] })
+  })
+
+  it('warns about an unreachable exhaustion rule on a non-loop step', () => {
+    const result = check(implement(`escalate: { ${allStops}, exhausted: continue }`))
+    expect(result.errors).toEqual([])
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ key: 'steps.implement.escalate.exhausted' }),
+    )
+  })
+
+  it('warns when a rule asks for a comment without a comment host', () => {
+    const result = check(
+      implement(
+        'escalate: { failed: stop, blocked: stop, needs-decision: { do: stop, comment: Explain } }',
+      ),
+    )
+    expect(result.errors).toEqual([])
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ problem: expect.stringMatching(/comment.*host|host.*comment/i) }),
+    )
+  })
+
+  it.each([
+    ['blocked', ''],
+    ['needs-decision', '  late: { kind: approval }\n'],
+  ])('warns about bypassing %s before a merge without prior approval', (status, approval) => {
+    const result = check(delivery(status).replace('  approve: { kind: approval }\n', '') + approval)
+    expect(result.errors).toEqual([])
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ problem: expect.stringContaining(status) }),
+    )
+  })
+
+  it('accepts a continued block when approval precedes merge', () => {
+    expect(check(delivery('blocked'))).toMatchObject({ errors: [], warnings: [] })
+  })
+})
