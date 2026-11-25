@@ -910,6 +910,7 @@ export async function handleWorkflowRun(
       { cards: [request.card] },
     )
     const card = cards[0]
+    if (card?.error !== undefined) throw new Error(card.error)
     if (
       card === undefined ||
       card.closed ||

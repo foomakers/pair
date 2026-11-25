@@ -821,7 +821,7 @@ pair-cli run [workflow] [options]
 
 | Option                          | Description                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `[workflow]`                    | A workflow to run step by step on one card: a file path or a workflow name. Needs `--card`. See [Run a workflow file](#run-a-workflow-file-pair-cli-run-workflow) |
+| `[workflow]`                    | A workflow file path or name. Select cards with `--card`, `--root` or `--filter`. See [Run a workflow file](#run-a-workflow-file-pair-cli-run-workflow) |
 | `--restart`                     | With a workflow name: archive the run directory and start the run over                              |
 | `--config <name\|file>`         | With a workflow name: the configuration (engine, model, effort per step). Else `pair.config.json` `workflows.<workflow>.configuration`, then `workflows.default.configuration`, then the engine default |
 | `--config-override <json>`      | With a workflow name: a JSON object deep-merged over the configuration, validated and recorded in the run |
@@ -958,6 +958,8 @@ Worktrees default to `../pair-worktrees/<main-checkout-name>/<card>` relative to
 Missing pieces HALT: `skill-missing` (the skill is not installed) and `worktree-conflict` (an occupied destination or another branch) before any spawn; `agent-definition-missing` (a stage's role, located through the `agent-definitions` registry) when the stage that needs that role is due, before any spawn for the first stage's role, later for a role only a later stage uses (e.g. the preparation role, first needed by a finding round).
 
 ### Run a workflow file: `pair-cli run <workflow>`
+
+Run the shipped [refinement workflow](/docs/process-lifecycle/refinement-workflow) on an epic with `pair-cli run refinement --root 641 --parallel 3`. Pass a comma-separated list to `--card`, or use `--filter` to select open cards by label. `--status` and `--assignee` narrow that selection. Set `parallel` in the workflow configuration to change its default of one. `--parallel` overrides that value.
 
 A workflow is a YAML file of typed steps. A workflow name as the positional argument runs it on
 one card, one step at a time, in file order. The grammar and the step kinds are in the knowledge

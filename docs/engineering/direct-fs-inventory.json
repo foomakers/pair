@@ -5131,22 +5131,6 @@
       "testCategory": "root import guard"
     },
     {
-      "path": "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.test.mjs",
-      "hash": "58cca1761412744c2d1000205e538c0df29ca0beeb1a513a371e94ca1717d64b",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 13
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.test.mjs",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
       "path": "packages/knowledge-hub/src/conformance/adoption-informed-generation.test.ts",
       "hash": "d81010a2ae9a54467ea5086148507e9fba87b88a231191c50bd7b190555ca9d1",
       "dependencies": [

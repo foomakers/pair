@@ -2932,23 +2932,24 @@ export function worktreeClean({ cwd, dir, story }) {
 // closed, stateReason, closedAt, boardState }. `boardState`: the board item's Status (`projectItems`, which a
 // token without `read:project` cannot read — retried without it), else null; the caller falls back to the body.
 const CARD_FIELDS = ['title', 'body', 'labels', 'state', 'stateReason', 'closedAt']
-export function cardView({ story, dir, host }) {
+export function cardView({ story, dir, host, selection }) {
   const h = host ?? bindHosts(dir ? { dir } : { from: process.cwd() })
   if (!h.pm.parseCardRef(story)) return { error: `not-a-card: ${JSON.stringify(story)} is not a ${h.pmTool} card` }
+  const fields = selection ? [...CARD_FIELDS, 'assignees', 'createdAt'] : CARD_FIELDS
   let c
   try {
     try {
-      c = h.pm.readCard(story, { fields: [...CARD_FIELDS, 'projectItems'] })
+      c = h.pm.readCard(story, { fields: [...fields, 'projectItems'] })
     } catch (error) {
       if (error?.kind === 'transient-exhausted') throw error
-      c = h.pm.readCard(story, { fields: CARD_FIELDS })
+      c = h.pm.readCard(story, { fields })
     }
   } catch (e) {
     return { error: `card-unreadable: ${hostDetail(e)}` }
   }
   const closed = String(c?.state ?? '').toUpperCase() === 'CLOSED'
   const boardState = (c?.projectItems ?? []).map(i => String(i?.status?.name ?? '').trim()).find(Boolean) ?? null
-  return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState }
+  return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState, ...(selection ? { assignees: (c?.assignees ?? []).map(one => String(one.login ?? one)), created: c?.createdAt ?? undefined } : {}) }
 }
 
 export function workflowCards(host, { root, cards, filter, assignee } = {}) {
@@ -2963,19 +2964,16 @@ export function workflowCards(host, { root, cards, filter, assignee } = {}) {
     : host.pm.childCards({ id: normalize(root) }))
   const selected = [...new Set(candidates.filter(card => !card.closed).map(card => String(card.id)))]
   const facts = selected.flatMap(id => {
-    const view = cardView({ story: id, host })
-    if (view.error) throw new Error(view.error)
+    const view = cardView({ story: id, host, selection: true })
+    if (view.error) return [{ id, error: view.error }]
     if (view.closed && requested === undefined) return []
-    const metadata = host.pm.readCard(id, { fields: ['assignees', 'createdAt'] })
-    const declared = dependencyIds(view.body, undefined, ref => host.pm.parseCardRef(ref), true)
-    const native = host.pm.blockedBy({ id })
-    return [{
-      ...view,
-      assignees: (metadata.assignees ?? []).map(one => String(one.login ?? one)),
-      created: metadata.createdAt ?? undefined,
-      prerequisites: [...new Set([...declared.ids, ...native])],
-      uncertain: declared.uncertain,
-    }]
+    try {
+      const declared = dependencyIds(view.body, undefined, ref => host.pm.parseCardRef(ref), true)
+      const native = view.closed ? [] : host.pm.blockedBy({ id })
+      return [{ ...view, prerequisites: [...new Set([...declared.ids, ...native])], uncertain: declared.uncertain }]
+    } catch (error) {
+      return [{ ...view, error: hostDetail(error) }]
+    }
   })
   return { cards: facts, ...(assignee === '@me' ? { assignee: host.pm.resolveUser() } : {}) }
 }

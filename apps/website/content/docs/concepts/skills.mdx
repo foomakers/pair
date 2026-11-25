@@ -71,7 +71,7 @@ Detail: [Delivery cycle](/docs/process-lifecycle/delivery-cycle#2-the-stages-one
 
 ### Loop and Batch Entry Points
 
-`/pair-loop` selects eligible cards and repeats under the [autonomy gates](/docs/tutorials/automated-development#autonomy-until-gates-escalation). It composes the batch workflows `pair-implement-batch` and `pair-refine-batch` (installed in `.claude/workflows/`), which dispatch five subagents installed in `.claude/agents/`:
+`/pair-loop` selects eligible cards and repeats under the [autonomy gates](/docs/tutorials/automated-development#autonomy-until-gates-escalation). It composes the batch workflows `pair-implement-batch` (installed in `.claude/workflows/`), which dispatch five subagents installed in `.claude/agents/`:
 
 | Subagent | Role |
 |----------|------|

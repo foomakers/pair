@@ -29,7 +29,7 @@
 <text x="190.0" y="267.0" text-anchor="middle" fill="#222">you run each skill, one by one</text>
 <rect x="380" y="210" width="320" height="90" rx="6" fill="#fff6df" stroke="#a06a00" stroke-width="1.3"/>
 <text x="540.0" y="243.0" text-anchor="middle" fill="#222" font-weight="bold">Supervised</text>
-<text x="540.0" y="259.0" text-anchor="middle" fill="#222">/pair-refine-batch</text>
+<text x="540.0" y="259.0" text-anchor="middle" fill="#222">pair-cli run refinement</text>
 <text x="540.0" y="275.0" text-anchor="middle" fill="#222">pair-cli run --until ready</text>
 <rect x="730" y="210" width="320" height="90" rx="6" fill="#e9f6ec" stroke="#2f7d46" stroke-width="1.3"/>
 <text x="890.0" y="243.0" text-anchor="middle" fill="#222" font-weight="bold">Autonomous</text>

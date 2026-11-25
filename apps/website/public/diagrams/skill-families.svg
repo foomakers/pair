@@ -19,7 +19,7 @@
 <text x="355" y="80" text-anchor="middle" font-size="11" fill="#333">stages compose</text>
 <rect x="380" y="170" width="300" height="70" rx="6" fill="#e9f6ec" stroke="#2f7d46" stroke-width="1.3"/>
 <text x="530.0" y="201.0" text-anchor="middle" fill="#222" font-weight="bold">Loop and batch</text>
-<text x="530.0" y="217.0" text-anchor="middle" fill="#222">/pair-loop, pair-implement-batch, pair-refine-batch</text>
+<text x="530.0" y="217.0" text-anchor="middle" fill="#222">/pair-loop, pair-implement-batch</text>
 <polyline points="530,170 530,130" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
 <text x="570" y="155" text-anchor="middle" font-size="11" fill="#333">composes</text>
 <rect x="380" y="280" width="300" height="60" rx="6" fill="#fdecec" stroke="#a33" stroke-width="1.3"/>

@@ -114,6 +114,10 @@ export async function handleWorkflowBatch(
   const prior = new Map<string, BatchOutcome>()
   const excluded: BatchOutcome[] = []
   const selected = orderCards(cards, selection.order).filter(card => {
+    if (card.error !== undefined) {
+      prior.set(card.id, { id: card.id, outcome: 'failed', reason: card.error })
+      return true
+    }
     if (
       !request.restart &&
       completedRun(
@@ -232,6 +236,7 @@ export async function handleMappedWorkflow(
     { cards: [card] },
   )
   const found = cards[0]
+  if (found?.error !== undefined) throw new Error(found.error)
   const cardId = found?.id ?? card
   function* candidates() {
     for (const name of names) {

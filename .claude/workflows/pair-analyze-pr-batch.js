@@ -33,9 +33,8 @@ export const meta = {
 // }
 //
 // Every value here is validated by TYPE and by CONTENT, on the same rules and with the same
-// predicates as `pair-implement-batch.js` / `pair-refine-batch.js` — held in agreement by the
-// engine differential in `pair-refine-batch.test.mjs`. The reason is stronger here than on
-// either sibling: these prompts go to `general-purpose`, a host built-in whose tool set the
+// predicates as `pair-implement-batch.js`. These prompts go to `general-purpose`,
+// a host built-in whose tool set the
 // shipped docs page itself calls UNRESTRICTED, and `branch` reaches it inside `git fetch origin
 // <branch>` and `git rev-parse origin/<branch>`. A value carrying shell syntax or a path escape
 // is REJECTED, never quoted: an escaped value still RUNS, and the caller who typed something

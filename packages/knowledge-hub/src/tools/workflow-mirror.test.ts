@@ -98,9 +98,7 @@ const PAIRS: MirrorPair[] = [
       'pair-analyze-pr-batch.test.mjs': {
         why:
           'Root-only for the same reason as its engine — a test file has nothing to drive without ' +
-          "it. The two travel together, and the dataset's `pair-refine-batch.test.mjs` reads the " +
-          'unshipped engine only when it is present, so the DATASET copy stays runnable (`node ' +
-          '--test` in `dataset/.workflows/`, asserted there).',
+          'it. The test ships only with its engine.',
       },
       'pair-contracts/cycle-coordinator.test.mjs': {
         why:
@@ -524,9 +522,7 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
   // The mirror guard cannot see any of them: both copies are equally wrong. This one reads
   // the references OUT of the shipped artifacts and resolves each against what actually ships.
   //
-  // Instances 4 and 5 were found by the NEXT reviewer, in the half this guard did not scan:
-  // `pair-refine-batch.js` cited an ADL by filename inside a runtime PROMPT, and
-  // `pair-contracts/{ensure-contract.mjs,.gitignore}` cited an ADR the dataset has no
+  // A later review found `pair-contracts/{ensure-contract.mjs,.gitignore}` cited an ADR the dataset has no
   // directory for. Scanning `.agents` only was the reason review round 5, not CI, caught them.
   // Both shipped trees are scanned now — a workflow is as adopter-facing as an agent.
   const agentsDir = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.agents')

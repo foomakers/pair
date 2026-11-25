@@ -33,7 +33,7 @@ Pick per project, or per card.
 
 **pair automates the work on a single card, from start to finish; you trigger it and review the result.** A hand-picked batch is the same thing on several cards you name.
 
-- **Refinement**: `pair-cli run --card <id> --until ready` stops the card right after refinement; `/pair-refine-batch` does it for a set of Draft cards you name. Grill questions still reach you.
+- **Refinement**: `pair-cli run --card <id> --until ready` stops the card right after refinement; `pair-cli run refinement` does it for a set of Draft cards you name. Unresolved product questions park the affected card.
 - **Delivery**: `/pair-workflow-cycle <id>` in your assistant, or `pair-cli run --card <id>` from a shell; `/pair-implement-batch` for a set of cards you name. The workflow runs implement, independent verify and remediation, then stops at the review-approved PR or at an [escalation](/docs/concepts/glossary#escalation).
 
 Use it when the project is set up, the backlog is known, and you want independent verification without running each stage by hand. Recipe: [Deliver a card](/docs/guides/deliver-a-card).
@@ -68,7 +68,7 @@ Assisted needs only a tool that reads skills. Supervised in-session needs a [har
 | --- | --- | --- | --- | --- | --- |
 | Assisted | Refinement | you, per skill | `/pair-process-brainstorm`, `-plan-stories`, `-refine-story`, `-plan-tasks` | after each skill | none |
 | Assisted | Delivery | you, per skill | `/pair-process-implement`, `/pair-process-review` | after each skill | none |
-| Supervised | Refinement | you, per card or batch | `pair-cli run --card --until ready`, `/pair-refine-batch` | Ready, or a grill question | `prepare` |
+| Supervised | Refinement | you, per card or batch | `pair-cli run --card --until ready`, `pair-cli run refinement` | Ready, or a grill question | `prepare` |
 | Supervised | Delivery | you, per card or batch | `/pair-workflow-cycle`, `/pair-implement-batch`, `pair-cli run --card` | review-approved PR, escalation | `until`, Blocking Severities |
 | Autonomous | Refinement | the loop | `prepare` gate `hold-never` or `hold-when` | escalation (`needs-review`) | `prepare` |
 | Autonomous | Delivery | the loop or daemon | `/pair-loop`, `pair-cli run --root --parallel --watch` | gates `until` and `merge`, escalation | `## Autonomy` |
