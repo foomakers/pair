@@ -142,11 +142,11 @@ async function loadDependencies(
   { selected, prior }: ReturnType<typeof selectCards>,
   read: WorkflowSelection['readDependencies'],
 ): Promise<readonly WorkflowCard[]> {
-  const ids = selected.filter(card => !prior.has(card.id)).map(card => card.id)
+  const ids = selected.filter(card => prior.get(card.id)?.outcome !== 'failed').map(card => card.id)
   if (read === undefined || ids.length === 0) return selected
   const dependencies = new Map((await read(ids)).map(facts => [facts.id, facts]))
   return selected.map(card => {
-    if (prior.has(card.id)) return card
+    if (prior.get(card.id)?.outcome === 'failed') return card
     const facts = dependencies.get(card.id)
     const reason = facts === undefined ? 'dependency facts missing' : facts.error
     if (reason !== undefined) prior.set(card.id, { id: card.id, outcome: 'failed', reason })
