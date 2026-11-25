@@ -429,8 +429,54 @@ it.each([
   },
 )
 
+it.each([
+  { options: { filter: 'docs' }, applicable: false },
+  { options: { status: 'Ready' }, applicable: false },
+  { options: { assignee: 'someone-else' }, applicable: false },
+  { options: { assignee: '@me' }, applicable: false },
+  {
+    options: { filter: 'docs,risk:green', status: 'Draft', assignee: 'maintainer' },
+    applicable: true,
+  },
+])(
+  'R744-28 (#678 AC-2/AC-3): narrows mapped selection with $options',
+  async ({ options, applicable }) => {
+    write('pair.config.json', JSON.stringify({ workflows: { quick: {} } }))
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('name: quick', 'name: quick\nselect: { filter: { status: [Draft] } }'),
+    )
+    const readSelection: NonNullable<WorkflowHostDependencies['readSelection']> = async (
+      _platform,
+      scope,
+    ) => ({
+      cards: [
+        {
+          id: '12',
+          title: 'Story 12',
+          body: '',
+          labels: ['risk:green'],
+          assignees: ['maintainer'],
+          status: 'Draft',
+          boardState: 'Draft',
+          closed: false,
+          prerequisites: [],
+        },
+      ],
+      ...(scope.assignee === '@me' && { assignee: 'current-user' }),
+    })
+
+    expect(await run([], OK, { card: '12', ...options }, { readSelection })).toBe(0)
+    if (applicable) expect(states('quick-12')).toEqual({ implement: 'ok', review: 'ok' })
+    else {
+      expect(lines).toContain('  #12: not-applicable — selection filter')
+      expect(launched).toHaveLength(0)
+    }
+  },
+)
+
 it.each([false, true])(
-  'R744-08: bare-card retry resumes refinement (another match: %s)',
+  'R744-08/R744-28: bare-card retry honors narrowing (another match: %s)',
   async other => {
     const draft = 'Draft'
     const ready = 'Ready'
@@ -462,14 +508,16 @@ steps:
           fenced({ status: 'ok', summary: 'Planned', boardStatus: boardState, tasks: 1 }),
       },
       {
-        async readSelection() {
+        async readSelection(_platform, scope) {
           return {
+            ...(scope.assignee === '@me' && { assignee: 'maintainer' }),
             cards: [
               {
                 id: '12',
                 title: 'Story 12',
                 body,
-                labels: [],
+                labels: ['risk:green'],
+                assignees: ['maintainer'],
                 status: boardState,
                 boardState,
                 closed: false,
@@ -491,7 +539,22 @@ steps:
     const command = parseRunCommand({ cwd: project, card: '12' }, [])
     expect(await handleRunCommand(command, fs, workflow)).toBe(1)
     expect(boardState).toBe(ready)
-    expect(await handleRunCommand(command, fs, workflow)).toBe(0)
+    for (const options of [
+      { filter: 'docs' },
+      { status: 'Review' },
+      { assignee: 'someone-else' },
+    ]) {
+      const excluded = parseRunCommand({ cwd: project, card: '12', ...options }, [])
+      lines.length = 0
+      expect(await handleRunCommand(excluded, fs, workflow)).toBe(0)
+      expect(lines).toContain('  #12: not-applicable — selection filter')
+      expect(states('refinement-12')).toEqual({ tasks: 'failed' })
+    }
+    const resume = parseRunCommand(
+      { cwd: project, card: '12', filter: 'risk:green', status: 'Draft', assignee: '@me' },
+      [],
+    )
+    expect(await handleRunCommand(resume, fs, workflow)).toBe(0)
     expect(states('refinement-12')).toEqual({ tasks: 'ok' })
     expect(launched.map(one => skillOf(one.promptText))).toEqual(['pair-process-plan-tasks'])
   },
