@@ -707,10 +707,11 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
 
 describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
   it.each([
-    ['successful transitions', false, false],
-    ['a retry after a Ready transition fails (R744-01)', true, false],
-    ['canonical board states (R744-01)', false, true],
-  ])('completes and skips cards with %s', async (_name, failReady, canonical) => {
+    ['successful transitions', undefined, false],
+    ['a refused Ready write (R744-01)', 'refused', false],
+    ['an applied Ready write with no confirmation (R744-01)', 'unconfirmed', false],
+    ['canonical board states (R744-01)', undefined, true],
+  ] as const)('completes and skips cards with %s', async (_name, failure, canonical) => {
     const source = '.pair/adoption/tech/workflows/refinement.yaml'
     write(
       source,
@@ -728,6 +729,8 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     const ready = canonical ? 'Ready' : 'Refined'
     const status = new Map(ids.map(id => [id, draft]))
     const bodies = new Map<string, string>()
+    const prerequisiteAtLaunch: string[] = []
+    let failReady = failure !== undefined
     const readSelection = async () => ({
       cards: ids.map(id => ({
         id,
@@ -746,7 +749,10 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
       board: {
         getState: async id => status.get(id) ?? null,
         async setState(id, value) {
-          if (id === '9' && failReady) throw new Error('board refused Ready')
+          if (id === '9' && failReady) {
+            if (failure === 'unconfirmed') status.set(id, value)
+            throw new Error('Ready write unconfirmed')
+          }
           status.set(id, value)
         },
       },
@@ -765,6 +771,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
         const current = status.get(id)
         launched.push(input)
         expect(current).toBe(draft)
+        if (id === '12') prerequisiteAtLaunch.push(states('refinement-9')['tasks'] ?? '')
         const refine = skillOf(input.promptText) === 'pair-process-refine-story'
         bodies.set(
           id,
@@ -790,14 +797,16 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     ])
     expect(await handleRunCommand(command, fs, { workflow })).toBe(failReady ? 1 : 0)
     if (failReady) {
-      expect(status.get('9')).toBe(draft)
+      expect(status.get('9')).toBe(failure === 'unconfirmed' ? ready : draft)
       expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'failed' })
       expect(lines.some(line => line.includes('#12: waiting'))).toBe(true)
-      expect(lines.some(line => line.includes('board refused Ready'))).toBe(true)
+      expect(lines.some(line => line.includes('Ready write unconfirmed'))).toBe(true)
       failReady = false
       expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
-      expect(launched).toHaveLength(7)
+      expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'ok' })
+      expect(launched).toHaveLength(6)
     }
+    expect(prerequisiteAtLaunch).toEqual(['ok', 'ok'])
     expect([...status.values()]).toEqual([ready, ready, ready])
     expect(new Set(launched.map(step => step.cwd)).size).toBe(3)
     const executions = launched.length
