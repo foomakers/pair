@@ -95,6 +95,21 @@ for (const [name, source, expected, status] of [
   })
 }
 
+for (const [name, source] of [
+  ['a hoisted call before initialization', 'function run() { print(); var n = 1; function print() { console.log(n) } }\nrun()\n'],
+  ['a catch-shadowed declaration', 'try { JSON.parse("invalid") } catch (n) { var n = 2; console.log(n) }\nconsole.log(n)\n'],
+]) {
+  test(`#693 R4 reports no-var without rewriting ${name}`, t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const file = join(cwd, 'fixture.js')
+    writeFileSync(file, source)
+    const fixed = lint(cwd, '--workspace', '--fix')
+    assert.equal(readFileSync(file, 'utf8'), source)
+    assert.equal(fixed.status, 1)
+    assert.ok(fixed.diagnostics.some(item => item.code === 'eslint(no-var)' && item.severity === 'error'))
+  })
+}
+
 test('#693 AC-1 preserves TypeScript assertions and enforces unsafe optional chaining', t => {
   const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
   writeFileSync(join(cwd, 'asserted.ts'), 'export const assert = (r?: { prop: string }) => (r?.prop as string).startsWith("a")\n')

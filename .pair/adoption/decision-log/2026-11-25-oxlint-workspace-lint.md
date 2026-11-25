@@ -20,6 +20,8 @@ Tooling Preference
 
 Pin Oxlint 1.95.0 and define Pair-owned base and React profiles in JSON. Use native rules where parity checks pass and selected JavaScript rule implementations where the native behavior differs. Keep the React, Hooks and accessibility plugin versions from the baseline. Preserve Brand's base package profile and React direct-file profile.
 
+Keep the `no-var` error and leave the source unchanged for catch-shadowed declarations and bindings read by a hoisted function before initialization. Ordinary safe declarations still autofix. [Maintainer decision](https://github.com/foomakers/pair/issues/693#issuecomment-7172593619)
+
 ## Alternatives Considered
 
 - **Cloudflare's standalone preset.** Its rule set, test policy, globals and parser requirements would change the migration scope.
