@@ -235,18 +235,15 @@ export function workflowConfiguration(
   request: RunWorkflowRequest,
   services: Services,
   at: Resolved,
-  card?: WorkflowCard,
 ) {
   const { fs } = services
-  const labels =
-    card === undefined ? at.cardLabels : (frozenTierLabels(at, request, fs) ?? card.labels)
   return resolveConfiguration({
     fs,
     cwd: at.cwd,
     main: at.main,
     project: at.project,
     workflow: at.workflow,
-    labels,
+    labels: at.cardLabels,
     flag: request.config,
     override: request.configOverride,
     engineFlag: config.engine,
@@ -256,7 +253,7 @@ export function workflowConfiguration(
 }
 
 /** The configuration of the run, its warnings and refusals printed; `undefined`: refused. */
-function configure(
+export function configureWorkflowRun(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
   services: Services,
@@ -367,7 +364,7 @@ function reportValidation(
 }
 
 /** Validate the workflow and tier declarations before looking up card labels. */
-function resolveWorkflowDefinition(
+export function resolveWorkflowDefinition(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
   services: Services,
@@ -432,12 +429,16 @@ const workflowRunDir = (resolved: Resolved, request: RunWorkflowRequest) =>
     request.runId ?? `${resolved.workflow.name}-${request.card}`,
   )
 
-function frozenTierLabels(resolved: Resolved, request: RunWorkflowRequest, fs: FileSystemService) {
+export function frozenTierLabels(
+  resolved: Resolved,
+  request: RunWorkflowRequest,
+  fs: FileSystemService,
+) {
   const saved = savedRunState(request, workflowRunDir(resolved, request), fs)
   return saved?.workflow.name === resolved.workflow.name ? (saved.cardLabels ?? []) : undefined
 }
 
-/** Batch planning and mapped routing resolve synchronously with the facts already read. */
+/** Mapped routing resolves synchronously with the facts already read. */
 export function resolveWorkflowRun(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
@@ -446,11 +447,10 @@ export function resolveWorkflowRun(
 ): Resolved | undefined {
   const resolved = resolveWorkflowDefinition(config, request, services, resume)
   if (resolved === undefined) return undefined
-  const labels =
-    request.card !== '' && usesTierLabels(resolved, request)
-      ? (frozenTierLabels(resolved, request, services.fs) ?? card?.labels)
-      : undefined
-  return configure(config, request, services, { ...resolved, cardLabels: labels })
+  const labels = usesTierLabels(resolved, request)
+    ? (frozenTierLabels(resolved, request, services.fs) ?? card?.labels)
+    : undefined
+  return configureWorkflowRun(config, request, services, { ...resolved, cardLabels: labels })
 }
 
 /** What a recorded step says: its summary, then its reason and detail when it has them. */
@@ -1370,7 +1370,7 @@ export async function handleWorkflowRun(
   if (definition === undefined) return 1
   const card = { read: selectionCardReader(definition, request.card, services), batch }
   const cardLabels = await runTierLabels(definition, request, services, card)
-  const resolved = configure(config, request, services, { ...definition, cardLabels })
+  const resolved = configureWorkflowRun(config, request, services, { ...definition, cardLabels })
   if (resolved === undefined) return 1
   printPlan(resolved.workflow)
   if (config.dryRun) return printWorkflowPreview(resolved)
