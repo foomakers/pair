@@ -624,7 +624,9 @@ function reopenedSteps(
   const topLevel = new Set(workflow.steps.map(step => step.id))
   const steps = new Map(addressedSteps(workflow).map(step => [step.id, step]))
   const last = workflow.steps.at(-1)?.id
-  const retryLegacy = runIsDone(workflow, state)
+  const done = runIsDone(workflow, state)
+  const retryAfterCompletion = (step: Step, status: StepState) =>
+    done && retryShorthandFailure(step, status)
   return Object.fromEntries(
     Object.entries(state.steps).map(([id, saved]) => {
       const step = steps.get(id)
@@ -636,8 +638,7 @@ function reopenedSteps(
         step !== undefined &&
         (child
           ? childSettled(step, saved.state)
-          : stepSettled(step, saved.state) &&
-            !(retryLegacy && retryShorthandFailure(step, saved.state)))
+          : stepSettled(step, saved.state) && !retryAfterCompletion(step, saved.state))
       )
         return [id, saved]
       return [id, reopenStep(run, saved, child ? undefined : step)]
