@@ -1,4 +1,4 @@
-import { runSteps } from '.'
+import { runSteps, type WorkflowHost } from '.'
 import { start } from '../engine'
 import { createMemoryFiles } from '../engine/memory-files'
 import { cardStateOf } from '../grammar'
@@ -62,4 +62,61 @@ describe('refinement kinds (#678 AC-1 and AC-9)', () => {
     })
     expect(cardStateOf({ kind: 'refine-story', state: 'none' })).toBeUndefined()
   })
+
+  it.each([true, false])(
+    'R744-17: resumes task planning with risk label present: %s',
+    async present => {
+      const files = createMemoryFiles()
+      const run = { dir, files }
+      const workflow = source(', state: none, with: { mode: autonomous }')
+      const steps: string[] = []
+      const riskTag = 'risk:green'
+      let labels = [riskTag]
+      let boardStatus = 'Draft'
+      let timedOut = true
+      const host: WorkflowHost = {
+        files,
+        style: 'instruction',
+        isSafeText: () => true,
+        async launch(step) {
+          steps.push(step.id)
+          if (step.kind === 'plan-tasks' && timedOut) return undefined
+          const outputs =
+            step.kind === 'refine-story' ? { riskTag, openQuestions: [] } : { tasks: 1 }
+          return (
+            '```json\n' +
+            JSON.stringify({ status: 'ok', summary: 'Prepared', boardStatus, ...outputs }) +
+            '\n```'
+          )
+        },
+        async readResultFacts() {
+          return {
+            card: {
+              boardStatus,
+              labels,
+              body: '## Acceptance Criteria\n\n## Technical Analysis\n\n## Assumptions\n\n## Task Breakdown\n\n- [ ] **T-1**: Add a test',
+            },
+          }
+        },
+        async confirmReady() {
+          boardStatus = 'Ready'
+        },
+      }
+      await start(run, workflow, { card: '12' })
+      expect((await runSteps(host, dir)).last?.reason).toBe('no-result')
+      expect(boardStatus).toBe('Draft')
+
+      timedOut = false
+      if (!present) labels = []
+      await start(run, workflow, { card: '12' })
+      const result = await runSteps(host, dir)
+      expect(steps).toEqual(['refine', 'tasks', 'tasks'])
+      expect(result.run).toBe(present ? 'done' : 'failed')
+      expect(boardStatus).toBe(present ? 'Ready' : 'Draft')
+      if (!present) {
+        expect(result.last?.reason).toBe('result-not-confirmed')
+        expect(result.last?.detail).toContain('riskTag')
+      }
+    },
+  )
 })
