@@ -28,6 +28,22 @@ export interface WorkflowScope {
   readonly assignee?: string
 }
 
+type DependencyFacts = Pick<WorkflowCard, 'id' | 'prerequisites' | 'uncertain' | 'error'>
+export interface WorkflowSelection {
+  readonly cards: readonly WorkflowCard[]
+  readonly assignee?: string
+  readonly readDependencies?: (ids: readonly string[]) => Promise<readonly DependencyFacts[]>
+}
+
+const unreadableCard = {
+  labels: [],
+  boardState: null,
+  closed: false,
+  title: '',
+  body: '',
+  prerequisites: [],
+}
+
 async function readPlatform<T>(at: Platform, args: string[], timeout = 30_000): Promise<T> {
   const { scriptsDir } = locateCycleScripts(at.fs, at.project, at.cwd)
   const result = await runHostProcess(
@@ -41,9 +57,12 @@ async function readPlatform<T>(at: Platform, args: string[], timeout = 30_000): 
   return JSON.parse(result.stdout) as T
 }
 
-export async function readWorkflowCards(at: Platform, scope: WorkflowScope) {
+export async function readWorkflowCards(
+  at: Platform,
+  scope: WorkflowScope,
+): Promise<WorkflowSelection> {
   const output = await readPlatform<{
-    cards: (WorkflowCard | { id: string; error: string })[]
+    cards: (Omit<WorkflowCard, 'prerequisites'> | { id: string; error: string })[]
     assignee?: string
   }>(
     at,
@@ -59,22 +78,20 @@ export async function readWorkflowCards(at: Platform, scope: WorkflowScope) {
   const mapping = readStateMapping(at.fs, at.main)
   return {
     ...output,
+    readDependencies: ids =>
+      readPlatform<DependencyFacts[]>(
+        at,
+        ['workflow-dependencies', '--cards', ids.join(',')],
+        180_000,
+      ),
     cards: output.cards.map(card => {
-      if (!('title' in card))
-        return {
-          labels: [],
-          boardState: null,
-          closed: false,
-          title: '',
-          body: '',
-          prerequisites: [],
-          ...card,
-        }
+      if (!('title' in card)) return { ...unreadableCard, ...card }
       const status = resolveMacrostate(card.boardState ?? '', mapping)
       const priority = /^\s*(?:-\s+)?(?:\*\*Priority:?\*\*:?|Priority:)\s*P(\d+)\b/im.exec(
         card.body,
       )?.[1]
       return {
+        prerequisites: [],
         ...card,
         ...(status && { status }),
         ...(priority !== undefined && { priority: Number(priority) }),

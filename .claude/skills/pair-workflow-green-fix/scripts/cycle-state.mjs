@@ -2956,30 +2956,39 @@ export function cardView({ story, dir, host, selection, scopedBoard = selection 
   return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState, ...(selection ? { assignees: (c?.assignees ?? []).map(one => String(one.login ?? one)), created: c?.createdAt ?? undefined } : {}) }
 }
 
+function workflowCardId(host, ref) {
+  const found = host.pm.parseCardRef(ref)
+  if (!found?.id || found.inScope === false) throw new Error(`card-out-of-scope: ${ref}`)
+  return String(found.id)
+}
+
 export function workflowCards(host, { root, cards, filter, assignee } = {}) {
-  const normalize = ref => {
-    const found = host.pm.parseCardRef(ref)
-    if (!found?.id || found.inScope === false) throw new Error(`card-out-of-scope: ${ref}`)
-    return String(found.id)
-  }
-  const requested = cards?.split(',').map(id => ({ id: normalize(id) }))
+  const requested = cards?.split(',').map(id => ({ id: workflowCardId(host, id) }))
   const candidates = requested ?? (root === undefined
     ? host.pm.listCards({ labels: filter && filter !== '*' ? filter.split(',').map(label => label.trim()) : undefined })
-    : host.pm.childCards({ id: normalize(root) }))
+    : host.pm.childCards({ id: workflowCardId(host, root) }))
   const selected = [...new Set(candidates.filter(card => !card.closed).map(card => String(card.id)))]
   const facts = selected.flatMap(id => {
     const view = cardView({ story: id, host, selection: true })
     if (view.error) return [{ id, error: view.error }]
     if (view.closed && requested === undefined) return []
-    try {
-      const declared = dependencyIds(view.body, undefined, ref => host.pm.parseCardRef(ref), true)
-      const native = view.closed ? [] : host.pm.blockedBy({ id })
-      return [{ ...view, prerequisites: [...new Set([...declared.ids, ...native])], uncertain: declared.uncertain }]
-    } catch (error) {
-      return [{ ...view, error: hostDetail(error) }]
-    }
+    return [view]
   })
   return { cards: facts, ...(assignee === '@me' ? { assignee: host.pm.resolveUser() } : {}) }
+}
+
+function workflowDependencies(host, cards) {
+  return cards.split(',').map(ref => {
+    const id = workflowCardId(host, ref)
+    try {
+      const { body } = host.pm.readCard(id)
+      const declared = dependencyIds(body, undefined, ref => host.pm.parseCardRef(ref), true)
+      const native = host.pm.blockedBy({ id })
+      return { id, prerequisites: [...new Set([...declared.ids, ...native])], uncertain: declared.uncertain }
+    } catch (error) {
+      return { id, prerequisites: [], error: hostDetail(error) }
+    }
+  })
 }
 
 export function prLabelsView({ ref, dir, host }) {
@@ -4604,6 +4613,7 @@ if (isMain()) {
       card: ['dir', 'story'],
       'workflow-cards': ['root', 'cards', 'filter', 'assignee'],
       'workflow-card': ['story'],
+      'workflow-dependencies': ['cards'],
       'workflow-pr-head': ['ref'],
       'pr-labels': ['dir', 'ref'],
       whoami: ['dir'],
@@ -4794,6 +4804,10 @@ if (isMain()) {
       out = cmd === 'workflow-cards'
         ? workflowCards(h, opts)
         : { head: h.code.prHead({ pr: opts.ref }) }
+      process.stdout.write(JSON.stringify(out) + '\n')
+    } else if (cmd === 'workflow-dependencies') {
+      need('cards')
+      out = workflowDependencies(bindHosts({ from: process.cwd() }), opts.cards)
       process.stdout.write(JSON.stringify(out) + '\n')
     } else if (cmd === 'card' || cmd === 'workflow-card') {
       need('story')

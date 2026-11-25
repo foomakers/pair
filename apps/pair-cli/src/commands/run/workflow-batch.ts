@@ -15,7 +15,7 @@ import { mainCheckoutOrCwd } from './cycle-wiring'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { runPool } from './parallel'
 import { inPooledCard } from './pooled-card'
-import { readWorkflowCards, type WorkflowCard } from './workflow-facts'
+import { readWorkflowCards, type WorkflowCard, type WorkflowSelection } from './workflow-facts'
 import { handleWorkflowRun, resolveWorkflowRun, type Services } from './workflow-host'
 import type { RunCommandConfig, RunWorkflowBatch } from './parser'
 
@@ -128,15 +128,30 @@ function selectCards(
   return { selected, prior, excluded }
 }
 
+async function loadDependencies(
+  { selected, prior }: ReturnType<typeof selectCards>,
+  read: WorkflowSelection['readDependencies'],
+): Promise<readonly WorkflowCard[]> {
+  const ids = selected.filter(card => !prior.has(card.id)).map(card => card.id)
+  if (read === undefined || ids.length === 0) return selected
+  const dependencies = new Map((await read(ids)).map(facts => [facts.id, facts]))
+  return selected.map(card => {
+    if (prior.has(card.id)) return card
+    const facts = dependencies.get(card.id)
+    const reason = facts === undefined ? 'dependency facts missing' : facts.error
+    if (reason !== undefined) prior.set(card.id, { id: card.id, outcome: 'failed', reason })
+    return { ...card, ...facts }
+  })
+}
+
 async function planBatch(
   { request, services }: BatchRequest,
   resolved: NonNullable<ReturnType<typeof resolveWorkflowRun>>,
 ): Promise<Plan> {
   const { fs, deps } = services
-  const { cards, assignee } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
-    { fs, ...resolved },
-    request,
-  )
+  const { cards, assignee, readDependencies } = await (
+    deps.workflow?.readSelection ?? readWorkflowCards
+  )({ fs, ...resolved }, request)
   const workflow = resolved.workflow.name
   const configuration = resolved.configuration?.configuration
   const selection = effectiveSelection(
@@ -149,8 +164,10 @@ async function planBatch(
   const completed = (id: string) =>
     !request.restart &&
     completedRun({ files: fs, dir: join(runs, runId(id)) }, { card: id, workflow })
+  const candidates = selectCards(cards, selection, completed)
   return {
-    ...selectCards(cards, selection, completed),
+    ...candidates,
+    selected: await loadDependencies(candidates, readDependencies),
     limit: request.parallel ?? configuration?.parallel ?? 1,
     runs,
     runId,
