@@ -111,6 +111,11 @@ These schemas come from the workflow validator.
         },
         "description": "The aliases the steps cite, each with its default engine, model and effort."
       },
+      "assign": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*(?:\\[bot\\])?$",
+        "description": "Use `me` for the runner, a login, `none` to keep the assignee, or `unassign` to clear it."
+      },
       "steps": {
         "type": "object",
         "minProperties": 1,
@@ -238,6 +243,11 @@ These schemas come from the workflow validator.
                 "none"
               ],
               "description": "The card's board state the host sets for the step (a macrostate), or `none`; overrides the kind's default."
+            },
+            "assign": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*(?:\\[bot\\])?$",
+              "description": "Use `me` for the runner, a login, `none` to keep the assignee, or `unassign` to clear it."
             },
             "until": {
               "type": "string",

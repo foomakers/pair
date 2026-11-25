@@ -87,11 +87,80 @@ describe('workflow aliases (#672 AC-11)', () => {
   })
 })
 
+describe('workflow assignment (#723 AC-6)', () => {
+  const ASSIGNMENT = `version: 1
+name: quick
+# workflow
+steps:
+  build:
+    kind: implement
+    # step
+  retry:
+    kind: loop
+    until: check
+    max: 2
+    steps:
+      check:
+        kind: review
+        # child
+`
+  const positions = {
+    workflow: { line: 3, key: 'assign' },
+    step: { line: 7, key: 'steps.build.assign' },
+    child: { line: 15, key: 'steps.retry.steps.check.assign' },
+  } as const
+  const file = 'workflows/quick.yaml'
+
+  it.each([
+    ['me', 'alice', 'unassign'],
+    ['alice', 'none', 'me'],
+    ['none', 'unassign', 'bot-pair'],
+    ['unassign', 'bot-pair', 'alice'],
+    ['bot-pair', 'me', 'none'],
+  ])('preserves workflow %s, step %s and loop child %s', (assign, step, child) => {
+    const text = ASSIGNMENT.replace('# workflow', `assign: ${assign}`)
+      .replace('# step', `assign: ${step}`)
+      .replace('# child', `assign: ${child}`)
+    const { workflow, errors } = parseWorkflow(text, file)
+    expect(errors).toEqual([])
+    expect(workflow).toMatchObject({
+      assign,
+      steps: [
+        { id: 'build', assign: step },
+        { id: 'retry', steps: [{ id: 'check', assign: child }] },
+      ],
+    })
+  })
+
+  it.each([
+    ['null', 'workflow'],
+    ['7', 'step'],
+    ['""', 'child'],
+    ['" alice "', 'workflow'],
+    ['"@me"', 'step'],
+    ['"alice/review"', 'child'],
+    ['"alice;true"', 'step'],
+  ] as const)('refuses assign: %s at %s with a positioned fix', (value, position) => {
+    const text = ASSIGNMENT.replace(`# ${position}`, `assign: ${value}`)
+    const { workflow, errors } = parseWorkflow(text, file)
+    expect(workflow).toBeUndefined()
+    expect(errors).toEqual([
+      expect.objectContaining({
+        file,
+        ...positions[position],
+        problem: expect.stringMatching(/expected string|does not match/),
+        fix: expect.stringMatching(/^write a value (?:of type string$|matching \^)/),
+      }),
+    ])
+  })
+})
+
 describe('parseWorkflow (AC-2)', () => {
   it('reads a valid file into steps in file order', () => {
     const { workflow, errors } = parseWorkflow(QUICK, 'workflows/quick.yaml')
     expect(errors).toEqual([])
     expect(workflow).toMatchObject({ version: 1, name: 'quick' })
+    expect(workflow).not.toHaveProperty('assign')
     expect(workflow?.steps).toEqual([
       { id: 'implement', kind: 'implement', with: { gates: ['quality-gate'] } },
       { id: 'review', kind: 'review' },
@@ -111,7 +180,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 3,
         key: 'descripton',
         problem: "unknown key 'descripton'",
-        fix: 'use one of version, name, select, description, outputs, aliases, steps',
+        fix: 'use one of version, name, select, description, outputs, aliases, assign, steps',
       },
     ],
     [
@@ -121,7 +190,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 7,
         key: 'steps.implement.retry',
         problem: "unknown key 'retry'",
-        fix: 'use one of kind, skill, when, uses, with, gates, on-failed, on-resume, alias, state, until, max, on-max, steps',
+        fix: 'use one of kind, skill, when, uses, with, gates, on-failed, on-resume, alias, state, assign, until, max, on-max, steps',
       },
     ],
     [

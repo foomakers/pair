@@ -64,6 +64,16 @@ export interface Entry {
 }
 
 const text = { type: 'string' } as const
+
+/** A card assignment directive or an explicit login. */
+export type Assignment = string
+export const assignmentSchema: JsonSchema = {
+  type: 'string',
+  pattern: '^[A-Za-z0-9][A-Za-z0-9_-]*(?:\\[bot\\])?$',
+  description:
+    'Use `me` for the runner, a login, `none` to keep the assignee, or `unassign` to clear it.',
+}
+
 export const entrySchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,
@@ -163,6 +173,7 @@ export const stepSchema: JsonSchema = {
       description:
         "The card's board state the host sets for the step (a macrostate), or `none`; overrides the kind's default.",
     },
+    assign: assignmentSchema,
     until: { type: 'string', pattern: STEP_ID },
     max: { type: 'integer', minimum: 1 },
     'on-max': { enum: ['escalate', 'fail'] },
@@ -199,6 +210,7 @@ export const workflowSchemaV1: JsonSchema = {
       additionalProperties: entrySchema,
       description: 'The aliases the steps cite, each with its default engine, model and effort.',
     },
+    assign: assignmentSchema,
     steps: {
       type: 'object',
       minProperties: 1,
@@ -268,6 +280,7 @@ export interface Step {
   readonly alias?: string
   /** The card's board state the host sets for the step; `none` sets nothing. */
   readonly state?: CardState | 'none'
+  readonly assign?: Assignment
   readonly until?: string
   readonly max?: number
   readonly 'on-max'?: 'escalate' | 'fail'
@@ -282,6 +295,7 @@ export interface Workflow {
   readonly outputs?: { readonly from: string }
   /** The declared aliases, each with its defaults. */
   readonly aliases?: Readonly<Record<string, Entry>>
+  readonly assign?: Assignment
   /** In file order: the execution order. */
   readonly steps: readonly Step[]
   readonly file: string
