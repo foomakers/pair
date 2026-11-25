@@ -40,7 +40,10 @@ const fixture = {
   head: sha,
   checks: [] as object[],
   statuses: [] as object[],
-  required: 404 as number | { contexts?: string[]; checks?: { context: string }[] },
+  required: 404 as
+    | number
+    | { contexts?: string[]; checks?: { context: string; app_id?: number }[] },
+  rules: [] as object[],
   actor: { login: 'reader', type: 'User' },
   comments: [] as object[],
   reviews: [] as object[],
@@ -54,6 +57,7 @@ const transport = vi.mocked(spawnSync)
 function respondChecks(endpoint: string) {
   if (endpoint.endsWith('/branches/release%2Fnext/protection/required_status_checks'))
     return typeof github.required === 'number' ? httpError(github.required) : json(github.required)
+  if (endpoint.includes('/rules/branches/release%2Fnext?')) return json(github.rules)
   const commit = `/commits/${github.head}`
   if (endpoint.includes(commit + '/check-runs')) return json({ check_runs: github.checks })
   if (endpoint.includes(commit + '/status')) return json({ statuses: github.statuses })
@@ -384,6 +388,31 @@ it.each([
   github.checks = row.checks
   await expect(facts(dir, ['head-unchanged', 'ci-green']).ci()).resolves.toBe(row.expected)
 })
+
+it.each(['classic', 'ruleset'] as const)(
+  'requires CI from the configured %s publisher (#726 AC-1)',
+  async source => {
+    const context = 'build'
+    if (source === 'classic')
+      github.required = { contexts: [context], checks: [{ context, app_id: 17 }] }
+    else
+      github.rules = [
+        {
+          type: 'required_status_checks',
+          parameters: {
+            required_status_checks: [{ context, integration_id: 17 }],
+          },
+        },
+      ]
+    github.checks = [{ ...check(context), app: { id: 88 } }]
+    github.statuses = [{ context, state: 'success' }]
+    await expect(facts(dir).ci()).resolves.toBe('pending')
+    github.checks.unshift({ ...check(context, 'failure'), app: { id: 17 } })
+    await expect(facts(dir).ci()).resolves.toBe('red')
+    github.checks[0] = { ...check(context), app: { id: 17 } }
+    await expect(facts(dir).ci()).resolves.toBe('green')
+  },
+)
 
 it('waits only to the deadline when a required CI context never reports (#726 AC-1)', async () => {
   github.required = { contexts: ['build', 'test'] }
