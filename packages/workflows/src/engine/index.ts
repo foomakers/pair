@@ -669,13 +669,49 @@ const replayLaunch = (state: RunStateFile) => {
   return replayAttempt === undefined ? {} : { replayAttempt }
 }
 
+type LaunchCheck = (launch: StepLaunch) => Promise<string | undefined>
+type LaunchContext = { state: RunStateFile; check: LaunchCheck | undefined }
+
+interface NextLaunch {
+  readonly ready: readonly StepLaunch[]
+  readonly run: RunState
+  readonly held?: SkippedStep & { readonly summary: string }
+}
+
+async function reserveLaunch(
+  run: RunDirectory,
+  { state, check }: LaunchContext,
+  launch: StepLaunch,
+  loop?: { id: string; round: number },
+): Promise<NextLaunch> {
+  const { id, kind, attempt, round } = launch
+  const summary = await check?.(launch)
+  if (summary !== undefined) return { ready: [], run: 'running', held: { id, kind, summary } }
+  await writeState(run, {
+    ...state,
+    steps: {
+      ...state.steps,
+      ...(loop !== undefined && { [loop.id]: { state: 'running' as const, round: loop.round } }),
+      [id]: {
+        state: 'running',
+        executions: attempt,
+        ...(round !== undefined && { round }),
+        ...pendingOf(launch),
+        ...retryBoardStatusOf(launch),
+      },
+    },
+  })
+  return { ready: [launch], run: 'running' }
+}
+
 /** The launch of the loop child that is next, or the halt that stops the run. */
 async function nextInLoop(
   run: RunDirectory,
-  state: RunStateFile,
+  context: LaunchContext,
   workflow: Workflow,
   step: Step,
-): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
+): Promise<NextLaunch> {
+  const { state } = context
   const { child, id } = loopChild(state, step)
   const childHalt = HALTED[state.steps[id]?.state ?? 'pending']
   if (childHalt !== undefined) return { ready: [], run: childHalt }
@@ -685,15 +721,6 @@ async function nextInLoop(
   const pending = { ...pendingOf(saved), ...retryBoardStatusOf(saved) }
   const assignment = assignmentOf(workflow, { ...child, id }, run)
 
-  const replay = replayLaunch(state)
-  await writeState(run, {
-    ...state,
-    steps: {
-      ...state.steps,
-      [step.id]: { state: 'running', round },
-      [id]: { state: 'running', executions: attempt, round, ...pending },
-    },
-  })
   const launch: StepLaunch = {
     id,
     kind: child.kind,
@@ -706,26 +733,28 @@ async function nextInLoop(
     inputs: pick({ ...inputsBefore(step, workflow.steps, state), ...state.latest }, child.kind),
     attempt,
     round,
-    ...replay,
+    ...replayLaunch(state),
   }
-  return { ready: [launch], run: 'running' }
+  return reserveLaunch(run, context, launch, { id: step.id, round })
 }
 
 /**
  * The steps to launch now and the state of the run. Linear: at most one step is ready, and it is
- * written `running` before it is returned, so an interrupted launch is visible on disk.
+ * written `running` before it is returned, so an interrupted launch is visible on disk. A launch
+ * check that returns a reason leaves the step untouched and resumable.
  */
 export async function next(
   run: RunDirectory,
   card?: () => Promise<CardFacts>,
   skipped: SkippedStep[] = [],
-): Promise<{
-  readonly ready: readonly StepLaunch[]
-  readonly run: RunState
-  readonly skipped?: readonly SkippedStep[]
-  /** The condition needs an unavailable fact. The stored step remains unchanged. */
-  readonly blocked?: SkippedStep & { readonly detail: string }
-}> {
+  check?: LaunchCheck,
+): Promise<
+  NextLaunch & {
+    readonly skipped?: readonly SkippedStep[]
+    /** The condition needs an unavailable fact. The stored step remains unchanged. */
+    readonly blocked?: SkippedStep & { readonly detail: string }
+  }
+> {
   const state = requireState(run)
   const workflow = frozenWorkflow(run)
   const { steps } = workflow
@@ -741,10 +770,11 @@ export async function next(
       blocked: { ...condition.step, detail: condition.error },
       ...seen(skipped),
     }
-  if (condition !== undefined) return next(run, card, [...skipped, condition.step])
+  if (condition !== undefined) return next(run, card, [...skipped, condition.step], check)
+  const context = { state, check }
   const launched = await (step.kind === 'loop'
-    ? nextInLoop(run, state, workflow, step)
-    : nextPlain(run, state, workflow, step))
+    ? nextInLoop(run, context, workflow, step)
+    : reserveLaunch(run, context, plainLaunch(state, workflow, step, run)))
   return { ...launched, ...seen(skipped) }
 }
 
@@ -823,28 +853,6 @@ async function checkWhen(
     ...(progress.loops !== undefined && { loops: progress.loops }),
   })
   return { step: checked }
-}
-
-async function nextPlain(
-  run: RunDirectory,
-  state: RunStateFile,
-  workflow: Workflow,
-  step: Step,
-): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
-  const launch = plainLaunch(state, workflow, step, run)
-  await writeState(run, {
-    ...state,
-    steps: {
-      ...state.steps,
-      [step.id]: {
-        state: 'running',
-        executions: launch.attempt,
-        ...pendingOf(launch),
-        ...retryBoardStatusOf(launch),
-      },
-    },
-  })
-  return { ready: [launch], run: 'running' }
 }
 
 const assignmentOf = (workflow: Workflow, step: Step, run?: RunDirectory) => {

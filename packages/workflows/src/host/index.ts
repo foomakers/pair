@@ -221,10 +221,13 @@ const NO_AGENT_RESULT: StepResult = {
   summary: 'the agent ended without a final message',
 }
 
-const delegatesAssignment = (host: WorkflowHost, step: StepLaunch) =>
-  step.kind === 'implement' &&
-  (step.assignment === undefined || host.assignCard === undefined) &&
+const ownsAssignment = (host: WorkflowHost, step: StepLaunch) =>
+  step.assignment !== undefined &&
+  host.assignCard !== undefined &&
   step.pendingSuccess === undefined
+
+const delegatesAssignment = (host: WorkflowHost, step: StepLaunch) =>
+  step.kind === 'implement' && step.pendingSuccess === undefined && !ownsAssignment(host, step)
 
 const starting = (step: StepLaunch): StepEvent => ({
   step: step.id,
@@ -379,7 +382,11 @@ async function ended(
 
 /** The next step, reporting every step passed over because its `when` did not match. */
 async function advance(host: WorkflowHost, run: RunDirectory) {
-  const found = await next(run, host.card?.bind(host))
+  const found = await next(run, host.card?.bind(host), [], async step =>
+    step.assignment !== undefined && step.pendingSuccess === undefined
+      ? host.assignCard?.(step.assignment.value)
+      : undefined,
+  )
   for (const { id, kind } of found.skipped ?? [])
     host.report?.({
       step: id,
@@ -387,7 +394,29 @@ async function advance(host: WorkflowHost, run: RunDirectory) {
       state: 'skipped',
       summary: 'skipped: when did not match',
     })
-  return found
+  const { ready, run: state, held, blocked } = found
+  if (held !== undefined) {
+    const event: StepEvent = {
+      step: held.id,
+      kind: held.kind,
+      state: 'skipped',
+      summary: held.summary,
+      reason: 'card-held',
+    }
+    host.report?.(event)
+    return { ready, state: 'skipped' as const, event }
+  }
+  if (blocked === undefined) return { ready, state }
+  const event: StepEvent = {
+    step: blocked.id,
+    kind: blocked.kind,
+    state: 'failed',
+    summary: 'could not evaluate when',
+    reason: 'card-status-unavailable',
+    detail: blocked.detail,
+  }
+  host.report?.(event)
+  return { ready, state, event }
 }
 
 async function emitStep(host: WorkflowHost, event: StepEvent): Promise<void> {
@@ -401,22 +430,10 @@ async function runStep(
   step: StepLaunch,
   writer: Writer,
 ): Promise<StepEvent> {
-  let launch = step
-  if (step.assignment !== undefined && host.assignCard && step.pendingSuccess === undefined) {
-    const held = await host.assignCard(step.assignment.value)
-    if (held !== undefined) {
-      const skipped = {
-        step: step.id,
-        kind: step.kind,
-        state: 'skipped',
-        reason: 'card-held',
-        summary: held,
-      } as const
-      host.report?.(skipped)
-      return skipped
-    }
-    if (step.kind === 'implement') launch = { ...step, with: { ...step.with, assignee: 'none' } }
-  }
+  const launch =
+    step.kind === 'implement' && ownsAssignment(host, step)
+      ? { ...step, with: { ...step.with, assignee: 'none' } }
+      : step
   // The implement skill claims ownership before activating the card itself.
   if (delegatesAssignment(host, step)) host.report?.(starting(step))
   else await emitStep(host, starting(step))
@@ -444,20 +461,9 @@ export async function runSteps(
   if (writer === undefined) await reopenRun(run).catch(() => undefined)
   let last: StepEvent | undefined
   for (;;) {
-    const { ready, run: state, blocked } = await advance(host, run)
-    if (blocked !== undefined) {
-      last = {
-        step: blocked.id,
-        kind: blocked.kind,
-        state: 'failed',
-        summary: 'could not evaluate when',
-        reason: 'card-status-unavailable',
-        detail: blocked.detail,
-      }
-      host.report?.(last)
-    }
+    const { ready, state, event } = await advance(host, run)
     const step = ready[0]
-    if (state !== 'running' || step === undefined) return ended(state, last, writer)
+    if (state !== 'running' || step === undefined) return ended(state, event ?? last, writer)
     last = await runStep(host, run, step, writer)
     if (last.state === 'skipped') return ended('skipped', last, writer)
   }
