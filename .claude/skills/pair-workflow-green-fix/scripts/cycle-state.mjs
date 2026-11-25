@@ -2944,9 +2944,13 @@ export function cardView({ story, dir, host, selection, scopedBoard = selection 
     try {
       c = h.pm.readCard(story, { fields: [...fields, 'projectItems'] })
       if (scopedBoard) {
-        const state = h.pm.cardState({ id: ref.id, card: c })
-        boardState = state.boardState
-        boardError = state.gap
+        try {
+          const state = h.pm.cardState({ id: ref.id, card: c })
+          boardState = state.boardState
+          boardError = state.gap
+        } catch (error) {
+          boardError = `board-unreadable: ${hostDetail(error)}`
+        }
       } else {
         boardState = (c?.projectItems ?? []).map(i => String(i?.status?.name ?? '').trim()).find(Boolean) ?? null
       }
