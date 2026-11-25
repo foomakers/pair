@@ -37,8 +37,27 @@ if (args[0] === '--workspace') {
   options.push('--no-error-on-unmatched-pattern')
 }
 if (process.env.PAIR_LINT_REPORT === 'json') args.push('--format', 'json')
-const lint = spawnSync(process.execPath, [cli, ...options, ...args], {
-  stdio: 'inherit',
-})
-if (lint.error) throw lint.error
-process.exitCode = lint.status ?? 2
+
+function runLint(args, stdio) {
+  const result = spawnSync(process.execPath, [cli, ...options, ...args], {
+    stdio,
+    maxBuffer: 64 * 1024 * 1024,
+  })
+  if (result.error) throw result.error
+  return result
+}
+
+const fixFlags = new Set(['--fix', '--fix-suggestions', '--fix-dangerously'])
+const checkArgs = args.filter(arg => !fixFlags.has(arg))
+if (checkArgs.length === args.length) {
+  process.exitCode = runLint(args, 'inherit').status ?? 2
+} else {
+  const fixed = runLint(args, ['inherit', 'pipe', 'inherit'])
+  if (fixed.status !== 0) {
+    process.stdout.write(fixed.stdout)
+    process.exitCode = fixed.status ?? 2
+  } else {
+    // Oxlint can report success before evaluating errors introduced by a fix.
+    process.exitCode = runLint(checkArgs, 'inherit').status ?? 2
+  }
+}
