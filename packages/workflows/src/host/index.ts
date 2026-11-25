@@ -221,6 +221,17 @@ const NO_AGENT_RESULT: StepResult = {
   summary: 'the agent ended without a final message',
 }
 
+const delegatesAssignment = (host: WorkflowHost, step: StepLaunch) =>
+  step.kind === 'implement' &&
+  (step.assignment === undefined || host.assignCard === undefined) &&
+  step.pendingSuccess === undefined
+
+const starting = (step: StepLaunch): StepEvent => ({
+  step: step.id,
+  kind: step.kind,
+  state: 'running',
+})
+
 type StepExecutionResult =
   | StepResult
   | { status: 'skipped'; summary: string; reason: 'card-held'; detail?: string }
@@ -291,6 +302,7 @@ async function executeAgent(
   // Leave the step running on disk so the next invocation can retry it.
   if (step.kind === 'implement' && result.status === 'failed' && result.reason === 'card-held')
     return { ...result, status: 'skipped', reason: result.reason }
+  if (delegatesAssignment(host, step)) await host.transition?.(starting(step))
   const checked = await gated(host, step, result)
   return recordResult(host, run, step, {
     ...(await confirmed(host, run, step, checked)),
@@ -405,7 +417,9 @@ async function runStep(
     }
     if (step.kind === 'implement') launch = { ...step, with: { ...step.with, assignee: 'none' } }
   }
-  await emitStep(host, { step: step.id, kind: step.kind, state: 'running' })
+  // The implement skill claims ownership before activating the card itself.
+  if (delegatesAssignment(host, step)) host.report?.(starting(step))
+  else await emitStep(host, starting(step))
   const { status, summary, reason, detail } = await executeMetered(host, run, launch, writer)
   const result = {
     step: step.id,
