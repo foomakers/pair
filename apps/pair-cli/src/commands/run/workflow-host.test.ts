@@ -813,3 +813,52 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     expect(summary.totals).toEqual({ skipped: 3 })
   })
 })
+
+it.each([false, true])(
+  'R744-05: only selected cards read dependencies (selected read fails: %s)',
+  async failSelected => {
+    write(
+      '.pair/adoption/tech/way-of-working.md',
+      REGISTRY + '\n- `pm-tool`: `github`\n- `pm-project`: `Pair`\n',
+    )
+    const skill = '.claude/skills/pair-workflow-cycle'
+    write(`${skill}/SKILL.md`, '# Cycle\n')
+    fs.symlinkSync(
+      join(__dirname, '../../../../../', skill, 'scripts'),
+      join(project, skill, 'scripts'),
+    )
+    const reads = join(project, 'dependencies.log')
+    const gh = join(project, 'gh')
+    write(
+      'gh',
+      `#!/usr/bin/env node
+const fs = require('node:fs')
+const [command, action, id] = process.argv.slice(2)
+const out = value => process.stdout.write(JSON.stringify(value))
+if (command === 'repo') process.stdout.write('acme/pair')
+else if (command === 'project') out({ projects: [] })
+else if (command === 'issue' && action === 'view') {
+  if (!process.argv.includes('-q')) out({ title: 'Story ' + id, body: '', labels: id === '9' ? [{ name: 'wanted' }] : [], state: 'OPEN' })
+} else if (command === 'api' && action.includes('/dependencies/blocked_by?')) {
+  const card = action.split('/').at(-3)
+  fs.appendFileSync(${JSON.stringify(reads)}, card + '\\n')
+  if (card === '10' || ${failSelected}) { process.stderr.write('dependency unavailable'); process.exitCode = 1 }
+  else out([])
+} else process.exitCode = 3
+`,
+    )
+    fs.chmodSync(gh, 0o755)
+    vi.stubEnv('PAIR_GH_BIN', gh)
+    try {
+      const command = parseRunCommand(
+        { cwd: project, card: '9,10', filter: 'wanted', dryRun: true },
+        ['quick'],
+      )
+      expect(await handleRunCommand(command, fs)).toBe(failSelected ? 1 : 0)
+      expect(lines.some(line => line.includes('#10: not-applicable'))).toBe(true)
+      expect(fs.readFileSync(reads)).toBe('9\n')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  },
+)
