@@ -354,7 +354,7 @@ export default defineAdapter({
           if (implicit) write('POST', `${issue}/assignees`, { assignees })
           else write('PATCH', issue, { assignees })
           let after = readOwners()
-          if (implicit && after.some(owner => !isTarget(owner))) {
+          while (implicit && after.some(owner => !isTarget(owner))) {
             const owners = after.filter(owner => !isTarget(owner))
             if (!after.some(isTarget)) return { status: 'held', owners }
             try {
@@ -379,7 +379,8 @@ export default defineAdapter({
                 if (after.some(isTarget)) throw new Error(`Could not confirm release of ${login}`)
                 return { status: 'held', owners: after }
               }
-              if (after.length !== 1 || !after.some(isTarget))
+              // A new claimant can arrive during cleanup. Resolve the new set before admitting work.
+              if (!after.some(isTarget) || owners.every(owner => after.includes(owner)))
                 throw new Error(`Could not confirm sole ownership on #${number}`)
             } catch (error) {
               return { status: 'held', owners, reason: error.message }
