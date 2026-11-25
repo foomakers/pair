@@ -166,6 +166,31 @@ test('#728 AC-3 F4: analysis preserves a live run holder’s lock', t => {
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).status, 'needs-human')
 })
 
+for (const [scenario, host, guarded, expected] of [
+  ['dead local holder', hostname(), false, 'needs-decision'],
+  ['remote holder', `${hostname()}-remote`, false, 'needs-human'],
+  ['dead local holder under reclaim', hostname(), true, 'needs-human'],
+]) {
+  test(`#728 AC-3 F6: analysis handles a ${scenario}`, t => {
+    const dir = runsDir({ 'quick-627': [step('quick-627', 'implement', { status: 'needs-human' })] })
+    t.after(() => rmSync(dir, { recursive: true, force: true }))
+    const lock = join(dir, 'quick-627', 'run.lock')
+    const file = join(dir, 'quick-627', 'telemetry.jsonl')
+    const owner = spawnSync(process.execPath, ['-e', "require('node:fs').writeFileSync(process.argv[1], JSON.stringify({pid: process.pid, host: process.argv[2], startedAt: new Date().toISOString()}), {flag: 'wx'})", lock, host], { encoding: 'utf8' })
+    assert.equal(owner.status, 0, owner.stderr)
+    const holder = readFileSync(lock, 'utf8')
+    if (guarded) mkdirSync(`${lock}.reclaim`)
+
+    for (let read = 0; read < 2; read++) {
+      assert.deepEqual(answer('passes', readRuns(dir)).runs[0].steps[0].statuses, ['needs-decision'])
+      assert.equal(JSON.parse(readFileSync(file, 'utf8')).status, expected)
+    }
+    if (expected === 'needs-human') assert.equal(readFileSync(lock, 'utf8'), holder)
+    else assert.equal(existsSync(lock), false)
+    assert.equal(existsSync(`${lock}.reclaim`), guarded)
+  })
+}
+
 test('#728 AC-3 F5: migration preserves group read access under umask 077', t => {
   const dir = runsDir({ 'quick-627': [step('quick-627', 'implement', { status: 'needs-human' })] })
   t.after(() => rmSync(dir, { recursive: true, force: true }))
