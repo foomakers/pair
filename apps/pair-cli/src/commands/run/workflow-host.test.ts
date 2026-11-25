@@ -712,7 +712,8 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     ['an applied Ready write with no confirmation (R744-01)', 'unconfirmed', false, undefined],
     ['an unconfirmed Ready write saved by an older version (R744-01)', 'legacy', false, undefined],
     ['canonical board states (R744-01)', undefined, true, undefined],
-    ['a stale task checklist (R744-07)', 'refused', false, 'Task Breakdown'],
+    ['a stale task count after a refused write (R744-11)', 'refused', false, 'tasks'],
+    ['a stale task count after Ready lands (R744-11)', 'unconfirmed', false, 'tasks'],
     ['stale refinement after Ready lands (R744-07)', 'unconfirmed', false, 'Assumptions'],
   ] as const)('completes and skips cards with %s', async (_name, failure, canonical, stale) => {
     const source = '.pair/adoption/tech/workflows/refinement.yaml'
@@ -732,6 +733,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     const status = new Map(ids.map(id => [id, draft]))
     const bodies = new Map<string, string>()
     const prerequisiteAtLaunch: string[] = []
+    let failRead = false
     let failReady = failure !== undefined
     const applied = failure === 'unconfirmed' || failure === 'legacy'
     const readSelection = async () => ({
@@ -761,6 +763,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
       },
       async readResultFacts(step) {
         const id = String(step.inputs['card'])
+        if (id === '9' && failRead) throw new Error('tracker unavailable')
         return {
           card: {
             boardStatus: status.get(id) ?? null,
@@ -772,16 +775,18 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
       async runIteration(input) {
         const id = /- card: (\d+)/.exec(input.promptText)?.[1] ?? ''
         const current = status.get(id)
+        const refresh = bodies.get(id)?.includes('**T-2**:') ?? false
         launched.push(input)
-        expect(current).toBe(draft)
+        expect(current).toBe(refresh && applied ? ready : draft)
         if (id === '12') prerequisiteAtLaunch.push(states('refinement-9')['tasks'] ?? '')
         const refine = skillOf(input.promptText) === 'pair-process-refine-story'
-        bodies.set(
-          id,
-          refine
-            ? '## Acceptance Criteria\n\n## Technical Analysis\n\n## Assumptions'
-            : `${bodies.get(id) ?? ''}\n\n## Task Breakdown\n\n- [ ] **T-1**: Add a test`,
-        )
+        if (!refresh)
+          bodies.set(
+            id,
+            refine
+              ? '## Acceptance Criteria\n\n## Technical Analysis\n\n## Assumptions'
+              : `${bodies.get(id) ?? ''}\n\n## Task Breakdown\n\n- [ ] **T-1**: Add a test`,
+          )
         input.onEvent?.({
           type: 'result',
           subtype: 'success',
@@ -789,7 +794,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
             status: 'ok',
             summary: 'Prepared',
             boardStatus: current,
-            ...(refine ? { riskTag: 'risk:green', openQuestions: [] } : { tasks: 1 }),
+            ...(refine ? { riskTag: 'risk:green', openQuestions: [] } : { tasks: refresh ? 2 : 1 }),
           }),
         })
         return { outcome: 'success', detail: 'terminal event: success' }
@@ -814,18 +819,31 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
         fs.writeFileSync(path, JSON.stringify(snapshot))
       }
       failReady = false
+      if (failure === 'refused' && stale === undefined) {
+        failRead = true
+        expect(await handleRunCommand(command, fs, { workflow })).toBe(1)
+        expect(lines.some(line => line.includes('tracker unavailable'))).toBe(true)
+        expect(launched).toHaveLength(4)
+        failRead = false
+      }
       if (stale !== undefined) {
         const original = bodies.get('9')!
-        bodies.set('9', original.replace(`## ${stale}`, '## Removed'))
+        bodies.set(
+          '9',
+          stale === 'tasks'
+            ? `${original}\n- [ ] **T-2**: Add another test`
+            : original.replace(`## ${stale}`, '## Removed'),
+        )
         expect(await handleRunCommand(command, fs, { workflow })).toBe(1)
         expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'failed' })
         expect(status.get('9')).toBe(afterFailure)
         expect(lines.some(line => line.includes(`${stale}: declared`))).toBe(true)
-        bodies.set('9', original)
+        expect(launched).toHaveLength(4)
+        if (stale !== 'tasks') bodies.set('9', original)
       }
       expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
       expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'ok' })
-      expect(launched).toHaveLength(6)
+      expect(launched).toHaveLength(stale === 'tasks' ? 7 : 6)
     }
     expect(prerequisiteAtLaunch).toEqual(['ok', 'ok'])
     expect([...status.values()]).toEqual([ready, ready, ready])
