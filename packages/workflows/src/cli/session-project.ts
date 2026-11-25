@@ -81,6 +81,19 @@ export function cycleScripts(project: Project): string {
   return scripts
 }
 
+export function controlStateScript(project: Project): string {
+  const candidates = [
+    ...['.claude', '.agents', '.opencode', '.github', '.cursor', '.agent', '.windsurf'].map(host =>
+      join(project.main, host, 'skills/pair-next/control-state.mjs'),
+    ),
+    resolve(project.scriptDir, '../../../next/control-state.mjs'),
+  ]
+  const script = candidates.find(isFile)
+  if (script === undefined)
+    throw new Error('skill-missing: install pair-next with control-state.mjs')
+  return script
+}
+
 function skillExists(project: Project, skill: string): boolean {
   const [, category, name] = /^pair-(capability|process|workflow)-(.+)$/.exec(skill) ?? []
   return (

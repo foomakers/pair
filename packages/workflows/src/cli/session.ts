@@ -29,10 +29,11 @@ import {
   type StepEvent,
 } from '../host'
 import { kindByName } from '../kinds'
+import { effectiveSelection } from '../select'
 import { reopenRun, type Usage } from '../telemetry'
 import { prepareReplayHead } from '../worktree'
 import { runHostProcess } from '../worktree/host-process'
-import { sessionCard, sessionWorktree } from '../worktree/session'
+import { sessionCard, sessionCardStatus, sessionWorktree } from '../worktree/session'
 import { acquireCardLock } from './card-lock'
 import { withSessionLease, type SessionApproval, type SessionLease } from './run-lock'
 import { sessionHost } from './session-host'
@@ -41,6 +42,7 @@ import { runWorkflowOperation } from './workflow-facts'
 import { refreshReplayInputs } from './workflow-replay'
 import { readMessage, readText, sessionFiles } from './session-files'
 import {
+  controlStateScript,
   cycleScripts,
   effectiveSettings,
   isSafeText,
@@ -88,6 +90,30 @@ function prepareSessionWorktree(project: Project, scripts: string, card: string,
   })
 }
 
+function checkSelection(
+  project: Project,
+  scripts: string,
+  view: Card,
+  { workflow, configuration }: { workflow: Workflow; configuration: Configuration | undefined },
+) {
+  const filter = configuration?.select?.filter ?? workflow.select?.filter
+  if (filter === undefined) return
+  const facts =
+    filter.assignee === undefined ? view : sessionCard(scripts, project.main, view.id, true)
+  const selection = effectiveSelection(workflow.select, configuration?.select)
+  const effectiveFacts = selection.needsStatus(facts)
+    ? withSelectedCardStatus(project, facts)
+    : facts
+  if (!selection.accepts(effectiveFacts))
+    throw new Error(`not-applicable: card ${view.id} does not match the selection filter`)
+}
+
+function withSelectedCardStatus(project: Project, view: Card) {
+  if (view.boardError !== undefined) throw new Error(view.boardError)
+  const status = sessionCardStatus(controlStateScript(project), project.main, view)
+  return status === null ? view : { ...view, status }
+}
+
 async function startFresh(
   project: Project,
   run: RunDirectory,
@@ -103,6 +129,10 @@ async function startFresh(
     engine: input.engine,
     flag: input.config,
     labels: view.labels,
+  })
+  checkSelection(project, scripts, view, {
+    workflow: definition.workflow,
+    configuration: selected?.configuration,
   })
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
   const started = await start(run, definition.source, {

@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process'
-import { isAbsolute, join } from 'node:path'
+import { basename, dirname, isAbsolute, join } from 'node:path'
 import { prepareCardWorktree } from './index'
 
 type Card = {
+  readonly id: string
   readonly title: string | null
   readonly body: string
   readonly labels: readonly string[]
@@ -84,6 +85,15 @@ export function sessionCard(scripts: string, main: string, story: string, owners
   if (view?.assignees === undefined)
     throw new Error(view?.error ?? `assignees unavailable for card ${story}`)
   return view
+}
+
+export function sessionCardStatus(authority: string, main: string, view: Card) {
+  const { title, body, boardState } = view
+  return script<{ macrostate: string | null }>(dirname(authority), main, basename(authority), [
+    'resolve',
+    main,
+    JSON.stringify({ title: title ?? '', body, boardState }),
+  ]).macrostate
 }
 
 export const sessionPrHead = (scripts: string, main: string, pr: number): string =>
