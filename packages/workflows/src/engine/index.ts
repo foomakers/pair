@@ -14,7 +14,7 @@ import {
   type When,
   type Workflow,
 } from '../grammar'
-import { parseFrozenConfiguration } from '../configuration'
+import { parseFrozenConfiguration, type Configuration } from '../configuration'
 import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 import { effectiveSelection, matches, type CardFacts } from '../select'
 
@@ -188,6 +188,23 @@ export interface StartOptions {
 export function frozenConfiguration(run: RunDirectory): string | undefined {
   const path = join(run.dir, FROZEN_CONFIGURATION)
   return run.files.existsSync(path) ? run.files.readFileSync(path) : undefined
+}
+
+function parsedFrozenConfiguration(run: RunDirectory) {
+  const text = frozenConfiguration(run)
+  return text === undefined
+    ? undefined
+    : parseFrozenConfiguration(text, join(run.dir, FROZEN_CONFIGURATION))
+}
+
+/** The host checks that the copy it froze still parses before it launches steps. */
+export function effectiveConfiguration(run: RunDirectory): Configuration | undefined {
+  const parsed = parsedFrozenConfiguration(run)
+  if (parsed !== undefined && parsed.configuration === undefined) {
+    const path = join(run.dir, FROZEN_CONFIGURATION)
+    throw new Error(`run-state-unreadable: ${path}: ${parsed.errors[0]?.problem ?? 'invalid'}`)
+  }
+  return parsed?.configuration
 }
 
 const configurationRecord = (c: NonNullable<StartOptions['configuration']>) => ({
@@ -666,6 +683,7 @@ async function nextInLoop(
   const round = state.loops?.[step.id]?.round ?? 1
   const saved = state.steps[id]
   const pending = { ...pendingOf(saved), ...retryBoardStatusOf(saved) }
+  const assignment = assignmentOf(workflow, { ...child, id }, run)
 
   const replay = replayLaunch(state)
   await writeState(run, {
@@ -684,7 +702,7 @@ async function nextInLoop(
     ...gatesOf(child),
     ...confirmationOf(child),
     ...pending,
-    ...assignmentOf(workflow, { ...child, id }),
+    ...assignment,
     inputs: pick({ ...inputsBefore(step, workflow.steps, state), ...state.latest }, child.kind),
     attempt,
     round,
@@ -813,7 +831,7 @@ async function nextPlain(
   workflow: Workflow,
   step: Step,
 ): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
-  const launch = plainLaunch(state, workflow, step)
+  const launch = plainLaunch(state, workflow, step, run)
   await writeState(run, {
     ...state,
     steps: {
@@ -829,12 +847,19 @@ async function nextPlain(
   return { ready: [launch], run: 'running' }
 }
 
-const assignmentOf = (workflow: Workflow, step: Step) => {
-  const assignment = assignmentFor(workflow, step)
+const assignmentOf = (workflow: Workflow, step: Step, run?: RunDirectory) => {
+  const configuration =
+    run === undefined ? undefined : parsedFrozenConfiguration(run)?.configuration
+  const assignment = assignmentFor(workflow, step, configuration)
   return assignment === undefined ? {} : { assignment }
 }
 
-function plainLaunch(state: RunStateFile, workflow: Workflow, step: Step): StepLaunch {
+function plainLaunch(
+  state: RunStateFile,
+  workflow: Workflow,
+  step: Step,
+  run?: RunDirectory,
+): StepLaunch {
   if (step.kind === 'loop') throw new Error('loop is not directly launchable')
   const attempt = launches(state, step.id)
   const replayAttempt = replayAttemptOf(state)
@@ -848,7 +873,7 @@ function plainLaunch(state: RunStateFile, workflow: Workflow, step: Step): StepL
     ...confirmationOf(step),
     ...pendingOf(saved),
     ...retryBoardStatusOf(saved),
-    ...assignmentOf(workflow, step),
+    ...assignmentOf(workflow, step, run),
     inputs: pick(inputsBefore(step, workflow.steps, state), step.kind),
     attempt,
     ...(replayAttempt !== undefined && { replayAttempt }),

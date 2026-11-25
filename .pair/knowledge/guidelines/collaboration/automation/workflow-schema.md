@@ -333,6 +333,11 @@ These schemas come from the workflow validator.
           }
         }
       },
+      "assign": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*(?:\\[bot\\])?$",
+        "description": "Use `me` for the runner, a login, `none` to keep the assignee, or `unassign` to clear it."
+      },
       "steps": {
         "type": "object",
         "additionalProperties": {
@@ -351,6 +356,11 @@ These schemas come from the workflow validator.
             "max": {
               "type": "integer",
               "minimum": 1
+            },
+            "assign": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*(?:\\[bot\\])?$",
+              "description": "Use `me` for the runner, a login, `none` to keep the assignee, or `unassign` to clear it."
             }
           }
         }

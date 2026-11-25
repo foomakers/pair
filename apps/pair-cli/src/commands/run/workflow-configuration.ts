@@ -123,8 +123,8 @@ function load(input: ConfigurationInput, selection: { name: string; via: string 
 type Chosen = { configuration?: Configuration; file: string; source: string; override?: unknown }
 
 /** `--config-override` merged over `chosen`; or the refusal. */
-function overlay(chosen: Chosen, text: string): Chosen | ConfigurationOutcome {
-  const merged = applyOverride(chosen.configuration, text, chosen.file)
+function overlay(chosen: Chosen, text: string, engine: EngineId): Chosen | ConfigurationOutcome {
+  const merged = applyOverride(chosen.configuration, text, chosen.file, engine)
   if ('problem' in merged) return refused(merged.problem)
   if (merged.parsed.configuration === undefined)
     return refused(...merged.parsed.errors.map(formatError))
@@ -157,7 +157,7 @@ function choose(input: ConfigurationInput): Chosen | ConfigurationOutcome {
     file: loaded?.file ?? 'override.yaml',
     source: loaded?.source ?? 'none',
   }
-  return input.override === undefined ? chosen : overlay(chosen, input.override)
+  return input.override === undefined ? chosen : overlay(chosen, input.override, input.engine)
 }
 
 /** Which configuration runs, validated and merged with the override — or why the run is refused. */

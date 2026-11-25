@@ -13,11 +13,11 @@ import {
   formatError,
   kindByName,
   addressedSteps,
-  frozenConfiguration,
+  assignmentFor,
+  effectiveConfiguration,
   parseWorkflow,
   pendingMergeClosure,
   record,
-  parseFrozenConfiguration,
   readGateRegistry,
   readGateTargets,
   runSteps,
@@ -31,6 +31,7 @@ import {
   type RunOutcome,
   type StepResult,
   type ResultFacts,
+  type ResolvedAssignment,
   type StepEvent,
   type StepLaunch,
   type StepReplay,
@@ -999,7 +1000,7 @@ async function drive(
   recordIncludeSources(fs, runDir, resolved.sources, started.status)
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   console.log(`  Run dir: ${runDir} (${started.status})`)
-  const effective = readEffective(fs, runDir)
+  const effective = effectiveConfiguration({ files: fs, dir: runDir })
   printSettings(resolved, effective)
   probeUnchecked(
     resolved,
@@ -1040,34 +1041,28 @@ function probeUnchecked(
   if (errors.length > 0) throw new Error(errors.map(formatError).join('\n'))
 }
 
-/** The run's frozen configuration, read back from its copy: the copy wins over the source file (design §6). */
-function readEffective(fs: FileSystemService, runDir: string): Configuration | undefined {
-  const text = frozenConfiguration({ files: fs, dir: runDir })
-  if (text === undefined) return undefined
-  const path = join(runDir, 'configuration.yaml')
-  const { configuration, errors } = parseFrozenConfiguration(text, path)
-  if (configuration === undefined)
-    throw new Error(`run-state-unreadable: ${path}: ${errors[0]?.problem ?? 'invalid'}`)
-  return configuration
-}
+const describeAssignment = (assignment?: ResolvedAssignment): string =>
+  assignment === undefined ? '' : ` assign=${assignment.value} (${assignment.source})`
 
 /** What every step launches with and where each value came from; or that no configuration applies. */
 function printSettings(resolved: Resolved, effective: Configuration | undefined): void {
   if (effective === undefined) {
     const { id } = resolved.engine.engine
     console.log(`  Configuration: none applies — engine ${id}, its default model`)
-    return
+  } else {
+    console.log(
+      `  Configuration: ${effective.name}${resolved.configuration ? ` — ${resolved.configuration.source}` : ' — frozen copy'}`,
+    )
   }
-  console.log(
-    `  Configuration: ${effective.name}${resolved.configuration ? ` — ${resolved.configuration.source}` : ' — frozen copy'}`,
-  )
   addressedSteps(resolved.workflow)
     .filter(step => step.kind !== 'loop')
-    .forEach(step =>
-      console.log(
-        `    ${describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))}`,
-      ),
-    )
+    .forEach(step => {
+      const assignment = describeAssignment(assignmentFor(resolved.workflow, step, effective))
+      const settings =
+        effective &&
+        describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))
+      if (settings || assignment) console.log(`    ${settings ?? `${step.id}:`}${assignment}`)
+    })
 }
 
 function printPlan(workflow: Workflow): void {
@@ -1156,8 +1151,14 @@ function printWorkflowPreview(resolved: Resolved): number {
   addressedSteps(resolved.workflow).forEach(step => {
     const host = step.kind === 'loop' || kindByName[step.kind].host === true
     const skill = host ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
+    const assignment =
+      step.kind === 'loop'
+        ? ''
+        : describeAssignment(
+            assignmentFor(resolved.workflow, step, resolved.configuration?.configuration),
+          )
     console.log(
-      `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''}${dryRunExecution(resolved, step)}${dryRunExhaustion(step)}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${approvalQuestion(step)}`,
+      `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''}${dryRunExecution(resolved, step)}${assignment}${dryRunExhaustion(step)}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${approvalQuestion(step)}`,
     )
   })
   console.log('  Dry run: the workflow is valid; nothing was launched.')

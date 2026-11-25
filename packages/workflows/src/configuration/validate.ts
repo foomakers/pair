@@ -115,7 +115,7 @@ function entriesOf(c: Configuration, { steps, aliases }: CheckContext): [Path, E
   ]
 }
 
-/** Loop entries may only override max; max is only for loops. */
+/** A loop has assignment and max, but does not launch with engine settings. */
 function loopOptionErrors(
   c: Configuration,
   steps: NonNullable<CheckContext['steps']>,

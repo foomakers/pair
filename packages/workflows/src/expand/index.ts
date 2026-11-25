@@ -39,11 +39,22 @@ type ExpansionState = {
 
 type StepContext = { workflow: Workflow; step: Step; id: string }
 
-function forwardOptions(step: Step, selected: Step, steps: readonly Step[]): Step[] {
-  return steps.map((child, index) => ({
+function forwardOptions(context: StepContext, selected: Step, included: Workflow): Step[] {
+  const { step, id } = context
+  const assign = step.assign ?? included.assign
+  return included.steps.map((child, index) => ({
     ...child,
     ...(child === selected && step.with && { with: { ...child.with, ...step.with } }),
-    ...(index === steps.length - 1 && step['on-failed'] && { 'on-failed': step['on-failed'] }),
+    ...(index === included.steps.length - 1 &&
+      step['on-failed'] && { 'on-failed': step['on-failed'] }),
+    ...(child.assign === undefined &&
+      assign !== undefined && {
+        assign,
+        'assign-source':
+          step.assign === undefined
+            ? (`workflows.${included.name}.assign` as const)
+            : (`steps.${id}.assign` as const),
+      }),
   }))
 }
 
@@ -74,7 +85,7 @@ function includeSteps(state: ExpansionState, context: StepContext, included: Wor
     return []
   }
   state.outputSteps[id] = selected.id
-  return forwardOptions(step, selected, included.steps)
+  return forwardOptions(context, selected, included)
 }
 
 function expandLoop(state: ExpansionState, context: StepContext, chain: readonly string[]): Step {

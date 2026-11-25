@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { expand } from '.'
+import { assignmentFor } from '../grammar'
 
 const run = (caller: string, steps: string, outputs = '') => {
   const root = {
@@ -66,5 +67,39 @@ describe('include caller contract (AC-2, AC-3)', () => {
       run('kind: fix, with: { gates: [quality-gate] }', '  work: { kind: generic, skill: x }')
         .errors.length,
     ).toBeGreaterThan(0)
+  })
+})
+
+describe('#723 assignment through an include (AC-6, AC-8)', () => {
+  it.each([
+    ['included workflow', '', 'bot-pair'],
+    ['caller', ', assign: me', 'me'],
+  ])('preserves leaf overrides over the %s default', (_source, override, expected) => {
+    const root = {
+      file: 'root.yaml',
+      text: `version: 1
+name: root
+assign: mallory
+steps:
+  call: { kind: generic, uses: shared${override} }
+`,
+    }
+    const shared = {
+      file: 'shared.yaml',
+      text: `version: 1
+name: shared
+assign: bot-pair
+steps:
+  build: { kind: implement }
+  review: { kind: review, assign: alice }
+`,
+    }
+    const result = expand(root, name => (name === 'shared' ? shared : undefined))
+    expect(result.errors).toEqual([])
+    const workflow = result.workflow!
+    expect(workflow.steps.map(step => [step.id, assignmentFor(workflow, step)?.value])).toEqual([
+      ['call/build', expected],
+      ['call/review', 'alice'],
+    ])
   })
 })
