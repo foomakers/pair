@@ -596,7 +596,7 @@ export async function next(
   readonly run: RunState
   readonly skipped?: readonly SkippedStep[]
 }> {
-  const state = requireState(run)
+  const state = await migrateStateStatuses(run, requireState(run))
   const { steps } = frozenWorkflow(run)
   const step = steps.find(one => !settled(state, one))
   if (step === undefined) return { ready: [], run: finalState(state, steps), ...seen(skipped) }
