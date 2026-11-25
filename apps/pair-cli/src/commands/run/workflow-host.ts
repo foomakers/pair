@@ -5,6 +5,7 @@ import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
 import {
   cardStateOf,
+  cardStateToConfirm,
   completedRun,
   effectiveSelection,
   checkAgainstEngines,
@@ -686,15 +687,16 @@ async function setCardState(
 
 function cardTransitions({ request, resolved }: Opened, services: Services) {
   return {
-    isReadyBoardStatus(status: string | null) {
-      return isAtLeast(status, 'Ready', readStateMapping(services.fs, resolved.main))
+    isAtLeastBoardStatus(status: string | null, target: CardState) {
+      return isAtLeast(status, target, readStateMapping(services.fs, resolved.main))
     },
-    async confirmReady() {
-      await setCardState(request.card, 'Ready', resolved, services)
+    async confirmState(target: CardState) {
+      await setCardState(request.card, target, resolved, services)
     },
     async transition(event: StepEvent) {
-      const set = cardStateOf(stepOf(resolved, event.step))
-      if (set === undefined || set.state === 'Ready' || set.when !== whenOf(event.state)) return
+      const step = stepOf(resolved, event.step)
+      const set = cardStateOf(step)
+      if (set === undefined || set.when !== whenOf(event.state) || cardStateToConfirm(step)) return
       try {
         await setCardState(request.card, set.state, resolved, services)
       } catch (error) {

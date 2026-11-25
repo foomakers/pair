@@ -10,7 +10,7 @@ import {
   type StepLaunch,
 } from '../engine'
 import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
-import type { KindName } from '../grammar'
+import type { CardState, KindName } from '../grammar'
 import { violations } from '../schema'
 import type { CardFacts } from '../select'
 import { kindByName, settle, type StepResult, type StepStatus } from '../kinds'
@@ -67,10 +67,10 @@ export interface WorkflowHost {
   runGates?(entries: readonly string[], step: StepLaunch): Promise<StepResult | undefined>
   /** The result's observable platform facts. */
   readResultFacts?(step: StepLaunch, result: StepResult): Promise<ResultFacts>
-  /** Whether the observed board status shows that the Ready transition has already landed. */
-  isReadyBoardStatus?(status: string | null): boolean
-  /** Confirms the Ready transition before success becomes durable. */
-  confirmReady?(): Promise<void>
+  /** Whether the observed board status has already reached the target macrostate. */
+  isAtLeastBoardStatus?(status: string | null, target: CardState): boolean
+  /** Confirms the board transition before success becomes durable. */
+  confirmState?(target: CardState): Promise<void>
   /** Sees step starts, results and condition failures in order. */
   report?(event: StepEvent): void
   transition?(event: StepEvent): Promise<void>
@@ -140,10 +140,7 @@ async function confirmed(
     if (staged) return checkStagedResult({ host, run }, step, result, facts)
     const checked = confirmResult(step.kind, result, facts)
     return {
-      result:
-        checked.status === 'ok' && step.confirmReady
-          ? confirmPriorRefinement(run, step, result, facts)
-          : checked,
+      result: checked.status === 'ok' ? confirmPriorRefinement(run, step, checked, facts) : checked,
     }
   } catch (error) {
     return { result: unconfirmed((error as Error).message) }
@@ -158,7 +155,9 @@ function checkStagedResult(
 ): Confirmation {
   const boardStatus = facts.card?.boardStatus
   const declaration =
-    boardStatus !== undefined && host.isReadyBoardStatus?.(boardStatus)
+    boardStatus !== undefined &&
+    step.confirmState !== undefined &&
+    host.isAtLeastBoardStatus?.(boardStatus, step.confirmState)
       ? { ...result, boardStatus }
       : result
   const checked = confirmResult(step.kind, declaration, facts)
@@ -173,7 +172,8 @@ function confirmPriorRefinement(
   result: StepResult,
   facts: ResultFacts,
 ): StepResult {
-  if (step.kind !== 'plan-tasks' || facts.card === undefined) return result
+  if (step.kind !== 'plan-tasks' || step.confirmState !== 'Ready' || facts.card === undefined)
+    return result
   const refinement = priorRefinement(run, step.id)
   if (refinement === undefined) return result
   const checked = confirmResult(
@@ -191,16 +191,20 @@ async function recordResult(
   { result, output, invalidatePendingSuccess }: Confirmation & { output?: string },
 ): Promise<StepResult> {
   let final = result
-  if (step.pendingSuccess !== undefined && !host.confirmReady && result.status === 'ok')
-    return record(run, step.id, unconfirmed('the host cannot confirm the Ready transition'))
+  if (step.pendingSuccess !== undefined && !host.confirmState && result.status === 'ok')
+    return record(
+      run,
+      step.id,
+      unconfirmed(`the host cannot confirm the ${step.confirmState} transition`),
+    )
   if (
-    step.confirmReady &&
-    host.confirmReady &&
+    step.confirmState !== undefined &&
+    host.confirmState &&
     settle(kindByName[step.kind], result).status === 'ok'
   ) {
     await stageSuccess(run, step.id, result)
     try {
-      await host.confirmReady()
+      await host.confirmState(step.confirmState)
     } catch (error) {
       final = unconfirmed((error as Error).message)
     }

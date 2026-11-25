@@ -4,7 +4,9 @@ import { readResult } from '../dispatch'
 import {
   addressedSteps,
   cardStateOf,
+  cardStateToConfirm,
   parseWorkflow,
+  type CardState,
   type KindName,
   type Step,
   type When,
@@ -92,7 +94,7 @@ export interface StepLaunch {
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
   readonly round?: number
-  readonly confirmReady?: true
+  readonly confirmState?: CardState
   readonly pendingSuccess?: StepResult
   readonly retryBoardStatus?: string
 
@@ -364,7 +366,7 @@ const legacyReadyFailure = (saved: StepRecord) =>
   saved.reason === 'result-not-confirmed' &&
   /^card state .+ not set: /.test(saved.detail ?? '')
 
-function pendingReadyResult(
+function pendingTransitionResult(
   run: RunDirectory,
   step: Step,
   saved?: StepRecord,
@@ -385,13 +387,14 @@ function stagedBoardStatus(
 ): string | undefined {
   for (const step of steps) {
     const saved = state.steps[step.id]
-    const status = saved?.retryBoardStatus ?? pendingReadyResult(run, step, saved)?.['boardStatus']
+    const status =
+      saved?.retryBoardStatus ?? pendingTransitionResult(run, step, saved)?.['boardStatus']
     if (typeof status === 'string') return status
   }
   return undefined
 }
 
-/** The board status used to reselect unfinished refinement or a Ready transition. */
+/** The board status used to reselect unfinished refinement or a staged transition. */
 export function pendingBoardStatus(
   run: RunDirectory,
   identity: { card: string; workflow: string },
@@ -495,7 +498,7 @@ function reopenedSteps(
       if (saved.state === 'ok' || (saved.state === 'failed' && step === undefined))
         return [id, saved]
       const pendingSuccess =
-        step === undefined ? saved.pendingSuccess : pendingReadyResult(run, step, saved)
+        step === undefined ? saved.pendingSuccess : pendingTransitionResult(run, step, saved)
       return [
         id,
         {
@@ -622,11 +625,13 @@ const pendingOf = (saved?: Pick<StepRecord, 'pendingSuccess'>) =>
 const retryBoardStatusOf = (saved?: Pick<StepRecord, 'retryBoardStatus'>) =>
   saved?.retryBoardStatus === undefined ? {} : { retryBoardStatus: saved.retryBoardStatus }
 
-const awaitingReady = (saved?: StepRecord) =>
+const awaitingTransition = (saved?: StepRecord) =>
   saved?.pendingSuccess !== undefined || saved?.retryBoardStatus !== undefined
 
-const readyOf = (step: Step) =>
-  cardStateOf(step)?.state === 'Ready' ? { confirmReady: true as const } : {}
+const confirmationOf = (step: Step) => {
+  const confirmState = cardStateToConfirm(step)
+  return confirmState === undefined ? {} : { confirmState }
+}
 
 const replayAttemptOf = (state: RunStateFile): number | undefined => {
   if (!state.replay) return undefined
@@ -672,7 +677,7 @@ async function nextInLoop(
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
     ...gatesOf(child),
-    ...readyOf(child),
+    ...confirmationOf(child),
     ...pending,
     inputs: pick({ ...inputsBefore(step, steps, state), ...state.latest }, child.kind),
     attempt,
@@ -773,7 +778,7 @@ async function checkWhen(
   const child = inLoop ? loopChild(state, step).child : undefined
   const target = child ?? step
   const id = inLoop ? `${step.id}/${target.id}` : step.id
-  if (awaitingReady(state.steps[id])) return undefined
+  if (awaitingTransition(state.steps[id])) return undefined
   const failure = await whenFailure(target.when, state, card)
   if (failure === undefined) return undefined
   const checked = { id, kind: target.kind as KindName }
@@ -828,7 +833,7 @@ function plainLaunch(state: RunStateFile, steps: readonly Step[], step: Step): S
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
     ...gatesOf(step),
-    ...readyOf(step),
+    ...confirmationOf(step),
     ...pendingOf(saved),
     ...retryBoardStatusOf(saved),
     inputs: pick(inputsBefore(step, steps, state), step.kind),
@@ -960,7 +965,7 @@ async function writeResult(
 const loopRound = (state: RunStateFile, outer: Step | undefined): number | undefined =>
   state.loops?.[outer?.id ?? '']?.round
 
-/** Preserve the confirmed result before the host attempts a remote Ready write. */
+/** Preserve the confirmed result before the host attempts a remote state write. */
 export async function stageSuccess(
   run: RunDirectory,
   id: string,

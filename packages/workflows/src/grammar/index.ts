@@ -20,6 +20,8 @@ export type KindName = (typeof KIND_NAMES)[number]
 export const CARD_STATES = ['Draft', 'Ready', 'In Progress', 'Review', 'Done'] as const
 export type CardState = (typeof CARD_STATES)[number]
 
+const isRefinement = (kind: KindName | 'loop') => kind === 'refine-story' || kind === 'plan-tasks'
+
 /** The card state a step sets, and when: Ready and Done as the step ends `ok`, the others as it starts. */
 export function cardStateOf(step: {
   readonly kind: KindName | 'loop'
@@ -34,11 +36,19 @@ export function cardStateOf(step: {
     'refine-story': 'Ready',
     'plan-tasks': 'Ready',
   }
-  const refinement = step.kind === 'refine-story' || step.kind === 'plan-tasks'
   const state = step.state ?? defaults[step.kind]
   return state === undefined || state === 'none'
     ? undefined
-    : { state, when: refinement || state === 'Ready' || state === 'Done' ? 'end' : 'start' }
+    : {
+        state,
+        when: isRefinement(step.kind) || state === 'Ready' || state === 'Done' ? 'end' : 'start',
+      }
+}
+
+/** The board transition that must be confirmed before the step can record success. */
+export function cardStateToConfirm(step: Parameters<typeof cardStateOf>[0]): CardState | undefined {
+  const state = cardStateOf(step)?.state
+  return state === 'Ready' || isRefinement(step.kind) ? state : undefined
 }
 
 /** A step id names a directory of the run and a row of the output: lower-case, digits and hyphens. */

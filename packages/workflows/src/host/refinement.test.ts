@@ -98,8 +98,8 @@ describe('refinement kinds (#678 AC-1 and AC-9)', () => {
             },
           }
         },
-        async confirmReady() {
-          boardStatus = 'Ready'
+        async confirmState(target) {
+          boardStatus = target
         },
       }
       await start(run, workflow, { card: '12' })
