@@ -7,6 +7,8 @@ import {
   completedRun,
   effectiveConfiguration,
   frozenWorkflow,
+  pendingMergeClosure,
+  record,
   requireState,
   start,
   stepSettled,
@@ -14,6 +16,7 @@ import {
   type RunDirectory,
   type RunState,
   type StepLaunch,
+  type RunStateFile,
 } from '../engine'
 import { addressedSteps, type Workflow } from '../grammar'
 import {
@@ -38,7 +41,8 @@ import { acquireCardLock } from './card-lock'
 import { withSessionLease, type SessionApproval, type SessionLease } from './run-lock'
 import { sessionHost } from './session-host'
 import { approvalQuestion, type ApprovalTarget } from './workflow-approval'
-import { runWorkflowOperation } from './workflow-facts'
+import { runWorkflowOperation, type Operation } from './workflow-facts'
+import { workflowMerge } from './workflow-merge'
 import { refreshReplayInputs } from './workflow-replay'
 import { readMessage, readText, sessionFiles } from './session-files'
 import {
@@ -172,15 +176,44 @@ async function resumeSaved(
   effectiveConfiguration(run) // Refuse an unreadable frozen file before touching the worktree.
   if (completedRun(run, { card, workflow }))
     return { ...(await start(run, source, { card })), card, worktree: undefined }
-  const scripts = () => cycleScripts(project)
-  const replay = await refreshReplayInputs(
-    { workflow: frozenWorkflow(run), state },
-    (action, card, data) =>
-      runWorkflowOperation(runHostProcess, scripts, project.main, { action, card, data }),
-  )
-  const worktree = await prepareSessionWorktree(project, scripts(), card)
+  const scripts = cycleScripts(project)
+  const view = sessionCard(scripts, project.main, card)
+  const saved = frozenWorkflow(run)
+  const operation: Operation = (action, card, data) =>
+    runWorkflowOperation(runHostProcess, () => scripts, project.main, { action, card, data })
+  if (view.closed)
+    return finishSessionClosure(project.main, run, { card, state, workflow: saved }, operation)
+  const replay = await refreshReplayInputs({ workflow: saved, state }, operation)
+  const worktree = await prepareSessionWorktree(project, scripts, card, view)
   if (replay) await prepareReplayHead(worktree, replay.inputs.head, runHostProcess)
   return { ...(await start(run, source, { card, ...(replay && { replay }) })), card, worktree }
+}
+
+async function finishSessionClosure(
+  main: string,
+  run: RunDirectory,
+  { card, state, workflow }: { card: string; state: RunStateFile; workflow: Workflow },
+  operation: Operation,
+) {
+  const step = pendingMergeClosure(workflow, state)
+  if (
+    step === undefined ||
+    (await operation('merge-resume', card, {
+      pr: step.inputs['pr'],
+      head: step.inputs['head'],
+    })) !== true
+  )
+    throw new Error(`card-closed: ${card}`)
+  const result = await record(run, step.id, await workflowMerge(operation, main, true)(step), {
+    host: 'session',
+  })
+  return {
+    card,
+    status: result.status === 'ok' ? ('complete' as const) : ('failed' as const),
+    warnings: [result.summary],
+    worktree: undefined,
+    telemetryWarning: undefined,
+  }
 }
 
 function withCardSessionLease<T>(
