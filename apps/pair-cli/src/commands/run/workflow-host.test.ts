@@ -14,6 +14,8 @@ import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memor
 import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/delivery.yaml?raw'
 // @ts-expect-error Vite loads the shipped definition as fixture text.
 import quickDefinition from '../../../../../packages/knowledge-hub/dataset/.pair/adoption/tech/workflows/quick.yaml?raw'
+// @ts-expect-error Vite loads the portable definition as fixture text.
+import portableQuick from '../../../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-examples/quick.yaml?raw'
 import baseConfig from '../../../config.json'
 import { acquireRunLock } from './run-lock'
 import { handleRunCommand } from './handler'
@@ -153,6 +155,8 @@ beforeEach(() => {
     {
       '/project/config.json': JSON.stringify(baseConfig),
       '/kb/dataset/.pair/adoption/tech/workflows/quick.yaml': quickDefinition as string,
+      '/kb/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-examples/quick.yaml':
+        portableQuick as string,
     },
     project,
     project,
@@ -1172,12 +1176,11 @@ describe('workflow resolution (design §7)', () => {
     expect(states()).toEqual({ implement: 'ok' })
   })
 
-  it('falls back to the knowledge-base default of that name', async () => {
+  it('falls back to the portable Quick when there is no adopted copy', async () => {
     fs.rmSync(join(project, '.pair/adoption/tech/workflows'), { recursive: true, force: true })
     expect(await run(['quick'], OK, { dryRun: true })).toBe(0)
-    expect(
-      lines.some(line => line.includes('dataset/.pair/adoption/tech/workflows/quick.yaml')),
-    ).toBe(true)
+    expect(lines.some(line => line.includes('/workflow-examples/quick.yaml'))).toBe(true)
+    expect(lines.join('\n')).not.toContain('target:pr')
   })
 })
 

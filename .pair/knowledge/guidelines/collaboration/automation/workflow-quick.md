@@ -20,6 +20,7 @@ steps:
   implement:
     kind: implement
     alias: build
+    gates: [target:increment]
   review:
     kind: review
     alias: judge
@@ -27,7 +28,11 @@ steps:
   fix:
     kind: fix
     alias: build
+    gates: [target:increment]
     when: { output: review.verdict, is: [changes-requested] }
+  gate:
+    kind: gate
+    with: { gates: [target:pr] }
 ```
 
 `implement` and `fix` run with the alias `build`, `review` with `judge`. A configuration sets their engine, model and effort: `pair-cli run quick --card 627 --config codex`. See [workflow-configuration.md](workflow-configuration.md).

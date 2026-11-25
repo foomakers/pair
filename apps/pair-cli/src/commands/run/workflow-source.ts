@@ -16,6 +16,8 @@ import { locateCycleScripts } from './cycle-scripts'
 import { canCommentOnCard } from './workflow-facts'
 
 const WORKFLOWS_DIR = '.pair/adoption/tech/workflows'
+const PORTABLE_QUICK =
+  '.pair/knowledge/guidelines/collaboration/automation/workflow-examples/quick.yaml'
 export const WAY_OF_WORKING = '.pair/adoption/tech/way-of-working.md'
 
 export interface Located {
@@ -32,7 +34,10 @@ export function locateWorkflow(
   const adopted = join(at.main, WORKFLOWS_DIR, `${name}.yaml`)
   const candidates = [resolve(at.cwd, name), adopted]
   try {
-    candidates.push(join(getKnowledgeHubDatasetPath(fs), WORKFLOWS_DIR, `${name}.yaml`))
+    const dataset = getKnowledgeHubDatasetPath(fs)
+    // The portable Quick fallback works without project gate targets.
+    if (name === 'quick') candidates.push(join(dataset, PORTABLE_QUICK))
+    candidates.push(join(dataset, WORKFLOWS_DIR, `${name}.yaml`))
   } catch {
     // no knowledge base beside this CLI: the two project locations are the only candidates
   }

@@ -4,12 +4,14 @@ import { parse } from 'yaml'
 import { fileSystemService as fs } from '@pair/content-ops'
 import {
   createMemoryFiles,
+  runGate,
   runSteps,
   start,
   readGateRegistry,
   readGateTargets,
   validate,
 } from '@pair/workflows'
+import type { StepEvent, StepResult } from '@pair/workflows'
 import { isSafePromptText } from './prompt-safety'
 
 /**
@@ -20,19 +22,27 @@ import { isSafePromptText } from './prompt-safety'
 const REPO = join(__dirname, '../../../../..')
 const DATASET = join(REPO, 'packages/knowledge-hub/dataset')
 const WAY_OF_WORKING = '.pair/adoption/tech/way-of-working.md'
-const QUICK = '.pair/adoption/tech/workflows/quick.yaml'
+const WORKFLOWS = '.pair/adoption/tech/workflows'
+const QUICK = join(WORKFLOWS, 'quick.yaml')
 const PAGE = '.pair/knowledge/guidelines/collaboration/automation/workflow-quick.md'
 
 const read = (root: string, path: string) => fs.readFileSync(join(root, path))
 
-const errorsOf = (root: string) =>
-  validate(read(root, QUICK), QUICK, {
-    skillExists: () => true,
+const validateAdopted = (root: string, path: string) =>
+  validate(read(root, path), path, {
+    skillExists: skill => fs.existsSync(join(REPO, '.claude/skills', skill, 'SKILL.md')),
     gateKeys: Object.keys(readGateRegistry(read(root, WAY_OF_WORKING))),
     gateTargets: Object.keys(readGateTargets(read(root, WAY_OF_WORKING))),
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
-  }).errors
+  })
+
+const errorsOf = (root: string) => validateAdopted(root, QUICK).errors
+
+const workflowFiles = (root: string) =>
+  fs.readdirSync(join(root, WORKFLOWS)).filter(file => file.isFile() && file.name.endsWith('.yaml'))
+
+const agentResult = (payload: StepResult) => `\`\`\`json\n${JSON.stringify(payload)}\n\`\`\``
 
 const commandGates = (value: unknown): boolean => {
   if (!value || typeof value !== 'object') return false
@@ -73,8 +83,7 @@ describe('the shipped quick workflow: what already holds (r0-2)', () => {
   })
 
   it('c6 no shipped workflow carries a command: gate (ADR-036)', () => {
-    const dir = '.pair/adoption/tech/workflows'
-    const files = fs.readdirSync(join(DATASET, dir)).map(f => join(dir, f.name))
+    const files = workflowFiles(DATASET).map(file => join(WORKFLOWS, file.name))
     const direct = files.filter(f => commandGates(parse(read(DATASET, f))))
 
     expect(direct).toEqual([])
@@ -83,26 +92,124 @@ describe('the shipped quick workflow: what already holds (r0-2)', () => {
   })
 })
 
+describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequence', () => {
+  it('ships the same quick file that pair uses locally', () => {
+    expect(read(DATASET, QUICK)).toBe(read(REPO, QUICK))
+  })
+
+  const sources = [
+    {
+      name: 'repository',
+      root: REPO,
+      commands: ['pnpm gate:increment', 'pnpm gate:increment', 'pnpm gate:pr'],
+    },
+    {
+      name: 'dataset',
+      root: DATASET,
+      commands: ['pnpm format:check', 'pnpm format:check', 'pnpm format:check'],
+    },
+  ]
+
+  it.each(
+    sources.flatMap(source =>
+      workflowFiles(source.root).map(file => ({ ...source, file: file.name })),
+    ),
+  )('$name $file has no new validation warnings', ({ name, root, file }) => {
+    const { errors, warnings } = validateAdopted(root, join(WORKFLOWS, file))
+    expect(errors).toEqual([])
+    expect(warnings.map(({ key, problem }) => ({ key, problem }))).toEqual(
+      name === 'repository' && file === 'delivery.yaml'
+        ? [{ key: 'steps.merge', problem: 'merge has no review after the last code-changing step' }]
+        : [],
+    )
+  })
+
+  it.each(sources)(
+    '$name quick fixes a blocking review and runs its adopted gates',
+    async ({ root, commands }) => {
+      const run = { files: createMemoryFiles(), dir: '/runs/728' }
+      const head = 'a'.repeat(40)
+      const replies: Record<string, StepResult> = {
+        implement: { status: 'ok', summary: 'PR opened', branch: 'feature/quick', pr: 728, head },
+        review: {
+          status: 'failed',
+          summary: 'Changes requested',
+          verdict: 'changes-requested',
+          reviewedHead: head,
+          findings: [{ id: 'f1', severity: 'Major', title: 'Missing check', blocking: true }],
+        },
+        fix: {
+          status: 'ok',
+          summary: 'Finding fixed',
+          head,
+          resolutions: [{ id: 'f1', status: 'resolved', reason: 'Check added' }],
+        },
+      }
+      const registryText = read(root, WAY_OF_WORKING)
+      const invoked: string[] = []
+      const gates = (entries: readonly string[]) =>
+        runGate(
+          { gates: entries },
+          {
+            registry: readGateRegistry(registryText),
+            targets: readGateTargets(registryText),
+            run: async command => {
+              invoked.push(command)
+              return { code: 0, output: '' }
+            },
+          },
+        )
+      const events: StepEvent[] = []
+      await start(run, { text: read(root, QUICK), file: QUICK }, { card: '728' })
+      const outcome = await runSteps(
+        {
+          files: run.files,
+          style: 'instruction',
+          isSafeText: isSafePromptText,
+          launch: async ({ id }) => {
+            const reply = replies[id]
+            if (reply === undefined) throw new Error(`Unexpected agent step ${id}`)
+            return agentResult(reply)
+          },
+          runGates: async entries => {
+            const result = await gates(entries)
+            return result.status === 'ok' ? undefined : result
+          },
+          perform: async step => gates(step.with['gates'] as readonly string[]),
+          report: event => events.push(event),
+        },
+        run.dir,
+      )
+
+      expect(outcome.run).toBe('done')
+      expect(invoked).toEqual(commands)
+      expect(
+        events.filter(event => event.state !== 'running').map(event => [event.step, event.state]),
+      ).toEqual([
+        ['implement', 'ok'],
+        ['review', 'failed'],
+        ['fix', 'ok'],
+        ['gate', 'ok'],
+      ])
+    },
+  )
+})
+
 it('the shipped workflow fails at fix after review produces no verdict (#726 AC-6)', async () => {
   const run = { files: createMemoryFiles(), dir: '/runs/726' }
   const head = 'a'.repeat(40)
   await start(run, { text: read(DATASET, QUICK), file: QUICK }, { card: '726' })
   const launched: string[] = []
-  const result = (payload: object) =>
-    String.fromCharCode(96).repeat(3) +
-    'json\n' +
-    JSON.stringify(payload) +
-    '\n' +
-    String.fromCharCode(96).repeat(3)
   const outcome = await runSteps(
     {
       files: run.files,
       style: 'instruction',
       isSafeText: () => true,
+      runGates: async () => undefined,
       launch: async step => {
         launched.push(step.id)
         if (step.kind === 'implement')
-          return result({
+          return agentResult({
             status: 'ok',
             summary: 'ready',
             branch: 'feature/US-726-test',
@@ -110,7 +217,7 @@ it('the shipped workflow fails at fix after review produces no verdict (#726 AC-
             head,
           })
         if (step.kind === 'fix')
-          return result({ status: 'ok', summary: 'fixed', head, resolutions: [] })
+          return agentResult({ status: 'ok', summary: 'fixed', head, resolutions: [] })
         return undefined
       },
     },
