@@ -13,7 +13,8 @@ function forbiddenImports(path: string, source: string): string[] {
   const allowed = new Set(ALLOWED)
   if (isTest) allowed.add('vitest')
   if (isHost) allowed.add('node:fs')
-  if (path === 'cli/run-lock.ts') allowed.add('node:os')
+  if (['cli/card-lock.ts', 'cli/lock-holder.ts', 'cli/run-lock.ts'].includes(path))
+    allowed.add('node:os')
   if (path === 'cli/session-files.ts') allowed.add('node:fs/promises')
   if (path === 'cli/workflow.ts') allowed.add('node:util')
   if (path.startsWith('worktree/')) allowed.add('node:child_process')
@@ -61,7 +62,7 @@ describe('workflow core boundary (#696 AC-6)', () => {
     expect(forbiddenImports('cli/index.ts', source)).toEqual(['node:child_process'])
   })
 
-  it('allows only the CLI run lock to import the host OS module', () => {
+  it('allows only the CLI lock adapters to import the host OS module', () => {
     const source = "import { hostname } from 'node:os'"
     expect(forbiddenImports('engine/index.ts', source)).toEqual(['node:os'])
     expect(forbiddenImports('worktree/index.ts', source)).toEqual(['node:os'])

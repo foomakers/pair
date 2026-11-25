@@ -94,6 +94,18 @@ function orphaned(note: LockNote, isAlive: (pid: number) => boolean): boolean {
   return typeof expiresAt === 'number' && expiresAt <= Date.now()
 }
 
+/** A card reservation follows the run lease across short-lived session commands. */
+export function sessionOwnerAlive(
+  runDir: string,
+  token: string,
+  isAlive: (pid: number) => boolean,
+) {
+  const note = readNote(join(runDir, RUN_LOCK_FILE))
+  if (note === undefined) return false
+  if (note.lease === undefined) return note.host === undefined && note.pid === undefined
+  return note.lease.token === token && !orphaned(note, isAlive)
+}
+
 const active = () => ({
   pid: process.pid,
   host: hostname(),

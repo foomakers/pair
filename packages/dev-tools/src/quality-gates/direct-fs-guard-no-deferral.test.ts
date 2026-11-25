@@ -89,8 +89,10 @@ const EXCEPTION_TESTS = new Set([
   'packages/knowledge-hub/src/tools/skill-md-mirror.test.ts',
   'packages/knowledge-hub/src/tools/skills-guide-mirror.test.ts',
 ])
-// #696 AC-4: both hosts share the lock's OS guarantees in these two files.
+// #696 AC-4: both hosts share the card and run lock OS guarantees.
 const SHARED_LOCK_OS_PATHS = [
+  'packages/workflows/src/cli/card-lock.ts',
+  'packages/workflows/src/cli/lock-holder.ts',
   'packages/workflows/src/cli/lock-support.ts',
   'packages/workflows/src/cli/run-lock.ts',
 ]

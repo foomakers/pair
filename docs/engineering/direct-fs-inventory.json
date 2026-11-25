@@ -1,13 +1,13 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
-  "scanned": 1083,
+  "scanned": 1085,
   "files": 407,
   "distinctContents": 372,
   "dispositionCounts": {
     "standalone-script": 17,
-    "os-guarantee": 29,
+    "os-guarantee": 31,
     "type-contract": 13,
-    "in-flight-churn": 243,
+    "in-flight-churn": 241,
     "repo-contract": 104,
     "boundary-adapter": 1
   },
@@ -394,22 +394,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/card-lock.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/card-lock.ts",
-      "hash": "9dd859271a06ac95ee6de6259e3839101bc4be84ea16ab85039e55ca4759f0b8",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/card-lock.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
@@ -1546,22 +1530,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/live-guard-597.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/lock-holder.ts",
-      "hash": "71ead865c5eb811d1e0c19402c245291dd937ac5a23eabcbcb3ea8651d0cd42b",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/lock-holder.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
@@ -6722,6 +6690,47 @@
       "reason": "Build tooling emits the standalone artifact to the dataset or a caller-supplied file.",
       "decision": "Keep direct fs in the bundle generator.",
       "testCategory": "installed-script-smoke"
+    },
+    {
+      "path": "packages/workflows/src/cli/card-lock.ts",
+      "hash": "7b29788746082a93b98df91362dbf1b5782bcbd9ed46ad3b84e954a2a3827b9d",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/src/cli/card-lock.ts",
+      "observedOperations": [
+        "mkdirSync",
+        "readFileSync",
+        "renameSync",
+        "rmSync",
+        "statSync",
+        "writeFileSync"
+      ],
+      "reason": "A card lock must be created and reclaimed atomically across the CLI and session hosts.",
+      "decision": "Keep the per-card lock protocol in the shared host adapter.",
+      "testCategory": "real lock integration"
+    },
+    {
+      "path": "packages/workflows/src/cli/lock-holder.ts",
+      "hash": "15db2aae6491be3377581400d70950ec86bd085ec9e8db5d532b9cd86fb9ef82",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/src/cli/lock-holder.ts",
+      "observedOperations": ["readFileSync"],
+      "reason": "Both hosts must read the actual holder note before reclaiming a card lock.",
+      "decision": "Keep the per-card lock protocol in the shared host adapter.",
+      "testCategory": "real lock integration"
     },
     {
       "path": "packages/workflows/src/cli/lock-support.ts",

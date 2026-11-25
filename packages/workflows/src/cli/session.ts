@@ -33,6 +33,7 @@ import { reopenRun, type Usage } from '../telemetry'
 import { prepareReplayHead } from '../worktree'
 import { runHostProcess } from '../worktree/host-process'
 import { sessionCard, sessionWorktree } from '../worktree/session'
+import { acquireCardLock } from './card-lock'
 import { withSessionLease, type SessionApproval, type SessionLease } from './run-lock'
 import { sessionHost } from './session-host'
 import { approvalQuestion, type ApprovalTarget } from './workflow-approval'
@@ -152,6 +153,30 @@ async function resumeSaved(
   return { ...(await start(run, source, { card, ...(replay && { replay }) })), card, worktree }
 }
 
+function withCardSessionLease<T>(
+  run: RunDirectory,
+  input: { engine: string; card?: string } | { token: string },
+  command: Parameters<typeof withSessionLease<T>>[2],
+): Promise<T> {
+  return withSessionLease(run.dir, input, async lease => {
+    const card = ('card' in input && input.card) || requireState(run).card
+    const outcome = acquireCardLock({
+      workingArea: join(run.dir, '../..'),
+      card,
+      session: { runId: basename(run.dir), token: lease.token },
+    })
+    if (outcome.kind === 'held') throw new Error(`card-locked: ${outcome.path}`)
+    try {
+      const result = await command(lease)
+      if (result.stop) outcome.lock.release()
+      return result
+    } catch (error) {
+      if ('engine' in input) outcome.lock.release()
+      throw error
+    }
+  })
+}
+
 export async function openSession(project: Project, input: OpenInput) {
   const { runId, definition } =
     'card' in input
@@ -162,29 +187,33 @@ export async function openSession(project: Project, input: OpenInput) {
   if ('card' in input) await run.files.mkdir(run.dir, { recursive: true })
   else if (!hasState()) throw new Error(`run-not-found: ${runId}`)
 
-  return withSessionLease(run.dir, { engine: input.engine }, async lease => {
-    const opened =
-      'card' in input && definition !== undefined && !hasState()
-        ? await startFresh(project, run, input, definition)
-        : await resumeSaved(project, run, input, definition)
-    const workflow = frozenWorkflow(run)
-    const config = effectiveConfiguration(run)
-    if (opened.telemetryWarning !== undefined) lease.telemetryWarned = true
-    if (opened.status === 'resumed') {
-      const writer = sessionTelemetry(observeRun(run), workflow, config, lease)
-      if (writer === undefined) await reopenRun(run).catch(() => undefined)
-      else await writer.reopen()
-    }
-    return {
-      ...(opened.worktree !== undefined && { worktree: opened.worktree }),
-      result: {
-        ...opened,
-        ...workflowSummary(workflow, config, lease.engine),
-        runId,
-        lease: lease.token,
-      },
-    }
-  })
+  return withCardSessionLease(
+    run,
+    { engine: input.engine, ...('card' in input && { card: input.card }) },
+    async lease => {
+      const opened =
+        'card' in input && definition !== undefined && !hasState()
+          ? await startFresh(project, run, input, definition)
+          : await resumeSaved(project, run, input, definition)
+      const workflow = frozenWorkflow(run)
+      const config = effectiveConfiguration(run)
+      if (opened.telemetryWarning !== undefined) lease.telemetryWarned = true
+      if (opened.status === 'resumed') {
+        const writer = sessionTelemetry(observeRun(run), workflow, config, lease)
+        if (writer === undefined) await reopenRun(run).catch(() => undefined)
+        else await writer.reopen()
+      }
+      return {
+        ...(opened.worktree !== undefined && { worktree: opened.worktree }),
+        result: {
+          ...opened,
+          ...workflowSummary(workflow, config, lease.engine),
+          runId,
+          lease: lease.token,
+        },
+      }
+    },
+  )
 }
 
 const sessionMessage = (launch: StepLaunch, worktree: string | undefined) =>
@@ -347,7 +376,7 @@ export async function nextSession(
   token: string,
   answer?: string,
 ) {
-  return withSessionLease<SessionNext>(run.dir, { token }, async lease => {
+  return withCardSessionLease<SessionNext>(run, { token }, async lease => {
     if (answer !== undefined && lease.approval === undefined)
       throw new Error('The workflow must be parked at an approval shown in this session')
     if (lease.approval !== undefined && answer === undefined)
@@ -392,7 +421,7 @@ export async function recordSession(
     usage?: Usage | undefined
   },
 ) {
-  return withSessionLease(run.dir, { token }, async lease => {
+  return withCardSessionLease(run, { token }, async lease => {
     const { launch } = lease
     const { step, file, model, attempt, usage } = input
     if (launch?.id !== step || launch.attempt !== (attempt ?? 1))
@@ -418,7 +447,7 @@ export async function recordSession(
 }
 
 export async function stopSession(run: RunDirectory, token: string) {
-  return withSessionLease(run.dir, { token }, async () => ({
+  return withCardSessionLease(run, { token }, async () => ({
     result: { stopped: true },
     stop: true,
   }))

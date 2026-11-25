@@ -15,7 +15,7 @@ import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { acquireRunLock } from '../src/cli'
+import { acquireCardLock, acquireRunLock } from '../src/cli'
 import { next, record, start } from '../src/engine'
 
 const repo = join(__dirname, '../../..')
@@ -813,7 +813,15 @@ it.each([
 
 it('R754-01 / AC-4: holds the card across workflows until the session stops', () => {
   write('.pair/adoption/tech/workflows/other.yaml', workflow.replace('name: quick', 'name: other'))
-  const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
+  const startQuick = ['start', 'quick', '--card', card, '--engine', 'codex']
+  const lockRequest = { workingArea: join(main, '.pair/working'), card }
+  const terminalLock = acquireCardLock(lockRequest)
+  if (terminalLock.kind !== 'acquired') throw new Error('fixture could not lock the card')
+  expect(invoke(startQuick).stderr).toContain('card-locked')
+  terminalLock.lock.release()
+
+  const lease = openSession(startQuick)
+  expect(acquireCardLock(lockRequest)).toMatchObject({ kind: 'held', alive: true })
   const args = ['start', 'other', '--card', card, '--engine', 'codex']
   const refused = invoke(args)
   expect(refused.status).toBe(1)
