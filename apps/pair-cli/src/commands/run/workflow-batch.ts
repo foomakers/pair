@@ -303,14 +303,19 @@ async function planBatch(input: BatchRequest, resolved: BatchDefinition): Promis
   const base = tiered ? batchConfiguration(input, resolved, runId).plan : resolved.configuration
   const configured = base?.configuration.select
   const flags = flagsOf(request, assignee)
+  const invocationSelection = effectiveSelection(undefined, undefined, flags)
   const { stateFor, summary, members } = selectionScope(input, resolved, configured, flags)
   const { order } = effectiveSelection(select, configured)
   const candidates = selectCards(cards, order, card => {
     let cardSelection = configured
     if (tiered && !card.closed && card.error === undefined) {
       const outcome = batchConfiguration(input, resolved, runId, card)
-      if (outcome.errors.length > 0)
+      if (outcome.errors.length > 0) {
+        // CLI flags still apply when the card's configuration cannot supply a selection.
+        const scope = selectionOutcome(card, invocationSelection, stateFor(card, undefined))
+        if (scope?.outcome === 'not-applicable') return scope
         return { id: card.id, outcome: 'failed', reason: outcome.errors.join(' · ') }
+      }
       cardSelection = outcome.plan?.configuration.select
     }
     return selectionOutcome(
