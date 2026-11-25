@@ -22,7 +22,10 @@ function lint(cwd, ...args) {
   const result = spawnSync(process.execPath, [runner, ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, PAIR_LINT_REPORT: 'json' },
+    env: {
+      ...process.env,
+      PAIR_LINT_REPORT: args.some(arg => /^--format(?:=|$)/.test(arg)) ? '' : 'json',
+    },
   })
   assert.equal(result.stderr, '')
   const { diagnostics } = JSON.parse(result.stdout)
@@ -77,6 +80,38 @@ test('#693 R3 fix mode fails on an error introduced by an applied fix', t => {
   assert.equal(readFileSync(path, 'utf8'), '[];\n')
   assert.equal(fixed.status, 1)
   assert.deepEqual(fixed.diagnostics.map(item => item.code), ['eslint(no-unused-expressions)'])
+})
+
+test('#693 R5 direct lint restores Git-ignored files within the requested directory', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  mkdirSync(join(cwd, 'src/generated'), { recursive: true })
+  writeFileSync(join(cwd, '.gitignore'), 'generated/\noutside.ts\n')
+  writeFileSync(join(cwd, 'src/clean.ts'), 'export const value = 1\n')
+  writeFileSync(join(cwd, 'src/generated/tracked.ts'), 'debugger;\n')
+  writeFileSync(join(cwd, 'outside.ts'), 'debugger;\n')
+  for (const args of [['init', '-q'], ['add', '-f', 'src/generated/tracked.ts']]) {
+    assert.equal(spawnSync('git', args, { cwd }).status, 0)
+  }
+
+  for (const path of ['src', join(cwd, 'src')]) {
+    const check = lint(cwd, path)
+    assert.equal(check.status, 1)
+    assert.deepEqual(check.diagnostics.map(item => item.filename), ['src/generated/tracked.ts'])
+  }
+})
+
+test('#693 R5 direct lint accepts ignored files with options and rejects a missing path', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const vue = '<script>const x = ;</script>'
+  writeFileSync(join(cwd, 'vitest.config.ts'), 'debugger;\n')
+  writeFileSync(join(cwd, 'Widget.vue'), vue)
+
+  for (const args of [['--format', 'json', 'vitest.config.ts'], ['--fix', 'Widget.vue']]) {
+    assert.deepEqual(lint(cwd, ...args), { diagnostics: [], status: 0 }, args.join(' '))
+  }
+  assert.equal(readFileSync(join(cwd, 'Widget.vue'), 'utf8'), vue)
+  const missing = spawnSync(process.execPath, [runner, '--format=json', 'missing.ts'], { cwd })
+  assert.equal(missing.status, 1)
 })
 
 for (const [name, source, expected, status] of [
