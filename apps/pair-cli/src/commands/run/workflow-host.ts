@@ -28,6 +28,7 @@ import {
   settingsFor,
   start,
   stepSettled,
+  stoppedApproval,
   stoppedLoop,
   type Assignment,
   type CardState,
@@ -890,16 +891,11 @@ function stopOf(status: string, request: Opened['request']): number | undefined 
 
 function parkedApproval(opened: Opened, fs: FileSystemService): string | undefined {
   if (opened.request.flagAnswer === undefined) return undefined
-  const path = join(opened.runDir, 'state.json')
-  if (!fs.existsSync(path)) throw new Error('No parked workflow for this card')
-  const state = JSON.parse(fs.readFileSync(path)) as { steps: Record<string, { state: string }> }
-  const parked = addressedSteps(opened.resolved.workflow).filter(
-    step =>
-      step.kind === 'approval' &&
-      ['needs-decision', 'needs-human'].includes(state.steps[step.id]?.state ?? ''),
-  )
-  if (parked.length !== 1) throw new Error('The workflow must be parked at one approval step')
-  return parked[0]?.id
+  const saved = savedWorkflow(opened.request, opened.runDir, fs)
+  if (saved === undefined) throw new Error('No parked workflow for this card')
+  const parked = stoppedApproval(saved.workflow, saved.state)
+  if (parked === undefined) throw new Error('The workflow must be parked at one approval step')
+  return parked
 }
 
 async function refreshReplayInputs(

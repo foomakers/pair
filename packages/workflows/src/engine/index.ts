@@ -797,6 +797,18 @@ function loopChild(
   return { child: child as Step & { kind: KindName }, id: `${step.id}/${child.id}` }
 }
 
+/** The approval awaiting an answer at the run's current position. */
+export function stoppedApproval(workflow: Workflow, state: RunStateFile): string | undefined {
+  const step = workflow.steps.find(one => !stepSettled(one, state.steps[one.id]?.state))
+  if (step === undefined) return undefined
+  if (step.kind === 'loop' && state.steps[step.id]?.state !== 'running') return undefined
+  const { child, id } = step.kind === 'loop' ? loopChild(state, step) : { child: step, id: step.id }
+  const status: string | undefined = state.steps[id]?.state
+  return child.kind === 'approval' && (status === 'needs-decision' || status === 'needs-human')
+    ? id
+    : undefined
+}
+
 function haltAt(state: RunStateFile, step: Step): Halt | undefined {
   const halted = haltFor(step, state.steps[step.id]?.state)
   if (halted !== undefined || step.kind !== 'loop') return halted
