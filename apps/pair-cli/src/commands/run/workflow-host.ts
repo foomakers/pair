@@ -54,6 +54,7 @@ import {
   MACROSTATES,
   readStateMapping,
   readyBoardState,
+  resolveCardReadiness,
   resolveMacrostate,
   type StateMapping,
 } from './card-readiness'
@@ -567,6 +568,34 @@ const isAtLeast = (current: string | null, macrostate: CardState, mapping: State
   return held !== undefined && MACROSTATES.indexOf(held) >= MACROSTATES.indexOf(macrostate)
 }
 
+/** On a board without a Ready column, the current card must satisfy the Definition of Ready. */
+async function confirmReadyByDefinition(
+  card: string,
+  mapping: StateMapping,
+  resolved: Resolved,
+  { fs, deps }: Services,
+): Promise<void> {
+  const { cards } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
+    { fs, ...resolved },
+    { cards: [card] },
+  )
+  const found = cards.find(one => one.id === card)
+  if (found?.error !== undefined) throw new Error(found.error)
+  if (found === undefined || found.closed)
+    throw new Error(`card ${card} is unavailable for Ready confirmation`)
+  if (isAtLeast(found.boardState, 'Ready', mapping)) return
+  const verdict = resolveCardReadiness(
+    { ...found, boardState: found.boardState ?? undefined },
+    mapping,
+  )
+  if (verdict.readiness === 'draft') throw new Error(verdict.explanation)
+}
+
+function boardStateTarget(state: CardState, mapping: StateMapping): string | undefined {
+  if (state === 'Ready' && mapping === undefined) return readyBoardState(mapping)
+  return mapping?.find(row => row.macrostate === state)?.boardState
+}
+
 /** Sets the card's state through the board by the adopted mapping. */
 async function setCardState(
   card: string,
@@ -575,10 +604,9 @@ async function setCardState(
   { fs, deps }: Services,
 ): Promise<void> {
   const mapping = readStateMapping(fs, resolved.main)
-  const literal =
-    macrostate === 'Ready'
-      ? readyBoardState(mapping)
-      : mapping?.find(row => row.macrostate === macrostate)?.boardState
+  const literal = boardStateTarget(macrostate, mapping)
+  if (macrostate === 'Ready' && literal === undefined)
+    return confirmReadyByDefinition(card, mapping, resolved, { fs, deps })
   try {
     if (literal === undefined) throw new Error(`no board state maps to ${macrostate}`)
     const board =
