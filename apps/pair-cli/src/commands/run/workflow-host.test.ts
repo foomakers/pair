@@ -657,6 +657,30 @@ describe('telemetry, switched by flag (US-697 AC-5)', () => {
     expect(states()).toEqual({ implement: 'ok', review: 'ok' })
     expect(lines.filter(line => line.includes('telemetry was not written'))).toHaveLength(1)
   })
+
+  it('#728 AC-3 F3: resumes with unwritable legacy telemetry and warns once', async () => {
+    const parked = () => fenced({ status: 'needs-decision', summary: 'waiting for a decision' })
+    const options = { telemetry: true }
+    expect(await run(['quick'], { ...OK, 'pair-process-review': parked }, options)).toBe(0)
+    const file = telemetryFile()
+    const current = fs.readFileSync(file)
+    const legacy = current.replace('"status":"needs-decision"', '"status":"needs-human"')
+    fs.writeFileSync(file, legacy)
+    const writeFile = fs.writeFile.bind(fs)
+    const deny = vi.spyOn(fs, 'writeFile').mockImplementation(async (path, content) => {
+      if (path === `${file}.tmp`) throw new Error('EACCES: telemetry replacement')
+      await writeFile(path, content)
+    })
+
+    expect(await run(['quick'], OK, options)).toBe(0)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+    expect(lines.filter(line => line.includes('EACCES: telemetry replacement'))).toHaveLength(1)
+    expect(fs.readFileSync(file)).toBe(legacy)
+
+    deny.mockRestore()
+    expect(await run(['quick'], OK, options)).toBe(0)
+    expect(fs.readFileSync(file)).toBe(current)
+  })
 })
 
 describe('refusals before any launch (design §8)', () => {

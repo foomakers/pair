@@ -304,22 +304,18 @@ steps:
       expect(write).not.toHaveBeenCalled()
     })
 
-    it('recovers after the second file replacement is interrupted', async () => {
+    it('#728 AC-3 F3: preserves telemetry when replacement is interrupted and retries', async () => {
       const run = saved()
       const rename = run.files.rename
-      let replacements = 0
       const interrupt = vi.spyOn(run.files, 'rename').mockImplementation(async (from, to) => {
-        if ([statePath, telemetryPath].includes(to) && ++replacements === 2)
-          throw new Error('interrupted migration')
+        if (to === telemetryPath) throw new Error('interrupted migration')
         await rename(from, to)
       })
 
-      await expect(start(run, source, { card: '627' })).rejects.toThrow('interrupted migration')
+      const started = await start(run, source, { card: '627' })
+      expect(started.status).toBe('parked')
+      expect(persistedFiles(run)).toEqual([migratedState, originalTelemetry])
       interrupt.mockRestore()
-      expect([
-        [migratedState, originalTelemetry],
-        [originalState, migratedTelemetry],
-      ]).toContainEqual(persistedFiles(run))
 
       expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
       expect(persistedFiles(run)).toEqual([migratedState, migratedTelemetry])
