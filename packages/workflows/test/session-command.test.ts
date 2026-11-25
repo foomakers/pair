@@ -901,3 +901,18 @@ it('R754-03: refuses a closed card with unfinished agent work', async () => {
   expect(result.stderr).toContain('card-closed')
   expect(readRun('state.json')).toBe(saved)
 })
+
+it('R754-04: refuses the same undeclared alias during validate and start', () => {
+  write(configFile, configuration + 'aliases: { undeclared: { effort: low } }\n')
+  const flags = ['--engine', 'codex', '--config', 'mine']
+  for (const args of [
+    ['validate', 'quick', ...flags],
+    ['start', 'quick', '--card', card, ...flags],
+  ]) {
+    const result = invoke(args)
+    expect(result.status).toBe(1)
+    expect(result.stderr).toMatch(/configuration-invalid:.*alias 'undeclared'/)
+  }
+  expect(existsSync(worktree)).toBe(false)
+  expect(existsSync(join(runDir, 'configuration.yaml'))).toBe(false)
+})
