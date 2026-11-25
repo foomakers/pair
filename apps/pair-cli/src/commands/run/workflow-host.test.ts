@@ -867,7 +867,12 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
   })
 })
 
-it.each([false, true])('R744-18: schedules after a completed card (cycle: %s)', async cycle => {
+it.each([
+  { name: 'acyclic dependencies' },
+  { name: 'reciprocal dependencies (R744-18)', cycle: true },
+  { name: 'a dependency read error (R744-19)', error: 'tracker unavailable' },
+  { name: 'a missing dependency result (R744-19)', missing: true },
+])('schedules a batch with a completed card and $name', async ({ cycle, error, missing }) => {
   expect(await run(['quick'], OK, { card: '9' })).toBe(0)
   launched.length = 0
 
@@ -887,7 +892,13 @@ it.each([false, true])('R744-18: schedules after a completed card (cycle: %s)', 
           prerequisites: [],
         })),
         readDependencies: async ids =>
-          ids.map(id => ({ id, prerequisites: id === '10' ? ['9'] : cycle ? ['10'] : [] })),
+          ids
+            .filter(id => id !== '9' || !missing)
+            .map(id => ({
+              id,
+              prerequisites: id === '10' ? ['9'] : cycle ? ['10'] : [],
+              ...(id === '9' && error !== undefined && { error }),
+            })),
       }),
     },
   )
@@ -897,6 +908,7 @@ it.each([false, true])('R744-18: schedules after a completed card (cycle: %s)', 
   } else {
     expect(await batch).toBe(0)
     expect(lines.join('\n')).toContain('#9: skipped — workflow already complete')
+    if (error || missing) expect(lines.join('\n')).toContain(error ?? 'dependency facts missing')
     expect(launched.map(step => step.cwd)).toEqual([
       join(project, 'worktrees', '10'),
       join(project, 'worktrees', '10'),
