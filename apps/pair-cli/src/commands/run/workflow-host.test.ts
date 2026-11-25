@@ -867,6 +867,43 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
   })
 })
 
+it.each([false, true])('R744-18: schedules after a completed card (cycle: %s)', async cycle => {
+  expect(await run(['quick'], OK, { card: '9' })).toBe(0)
+  launched.length = 0
+
+  const batch = run(
+    ['quick'],
+    OK,
+    { card: '9,10' },
+    {
+      readSelection: async () => ({
+        cards: ['9', '10'].map(id => ({
+          id,
+          title: `Story ${id}`,
+          body: '',
+          labels: [],
+          boardState: null,
+          closed: false,
+          prerequisites: [],
+        })),
+        readDependencies: async ids =>
+          ids.map(id => ({ id, prerequisites: id === '10' ? ['9'] : cycle ? ['10'] : [] })),
+      }),
+    },
+  )
+  if (cycle) {
+    await expect(batch).rejects.toThrow('dependency-cycle: #9 → #10 → #9')
+    expect(launched).toHaveLength(0)
+  } else {
+    expect(await batch).toBe(0)
+    expect(lines.join('\n')).toContain('#9: skipped — workflow already complete')
+    expect(launched.map(step => step.cwd)).toEqual([
+      join(project, 'worktrees', '10'),
+      join(project, 'worktrees', '10'),
+    ])
+  }
+})
+
 it.each([false, true])(
   'R744-08: bare-card retry resumes refinement (another match: %s)',
   async other => {
