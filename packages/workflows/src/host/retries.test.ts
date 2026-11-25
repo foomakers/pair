@@ -23,12 +23,20 @@ function startTest(steps: string, answers: readonly (AgentLaunchResult | Error)[
   const files = createMemoryFiles()
   const rename = files.rename
   let interruptedResult: string | undefined
+  let interruptedRetry: string | undefined
   files.rename = async (from, to) => {
     if (to === interruptedResult) {
       interruptedResult = undefined
       throw new Error('result write interrupted')
     }
     await rename(from, to)
+    if (to === statePath && interruptedRetry !== undefined) {
+      const saved = state().steps[interruptedRetry]
+      if (saved?.executions === 2 && saved.attempts?.[0]?.attempt === 1) {
+        interruptedRetry = undefined
+        throw new Error('retry reservation interrupted')
+      }
+    }
   }
   const run = { dir: '/run', files }
   const sent: { attempt: number; round?: number | undefined; message: string }[] = []
@@ -52,6 +60,9 @@ function startTest(steps: string, answers: readonly (AgentLaunchResult | Error)[
     state,
     interruptResultWrite: (id: string) => {
       interruptedResult = `/run/steps/${id}/result.json`
+    },
+    interruptRetryReservation: (id: string) => {
+      interruptedRetry = id
     },
     useLegacyState: () =>
       files.writeFile(
@@ -109,6 +120,47 @@ describe('#704: process retries', () => {
 
     expect(await test.run()).toMatchObject({ run: 'parked', last: { reason: 'fault' } })
     expect(test.sent.map(attempt => attempt.attempt)).toEqual([1])
+    expect(test.telemetry().filter(entry => entry.diagnosis !== undefined)).toHaveLength(1)
+  })
+
+  it.each([
+    { id: 'work', round: undefined, steps: work(', retries: 1') },
+    {
+      id: 'loop/work',
+      round: 1,
+      steps: `  loop:\n    kind: loop\n    until: work\n    max: 1\n    on-max: fail\n    steps:\n    ${work(', retries: 1')}`,
+    },
+  ])('#704 F10: restores fault telemetry for $id after reservation (AC-4)', async row => {
+    const test = startTest(row.steps, [crash, ok])
+    test.interruptRetryReservation(row.id)
+    await expect(test.run()).rejects.toThrow('retry reservation interrupted')
+    const outcome = await test.run()
+    expect(outcome).toMatchObject({
+      run: 'done',
+      faults: [{ step: row.id, attempts: [{ attempt: 1, kind: 'crash' }] }],
+    })
+
+    const entries = test.telemetry().filter(entry => entry.type === 'step')
+    expect(entries).toEqual([
+      expect.objectContaining({
+        step: row.id,
+        attempt: 1,
+        ...(row.round !== undefined && { round: row.round }),
+        reason: 'fault',
+        diagnosis: {
+          kind: 'crash',
+          detail: '[redacted]',
+          exitCode: 1,
+          signal: null,
+          elapsedMs: 83,
+          stderrTail: ['[redacted]'],
+        },
+      }),
+      expect.objectContaining({ step: row.id, status: 'ok' }),
+    ])
+
+    await test.run()
+    expect(test.telemetry().filter(entry => entry.diagnosis !== undefined)).toHaveLength(1)
   })
 
   it.each([
