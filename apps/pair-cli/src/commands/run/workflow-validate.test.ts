@@ -17,6 +17,16 @@ steps:
 `
 const warned = workflow.replace('[failed]', '[exhausted]')
 const invalid = workflow.replace('build.status', 'missing.status')
+const clean = workflow
+  .replace('name: validation', 'name: clean')
+  .replace(
+    'on-failed: continue',
+    'on-failed: continue, escalate: { blocked: stop, needs-decision: stop }',
+  )
+  .replace(
+    'kind: implement, when:',
+    'kind: implement, escalate: { failed: stop, blocked: stop, needs-decision: stop }, when:',
+  )
 const commented = `version: 1
 name: commented
 steps:
@@ -35,7 +45,7 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
       {
         [`${project}/.claude/skills/pair-process-implement/SKILL.md`]: '# Implement',
         [`${project}/.pair/adoption/tech/workflows/validation.yaml`]: warned,
-        [`${project}/clean.yaml`]: workflow.replace('name: validation', 'name: clean'),
+        [`${project}/clean.yaml`]: clean,
         [`${project}/invalid.yaml`]: invalid.replace('name: validation', 'name: invalid'),
         [`${project}/commented.yaml`]: commented,
       },
@@ -74,6 +84,7 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
 
     expect(process.exitCode ?? 0).toBe(0)
     expect(lines.join('\n')).toMatch(/warning:.*validation\.yaml:5.*exhausted/i)
+    expect(lines.join('\n')).toMatch(/warning:.*validation\.yaml:4.*'blocked' is unhandled/i)
     for (const write of writes) expect(write).not.toHaveBeenCalled()
   })
 
