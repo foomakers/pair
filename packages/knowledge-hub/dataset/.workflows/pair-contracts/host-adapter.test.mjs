@@ -202,6 +202,8 @@ if (a[0] === 'issue' && a[1] === 'close') { S.issues[a[2]].state = 'closed'; sav
 if (a[0] === 'pr' && a[1] === 'view') { process.stdout.write(S.prs[a[2]].head + '\\n'); process.exit(0) }
 if (a[0] === 'pr' && a[1] === 'merge') { S.prs[a[2]].merged = a.slice(3); save(); process.exit(0) }
 if (a[0] === 'api') {
+  const relation = S.relations?.[a[1].split('?')[0]]
+  if (relation) { process.stdout.write(JSON.stringify(relation)); process.exit(0) }
   const cm = /^repos\\/[^/]+\\/[^/]+\\/issues\\/comments\\/(\\d+)$/.exec(a[1])
   if (cm) { const c = (S.comments || {})[Number(cm[1])]; if (!c) { process.stderr.write('gh: Not Found (HTTP 404)'); process.exit(1) } process.stdout.write(JSON.stringify(c)); process.exit(0) }
   const m = /issues\\/(\\d+)\\/(parent|sub_issues)$/.exec(a[1])
@@ -223,6 +225,22 @@ test('github readComment returns the comment`s CANONICAL identity (numeric id, r
     { id: out.id, repo: out.repo, createdAt: out.createdAt, updatedAt: out.updatedAt, pr: out.pr },
     { id: '555', repo: 'Acme/App', createdAt: '2026-11-15T10:00:00Z', updatedAt: '2026-11-15T10:05:00Z', pr: 7 },
   )
+})
+
+test('R744-02: a foreign child or blocker never aliases the same local number', () => {
+  const issue = (repo, number) => ({ number, state: 'open', repository_url: `https://api.github.com/repos/${repo}` })
+  const local = issue('Acme/App', 7)
+  const foreign = issue('Acme/Other', 7)
+  const paths = 'repos/acme/app/issues'
+  const gh = fakeGh({ relations: {
+    [`${paths}/10/sub_issues`]: [local],
+    [`${paths}/11/sub_issues`]: [foreign],
+    [`${paths}/12/dependencies/blocked_by`]: [local, foreign],
+  } })
+  const pm = github.instantiate({ ghBin: gh.ghBin })
+  assert.deepEqual(pm.childCards({ id: 10, repo: 'acme/app' }), [{ id: '7', closed: false }])
+  assert.throws(() => pm.childCards({ id: 11, repo: 'acme/app' }), /card-out-of-scope: Acme\/Other#7/)
+  assert.deepEqual(pm.blockedBy({ id: 12, repo: 'acme/app' }), ['7', 'Acme/Other#7'])
 })
 
 const wowDir = text => {
