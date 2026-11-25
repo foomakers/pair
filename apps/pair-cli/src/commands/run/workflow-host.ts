@@ -455,8 +455,9 @@ function agentOutcome(
     elapsedMs,
     stderrTail: [],
   }
-  if (stoppedBy === undefined && result.outcome === 'success' && final !== undefined)
-    return { final, process }
+  // The stream reader reports a work HALT on a successful terminal event as an iteration failure.
+  const terminalSucceeded = result.outcome === 'success' || result.cause === 'halted'
+  if (stoppedBy === undefined && terminalSucceeded && final !== undefined) return { final, process }
   const cleanExitWithoutResult = process.exitCode === 0 && noTerminalEvent(result)
   const kind =
     stoppedBy ?? (result.outcome === 'success' || cleanExitWithoutResult ? 'no-result' : 'crash')
