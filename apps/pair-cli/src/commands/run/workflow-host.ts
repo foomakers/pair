@@ -14,18 +14,19 @@ import {
   hasLegacyRunTelemetry,
   kindByName,
   addressedSteps,
-  frozenConfiguration,
+  assignmentFor,
+  effectiveConfiguration,
   migrateRunTelemetry,
   parseWorkflow,
   pendingMergeClosure,
   record,
-  parseFrozenConfiguration,
   readGateRegistry,
   readGateTargets,
   runSteps,
   settingsFor,
   start,
   validate,
+  type Assignment,
   type CardState,
   type Configuration,
   type Filter,
@@ -33,6 +34,7 @@ import {
   type RunOutcome,
   type StepResult,
   type ResultFacts,
+  type ResolvedAssignment,
   type StepEvent,
   type StepLaunch,
   type StepReplay,
@@ -84,7 +86,7 @@ import {
   readWorkflowCards,
   type WorkflowCard,
 } from './workflow-selection'
-import { workflowFacts, workflowOperation } from './workflow-facts'
+import { assignWorkflowCard, workflowFacts, workflowOperation } from './workflow-facts'
 import { sectionBodies } from './policy-sections'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
@@ -251,8 +253,8 @@ function expandedSource(workflow: Workflow): string {
         { ...step, ...(children && { steps: entries(children) }) },
       ]),
     )
-  const { version, name, description, aliases, select, steps } = workflow
-  return `${JSON.stringify({ version, name, description, aliases, select, steps: entries(steps) }, null, 2)}\n`
+  const { version, name, description, aliases, select, assign, steps } = workflow
+  return `${JSON.stringify({ version, name, description, aliases, select, assign, steps: entries(steps) }, null, 2)}\n`
 }
 
 function checkWorkflow(
@@ -498,6 +500,11 @@ type Ending = (at: string, why: string, resume: string) => string
 const ENDINGS: Readonly<Record<RunOutcome['run'], { status: string; exit: number; line: Ending }>> =
   {
     done: { status: 'completed', exit: 0, line: () => 'done — every step is ok.' },
+    skipped: {
+      status: 'skipped',
+      exit: 0,
+      line: (at, why, resume) => `skipped at step ${at} — ${why}. Resume with: ${resume}`,
+    },
     failed: {
       status: 'failed',
       exit: 1,
@@ -633,6 +640,8 @@ function hostKindsOf(
   )
   return {
     ...hostCardFacts(resolved, request.card, services),
+    assignCard: (assign: Assignment) =>
+      assignWorkflowCard(scriptDir, resolved.cwd, request.card, assign),
     perform: async (step: StepLaunch) => {
       if (step.kind !== 'approval' && step.kind !== 'merge') return gate(step)
       try {
@@ -767,7 +776,8 @@ function exhaustedEnding(
     steps: Record<string, { summary?: string; state: string }>
   }
   const exhausted = resolved.workflow.steps.find(step => state.loops?.[step.id]?.exhausted)
-  if (exhausted === undefined || outcome.run === 'done') return undefined
+  if (exhausted === undefined || outcome.run === 'done' || outcome.run === 'skipped')
+    return undefined
   const last = state.steps[`${exhausted.id}/${exhausted.until}`]
   const why = `${state.steps[exhausted.id]?.summary}; last until: ${last?.state} — ${last?.summary}`
   sink.event({
@@ -785,6 +795,10 @@ function reportRunOutcome(opened: Opened, outcome: RunOutcome): void {
   opened.report?.({
     id: opened.request.card,
     outcome: outcome.run,
+    ...(outcome.run === 'skipped' &&
+      outcome.last?.reason === 'card-held' && {
+        skipReason: outcome.last.reason,
+      }),
     ...(outcome.last && { lastStep: outcome.last.step, reason: explain(outcome.last) }),
   })
 }
@@ -1005,7 +1019,7 @@ async function drive(
   const replayTree = replay && (await prepare())
   if (replay && replayTree) await prepareReplayHead(replayTree, String(replay.inputs['head']))
   const started = await startOnConsole(opened, fs, replay)
-  const effective = readEffective(fs, runDir)
+  const effective = effectiveConfiguration({ files: fs, dir: runDir })
   printSettings(resolved, effective)
   probeUnchecked(
     resolved,
@@ -1052,34 +1066,28 @@ function probeUnchecked(
   if (errors.length > 0) throw new Error(errors.map(formatError).join('\n'))
 }
 
-/** The run's frozen configuration, read back from its copy: the copy wins over the source file (design §6). */
-function readEffective(fs: FileSystemService, runDir: string): Configuration | undefined {
-  const text = frozenConfiguration({ files: fs, dir: runDir })
-  if (text === undefined) return undefined
-  const path = join(runDir, 'configuration.yaml')
-  const { configuration, errors } = parseFrozenConfiguration(text, path)
-  if (configuration === undefined)
-    throw new Error(`run-state-unreadable: ${path}: ${errors[0]?.problem ?? 'invalid'}`)
-  return configuration
-}
+const describeAssignment = (assignment?: ResolvedAssignment): string =>
+  assignment === undefined ? '' : ` assign=${assignment.value} (${assignment.source})`
 
 /** What every step launches with and where each value came from; or that no configuration applies. */
 function printSettings(resolved: Resolved, effective: Configuration | undefined): void {
   if (effective === undefined) {
     const { id } = resolved.engine.engine
     console.log(`  Configuration: none applies — engine ${id}, its default model`)
-    return
+  } else {
+    console.log(
+      `  Configuration: ${effective.name}${resolved.configuration ? ` — ${resolved.configuration.source}` : ' — frozen copy'}`,
+    )
   }
-  console.log(
-    `  Configuration: ${effective.name}${resolved.configuration ? ` — ${resolved.configuration.source}` : ' — frozen copy'}`,
-  )
   addressedSteps(resolved.workflow)
     .filter(step => step.kind !== 'loop')
-    .forEach(step =>
-      console.log(
-        `    ${describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))}`,
-      ),
-    )
+    .forEach(step => {
+      const assignment = describeAssignment(assignmentFor(resolved.workflow, step, effective))
+      const settings =
+        effective &&
+        describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))
+      if (settings || assignment) console.log(`    ${settings ?? `${step.id}:`}${assignment}`)
+    })
 }
 
 function printPlan(workflow: Workflow): void {
@@ -1168,8 +1176,14 @@ function printWorkflowPreview(resolved: Resolved): number {
   addressedSteps(resolved.workflow).forEach(step => {
     const host = step.kind === 'loop' || kindByName[step.kind].host === true
     const skill = host ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
+    const assignment =
+      step.kind === 'loop'
+        ? ''
+        : describeAssignment(
+            assignmentFor(resolved.workflow, step, resolved.configuration?.configuration),
+          )
     console.log(
-      `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''}${dryRunExecution(resolved, step)}${dryRunExhaustion(step)}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${approvalQuestion(step)}`,
+      `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''}${dryRunExecution(resolved, step)}${assignment}${dryRunExhaustion(step)}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${approvalQuestion(step)}`,
     )
   })
   console.log('  Dry run: the workflow is valid; nothing was launched.')

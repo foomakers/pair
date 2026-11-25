@@ -3,16 +3,18 @@ import { basename, join } from 'node:path'
 import { readResult } from '../dispatch'
 import {
   addressedSteps,
+  assignmentFor,
   cardStateOf,
   cardStateToConfirm,
   parseWorkflow,
   type CardState,
   type KindName,
+  type ResolvedAssignment,
   type Step,
   type When,
   type Workflow,
 } from '../grammar'
-import { parseFrozenConfiguration } from '../configuration'
+import { parseFrozenConfiguration, type Configuration } from '../configuration'
 import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 import { effectiveSelection, matches, type CardFacts } from '../select'
 import { migrateTelemetryStatuses } from '../telemetry/legacy-status'
@@ -49,6 +51,8 @@ export const TELEMETRY_FILE = 'telemetry.jsonl'
 /** `skipped`: the step's `when` did not match when it was about to start; it produces no outputs. */
 export type StepState = 'pending' | 'running' | 'skipped' | StepStatus
 export type RunState = 'running' | 'done' | 'failed' | 'parked'
+/** A held card ends the current invocation while the stored run remains resumable. */
+export type RunEndStatus = Exclude<RunState, 'running'> | 'skipped'
 
 export interface StepRecord {
   readonly state: StepState
@@ -92,12 +96,14 @@ export interface StepLaunch {
   readonly kind: KindName
   readonly uses: string
   readonly with: Readonly<Record<string, unknown>>
+  readonly assignment?: ResolvedAssignment
   /** Validation the host runs after the step ends `ok`. */
   readonly gates?: readonly string[]
   readonly inputs: Readonly<Record<string, unknown>>
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
   readonly round?: number
+  readonly startState?: CardState
   readonly confirmState?: CardState
   readonly pendingSuccess?: StepResult
   readonly retryBoardStatus?: string
@@ -248,6 +254,23 @@ export interface StartOptions {
 export function frozenConfiguration(run: RunDirectory): string | undefined {
   const path = join(run.dir, FROZEN_CONFIGURATION)
   return run.files.existsSync(path) ? run.files.readFileSync(path) : undefined
+}
+
+function parsedFrozenConfiguration(run: RunDirectory) {
+  const text = frozenConfiguration(run)
+  return text === undefined
+    ? undefined
+    : parseFrozenConfiguration(text, join(run.dir, FROZEN_CONFIGURATION))
+}
+
+/** The host checks that the copy it froze still parses before it launches steps. */
+export function effectiveConfiguration(run: RunDirectory): Configuration | undefined {
+  const parsed = parsedFrozenConfiguration(run)
+  if (parsed !== undefined && parsed.configuration === undefined) {
+    const path = join(run.dir, FROZEN_CONFIGURATION)
+    throw new Error(`run-state-unreadable: ${path}: ${parsed.errors[0]?.problem ?? 'invalid'}`)
+  }
+  return parsed?.configuration
 }
 
 const configurationRecord = (c: NonNullable<StartOptions['configuration']>) => ({
@@ -702,9 +725,16 @@ const retryBoardStatusOf = (saved?: Pick<StepRecord, 'retryBoardStatus'>) =>
 const awaitingTransition = (saved?: StepRecord) =>
   saved?.pendingSuccess !== undefined || saved?.retryBoardStatus !== undefined
 
-const confirmationOf = (step: Step) => {
+const boardStatesOf = (step: Step) => {
   const confirmState = cardStateToConfirm(step)
-  return confirmState === undefined ? {} : { confirmState }
+  const transition = cardStateOf(step)
+  return {
+    ...(step.kind === 'implement' &&
+      transition?.when === 'start' && {
+        startState: transition.state,
+      }),
+    ...(confirmState !== undefined && { confirmState }),
+  }
 }
 
 const replayAttemptOf = (state: RunStateFile): number | undefined => {
@@ -721,13 +751,49 @@ const replayLaunch = (state: RunStateFile) => {
   return replayAttempt === undefined ? {} : { replayAttempt }
 }
 
+type LaunchCheck = (launch: StepLaunch) => Promise<string | undefined>
+type LaunchContext = { state: RunStateFile; check: LaunchCheck | undefined }
+
+interface NextLaunch {
+  readonly ready: readonly StepLaunch[]
+  readonly run: RunState
+  readonly held?: SkippedStep & { readonly summary: string }
+}
+
+async function reserveLaunch(
+  run: RunDirectory,
+  { state, check }: LaunchContext,
+  launch: StepLaunch,
+  loop?: { id: string; round: number },
+): Promise<NextLaunch> {
+  const { id, kind, attempt, round } = launch
+  const summary = await check?.(launch)
+  if (summary !== undefined) return { ready: [], run: 'running', held: { id, kind, summary } }
+  await writeState(run, {
+    ...state,
+    steps: {
+      ...state.steps,
+      ...(loop !== undefined && { [loop.id]: { state: 'running' as const, round: loop.round } }),
+      [id]: {
+        state: 'running',
+        executions: attempt,
+        ...(round !== undefined && { round }),
+        ...pendingOf(launch),
+        ...retryBoardStatusOf(launch),
+      },
+    },
+  })
+  return { ready: [launch], run: 'running' }
+}
+
 /** The launch of the loop child that is next, or the halt that stops the run. */
 async function nextInLoop(
   run: RunDirectory,
-  state: RunStateFile,
-  steps: readonly Step[],
+  context: LaunchContext,
+  workflow: Workflow,
   step: Step,
-): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
+): Promise<NextLaunch> {
+  const { state } = context
   const { child, id } = loopChild(state, step)
   const childHalt = HALTED[state.steps[id]?.state ?? 'pending']
   if (childHalt !== undefined) return { ready: [], run: childHalt }
@@ -735,49 +801,45 @@ async function nextInLoop(
   const round = state.loops?.[step.id]?.round ?? 1
   const saved = state.steps[id]
   const pending = { ...pendingOf(saved), ...retryBoardStatusOf(saved) }
+  const assignment = assignmentOf(workflow, { ...child, id }, run)
 
-  const replay = replayLaunch(state)
-  await writeState(run, {
-    ...state,
-    steps: {
-      ...state.steps,
-      [step.id]: { state: 'running', round },
-      [id]: { state: 'running', executions: attempt, round, ...pending },
-    },
-  })
   const launch: StepLaunch = {
     id,
     kind: child.kind,
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
     ...gatesOf(child),
-    ...confirmationOf(child),
+    ...boardStatesOf(child),
     ...pending,
-    inputs: pick({ ...inputsBefore(step, steps, state), ...state.latest }, child.kind),
+    ...assignment,
+    inputs: pick({ ...inputsBefore(step, workflow.steps, state), ...state.latest }, child.kind),
     attempt,
     round,
-    ...replay,
+    ...replayLaunch(state),
   }
-  return { ready: [launch], run: 'running' }
+  return reserveLaunch(run, context, launch, { id: step.id, round })
 }
 
 /**
  * The steps to launch now and the state of the run. Linear: at most one step is ready, and it is
- * written `running` before it is returned, so an interrupted launch is visible on disk.
+ * written `running` before it is returned, so an interrupted launch is visible on disk. A launch
+ * check that returns a reason leaves the step untouched and resumable.
  */
 export async function next(
   run: RunDirectory,
   card?: () => Promise<CardFacts>,
   skipped: SkippedStep[] = [],
-): Promise<{
-  readonly ready: readonly StepLaunch[]
-  readonly run: RunState
-  readonly skipped?: readonly SkippedStep[]
-  /** The condition needs an unavailable fact. The stored step remains unchanged. */
-  readonly blocked?: SkippedStep & { readonly detail: string }
-}> {
+  check?: LaunchCheck,
+): Promise<
+  NextLaunch & {
+    readonly skipped?: readonly SkippedStep[]
+    /** The condition needs an unavailable fact. The stored step remains unchanged. */
+    readonly blocked?: SkippedStep & { readonly detail: string }
+  }
+> {
   const state = await migrateStateStatuses(run, requireState(run))
-  const { steps } = frozenWorkflow(run)
+  const workflow = frozenWorkflow(run)
+  const { steps } = workflow
   const step = steps.find(one => !settled(state, one))
   if (step === undefined) return { ready: [], run: finalState(state, steps), ...seen(skipped) }
   const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
@@ -790,10 +852,11 @@ export async function next(
       blocked: { ...condition.step, detail: condition.error },
       ...seen(skipped),
     }
-  if (condition !== undefined) return next(run, card, [...skipped, condition.step])
+  if (condition !== undefined) return next(run, card, [...skipped, condition.step], check)
+  const context = { state, check }
   const launched = await (step.kind === 'loop'
-    ? nextInLoop(run, state, steps, step)
-    : nextPlain(run, state, steps, step))
+    ? nextInLoop(run, context, workflow, step)
+    : reserveLaunch(run, context, plainLaunch(state, workflow, step, run)))
   return { ...launched, ...seen(skipped) }
 }
 
@@ -878,29 +941,19 @@ async function checkWhen(
   return { step: checked }
 }
 
-async function nextPlain(
-  run: RunDirectory,
-  state: RunStateFile,
-  steps: readonly Step[],
-  step: Step,
-): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
-  const launch = plainLaunch(state, steps, step)
-  await writeState(run, {
-    ...state,
-    steps: {
-      ...state.steps,
-      [step.id]: {
-        state: 'running',
-        executions: launch.attempt,
-        ...pendingOf(launch),
-        ...retryBoardStatusOf(launch),
-      },
-    },
-  })
-  return { ready: [launch], run: 'running' }
+const assignmentOf = (workflow: Workflow, step: Step, run?: RunDirectory) => {
+  const configuration =
+    run === undefined ? undefined : parsedFrozenConfiguration(run)?.configuration
+  const assignment = assignmentFor(workflow, step, configuration)
+  return assignment === undefined ? {} : { assignment }
 }
 
-function plainLaunch(state: RunStateFile, steps: readonly Step[], step: Step): StepLaunch {
+function plainLaunch(
+  state: RunStateFile,
+  workflow: Workflow,
+  step: Step,
+  run?: RunDirectory,
+): StepLaunch {
   if (step.kind === 'loop') throw new Error('loop is not directly launchable')
   const attempt = launches(state, step.id)
   const replayAttempt = replayAttemptOf(state)
@@ -911,10 +964,11 @@ function plainLaunch(state: RunStateFile, steps: readonly Step[], step: Step): S
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
     ...gatesOf(step),
-    ...confirmationOf(step),
+    ...boardStatesOf(step),
     ...pendingOf(saved),
     ...retryBoardStatusOf(saved),
-    inputs: pick(inputsBefore(step, steps, state), step.kind),
+    ...assignmentOf(workflow, step, run),
+    inputs: pick(inputsBefore(step, workflow.steps, state), step.kind),
     attempt,
     ...(replayAttempt !== undefined && { replayAttempt }),
   }
@@ -933,7 +987,7 @@ export function pendingMergeClosure(
   )
     return undefined
   if (!steps.slice(0, -1).every(step => settled(state, step))) return undefined
-  return plainLaunch(state, steps, merge)
+  return plainLaunch(state, workflow, merge)
 }
 
 interface Advance {

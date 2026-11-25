@@ -39,6 +39,8 @@ Executable form of the **`implement`** step. A **direct** invocation while a ste
 | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$story` | No       | Story ID to implement, supplied by the invocation (e.g. `/pair-process-implement #256`). If omitted, detected from session context or the current branch (`feature/US-<id>-*`). This is the id the resume probe (Step 0.0) uses and the closing phase forwards to `/pair-capability-checkpoint` and `/pair-capability-publish-pr`. If it cannot be resolved when a checkpoint operation needs it → **HALT**. |
 | `$gates` | No       | `none` = run no quality gate of this skill's own (Step 2.7 and the closing `/pair-capability-publish-pr`): the caller runs them. Default: run them. |
+| `$assignee` | No | `<login>` or `@me` explicitly assigns that user at work start. `none` leaves assignment unchanged. Omit to claim the card as the authenticated runner. |
+| `$board-state` | No | Start macrostate to apply after assignment. Omit for `In Progress`. `none` skips activation and `managed` leaves it to the workflow host. |
 | `$boundary` | No | `published-pr` (also supplied as `Handoff: published-pr.`) returns the published PR, branch and current head to the caller. Omitted for the standalone lifecycle. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
@@ -51,14 +53,14 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
 
 1. **Check**: Is `/pair-capability-checkpoint` installed AND does a checkpoint exist for this story (`.pair/working/checkpoints/<story-id>.md`)?
 2. **Skip**: If no checkpoint exists → this is a fresh start. Proceed to Step 0.1 (normal one-shot flow — no regression).
-3. **Act**: Compose `/pair-capability-checkpoint $mode=resume` (pass `$story` — the story id from the invocation, see [Arguments](#arguments); if absent it is detected from the branch). Use the parsed state — branch, tasks done, key decisions, remaining todos — to skip re-analysis and jump straight to the **first pending task** in Phase 2, **without repeating** completed tasks.
+3. **Act**: Compose `/pair-capability-checkpoint $mode=resume` (pass `$story` — the story id from the invocation, see [Arguments](#arguments); if absent it is detected from the branch). Use the parsed state — branch, tasks done, key decisions, remaining todos — to skip re-analysis. After the checkpoint checks below, run Step 0.1b before entering the **first pending task** in Phase 2. Completed tasks stay complete.
 4. **Act — edge cases** (resolve before continuing):
    - **Checkpoint exists but its branch is missing** (checkpoint says branch X, repo has none): **HALT** and report the divergence. Do not guess a branch.
    - **Stale checkpoint (story already Done)**: warn that the story is already Done and **require explicit developer confirmation** before reusing the checkpoint. Never silently resume a finished story.
    - **Corrupted/incomplete checkpoint**: `/pair-capability-checkpoint` reports what parsed and what is missing — confirm the gaps with the developer before proceeding (never guess).
 5. **Verify**: Either a fresh start is confirmed, or a valid checkpoint is resumed with the first pending task identified. If `/pair-capability-checkpoint` is not installed, fall back to the git+PM-tool resume (Idempotent Re-invocation) and continue.
 
-**Verified RED handoff.** If the checkpoint carries a valid TDD Handoff, resume its active task at Step 2.3 in GREEN. Confirm the story, current branch, task and test file match, then re-run the recorded command and confirm the recorded test ran. The expected failure authorizes GREEN on that task. A passing test means GREEN already landed in the worktree, so proceed to verification. If the evidence differs, stop and report the mismatch. Do not start another RED session for that task.
+**Verified RED handoff.** If the checkpoint carries a valid TDD Handoff, confirm the story, current branch, task and test file match. Run Step 0.1b before resuming its active task at Step 2.3 in GREEN. Re-run the recorded command and confirm the recorded test ran. The expected failure authorizes GREEN on that task. A passing test means GREEN already landed in the worktree, so proceed to verification. If the evidence differs, stop and report the mismatch. Do not start another RED session for that task.
 
 ### Step 0.1: Load Story
 
@@ -71,12 +73,19 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
 
 ### Step 0.1b: Activate Story in PM Tool (NEVER SKIP)
 
-1. **Check**: Read the story back: is it already assigned AND already in the `In Progress` macrostate?
-2. **Skip**: If BOTH conditions met, move to Step 0.2.
-3. **Act**: Update the PM tool:
-   - **Assign the story only when it has no assignee**, to whatever the [Assignee resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution) cascade returns — an explicitly passed assignee, else the adoption's `default-assignee`, else none with a warning (never a HALT: an under-visible story beats a blocked one). **Never the authenticated user**, and never a reassignment: the default is the _declared_ field, because an agent running under a bot token would otherwise assign every story to the bot and pass its own check, and a story already assigned belongs to whoever owns it.
-   - **Set the board state to the `In Progress` macrostate**, in the order the item writer states once and this step applies unchanged — **membership, then a read that confirms it, then the state field** (`/pair-capability-write-issue` Step 7b): a state field cannot be written on an item the tracked view does not hold, and the add that puts it there can exit 0 having done nothing. Composing `/pair-capability-write-issue` is not the route for a state-only change — its write mode is a **full-body overwrite** and would replace the story's AC/DoD/task breakdown — so the invariant is applied here **by reference**, never re-derived.
-4. **Verify**: A **read** of the item shows it assigned (or the unassigned warning was surfaced) and in `In Progress` — report **what the read observed**, never what the calls returned. If PM tool is inaccessible → warn developer and continue.
+1. **Assign before board writes**, even when the story is already `In Progress`. Use the installed `pair-workflow-cycle` skill's script from the story repository: `node "<cycle-skill-dir>"/scripts/workflow-facts.mjs assign-card <card>`.
+   - Omit the JSON argument when `$assignee` is omitted to claim an unassigned card for the authenticated runner.
+   - Pass `'{"login":"<login>"}'` or `'{"assign":"@me"}'` as the last argument to override ownership. Replace `<login>` with the literal username, including `me` or `unassign` when that is the requested username. The adapter posts a comment naming the previous owners when it takes over.
+   - Pass `'{"assign":"none"}'` to leave the current assignment untouched.
+2. **Read the assignment result**:
+   - `assigned`: report the assignment confirmed by the adapter's read-back.
+   - `unchanged`: continue without an assignment write.
+   - `held`: warn with the returned `owners` and any `reason`. Halt before board, work, or git writes. For a structured or unattended handoff, return `{ status: "failed", reason: "card-held", summary }` with the owners named in `summary`.
+   - `warning`: report the reason and continue without reporting a confirmed assignment. If the script is unavailable or gives no usable result, report that as an assignment warning and continue.
+
+   Skip items 3 and 4 when `$board-state` is `none` or `managed`.
+3. **Check the board**: Use the macrostate named by `$board-state`, or `In Progress` when omitted. If a read confirms membership and the target macrostate, continue without a board write. For a target supplied by the workflow, also leave a later macrostate in place. Otherwise **set the board state to the target macrostate**, in the order the item writer states once and this step applies unchanged — **membership, then a read that confirms it, then the state field** (`/pair-capability-write-issue` Step 7b): a state field cannot be written on an item the tracked view does not hold, and the add that puts it there can exit 0 having done nothing. Composing `/pair-capability-write-issue` is not the route for a state-only change — its write mode is a **full-body overwrite** and would replace the story's AC/DoD/task breakdown — so the invariant is applied here **by reference**, never re-derived.
+4. **Verify**: Read the item to confirm the board state and report **what the read observed**. The assignment result comes from item 2. If the PM tool is inaccessible, warn and continue.
 
 ### Step 0.2: Analyze Tasks
 
@@ -390,6 +399,7 @@ Implementation stops immediately when:
 
 - **Checkpoint/branch divergence** (Step 0.0) — checkpoint names a branch the repo does not have; report and stop, do not guess a branch
 - **Story not loaded or incomplete** (Phase 0)
+- **Card held by someone else** (Step 0.1b) — report owners and stop before writes. The task-progress batch is still empty.
 - **Task specifications incomplete** (Step 2.2)
 - **Quality gate failure** (Step 2.7) — only when the cause lies outside the card; otherwise fix it and continue
 - **New dependency rejected by /assess-stack** (Step 2.4)
@@ -404,7 +414,7 @@ On HALT: **flush the task-progress batch first — unless Step 3.1b already flus
 
 See [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). Re-invoking `/pair-process-implement` on a partially completed story is safe and expected — per-step:
 
-1. **Checkpoint**: the opening-phase resume probe (Step 0.0) reads the checkpoint and jumps to the first pending task — never repeating completed tasks. When `/pair-capability-checkpoint` is absent, the git+PM resume below applies.
+1. **Checkpoint**: the opening-phase resume probe (Step 0.0) reads the checkpoint and runs Step 0.1b before the first pending task — never repeating completed tasks. When `/pair-capability-checkpoint` is absent, the git+PM resume below applies.
 2. **Branch**: detects existing branch, switches to it.
 3. **Commit strategy**: if commits already exist on branch, infer strategy from history.
 4. **Tasks**: scans task checklist and git log to identify completed tasks, and does **not re-run them** — this is **not the `skipped` outcome** (Step 2.1): a task an earlier invocation completed is neither re-written nor queued, so a re-invocation that finds everything done reaches Step 3.1b with an empty queue and posts nothing.

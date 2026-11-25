@@ -23,10 +23,12 @@ export function settingsFor(
   const layers: readonly (readonly [Source, Entry | undefined])[] = [
     ['step', configuration.steps?.[step.id]],
     ['alias', configuration.aliases?.[alias]],
-    ['workflow', declared?.[alias]],
+    ['workflow', configuration['assignment-only'] ? undefined : declared?.[alias]],
     ['defaults', configuration.defaults],
   ]
-  const values: Partial<Record<Field, string>> = {}
+  const values: Partial<Record<Field, string>> & { engine: string } = {
+    engine: configuration.defaults.engine,
+  }
   const sources: Partial<Record<Field, Source>> = {}
   for (const field of ['engine', 'model', 'effort'] as const) {
     for (const [source, entry] of layers) {
@@ -37,8 +39,7 @@ export function settingsFor(
       break
     }
   }
-  // `defaults.engine` is required: the engine always resolves.
-  return { ...values, engine: values.engine ?? configuration.defaults.engine, sources }
+  return { ...values, sources }
 }
 
 /** One printed line per step: each value with its source. */

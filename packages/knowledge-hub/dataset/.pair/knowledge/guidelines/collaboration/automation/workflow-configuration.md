@@ -21,8 +21,9 @@ steps: # optional; an exception for one step id
 telemetry: true # optional; switches the run's telemetry on or off
 ```
 
-- An entry takes `engine`, `model`, `effort`. `defaults` needs `engine`.
-- A loop id under `steps` takes only `max`, a positive integer. No other loop key can be overridden.
+- Execution settings take `engine`, `model`, and `effort`. `defaults` needs `engine`.
+- Set `assign` at the top level or under `steps.<id>` to override the [workflow's card assignment](workflow-grammar.md#card-assignment).
+- A loop id under `steps` accepts `max` (a positive integer) and `assign`. The loop's `assign` applies to its child steps unless the configuration sets `assign` for a specific child under `steps.<loop>/<child>`.
 - `model` is the real model id. There are no model classes.
 - Same parsing rules as a workflow: YAML 1.2, no anchors, tags or duplicate keys. Unknown keys are errors.
 
@@ -72,7 +73,7 @@ Different engines in one run are allowed.
 
 ## Override
 
-`--config-override '<json>'` is deep-merged over the selected configuration, validated like a file and recorded in `state.json`. With no configuration selected it must hold a complete `defaults`. There are no `--model` or `--effort` flags.
+`--config-override '<json>'` is deep-merged over the selected configuration, validated like a file and recorded in `state.json`. With no configuration selected, an assignment-only override can use top-level `assign`, `steps.<id>.assign`, or both. For example, `--config-override '{"assign":"none"}'` uses the run's resolved engine and overrides assignment for every step. An override that sets other configuration fields needs `defaults` with an `engine` when no configuration is selected. Use `--config-override` for model or effort changes.
 
 ## Validation
 

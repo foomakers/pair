@@ -158,6 +158,79 @@ describe('runSteps: a linear run (AC-1)', () => {
   })
 })
 
+describe('runSteps: delegated implementation activation (#723 F8)', () => {
+  it.each([
+    ['Review', 'Review', 'done', ['skill sets Review', 'implementation starts']],
+    ['none', 'none', 'done', ['implementation starts']],
+    ['Done', 'none', 'done', ['implementation starts', 'host sets Done']],
+    ['Review', 'Review', 'skipped', []],
+  ] as const)('hands off state %s as %s for a %s run', async (state, target, result, expected) => {
+    const board: string[] = []
+    const { host, launched } = fakeHost({
+      'pair-process-implement': (_step, message) => {
+        if (result === 'skipped')
+          return fenced({ status: 'failed', reason: 'card-held', summary: 'Held by alice' })
+        const startState = /^- board-state: (.+)$/m.exec(message)?.[1] ?? 'In Progress'
+        if (startState !== 'none') board.push(`skill sets ${startState}`)
+        board.push('implementation starts')
+        return IMPLEMENTED
+      },
+    })
+    const text = `version: 1\nname: quick\nsteps:\n  implement: { kind: implement, state: ${state} }\n`
+    await start({ files: host.files, dir: DIR }, { text, file: 'quick.yaml' }, { card: '627' })
+
+    const outcome = await runSteps(
+      {
+        ...host,
+        transition: async event => {
+          if (event.state === 'running') board.push('host sets start state')
+          if (event.state === 'ok' && state === 'Done') board.push('host sets Done')
+        },
+      },
+      DIR,
+    )
+
+    expect(outcome.run).toBe(result)
+    expect(board).toEqual(expected)
+    expect(launched[0]?.message).toContain(`- board-state: ${target}\n`)
+  })
+
+  it.each([
+    ['', '', undefined],
+    ['', ', with: { assignee: alice }', 'alice'],
+    ['assign: none\n', '', 'none'],
+    ['assign: none\n', ', assign: alice', 'alice'],
+    ['assign: me\n', ', with: { assignee: alice }', undefined],
+  ] as const)(
+    '#723 F12: delegates assignment with workflow %j and step options %j',
+    async (workflow, options, expected) => {
+      const { host, launched } = fakeHost({ 'pair-process-implement': () => IMPLEMENTED })
+      const text = `version: 1\nname: quick\n${workflow}steps:\n  implement: { kind: implement, state: Review${options} }\n`
+      await start({ files: host.files, dir: DIR }, { text, file: 'quick.yaml' }, { card: '627' })
+
+      expect((await runSteps({ ...host, transition: async () => {} }, DIR)).run).toBe('done')
+      expect(/^- assignee: (.+)$/m.exec(launched[0]?.message ?? '')?.[1]).toBe(expected)
+    },
+  )
+
+  it('#723 F12: warns before launch when clearing the assignee requires a host hook', async () => {
+    const { host, events, launched } = fakeHost({
+      'pair-process-implement': () => {
+        expect(events[0]).toMatchObject({
+          state: 'running',
+          summary: expect.stringMatching(/Warning:.*unassign.*assignCard/),
+        })
+        return IMPLEMENTED
+      },
+    })
+    const text = `version: 1\nname: quick\nassign: unassign\nsteps:\n  implement: { kind: implement }\n`
+    await start({ files: host.files, dir: DIR }, { text, file: 'quick.yaml' }, { card: '627' })
+
+    expect((await runSteps(host, DIR)).run).toBe('done')
+    expect(launched[0]?.message).toContain('- assignee: none\n')
+  })
+})
+
 describe('runSteps: results and resume (AC-4, AC-6)', () => {
   it.each([
     ['a final message with no result', () => 'All done.', 'invalid-result'],

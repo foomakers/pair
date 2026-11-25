@@ -322,6 +322,80 @@ export default defineAdapter({
         }
         return parseJson(gh([...base, '--json', fields.join(',')]), { command: 'gh issue view' })
       },
+      assignCard({ id, repo, assign = 'me', login: explicit }) {
+        if (explicit === undefined && assign === 'none') return { status: 'unchanged' }
+        try {
+          const number = /^#?(\d+)$/.exec(String(id))?.[1]
+          if (!number) throw new Error('Assignment needs a GitHub issue number')
+          const slug = resolveRepo(repo)
+          const readOwners = () => {
+            const assignees = this.readCard(number, { repo: slug, fields: ['assignees'] })?.assignees
+            if (!Array.isArray(assignees) || assignees.some(owner => typeof owner?.login !== 'string' || !owner.login))
+              throw new Error(`Could not read assignees on #${number}`)
+            return assignees.map(owner => owner.login)
+          }
+          const implicit = explicit === undefined && assign === 'me'
+          const clear = explicit === undefined && assign === 'unassign'
+          const login = explicit !== undefined ? explicit : clear ? null : implicit || assign === '@me' ? this.resolveUser() : assign
+          if (!clear && (typeof login !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]*(?:\[bot\])?$/.test(login)))
+            throw new Error(`Invalid assignee login ${JSON.stringify(login)}`)
+          const isTarget = owner => login !== null && owner.toLowerCase() === login.toLowerCase()
+          const before = readOwners()
+          if (implicit && before.length)
+            return before.some(isTarget) ? { status: 'unchanged' } : { status: 'held', owners: before }
+          if (clear ? before.length === 0 : before.length === 1 && isTarget(before[0]))
+            return { status: 'unchanged' }
+          const issue = `repos/${slug}/issues/${number}`
+          if (!clear && !implicit) gh(['api', `${issue}/assignees/${encodeURIComponent(login)}`])
+
+          const write = (method, path, body) => gh(['api', '-X', method, path, '--input', '-'], { input: JSON.stringify(body) })
+          const assignees = clear ? [] : [login]
+          // Claim additively so a concurrent owner can be seen on the read-back.
+          if (implicit) write('POST', `${issue}/assignees`, { assignees })
+          else write('PATCH', issue, { assignees })
+          let after = readOwners()
+          while (implicit && after.some(owner => !isTarget(owner))) {
+            const owners = after.filter(owner => !isTarget(owner))
+            if (!after.some(isTarget)) return { status: 'held', owners }
+            try {
+              // GitHub's assignee list is not claim order. The earliest current assignment wins,
+              // including when another claimant posts after the first one has confirmed ownership.
+              const latest = new Map()
+              const events = listPages(`${issue}/events`).filter(event => event?.event === 'assigned')
+              for (const event of events.sort((a, b) => a.id - b.id))
+                latest.set(event.assignee?.login?.toLowerCase(), event)
+              const claims = after.map(owner => latest.get(owner.toLowerCase()))
+              if (claims.some(event => !Number.isSafeInteger(event?.id)))
+                throw new Error(`Could not determine assignment order on #${number}`)
+              const [first] = claims.sort((a, b) => a.id - b.id)
+              // A later deliberate assignment by someone else takes precedence over auto-claims.
+              const manual = claims.find(event => !isTarget(event.assignee.login)
+                && event.assigner?.login?.toLowerCase() !== event.assignee.login.toLowerCase())
+              const won = manual === undefined && isTarget(first.assignee.login)
+              const release = won ? owners : assignees
+              write('DELETE', `${issue}/assignees`, { assignees: release })
+              after = readOwners()
+              if (!won) {
+                if (after.some(isTarget)) throw new Error(`Could not confirm release of ${login}`)
+                return { status: 'held', owners: after }
+              }
+              // A new claimant can arrive during cleanup. Resolve the new set before admitting work.
+              if (!after.some(isTarget) || owners.every(owner => after.includes(owner)))
+                throw new Error(`Could not confirm sole ownership on #${number}`)
+            } catch (error) {
+              return { status: 'held', owners, reason: error.message }
+            }
+          }
+          if (clear ? after.length !== 0 : after.length !== 1 || !isTarget(after[0]))
+            throw new Error(`Could not confirm assignment on #${number}. Current owners are ${after.join(', ') || 'none'}.`)
+          const previous = before.filter(owner => !isTarget(owner))
+          if (!clear && previous.length)
+            write('POST', `${issue}/comments`, { body: `Reassigned to ${login} from ${previous.join(', ')}.` })
+          return { status: 'assigned' }
+        } catch (error) {
+          return { status: 'warning', reason: error.message }
+        }
+      },
       // Board facts (cardState) come from the adopted project only; an unresolved board holds no item.
       // The user's repository role (`admin`, `maintain`, `write`, …) as the server reports it now; null when
       // unreadable — the board workflow's authorization (#642 Maintainer Decision) treats null as deny.
@@ -547,7 +621,17 @@ export default defineAdapter({
       },
       // US-572: `--assignee @me` — the login the tracker CLI is authenticated as.
       resolveUser() {
-        const login = gh(['api', 'user', '-q', '.login']).trim()
+        let login
+        try {
+          login = gh(['api', 'user', '-q', '.login']).trim()
+        } catch (error) {
+          if (!/resource not accessible by integration.*HTTP 403/i.test(error.detail ?? '')) throw error
+          // Installation credentials have a GraphQL viewer but cannot call REST /user.
+          const viewer = parseJson(gh(['api', 'graphql', '-f', 'query=query { viewer { login } }']), { command: 'gh api graphql viewer' })?.data?.viewer?.login
+          if (typeof viewer !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]*\[bot\]$/.test(viewer))
+            throw new HostError('invalid-output', { message: 'gh api graphql viewer: expected an installation bot login', method: 'resolveUser' })
+          login = viewer
+        }
         if (!login) throw new HostError('invalid-output', { message: 'gh api user: empty login', method: 'resolveUser' })
         return login
       },

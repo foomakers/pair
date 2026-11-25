@@ -2,11 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { fileSystemService as fs } from '@pair/content-ops'
+import { runCli } from '../../cli'
+import { commandRegistry } from '..'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
-import { parseConfiguration } from '@pair/workflows'
+import { isSafePromptText } from './prompt-safety'
+import { assignmentFor, parseConfiguration, validate } from '@pair/workflows'
 import type { SpawnIterationInput } from './spawn'
 import type { WorkflowHostDependencies } from './workflow-host'
+import * as hostProcess from './host-process'
 
 /**
  * US-672 — configuration per step through `pair run <workflow>`; same harness as US-652.
@@ -363,6 +367,224 @@ describe('override (AC-6)', () => {
     expect(
       await run(['quick'], OK, { configOverride: '{"aliases":{"judge":{"model":"m"}}}' }),
     ).toBe(1)
+    expect(launched).toEqual([])
+  })
+})
+
+describe('#723 T-6 assignment configuration (AC-7, AC-9)', () => {
+  const workflowPath = '.pair/adoption/tech/workflows/quick.yaml'
+  let assignments: string[]
+
+  beforeEach(() => {
+    assignments = []
+    write(
+      workflowPath,
+      QUICK.replace('name: quick', 'name: quick\nassign: me').replace(
+        'alias: judge',
+        'alias: judge\n    assign: unassign',
+      ),
+    )
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Host bridge fixture')
+    vi.spyOn(hostProcess, 'runHostProcess').mockImplementation(async (bin, args) => {
+      if (bin === 'sh') return { status: 0, stdout: '', stderr: '' }
+      const [, operation, , raw] = args
+      expect(operation).toBe('assign-card')
+      const { assign } = JSON.parse(raw ?? '{}') as { assign: string }
+      assignments.push(assign)
+      return { status: 0, stdout: '{"status":"assigned"}', stderr: '' }
+    })
+  })
+
+  const printsAssignment = (step: string, value: string, source: string) => {
+    const output = lines.filter(line => line.trimStart().startsWith(`${step}:`)).join('\n')
+    expect(output).toContain(`assign=${value} (${source})`)
+  }
+
+  it('applies the configured step before the configured default, then prints both sources', async () => {
+    writeConfig('mine', `${CONFIG}assign: bot-pair\nsteps:\n  implement: { assign: alice }\n`)
+
+    expect(await run(['quick'], OK, { config: 'mine' }), lines.join('\n')).toBe(0)
+
+    expect(assignments).toEqual(['alice', 'bot-pair'])
+    expect(launched[0]?.promptText).toContain('- assignee: none')
+    expect(launched.map(one => [one.model, one.effort])).toEqual([
+      ['claude-sonnet-5-5', 'medium'],
+      ['claude-opus-5-5', 'high'],
+    ])
+    printsAssignment('implement', 'alice', 'configuration.steps.implement.assign')
+    printsAssignment('review', 'bot-pair', 'configuration.assign')
+  })
+
+  it.each(['mine', undefined])('reports workflow fallback sources with config=%s', async config => {
+    writeConfig()
+
+    expect(await run(['quick'], OK, { config }), lines.join('\n')).toBe(0)
+
+    expect(assignments).toEqual(['me', 'unassign'])
+    printsAssignment('implement', 'me', 'workflow.assign')
+    printsAssignment('review', 'unassign', 'steps.review.assign')
+  })
+
+  it('claims for the runner when neither source configures an assignment', async () => {
+    write(workflowPath, QUICK)
+    writeConfig()
+
+    expect(await run(['quick'], OK, { config: 'mine' })).toBe(0)
+
+    expect(assignments).toEqual(['me'])
+    expect(launched[0]?.promptText).toContain('- assignee: none')
+    printsAssignment('implement', 'me', 'default')
+    expect(lines.filter(line => line.includes('assign='))).toHaveLength(1)
+  })
+
+  it('previews implicit me alongside a configured review assignee', async () => {
+    write(workflowPath, QUICK)
+    writeConfig('mine', `${CONFIG}steps:\n  review: { assign: alice }\n`)
+
+    expect(await run(['quick'], OK, { config: 'mine', dryRun: true })).toBe(0)
+
+    printsAssignment('implement', 'me', 'default')
+    printsAssignment('review', 'alice', 'configuration.steps.review.assign')
+    expect(assignments).toEqual([])
+    expect(launched).toEqual([])
+  })
+
+  it('runs quick --card 123 --config-override with explicit none and no named configuration', async () => {
+    expect(
+      await run(['quick'], OK, { card: '123', configOverride: '{"assign":"none"}' }),
+      lines.join('\n'),
+    ).toBe(0)
+
+    expect(assignments).toEqual([])
+    expect(launched[0]?.promptText).toContain('- assignee: none')
+    expect(launched.map(one => one.model)).toEqual([undefined, undefined])
+    printsAssignment('implement', 'none', 'configuration.assign')
+    printsAssignment('review', 'none', 'configuration.assign')
+  })
+
+  describe('published card assignment examples (#723 AC-9)', () => {
+    const grammar = join(
+      __dirname,
+      '../../../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-grammar.md',
+    )
+    const examples = () =>
+      fs
+        .readFileSync(grammar)
+        .replace(/\r\n/g, '\n')
+        .split('\n## Card assignment\n')[1]
+        ?.split('\n## ')[0] ?? ''
+    const commands = () =>
+      Array.from(
+        examples().matchAll(/^```(?:bash|sh|shell|text)?\n([\s\S]*?)^```$/gm),
+        ([, block]) => block ?? '',
+      ).flatMap(block =>
+        block
+          .trim()
+          .split('\n')
+          .map(line => line.split(/\s+#/)[0]?.trim()),
+      )
+
+    it.each(['', ' $assignee=alice', ' $assignee=none'])(
+      'shows /pair-process-implement $story=123%s',
+      override => {
+        expect(commands(), 'skill commands in the Card assignment section').toContain(
+          `/pair-process-implement $story=123${override}`,
+        )
+      },
+    )
+
+    it('resolves the quick.yaml example to me, alice on review and unassign on the final step', () => {
+      const yaml = Array.from(
+        examples().matchAll(/^```yaml\n([\s\S]*?)^```$/gm),
+        ([, block]) => block,
+      ).find(block => /^name: quick$/m.test(block ?? ''))
+      expect(yaml, 'quick.yaml in the Card assignment section').toBeDefined()
+      const { workflow, errors } = validate(yaml ?? '', 'quick.yaml', {
+        skillExists: () => true,
+        gateKeys: ['quality-gate'],
+        launchInputs: ['card'],
+        isSafeText: isSafePromptText,
+      })
+      expect(errors).toEqual([])
+      expect(workflow?.assign).toBe('me')
+      const steps = workflow?.steps.map(step => ({ id: step.id, ...assignmentFor(workflow, step) }))
+      expect(steps?.find(step => step.id === 'implement')).toMatchObject({
+        value: 'me',
+        source: 'workflow.assign',
+      })
+      expect(steps?.find(step => step.id === 'review')).toMatchObject({
+        value: 'alice',
+        source: 'steps.review.assign',
+      })
+      expect(steps?.at(-1)?.value).toBe('unassign')
+    })
+
+    it('runs the documented config override that leaves the card assignment unchanged', async () => {
+      const command = commands().find(line =>
+        /^pair run quick --card 123 --config-override '\{"assign":"none"\}'$/.test(line ?? ''),
+      )
+      expect(command, 'config override command in the Card assignment section').toBeDefined()
+      const argv = command?.match(/'[^']*'|\S+/g)?.map(arg => arg.replace(/^'|'$/g, '')) ?? []
+      const handle = vi
+        .spyOn(commandRegistry.run, 'handle')
+        .mockImplementation(async (config, files) => {
+          const code = await handleRunCommand(config, files, deps(OK))
+          expect(code, lines.join('\n')).toBe(0)
+          return code
+        })
+
+      await runCli([process.execPath, ...argv, '--cwd', project])
+      expect(handle).toHaveBeenCalledOnce()
+      expect(assignments).toEqual([])
+      printsAssignment('implement', 'none', 'configuration.assign')
+      printsAssignment('review', 'none', 'configuration.assign')
+    })
+  })
+
+  it('overrides only the addressed step through JSON with no named configuration', async () => {
+    expect(
+      await run(['quick'], OK, {
+        card: '123',
+        configOverride: '{"steps":{"review":{"assign":"alice"}}}',
+      }),
+      lines.join('\n'),
+    ).toBe(0)
+
+    expect(assignments).toEqual(['me', 'alice'])
+    printsAssignment('implement', 'me', 'workflow.assign')
+    printsAssignment('review', 'alice', 'configuration.steps.review.assign')
+  })
+
+  it('resumes with the assignment from the frozen configuration after the source changes', async () => {
+    const withReviewer = (login: string) => `${CONFIG}steps:\n  review: { assign: ${login} }\n`
+    const failedReview = () => fenced({ status: 'failed', summary: 'red', reason: 'quality-gate' })
+    writeConfig('mine', withReviewer('alice'))
+    const config = { config: 'mine' }
+    expect(await run(['quick'], { ...OK, 'pair-process-review': failedReview }, config)).toBe(1)
+    writeConfig('mine', withReviewer('mallory'))
+    assignments.length = 0
+    launched.length = 0
+    lines.length = 0
+
+    expect(await run(['quick'], OK, config), lines.join('\n')).toBe(0)
+
+    expect(assignments).toEqual(['alice'])
+    expect(launched.map(one => skillOf(one.promptText))).toEqual(['pair-process-review'])
+    printsAssignment('review', 'alice', 'configuration.steps.review.assign')
+  })
+
+  it.each([
+    ['assign: "@me"', 'mine.yaml:6: assign', 'does not match'],
+    ['steps:\n  review: { assign: false }', 'mine.yaml:7: steps.review.assign', 'expected string'],
+  ])('reports a positioned fix for invalid configuration %s', async (input, position, problem) => {
+    writeConfig('mine', `${CONFIG}${input}\n`)
+
+    expect(await run(['quick'], OK, { config: 'mine' })).toBe(1)
+
+    const diagnostic = lines.find(line => line.includes(position)) ?? ''
+    expect(diagnostic).toContain(problem)
+    expect(diagnostic).toContain('fix:')
+    expect(diagnostic).not.toContain('unknown key')
     expect(launched).toEqual([])
   })
 })

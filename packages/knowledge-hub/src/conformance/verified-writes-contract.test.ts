@@ -1319,20 +1319,82 @@ describe('no write is assumed — every write is re-read back (#403 AC8)', () =>
   )
 })
 
-describe('the other PM-tool writers obey the same two rules (#403)', () => {
+describe('/implement — assignment when work starts (#723)', () => {
   it.each(implementCases)(
-    '$corpus: story activation resolves the assignee by the cascade, not the current user',
+    '$corpus: claims an unassigned card as the authenticated runner before the board write (AC-2)',
     ({ content }) => {
-      // Step 0.1b runs on EVERY story and wrote "assign to the current developer" — the
-      // one default the cascade forbids, for the reason the cascade exists: an agent
-      // under a bot token assigns every story to the bot and passes its own check.
-      const body = normalize(section(content, 'Step 0.1b', 3))
-      expect(body).toContain('only when it has no assignee')
-      expect(body).toContain('never the authenticated user')
-      expect(body).toContain('default-assignee')
+      const activation = normalize(section(content, 'Step 0.1b'))
+      expect(activation).toMatch(/workflow-facts\.mjs assign-card\b.*membership, then a read/)
+      expect(activation).toMatch(
+        /omit(?:ted)?[^.]*assign[^.]*authenticated (?:runner|identity|user)/,
+      )
+      expect(activation).toMatch(/\bassigned\b[^.]*read[- ]back/)
+      expect(activation).not.toContain('default-assignee')
     },
   )
 
+  it.each(implementCases)(
+    '$corpus: checks assignment on checkpoint resume (AC-4)',
+    ({ content }) => {
+      const resume = normalize(section(content, 'Step 0.0'))
+      expect(resume).toMatch(/step 0\.1b.*(?:before|then).*first pending task/)
+    },
+  )
+
+  it.each(implementCases)(
+    '$corpus: continues an already-owned card without writing its assignment (AC-3)',
+    ({ content }) => {
+      const activation = normalize(section(content, 'Step 0.1b'))
+      expect(activation).toMatch(/\bunchanged\b[^.]*\b(?:continue|proceed)\b/)
+      expect(activation).toMatch(
+        /\bunchanged\b[^.]*\b(?:no assignment write|without (?:an )?assignment write)\b/,
+      )
+    },
+  )
+
+  it.each(implementCases)(
+    '$corpus: warns with owners and halts a held card before writes even unattended (AC-4)',
+    ({ content }) => {
+      const activation = normalize(section(content, 'Step 0.1b'))
+      expect(activation).toMatch(/\bheld\b[^.]*\b(?:warn|report)\b[^.]*\bowners\b/)
+      expect(activation).toMatch(
+        /\b(?:stop|halt)\b[^.]*\bbefore\b[^.]*\b(?:board|pm)\b[^.]*\bgit\b/,
+      )
+      expect(activation).toMatch(/\bunattended\b[^.]*\bfailed\b[^.]*\bcard-held\b/)
+    },
+  )
+
+  it.each(implementCases)(
+    '$corpus: accepts explicit takeover and records the previous owner on the card (AC-5)',
+    ({ content }) => {
+      const argument =
+        tableRows(content, 'Arguments').find(row => /^\|\s*\$assignee\s*\|/.test(row)) ?? ''
+      expect(argument).toMatch(/<login>.*@me.*\bnone\b/)
+      const activation = normalize(section(content, 'Step 0.1b'))
+      expect(activation).toMatch(/\{\s*"assign"\s*:\s*"@me"\s*\}/)
+      expect(activation).toMatch(/<login>.*@me[^.]*\b(?:override|takeover|take over|reassign)\b/)
+      expect(activation).toMatch(/\bcomment\b[^.]*\bprevious owners?\b/)
+    },
+  )
+
+  it.each(implementCases)(
+    '$corpus: none leaves the current assignment untouched (AC-5)',
+    ({ content }) => {
+      const activation = normalize(section(content, 'Step 0.1b'))
+      expect(activation).toMatch(/\bnone\b[^.]*\b(?:untouched|unchanged|no assignment write)\b/)
+    },
+  )
+
+  it.each(implementCases)(
+    '$corpus: reports a failed assignment without blocking implementation (#723 system errors)',
+    ({ content }) => {
+      const activation = normalize(section(content, 'Step 0.1b'))
+      expect(activation).toMatch(/\bwarning\b[^.]*\breason\b[^.]*\b(?:continue|proceed)\b/)
+    },
+  )
+})
+
+describe('the other PM-tool writers obey the same two rules (#403)', () => {
   it.each(implementCases)(
     '$corpus: story activation writes the board state in the invariant order',
     ({ content }) => {
@@ -1373,19 +1435,18 @@ describe('adoption schema — the machine-readable half of the Assignment rule (
     },
   )
 
-  it.each(conventionCases)('$corpus: declares the key and its cascade, once', ({ content }) => {
-    const body = normalize(section(content, 'Assignee resolution', 2))
-    expect(body).toContain('default-assignee')
-    // Byte-for-byte the order both skills state — one sentence, three readers.
-    expect(body).toContain('the argument first, then the adoption default, then none')
-  })
-
   it.each(conventionCases)(
-    '$corpus: the default is never the authenticated user',
+    '$corpus: declares the PR cascade and keeps it out of activation (#723 AC-2, AC-11)',
     ({ content }) => {
       const body = normalize(section(content, 'Assignee resolution', 2))
-      expect(body).toContain('never the authenticated user')
-      expect(body).toContain('bot token')
+      expect(body).toContain('default-assignee')
+      expect(body).toContain('the argument first, then the adoption default, then none')
+      expect(body).toMatch(
+        /(?:development activation|(?:card|work) start)[^.]*authenticated (?:runner|identity|user)/,
+      )
+      expect(body).not.toContain('for pr assignment and development activation')
+      expect(body).not.toContain('development activation may use default-assignee')
+      expect(body).not.toContain('pr or an item taken in charge')
     },
   )
 
@@ -1436,6 +1497,25 @@ describe('adoption schema — the machine-readable half of the Assignment rule (
     // Both declared keys carry the side that reads them, so the schema a project copies
     // never ships a field nothing resolves.
     expect(normalize(template)).toContain('read for pull request assignment')
+  })
+
+  it('the way-of-working template assigns work to the runner at start (#723 AC-2)', () => {
+    const assignment = normalize(section(read(join(DATASET, WOW)), 'Assignment', 2))
+    expect(assignment).toMatch(
+      /(?:development activation|(?:card|work) start)[^.]*authenticated (?:runner|identity|user)/,
+    )
+    expect(assignment).not.toContain('development activation uses default-assignee')
+  })
+
+  it("this project's activation leaves PR and decision-comment defaults intact (#723 AC-2, AC-11)", () => {
+    const assignment = normalize(section(read(join(REPO_ROOT, WOW)), 'Assignment', 2))
+    expect(assignment).toMatch(
+      /(?:development activation|(?:card|work) start)[^.]*authenticated (?:runner|identity|user)/,
+    )
+    expect(assignment).not.toContain('and when development is taken in charge')
+    expect(assignment).toMatch(/default-assignee[^.]*\bmaintainer\b/)
+    expect(assignment).toContain('code-host-assignee, else default-assignee')
+    expect(assignment).toContain('the same resolved login is the only author')
   })
 
   it("this project's adoption declares a resolvable default-assignee", () => {
