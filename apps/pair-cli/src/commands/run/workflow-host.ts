@@ -68,6 +68,7 @@ import { acquireCardLock } from './card-lock'
 import type { BatchOutcome } from './workflow-batch'
 import {
   matchesWorkflowCard,
+  selectionBoardError,
   readWorkflowCard,
   readWorkflowPrHead,
   readWorkflowCards,
@@ -963,11 +964,13 @@ async function acceptsCard(
     { cards: [request.card] },
   )
   const found = cards[0]
-  if (found?.error !== undefined) throw new Error(found.error)
+  if (found === undefined) return false
+  const error = found.error ?? selectionBoardError(found, selection)
+  if (error !== undefined) throw new Error(error)
   const run = request.restart
     ? undefined
     : { files: fs, dir: runDir, workflow: resolved.workflow.name, main: resolved.main }
-  return found !== undefined && matchesWorkflowCard(found, selection.accepts, run)
+  return matchesWorkflowCard(found, selection.accepts, run)
 }
 
 function completedWorkflow(

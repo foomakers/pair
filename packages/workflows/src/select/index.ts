@@ -41,15 +41,23 @@ function selectionFilter(value: CardSelection['filter'] = {}): Filter {
   return assignee === undefined ? filter : { ...filter, assignee: [assignee] }
 }
 
+const statusOverlap = (status?: readonly string[], flags?: readonly string[]) =>
+  (status ?? flags)?.some(one => flags === undefined || flags.includes(one)) === true
+
 export function effectiveSelection(
   workflow?: CardSelection,
   configuration?: CardSelection,
   flags: Filter = {},
 ) {
   const selected = selectionFilter(configuration?.filter ?? workflow?.filter)
+  const { status, ...otherSelected } = selected
+  const { status: flagStatus, ...otherFlags } = flags
+  const statusCanMatch = statusOverlap(status, flagStatus)
   return {
     order: configuration?.order ?? workflow?.order ?? (['priority', 'number'] as const),
     accepts: (card: CardFacts) => matches(selected, card) && matches(flags, card),
+    needsStatus: (card: CardFacts) =>
+      statusCanMatch && matches(otherSelected, card) && matches(otherFlags, card),
   }
 }
 

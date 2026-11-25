@@ -19,6 +19,7 @@ import {
   matchesWorkflowCard,
   pendingWorkflowCard,
   readWorkflowCards,
+  selectionBoardError,
   type WorkflowCard,
   type WorkflowSelection,
 } from './workflow-facts'
@@ -111,16 +112,18 @@ type BatchRequest = { config: RunCommandConfig; request: RunWorkflowBatch; servi
 
 function selectCards(
   cards: readonly WorkflowCard[],
-  ordering: ReturnType<typeof effectiveSelection>['order'],
+  selection: ReturnType<typeof effectiveSelection>,
   accepts: (card: WorkflowCard) => boolean,
   completed: (id: string) => boolean,
 ) {
   const prior = new Map<string, BatchOutcome>()
   const excluded: BatchOutcome[] = []
-  const selected = orderCards(cards, ordering).filter(card => {
-    if (card.error !== undefined) {
-      prior.set(card.id, { id: card.id, outcome: 'failed', reason: card.error })
-    } else if (completed(card.id)) {
+  const selected = orderCards(cards, selection.order).filter(card => {
+    const done = card.error === undefined && completed(card.id)
+    const error = card.error ?? (done ? undefined : selectionBoardError(card, selection))
+    if (error !== undefined) {
+      prior.set(card.id, { id: card.id, outcome: 'failed', reason: error })
+    } else if (done) {
       prior.set(card.id, { id: card.id, outcome: 'skipped', reason: 'workflow already complete' })
     } else if (!accepts(card)) {
       excluded.push({
@@ -178,7 +181,7 @@ async function planBatch(
     !request.restart && completedRun(runOf(id), { card: id, workflow })
   const accepts = (card: WorkflowCard) =>
     matchesWorkflowCard(card, selection.accepts, request.restart ? undefined : runOf(card.id))
-  const candidates = selectCards(cards, selection.order, accepts, completed)
+  const candidates = selectCards(cards, selection, accepts, completed)
   return {
     ...candidates,
     selected: await loadDependencies(candidates, readDependencies),
@@ -337,10 +340,15 @@ function mappedCard(found: WorkflowCard | undefined, names: string[], routing: R
     const candidate = configuredWorkflow(name, id, routing, true)
     if (candidate.selection.accepts(pending)) return candidate
   }
-  function* candidates() {
-    for (const name of names) yield configuredWorkflow(name, id, routing)
+  function* candidates(card: WorkflowCard) {
+    for (const name of names) {
+      const candidate = configuredWorkflow(name, id, routing)
+      const error = selectionBoardError(card, candidate.selection)
+      if (error !== undefined) throw new Error(error)
+      yield candidate
+    }
   }
-  return chooseWorkflow(candidates(), found)
+  return chooseWorkflow(candidates(found), found)
 }
 
 /** Explicitly named workflow mappings opt a project into routing a bare card to YAML. */

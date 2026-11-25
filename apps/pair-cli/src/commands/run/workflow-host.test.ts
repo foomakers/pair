@@ -989,12 +989,18 @@ ${design ? 'Design: not required' : ''}
 })
 
 it.each([
-  { failSelected: false, requiresStatus: false },
-  { failSelected: true, requiresStatus: false },
-  { failSelected: false, requiresStatus: true },
+  { failSelected: false, status: undefined, configuredStatus: undefined },
+  { failSelected: true, status: undefined, configuredStatus: undefined },
+  { failSelected: false, status: 'Draft', configuredStatus: undefined },
+  { failSelected: false, status: 'Draft', configuredStatus: 'Ready' },
 ])(
-  'R744-05/R744-10: selection before dependencies ($failSelected, $requiresStatus)',
-  async ({ failSelected, requiresStatus }) => {
+  'R744-05/R744-10: selection before dependencies ($failSelected, $status, $configuredStatus)',
+  async ({ failSelected, status, configuredStatus }) => {
+    if (configuredStatus)
+      write(
+        '.pair/adoption/tech/workflows/quick.yaml',
+        `${QUICK}select: { filter: { status: [${configuredStatus}] } }\n`,
+      )
     write(
       '.pair/adoption/tech/way-of-working.md',
       REGISTRY + '\n- `pm-tool`: `github`\n- `pm-project`: `Pair`\n',
@@ -1034,14 +1040,18 @@ else if (command === 'issue' && action === 'view') {
           card: '9,10',
           filter: 'wanted',
           dryRun: true,
-          ...(requiresStatus && { status: 'Draft' }),
+          ...(status !== undefined && { status }),
         },
         ['quick'],
       )
+      const requiresStatus = status !== undefined && configuredStatus === undefined
       expect(await handleRunCommand(command, fs)).toBe(failSelected || requiresStatus ? 1 : 0)
       expect(lines.some(line => line.includes('#10: not-applicable'))).toBe(true)
       if (requiresStatus) {
         expect(lines.some(line => /#9: failed.*board-unresolved/.test(line))).toBe(true)
+        expect(fs.existsSync(reads)).toBe(false)
+      } else if (configuredStatus) {
+        expect(lines.some(line => line.includes('#9: not-applicable'))).toBe(true)
         expect(fs.existsSync(reads)).toBe(false)
       } else expect(fs.readFileSync(reads)).toBe('9\n')
     } finally {

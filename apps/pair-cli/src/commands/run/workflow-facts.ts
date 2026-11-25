@@ -1,4 +1,4 @@
-import { pendingBoardStatus, type CardFacts } from '@pair/workflows'
+import { pendingBoardStatus, type CardFacts, type effectiveSelection } from '@pair/workflows'
 import { locateCycleScripts } from './cycle-scripts'
 import { runHostProcess } from './host-process'
 import { join } from 'path'
@@ -13,6 +13,7 @@ export interface WorkflowCard extends CardFacts {
   readonly body: string
   readonly title: string
   readonly boardState: string | null
+  readonly boardError?: string
   readonly closed: boolean
   readonly created?: string
   readonly priority?: number
@@ -36,6 +37,15 @@ export interface WorkflowSelection {
 }
 
 type SelectionRun = { files: FileSystemService; dir: string; workflow: string; main: string }
+
+export function selectionBoardError(
+  card: WorkflowCard,
+  selection: ReturnType<typeof effectiveSelection>,
+): string | undefined {
+  return !card.closed && card.boardError !== undefined && selection.needsStatus(card)
+    ? card.boardError
+    : undefined
+}
 
 /** Match current scope, preserving the board status of a confirmed step awaiting its Ready write. */
 export function matchesWorkflowCard(

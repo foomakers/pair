@@ -2939,21 +2939,27 @@ export function cardView({ story, dir, host, selection, scopedBoard = selection 
   const fields = selection ? [...CARD_FIELDS, 'assignees', 'createdAt'] : CARD_FIELDS
   let c
   let boardState = null
+  let boardError
   try {
     try {
       c = h.pm.readCard(story, { fields: [...fields, 'projectItems'] })
-      boardState = scopedBoard
-        ? h.pm.cardState({ id: ref.id, card: c }).boardState
-        : (c?.projectItems ?? []).map(i => String(i?.status?.name ?? '').trim()).find(Boolean) ?? null
+      if (scopedBoard) {
+        const state = h.pm.cardState({ id: ref.id, card: c })
+        boardState = state.boardState
+        boardError = state.gap
+      } else {
+        boardState = (c?.projectItems ?? []).map(i => String(i?.status?.name ?? '').trim()).find(Boolean) ?? null
+      }
     } catch (error) {
       if (error?.kind === 'transient-exhausted') throw error
+      if (scopedBoard) boardError = `board-unreadable: ${hostDetail(error)}`
       c = h.pm.readCard(story, { fields })
     }
   } catch (e) {
     return { error: `card-unreadable: ${hostDetail(e)}` }
   }
   const closed = String(c?.state ?? '').toUpperCase() === 'CLOSED'
-  return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState, ...(selection ? { assignees: (c?.assignees ?? []).map(one => String(one.login ?? one)), created: c?.createdAt ?? undefined } : {}) }
+  return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState, ...(boardError && { boardError }), ...(selection ? { assignees: (c?.assignees ?? []).map(one => String(one.login ?? one)), created: c?.createdAt ?? undefined } : {}) }
 }
 
 function workflowCardId(host, ref) {
