@@ -222,8 +222,8 @@ export function findWriteModeFormatters(gateCommand: string): string[] {
  * gate ACTUALLY runs instead of the name it hides behind. Bounded depth + visited
  * set: a script that reaches itself is expanded once, never forever.
  *
- * The expansion precedes the reference so the original command retains its flags
- * and the failure message still shows the delegation path.
+ * The runner appends arguments to the script body. Expand that invocation and
+ * retain the original reference so the failure shows the delegation path.
  */
 export function expandScriptReferences(
   scripts: Record<string, string>,
@@ -232,12 +232,13 @@ export function expandScriptReferences(
   depth = 0,
 ): string {
   if (depth >= MAX_EXPANSION_DEPTH) return command
-  return command.replace(scriptReference(), (match, name: string) => {
+  const invocation = new RegExp(`${scriptReference().source}([^&|;{}\\n]*)`, 'g')
+  return command.replace(invocation, (match, name: string, args: string) => {
     const body = scripts[name]
     if (typeof body !== 'string' || visited.has(name)) return match
     const seen = new Set(visited)
     seen.add(name)
-    return `{ ${expandScriptReferences(scripts, body, seen, depth + 1)} } ${match}`
+    return `{ ${expandScriptReferences(scripts, body + args, seen, depth + 1)} } ${match}`
   })
 }
 
