@@ -769,9 +769,10 @@ it('#704 AC-4: quick retries a killed agent and records both diagnoses', async (
     ],
   })
   const telemetry = fs.readFileSync(join(runDir(), 'telemetry.jsonl')).trim().split('\n')
+  const safeDiagnosis = { ...diagnosis, stderrTail: Array.from({ length: 20 }, () => '[redacted]') }
   expect(telemetry.slice(0, 2).map(line => JSON.parse(line))).toEqual([
-    expect.objectContaining({ step: 'implement', attempt: 1, diagnosis }),
-    expect.objectContaining({ step: 'implement', attempt: 2, diagnosis }),
+    expect.objectContaining({ step: 'implement', attempt: 1, diagnosis: safeDiagnosis }),
+    expect.objectContaining({ step: 'implement', attempt: 2, diagnosis: safeDiagnosis }),
   ])
   expect(lines).toEqual(
     expect.arrayContaining([

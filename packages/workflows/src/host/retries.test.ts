@@ -126,9 +126,10 @@ it('#704 AC-4: records every fault even when a retry succeeds', async () => {
   }
   const attempts = [1, 2].map(attempt => ({ ...diagnosis, attempt }))
   expect(test.state().steps['work']).toMatchObject({ state: 'ok', executions: 3, attempts })
+  const safeDiagnosis = { ...diagnosis, detail: '[redacted]', stderrTail: ['[redacted]'] }
   expect(test.telemetry().filter(entry => entry.type === 'step')).toEqual([
-    expect.objectContaining({ attempt: 1, reason: 'fault', diagnosis }),
-    expect.objectContaining({ attempt: 2, reason: 'fault', diagnosis }),
+    expect.objectContaining({ attempt: 1, reason: 'fault', diagnosis: safeDiagnosis }),
+    expect.objectContaining({ attempt: 2, reason: 'fault', diagnosis: safeDiagnosis }),
     expect.objectContaining({ attempt: 3, status: 'ok' }),
   ])
   expect(outcome.faults).toEqual([{ step: 'work', attempts }])

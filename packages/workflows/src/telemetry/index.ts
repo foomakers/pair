@@ -141,11 +141,39 @@ function stepsOf(run: RunDirectory): StepTelemetry[] {
     .filter((record): record is StepTelemetry => record.type === 'step')
 }
 
+// An arbitrary line can be a prompt or an unlabelled credential. Keep only complete, known-safe
+// messages in telemetry. The local run diagnosis still carries the original text for debugging.
+const SAFE_DIAGNOSTICS = new Set([
+  'Connection refused',
+  'Connection reset by peer',
+  'Permission denied',
+  'No space left on device',
+  'no terminal event in the engine stream (fail-closed: the exit code is never consulted)',
+])
+
+const safeDiagnostic = (text: string): string => (SAFE_DIAGNOSTICS.has(text) ? text : '[redacted]')
+
+function telemetryLine(record: StepTelemetry | RunTelemetry): string {
+  if (record.type === 'run' || record.diagnosis === undefined) return JSON.stringify(record)
+  const { kind, detail, exitCode, signal, elapsedMs, stderrTail } = record.diagnosis
+  return JSON.stringify({
+    ...record,
+    diagnosis: {
+      kind,
+      detail: safeDiagnostic(detail),
+      exitCode,
+      signal,
+      elapsedMs,
+      stderrTail: stderrTail.map(safeDiagnostic),
+    },
+  })
+}
+
 const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetry)[]) =>
   writeAtomic(
     run.files,
     fileOf(run),
-    records.map(record => `${JSON.stringify(record)}\n`).join(''),
+    records.map(record => `${telemetryLine(record)}\n`).join(''),
     {
       preserveMode: true,
     },
