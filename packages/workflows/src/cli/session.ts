@@ -7,6 +7,7 @@ import {
   completedRun,
   effectiveConfiguration,
   frozenWorkflow,
+  pendingBoardStatus,
   pendingMergeClosure,
   record,
   requireState,
@@ -18,7 +19,7 @@ import {
   type StepLaunch,
   type RunStateFile,
 } from '../engine'
-import { addressedSteps, type Workflow } from '../grammar'
+import { addressedSteps, CARD_STATES, type CardState, type Workflow } from '../grammar'
 import {
   advanceStep,
   endStep,
@@ -36,7 +37,12 @@ import { effectiveSelection } from '../select'
 import { reopenRun, type Usage } from '../telemetry'
 import { prepareReplayHead } from '../worktree'
 import { runHostProcess } from '../worktree/host-process'
-import { sessionCard, sessionCardStatus, sessionWorktree } from '../worktree/session'
+import {
+  sessionBoardMacrostate,
+  sessionCard,
+  sessionCardStatus,
+  sessionWorktree,
+} from '../worktree/session'
 import { acquireCardLock } from './card-lock'
 import { withSessionLease, type SessionApproval, type SessionLease } from './run-lock'
 import { sessionHost } from './session-host'
@@ -101,23 +107,43 @@ function checkSelection(
   scripts: string,
   view: Card,
   { workflow, configuration }: { workflow: Workflow; configuration: Configuration | undefined },
+  run?: RunDirectory,
 ) {
   const filter = configuration?.select?.filter ?? workflow.select?.filter
   if (filter === undefined) return
   const facts =
     filter.assignee === undefined ? view : sessionCard(scripts, project.main, view.id, true)
   const selection = effectiveSelection(workflow.select, configuration?.select)
-  const effectiveFacts = selection.needsStatus(facts)
-    ? withSelectedCardStatus(project, facts)
-    : facts
-  if (!selection.accepts(effectiveFacts))
-    throw new Error(`not-applicable: card ${view.id} does not match the selection filter`)
+  if (selection.needsStatus(facts)) {
+    if (facts.boardError !== undefined) throw new Error(facts.boardError)
+    const authority = controlStateScript(project)
+    const status = sessionCardStatus(authority, project.main, facts)
+    if (status !== null && selection.accepts({ ...facts, status })) return
+    const previous =
+      run && pendingSelectionStatus(project, authority, { ...facts, status }, run, workflow)
+    if (previous != null && selection.accepts({ ...facts, status: previous })) return
+  } else if (selection.accepts(facts)) return
+  throw new Error(`not-applicable: card ${view.id} does not match the selection filter`)
 }
 
-function withSelectedCardStatus(project: Project, view: Card) {
-  if (view.boardError !== undefined) throw new Error(view.boardError)
-  const status = sessionCardStatus(controlStateScript(project), project.main, view)
-  return status === null ? view : { ...view, status }
+function pendingSelectionStatus(
+  { main }: Project,
+  authority: string,
+  view: Card & { status: CardState | null },
+  run: RunDirectory,
+  workflow: Workflow,
+) {
+  const { status, boardState } = view
+  if (status === null || CARD_STATES.indexOf(status) < CARD_STATES.indexOf('Ready')) return
+  // As in the CLI, the DoR can resolve to Ready while the board still reads Draft.
+  const draft =
+    status === 'Ready' &&
+    boardState !== null &&
+    sessionBoardMacrostate(authority, main, boardState) === 'Draft'
+      ? boardState
+      : undefined
+  const previous = pendingBoardStatus(run, { card: view.id, workflow: workflow.name }, draft)
+  return previous === undefined ? undefined : sessionBoardMacrostate(authority, main, previous)
 }
 
 async function startFresh(
@@ -182,7 +208,7 @@ async function resumeSaved(
     )
   const file = join(run.dir, FROZEN_WORKFLOW)
   const source = { file, text: readText(file) }
-  effectiveConfiguration(run) // Refuse an unreadable frozen file before touching the worktree.
+  const configuration = effectiveConfiguration(run)
   if (completedRun(run, { card, workflow }))
     return { ...(await start(run, source, { card })), card, worktree: undefined }
   const scripts = cycleScripts(project)
@@ -192,6 +218,7 @@ async function resumeSaved(
     runWorkflowOperation(runHostProcess, () => scripts, project.main, { action, card, data })
   if (view.closed)
     return finishSessionClosure(project.main, run, { card, state, workflow: saved }, operation)
+  checkSelection(project, scripts, view, { workflow: saved, configuration }, run)
   const replay = await refreshReplayInputs({ workflow: saved, state }, operation)
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
   if (replay) await prepareReplayHead(worktree, replay.inputs.head, runHostProcess)

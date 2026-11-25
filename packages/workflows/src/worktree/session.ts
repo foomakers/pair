@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, isAbsolute, join } from 'node:path'
+import type { CardState } from '../grammar'
 import { prepareCardWorktree } from './index'
 
 type Card = {
@@ -89,10 +90,18 @@ export function sessionCard(scripts: string, main: string, story: string, owners
 
 export function sessionCardStatus(authority: string, main: string, view: Card) {
   const { title, body, boardState } = view
-  return script<{ macrostate: string | null }>(dirname(authority), main, basename(authority), [
+  return script<{ macrostate: CardState | null }>(dirname(authority), main, basename(authority), [
     'resolve',
     main,
     JSON.stringify({ title: title ?? '', body, boardState }),
+  ]).macrostate
+}
+
+export function sessionBoardMacrostate(authority: string, main: string, boardState: string) {
+  return script<{ macrostate: CardState | null }>(dirname(authority), main, basename(authority), [
+    'macrostate',
+    main,
+    boardState,
   ]).macrostate
 }
 
