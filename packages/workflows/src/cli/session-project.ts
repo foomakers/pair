@@ -251,6 +251,12 @@ export function effectiveSettings(
     : settingsFor(configuration, step, workflow.aliases)
 }
 
+export function sessionInteractiveOf(step: Pick<Step, 'kind' | 'with' | 'interactive'>): boolean {
+  return (
+    (step.kind === 'refine-story' && step.with?.['mode'] !== 'autonomous') || interactiveOf(step)
+  )
+}
+
 export function workflowSummary(
   workflow: Workflow,
   configuration: Configuration | undefined,
@@ -267,7 +273,7 @@ export function workflowSummary(
               id: step.id,
               kind: step.kind,
               skill: step.skill ?? kindByName[step.kind].defaultSkill,
-              interactive: interactiveOf(step),
+              interactive: sessionInteractiveOf(step),
               settings: effectiveSettings(configuration, workflow, step, engine),
             },
           ],

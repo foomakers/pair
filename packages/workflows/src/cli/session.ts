@@ -52,6 +52,7 @@ import {
   effectiveSettings,
   isSafeText,
   readAdoption,
+  sessionInteractiveOf,
   workflowConfiguration,
   workflowDefinition,
   workflowName,
@@ -288,7 +289,11 @@ export async function openSession(project: Project, input: OpenInput) {
 }
 
 const sessionMessage = (launch: StepLaunch, worktree: string | undefined) =>
-  buildMessage(launch, kindByName[launch.kind], { style: 'instruction', isSafeText, worktree })
+  buildMessage({ ...launch, interactive: sessionInteractiveOf(launch) }, kindByName[launch.kind], {
+    style: 'instruction',
+    isSafeText,
+    worktree,
+  })
 
 function stepPacket(
   workflow: Workflow,
@@ -301,7 +306,7 @@ function stepPacket(
   return {
     ...launch,
     worktree: context.worktree,
-    interactive: launch.interactive === true,
+    interactive: sessionInteractiveOf(launch),
     settings: effectiveSettings(configuration, workflow, step, context.engine),
     message: sessionMessage(launch, context.worktree),
   }
