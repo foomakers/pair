@@ -46,13 +46,15 @@ function mismatch(field: string, expected: unknown, actual: unknown): StepResult
 const cleanBody = (body: string) =>
   body.replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[^\n]*$/gm, '').replace(/<!--[\s\S]*?-->/g, '')
 
+const RISK_TAGS = ['risk:green', 'risk:yellow', 'risk:red']
+
 function confirmRefinement(
   result: StepResult,
   card: NonNullable<ResultFacts['card']>,
   body: string,
 ): StepResult {
   const risk = result['riskTag']
-  if (typeof risk !== 'string' || !matches({ has: [risk] }, card))
+  if (typeof risk !== 'string' || !RISK_TAGS.includes(risk) || !matches({ has: [risk] }, card))
     return mismatch('riskTag', risk, card.labels)
   const required = ['Acceptance Criteria', 'Technical Analysis', 'Assumptions']
   const missing = required.find(
