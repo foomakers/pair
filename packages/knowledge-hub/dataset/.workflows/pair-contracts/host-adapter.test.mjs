@@ -28,7 +28,7 @@ import {
 } from '../../skills/pair-workflow-review-phase/scripts/host/index.mjs'
 import github from '../../skills/pair-workflow-review-phase/scripts/host/github.mjs'
 import azure from '../../skills/pair-workflow-review-phase/scripts/host/azure-devops.mjs'
-import { cardHash, applyScopeDecisions, publish, scopeBaselineHashOf, discoverDecisions, readDecisions } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
+import { cardHash, cardView, applyScopeDecisions, publish, scopeBaselineHashOf, discoverDecisions, readDecisions } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
 import { createHash } from 'node:crypto'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
@@ -253,6 +253,16 @@ const wowDir = text => {
 }
 const AZURE_WOW = '# Way of Working\n\n- Azure DevOps is adopted for project management.\n  Organization: acme. Project: Proj.\n'
 const SPLIT_WOW = '# Way of Working\n\n- Azure DevOps is adopted for project management.\n\n## Git Workflow\n\n- `code-host`: `github` — repository `acme/app`.\n'
+
+test('R744-04: Azure card facts include each stored risk and team tag', () => {
+  const az = fakeAz({ workItems: {
+    7: { fields: { 'System.Tags': ' risk:green ; ; team:cli ' } },
+    8: { fields: {} },
+  } })
+  const host = { pmTool: 'azure-devops', pm: azure.instantiate({ azBin: az.azBin }) }
+  assert.deepEqual(cardView({ story: '7', host }).labels, ['risk:green', 'team:cli'])
+  assert.deepEqual(cardView({ story: '8', host }).labels, [])
+})
 
 // ── T-1: the interface + the shared canonicalization ─────────────────────────────────────────
 test('AC1/T-1: the interface is exactly the eight named methods, and both shipped adapters implement every one', () => {
