@@ -14,6 +14,9 @@ export interface Filter {
   readonly assignee?: readonly string[]
 }
 
+const owners = (card: CardFacts) =>
+  card.assignees ?? (card.assignee === undefined ? [] : [card.assignee])
+
 /** Whether `card` matches `filter`; a filter with no key matches everything. */
 export function matches(filter: Filter, card: CardFacts): boolean {
   const { has, lacks, status, assignee } = filter
@@ -21,10 +24,7 @@ export function matches(filter: Filter, card: CardFacts): boolean {
     (has === undefined || has.some(label => card.labels.includes(label))) &&
     (lacks === undefined || !lacks.some(label => card.labels.includes(label))) &&
     (status === undefined || (card.status !== undefined && status.includes(card.status))) &&
-    (assignee === undefined ||
-      (card.assignees ?? (card.assignee === undefined ? [] : [card.assignee])).some(login =>
-        assignee.includes(login),
-      ))
+    (assignee === undefined || owners(card).some(login => assignee.includes(login)))
   )
 }
 
@@ -36,13 +36,17 @@ export interface CardSelection {
   readonly order?: readonly OrderKey[]
 }
 
+function selectionFilter(value: CardSelection['filter'] = {}): Filter {
+  const { assignee, ...filter } = value
+  return assignee === undefined ? filter : { ...filter, assignee: [assignee] }
+}
+
 export function effectiveSelection(
   workflow?: CardSelection,
   configuration?: CardSelection,
   flags: Filter = {},
 ) {
-  const { assignee, ...filter } = configuration?.filter ?? workflow?.filter ?? {}
-  const selected = { ...filter, ...(assignee === undefined ? {} : { assignee: [assignee] }) }
+  const selected = selectionFilter(configuration?.filter ?? workflow?.filter)
   return {
     order: configuration?.order ?? workflow?.order ?? (['priority', 'number'] as const),
     accepts: (card: CardFacts) => matches(selected, card) && matches(flags, card),

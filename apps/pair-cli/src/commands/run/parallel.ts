@@ -137,16 +137,19 @@ export async function runPool<T, Outcome = CardOutcome>(
   const active = new Map<number, Promise<void>>()
   const held = new Set<string>()
   const state = { results, active, held }
-  while (pending.length > 0 || active.size > 0) {
+  const ready = (index: number) => {
+    const item = input.items[index]!
+    return (
+      (input.ready?.(item) ?? true) &&
+      (input.resources?.(item) ?? []).every(resource => !held.has(resource))
+    )
+  }
+  for (;;) {
     if (!mayStart()) {
       for (const index of pending.splice(0)) results[index] = input.notStarted(input.items[index]!)
     }
     while (active.size < input.limit && pending.length > 0) {
-      const position = pending.findIndex(
-        index =>
-          (input.ready?.(input.items[index]!) ?? true) &&
-          (input.resources?.(input.items[index]!) ?? []).every(resource => !held.has(resource)),
-      )
+      const position = pending.findIndex(ready)
       if (position < 0) break
       const [index] = pending.splice(position, 1)
       startPoolTask(input, index!, state)

@@ -294,6 +294,11 @@ async function advance(host: WorkflowHost, run: RunDirectory) {
   return found
 }
 
+async function emitStep(host: WorkflowHost, event: StepEvent): Promise<void> {
+  await host.transition?.(event)
+  host.report?.(event)
+}
+
 /** The host loop over a started run: `next` → launch → `record`, until the run is no longer running. */
 export async function runSteps(
   host: WorkflowHost,
@@ -309,8 +314,7 @@ export async function runSteps(
     const step = ready[0]
     if (state !== 'running' || step === undefined) return ended(state, last, writer)
     const launchEvent = { step: step.id, kind: step.kind, state: 'running' } as const
-    host.report?.(launchEvent)
-    await host.transition?.(launchEvent)
+    await emitStep(host, launchEvent)
     const { status, summary, reason, detail } = await executeMetered(host, run, step, writer)
     last = {
       step: step.id,
@@ -320,7 +324,6 @@ export async function runSteps(
       ...(reason !== undefined && { reason }),
       ...(detail !== undefined && { detail }),
     }
-    await host.transition?.(last)
-    host.report?.(last)
+    await emitStep(host, last)
   }
 }

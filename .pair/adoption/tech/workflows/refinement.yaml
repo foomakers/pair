@@ -4,11 +4,16 @@ description: Refine a card and break it into tasks.
 select:
   filter: { status: [Draft] }
   order: [priority, number]
+aliases:
+  build: {}
+  judge: {}
 steps:
   refine:
     kind: refine-story
+    alias: judge
     # A standalone refinement moves to Ready. The shipped workflow waits for tasks.
     state: none
     with: { mode: autonomous }
   tasks:
     kind: plan-tasks
+    alias: build

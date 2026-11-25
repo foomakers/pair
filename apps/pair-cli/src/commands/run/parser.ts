@@ -818,6 +818,24 @@ function resolveWorkflowRun(
     return {}
   }
   const workflow = promptSafeText(name, 'the workflow name')!
+  assertWorkflowFlags(workflow, options)
+  const { cards, ...scope } = parseWorkflowScope(workflow, options)
+  const request = workflowRequest(workflow, options)
+  if (cards?.length === 1 && Object.keys(scope).length === 0 && options.parallel === undefined)
+    return { workflow: { ...request, card: cards[0]! } }
+  return {
+    workflowBatch: {
+      ...request,
+      ...scope,
+      ...(cards !== undefined && { cards }),
+      ...(options.parallel !== undefined && {
+        parallel: parsePositiveInteger('--parallel', options.parallel),
+      }),
+    },
+  }
+}
+
+function assertWorkflowFlags(workflow: string, options: ParseRunOptions): void {
   const configured = passed(options, [
     ['profile', '--profile'],
     ['workflowConfig', '--workflow-config'],
@@ -833,50 +851,53 @@ function resolveWorkflowRun(
       `${foreign.join(', ')} cannot be combined with a workflow name: \`pair-cli run ${workflow}\` takes ` +
         '--card, --engine, --config, --config-override, --reconfigure, --run-id, --restart, --dry-run, --cwd, the timeouts and the output flags.',
     )
+}
+
+function workflowCards(value: ParseRunOptions['card']): string[] | undefined {
+  if (value === undefined) return undefined
+  return [
+    ...new Set(
+      String(value)
+        .split(',')
+        .map(raw => {
+          const card = identifierText(raw.trim(), '--card')
+          if (card === undefined) throw new Error('--card contains an empty identifier')
+          return card
+        }),
+    ),
+  ]
+}
+
+function parseWorkflowScope(workflow: string, options: ParseRunOptions) {
   const scope = resolveScope(options)
-  const cards =
-    options.card === undefined
-      ? undefined
-      : [
-          ...new Set(
-            String(options.card)
-              .split(',')
-              .map(value => {
-                const card = identifierText(value.trim(), '--card')
-                if (card === undefined) throw new Error('--card contains an empty identifier')
-                return card
-              }),
-          ),
-        ]
+  const cards = workflowCards(options.card)
   if (cards !== undefined && scope.root !== undefined)
     throw new Error('--card cannot be combined with --root')
   if (cards === undefined && scope.root === undefined && scope.filter === undefined)
     throw new Error(`pair-cli run ${workflow} needs --card <id>, --root <id> or --filter <label>`)
+  return { cards, ...scope }
+}
 
+function workflowRequest(workflow: string, options: ParseRunOptions) {
   const runId = identifierText(options.runId, '--run-id')
   const moreRounds =
     options.moreRounds === undefined
       ? undefined
       : parsePositiveInteger('--more-rounds', options.moreRounds)
-  const request = {
+  return {
     name: workflow,
     ...(runId !== undefined && { runId }),
     restart: options.restart === true,
     ...configurationOf(options),
     ...(moreRounds !== undefined && { moreRounds }),
   }
-  if (cards?.length === 1 && Object.keys(scope).length === 0 && options.parallel === undefined)
-    return { workflow: { ...request, card: cards[0]! } }
-  return {
-    workflowBatch: {
-      ...request,
-      ...scope,
-      ...(cards !== undefined && { cards }),
-      ...(options.parallel !== undefined && {
-        parallel: parsePositiveInteger('--parallel', options.parallel),
-      }),
-    },
-  }
+}
+
+function withoutWorkflowScope(input: ParseRunOptions): ParseRunOptions {
+  const common = { ...input }
+  for (const key of ['card', 'root', 'filter', 'assignee', 'status', 'parallel'] as const)
+    delete common[key]
+  return common
 }
 
 /** The one positional argument `run` takes: a workflow name (US-652). */
@@ -894,16 +915,8 @@ function workflowOf(
 
 export function parseRunCommand(input: ParseRunOptions, args: string[] = []): RunCommandConfig {
   const workflow = workflowOf(args, input)
-  const {
-    card: _card,
-    root: _root,
-    filter: _filter,
-    assignee: _assignee,
-    status: _status,
-    parallel: _parallel,
-    ...common
-  } = input
-  const options = workflow.workflowBatch === undefined ? withImpliedParallel(input) : common
+  const options =
+    workflow.workflowBatch === undefined ? withImpliedParallel(input) : withoutWorkflowScope(input)
 
   const engine = resolveEngineFlag(options.engine)
   const cwd = optionalText(options.cwd, '--cwd')
