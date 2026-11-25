@@ -272,10 +272,10 @@ describe('analyze-delivery-metrics — catalog registration (#222)', () => {
     ['dataset', NEXT_DATASET, GUIDE_DATASET],
     ['mirror', NEXT_MIRROR, GUIDE_MIRROR],
   ] as const) {
-    it(`${label} next catalog lists it and states 36 capability / 56 total`, () => {
+    it(`${label} next catalog lists it and states 36 capability / 57 total`, () => {
       expect(next).toMatch(/analyze-delivery-metrics/)
       expect(next).toContain('36 capability')
-      expect(next).toContain('56 skills')
+      expect(next).toContain('57 skills')
     })
 
     // Review of #461, Minor 6: next's "Full catalog coverage" note enumerates the skills
@@ -286,10 +286,10 @@ describe('analyze-delivery-metrics — catalog registration (#222)', () => {
       expect(note).toContain('analyze-delivery-metrics')
     })
 
-    it(`${label} skills-guide lists it under Analysis (3) and states 56 total`, () => {
+    it(`${label} skills-guide lists it under Analysis (3) and states 57 total`, () => {
       expect(guide).toMatch(/analyze-delivery-metrics/)
       expect(guide).toContain('Analysis Skills (3)')
-      expect(guide).toMatch(/Total: 56/)
+      expect(guide).toMatch(/Total: 57/)
     })
 
     it(`${label} skills-guide states it writes its own panel — the D14 exception`, () => {

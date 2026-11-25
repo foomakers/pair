@@ -444,7 +444,7 @@ describe('generateCatalogRows + committed catalog parity (Check 2c integration)'
   const SKILLS_DIR = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
   it('derives a command + non-empty description for every dataset skill', () => {
     const rows = generateCatalogRows(SKILLS_DIR)
-    expect(rows.size).toBe(56)
+    expect(rows.size).toBe(57)
     expect(rows.get('next')?.command).toBe('/pair-next')
     for (const [, row] of rows) expect(row.description.length).toBeGreaterThan(0)
   })
