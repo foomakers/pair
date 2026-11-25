@@ -614,8 +614,8 @@ function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay):
   return { ...state, steps: records, loops, latest: {}, replay }
 }
 
-// An interrupted or stopped step runs again. Outcomes the run continued past stay recorded.
-// After a finished run, a legacy top-level `on-failed: continue` still retries the failure.
+// An interrupted or stopped step runs again. Continued outcomes usually stay recorded.
+// A finished run or a failed final gate also retries legacy continued failures.
 function reopenedSteps(
   run: RunDirectory,
   state: RunStateFile,
@@ -623,10 +623,9 @@ function reopenedSteps(
 ): Record<string, StepRecord> {
   const topLevel = new Set(workflow.steps.map(step => step.id))
   const steps = new Map(addressedSteps(workflow).map(step => [step.id, step]))
-  const last = workflow.steps.at(-1)?.id
-  const done = runIsDone(workflow, state)
-  const retryAfterCompletion = (step: Step, status: StepState) =>
-    done && retryShorthandFailure(step, status)
+  const last = workflow.steps.at(-1)
+  const failedFinalGate = last?.kind === 'gate' && state.steps[last.id]?.state === 'failed'
+  const retryFailures = runIsDone(workflow, state) || failedFinalGate
   return Object.fromEntries(
     Object.entries(state.steps).map(([id, saved]) => {
       const step = steps.get(id)
@@ -634,11 +633,12 @@ function reopenedSteps(
       if (saved.state === 'ok') return [id, saved]
       if (
         saved.state !== 'skipped' &&
-        (saved.state !== 'failed' || id !== last) &&
+        (saved.state !== 'failed' || id !== last?.id) &&
         step !== undefined &&
         (child
           ? childSettled(step, saved.state)
-          : stepSettled(step, saved.state) && !retryAfterCompletion(step, saved.state))
+          : stepSettled(step, saved.state) &&
+            !(retryFailures && retryShorthandFailure(step, saved.state)))
       )
         return [id, saved]
       return [id, reopenStep(run, saved, child ? undefined : step)]
