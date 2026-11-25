@@ -153,6 +153,20 @@ const SAFE_DIAGNOSTICS = new Set([
 
 const safeDiagnostic = (text: string): string => (SAFE_DIAGNOSTICS.has(text) ? text : '[redacted]')
 
+/** Render watchdog facts without forwarding detail that may contain engine text. */
+function safeTimeout({ kind, timeoutSeconds }: Diagnosis) {
+  if (timeoutSeconds === undefined || !Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0)
+    return undefined
+  if (kind === 'timeout')
+    return {
+      timeoutSeconds,
+      detail: `stalled: no terminal event within ${timeoutSeconds}s — the engine was stopped`,
+    }
+  if (kind === 'idle')
+    return { timeoutSeconds, detail: `timed out (idle): no engine event for ${timeoutSeconds}s` }
+  return undefined
+}
+
 function telemetryLine(record: StepTelemetry | RunTelemetry): string {
   if (record.type === 'run' || record.diagnosis === undefined) return JSON.stringify(record)
   const { kind, detail, exitCode, signal, elapsedMs, stderrTail } = record.diagnosis
@@ -160,7 +174,7 @@ function telemetryLine(record: StepTelemetry | RunTelemetry): string {
     ...record,
     diagnosis: {
       kind,
-      detail: safeDiagnostic(detail),
+      ...(safeTimeout(record.diagnosis) ?? { detail: safeDiagnostic(detail) }),
       exitCode,
       signal,
       elapsedMs,

@@ -90,7 +90,7 @@ export interface SpawnIterationInput extends EngineArgsInput {
   readonly maxFixRounds?: number | undefined
 }
 
-type ProcessStop = { kind: 'idle' | 'timeout'; detail: string }
+type ProcessStop = { kind: 'idle' | 'timeout'; detail: string; timeoutSeconds: number }
 
 /**
  * The two bounds on one iteration (US-573 AC5): the idle timer, re-armed by every decoded event, and
@@ -106,24 +106,29 @@ function createWatchdog(
   // US-600: after the soft stop a bounded grace elapses, then the read is abandoned (`grace`).
   let graceOver!: () => void
   const grace = new Promise<undefined>(done => (graceOver = () => done(undefined)))
-  const stop = (kind: ProcessStop['kind'], detail: () => string) => () => {
+  const stop = (kind: ProcessStop['kind'], timeoutSeconds: number, detail: () => string) => () => {
     if (stopped === undefined) setTimeout(graceOver, ENGINE_GRACE_MS).unref()
-    stopped ??= { kind, detail: detail() }
+    stopped ??= { kind, detail: detail(), timeoutSeconds }
     kill('SIGTERM')
   }
   const idleSeconds = input.idleTimeoutSeconds ?? DEFAULT_IDLE_TIMEOUT_SECONDS
-  const onIdle = stop('idle', () => `timed out (idle)${where}: no engine event for ${idleSeconds}s`)
+  const onIdle = stop(
+    'idle',
+    idleSeconds,
+    () => `timed out (idle)${where}: no engine event for ${idleSeconds}s`,
+  )
   let idle = setTimeout(onIdle, idleSeconds * 1000)
+  const capSeconds = input.timeoutSeconds
   const cap =
-    input.timeoutSeconds === undefined
+    capSeconds === undefined
       ? undefined
       : setTimeout(
           stop(
             'timeout',
-            () =>
-              `stalled: no terminal event within ${input.timeoutSeconds}s — the engine was stopped`,
+            capSeconds,
+            () => `stalled: no terminal event within ${capSeconds}s — the engine was stopped`,
           ),
-          input.timeoutSeconds * 1000,
+          capSeconds * 1000,
         )
   return {
     rearm: () => {
@@ -383,7 +388,10 @@ async function diagnosedIteration(
       signal: child.signalCode,
       elapsedMs: Math.round(performance.now() - started),
       stderrTail: [...stderrTail],
-      ...(stopped !== undefined && { stoppedBy: stopped.kind }),
+      ...(stopped !== undefined && {
+        stoppedBy: stopped.kind,
+        timeoutSeconds: stopped.timeoutSeconds,
+      }),
     },
   }
 }

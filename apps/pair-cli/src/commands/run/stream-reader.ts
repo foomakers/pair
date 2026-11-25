@@ -27,7 +27,10 @@ export interface IterationResult {
   readonly outcome: IterationOutcome
   /** Why, in one line — the terminal event's own detail, or the fail-closed reason. */
   readonly detail: string
-  readonly process?: ProcessDiagnostics & { readonly stoppedBy?: 'idle' | 'timeout' }
+  readonly process?: ProcessDiagnostics & {
+    readonly stoppedBy?: 'idle' | 'timeout'
+    readonly timeoutSeconds?: number
+  }
   /**
    * The continue-token the skill printed, if any (ADR-017 §4 / `pair-loop`'s output format).
    *

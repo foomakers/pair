@@ -8,6 +8,8 @@ export interface ProcessDiagnostics {
 export interface Diagnosis extends ProcessDiagnostics {
   readonly kind: 'timeout' | 'idle' | 'crash' | 'no-result' | 'invalid-result'
   readonly detail: string
+  /** Configured limit of the watchdog that stopped this attempt. */
+  readonly timeoutSeconds?: number
 }
 
 export interface FaultAttempt extends Diagnosis {
