@@ -72,7 +72,7 @@ export function pendingWorkflowCard(
   const statusIndex = MACROSTATES.findIndex(state => state === card.status)
   if (card.closed || statusIndex < MACROSTATES.indexOf('Ready')) return undefined
   const mapping = readStateMapping(run.files, run.main)
-  // Task planning can complete the DoR before returning a result, while the board is still Draft.
+  // Refinement can complete the DoR before returning a result, while the board is still Draft.
   const draft =
     card.status === 'Ready' &&
     card.boardState !== null &&

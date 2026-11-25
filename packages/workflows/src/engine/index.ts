@@ -367,7 +367,7 @@ function pendingReadyResult(
   return result.status === 'ok' ? result : undefined
 }
 
-/** The board status used to reselect an unfinished Ready transition or task plan. */
+/** The board status used to reselect unfinished refinement or a Ready transition. */
 export function pendingBoardStatus(
   run: RunDirectory,
   identity: { card: string; workflow: string },
@@ -385,7 +385,7 @@ export function pendingBoardStatus(
     steps.some(step => {
       const saved = state.steps[step.id]
       return (
-        step.kind === 'plan-tasks' &&
+        (step.kind === 'refine-story' || step.kind === 'plan-tasks') &&
         saved?.executions &&
         saved.state !== 'ok' &&
         saved.state !== 'skipped'
