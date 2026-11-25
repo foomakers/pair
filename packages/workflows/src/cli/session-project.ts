@@ -20,6 +20,7 @@ import { interactiveOf, kindByName, readGateRegistry, readGateTargets } from '..
 import { validate } from '../validate'
 import { canCommentOnCard } from '../worktree/session'
 import { isFile, projectConfig, readOptional, readText, yamlFiles } from './session-files'
+import { skillPaths } from './skill-paths'
 
 const TECH = '.pair/adoption/tech'
 const PORTABLE_QUICK =
@@ -68,13 +69,43 @@ function namedCandidates(project: Project, category: (typeof CATEGORIES)[number]
   ])
 }
 
+const DEFAULT_TARGETS = [
+  '.claude',
+  '.agents',
+  '.opencode',
+  '.github',
+  '.cursor',
+  '.agent',
+  '.windsurf',
+].map(host => `${host}/skills`)
+
+type SkillsRegistry = { targets?: { path: string }[]; target_path?: string; prefix?: string }
+
+function registryTargets(registry: SkillsRegistry): readonly string[] {
+  return registry.targets?.length
+    ? registry.targets.map(target => target.path)
+    : [registry.target_path || 'skills']
+}
+
+function installedSkillPaths(project: Project, name: string, root = project.main) {
+  const config = projectConfig(root) ?? projectConfig(project.main)
+  const registries = (config?.['asset_registries'] ?? config?.['dataset_registries']) as
+    | { skills?: SkillsRegistry }
+    | undefined
+  const registry = registries?.skills
+  return registry === undefined
+    ? skillPaths(root, DEFAULT_TARGETS, 'pair', name)
+    : skillPaths(root, registryTargets(registry), registry.prefix, name)
+}
+
+function builtinSkillPaths(project: Project, name: string) {
+  return [...installedSkillPaths(project, `pair-${name}`), ...installedSkillPaths(project, name)]
+}
+
 export function cycleScripts(project: Project): string {
   const candidates = [
-    resolve(project.scriptDir, '../../pair-workflow-cycle/scripts'),
+    ...builtinSkillPaths(project, 'workflow-cycle').map(dir => join(dir, 'scripts')),
     resolve(project.scriptDir, '../../../workflow/cycle/scripts'),
-    ...['.claude', '.agents'].map(root =>
-      join(project.main, root, 'skills/pair-workflow-cycle/scripts'),
-    ),
   ]
   const scripts = candidates.find(dir =>
     ['cycle-state.mjs', 'cycle-dispatch.mjs'].every(file => isFile(join(dir, file))),
@@ -85,9 +116,7 @@ export function cycleScripts(project: Project): string {
 
 export function controlStateScript(project: Project): string {
   const candidates = [
-    ...['.claude', '.agents', '.opencode', '.github', '.cursor', '.agent', '.windsurf'].map(host =>
-      join(project.main, host, 'skills/pair-next/control-state.mjs'),
-    ),
+    ...builtinSkillPaths(project, 'next').map(dir => join(dir, 'control-state.mjs')),
     resolve(project.scriptDir, '../../../next/control-state.mjs'),
   ]
   const script = candidates.find(isFile)
@@ -99,9 +128,7 @@ export function controlStateScript(project: Project): string {
 function skillExists(project: Project, skill: string): boolean {
   const [, category, name] = /^pair-(capability|process|workflow)-(.+)$/.exec(skill) ?? []
   return (
-    ['.claude', '.agents', '.opencode', '.github', '.cursor', '.agent', '.windsurf'].some(host =>
-      isFile(join(project.cwd, host, 'skills', skill, 'SKILL.md')),
-    ) ||
+    installedSkillPaths(project, skill, project.cwd).some(dir => isFile(join(dir, 'SKILL.md'))) ||
     (category !== undefined &&
       name !== undefined &&
       isFile(join(project.cwd, '.skills', category, name, 'SKILL.md')))

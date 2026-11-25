@@ -944,7 +944,7 @@ it('R754-05: renews the lease without replacing an outstanding step attempt', ()
   }
 })
 
-it('R754-06: starts from a redirected skills target and resolves prefixed names', async () => {
+it('R754-06: starts from a redirected skills target and resolves prefixed names', () => {
   const target = 'team/skills'
   write(
     'pair.config.json',
