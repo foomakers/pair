@@ -616,6 +616,7 @@ function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay):
 
 // An interrupted or stopped step runs again. Continued outcomes usually stay recorded.
 // A finished run or a failed final gate also retries top-level continued failures.
+// A stopped fix retries earlier failed reviews so it uses fresh findings.
 function reopenedSteps(
   run: RunDirectory,
   state: RunStateFile,
@@ -625,10 +626,22 @@ function reopenedSteps(
   const steps = new Map(addressedSteps(workflow).map(step => [step.id, step]))
   const last = workflow.steps.at(-1)
   const failedFinalGate = last?.kind === 'gate' && state.steps[last.id]?.state === 'failed'
+  const stoppedAt = workflow.steps.findIndex(
+    step => !stepSettled(step, state.steps[step.id]?.state),
+  )
+  const stopped = workflow.steps[stoppedAt]
+  const failedFix = stopped?.kind === 'fix' && state.steps[stopped.id]?.state === 'failed'
   const retryFailedSteps =
     runIsDone(workflow, state) || failedFinalGate
       ? topLevel
-      : new Set(last === undefined ? [] : [last.id])
+      : new Set(
+          workflow.steps
+            .filter(
+              (step, index) =>
+                step === last || (failedFix && index < stoppedAt && step.kind === 'review'),
+            )
+            .map(step => step.id),
+        )
   return Object.fromEntries(
     Object.entries(state.steps).map(([id, saved]) => {
       const step = steps.get(id)
