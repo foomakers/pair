@@ -4,7 +4,12 @@ import { runHostProcess } from './host-process'
 import { join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
-import { MACROSTATES, readStateMapping, resolveMacrostate } from './card-readiness'
+import {
+  MACROSTATES,
+  readStateMapping,
+  resolveControlState,
+  resolveMacrostate,
+} from './card-readiness'
 
 type Platform = { fs: FileSystemService; project: Config; cwd: string; main: string }
 
@@ -69,6 +74,7 @@ export function pendingWorkflowCard(
   const previous = pendingBoardStatus(run, { card: card.id, workflow: run.workflow })
   if (previous === undefined) return undefined
   const mapping = readStateMapping(run.files, run.main)
+  // The current body can already meet the DoR while the saved transition is still pending.
   const status = resolveMacrostate(previous, mapping)
   return status === undefined ? undefined : { ...card, status }
 }
@@ -124,14 +130,17 @@ export async function readWorkflowCards(
       ),
     cards: output.cards.map(card => {
       if (!('title' in card)) return { ...unreadableCard, ...card }
-      const status = resolveMacrostate(card.boardState ?? '', mapping)
+      const { macrostate } = resolveControlState(
+        { title: card.title ?? '', body: card.body, boardState: card.boardState ?? undefined },
+        mapping,
+      )
       const priority = /^\s*(?:-\s+)?(?:\*\*Priority:?\*\*:?|Priority:)\s*P(\d+)\b/im.exec(
         card.body,
       )?.[1]
       return {
         prerequisites: [],
         ...card,
-        ...(status && { status }),
+        ...(macrostate && { status: macrostate }),
         ...(priority !== undefined && { priority: Number(priority) }),
       }
     }),
