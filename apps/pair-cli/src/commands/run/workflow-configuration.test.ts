@@ -468,9 +468,16 @@ describe('#707 T-3 workflow tier selection (AC-1, AC-2)', () => {
   })
 
   it.each([
-    { name: 'all tiered', labels: ['risk:red'], exit: 0, eligible: '627, 628' },
-    { name: 'one fallback', labels: [], exit: 1, eligible: '627' },
-  ])('707-F2: plans a batch with $name when the fallback lacks the engine', async row => {
+    { name: '707-F2: all tiered', labels: ['risk:red'], exit: 0, eligible: '627, 628' },
+    { name: '707-F2: included fallback', labels: [], exit: 1, eligible: '627' },
+    {
+      name: '707-F3: fallback excluded by label',
+      labels: [],
+      filter: 'risk:red',
+      exit: 0,
+      eligible: '627',
+    },
+  ])('$name when the fallback lacks the engine', async row => {
     write(
       'pair.config.json',
       JSON.stringify({
@@ -485,7 +492,7 @@ describe('#707 T-3 workflow tier selection (AC-1, AC-2)', () => {
     const exit = await run(
       ['quick'],
       OK,
-      { card: '627,628', engine: 'codex', dryRun: true },
+      { card: '627,628', engine: 'codex', filter: row.filter, dryRun: true },
       { readSelection },
     )
 
@@ -497,6 +504,7 @@ describe('#707 T-3 workflow tier selection (AC-1, AC-2)', () => {
     if (row.exit === 1)
       expect(output).toContain(`#628: failed — configuration-not-found: ${diagnostic}`)
     else expect(output).not.toContain(diagnostic)
+    if (row.filter) expect(output).toContain('#628: not-applicable — selection filter')
   })
 
   it.each(['tracker request', 'card lookup'])(
