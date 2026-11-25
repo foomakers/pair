@@ -183,14 +183,14 @@ describe('parseRunCommand: a workflow name (US-652)', () => {
       /^--workflow-config cannot be combined with a workflow name: .*--config/,
     ],
     ['a cycle flag', { pr: '12' }, /^--pr cannot be combined with a workflow name/],
-    ['a loop flag', { root: '641' }, /^--root cannot be combined with a workflow name/],
+    ['a loop flag', { watch: true }, /^--watch cannot be combined with a workflow name/],
   ])('refuses %s with a workflow name', (_name, options, message) => {
     expect(() => parseRunCommand({ card: '627', ...options }, ['quick'])).toThrow(message)
   })
 
   it('needs a card', () => {
     expect(() => parseRunCommand({}, ['quick'])).toThrow(
-      '`pair-cli run quick` needs --card <id>: a workflow runs on one card',
+      'pair-cli run quick needs --card <id>, --root <id> or --filter <label>',
     )
   })
 
