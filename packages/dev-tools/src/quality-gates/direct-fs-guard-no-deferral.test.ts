@@ -89,9 +89,15 @@ const EXCEPTION_TESTS = new Set([
   'packages/knowledge-hub/src/tools/skill-md-mirror.test.ts',
   'packages/knowledge-hub/src/tools/skills-guide-mirror.test.ts',
 ])
+// #696 AC-4: both hosts share the lock's OS guarantees in these two files.
+const SHARED_LOCK_OS_PATHS = [
+  'packages/workflows/src/cli/lock-support.ts',
+  'packages/workflows/src/cli/run-lock.ts',
+]
 // Reviewed, pinned set of OUT-of-SCOPE paths (not editable by this story) that may keep an exception row.
 // A path outside migration SCOPE cannot be migrated here, so it may only be relabeled by being listed.
 const EXCEPTION_OUT_OF_SCOPE = new Set([
+  ...SHARED_LOCK_OS_PATHS,
   'packages/knowledge-hub/src/conformance/workflow-authoring.test.ts',
   'scripts/workflow-test-runner.mjs',
   'packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs',
@@ -322,6 +328,17 @@ describe('registry rows are reasoned exceptions, not relabeled deferrals', () =>
 
   it('keeps out-of-scope exception rows inside the reviewed pinned set', async () => {
     expect(unreviewedOutOfScope((await registry()).rows)).toEqual([])
+  })
+
+  it('records the shared run lock OS guarantees at their current paths (#696)', async () => {
+    const { rows } = await registry()
+    const paths = [...SHARED_LOCK_OS_PATHS, 'apps/pair-cli/src/commands/run/run-lock.ts']
+    expect(
+      rows
+        .filter(r => paths.includes(r.path))
+        .map(r => [r.path, r.disposition])
+        .sort(),
+    ).toEqual(SHARED_LOCK_OS_PATHS.map(path => [path, 'os-guarantee']))
   })
 
   it('flags an out-of-scope test relabeled outside the reviewed pinned set', () => {

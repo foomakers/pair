@@ -1,13 +1,13 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1078,
-  "files": 402,
-  "distinctContents": 367,
+  "files": 403,
+  "distinctContents": 368,
   "dispositionCounts": {
     "standalone-script": 15,
-    "os-guarantee": 25,
+    "os-guarantee": 27,
     "type-contract": 13,
-    "in-flight-churn": 244,
+    "in-flight-churn": 243,
     "repo-contract": 104,
     "boundary-adapter": 1
   },
@@ -2010,22 +2010,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/run-lock.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/run-lock.ts",
-      "hash": "4d3223ff7e0bc139d5e11cb6583ccf2f566d69670200d182ae28bc306bf885aa",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/run-lock.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
@@ -6721,6 +6705,40 @@
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
       "testCategory": "repo-file-contract"
+    },
+    {
+      "path": "packages/workflows/src/cli/lock-support.ts",
+      "hash": "6153b74d80bac4cafac5b36efab25aab2fc466f249bf16ad3589ea79a28fd7fc",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/src/cli/lock-support.ts",
+      "observedOperations": ["mkdirSync", "rmSync", "statSync"],
+      "reason": "The shared reclaim guard relies on exclusive directory creation across processes.",
+      "decision": "Keep the atomic guard in the host adapter.",
+      "testCategory": "real lock integration"
+    },
+    {
+      "path": "packages/workflows/src/cli/run-lock.ts",
+      "hash": "673e87dc0bf36716b0ff11ba47fc4b8588582a301a6d4eae900c4a0140a110fa",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/src/cli/run-lock.ts",
+      "observedOperations": ["readFileSync", "rmSync", "unlinkSync", "writeFileSync"],
+      "reason": "A run must acquire its lock file exclusively across the CLI and session hosts.",
+      "decision": "Keep the exclusive file operations in the host adapter.",
+      "testCategory": "real lock integration"
     },
     {
       "path": "scripts/dev/delivery-process-overwrite.test.mjs",

@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs'
 import { hostname } from 'os'
 import { join } from 'path'
+import { pidIsAlive } from '@pair/workflows/cli'
 
 /**
  * Who holds a lock, read off its own `holder.json` (`{ card, pid, host?, acquiredAt }`), and whether that
@@ -32,16 +33,6 @@ export function readHolder(path: string): HolderNote {
     }
   } catch {
     return {}
-  }
-}
-
-/** `process.kill(pid, 0)`: ESRCH ⇒ gone; EPERM ⇒ exists (another user's process). */
-export function pidIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code !== 'ESRCH'
   }
 }
 

@@ -8,6 +8,7 @@ import {
   type Stats,
 } from 'fs'
 import { hostname } from 'os'
+import { takeGuard } from '@pair/workflows/cli'
 import { livenessOf, readHolder } from './lock-holder'
 import { join } from 'path'
 import { isSafeId } from './prompt-safety'
@@ -150,24 +151,6 @@ export const acquireCardLock: LockAcquirer = createCardLockAcquirer()
  * with one atomic `rename` — of two racing reclaimers exactly one wins — then removed. Returns the dead pid
  * when THIS caller reclaimed it, else `undefined` (alive, unknown, or lost the race: the normal flow decides).
  */
-/** The sidecar guard; one a crashed reclaimer left behind (older than a minute) is cleared once, never trusted forever. */
-export function takeGuard(guard: string): boolean {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      mkdirSync(guard)
-      return true
-    } catch {
-      try {
-        if (Date.now() - statSync(guard).mtimeMs < 60_000) return false
-        rmSync(guard, { recursive: true, force: true })
-      } catch {
-        return false
-      }
-    }
-  }
-  return false
-}
-
 function reclaimStale(path: string, hooks: ReclaimHooks = {}): number | undefined {
   const liveness = livenessOf(path)
   if (liveness.state !== 'dead') return undefined

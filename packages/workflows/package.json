@@ -11,6 +11,11 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js"
     },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "import": "./dist/cli/index.js",
+      "require": "./dist/cli/index.js"
+    },
     "./worktree": {
       "types": "./dist/worktree/index.d.ts",
       "import": "./dist/worktree/index.js",

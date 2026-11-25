@@ -87,7 +87,7 @@ import { workflowFacts, workflowOperation } from './workflow-facts'
 import { sectionBodies } from './policy-sections'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
-import { finalTextOf, type IterationResult } from './stream-reader'
+import { finalTextOf, reportedModelOf, type IterationResult } from './stream-reader'
 import { observeEngineEvent, type EngineObservation } from './telemetry'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
 import { mainCheckoutOrCwd, readRunnableCard, resolveBranch, runSetupCommand } from './cycle-wiring'
@@ -447,15 +447,12 @@ function launcher(run: Launch) {
   const { config, resolved, services } = run
   const policyOf = policiesOf(run)
   const runIteration = services.deps.workflow?.runIteration ?? spawnIteration
-  return async (
-    step: StepLaunch,
-    message: string,
-    meter: (usage: Usage) => void,
-  ): Promise<string | undefined> => {
+  return async (step: StepLaunch, message: string, meter: (usage: Usage) => void) => {
     const settings = stepSettings(resolved, run.effective, stepOf(resolved, step.id))
     const engine = engineOf(resolved, settings.engine)
     const { autonomyArgs, idle } = policyOf(engine)
     let text: string | undefined
+    let actualModel: string | undefined
     let observed: EngineObservation = {}
     const result = await runIteration({
       engine,
@@ -468,6 +465,7 @@ function launcher(run: Launch) {
       idleTimeoutSeconds: idle,
       onEvent: payload => {
         text = finalTextOf(engine, payload) ?? text
+        actualModel = reportedModelOf(engine, payload) ?? actualModel
         // The usage the engine reports, read by the per-engine parsers; none reported, none metered.
         observed = observeEngineEvent(observed, engine.id, payload)
         const { tokens } = observed
@@ -477,9 +475,10 @@ function launcher(run: Launch) {
     })
     // An interrupted run records nothing: the step stays `running` on disk and runs again at the next launch.
     if (isInterrupted()) throw new Error('interrupted')
-    if (result.outcome === 'success' && text !== undefined) return text
+    if (result.outcome === 'success' && text !== undefined)
+      return { output: text, model: actualModel ?? (engine.modelFlag ? settings.model : undefined) }
     console.log(`  ${step.id}: the agent ended with no result — ${result.detail}`)
-    return undefined
+    return { model: actualModel }
   }
 }
 
@@ -814,6 +813,7 @@ async function runOnConsole(
     sink.event({ event: 'card-start', card: request.card, title: opened.title })
     const outcome = await runSteps(
       {
+        id: 'pair-run',
         files: fs,
         style: resolved.engine.engine.skillInvocationStyle,
         isSafeText: isSafePromptText,
@@ -966,7 +966,9 @@ async function finishClosure(opened: Opened, fs: FileSystemService): Promise<num
     resolved.main,
     true,
   )
-  const result = await record({ dir: runDir, files: fs }, step.id, await finish(step))
+  const result = await record({ dir: runDir, files: fs }, step.id, await finish(step), {
+    host: 'pair-run',
+  })
   console.log(`  Run: ${result.summary}`)
   return result.status === 'ok' ? 0 : 1
 }

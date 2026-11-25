@@ -4,6 +4,7 @@ import {
   TELEMETRY_FILE,
   writeAtomic,
   type RunDirectory,
+  type RunHost,
   type RunIdentity,
   type RunState,
   type StepLaunch,
@@ -56,7 +57,7 @@ export const estimated = (sent: string, final: string): Tokens => ({
   written: fromText(final),
 })
 
-export type TelemetryHost = 'pair-run' | 'session'
+export type TelemetryHost = RunHost
 
 /** One execution of a step. A re-executed step has one record per execution. */
 export interface StepTelemetry extends RunIdentity {

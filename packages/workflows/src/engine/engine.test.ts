@@ -110,6 +110,27 @@ describe('engine: a linear run (AC-1)', () => {
     })
   })
 
+  it('resumes an interrupted run and keeps each host and actual model (#696 AC-4/AC-5)', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    await next(run)
+    const pairRun = { host: 'pair-run', model: 'claude-sonnet-5-5', output: 'CLI result' } as const
+    await record(run, 'implement', IMPLEMENTED, pairRun)
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'review', attempt: 1 })
+
+    const resumed = { dir: run.dir, files: run.files }
+    expect(await start(resumed, SOURCE, { card: '627' })).toMatchObject({ status: 'resumed' })
+    expect((await next(resumed)).ready[0]).toMatchObject({ id: 'review', attempt: 2 })
+    const session = { host: 'session', model: 'claude-opus-5-5', output: 'Session result' } as const
+    await record(resumed, 'review', REVIEWED, session)
+
+    expect((await next(resumed)).run).toBe('done')
+    expect(stateOf(resumed).steps).toMatchObject({
+      implement: { state: 'ok', executions: 1, host: 'pair-run', model: 'claude-sonnet-5-5' },
+      review: { state: 'ok', executions: 2, host: 'session', model: 'claude-opus-5-5' },
+    })
+  })
+
   it('names the hash of the frozen workflow by its algorithm', () => {
     expect(hashOf('')).toBe(
       'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',

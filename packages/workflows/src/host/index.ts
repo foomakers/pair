@@ -6,6 +6,7 @@ import {
   stageSuccess,
   type RunDirectory,
   type RunFiles,
+  type RunHost,
   type RunState,
   type StepLaunch,
 } from '../engine'
@@ -40,6 +41,8 @@ export interface StepEvent {
  * owns everything the package must not touch: processes, the worktree, the console.
  */
 export interface WorkflowHost {
+  /** The host that executes steps, when the caller identifies it. */
+  readonly id?: RunHost
   /** The disk, for the run directory. */
   readonly files: RunFiles
   /** How the host's engine is told to run a skill. */
@@ -53,14 +56,14 @@ export interface WorkflowHost {
   /**
    * Launches the agent of one step in the run's worktree and resolves to its final message —
    * `undefined` when the agent died or timed out. Rejects when the run is interrupted: nothing is
-   * recorded, the step stays `running` on disk and runs again at the next launch. A host whose engine
-   * reports usage hands it to `meter`; the last call is the step's usage.
+   * recorded, the step stays `running` on disk and runs again at the next launch. Use an object
+   * to report the model as well. The last call to `meter` is the step's usage.
    */
   launch(
     step: StepLaunch,
     message: string,
     meter: (usage: Usage) => void,
-  ): Promise<string | undefined>
+  ): Promise<string | { output?: string | undefined; model?: string | undefined } | undefined>
   /** The card as it is now: what a step's `when` reads. Absent: a `when` on card facts matches. */
   card?(): Promise<CardFacts>
   /** Runs a step of a host kind (`gate`, `approval`, `merge`): the result it returns, no agent. */
@@ -190,28 +193,38 @@ async function recordResult(
   host: WorkflowHost,
   run: RunDirectory,
   step: StepLaunch,
-  { result, output, invalidatePendingSuccess }: Confirmation & { output?: string },
+  {
+    result,
+    output,
+    model,
+    invalidatePendingSuccess,
+  }: Confirmation & {
+    output?: string
+    model?: string | undefined
+  },
 ): Promise<StepResult> {
   let final = result
+  const execution = { host: host.id, model }
   if (step.pendingSuccess !== undefined && !host.confirmState && result.status === 'ok')
     return record(
       run,
       step.id,
       unconfirmed(`the host cannot confirm the ${step.confirmState} transition`),
+      execution,
     )
   if (
     step.confirmState !== undefined &&
     host.confirmState &&
     settle(kindByName[step.kind], result).status === 'ok'
   ) {
-    await stageSuccess(run, step.id, result)
+    await stageSuccess(run, step.id, result, execution)
     try {
       await host.confirmState(step.confirmState)
     } catch (error) {
       final = unconfirmed((error as Error).message)
     }
   }
-  return record(run, step.id, final, { output, invalidatePendingSuccess })
+  return record(run, step.id, final, { output, invalidatePendingSuccess, ...execution })
 }
 
 const NO_AGENT_RESULT: StepResult = {
@@ -279,15 +292,18 @@ async function executeAgent(
     return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
   }
   exchange.sent = message
-  const final = await host.launch(step, message, usage => {
+  const launched = await host.launch(step, message, usage => {
     exchange.usage = usage
   })
-  if (final === undefined) return record(run, step.id, NO_AGENT_RESULT)
+  const final = typeof launched === 'string' ? launched : launched?.output
+  const model = typeof launched === 'object' ? launched.model : undefined
+  if (final === undefined) return record(run, step.id, NO_AGENT_RESULT, { host: host.id, model })
   exchange.final = final
   const result = await gated(host, step, readResult(final, kind))
   return recordResult(host, run, step, {
     ...(await confirmed(host, run, step, result)),
     output: final,
+    model,
   })
 }
 

@@ -52,8 +52,19 @@ export const TELEMETRY_FILE = 'telemetry.jsonl'
 /** `skipped`: the step's `when` did not match when it was about to start; it produces no outputs. */
 export type StepState = 'pending' | 'running' | 'skipped' | StepStatus
 export type RunState = 'running' | 'done' | 'failed' | 'parked'
+export type RunHost = 'pair-run' | 'session'
 
-export interface StepRecord {
+interface StepExecutionIdentity {
+  readonly host?: RunHost | undefined
+  readonly model?: string | undefined
+}
+
+const executionOf = ({ host, model }: StepExecutionIdentity) => ({
+  ...(host !== undefined && { host }),
+  ...(model !== undefined && { model }),
+})
+
+export interface StepRecord extends StepExecutionIdentity {
   readonly state: StepState
   readonly round?: number
   /** How many times the step was launched in this run. */
@@ -514,7 +525,7 @@ function reopenedSteps(
           state: 'pending',
           ...(saved.executions !== undefined && { executions: saved.executions }),
           ...retryBoardStatusOf(saved),
-          ...(pendingSuccess !== undefined && { pendingSuccess }),
+          ...(pendingSuccess !== undefined && { pendingSuccess, ...executionOf(saved) }),
         },
       ]
     }),
@@ -677,7 +688,13 @@ async function nextInLoop(
     steps: {
       ...state.steps,
       [step.id]: { state: 'running', round },
-      [id]: { state: 'running', executions: attempt, round, ...pending },
+      [id]: {
+        state: 'running',
+        executions: attempt,
+        round,
+        ...pending,
+        ...stagedExecutionOf(saved),
+      },
     },
   })
   const launch: StepLaunch = {
@@ -826,6 +843,7 @@ async function nextPlain(
         executions: launch.attempt,
         ...pendingOf(launch),
         ...retryBoardStatusOf(launch),
+        ...stagedExecutionOf(state.steps[step.id]),
       },
     },
   })
@@ -976,18 +994,22 @@ async function writeResult(
 const loopRound = (state: RunStateFile, outer: Step | undefined): number | undefined =>
   state.loops?.[outer?.id ?? '']?.round
 
+const stagedExecutionOf = (saved?: StepRecord): StepExecutionIdentity =>
+  saved?.pendingSuccess === undefined ? {} : executionOf(saved)
+
 /** Preserve the confirmed result before the host attempts a remote state write. */
 export async function stageSuccess(
   run: RunDirectory,
   id: string,
   result: StepResult,
+  execution: StepExecutionIdentity = {},
 ): Promise<void> {
   const state = requireState(run)
   const step = state.steps[id]
   if (step?.state !== 'running' || step.pendingSuccess !== undefined) return
   await writeState(run, {
     ...state,
-    steps: { ...state.steps, [id]: { ...step, pendingSuccess: result } },
+    steps: { ...state.steps, [id]: { ...step, pendingSuccess: result, ...executionOf(execution) } },
   })
 }
 
@@ -1009,7 +1031,7 @@ function recordOf(
   }
 }
 
-type RecordOptions = {
+type RecordOptions = StepExecutionIdentity & {
   readonly output?: string | undefined
   readonly invalidatePendingSuccess?: boolean | undefined
 }
@@ -1031,7 +1053,8 @@ const recordOptions = (value: string | RecordOptions | undefined): RecordOptions
 /**
  * Records the result of a step: validated against its kind (a result that breaks the contract is
  * recorded `failed`, `invalid-result`), written to `steps/<id>/result.json`, then to `state.json`.
- * `output` is the agent's final message, kept as `steps/<id>/output.log`.
+ * `output` is the agent's final message, kept as `steps/<id>/output.log`. The executing host and
+ * known model go into `state.json`, including when a different host confirms a staged result.
  */
 export async function record(
   run: RunDirectory,
@@ -1039,7 +1062,8 @@ export async function record(
   result: unknown,
   outputOrOptions?: string | RecordOptions,
 ): Promise<StepResult> {
-  const { output, invalidatePendingSuccess } = recordOptions(outputOrOptions)
+  const options = recordOptions(outputOrOptions)
+  const { output, invalidatePendingSuccess } = options
   const state = requireState(run)
   const { step, outer, childId } = launchable(run, stepId)
   const kind = kindByName[step.kind]
@@ -1055,6 +1079,7 @@ export async function record(
   const previous = state.steps[stepId]
   const entry = {
     ...recordOf(settled, outputs, round, previous?.executions),
+    ...executionOf(previous?.pendingSuccess === undefined ? options : previous),
     ...retryAfter(status, previous, invalidatePendingSuccess),
   }
   const { steps, loops } =
