@@ -117,6 +117,81 @@ test('#693 R5 direct lint accepts ignored files with options and rejects a missi
   }
 })
 
+for (const files of [['vitest.config.ts'], ['vitest.config.ts', 'clean.ts']]) {
+  test(`#693 R5 explicit ignored files count toward the warning limit with ${files.join(', ')}`, t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    writeFileSync(join(cwd, 'vitest.config.ts'), 'debugger;\n')
+    writeFileSync(join(cwd, 'clean.ts'), 'export const value = 1\n')
+    const check = lint(cwd, '--format', 'json', '--max-warnings', '0', ...files)
+    assert.equal(check.status, 1)
+    assert.deepEqual(check.diagnostics.map(({ filename, severity }) => [filename, severity]), [
+      ['vitest.config.ts', 'warning'],
+    ])
+  })
+}
+
+test('#693 R5 the warning limit combines ignored files and lint warnings', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  writeFileSync(join(cwd, 'vitest.config.ts'), 'debugger;\n')
+  writeFileSync(join(cwd, 'warn.ts'), 'export const value = void 0\n')
+  const warn = ['-W', 'no-void', '--max-warnings=1']
+  const native = lint(cwd, ...warn, 'warn.ts')
+  assert.equal(native.status, 0)
+  assert.deepEqual(native.diagnostics.map(({ severity }) => severity), ['warning'])
+  const ignored = ['vitest.config.ts', './vitest.config.ts']
+  const allowed = lint(cwd, '--max-warnings=1', ...ignored)
+  assert.equal(allowed.status, 0)
+  assert.equal(allowed.diagnostics.length, 1)
+
+  const overLimit = lint(cwd, '--quiet', ...warn, ...ignored, 'warn.ts')
+  assert.deepEqual(overLimit, { status: 1, diagnostics: [] })
+})
+
+test('#693 R5 quoted patterns lint matching files and honor excludes', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  mkdirSync(join(cwd, 'src/nested'), { recursive: true })
+  writeFileSync(join(cwd, '.gitignore'), 'src/tracked.cjs\n')
+  for (const file of ['src/tracked.cjs', 'src/nested/extra.cjs', 'src/outside.js', 'vitest.config.ts', 'literal[1].ts']) {
+    writeFileSync(join(cwd, file), 'debugger;\n')
+  }
+  for (const args of [['init', '-q'], ['add', '-f', 'src/tracked.cjs']]) {
+    assert.equal(spawnSync('git', args, { cwd }).status, 0)
+  }
+  writeFileSync(join(cwd, 'src/clean.js'), 'console.log("clean");\n')
+  assert.deepEqual(lint(cwd, '--max-warnings=0', 'src/clean*.js'), { status: 0, diagnostics: [] })
+
+  const check = lint(cwd, '--format', 'json', '--max-warnings=0', 'src/*.cjs', '*.ts', 'literal[1].ts')
+  assert.equal(check.status, 1)
+  assert.deepEqual(check.diagnostics.map(({ filename, severity }) => [filename, severity]).sort(), [
+    ['literal[1].ts', 'error'],
+    ['src/tracked.cjs', 'error'],
+  ])
+})
+
+for (const [name, input] of [
+  ['empty directory', 'empty'],
+  ['excluded directory', 'dist'],
+  ['unmatched pattern', 'src/*.cjs'],
+  ['excluded pattern', 'dist/*.ts'],
+]) {
+  test(`#693 R5 rejects an ${name} alongside a lintable file`, t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    mkdirSync(join(cwd, 'empty'))
+    mkdirSync(join(cwd, 'dist'))
+    writeFileSync(join(cwd, 'dist/excluded.ts'), 'debugger;\n')
+    writeFileSync(join(cwd, 'clean.ts'), 'export const value = 1\n')
+
+    const result = spawnSync(process.execPath, [runner, '--format', 'json', input, 'clean.ts'], {
+      cwd, encoding: 'utf8',
+    })
+    assert.equal(result.status, 2)
+    assert.ok(result.stderr.includes(input))
+    assert.deepEqual(lint(cwd, '--no-error-on-unmatched-pattern', input, 'clean.ts'), {
+      status: 0, diagnostics: [],
+    })
+  })
+}
+
 for (const [name, source, expected, status] of [
   ['negative zero comparison', 'export const isPositive = x => x > -0\n', 'export const isPositive = x => x > -0\n', 1],
   ['script var', 'var x = 1; console.log(x)\n', 'const x = 1; console.log(x)\n', 0],
