@@ -59,6 +59,7 @@ import {
   isSafeText,
   readAdoption,
   sessionInteractiveOf,
+  sessionSkill,
   workflowConfiguration,
   workflowDefinition,
   workflowName,
@@ -306,7 +307,7 @@ export async function openSession(project: Project, input: OpenInput) {
         ...(opened.worktree !== undefined && { worktree: opened.worktree }),
         result: {
           ...opened,
-          ...workflowSummary(workflow, config, lease.engine),
+          ...workflowSummary(project, workflow, config, lease.engine),
           runId,
           lease: lease.token,
         },
@@ -315,8 +316,14 @@ export async function openSession(project: Project, input: OpenInput) {
   )
 }
 
+const sessionLaunch = (project: Project, launch: StepLaunch): StepLaunch => ({
+  ...launch,
+  uses: sessionSkill(project, launch.uses),
+  interactive: sessionInteractiveOf(launch),
+})
+
 const sessionMessage = (launch: StepLaunch, worktree: string | undefined) =>
-  buildMessage({ ...launch, interactive: sessionInteractiveOf(launch) }, kindByName[launch.kind], {
+  buildMessage(launch, kindByName[launch.kind], {
     style: 'instruction',
     isSafeText,
     worktree,
@@ -333,7 +340,6 @@ function stepPacket(
   return {
     ...launch,
     worktree: context.worktree,
-    interactive: sessionInteractiveOf(launch),
     settings: effectiveSettings(configuration, workflow, step, context.engine),
     message: sessionMessage(launch, context.worktree),
   }
@@ -493,7 +499,8 @@ export async function nextSession(
 
     const workflow = frozenWorkflow(run)
     const config = effectiveConfiguration(run)
-    const packet = (launch: StepLaunch) => stepPacket(workflow, config, lease, launch)
+    const packet = (launch: StepLaunch) =>
+      stepPacket(workflow, config, lease, sessionLaunch(project, launch))
     if (lease.launch !== undefined)
       return {
         result: { run: 'running', ready: [packet(lease.launch)] },
@@ -541,7 +548,8 @@ export async function recordSession(
     const observed = observeRun(run)
     const writer = sessionTelemetry(observed, workflow, config, lease)
     const startedAt = new Date(lease.launchStartedAt ?? Date.now())
-    const sent = writer === undefined ? '' : sessionMessage(launch, lease.worktree)
+    const sent =
+      writer === undefined ? '' : sessionMessage(sessionLaunch(project, launch), lease.worktree)
     const final = readMessage(file)
     const result = await settleAgentStep(host, observed, launch, { final, model })
     await writer?.execution(launch, result, { sent, final, usage, startedAt, model })

@@ -26,7 +26,7 @@ Probe the current tool list for a callable subagent primitive before opening the
 
 For a fallback with only a run ID, read `workflow.name` and `card` from the main checkout's `.pair/working/runs/<run-id>/state.json` without opening the run.
 
-Resolve the absolute script path from this skill's installation. Use the adjacent `pair-capability-workflow/scripts/workflow.mjs`, or `../../capability/workflow/scripts/workflow.mjs` relative to this skill directory in the dataset layout. Run it from the project checkout where the request was made. Use that same checkout for each script call.
+Resolve the [workflow script](../pair-capability-workflow/scripts/workflow.mjs) to an absolute path relative to this skill directory. Run it from the project checkout where the request was made. Use that same checkout for each script call.
 
 ```sh
 node "$WORKFLOW_SCRIPT" start <workflow> --card <card> --engine <session-engine> [--config <name-or-file>]

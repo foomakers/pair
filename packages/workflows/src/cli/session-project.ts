@@ -1,4 +1,4 @@
-import { basename, extname, join, resolve } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   checkAgainstEngines,
   checkWorkflowTiers,
@@ -81,30 +81,42 @@ const DEFAULT_TARGETS = [
 
 type SkillsRegistry = { targets?: { path: string }[]; target_path?: string; prefix?: string }
 
-function registryTargets(registry: SkillsRegistry): readonly string[] {
-  return registry.targets?.length
-    ? registry.targets.map(target => target.path)
-    : [registry.target_path || 'skills']
-}
-
 function installedSkillPaths(project: Project, name: string, root = project.main) {
   const config = projectConfig(root) ?? projectConfig(project.main)
   const registries = (config?.['asset_registries'] ?? config?.['dataset_registries']) as
     | { skills?: SkillsRegistry }
     | undefined
   const registry = registries?.skills
-  return registry === undefined
-    ? skillPaths(root, DEFAULT_TARGETS, 'pair', name)
-    : skillPaths(root, registryTargets(registry), registry.prefix, name)
+  const bundle = dirname(project.scriptDir)
+  const target = relative(project.main, dirname(bundle))
+  const installed = /^(?:(.+)-)?capability-workflow$/.exec(basename(bundle))
+  const localBundle =
+    installed !== null && !isAbsolute(target) && target !== '..' && !target.startsWith(`..${sep}`)
+  // Partial registry overrides inherit installer targets. The bundle also identifies its own
+  // install target and prefix when the install used a source declaration or command-line config.
+  const targets = registry?.targets?.length
+    ? registry.targets.map(entry => entry.path)
+    : [
+        ...(localBundle ? [target] : []),
+        ...(registry?.target_path ? [registry.target_path] : []),
+        ...DEFAULT_TARGETS,
+      ]
+  const prefix = registry?.prefix ?? (localBundle ? (installed[1] ?? '') : 'pair')
+  const paths = skillPaths(root, targets, prefix, name)
+  if (name.startsWith('pair-')) paths.push(...skillPaths(root, targets, prefix, name.slice(5)))
+  return paths
 }
 
-function builtinSkillPaths(project: Project, name: string) {
-  return [...installedSkillPaths(project, `pair-${name}`), ...installedSkillPaths(project, name)]
+export function sessionSkill(project: Project, name: string): string {
+  const installed = installedSkillPaths(project, name, project.cwd).find(dir =>
+    isFile(join(dir, 'SKILL.md')),
+  )
+  return installed === undefined ? name : basename(installed)
 }
 
 export function cycleScripts(project: Project): string {
   const candidates = [
-    ...builtinSkillPaths(project, 'workflow-cycle').map(dir => join(dir, 'scripts')),
+    ...installedSkillPaths(project, 'pair-workflow-cycle').map(dir => join(dir, 'scripts')),
     resolve(project.scriptDir, '../../../workflow/cycle/scripts'),
   ]
   const scripts = candidates.find(dir =>
@@ -116,7 +128,7 @@ export function cycleScripts(project: Project): string {
 
 export function controlStateScript(project: Project): string {
   const candidates = [
-    ...builtinSkillPaths(project, 'next').map(dir => join(dir, 'control-state.mjs')),
+    ...installedSkillPaths(project, 'pair-next').map(dir => join(dir, 'control-state.mjs')),
     resolve(project.scriptDir, '../../../next/control-state.mjs'),
   ]
   const script = candidates.find(isFile)
@@ -258,6 +270,7 @@ export function sessionInteractiveOf(step: Pick<Step, 'kind' | 'with' | 'interac
 }
 
 export function workflowSummary(
+  project: Project,
   workflow: Workflow,
   configuration: Configuration | undefined,
   engine: string,
@@ -265,18 +278,18 @@ export function workflowSummary(
   return {
     workflow: workflow.name,
     configuration: configuration?.name,
-    steps: addressedSteps(workflow).flatMap(step =>
-      step.kind === 'loop'
-        ? []
-        : [
-            {
-              id: step.id,
-              kind: step.kind,
-              skill: step.skill ?? kindByName[step.kind].defaultSkill,
-              interactive: sessionInteractiveOf(step),
-              settings: effectiveSettings(configuration, workflow, step, engine),
-            },
-          ],
-    ),
+    steps: addressedSteps(workflow).flatMap(step => {
+      if (step.kind === 'loop') return []
+      const skill = step.skill ?? kindByName[step.kind].defaultSkill
+      return [
+        {
+          id: step.id,
+          kind: step.kind,
+          skill: skill === undefined ? undefined : sessionSkill(project, skill),
+          interactive: sessionInteractiveOf(step),
+          settings: effectiveSettings(configuration, workflow, step, engine),
+        },
+      ]
+    }),
   }
 }

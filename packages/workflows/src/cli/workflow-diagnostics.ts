@@ -30,7 +30,7 @@ export function validateWorkflow(
   const configWarnings = checkWorkflowConfiguration(workflow, selected, engineFlag)
   return {
     file: workflow.file,
-    ...workflowSummary(workflow, selected?.configuration, engine),
+    ...workflowSummary(project, workflow, selected?.configuration, engine),
     warnings: [...warnings, ...configWarnings],
   }
 }

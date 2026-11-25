@@ -1,5 +1,4 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -12,7 +11,8 @@ const roots: string[] = []
 
 afterEach(() => {
   vi.restoreAllMocks()
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  for (const root of roots.splice(0))
+    fileSystemService.rmSync(root, { recursive: true, force: true })
 })
 
 it.each([
@@ -26,7 +26,7 @@ it.each([
 ])(
   'R754-06 / AC-8: runs installed $prefix skills from $target',
   async ({ prefix, target, skills }) => {
-    const root = mkdtempSync(join(tmpdir(), 'pair-install-session-'))
+    const root = fileSystemService.mkdtempSync(join(tmpdir(), 'pair-install-session-'))
     roots.push(root)
     const fs = {
       ...fileSystemService,
@@ -34,7 +34,7 @@ it.each([
       rootModuleDirectory: () => CLI,
     }
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    writeFileSync(
+    fs.writeFileSync(
       join(root, 'pair.config.json'),
       JSON.stringify({
         worktreeRoot: 'worktrees',
@@ -57,8 +57,8 @@ it.each([
 
     const write = (path: string, value: string) => {
       const file = join(root, path)
-      mkdirSync(dirname(file), { recursive: true })
-      writeFileSync(file, value)
+      fs.mkdirSync(dirname(file), { recursive: true })
+      fs.writeFileSync(file, value)
     }
     const adoption =
       '- `pm-tool`: `filesystem`\n\n## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Todo | Draft |\n'
@@ -96,7 +96,7 @@ steps:
     )
     const runSkill = join(root, target, `${prefix}-workflow-run`, 'SKILL.md')
     const runner = join(root, target, `${prefix}-capability-workflow/scripts/workflow.mjs`)
-    const link = /\[workflow script\]\(([^)]+)\)/.exec(readFileSync(runSkill, 'utf8'))?.[1]
+    const link = /\[workflow script\]\(([^)]+)\)/.exec(fs.readFileSync(runSkill))?.[1]
     expect.soft(link && resolve(dirname(runSkill), link)).toBe(runner)
     const invoke = (file: string, ...args: string[]) =>
       spawnSync(process.execPath, [file, ...args], { cwd: root, encoding: 'utf8', timeout: 5_000 })

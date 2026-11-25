@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { basename, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { bindHosts, HostError } from './host/index.mjs'
 import { prereqState } from './cycle-state.mjs'
 import { closeStory } from './cycle-merge.mjs'
@@ -33,10 +35,12 @@ function approvalComments(pm, id, park) {
 }
 
 async function confirmReady(pm, id, adoption, boardState) {
-  const control = await import('../../pair-next/control-state.mjs').catch(error => {
-    if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error
-    return import('../../../next/control-state.mjs')
-  })
+  const cycle = basename(dirname(dirname(fileURLToPath(import.meta.url))))
+  const installed = /^(?:(.*-))?workflow-cycle$/.exec(cycle)
+  const helper = installed === null
+    ? '../../../next/control-state.mjs'
+    : `../../${encodeURIComponent(installed[1] ?? '')}next/control-state.mjs`
+  const control = await import(helper)
   const view = pm.readCard(id, { fields: ['title', 'body'] })
   const verdict = control.resolveControlState({ ...view, boardState }, control.parseStateMapping(adoption))
   if (verdict.outOfProcess || verdict.readiness === 'draft')
