@@ -124,7 +124,7 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
 
 1. **Check**: Use `$assignee`, when the caller passed one, on create and update. An empty value is absent, not an empty-string assignee. Never apply the adoption default on create or update; assignment when development starts is a separate operation. The fallback is never the authenticated user, including a bot token.
 2. **Act**: Write an explicit assignee as part of the create and of the update, never as a follow-up step. On create without `$assignee`, write the item unassigned without warning. On update without `$assignee`, leave the existing assignee unchanged, including an unassigned item, without warning: omit the assignee field rather than clearing it.
-3. **Act (rejected explicit assignee)**: report what the tool answered. If the tracker rejected an update because of the assignee, retry the item write once without the assignee and preserve the current assignment. On create, write the item without an assignee and warn that it is invisible in an assignee-filtered view; retry a rejected create only after confirming it created no item. If the created item is confirmed by evidence tied to this create attempt (the returned identifier or a unique correlation marker written with the request, never title matching alone), recover its identifier and continue board membership and every remaining create step, including establishing and verifying the parent link. If creation remains ambiguous, checkpoint the create attempt evidence, intended parent, and unresolved outcome for the caller, then HALT with `create-unconfirmed` without retrying or claiming success, regardless of `$on-failure`. Never drop it silently; this bookkeeping field never sinks the item and is never a HALT.
+3. **Act (rejected explicit assignee)**: report what the tool answered and never drop it silently; on create, write the item without an assignee and warn that it is invisible in an assignee-filtered view. On update, preserve the current assignment. This bookkeeping field never sinks the item and is never a HALT.
 4. **Verify**: re-read the item and report the observed assignment; if an explicit assignee was rejected, report the rejection. The `default-assignee` in `## Assignment` remains available for development activation and PR assignment, not this write.
 
 ### Step 7: Create or Update Issue
@@ -138,9 +138,9 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
    - **`$id` absent → Create mode**: Create a new issue in the PM tool.
    - **`$id` present → Update mode**: Verify the issue exists, then update it.
 2. **Act (Create)**:
-   - Create issue with the formatted body. Record its returned identifier immediately before any subsequent write; if the create cannot be confirmed by a read, follow Step 8 `create-unconfirmed` reconciliation even when the tool reported success.
+   - Create issue with the formatted body.
    - Apply labels based on `$type` (e.g., `user story`, `task`, `epic`, `initiative`), plus any topical labels in `$labels` (e.g. `tech-debt`).
-   - If `$parent` is provided, link to parent issue (hierarchy: epic → story → task) and read back the link. If this step fails, return the captured identifier and the pending parent link to the caller and checkpoint them; resume linking and verification on that same item before any new creation, never create a replacement.
+   - If `$parent` is provided, link to parent issue (hierarchy: epic → story → task).
    - Configure project field settings — priority, type, assignee (status via Step 7b) — per the implementation guide: the assignee is the one resolved in Step 6b, set on the create call itself, and the board state is **never** written here.
    - **Creating does not imply membership**: on an explicit-membership tool the new issue is not a board item yet. **Step 7b therefore runs on every create** — membership first, confirmed by a read — and it is what puts the item on the board; the state field is written there too, but only when Step 6 resolved one. A create never writes the state field here.
    - Record the new issue identifier for return, then **re-read the created item** and report the assignee and labels the read observed (a create is a write, so the invariant above applies to it too).
@@ -164,9 +164,9 @@ The order is **membership, then a read that confirms it, then the state field**.
 3. **Act — re-read to confirm it exists.** The add's **exit status is not evidence**: `gh project item-add` was observed exiting 0 with nothing created, and the identical second invocation created it. So confirm by reading the item back out of the view, and retry the add **once** when that read is negative.
 4. **Act — the read is still negative** ⇒ **HALT**:
 
-   > Board membership not established — item `$id` **could not be confirmed** as a member of `[view]` after adding it (`[tool's last response]`); no board state was written either. The item itself exists and is off the board: preserve its identifier and resume membership on that item, never create a replacement. A skipped board write is **never reported as success**.
+   > Board membership not established — item `$id` **could not be confirmed** as a member of `[view]` after adding it (`[tool's last response]`); no board state was written either. The item itself exists and is off the board: add it to the view manually, or re-invoke. A skipped board write is **never reported as success**.
 
-   **`$on-failure: report` exempts this beat on update only** — return `membership-unconfirmed` (Step 8b) with the same text on the `Board` row, and do not HALT. These beats run on **every** write-mode write, board state requested or not (the preamble above), so on an explicit-membership tool they sit in the path of writes that never asked to touch the board at all: an additive annotation would otherwise be sunk — and its caller stopped — by a bookkeeping read on a board it has no business with. The item's own write already landed and was confirmed by its own read in Step 7. The item is still off the board and the caller is still told exactly that: reported, never laundered into success.
+   **`$on-failure: report` exempts this beat** — return `membership-unconfirmed` (Step 8b) with the same text on the `Board` row, and do not HALT. These beats run on **every** write-mode write, board state requested or not (the preamble above), so on an explicit-membership tool they sit in the path of writes that never asked to touch the board at all: an additive annotation would otherwise be sunk — and its caller stopped — by a bookkeeping read on a board it has no business with. The item's own write already landed and was confirmed by its own read in Step 7. The item is still off the board and the caller is still told exactly that: reported, never laundered into success.
 
 5. **Act — write the state field**, **only when Step 6 resolved one**, to the board state it resolved, per the implementation guide (e.g. the GraphQL mutation for GitHub Projects). This is the **board field**, never body text. **No board state was resolved** (no `$status` was passed) ⇒ stop here and report the membership the read in 3 confirmed, with **no state written** — the item is on the board, its column is whatever the tool's own default is, and nothing claims otherwise.
 6. **Act — read the field back** and report the value the read returned. **A read-back that does not match the target is a failure**, not a success: report it as one rather than trusting the mutation's own response.
@@ -191,9 +191,9 @@ The **non-destructive** path: it appends a comment to the item and writes nothin
 
 ### Step 8: Handle Errors
 
-1. **Check**: Did the PM tool return an error during Step 7, or did a create fail confirmation by read? A specifically identified assignee rejection follows Step 6b first; a failed retry or any other error follows this step.
-2. **Skip**: If no error, proceed to output. **Comment mode is exempt** — its failures were already handled as warnings in Step 7c.2 and never reach here. **`$on-failure: report` is exempt only for updates** — the error is returned as `write-failed` (Step 8b), not raised. Create errors always follow step 3.
-3. **Act**: For a create with an unknown outcome (for example a timeout or lost response), reconcile an unknown create outcome before another create: recover an item uniquely confirmed by the returned identifier or a unique correlation marker written with this create attempt, never by title matching alone; complete and verify all remaining create steps including parent linking and membership, or checkpoint the create attempt evidence, intended parent, and unresolved outcome for the caller and HALT with `create-unconfirmed` without re-invoking creation. The caller must not count the item as created or retry until reconciliation resolves the outcome. If creation is confirmed but a later create step fails, preserve and report the confirmed ID, then resume the failed step and its verification on that same item; never create a replacement. For any other error, **HALT** with descriptive error:
+1. **Check**: Did the PM tool return an error during Step 7?
+2. **Skip**: If no error, proceed to output. **Comment mode is exempt** — its failures were already handled as warnings in Step 7c.2 and never reach here. **`$on-failure: report` is exempt too** — the error is returned as `write-failed` (Step 8b), not raised.
+3. **Act**: **HALT** with descriptive error:
 
    > PM tool error: `[error description]`. No fallback to alternative tools — resolve the issue with the adopted PM tool and re-invoke.
 
@@ -201,7 +201,7 @@ The **non-destructive** path: it appends a comment to the item and writes nothin
 
 ### Step 8b: Report, Don't Raise (`$on-failure: report`)
 
-This mode applies only to updates; a create always follows Step 8, regardless of `$on-failure`. A **HALT propagates**: it stops the composed skill and the caller that composed it. That is right for a caller whose work the write **is** — a story that was not filed did not happen. It is wrong for a caller whose write is an **additive annotation**, where the loss degrades reporting and invalidates nothing: stopping that caller trades a whole run for a bookkeeping line. Such a caller passes `$on-failure: report`, and the three **tracker-side** failures above become returned values instead of this skill's HALT:
+A **HALT propagates**: it stops the composed skill and the caller that composed it. That is right for a caller whose work the write **is** — a story that was not filed did not happen. It is wrong for a caller whose write is an **additive annotation**, where the loss degrades reporting and invalidates nothing: stopping that caller trades a whole run for a bookkeeping line. Such a caller passes `$on-failure: report`, and the three **tracker-side** failures above become returned values instead of this skill's HALT:
 
 | Failure | Where | Returned outcome |
 | --- | --- | --- |
@@ -236,7 +236,7 @@ Every value on the `Labels`, `Assignee` and `Board` rows is what a **read** retu
 
 In **comment mode** the five `n-a (comment mode)` values are the specified rendering, not an omission — one reason per row: no `$type` is taken, no template is resolved, no hierarchy is touched, no label is written and no assignee is touched, so there is nothing to report on those rows (`Status: Success` on a posted comment, or the warning text from Step 7c.2).
 
-**Return value**: The confirmed issue identifier (e.g., `#42`) — used by composing skills in chain operations. An unresolved create HALTs with `create-unconfirmed`, returns no identifier, and must not be counted or retried by the caller until reconciled.
+**Return value**: The issue identifier (e.g., `#42`) — used by composing skills in chain operations.
 
 ## Example: Creating a Task Issue
 
@@ -326,11 +326,11 @@ When invoked **independently**:
 - **Template not found** (Step 3) — missing knowledge base file.
 - **Target macrostate has no mapped board state** (Step 6) — reports the gap instead of guessing.
 - **Malformed `state-mapping` section** (Step 6) — points to canonical-states.md.
-- **Board membership could not be confirmed** by the re-read after adding it (Step 7b) — the item is off the board, and a skipped board write is never reported as success. Fires whenever a tracked view is named, `$status` or not (membership does not depend on a requested state). **Not** the minimal-board case (Step 6), which is a documented skip of the **state field** only. **Not a HALT under `$on-failure: report` on update** — returned as `membership-unconfirmed` (Step 8b).
+- **Board membership could not be confirmed** by the re-read after adding it (Step 7b) — the item is off the board, and a skipped board write is never reported as success. Fires whenever a tracked view is named, `$status` or not (membership does not depend on a requested state). **Not** the minimal-board case (Step 6), which is a documented skip of the **state field** only. **Not a HALT under `$on-failure: report`** — returned as `membership-unconfirmed` (Step 8b).
 - **`$id` provided but issue not found** (Step 7) — issue does not exist. **Not a HALT in `comment` mode** — warn with the manual-link instruction (Step 7c.2). **Not a HALT under `$on-failure: report`** — returned as `not-found` (Step 8b).
-- **PM tool error** (Step 8) — no fallback, descriptive error reported. **Not a HALT in `comment` mode** — warn (Step 7c.2). **Not a HALT under `$on-failure: report` on update** — returned as `write-failed` (Step 8b).
+- **PM tool error** (Step 8) — no fallback, descriptive error reported. **Not a HALT in `comment` mode** — warn (Step 7c.2). **Not a HALT under `$on-failure: report`** — returned as `write-failed` (Step 8b).
 
-The three rows above are the **tracker-side** failures, and they are the only update failures `$on-failure: report` exempts: they are intermittent (a 5xx, a secondary rate limit, an add that exited 0 having done nothing), so a caller that can carry on has something to carry on with. Every other row is a caller or configuration bug — deterministic, identical on re-invocation — and stays a HALT for every caller.
+The three rows above are the **tracker-side** failures, and they are the only ones `$on-failure: report` exempts: they are intermittent (a 5xx, a secondary rate limit, an add that exited 0 having done nothing), so a caller that can carry on has something to carry on with. Every other row is a caller or configuration bug — deterministic, identical on re-invocation — and stays a HALT for every caller.
 
 ## Extensibility
 

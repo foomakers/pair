@@ -62,7 +62,7 @@ Executable form of the **`plan-stories`** step. A **direct** invocation while a 
 
 ### Step 2: Build Existing Story Registry
 
-1. **Check**: Before proposing a create, resume any checkpoint from an interrupted creation for this epic. If it records an unresolved create, reconcile its attempt evidence first; HALT without creating while the outcome remains unknown. If it records a confirmed story ID and a pending parent link, link that same ID to the epic, then establish and verify board membership before building the registry; never create a replacement. If either remains unconfirmed, HALT with that ID. Then query PM tool for existing story issues linked to the selected epic — **including closed/Done items** (the closed-item triage rule in Step 3 depends on them being in the registry; many PM-tool queries default to open-only).
+1. **Check**: Query PM tool for existing story issues linked to the selected epic — **including closed/Done items** (the closed-item triage rule in Step 3 depends on them being in the registry; many PM-tool queries default to open-only).
 2. **Act**: Build a registry of existing stories, keyed for matching (idempotency key — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)):
 
    ```text
