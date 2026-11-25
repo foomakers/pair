@@ -497,6 +497,62 @@ steps:
   },
 )
 
+it.each(['refused', 'unconfirmed'])(
+  'R744-25 (#678 AC-9): retries a %s Review transition before completing refinement',
+  async failure => {
+    write(
+      '.pair/adoption/tech/way-of-working.md',
+      '## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Draft | Draft |\n| Review | Review |\n',
+    )
+    write(
+      '.pair/adoption/tech/workflows/refinement.yaml',
+      `version: 1
+name: refinement
+steps:
+  refine:
+    kind: refine-story
+    state: Review
+    with: { mode: autonomous }
+`,
+    )
+    write('.claude/skills/pair-process-refine-story/SKILL.md', '# Refine story\n')
+    let boardStatus = 'Draft'
+    const labels = ['risk:green']
+    const body = '## Acceptance Criteria\n\n## Technical Analysis\n\n## Assumptions'
+    const setState = vi.fn(async (_id: string, state: string) => {
+      boardStatus = state
+    })
+    setState.mockImplementationOnce(async (_id, state) => {
+      if (failure === 'unconfirmed') boardStatus = state
+      throw new Error('Review write not confirmed')
+    })
+    const skills = {
+      'pair-process-refine-story': () =>
+        fenced({
+          status: 'ok',
+          summary: 'Prepared',
+          boardStatus,
+          riskTag: labels[0],
+          openQuestions: [],
+        }),
+    }
+    const workflow: Partial<WorkflowHostDependencies> = {
+      readResultFacts: async () => ({ card: { boardStatus, labels, body } }),
+      board: { getState: async () => boardStatus, setState },
+    }
+    expect(await run(['refinement'], skills, {}, workflow)).toBe(1)
+    expect(states('refinement-627')).toEqual({ refine: 'failed' })
+    expect(lines.join('\n')).toContain('Review write not confirmed')
+    expect(boardStatus).toBe(failure === 'refused' ? 'Draft' : 'Review')
+
+    expect(await run(['refinement'], skills, {}, workflow)).toBe(0)
+    expect(states('refinement-627')).toEqual({ refine: 'ok' })
+    expect(boardStatus).toBe('Review')
+    expect(setState).toHaveBeenCalledTimes(failure === 'refused' ? 2 : 1)
+    expect(launched).toHaveLength(1)
+  },
+)
+
 it.each([true, false])('R744-09: a minimal board uses the DoR (design flag: %s)', async design => {
   const path = '.pair/adoption/tech/workflows/refinement.yaml'
   write(
