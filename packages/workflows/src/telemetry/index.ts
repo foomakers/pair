@@ -5,7 +5,7 @@ import {
   writeAtomic,
   type RunDirectory,
   type RunIdentity,
-  type RunState,
+  type RunEndStatus,
   type StepLaunch,
 } from '../engine'
 import type { KindName } from '../grammar'
@@ -91,7 +91,7 @@ export interface TokenSum extends TokenEntry {
 export interface RunTelemetry extends RunIdentity {
   readonly type: 'run'
   readonly schema: typeof TELEMETRY_SCHEMA
-  readonly status: Exclude<RunState, 'running'>
+  readonly status: RunEndStatus
   readonly durationMs: number
   readonly tokens: Readonly<Record<TokenName, TokenSum>>
   /** The number of step executions. */

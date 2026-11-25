@@ -310,6 +310,23 @@ export const addressedSteps = (workflow: Workflow): readonly Step[] =>
     ...(step.steps ?? []).map(child => ({ ...child, id: `${step.id}/${child.id}` })),
   ])
 
+export interface ResolvedAssignment {
+  readonly value: Assignment
+  readonly source: 'workflow.assign' | `steps.${string}.assign`
+}
+
+/** Assignment for a runnable step, using its run-wide id for loop children. */
+export function assignmentFor(workflow: Workflow, step: Step): ResolvedAssignment | undefined {
+  if (step.assign !== undefined) return { value: step.assign, source: `steps.${step.id}.assign` }
+  const loop = workflow.steps.find(
+    candidate => candidate.kind === 'loop' && step.id.startsWith(`${candidate.id}/`),
+  )
+  if (loop?.assign !== undefined) return { value: loop.assign, source: `steps.${loop.id}.assign` }
+  return workflow.assign === undefined
+    ? undefined
+    : { value: workflow.assign, source: 'workflow.assign' }
+}
+
 export type ParsedWorkflow =
   | { readonly workflow: Workflow; readonly errors: readonly [] }
   | { readonly workflow?: undefined; readonly errors: readonly WorkflowError[] }

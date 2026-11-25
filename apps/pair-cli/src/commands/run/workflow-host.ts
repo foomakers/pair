@@ -24,6 +24,7 @@ import {
   settingsFor,
   start,
   validate,
+  type Assignment,
   type CardState,
   type Configuration,
   type Filter,
@@ -81,7 +82,7 @@ import {
   readWorkflowCards,
   type WorkflowCard,
 } from './workflow-selection'
-import { workflowFacts, workflowOperation } from './workflow-facts'
+import { assignWorkflowCard, workflowFacts, workflowOperation } from './workflow-facts'
 import { sectionBodies } from './policy-sections'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
@@ -248,8 +249,8 @@ function expandedSource(workflow: Workflow): string {
         { ...step, ...(children && { steps: entries(children) }) },
       ]),
     )
-  const { version, name, description, aliases, select, steps } = workflow
-  return `${JSON.stringify({ version, name, description, aliases, select, steps: entries(steps) }, null, 2)}\n`
+  const { version, name, description, aliases, select, assign, steps } = workflow
+  return `${JSON.stringify({ version, name, description, aliases, select, assign, steps: entries(steps) }, null, 2)}\n`
 }
 
 function checkWorkflow(
@@ -495,6 +496,11 @@ type Ending = (at: string, why: string, resume: string) => string
 const ENDINGS: Readonly<Record<RunOutcome['run'], { status: string; exit: number; line: Ending }>> =
   {
     done: { status: 'completed', exit: 0, line: () => 'done — every step is ok.' },
+    skipped: {
+      status: 'skipped',
+      exit: 0,
+      line: (at, why, resume) => `skipped at step ${at} — ${why}. Resume with: ${resume}`,
+    },
     failed: {
       status: 'failed',
       exit: 1,
@@ -629,6 +635,8 @@ function hostKindsOf(
   )
   return {
     ...hostCardFacts(resolved, request.card, services),
+    assignCard: (assign: Assignment) =>
+      assignWorkflowCard(scriptDir, resolved.cwd, request.card, assign),
     perform: async (step: StepLaunch) => {
       if (step.kind !== 'approval' && step.kind !== 'merge') return gate(step)
       try {
@@ -761,7 +769,8 @@ function exhaustedEnding(
     steps: Record<string, { summary?: string; state: string }>
   }
   const exhausted = resolved.workflow.steps.find(step => state.loops?.[step.id]?.exhausted)
-  if (exhausted === undefined || outcome.run === 'done') return undefined
+  if (exhausted === undefined || outcome.run === 'done' || outcome.run === 'skipped')
+    return undefined
   const last = state.steps[`${exhausted.id}/${exhausted.until}`]
   const why = `${state.steps[exhausted.id]?.summary}; last until: ${last?.state} — ${last?.summary}`
   sink.event({

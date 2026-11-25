@@ -3,11 +3,13 @@ import { basename, join } from 'node:path'
 import { readResult } from '../dispatch'
 import {
   addressedSteps,
+  assignmentFor,
   cardStateOf,
   cardStateToConfirm,
   parseWorkflow,
   type CardState,
   type KindName,
+  type ResolvedAssignment,
   type Step,
   type When,
   type Workflow,
@@ -45,6 +47,8 @@ export const TELEMETRY_FILE = 'telemetry.jsonl'
 /** `skipped`: the step's `when` did not match when it was about to start; it produces no outputs. */
 export type StepState = 'pending' | 'running' | 'skipped' | StepStatus
 export type RunState = 'running' | 'done' | 'failed' | 'parked'
+/** A held card ends the current invocation while the stored run remains resumable. */
+export type RunEndStatus = Exclude<RunState, 'running'> | 'skipped'
 
 export interface StepRecord {
   readonly state: StepState
@@ -88,6 +92,7 @@ export interface StepLaunch {
   readonly kind: KindName
   readonly uses: string
   readonly with: Readonly<Record<string, unknown>>
+  readonly assignment?: ResolvedAssignment
   /** Validation the host runs after the step ends `ok`. */
   readonly gates?: readonly string[]
   readonly inputs: Readonly<Record<string, unknown>>
@@ -651,7 +656,7 @@ const replayLaunch = (state: RunStateFile) => {
 async function nextInLoop(
   run: RunDirectory,
   state: RunStateFile,
-  steps: readonly Step[],
+  workflow: Workflow,
   step: Step,
 ): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
   const { child, id } = loopChild(state, step)
@@ -679,7 +684,8 @@ async function nextInLoop(
     ...gatesOf(child),
     ...confirmationOf(child),
     ...pending,
-    inputs: pick({ ...inputsBefore(step, steps, state), ...state.latest }, child.kind),
+    ...assignmentOf(workflow, { ...child, id }),
+    inputs: pick({ ...inputsBefore(step, workflow.steps, state), ...state.latest }, child.kind),
     attempt,
     round,
     ...replay,
@@ -703,7 +709,8 @@ export async function next(
   readonly blocked?: SkippedStep & { readonly detail: string }
 }> {
   const state = requireState(run)
-  const { steps } = frozenWorkflow(run)
+  const workflow = frozenWorkflow(run)
+  const { steps } = workflow
   const step = steps.find(one => !settled(state, one))
   if (step === undefined) return { ready: [], run: finalState(state, steps), ...seen(skipped) }
   const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
@@ -718,8 +725,8 @@ export async function next(
     }
   if (condition !== undefined) return next(run, card, [...skipped, condition.step])
   const launched = await (step.kind === 'loop'
-    ? nextInLoop(run, state, steps, step)
-    : nextPlain(run, state, steps, step))
+    ? nextInLoop(run, state, workflow, step)
+    : nextPlain(run, state, workflow, step))
   return { ...launched, ...seen(skipped) }
 }
 
@@ -803,10 +810,10 @@ async function checkWhen(
 async function nextPlain(
   run: RunDirectory,
   state: RunStateFile,
-  steps: readonly Step[],
+  workflow: Workflow,
   step: Step,
 ): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
-  const launch = plainLaunch(state, steps, step)
+  const launch = plainLaunch(state, workflow, step)
   await writeState(run, {
     ...state,
     steps: {
@@ -822,7 +829,12 @@ async function nextPlain(
   return { ready: [launch], run: 'running' }
 }
 
-function plainLaunch(state: RunStateFile, steps: readonly Step[], step: Step): StepLaunch {
+const assignmentOf = (workflow: Workflow, step: Step) => {
+  const assignment = assignmentFor(workflow, step)
+  return assignment === undefined ? {} : { assignment }
+}
+
+function plainLaunch(state: RunStateFile, workflow: Workflow, step: Step): StepLaunch {
   if (step.kind === 'loop') throw new Error('loop is not directly launchable')
   const attempt = launches(state, step.id)
   const replayAttempt = replayAttemptOf(state)
@@ -836,7 +848,8 @@ function plainLaunch(state: RunStateFile, steps: readonly Step[], step: Step): S
     ...confirmationOf(step),
     ...pendingOf(saved),
     ...retryBoardStatusOf(saved),
-    inputs: pick(inputsBefore(step, steps, state), step.kind),
+    ...assignmentOf(workflow, step),
+    inputs: pick(inputsBefore(step, workflow.steps, state), step.kind),
     attempt,
     ...(replayAttempt !== undefined && { replayAttempt }),
   }
@@ -855,7 +868,7 @@ export function pendingMergeClosure(
   )
     return undefined
   if (!steps.slice(0, -1).every(step => settled(state, step))) return undefined
-  return plainLaunch(state, steps, merge)
+  return plainLaunch(state, workflow, merge)
 }
 
 interface Advance {

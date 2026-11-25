@@ -5,12 +5,13 @@ import {
   record,
   stageSuccess,
   type RunDirectory,
+  type RunEndStatus,
   type RunFiles,
   type RunState,
   type StepLaunch,
 } from '../engine'
 import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
-import type { CardState, KindName } from '../grammar'
+import type { Assignment, CardState, KindName } from '../grammar'
 import { violations } from '../schema'
 import type { CardFacts } from '../select'
 import { kindByName, settle, type StepResult, type StepStatus } from '../kinds'
@@ -61,6 +62,8 @@ export interface WorkflowHost {
   ): Promise<string | undefined>
   /** The card as it is now: what a step's `when` reads. Absent: a `when` on card facts matches. */
   card?(): Promise<CardFacts>
+  /** Applies the step's directive before it starts. Returns a reason when the card is held. */
+  assignCard?(assignment: Assignment): Promise<string | undefined>
   /** Runs a step of a host kind (`gate`, `approval`, `merge`): the result it returns, no agent. */
   perform?(step: StepLaunch): Promise<unknown>
   /** Runs the `gates` of a step that ended `ok`: `undefined` when all pass, else the failed result. */
@@ -95,7 +98,7 @@ export interface TelemetryOptions {
 }
 
 export interface RunOutcome {
-  readonly run: Exclude<RunState, 'running'>
+  readonly run: RunEndStatus
   /** The last step result or condition failure from this launch. */
   readonly last?: StepEvent
 }
@@ -345,7 +348,7 @@ async function executeMetered(
 }
 
 async function ended(
-  state: RunState,
+  state: RunState | RunEndStatus,
   last: StepEvent | undefined,
   writer: Writer,
 ): Promise<RunOutcome> {
@@ -370,6 +373,42 @@ async function advance(host: WorkflowHost, run: RunDirectory) {
 async function emitStep(host: WorkflowHost, event: StepEvent): Promise<void> {
   await host.transition?.(event)
   host.report?.(event)
+}
+
+async function runStep(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  writer: Writer,
+): Promise<StepEvent> {
+  let launch = step
+  if (step.assignment !== undefined && host.assignCard && step.pendingSuccess === undefined) {
+    const held = await host.assignCard(step.assignment.value)
+    if (held !== undefined) {
+      const skipped = {
+        step: step.id,
+        kind: step.kind,
+        state: 'skipped',
+        reason: 'card-held',
+        summary: held,
+      } as const
+      host.report?.(skipped)
+      return skipped
+    }
+    if (step.kind === 'implement') launch = { ...step, with: { ...step.with, assignee: 'none' } }
+  }
+  await emitStep(host, { step: step.id, kind: step.kind, state: 'running' })
+  const { status, summary, reason, detail } = await executeMetered(host, run, launch, writer)
+  const result = {
+    step: step.id,
+    kind: step.kind,
+    state: status,
+    summary,
+    ...(reason !== undefined && { reason }),
+    ...(detail !== undefined && { detail }),
+  }
+  await emitStep(host, result)
+  return result
 }
 
 /** The host loop over a started run: `next` → launch → `record`, until the run is no longer running. */
@@ -397,17 +436,7 @@ export async function runSteps(
     }
     const step = ready[0]
     if (state !== 'running' || step === undefined) return ended(state, last, writer)
-    const launchEvent = { step: step.id, kind: step.kind, state: 'running' } as const
-    await emitStep(host, launchEvent)
-    const { status, summary, reason, detail } = await executeMetered(host, run, step, writer)
-    last = {
-      step: step.id,
-      kind: step.kind,
-      state: status,
-      summary,
-      ...(reason !== undefined && { reason }),
-      ...(detail !== undefined && { detail }),
-    }
-    await emitStep(host, last)
+    last = await runStep(host, run, step, writer)
+    if (last.state === 'skipped') return ended('skipped', last, writer)
   }
 }

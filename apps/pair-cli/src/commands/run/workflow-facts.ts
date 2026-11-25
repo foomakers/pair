@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { FactReader, StepLaunch } from '@pair/workflows'
+import type { Assignment, FactReader, StepLaunch } from '@pair/workflows'
 import { runHostProcess } from './host-process'
 import { operationTimeout } from './workflow-facts-budget'
 
@@ -24,6 +24,34 @@ export async function workflowOperation(
       result.error?.message ?? (result.stderr.trim() || 'workflow host operation failed'),
     )
   return JSON.parse(result.stdout) as unknown
+}
+
+/** Applies assignment and returns a skip reason only when the card is held. */
+export async function assignWorkflowCard(
+  scriptDir: () => string,
+  cwd: string,
+  card: string,
+  assign: Assignment,
+): Promise<string | undefined> {
+  if (assign === 'none') return undefined
+  try {
+    const { status, owners, reason } = (await workflowOperation(scriptDir, cwd, {
+      action: 'assign-card',
+      card,
+      data: { assign },
+    })) as { status?: string; owners?: string[]; reason?: string }
+    if (status === 'assigned' || status === 'unchanged') return undefined
+    if (status === 'held') {
+      const held = `card held by ${owners?.join(', ') || 'another owner'}`
+      const summary = reason ? `${held}: ${reason}` : held
+      console.log(`  Warning: card ${card} skipped — ${summary}`)
+      return summary
+    }
+    throw new Error(reason ?? 'unreadable assignment result')
+  } catch (error) {
+    console.log(`  Warning: card ${card} assignment: ${(error as Error).message}`)
+    return undefined
+  }
 }
 
 export function workflowFacts(scriptDir: () => string, cwd: string, step: StepLaunch): FactReader {

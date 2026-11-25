@@ -274,6 +274,166 @@ describe('card state (AC-13)', () => {
     ).toBe(true)
     expect(states()).toEqual({ implement: 'ok', review: 'ok' })
   })
+
+  describe('#723 T-5 workflow assignment (AC-6, AC-8)', () => {
+    const implementOnly = (assign?: string) => `version: 1
+name: quick
+${assign === undefined ? '' : `assign: ${assign}\n`}steps:
+  implement: { kind: implement }
+`
+
+    const assignmentHost = (
+      actions: string[],
+      response = success(JSON.stringify({ status: 'assigned' })),
+    ) => {
+      write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Host bridge fixture')
+      hostProcess.mockImplementation(async (bin, args) => {
+        if (bin === 'sh') {
+          expect(args).toEqual(['-c', 'true'])
+          actions.push('host:gate')
+          return success()
+        }
+        const [, operation, card, raw] = args
+        expect(operation).toBe('assign-card')
+        expect(card).toBe('627')
+        const { assign } = JSON.parse(raw ?? '{}')
+        actions.push(`assign:${assign}`)
+        return assign === 'none' ? success(JSON.stringify({ status: 'unchanged' })) : response
+      })
+    }
+
+    it('applies the workflow default and step overrides before board writes and execution', async () => {
+      write(
+        '.pair/adoption/tech/workflows/quick.yaml',
+        `${implementOnly('me')}  review: { kind: review, assign: alice }
+  finish: { kind: gate, gates: [quality-gate], assign: unassign }
+`,
+      )
+      const actions: string[] = []
+      assignmentHost(actions)
+      const board = withBoard(async (_card, state) => void actions.push(`board:${state}`))
+      const skills = {
+        'pair-process-implement': () => {
+          actions.push('agent:implement')
+          return IMPLEMENTED
+        },
+        'pair-process-review': () => {
+          actions.push('agent:review')
+          return REVIEWED
+        },
+      }
+
+      expect(await run(['quick'], skills, {}, board)).toBe(0)
+
+      expect(actions).toEqual([
+        'assign:me',
+        'board:Building',
+        'agent:implement',
+        'assign:alice',
+        'board:Checking',
+        'agent:review',
+        'assign:unassign',
+        'host:gate',
+      ])
+      expect(launched[0]?.promptText).toContain('- assignee: none')
+      expect(launched[1]?.promptText).not.toContain('- assignee:')
+      expect(states()).toEqual({ implement: 'ok', review: 'ok', finish: 'ok' })
+    })
+
+    it('leaves implement dispatch unchanged when the workflow omits assign', async () => {
+      write('.pair/adoption/tech/workflows/quick.yaml', implementOnly())
+      const actions: string[] = []
+      assignmentHost(actions)
+
+      expect(
+        await run(
+          ['quick'],
+          OK,
+          {},
+          withBoard(async () => {}),
+        ),
+      ).toBe(0)
+
+      expect(actions).toEqual([])
+      expect(launched[0]?.promptText).not.toContain('- assignee:')
+    })
+
+    it('suppresses skill assignment for explicit none without asking the host to change ownership', async () => {
+      write('.pair/adoption/tech/workflows/quick.yaml', implementOnly('none'))
+      const actions: string[] = []
+      assignmentHost(actions)
+
+      expect(
+        await run(
+          ['quick'],
+          OK,
+          {},
+          withBoard(async () => {}),
+        ),
+      ).toBe(0)
+
+      expect(actions.every(action => action === 'assign:none')).toBe(true)
+      expect(launched[0]?.promptText).toContain('- assignee: none')
+    })
+
+    it('reuses the frozen workflow assignment when the authored default changes before resume', async () => {
+      const path = '.pair/adoption/tech/workflows/quick.yaml'
+      write(path, implementOnly('me'))
+      const actions: string[] = []
+      assignmentHost(actions)
+      const board = withBoard(async () => {})
+      const failed = () => fenced({ status: 'failed', summary: 'gate red' })
+      expect(await run(['quick'], { 'pair-process-implement': failed }, {}, board)).toBe(1)
+      actions.length = 0
+      write(path, implementOnly('none'))
+
+      expect(await run(['quick'], OK, {}, board)).toBe(0)
+
+      expect(actions).toEqual(['assign:me'])
+      expect(states()).toEqual({ implement: 'ok' })
+    })
+
+    it.each([
+      ['write denied', success(JSON.stringify({ status: 'warning', reason: 'write denied' }))],
+      ['read-back unavailable', { ...success(), status: 1, stderr: 'read-back unavailable' }],
+    ])(
+      'warns on %s and still runs implement with assignment disabled',
+      async (reason, response) => {
+        write('.pair/adoption/tech/workflows/quick.yaml', implementOnly('me'))
+        const actions: string[] = []
+        assignmentHost(actions, response)
+
+        expect(
+          await run(
+            ['quick'],
+            OK,
+            {},
+            withBoard(async () => {}),
+          ),
+        ).toBe(0)
+
+        expect(actions).toEqual(['assign:me'])
+        expect(lines.some(line => line.includes('Warning:') && line.includes(reason))).toBe(true)
+        expect(launched[0]?.promptText).toContain('- assignee: none')
+        expect(states()).toEqual({ implement: 'ok' })
+      },
+    )
+
+    it('skips a held card before the first board write or launch and names its owners', async () => {
+      write('.pair/adoption/tech/workflows/quick.yaml', implementOnly('me'))
+      const actions: string[] = []
+      assignmentHost(actions, success(JSON.stringify({ status: 'held', owners: ['alice', 'bob'] })))
+      const board = withBoard(async (_card, state) => void actions.push(`board:${state}`))
+
+      expect(await run(['quick'], OK, {}, board)).toBe(0)
+
+      expect(actions).toEqual(['assign:me'])
+      expect(launched).toEqual([])
+      expect(
+        lines.some(line => /skipp/i.test(line) && line.includes('alice') && line.includes('bob')),
+      ).toBe(true)
+    })
+  })
 })
 
 describe('always autonomous (AC-12)', () => {
