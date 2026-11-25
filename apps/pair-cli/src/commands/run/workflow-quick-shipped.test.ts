@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { fileSystemService as fs } from '@pair/content-ops'
-import { readGateRegistry, validate } from '@pair/workflows'
+import { readGateRegistry, readGateTargets, validate } from '@pair/workflows'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 import { isSafePromptText } from './prompt-safety'
@@ -58,6 +58,7 @@ describe('the shipped quick workflow on the shipped adoption template (r0-2)', (
     const checked = validate(shipped(QUICK), QUICK, {
       skillExists: () => true,
       gateKeys: Object.keys(readGateRegistry(shipped(WAY_OF_WORKING))),
+      gateTargets: Object.keys(readGateTargets(shipped(WAY_OF_WORKING))),
       launchInputs: ['card'],
       isSafeText: isSafePromptText,
     })

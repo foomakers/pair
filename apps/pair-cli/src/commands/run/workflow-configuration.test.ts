@@ -218,10 +218,16 @@ steps:
   },
 )
 
-it('dry run distinguishes loop failure from escalation (US-677 AC-6)', async () => {
-  write(
-    '.pair/adoption/tech/workflows/quick.yaml',
-    `version: 1
+it.each([
+  ['on-max: fail', 'on-max=fail (fails)'],
+  ['escalate: { exhausted: continue }', 'exhausted=continue'],
+  ['escalate: { exhausted: { do: stop, comment: Stuck } }', 'exhausted=stop'],
+])(
+  'dry run shows loop exhaustion policy %s (US-677 AC-6, #728 AC-13)',
+  async (policy, expected) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      `version: 1
 name: quick
 steps:
   implement: { kind: implement }
@@ -229,15 +235,16 @@ steps:
     kind: loop
     until: review
     max: 1
-    on-max: fail
+    ${policy}
     steps:
       review: { kind: review }
       fix: { kind: fix }
 `,
-  )
-  expect(await run(['quick'], OK, { dryRun: true })).toBe(0)
-  expect(lines.join('\n')).toContain('rounds: loop host on-max=fail (fails)')
-})
+    )
+    expect(await run(['quick'], OK, { dryRun: true })).toBe(0)
+    expect(lines.find(line => line.includes('rounds: loop host'))).toContain(expected)
+  },
+)
 
 describe('loop blocks (#670)', () => {
   it('resolves settings per inner step; the loop has no kind of its own', async () => {

@@ -87,6 +87,28 @@ describe('workflow aliases (#672 AC-11)', () => {
   })
 })
 
+describe('escalate grammar (#728 T-5)', () => {
+  it('reads short actions and a long action with a card comment', () => {
+    const text = seeded(
+      '    kind: implement',
+      `    kind: implement
+    escalate:
+      failed: continue
+      blocked: stop
+      needs-decision: { do: stop, comment: "Decision needed: {reason}" }`,
+    )
+    const { workflow, errors } = parseWorkflow(text, 'workflows/quick.yaml')
+    expect(errors).toEqual([])
+    expect(workflow?.steps[0]).toMatchObject({
+      escalate: {
+        failed: 'continue',
+        blocked: 'stop',
+        'needs-decision': { do: 'stop', comment: 'Decision needed: {reason}' },
+      },
+    })
+  })
+})
+
 describe('workflow assignment (#723 AC-6)', () => {
   const ASSIGNMENT = `version: 1
 name: quick
@@ -190,7 +212,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 7,
         key: 'steps.implement.retry',
         problem: "unknown key 'retry'",
-        fix: 'use one of kind, skill, when, uses, with, gates, on-failed, on-resume, alias, state, assign, until, max, on-max, steps',
+        fix: 'use one of kind, skill, when, uses, with, gates, on-failed, escalate, on-resume, alias, state, assign, until, max, on-max, steps',
       },
     ],
     [

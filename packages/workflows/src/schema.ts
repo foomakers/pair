@@ -1,13 +1,14 @@
 /**
  * The subset of JSON Schema the package needs, and its one validator: the grammar, a kind's `with`
  * options and a step's result are all checked here.
- * ponytail: no `$ref`, `oneOf` or formats; adopt a full validator when a schema needs them.
+ * This subset supports alternatives with `anyOf`, without references or formats.
  */
 export interface JsonSchema {
   readonly type?: 'object' | 'array' | 'string' | 'integer' | 'boolean'
   readonly description?: string
   readonly const?: unknown
   readonly enum?: readonly unknown[]
+  readonly anyOf?: readonly [JsonSchema, ...JsonSchema[]]
   readonly pattern?: string
   readonly required?: readonly string[]
   readonly properties?: Readonly<Record<string, JsonSchema>>
@@ -80,6 +81,17 @@ function scalarViolations(schema: JsonSchema, value: unknown, path: Path): Viola
   return []
 }
 
+function alternativeViolations(
+  alternatives: NonNullable<JsonSchema['anyOf']>,
+  value: unknown,
+  path: Path,
+): Violation[] {
+  const errors = alternatives.map(alternative => violations(alternative, value, path))
+  if (errors.some(found => found.length === 0)) return []
+  const matchingType = alternatives.findIndex(alternative => alternative.type === typeOf(value))
+  return errors[matchingType] ?? errors[0] ?? []
+}
+
 function keyViolations(schema: JsonSchema, key: string, path: Path): Violation[] {
   const names = schema.propertyNames?.pattern
   if (names !== undefined && !new RegExp(names).test(key))
@@ -131,6 +143,10 @@ function objectViolations(
 export function violations(schema: JsonSchema, value: unknown, path: Path = []): Violation[] {
   const scalar = scalarViolations(schema, value, path)
   if (scalar.length > 0) return scalar
+  if (schema.anyOf !== undefined) {
+    const alternatives = alternativeViolations(schema.anyOf, value, path)
+    if (alternatives.length > 0) return alternatives
+  }
   if (Array.isArray(value))
     return value.flatMap((item, index) => violations(schema.items ?? {}, item, [...path, index]))
   if (typeof value === 'object' && value !== null)

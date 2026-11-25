@@ -42,12 +42,12 @@ describe('gate gates (#680 AC-1)', () => {
 })
 
 describe('gate without platform facts', () => {
-  it('fails checks rather than assume, and still runs gates', async () => {
+  it('blocks checks without an adapter and still runs registry gates (R747-02)', async () => {
     expect(await runGate({ gates: ['a'] }, { registry, run: run() })).toMatchObject({
       status: 'ok',
     })
     expect(await runGate({ checks: ['ci-green'] }, { registry, run: run() })).toMatchObject({
-      status: 'failed',
+      status: 'blocked',
       reason: 'no-platform-adapter',
     })
   })
@@ -130,7 +130,7 @@ describe('gate checks (#680 AC-2)', () => {
   })
 })
 
-it('fails a check when platform facts cannot be read (#726 AC-1)', async () => {
+it('blocks a check when platform facts cannot be read (R747-02)', async () => {
   const result = await runGate(
     { checks: ['ci-green'] },
     {
@@ -143,7 +143,7 @@ it('fails a check when platform facts cannot be read (#726 AC-1)', async () => {
       }),
     },
   )
-  expect(result).toMatchObject({ status: 'failed', reason: 'fact-unreadable', detail: 'offline' })
+  expect(result).toMatchObject({ status: 'blocked', reason: 'fact-unreadable', detail: 'offline' })
 })
 
 it('does not accept a green read that finishes after the CI deadline (#726 T-5)', async () => {

@@ -1,6 +1,6 @@
 # The `quick` workflow
 
-`quick` implements a card, reviews the result and fixes the findings. It ships with pair and needs no configuration.
+`quick` implements a card, reviews the result, fixes findings when needed and runs the PR gate. The seeded project workflow uses the `increment` and `pr` targets in the Custom Gate Registry.
 
 ```bash
 pair-cli run quick --card 627
@@ -19,15 +19,23 @@ aliases:
 steps:
   implement:
     kind: implement
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
     alias: build
+    gates: [target:increment]
   review:
     kind: review
     alias: judge
     on-failed: continue
+    escalate: { blocked: stop, needs-decision: stop }
   fix:
     kind: fix
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
     alias: build
+    gates: [target:increment]
     when: { output: review.verdict, is: [changes-requested] }
+  gate:
+    kind: gate
+    with: { gates: [target:pr] }
 ```
 
 `implement` and `fix` run with the alias `build`, `review` with `judge`. A configuration sets their engine, model and effort: `pair-cli run quick --card 627 --config codex`. See [workflow-configuration.md](workflow-configuration.md).
@@ -36,16 +44,18 @@ steps:
 | ----------- | ----------- | ------------------------ | ------------------------------------------------- |
 | `implement` | `implement` | `pair-process-implement` | Implements the card, opens the PR.                |
 | `review`    | `review`    | `pair-process-review`    | Reviews that PR at the head `implement` returned. A blocking finding does not stop the run (`on-failed: continue`). |
-| `fix`       | `fix`       | `pair-process-fix`       | Fixes the findings of the review and pushes. With no blocking finding it finds nothing in scope and returns `ok`. |
+| `fix`       | `fix`       | `pair-process-fix`       | Runs when the review requests changes. It fixes the findings and pushes. |
+| `gate`      | `gate`      | Runs in the host.        | Runs the registry's `pr` target. |
 
 The grammar is in [workflow-grammar.md](workflow-grammar.md), the kinds in [workflow-kinds.md](workflow-kinds.md).
 
 ## Before the first run
 
-- The card is Ready. No command checks this: it is yours to verify.
+- Use a Ready card.
 - The skills `pair-process-implement`, `pair-process-review` and `pair-process-fix` are installed.
+- The project registry supplies the `increment` and `pr` targets. The seeded registry assigns `formatting` to both. Point the registry commands at the checks your project uses.
 
-`--dry-run` launches nothing and checks two things: the skills the workflow uses are installed, and every gate key the workflow names is in the Custom Gate Registry. It does not read the card; a real run does, and refuses one that is missing or closed.
+Validate the definition with `pair-cli workflow validate quick`. Use `--dry-run` to preview settings and step order. A real run reads the card and refuses a missing or closed card.
 
 ```bash
 pair-cli run quick --card 627 --dry-run
@@ -55,14 +65,14 @@ pair-cli run quick --card 627 --dry-run
 
 | Outcome                           | Exit | What to do                                             |
 | --------------------------------- | ---- | ------------------------------------------------------ |
-| `fix` is `ok`                     | 0    | The findings are fixed and pushed. Merging is yours.   |
-| `fix` is `failed`                 | 1    | A gate is red or a finding is not resolved: see the reason, then run the same command again. |
-| A step needs a person             | 0    | Do what the output asks, then run the resume command.  |
+| The PR gate succeeds | 0 | Review the resulting PR. |
+| An unhandled failure stops the run | 1 | Read the reason and run the same command after addressing it. |
+| A step is `blocked` or `needs-decision` | 0 | Resolve the missing prerequisite or decision, then use the printed resume command. |
 
-The last step decides the run. `quick` never merges and does not review the fixes again.
+The review's `on-failed: continue` keeps its verdict available to `fix`. A different routing policy can use [`escalate` and `when`](workflow-grammar.md#outcomes-and-escalation).
 
 ## Change it
 
-Copy the file to `.pair/adoption/tech/workflows/quick.yaml` and edit it there: the project copy wins over the shipped one. A copy under another name is another workflow: `name` must equal the file name.
+Edit `.pair/adoption/tech/workflows/quick.yaml` in your project. The project copy takes precedence. Keep `name` equal to the file name when renaming or copying a workflow. If the project has no adopted Quick, the command uses the [portable Quick example](workflow-examples/quick.yaml), which uses the original three steps and needs no gate targets.
 
-To run gates before the push, list them under `with.gates` of the `implement` and `fix` steps in your copy. Each one is a `Key` of the Custom Gate Registry in `.pair/adoption/tech/way-of-working.md`: a key the registry lacks is refused, and the error names the key.
+To change the attached checks, edit `gates` on `implement` and `fix`. Edit `with.gates` on `gate` to choose the final checks. Validation reports unknown registry keys and targets.

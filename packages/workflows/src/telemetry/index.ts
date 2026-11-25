@@ -3,18 +3,19 @@ import {
   identityOf,
   TELEMETRY_FILE,
   writeAtomic,
+  type EngineOutcome,
   type RunDirectory,
   type RunIdentity,
   type RunEndStatus,
   type StepLaunch,
 } from '../engine'
-import type { KindName } from '../grammar'
+import type { EscalationAction, KindName } from '../grammar'
 import type { StepStatus } from '../kinds'
 import { migrateTelemetryStatuses } from './legacy-status'
 
 export { TELEMETRY_FILE }
 
-/** The version of the record format of a run's `telemetry.jsonl` (ADR-033). A change of shape raises it. */
+/** The version of the record format of a run's `telemetry.jsonl` (ADR-033). Breaking changes raise it. */
 export const TELEMETRY_SCHEMA = 2
 
 /** Where a number comes from. Never a number without its origin. */
@@ -59,12 +60,17 @@ export const estimated = (sent: string, final: string): Tokens => ({
 
 export type TelemetryHost = 'pair-run' | 'session'
 
-/** One execution of a step. A re-executed step has one record per execution. */
+export interface EscalationTelemetry {
+  readonly status: EngineOutcome['status']
+  readonly do: EscalationAction
+}
+
+/** One step execution or loop exhaustion. A re-executed step has one record per execution. */
 export interface StepTelemetry extends RunIdentity {
   readonly type: 'step'
   readonly schema: typeof TELEMETRY_SCHEMA
   readonly step: string
-  readonly kind: KindName
+  readonly kind: KindName | 'loop'
   readonly uses: string
   readonly host: TelemetryHost
   readonly engine: string
@@ -75,8 +81,9 @@ export interface StepTelemetry extends RunIdentity {
   readonly tokens: Tokens
   /** Present when a token entry is estimated: how, and what the estimate does not see. */
   readonly estimate?: 'lower-bound-from-text'
-  readonly status: StepStatus | 'skipped'
+  readonly status: StepStatus | 'exhausted' | 'skipped'
   readonly reason?: string
+  readonly escalate?: EscalationTelemetry
   /** The execution number of this step in the run. */
   readonly attempt: number
   readonly round?: number
@@ -88,7 +95,7 @@ export interface TokenSum extends TokenEntry {
   readonly unknown?: readonly string[]
 }
 
-/** The closing record of a run. Its totals are sums of the step records, never a separate measurement. */
+/** The closing record of a run. Its totals count step executions, excluding loop exhaustion records. */
 export interface RunTelemetry extends RunIdentity {
   readonly type: 'run'
   readonly schema: typeof TELEMETRY_SCHEMA
@@ -99,9 +106,11 @@ export interface RunTelemetry extends RunIdentity {
   readonly steps: number
 }
 
-/** What a host knows about one execution of a step. */
+/** What a host knows about one step execution or loop exhaustion. */
 export interface StepExecution {
-  readonly step: Pick<StepLaunch, 'id' | 'kind' | 'uses' | 'attempt' | 'round'>
+  readonly step: Pick<StepLaunch, 'id' | 'uses' | 'attempt' | 'round'> & {
+    readonly kind: StepTelemetry['kind']
+  }
   readonly host: TelemetryHost
   /** The engine, model and effort actually used. */
   readonly settings: {
@@ -112,8 +121,9 @@ export interface StepExecution {
   readonly startedAt: Date
   readonly durationMs: number
   readonly tokens: Tokens
-  readonly status: StepStatus | 'skipped'
+  readonly status: StepTelemetry['status']
   readonly reason?: string
+  readonly escalate?: EscalationTelemetry
 }
 
 const fileOf = (run: RunDirectory): string => join(run.dir, TELEMETRY_FILE)
@@ -138,10 +148,10 @@ const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetr
     },
   )
 
-/** Appends the record of one execution of a step to the run's `telemetry.jsonl`. */
+/** Appends a step record to the run's `telemetry.jsonl`. */
 export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {
   const steps = stepsOf(run)
-  const { step, settings, tokens, reason } = execution
+  const { step, settings, tokens, reason, escalate } = execution
   const isEstimate = Object.values(tokens).some(entry => entry.source === 'estimated')
   const record: StepTelemetry = {
     type: 'step',
@@ -160,6 +170,7 @@ export async function recordStep(run: RunDirectory, execution: StepExecution): P
     ...(isEstimate && { estimate: 'lower-bound-from-text' as const }),
     status: execution.status,
     ...(reason !== undefined && { reason }),
+    ...(escalate !== undefined && { escalate }),
     attempt: step.attempt,
     ...(step.round !== undefined && { round: step.round }),
   }
@@ -180,21 +191,22 @@ function sumOf(name: TokenName, steps: readonly StepTelemetry[]): TokenSum {
   }
 }
 
-/** Writes the closing record of a run that ended: its outcome and the sums of its step records. */
+/** Writes a completed run's outcome and the totals of its step executions. */
 export async function closeRun(run: RunDirectory, status: RunTelemetry['status']): Promise<void> {
   const steps = stepsOf(run)
+  const executions = steps.filter(step => step.kind !== 'loop')
   const record: RunTelemetry = {
     type: 'run',
     schema: TELEMETRY_SCHEMA,
     ...identityOf(run),
     status,
-    durationMs: steps.reduce((sum, step) => sum + step.durationMs, 0),
+    durationMs: executions.reduce((sum, step) => sum + step.durationMs, 0),
     tokens: {
-      read: sumOf('read', steps),
-      cached: sumOf('cached', steps),
-      written: sumOf('written', steps),
+      read: sumOf('read', executions),
+      cached: sumOf('cached', executions),
+      written: sumOf('written', executions),
     },
-    steps: steps.length,
+    steps: executions.length,
   }
   await write(run, [...steps, record])
 }

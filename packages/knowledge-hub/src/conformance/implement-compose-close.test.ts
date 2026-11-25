@@ -24,6 +24,16 @@ const SKILLS_DIR = join(__dirname, '../../dataset/.skills')
 const dataset = (): string => readFileSync(DATASET, 'utf-8')
 const mirror = (): string => readFileSync(MIRROR, 'utf-8')
 
+it.each([
+  ['dataset', dataset],
+  ['installed mirror', mirror],
+] as const)('#728 AC 22: %s implement separates prerequisites from decisions', (_, readSkill) => {
+  const skill = readSkill()
+  expect(skill.match(/\bneeds-human\b/g)).toBeNull()
+  expect(skill).toContain('`blocked`')
+  expect(skill).toContain('`needs-decision`')
+})
+
 describe('implement composes checkpoint + publish-pr (#256)', () => {
   it('lists /checkpoint and /publish-pr as composed skills (dataset short refs)', () => {
     const c = dataset()

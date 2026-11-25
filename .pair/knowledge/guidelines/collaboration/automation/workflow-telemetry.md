@@ -28,8 +28,11 @@ A step that runs again (a resume after a failure) has one record per execution. 
 | `tokens`                     | See [Tokens](#tokens).                               |
 | `estimate`                   | `lower-bound-from-text`, only when a token entry is estimated. |
 | `status`, `reason`           | The outcome of the step.                             |
+| `escalate`                   | `{ status, do }` for an explicit rule that fired.     |
 | `attempt`                    | The execution number of this step in the run.        |
 | `round`                      | The loop round, present for an inner step.           |
+
+An exhausted loop adds a `step` record with `kind: loop`, `engine: pair`, `status: exhausted` and the round that reached the limit. It records zero tokens and duration, and contributes no execution to the run totals. Fired rules and engine exhaustion are additive to schema `2`.
 
 ### One closing record per run
 

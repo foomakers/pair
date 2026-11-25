@@ -14,6 +14,8 @@ import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memor
 import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/delivery.yaml?raw'
 // @ts-expect-error Vite loads the shipped definition as fixture text.
 import quickDefinition from '../../../../../packages/knowledge-hub/dataset/.pair/adoption/tech/workflows/quick.yaml?raw'
+// @ts-expect-error Vite loads the portable definition as fixture text.
+import portableQuick from '../../../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-examples/quick.yaml?raw'
 import baseConfig from '../../../config.json'
 import { acquireRunLock } from './run-lock'
 import { handleRunCommand } from './handler'
@@ -153,6 +155,8 @@ beforeEach(() => {
     {
       '/project/config.json': JSON.stringify(baseConfig),
       '/kb/dataset/.pair/adoption/tech/workflows/quick.yaml': quickDefinition as string,
+      '/kb/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-examples/quick.yaml':
+        portableQuick as string,
     },
     project,
     project,
@@ -179,6 +183,24 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+it('reports a missing escalation comment to the console while the run stays parked (#728 AC-8)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    `${QUICK}    escalate: { needs-decision: { do: stop, comment: 'Decision: {reason}' } }\n`,
+  )
+
+  expect(
+    await run(['quick'], {
+      ...OK,
+      'pair-process-review': () =>
+        fenced({ status: 'needs-decision', summary: 'waiting', reason: 'pick A or B' }),
+    }),
+  ).toBe(0)
+
+  expect(states()['review']).toBe('needs-decision')
+  expect(lines.join('\n')).toMatch(/comment.*(?:not written|could not be written)/i)
 })
 
 const MAPPING = `## State Mapping
@@ -807,7 +829,7 @@ steps:
     }
     expect(await run(['quick'], skills)).toBe(0)
     expect(states()).toMatchObject({
-      rounds: 'needs-decision',
+      rounds: 'exhausted',
       'rounds/review': 'failed',
       'rounds/fix': 'ok',
     })
@@ -840,6 +862,43 @@ steps:
       expect(output).toContain(action === 'escalate' ? '--more-rounds <n>' : '--restart')
     },
   )
+
+  it('reports a later blocked step after a loop continues past exhaustion (#728 AC-6, AC-13)', async () => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      loop.replace('on-max: escalate', 'escalate: { exhausted: continue }') +
+        `  fallback:
+    kind: implement
+    escalate: { blocked: stop }
+  later: { kind: review }
+`,
+    )
+    let implementations = 0
+    const skills = {
+      ...OK,
+      'pair-process-implement': () =>
+        ++implementations === 2
+          ? fenced({ status: 'blocked', summary: 'registry unavailable', reason: 'expired token' })
+          : IMPLEMENTED,
+      'pair-process-review': () => (implementations === 1 ? failedReview : REVIEWED),
+      'pair-process-fix': () => fixed,
+    }
+    const exit = await run(['quick'], skills)
+    expect(exit, lines.join('\n')).toBe(0)
+    expect(states()).toMatchObject({ rounds: 'exhausted', fallback: 'blocked', later: 'pending' })
+    const ending = lines.find(line => line.startsWith('  Run: '))
+    expect(ending).toContain('parked at step fallback')
+    expect(ending).toContain('registry unavailable (expired token)')
+    expect(ending).not.toContain('--more-rounds')
+
+    launched = []
+    expect(await run(['quick'], skills)).toBe(0)
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([
+      'pair-process-implement',
+      'pair-process-review',
+    ])
+    expect(states()).toMatchObject({ rounds: 'exhausted', fallback: 'ok', later: 'ok' })
+  })
 
   it('applies a configuration max override to the loop id', async () => {
     write('.pair/adoption/tech/workflows/quick.yaml', loop)
@@ -1117,12 +1176,11 @@ describe('workflow resolution (design §7)', () => {
     expect(states()).toEqual({ implement: 'ok' })
   })
 
-  it('falls back to the knowledge-base default of that name', async () => {
+  it('falls back to the portable Quick when there is no adopted copy', async () => {
     fs.rmSync(join(project, '.pair/adoption/tech/workflows'), { recursive: true, force: true })
     expect(await run(['quick'], OK, { dryRun: true })).toBe(0)
-    expect(
-      lines.some(line => line.includes('dataset/.pair/adoption/tech/workflows/quick.yaml')),
-    ).toBe(true)
+    expect(lines.some(line => line.includes('/workflow-examples/quick.yaml'))).toBe(true)
+    expect(lines.join('\n')).not.toContain('target:pr')
   })
 })
 
@@ -1156,6 +1214,56 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
     ])
   })
 })
+
+it.each(['top-level', 'loop'] as const)(
+  'answers the stopped %s approval after continuing an earlier one (R747-04)',
+  async placement => {
+    const prefix = `version: 1
+name: approvals
+steps:
+  advisory: { kind: approval, escalate: { needs-decision: { do: continue, comment: Advisory } } }
+`
+    const blocking =
+      placement === 'loop'
+        ? `  round:
+    kind: loop
+    until: required
+    max: 1
+    on-max: fail
+    steps:
+      required: { kind: approval }
+`
+        : '  required: { kind: approval }\n'
+    const file = '.pair/adoption/tech/workflows/approvals.yaml'
+    write(file, prefix + blocking)
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Cycle')
+    write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+    const answer = vi.fn((data: Record<string, unknown>) =>
+      data['flag'] ? [{ ...(data['flag'] as object), login: 'maintainer', channel: 'flag' }] : [],
+    )
+    hostProcess.mockImplementation(async (_bin, args) => {
+      const [, action, , raw] = args
+      if (action === 'approval-target') return success(JSON.stringify({ pr: 12, head: HEAD }))
+      if (action === 'approval-answers')
+        return success(JSON.stringify(answer(JSON.parse(raw ?? '{}'))))
+      return success('{}')
+    })
+    const required = placement === 'loop' ? 'round/required' : 'required'
+    const id = 'approvals-627'
+    expect(await run(['approvals'])).toBe(0)
+    expect(states(id)).toMatchObject({ advisory: 'needs-decision', [required]: 'needs-decision' })
+
+    // Resuming uses the frozen policy from the first invocation.
+    write(file, prefix.replace(/advisory: .*/, 'advisory: { kind: approval }') + blocking)
+    expect(await run(['approvals'], OK, { approve: '627' }), lines.join('\n')).toBe(0)
+    expect(states(id)).toMatchObject({ advisory: 'needs-decision', [required]: 'ok' })
+    expect(answer).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        flag: expect.objectContaining({ verdict: 'approved' }),
+      }),
+    )
+  },
+)
 
 it.each([
   'unchanged',

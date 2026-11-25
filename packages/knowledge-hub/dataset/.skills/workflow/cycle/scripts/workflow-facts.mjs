@@ -72,9 +72,12 @@ try {
     const expected = JSON.parse(raw)
     const target = host.code.workflowPrDetails({ pr })
     result = pr === expected.pr && target.head === expected.head && target.merged === true
-  } else if (action === 'approval-notice') {
+  } else if (action === 'card-comment-support') {
+    result = Object.hasOwn(host.pm, 'commentOnCard')
+  } else if (action === 'approval-notice' || action === 'comment-on-card') {
     const { marker, body } = JSON.parse(raw)
     result = host.pm.commentOnCard({ id: card, marker, body })
+    if (action === 'comment-on-card' && result?.error) throw new Error(result.error)
   } else if (action === 'approval-target' || action === 'approval-answers') {
     const { code, pm } = host
     const pr = code.workflowPr({ id: card })
@@ -117,8 +120,8 @@ try {
     const target = action === 'ci' ? code.workflowPrDetails({ pr }) : undefined
     const sha = target?.head ?? code.prHead({ pr })
     if ((action === 'ci' || action === 'review') && raw !== undefined && JSON.parse(raw).expectedHead !== sha)
-      throw new Error('PR head moved since review')
-    if (action === 'head') result = sha
+      result = { headChanged: true }
+    else if (action === 'head') result = sha
     else if (action === 'ci') result = code.workflowCi({ sha, base: target.base })
     else if (action === 'review') {
       result = (code.readCheckRun({ sha, context: 'pair-review' }) ?? code.readCheck({ sha, context: 'pair-review' })) === 'success'

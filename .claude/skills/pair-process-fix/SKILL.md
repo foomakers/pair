@@ -22,8 +22,9 @@ Executable form of the **`fix`** step. No how-to guide: the step exists only as 
 | Name       | Required | Meaning                                                                                                                  |
 | ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `pr`       | Yes      | The pull request.                                                                                                        |
-| `head`     | Yes      | The head the review is about.                                                                                            |
+| `head`     | Yes      | The current PR head to start fixing.                                                                                     |
 | `findings` | Yes      | The review findings: `id`, `severity`, `title`, `blocking`.                                                              |
+| `reviewedHead` | No   | The head the review and its report are about. Defaults to `head`.                                                          |
 | `severity` | No       | Lowest severity to fix: `Critical`, `Major` or `Minor` (the code-review template's severities). Default `Minor`.         |
 | `ids`      | No       | Finding ids to fix (`with.findings` of the step). When present only these are fixed and `severity` is ignored.           |
 | `gates`    | No       | Gate commands, in order. Absent or empty: none runs. The skill never chooses a gate and never adds one.                  |
@@ -34,7 +35,7 @@ Executable form of the **`fix`** step. No how-to guide: the step exists only as 
 
 ### Step 1: Scope
 
-1. Check the PR branch and review head. On resume, keep an existing descendant on the story branch, including local commits. Verify any fixes already there for this review before attempting the remaining findings.
+1. Check the PR branch against `head` and confirm the working head descends from or equals `reviewedHead` (default `head`). On resume, keep an existing descendant of `head` on the story branch, including local commits. Verify any fixes already there for this review before attempting the remaining findings.
 2. Scope = `ids` when given, else the findings whose severity is at or above `severity`. A finding outside the scope is left alone.
 3. **Empty scope** → return `ok`, `head` = the input head, `resolutions: []`. No commit, no push.
 
@@ -42,8 +43,8 @@ Executable form of the **`fix`** step. No how-to guide: the step exists only as 
 
 For each finding, in order:
 
-1. When `reportPath` is supplied, read the finding from that local report, verifying that its PR and reviewed SHA match the inputs before editing. If it is missing or does not match, return `failed` with the mismatch. When absent, read the finding from the PR review (body, file, line).
-2. **Record and continue.** When resolving a finding would contradict an acceptance criterion, needs a product decision, or requires an action only a human can perform, record it as `not-resolved` with the required action. When it depends on another unresolved finding, record that prerequisite. Continue with every independent finding in scope. A technical failure also ends only the affected attempt if its partial edits can be kept separate. Never treat a manual finding as a reason to stop before attempting independent code fixes.
+1. When `reportPath` is supplied, read the finding from that local report, verifying its PR and SHA against `pr` and `reviewedHead` (default `head`) before editing. If it is missing or does not match, return `failed` with the mismatch. When absent, read the finding from the PR review on that reviewed head (body, file, line).
+2. **Record and continue.** If resolving a finding would contradict an acceptance criterion, requires a product decision, or depends on an unavailable fact, permission or resource, record it as `not-resolved` with the prerequisite or decision needed. When it depends on another unresolved finding, record that prerequisite. Continue with every independent finding in scope. A technical failure also ends only the affected attempt if its partial edits can be kept separate. Never treat a manual finding as a reason to stop before attempting independent code fixes.
 3. **Bug** → write a failing regression test first and run it to see it fail; commit it (`test:`) before the fix. Then make the minimal fix and see the test pass. Not a bug (docs, naming, structure) → fix directly.
 4. Change nothing outside the finding. Commit per the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)), one commit per finding, naming the finding id.
 5. Record the resolution: `resolved`, or `not-resolved` with the technical `reason`.
@@ -59,15 +60,15 @@ Verify there is a resolution for each finding in scope before returning. Attempt
 
 End the turn with one JSON object in a fenced `json` block:
 
-- `status`: `ok` | `failed` | `needs-human`
+- `status`: `ok` | `failed` | `blocked` | `needs-decision`
 - `summary`: string
 - `reason`: string, when not `ok`
 - `head`: 40-hex sha after the push, or the input head when nothing changed
 - `resolutions`: `[{ id, status: "resolved" | "not-resolved", reason }]`
 
-`head` and `resolutions` are returned for `ok` and `failed` (on a red gate: the input head, nothing was pushed); `needs-human` may omit them.
+Return `head` and `resolutions` for `ok` and `failed`. If a red gate prevents the push, return the input head. For `blocked` and `needs-decision`, these fields are optional.
 
-Status: `ok` when every finding in scope is `resolved` and the push succeeds or is unnecessary. Return `failed` for a red gate with continuation disabled, a failed push, or an unresolved technical finding. Return `needs-human` when only human actions and their dependents remain. For either stop, report the unresolved finding IDs and reasons.
+Status: `ok` when every finding in scope is `resolved` and the push succeeds or is unnecessary. Return `failed` for a red gate with continuation disabled, a failed push, or an unresolved technical finding. Return `blocked` when a remaining finding needs an unavailable fact, permission or resource. Return `needs-decision` when a remaining finding needs a decision reserved for a person. For any stop, report the unresolved finding IDs and reasons.
 
 ## Never
 
