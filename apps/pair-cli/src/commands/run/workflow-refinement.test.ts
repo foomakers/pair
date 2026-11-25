@@ -147,6 +147,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     ['a stale task count after a refused write (R744-11)', 'refused', false, 'tasks'],
     ['a stale task count after Ready lands (R744-11)', 'unconfirmed', false, 'tasks'],
     ['stale refinement after Ready lands (R744-07)', 'unconfirmed', false, 'Assumptions'],
+    ['a missing batch summary (R744-24, AC-4/AC-6)', 'summary', false, undefined],
   ] as const)('completes and skips cards with %s', async (_name, failure, canonical, stale) => {
     const source = '.pair/adoption/tech/workflows/refinement.yaml'
     write(
@@ -166,7 +167,10 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     const bodies = new Map<string, string>()
     const prerequisiteAtLaunch: string[] = []
     let failRead = false
-    let failReady = failure !== undefined
+    const noSummary = failure === 'summary'
+    let parkCard = noSummary ? '10' : undefined
+    let failReady = failure !== undefined && !noSummary
+    let cycle = false
     const applied = failure === 'unconfirmed' || failure === 'legacy'
     function prepareCard(id: string, refine: boolean) {
       if (refine) {
@@ -187,7 +191,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
         status: status.get(id) === draft ? 'Draft' : 'Ready',
         boardState: status.get(id) ?? null,
         closed: false,
-        prerequisites: id === '12' ? ['9'] : [],
+        prerequisites: id === '12' || (cycle && id === '10') ? ['9'] : cycle ? ['10'] : [],
       })),
     })
     const workflow: WorkflowHostDependencies = {
@@ -219,6 +223,14 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
         const current = status.get(id)
         launched.push(input)
         if (id === '12') prerequisiteAtLaunch.push(states('refinement-9')['tasks'] ?? '')
+        if (id === parkCard) {
+          input.onEvent?.({
+            type: 'result',
+            subtype: 'success',
+            result: fenced({ status: 'needs-human', summary: 'Product decision pending' }),
+          })
+          return { outcome: 'success', detail: 'terminal event: success' }
+        }
         const result = prepareCard(id, skillOf(input.promptText) === 'pair-process-refine-story')
         expect(current).toBe(result.tasks === 2 && applied ? ready : draft)
         input.onEvent?.({
@@ -237,6 +249,28 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     const command = parseRunCommand({ cwd: project, card: ids.join(','), parallel: '2' }, [
       'refinement',
     ])
+    if (noSummary) {
+      const writeFile = fs.writeFileSync
+      const summaryWrite = vi.spyOn(fs, 'writeFileSync').mockImplementation((path, content) => {
+        if (path.endsWith('/summary.json')) throw new Error('summary write refused')
+        return writeFile(path, content)
+      })
+      await expect(handleRunCommand(command, fs, { workflow })).rejects.toThrow(
+        'summary write refused',
+      )
+      summaryWrite.mockRestore()
+      expect(status.get('9')).toBe(ready)
+      expect(states('refinement-10')['refine']).toBe('needs-human')
+
+      cycle = true
+      parkCard = undefined
+      launched.length = 0
+      await expect(handleRunCommand(command, fs, { workflow })).rejects.toThrow(
+        'dependency-cycle: #9 → #10 → #9',
+      )
+      expect(launched).toHaveLength(0)
+      return
+    }
     async function retryReady() {
       const afterFailure = applied ? ready : draft
       expect(status.get('9')).toBe(afterFailure)
