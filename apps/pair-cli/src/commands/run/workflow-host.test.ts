@@ -21,6 +21,8 @@ import portableQuick from '../../../../../packages/knowledge-hub/dataset/.pair/k
 import piSuccess from './__fixtures__/pi-success.jsonl?raw'
 // @ts-expect-error Vite loads the recorded engine stream as fixture text.
 import openCodeSuccess from './__fixtures__/opencode-success.jsonl?raw'
+// @ts-expect-error Vite loads the recorded engine stream as fixture text.
+import openCodeIntermediate from './__fixtures__/opencode-intermediate-steps.jsonl?raw'
 import baseConfig from '../../../config.json'
 import { acquireRunLock } from './run-lock'
 import { handleRunCommand } from './handler'
@@ -780,6 +782,25 @@ it.each([
     )
   },
 )
+
+it('#704 F7: OpenCode faults when only a tool-call step has text (AC-2, AC-3)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
+  )
+  const events = (openCodeIntermediate as string).split('\n')
+  const text = fenced({ status: 'blocked', summary: 'Intermediate', reason: 'intermediate-only' })
+  events.splice(1, 0, JSON.stringify({ type: 'text', part: { type: 'text', text } }))
+  const runIteration = (input: SpawnIterationInput) => replayEngine(input, events.join('\n'))
+
+  expect(await run(['quick'], OK, { engine: 'opencode' }, { runIteration })).toBe(0)
+  const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+  expect(state.steps['implement']).toMatchObject({
+    state: 'blocked',
+    reason: 'fault',
+    attempts: [{ attempt: 1, kind: 'no-result' }],
+  })
+})
 
 it.each([
   { subtype: 'success', attempts: 1, reason: 'approval-required' },
