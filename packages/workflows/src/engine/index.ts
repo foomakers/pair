@@ -243,7 +243,7 @@ export async function migrateRunTelemetry(run: RunDirectory): Promise<string | u
   return undefined
 }
 
-function requireState(run: RunDirectory): RunStateFile {
+export function requireState(run: RunDirectory): RunStateFile {
   const state = readState(run)
   if (state === undefined) throw new Error(`run-not-started: no ${STATE_FILE} in ${run.dir}`)
   return state

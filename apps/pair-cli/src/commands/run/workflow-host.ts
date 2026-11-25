@@ -27,7 +27,6 @@ import {
   runSteps,
   settingsFor,
   start,
-  stepSettled,
   stoppedApproval,
   stoppedLoop,
   type Assignment,
@@ -48,7 +47,12 @@ import {
   type WorkflowHost,
   type WorkflowsConfig,
 } from '@pair/workflows'
-import { approvalPlatform, hostSteps, riskTagFamily } from '@pair/workflows/cli'
+import {
+  approvalPlatform,
+  hostSteps,
+  refreshReplayInputs,
+  riskTagFamily,
+} from '@pair/workflows/cli'
 import { prepareCardWorktree } from '@pair/workflows/worktree'
 import { loadConfigWithOverrides } from '#config'
 import type { Config } from '#registry'
@@ -842,33 +846,11 @@ function parkedApproval(opened: Opened, fs: FileSystemService): string | undefin
   return parked
 }
 
-async function refreshReplayInputs(
-  opened: Opened,
-  fs: FileSystemService,
-): Promise<StepReplay | undefined> {
-  const saved = savedWorkflow(opened.request, opened.runDir, fs)
-  if (saved === undefined) return undefined
-  const { workflow, state } = saved
-  const { resolved, request } = opened
-  const stopped = workflow.steps.find(step => !stepSettled(step, state.steps[step.id]?.state))
-  const route = stopped?.['on-resume']
-  if (stopped === undefined || route === undefined) return undefined
-  const failure = state.steps[stopped.id]
-  if (failure?.state !== 'failed' || failure.reason !== route.reason) return undefined
-  const from = workflow.steps.findIndex(step => step.id === route.step)
-  const pr = workflow.steps
-    .slice(0, from)
-    .reverse()
-    .map(step => state.steps[step.id]?.outputs?.['pr'])
-    .find(value => typeof value === 'number')
-  if (pr === undefined) throw new Error('Cannot replay without the original workflow PR')
+function workflowReplay({ request, runDir, resolved }: Opened, fs: FileSystemService) {
   const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
-  const platform = approvalPlatform((action, card, data) =>
+  return refreshReplayInputs(savedWorkflow(request, runDir, fs), (action, card, data) =>
     workflowOperation(locate, resolved.cwd, { action, card, data }),
   )
-  const current = await platform.target(request.card)
-  if (current.pr !== pr) throw new Error('The workflow PR changed; start a new run for that PR')
-  return { from: route.step, inputs: { head: current.head } }
 }
 
 function recordIncludeSources(
@@ -940,7 +922,7 @@ async function drive(
   const { fs, deps } = services
   if (opened.closureOnly) return finishClosure(opened, fs)
   const flagStep = parkedApproval(opened, fs)
-  const replay = await refreshReplayInputs(opened, fs)
+  const replay = await workflowReplay(opened, fs)
   const prepare = () =>
     (deps.workflow?.prepareWorktree ?? cycleWorktree)({
       fs,
@@ -951,7 +933,7 @@ async function drive(
       title: opened.title,
     })
   const replayTree = replay && (await prepare())
-  if (replay && replayTree) await prepareReplayHead(replayTree, String(replay.inputs['head']))
+  if (replay && replayTree) await prepareReplayHead(replayTree, replay.inputs.head)
   const started = await startOnConsole(opened, fs, replay)
   const effective = effectiveConfiguration({ files: fs, dir: runDir })
   printSettings(resolved, effective)

@@ -20,6 +20,7 @@
     "assess-security-cost-coupling",
     "---Deliver---",
     "create-workflow",
+    "run-workflow-in-session",
     "deliver-a-card",
     "autonomy-and-profiles",
     "hooks-and-severities",

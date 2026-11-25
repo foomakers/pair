@@ -1,12 +1,13 @@
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { configurationText, type Configuration } from '../configuration'
 import { buildMessage } from '../dispatch'
 import {
   FROZEN_WORKFLOW,
   STATE_FILE,
+  completedRun,
   effectiveConfiguration,
   frozenWorkflow,
-  identityOf,
+  requireState,
   start,
   stepSettled,
   writeAtomic,
@@ -29,10 +30,14 @@ import {
 } from '../host'
 import { kindByName } from '../kinds'
 import { reopenRun, type Usage } from '../telemetry'
+import { prepareReplayHead } from '../worktree'
+import { runHostProcess } from '../worktree/host-process'
 import { sessionCard, sessionWorktree } from '../worktree/session'
 import { withSessionLease, type SessionApproval, type SessionLease } from './run-lock'
 import { sessionHost } from './session-host'
 import { approvalQuestion, type ApprovalTarget } from './workflow-approval'
+import { runWorkflowOperation } from './workflow-facts'
+import { refreshReplayInputs } from './workflow-replay'
 import { readMessage, readText, sessionFiles } from './session-files'
 import {
   cycleScripts,
@@ -120,19 +125,31 @@ async function resumeSaved(
   input: OpenInput,
   definition: Definition | undefined,
 ) {
-  const { card, workflow, run: id } = identityOf(run)
+  const state = requireState(run)
+  const { card } = state
+  const workflow = state.workflow.name
   const expected = definition?.workflow.name
   if (
     'card' in input &&
     (input.card !== card || (expected ?? workflowName(input.workflow)) !== workflow)
   )
-    throw new Error(`run-mismatch: ${id} belongs to workflow ${workflow} on card ${card}`)
+    throw new Error(
+      `run-mismatch: ${basename(run.dir)} belongs to workflow ${workflow} on card ${card}`,
+    )
   const file = join(run.dir, FROZEN_WORKFLOW)
-  const text = readText(file)
-  frozenWorkflow(run)
+  const source = { file, text: readText(file) }
   effectiveConfiguration(run) // Refuse an unreadable frozen file before touching the worktree.
-  const worktree = await prepareSessionWorktree(project, cycleScripts(project), card)
-  return { ...(await start(run, { file, text }, { card })), card, worktree }
+  if (completedRun(run, { card, workflow }))
+    return { ...(await start(run, source, { card })), card, worktree: undefined }
+  const scripts = () => cycleScripts(project)
+  const replay = await refreshReplayInputs(
+    { workflow: frozenWorkflow(run), state },
+    (action, card, data) =>
+      runWorkflowOperation(runHostProcess, scripts, project.main, { action, card, data }),
+  )
+  const worktree = await prepareSessionWorktree(project, scripts(), card)
+  if (replay) await prepareReplayHead(worktree, replay.inputs.head, runHostProcess)
+  return { ...(await start(run, source, { card, ...(replay && { replay }) })), card, worktree }
 }
 
 export async function openSession(project: Project, input: OpenInput) {
@@ -159,7 +176,7 @@ export async function openSession(project: Project, input: OpenInput) {
       else await writer.reopen()
     }
     return {
-      worktree: opened.worktree,
+      ...(opened.worktree !== undefined && { worktree: opened.worktree }),
       result: {
         ...opened,
         ...workflowSummary(workflow, config, lease.engine),

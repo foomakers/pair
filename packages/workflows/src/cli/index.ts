@@ -6,6 +6,7 @@ export { assignCard, runWorkflowOperation, stepFacts, type HostOperation } from 
 export { operationTimeout } from './workflow-facts-budget'
 export { hostGateRunners } from './workflow-kinds'
 export { workflowMerge } from './workflow-merge'
+export { refreshReplayInputs } from './workflow-replay'
 export { hostSteps } from './host-steps'
 export { riskTagFamily, sectionBodies } from './risk-tag-family'
 export { canCommentOnCard } from '../worktree/session'

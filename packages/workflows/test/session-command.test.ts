@@ -363,6 +363,26 @@ it('#696 AC-4: takes over an orphaned headless run and relaunches its interrupte
   successful(['stop', runId, ...lease])
 })
 
+it('#696 AC-1/AC-4: resumes a completed headless run without recreating its worktree', async () => {
+  await seedHeadlessRun()
+  const run = { dir: runDir, files }
+  await record(run, 'discuss', discussed, { host: 'pair-run' })
+  expect(await next(run)).toMatchObject({ run: 'done', ready: [] })
+  git('worktree', 'remove', worktree)
+  const outcomes = ['state.json', 'steps/draft/result.json', 'steps/discuss/result.json']
+  const saved = outcomes.map(readRun)
+
+  const opened = JSON.parse(successful(['resume', runId, '--engine', 'codex'])) as {
+    lease: string
+  }
+
+  expect(opened).toMatchObject({ runId, status: 'complete' })
+  successful(['stop', runId, '--lease', opened.lease])
+  expect(outcomes.map(readRun)).toEqual(saved)
+  expect(existsSync(worktree)).toBe(false)
+  expect(git('worktree', 'list', '--porcelain')).not.toContain(`worktree ${worktree}\n`)
+})
+
 const namedWorkflow = (steps: string) => `version: 1\nname: quick\nsteps:\n${steps}`
 
 function startWorkflow(steps: string) {
@@ -580,6 +600,7 @@ export default defineAdapter({
       throw new Error('Unexpected fixture code host call: ' + method)
     }])),
     workflowPr: () => ${pr},
+    prHead: () => state().head,
     workflowPrDetails: () => ({
       head: state().head,
       merged: state().merges.length > 0,
@@ -605,6 +626,65 @@ export default defineAdapter({
   write(codeState, JSON.stringify({ head, permission, merges: [] }))
   return head
 }
+
+it('#696 AC-1/AC-4: replays review at the current PR head after a saved gate failure', async () => {
+  const reviewedHead = git('rev-parse', 'HEAD').trim()
+  const head = installCodeHost('write')
+  git('worktree', 'add', '-b', branch, worktree, 'main')
+  expect(git('-C', worktree, 'rev-parse', 'HEAD').trim()).toBe(head)
+  expect(git('-C', worktree, 'status', '--porcelain')).toBe('')
+  const source = namedWorkflow(`  implement: { kind: implement }
+  review: { kind: review }
+  verify:
+    kind: gate
+    with: { checks: [head-unchanged] }
+    on-resume: { reason: head-changed, step: review }
+`)
+  const run = { dir: runDir, files }
+  await start(run, { file: join(main, workflowFile), text: source }, { card })
+  await next(run)
+  await record(
+    run,
+    'implement',
+    { status: 'ok', summary: 'Implemented', pr, head: reviewedHead, branch },
+    { host: 'pair-run' },
+  )
+  await next(run)
+  await record(run, 'review', {
+    status: 'ok',
+    summary: 'Approved',
+    verdict: 'approved',
+    reviewedHead,
+    findings: [],
+  })
+  await next(run)
+  await record(run, 'verify', { status: 'failed', summary: 'Head moved', reason: 'head-changed' })
+  expect(JSON.parse(readRun('state.json'))).toMatchObject({
+    steps: {
+      review: { state: 'ok', outputs: { reviewedHead } },
+      verify: { state: 'failed', reason: 'head-changed' },
+    },
+  })
+
+  const lease = openSession(['resume', runId, '--engine', 'codex'])
+
+  expect(JSON.parse(readRun('state.json'))).toMatchObject({
+    steps: {
+      implement: {
+        state: 'ok',
+        executions: 1,
+        host: 'pair-run',
+        outputs: { pr, head: reviewedHead },
+      },
+      verify: { state: 'pending', executions: 1 },
+    },
+  })
+  expect(advance(lease)).toMatchObject({
+    run: 'running',
+    ready: [{ id: 'review', attempt: 2, inputs: { pr, head }, worktree }],
+  })
+  successful(['stop', runId, ...lease])
+})
 
 const parkedApproval = {
   run: 'parked',
