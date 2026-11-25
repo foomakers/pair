@@ -19,7 +19,7 @@ const crash: AgentLaunchResult = {
 }
 const malformed = { final: 'no JSON' }
 
-function startTest(steps: string, answers: readonly AgentLaunchResult[]) {
+function startTest(steps: string, answers: readonly (AgentLaunchResult | Error)[]) {
   const files = createMemoryFiles()
   const run = { dir: '/run', files }
   const sent: { attempt: number; round?: number | undefined; message: string }[] = []
@@ -31,6 +31,7 @@ function startTest(steps: string, answers: readonly AgentLaunchResult[]) {
       const answer = answers[sent.length]
       sent.push({ attempt, round, message })
       if (!answer) throw new Error('unexpected launch')
+      if (answer instanceof Error) throw answer
       return answer
     },
   }
@@ -73,6 +74,26 @@ describe('#704: process retries', () => {
       const test = startTest(work(', retries: 1'), [crash, last])
       expect(await test.run()).toMatchObject({ run, last: { state, reason } })
       expect(test.sent).toHaveLength(2)
+    },
+  )
+
+  it.each([1, 2])(
+    '#704 F2: resumes with the unspent part of a budget of %i (AC-2)',
+    async retries => {
+      const test = startTest(work(`, retries: ${retries}`), [
+        crash,
+        new Error('interrupted'),
+        crash,
+        ok,
+      ])
+      await expect(test.run()).rejects.toThrow('interrupted')
+      expect(test.state().steps['work']).toMatchObject({ state: 'running', executions: 2 })
+
+      expect(await test.run()).toMatchObject({ run: retries === 1 ? 'parked' : 'done' })
+      expect(test.sent.map(attempt => attempt.attempt)).toEqual(
+        retries === 1 ? [1, 2, 3] : [1, 2, 3, 4],
+      )
+      expect(new Set(test.sent.map(attempt => attempt.message)).size).toBe(1)
     },
   )
 
