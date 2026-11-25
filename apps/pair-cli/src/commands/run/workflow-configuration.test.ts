@@ -345,6 +345,47 @@ describe('validation of the configuration (AC-4)', () => {
   })
 })
 
+describe('#707 AC-5 workflow tier validation', () => {
+  const withTiers = (tiers: Record<string, string | Record<string, string>>) => {
+    write(
+      'pair.config.json',
+      JSON.stringify({ workflows: { quick: { configuration: 'mine', tiers } } }),
+    )
+    writeConfig()
+  }
+
+  it.each([
+    ['an unmatched label', { 'risk:red': 'missing-tier-config' }, /risk:red.*missing-tier-config/],
+    [
+      'another engine arm',
+      { 'risk:green': { claude: 'mine', codex: 'missing-tier-config' } },
+      /risk:green.*missing-tier-config/,
+    ],
+    ['a malformed label', { ' risk:red ': 'mine' }, /label/i],
+  ] as const)('refuses %s before any launch', async (_case, tiers, diagnostic) => {
+    withTiers(tiers)
+    const code = await run(
+      ['quick'],
+      OK,
+      {},
+      {
+        readCard: async () => ({ title: 'A card', labels: ['risk:green'] }),
+      },
+    )
+    expect(code, lines.join('\n')).toBe(1)
+    expect(lines.join('\n')).toContain('workflows.quick.tiers')
+    expect(lines.join('\n')).toMatch(diagnostic)
+    expect(launched).toEqual([])
+  })
+
+  it('runs with a valid name and engine map when no label matches', async () => {
+    withTiers({ 'risk:green': 'mine', 'risk:red': { claude: 'mine', codex: 'cx' } })
+    writeConfig('cx', CONFIG.replace('engine: claude', 'engine: codex'))
+    expect(await run(['quick'])).toBe(0)
+    expect(launched[0]?.model).toBe('claude-sonnet-5-5')
+  })
+})
+
 describe('override (AC-6)', () => {
   it('deep-merges over the file, runs with it and records it in state.json', async () => {
     writeConfig()

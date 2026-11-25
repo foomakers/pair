@@ -5,6 +5,7 @@ import {
   addressedSteps,
   applyOverride,
   checkAgainstEngines,
+  checkWorkflowTiers,
   configurationText,
   firstExisting,
   formatError,
@@ -92,7 +93,11 @@ export interface ConfigurationOutcome {
 
 const refused = (...errors: string[]): ConfigurationOutcome => ({ errors, warnings: [] })
 
-function locate(fs: FileSystemService, name: string, at: { cwd: string; main: string }) {
+export function locateConfiguration(
+  fs: FileSystemService,
+  name: string,
+  at: { cwd: string; main: string },
+): string | undefined {
   if (isConfigurationPath(name))
     return firstExisting([resolve(at.cwd, name)], p => fs.existsSync(p))
   const candidates = [join(at.main, CONFIGURATIONS_DIR, `${name}.yaml`)]
@@ -108,7 +113,7 @@ function locate(fs: FileSystemService, name: string, at: { cwd: string; main: st
 /** The selected file, parsed: `undefined` when nothing is selected; else the configuration or the refusal. */
 function load(input: ConfigurationInput, selection: { name: string; via: string } | undefined) {
   if (selection === undefined) return undefined
-  const found = locate(input.fs, selection.name, input)
+  const found = locateConfiguration(input.fs, selection.name, input)
   if (found === undefined)
     return refused(
       `configuration-not-found: '${selection.name}' (${selection.via}) is neither a file nor ` +
@@ -162,6 +167,11 @@ function choose(input: ConfigurationInput): Chosen | ConfigurationOutcome {
 
 /** Which configuration runs, validated and merged with the override — or why the run is refused. */
 export function resolveConfiguration(input: ConfigurationInput): ConfigurationOutcome {
+  const errors = checkWorkflowTiers(
+    input.project['workflows'],
+    name => locateConfiguration(input.fs, name, input) !== undefined,
+  )
+  if (errors.length > 0) return refused(...errors)
   const chosen = choose(input)
   if ('errors' in chosen) return chosen
   const { configuration, file, source, override } = chosen
