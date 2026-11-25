@@ -448,7 +448,8 @@ export async function handleMappedWorkflow(
   )
   const flags = flagsOf(config.scope, assignee)
   const { selected, excluded } = mappedCard(cards[0], names, { main, config, services, flags })
-  if (selected !== undefined) return await handleWorkflowRun(config, selected.request, services)
+  if (selected !== undefined)
+    return await handleWorkflowRun(config, { ...selected.request, selectionFlags: flags }, services)
   if (excluded) {
     printOutcome({ id: card, outcome: 'not-applicable', reason: 'selection filter' })
     return 0

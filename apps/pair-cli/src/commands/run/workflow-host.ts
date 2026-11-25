@@ -26,6 +26,7 @@ import {
   validate,
   type CardState,
   type Configuration,
+  type Filter,
   type RunOutcome,
   type StepResult,
   type ResultFacts,
@@ -1140,6 +1141,8 @@ type BatchCard = {
   releases: Set<() => void>
 }
 
+type WorkflowRunRequest = RunWorkflowRequest & { readonly selectionFlags?: Filter }
+
 function printWorkflowPreview(resolved: Resolved): number {
   addressedSteps(resolved.workflow).forEach(step => {
     const host = step.kind === 'loop' || kindByName[step.kind].host === true
@@ -1152,21 +1155,22 @@ function printWorkflowPreview(resolved: Resolved): number {
   return 0
 }
 
-function configuredSelection(resolved: Resolved) {
+function configuredSelection(resolved: Resolved, selectionFlags: Filter = {}) {
   const workflow = resolved.workflow.select
   const configuration = resolved.configuration?.configuration.select
-  return (configuration?.filter ?? workflow?.filter) === undefined
+  return (configuration?.filter ?? workflow?.filter) === undefined &&
+    Object.keys(selectionFlags).length === 0
     ? undefined
-    : effectiveSelection(workflow, configuration)
+    : effectiveSelection(workflow, configuration, selectionFlags)
 }
 
 async function acceptsCard(
   resolved: Resolved,
-  request: RunWorkflowRequest,
+  request: WorkflowRunRequest,
   runDir: string,
   { fs, deps }: Services,
 ): Promise<boolean> {
-  const selection = configuredSelection(resolved)
+  const selection = configuredSelection(resolved, request.selectionFlags)
   if (selection === undefined) return true
   const { cards } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
     { fs, ...resolved },
@@ -1195,7 +1199,7 @@ function completedWorkflow(
 
 export async function handleWorkflowRun(
   config: RunCommandConfig,
-  request: RunWorkflowRequest,
+  request: WorkflowRunRequest,
   services: Services,
   batch?: BatchCard,
 ): Promise<number> {
@@ -1209,7 +1213,7 @@ export async function handleWorkflowRun(
 
 async function openCard(
   resolved: Resolved,
-  request: RunWorkflowRequest,
+  request: WorkflowRunRequest,
   services: Services,
   batch?: BatchCard,
 ): Promise<Opened | undefined> {
