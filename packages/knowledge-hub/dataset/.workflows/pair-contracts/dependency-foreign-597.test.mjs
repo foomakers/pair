@@ -12,7 +12,7 @@ const SCRIPTS = join(
   dirname(fileURLToPath(import.meta.url)),
   '../../skills/pair-workflow-cycle/scripts',
 )
-const { prereqState } = await import(pathToFileURL(join(SCRIPTS, 'cycle-state.mjs')).href)
+const { dependencyIds, prereqState } = await import(pathToFileURL(join(SCRIPTS, 'cycle-state.mjs')).href)
 const { bindHosts } = await import(pathToFileURL(join(SCRIPTS, 'host/index.mjs')).href)
 
 const dir = mkdtempSync(join(tmpdir(), 'dep-foreign-'))
@@ -80,3 +80,29 @@ for (const [row, body, ids] of [
       state(body).prerequisites.map(p => p.id),
       ids,
     ))
+
+for (const foreign of ['other/repo#12', 'https://github.com/other/repo/issues/12']) {
+  test(`R744-23: retains local edges alongside ${foreign}`, () => {
+    const { pm } = bindHosts({
+      binding: { pmTool: 'github', codeHost: 'github' },
+      transport: { ghBin: gh },
+    })
+    const body = `Depends on #3, ${foreign}, https://github.com/acme/pair/issues/7`
+    assert.deepEqual(dependencyIds(body, '42', ref => pm.parseCardRef(ref), true), {
+      ids: ['7', '3'],
+      uncertain: body,
+    })
+  })
+}
+
+test('R744-23: warns on a URL rejected by the tracker and keeps its local edge', () => {
+  const { pm } = bindHosts({
+    binding: { pmTool: 'linear', codeHost: 'github' },
+    transport: { team: 'ENG' },
+  })
+  const body = 'Depends on https://linear.app/acme/issue/ENG-7 and https://github.com/other/repo/issues/12'
+  assert.deepEqual(dependencyIds(body, 'ENG-42', ref => pm.parseCardRef(ref), true), {
+    ids: ['ENG-7'],
+    uncertain: body,
+  })
+})
