@@ -943,3 +943,25 @@ it('R754-05: renews the lease without replacing an outstanding step attempt', ()
     vi.unstubAllEnvs()
   }
 })
+
+it('R754-06: starts from a redirected skills target and resolves prefixed names', async () => {
+  const target = 'team/skills'
+  write(
+    'pair.config.json',
+    JSON.stringify({
+      worktreeRoot: 'worktrees',
+      asset_registries: {
+        skills: { prefix: 'team', targets: [{ path: target, mode: 'canonical' }] },
+      },
+    }),
+  )
+  for (const skill of ['team-pair-fixture-draft', 'fixture-discuss'])
+    write(`${target}/${skill}/SKILL.md`, `---\nname: ${skill}\ndescription: Fixture skill\n---\n`)
+  write(workflowFile, workflow.replace('pair-fixture-discuss', 'team-fixture-discuss'))
+  cpSync(join(main, cycle), join(main, target, 'team-workflow-cycle/scripts'), { recursive: true })
+  rmSync(join(main, '.claude/skills/pair-fixture-draft'), { recursive: true })
+  rmSync(join(main, cycle), { recursive: true })
+  expect(JSON.parse(successful(['validate', 'quick']))).toMatchObject({ workflow: 'quick' })
+  const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
+  expect(advance(lease)).toMatchObject({ ready: [{ id: 'draft', uses: 'pair-fixture-draft' }] })
+})
