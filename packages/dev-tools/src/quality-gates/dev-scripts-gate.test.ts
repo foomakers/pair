@@ -1,18 +1,15 @@
-// r2-g2 (finding r0-1): the root gate — `pnpm quality-gate` and the CI workflow — must execute
-// the scripts/dev/*.test.mjs suites (rtk-review-hook + rtk-session-path), so that removing the
-// agent_type guard of the rtk review hook turns the gate red. The gate command is not
-// reimplemented here: its `node --test` invocation is read from package.json / ci.yml, then RUN
-// against an isolated copy of scripts/dev with an injected regression.
+// r0-1 / #693 R8: execute the gate commands from package.json and ci.yml against one probe
+// per test file. The hook regressions use the corresponding real suite in the same sandbox.
 import { spawn } from 'child_process'
 import { fileSystemService } from '@pair/content-ops'
 import { tmpdir } from 'os'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { parse } from 'yaml'
 
 import { REPO_ROOT } from './repo-root'
 
-const { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } =
+const { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } =
   fileSystemService
 
 type Invocation = { cwd: string; args: string[]; from: string }
@@ -24,6 +21,11 @@ const SCRIPTS: Record<string, string> = JSON.parse(
   readFileSync(join(REPO_ROOT, 'package.json')),
 ).scripts
 const GUARD = "JSON.parse(stdin).agent_type !== 'pair-reviewer' || "
+const REVIEW_SUITE = 'rtk-review-hook.test.mjs'
+const SESSION_SUITE = 'rtk-session-path.test.mjs'
+const testFiles = readdirSync(DEV)
+  .filter(entry => entry.isFile() && entry.name.endsWith('.test.mjs'))
+  .map(entry => entry.name)
 
 const insideDev = (p: string): boolean => p === DEV || p.startsWith(DEV + sep)
 // only a plain `&&` chain propagates a failure; a segment carrying `;`, `|` or `||` is opaque
@@ -81,32 +83,28 @@ const requireOne = (found: Invocation[], where: string): Invocation => {
   return found[0] as Invocation
 }
 
-// an isolated copy of what the suites read, including the real workflow producers
-const sandbox = (mutate?: (root: string) => void): string => {
+const sandbox = (realSuite?: string, mutate?: (root: string) => void): string => {
   const root = mkdtempSync(join(tmpdir(), 'devgate-'))
-  cpSync(DEV, join(root, 'scripts/dev'), { recursive: true })
-  for (const file of [
-    '.claude/settings.json',
-    '.claude/workflows/pair-implement-batch.js',
-    'packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js',
-    '.husky/pre-commit',
-    '.husky/pre-push',
-    'apps/pair-cli/.oxlintrc.json',
-    'apps/website/.oxlintrc.json',
-    'docs/engineering/lint-migration-693-cases.json',
-  ]) {
-    mkdirSync(join(root, file, '..'), { recursive: true })
-    cpSync(join(REPO_ROOT, file), join(root, file))
+  onTestFinished(() => rmSync(root, { recursive: true, force: true }))
+  const dev = join(root, 'scripts/dev')
+  mkdirSync(dev, { recursive: true })
+  for (const file of testFiles) {
+    if (file === realSuite) cpSync(join(DEV, file), join(dev, file))
+    else {
+      const probe = [
+        "import { writeFileSync } from 'node:fs'",
+        "import { test } from 'node:test'",
+        `test(${JSON.stringify(file)}, () => writeFileSync(new URL(import.meta.url + '.ran'), ''))`,
+      ]
+      writeFileSync(join(dev, file), probe.join('\n'))
+    }
   }
-  cpSync(
-    join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts'),
-    join(root, '.claude/skills/pair-workflow-cycle/scripts'),
-    { recursive: true },
-  )
-  // The isolated suites need the installed linter and formatter binaries.
-  mkdirSync(join(root, 'tools'))
-  for (const tool of ['prettier-config', 'oxlint-config']) {
-    symlinkSync(join(REPO_ROOT, 'tools', tool), join(root, 'tools', tool))
+  if (realSuite) {
+    mkdirSync(join(root, '.claude'))
+    cpSync(join(REPO_ROOT, '.claude/settings.json'), join(root, '.claude/settings.json'))
+    for (const hook of ['rtk-review-hook.mjs', 'rtk-session-path.mjs']) {
+      cpSync(join(DEV, hook), join(dev, hook))
+    }
   }
   mutate?.(root)
   return root
@@ -151,7 +149,6 @@ const runFile = (root: string, file: string) =>
 // node --test summary lines: `# pass N` (TAP reporter) or `ℹ pass N` (spec reporter)
 const summary = (out: string, key: string): number =>
   Number(new RegExp(`^(?:#|ℹ) ${key} (\\d+)$`, 'm').exec(out)?.[1] ?? NaN)
-const passCount = (out: string): number => summary(out, 'pass')
 // red because a test FAILED, not because the runner could not load its input
 const assertTestsFailed = (r: { status: number | null; stdout: string }): void => {
   expect(r.status, r.stdout).not.toBe(0)
@@ -169,27 +166,35 @@ describe('root gate runs the scripts/dev suites (r0-1)', () => {
 
   it('r0-1-w3 the gate invocation fails when the agent_type guard is removed', async () => {
     assertTestsFailed(
-      await runGate(requireOne(gateInvocations(), 'quality-gate'), sandbox(dropGuard)),
+      await runGate(
+        requireOne(gateInvocations(), 'quality-gate'),
+        sandbox(REVIEW_SUITE, dropGuard),
+      ),
     )
   }, 60_000)
 
   it('r0-1-w4 the gate invocation fails when the SessionStart PATH hook is a no-op', async () => {
     const inv = requireOne(gateInvocations(), 'quality-gate')
-    assertTestsFailed(await runGate(inv, sandbox(noopSessionPath)))
+    assertTestsFailed(await runGate(inv, sandbox(SESSION_SUITE, noopSessionPath)))
   }, 60_000)
 
-  it('r0-1-w5 the gate invocation passes on the unmodified suites and runs every test file', async () => {
-    const r = await runGate(requireOne(gateInvocations(), 'quality-gate'), sandbox())
-    expect(r.status, r.stdout + r.stderr).toBe(0)
-    const files = readdirSync(DEV)
-      .map(d => d.name)
-      .filter(f => f.endsWith('.test.mjs'))
-    expect(files.length).toBeGreaterThanOrEqual(2)
-    const direct = await Promise.all(
-      files.map(async f => passCount((await runFile(sandbox(), f)).stdout)),
-    )
-    expect(passCount(r.stdout)).toBe(direct.reduce((a, b) => a + b, 0))
-  }, 60_000)
+  it.each([
+    ['quality-gate', gateInvocations],
+    ['ci.yml', ciInvocations],
+  ] as const)(
+    'r0-1-w5 %s runs every test file',
+    async (where, invocations) => {
+      const root = sandbox()
+      const r = await runGate(requireOne(invocations(), where), root)
+      expect(r.status, r.stdout + r.stderr).toBe(0)
+      const ran = readdirSync(join(root, 'scripts/dev'))
+        .map(entry => entry.name)
+        .filter(name => name.endsWith('.ran'))
+        .map(name => name.slice(0, -'.ran'.length))
+      expect(ran.sort()).toEqual([...testFiles].sort())
+    },
+    60_000,
+  )
 
   // a QUOTED glob is expanded by node --test itself, a Node 21+ feature: engines.node is >=20.19
   // and ci.yml pins Node 20 (the #219 workflows:test break). A shell glob is expanded by /bin/sh.
@@ -200,12 +205,12 @@ describe('root gate runs the scripts/dev suites (r0-1)', () => {
   })
 
   it('r0-1-c1 the hook suite itself fails when the agent_type guard is removed', async () => {
-    expect((await runFile(sandbox(), 'rtk-review-hook.test.mjs')).status).toBe(0)
-    assertTestsFailed(await runFile(sandbox(dropGuard), 'rtk-review-hook.test.mjs'))
+    expect((await runFile(sandbox(REVIEW_SUITE), REVIEW_SUITE)).status).toBe(0)
+    assertTestsFailed(await runFile(sandbox(REVIEW_SUITE, dropGuard), REVIEW_SUITE))
   }, 60_000)
 
   it('r0-1-c2 the session-path suite itself fails when the SessionStart hook is a no-op', async () => {
-    expect((await runFile(sandbox(), 'rtk-session-path.test.mjs')).status).toBe(0)
-    assertTestsFailed(await runFile(sandbox(noopSessionPath), 'rtk-session-path.test.mjs'))
+    expect((await runFile(sandbox(SESSION_SUITE), SESSION_SUITE)).status).toBe(0)
+    assertTestsFailed(await runFile(sandbox(SESSION_SUITE, noopSessionPath), SESSION_SUITE))
   }, 60_000)
 })
