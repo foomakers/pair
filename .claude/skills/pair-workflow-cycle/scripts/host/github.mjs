@@ -171,12 +171,17 @@ export default defineAdapter({
         throw new Error('Required CI contexts unreadable')
       return { name: context, appId: publisher > 0 ? publisher : undefined }
     }
-    const classicRequirements = endpoint => {
+    const classicRequirements = branchEndpoint => {
       let raw
       try {
-        raw = gh(['api', endpoint])
+        raw = gh(['api', `${branchEndpoint}/protection/required_status_checks`])
       } catch (error) {
-        if (/HTTP (403|404)\b/i.test(String(error.detail))) return []
+        if (/HTTP 404\b/i.test(String(error.detail))) {
+          // An opaque 404 can conceal missing access. GitHub's explicit absence or branch metadata confirms it.
+          if (/Branch not protected|Required status checks not enabled/i.test(String(error.detail))) return []
+          const branch = parseJson(gh(['api', branchEndpoint]), { command: 'gh api branch' })
+          if (branch?.protected === false) return []
+        }
         throw error
       }
       const { contexts, checks } = parseJson(raw, { command: 'gh api required_status_checks' }) ?? {}
@@ -191,7 +196,7 @@ export default defineAdapter({
       if (typeof base !== 'string' || !base) throw new Error('PR base branch unreadable')
       const branch = encodeURIComponent(base)
       const root = apiRepo(repo)
-      const classic = classicRequirements(`${root}/branches/${branch}/protection/required_status_checks`)
+      const classic = classicRequirements(`${root}/branches/${branch}`)
       const rules = listPages(`${root}/rules/branches/${branch}`).filter(rule => rule.type === 'required_status_checks')
       const requirements = classic.concat(rules.flatMap(rule => {
         if (!Array.isArray(rule.parameters?.required_status_checks)) throw new Error('Required ruleset CI contexts unreadable')
