@@ -737,6 +737,7 @@ it.each([
   'returned',
   'gate',
   'parked',
+  'answer-race',
   'dirty',
   'divergent',
   'fix',
@@ -819,6 +820,7 @@ it.each([
         currentHead = newHead
         moveAt = undefined
         if (action === 'merge') return success(JSON.stringify(moveFailure))
+        if (action === 'approval-answers') return success(JSON.stringify({ reason: 'head-moved' }))
       }
       return success(JSON.stringify(respond(action, JSON.parse(raw ?? '{}'))))
     })
@@ -838,7 +840,11 @@ it.each([
         expect(await run(['delivery'])).toBe(0)
         expect(notices).toBe(1)
         if (moved) {
-          moveAt = scenario === 'parked' ? 'approval-target' : 'merge'
+          moveAt =
+            new Map([
+              ['parked', 'approval-target'],
+              ['answer-race', 'approval-answers'],
+            ]).get(scenario) ?? 'merge'
           expect(await run(['delivery'], OK, { approve: '627' })).toBe(1)
           expect(notices).toBe(1)
           if (scenario === 'dirty' || scenario === 'divergent') obstacle = scenario

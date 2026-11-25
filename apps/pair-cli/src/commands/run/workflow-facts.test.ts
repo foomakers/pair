@@ -43,7 +43,9 @@ const fixture = {
   required: 404 as
     | number
     | { contexts?: string[]; checks?: { context: string; app_id?: number }[] },
+  branchProtected: false,
   rules: [] as object[],
+  machine: '',
   actor: { login: 'reader', type: 'User' },
   comments: [] as object[],
   reviews: [] as object[],
@@ -58,6 +60,9 @@ function respondChecks(endpoint: string) {
   if (endpoint.endsWith('/branches/release%2Fnext/protection/required_status_checks'))
     return typeof github.required === 'number' ? httpError(github.required) : json(github.required)
   if (endpoint.includes('/rules/branches/release%2Fnext?')) return json(github.rules)
+  if (endpoint.endsWith('/branches/release%2Fnext'))
+    return json({ protected: github.branchProtected })
+  if (endpoint.includes('/actions/variables?')) return ok(github.machine)
   const commit = `/commits/${github.head}`
   if (endpoint.includes(commit + '/check-runs')) return json({ check_runs: github.checks })
   if (endpoint.includes(commit + '/status')) return json({ statuses: github.statuses })
@@ -294,15 +299,26 @@ it('accepts only a current-head approval token from the author when solo approva
   ])
 })
 
-it('excludes the adopted machine account when review identity is written as user (#726 AC-3)', async () => {
-  adoption = '**Review identity**: `user`\n'
-  github.actor = { login: 'maintainer', type: 'User' }
-  const approvals = approvalPlatform((action, card, data) =>
-    workflowOperation(() => scripts, dir, { action, card, data }),
-  )
-  const park = { pr: 735, head: sha, since: '2026-11-23T08:00:00Z', notified: true }
-  await expect(approvals.answers('726', park, { verdict: 'approved' })).resolves.toEqual([])
-})
+it.each([undefined, '**Review identity**: `user`\n'])(
+  'excludes the repository machine account across adoption drift (%s, #726 AC-3)',
+  async declaration => {
+    adoption = declaration
+    github.machine = 'maintainer'
+    github.actor = { login: 'maintainer', type: 'User' }
+    const approvals = approvalPlatform((action, card, data) =>
+      workflowOperation(() => scripts, dir, { action, card, data }),
+    )
+    const park = { pr: 735, head: sha, since: '2026-11-23T08:00:00Z', notified: true }
+    await expect(approvals.answers('726', park, { verdict: 'approved' })).resolves.toEqual([])
+    await expect(
+      workflowOperation(() => scripts, dir, {
+        action: 'merge',
+        card: '726',
+        data: { pr: 735, head: sha, approvedBy: 'maintainer', root: dir },
+      }),
+    ).resolves.toMatchObject({ reason: 'approval-no-longer-authorized' })
+  },
+)
 
 it('rechecks the solo token at merge and requests the exact approved head (#726 AC-3/4)', async () => {
   const at = '2026-11-23T08:01:00Z'
@@ -372,12 +388,6 @@ it.each([
     expected: 'red',
   },
   {
-    name: 'unreadable protection',
-    required: 403,
-    checks: [check('build'), check('pair-review', 'failure'), check('pair-custom', 'failure')],
-    expected: 'green',
-  },
-  {
     name: 'no mechanical evidence',
     required: 404,
     checks: [check('pair-review')],
@@ -432,11 +442,15 @@ it('waits only to the deadline when a required CI context never reports (#726 AC
   await expect(facts(dir).ci()).resolves.toBe('green')
 })
 
-it('surfaces an unexpected protection read failure (726-ac1-ci-required-contexts)', async () => {
-  github.required = 401
-  github.checks = [check('build')]
-  await expect(facts(dir, ['ci-green']).ci()).rejects.toThrow('HTTP 401')
-})
+it.each([401, 403, 404])(
+  'refuses an unreadable requirement inventory (%s, #726 AC-1)',
+  async status => {
+    github.required = status
+    github.branchProtected = true
+    github.checks = [check('build')]
+    await expect(facts(dir, ['ci-green']).ci()).rejects.toThrow('HTTP ' + status)
+  },
+)
 
 it('ignores late comments without a matching target and accepts a matching approval (726-ac3-comment-head-binding)', async () => {
   const park = { pr: 735, head: sha, since: '2026-11-23T08:00:00Z', notified: true }
@@ -477,4 +491,18 @@ it('refuses closure of an open PR before attempting a merge (#726 AC-4)', async 
       ([, args]) => Array.isArray(args) && args[0] === 'pr' && args[1] === 'merge',
     ),
   ).toBe(false)
+})
+
+it.each([
+  [735, 'head-moved'],
+  [736, 'pr-changed'],
+] as const)('preserves the answer-read mismatch for PR %s (#726 AC-4)', async (pr, reason) => {
+  github.head = 'b'.repeat(40)
+  await expect(
+    workflowOperation(() => scripts, dir, {
+      action: 'approval-answers',
+      card: '726',
+      data: { pr, head: sha, since: '2026-11-23T08:00:00Z' },
+    }),
+  ).resolves.toEqual({ reason })
 })

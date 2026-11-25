@@ -36,6 +36,7 @@ describe('buildMessage (AC-4, AC-5)', () => {
         'Required when status is "ok": branch, pr, head.',
         '',
         'Execution mode: unattended.',
+        'Handoff: published-pr.',
       ].join('\n'),
     )
   })
