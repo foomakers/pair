@@ -190,7 +190,7 @@ These schemas come from the workflow validator.
             },
             "uses": {
               "type": "string",
-              "description": "Reserved for including a workflow (#699); never a skill name."
+              "description": "An included workflow whose steps replace this entry."
             },
             "with": {
               "type": "object",

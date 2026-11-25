@@ -13,6 +13,7 @@ The agent ends its turn with one JSON object in a fenced `json` block. Whatever 
 - `reason`: `string`, optional — Why, when the status is not `ok`.
 
 An agent can return `ok` and the statuses listed for its kind below.
+The `returns` contract describes when each non-success outcome applies. The workflow decides what happens next through [`escalate`](workflow-grammar.md#outcomes-and-escalation). The engine produces `exhausted` and `skipped`.
 
 A result that is missing, is not JSON or breaks the contract of its kind makes the step `failed` with reason `invalid-result`.
 

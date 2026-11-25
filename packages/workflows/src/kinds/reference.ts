@@ -60,6 +60,7 @@ export function renderKindReference(): string {
     ...fields(COMMON_RESULT, true).map(line => line.slice(2)),
     '',
     'An agent can return `ok` and the statuses listed for its kind below.',
+    'The `returns` contract describes when each non-success outcome applies. The workflow decides what happens next through [`escalate`](workflow-grammar.md#outcomes-and-escalation). The engine produces `exhausted` and `skipped`.',
     '',
     'A result that is missing, is not JSON or breaks the contract of its kind makes the step `failed` with reason `invalid-result`.',
     '',

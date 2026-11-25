@@ -173,7 +173,7 @@ export const stepSchema: JsonSchema = {
     },
     uses: {
       type: 'string',
-      description: 'Reserved for including a workflow (#699); never a skill name.',
+      description: 'An included workflow whose steps replace this entry.',
     },
     with: { type: 'object', description: 'Options of the step; the kind declares the keys.' },
     gates: {
@@ -308,7 +308,7 @@ export interface Step {
   readonly id: string
   readonly kind: KindName | 'loop'
   readonly skill?: string
-  /** Reserved for including a workflow (#699); the validator refuses it as a skill name. */
+  /** An included workflow. */
   readonly uses?: string
   readonly with?: Readonly<Record<string, unknown>>
   /** Validation the host runs after the step ends `ok`. */
