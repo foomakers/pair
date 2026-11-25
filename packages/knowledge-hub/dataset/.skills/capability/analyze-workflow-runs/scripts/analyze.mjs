@@ -10,7 +10,7 @@
 // Prices: `{ "<model>": { "read": n, "cached": n, "written": n } }`, per million tokens, kept by hand.
 // Dependency-free.
 import { randomUUID } from 'node:crypto'
-import { closeSync, existsSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -35,7 +35,9 @@ function persistMigration(file, original, migrated) {
     if (readFileSync(file, 'utf8') !== original) return
     const temp = `${file}.${randomUUID()}.tmp`
     try {
-      writeFileSync(temp, migrated, { flag: 'wx', mode: statSync(file).mode & 0o777 })
+      const mode = statSync(file).mode & 0o777
+      writeFileSync(temp, migrated, { flag: 'wx', mode })
+      chmodSync(temp, mode)
       renameSync(temp, file)
     } finally {
       rmSync(temp, { force: true })
