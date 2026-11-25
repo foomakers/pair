@@ -22,6 +22,8 @@ So correct ordering is *not sufficient*: `/pair-capability-write-issue` Step 7 c
 
 ## Decision
 
+Assignment details in decisions 3–6, 9 and 11 are amended by [2026-11-25 preserve assignment on card update](2026-11-25-preserve-assignment-on-card-update.md); PR assignment remains unchanged.
+
 **Any operation whose exit status can be 0 with no effect is verified by a read, and a skill reports what the read observed — never what the call returned.** A write a read cannot confirm is a failure or a finding, never a silent success.
 
 1. The rule is stated **once, as an invariant**, in `/pair-capability-write-issue` Step 7 (owner of item writes) and applied verbatim by `/pair-capability-publish-pr` (owner of PR writes). Both guarded by `packages/knowledge-hub/src/conformance/verified-writes-contract.test.ts`.

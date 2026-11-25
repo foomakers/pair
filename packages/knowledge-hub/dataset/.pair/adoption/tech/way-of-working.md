@@ -113,12 +113,12 @@ Optional. Skills resolve item state to 5 canonical macrostates — `Draft`, `Rea
 
 ## Assignment
 
-Optional. **Who** items and pull requests are assigned to. **Omitted by default** — but omitting it has a cost worth knowing before you do: most boards are read **filtered by assignee**, so an item nobody is assigned is **invisible in an assignee-filtered view** even while it is open, green and carrying a PR. Skills never guess a default from the authenticated user (an agent running under a bot token would assign everything to the bot), so with nothing declared here they file items and PRs unassigned and warn.
+Optional. **Who** items and pull requests are assigned to. **Omitted by default** — but omitting it has a cost worth knowing before you do: most boards are read **filtered by assignee**, so an item nobody is assigned is **invisible in an assignee-filtered view** even while it is open, green and carrying a PR. Skills never guess a default from the authenticated user (an agent running under a bot token would assign everything to the bot), so without a declared default development activation has no default, and PR publication has no default unless `code-host-assignee` is set. Issue creation and updates apply only an explicit assignee; omission leaves a create unassigned or preserves the existing assignment on update, without warning.
 
 | Field                | Default                | Meaning                                                                                                    |
 | -------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `default-assignee`   | *(none)*               | The identifier an item or PR is assigned to when the caller passes none.                                     |
-| `code-host-assignee` | *(`default-assignee`)* | Only when the code host knows the same person by a different identifier than the PM tool (split configuration). Read for **pull request** assignment; items keep using `default-assignee`. |
+| `default-assignee`   | *(none)*               | The identifier used for development activation and PR assignment when no explicit assignee is supplied.                                     |
+| `code-host-assignee` | *(`default-assignee`)* | Only when the code host knows the same person by a different identifier than the PM tool (split configuration). Read for **pull request** assignment; development activation uses `default-assignee`. |
 
 Example:
 
@@ -126,4 +126,4 @@ Example:
 - `default-assignee`: `jane-doe`
 ```
 
-The resolution order (`$assignee` argument → the adoption default for the side being written, `code-host-assignee` then `default-assignee` on a pull request → none + warning), the split-tool routing, and why the fallback is never the authenticated user live in [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
+The resolution order (explicit `$assignee` for issue writes; on PRs, `$assignee` → `code-host-assignee` → `default-assignee` → none + warning), the split-tool routing, and why the fallback is never the authenticated user live in [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
