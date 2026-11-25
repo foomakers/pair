@@ -70,7 +70,7 @@ export interface WorkflowHost {
   isReadyBoardStatus?(status: string | null): boolean
   /** Confirms the Ready transition before success becomes durable. */
   confirmReady?(): Promise<void>
-  /** Sees every step start and every recorded result, in order. */
+  /** Sees step starts, results and condition failures in order. */
   report?(event: StepEvent): void
   transition?(event: StepEvent): Promise<void>
 }
@@ -95,7 +95,7 @@ export interface TelemetryOptions {
 
 export interface RunOutcome {
   readonly run: Exclude<RunState, 'running'>
-  /** The last step this launch recorded. */
+  /** The last step result or condition failure from this launch. */
   readonly last?: StepEvent
 }
 
@@ -391,7 +391,18 @@ export async function runSteps(
   if (writer === undefined) await reopenRun(run).catch(() => undefined)
   let last: StepEvent | undefined
   for (;;) {
-    const { ready, run: state } = await advance(host, run)
+    const { ready, run: state, blocked } = await advance(host, run)
+    if (blocked !== undefined) {
+      last = {
+        step: blocked.id,
+        kind: blocked.kind,
+        state: 'failed',
+        summary: 'could not evaluate when',
+        reason: 'card-status-unavailable',
+        detail: blocked.detail,
+      }
+      host.report?.(last)
+    }
     const step = ready[0]
     if (state !== 'running' || step === undefined) return ended(state, last, writer)
     const launchEvent = { step: step.id, kind: step.kind, state: 'running' } as const

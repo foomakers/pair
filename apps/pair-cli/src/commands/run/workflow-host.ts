@@ -515,8 +515,12 @@ function hostKindsOf({ resolved, request, worktree }: Opened, { fs, deps }: Serv
   const readCard = () => readWorkflowCard({ fs, ...resolved }, request.card)
   return {
     async card() {
-      const { labels, boardState } = await readCard()
-      return { labels, ...(boardState !== null && { status: boardState }) }
+      const { labels, boardState, boardError } = await readCard()
+      return {
+        labels,
+        ...(boardState !== null && { status: boardState }),
+        ...(boardError !== undefined && { statusError: boardError }),
+      }
     },
     readResultFacts:
       deps.workflow?.readResultFacts ??

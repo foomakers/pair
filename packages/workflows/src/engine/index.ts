@@ -12,7 +12,7 @@ import {
 } from '../grammar'
 import { parseFrozenConfiguration } from '../configuration'
 import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
-import { matches, type CardFacts } from '../select'
+import { effectiveSelection, matches, type CardFacts } from '../select'
 
 /**
  * The disk, as the engine needs it: the run directory and nothing else. A structural subset of the
@@ -647,6 +647,8 @@ export async function next(
   readonly ready: readonly StepLaunch[]
   readonly run: RunState
   readonly skipped?: readonly SkippedStep[]
+  /** The condition needs an unavailable fact. The stored step remains unchanged. */
+  readonly blocked?: SkippedStep & { readonly detail: string }
 }> {
   const state = requireState(run)
   const { steps } = frozenWorkflow(run)
@@ -654,8 +656,15 @@ export async function next(
   if (step === undefined) return { ready: [], run: finalState(state, steps), ...seen(skipped) }
   const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
   if (halted !== undefined) return { ready: [], run: halted, ...seen(skipped) }
-  const skip = await skipIfNotWhen(run, state, step, card)
-  if (skip !== undefined) return next(run, card, [...skipped, skip])
+  const condition = await checkWhen(run, state, step, card)
+  if (condition?.error !== undefined)
+    return {
+      ready: [],
+      run: 'failed',
+      blocked: { ...condition.step, detail: condition.error },
+      ...seen(skipped),
+    }
+  if (condition !== undefined) return next(run, card, [...skipped, condition.step])
   const launched = await (step.kind === 'loop'
     ? nextInLoop(run, state, steps, step)
     : nextPlain(run, state, steps, step))
@@ -683,37 +692,49 @@ function outputMismatch(
     : `${output} is ${JSON.stringify(value)}`
 }
 
-/** Why `when` does not match now, or `undefined` when the step runs. */
-async function whenMismatch(
+/** The mismatch or unavailable fact preventing `when` from matching. */
+async function whenFailure(
   when: When | undefined,
   state: RunStateFile,
   card: (() => Promise<CardFacts>) | undefined,
-): Promise<string | undefined> {
+): Promise<{ reason: string; unavailable?: true } | undefined> {
   if (when === undefined) return undefined
   const { output, is, ...filter } = when
-  if (Object.keys(filter).length > 0 && card !== undefined && !matches(filter, await card()))
-    return `card does not match ${JSON.stringify(filter)}`
-  return output === undefined ? undefined : outputMismatch(output, is, state)
+  const outputReason = output === undefined ? undefined : outputMismatch(output, is, state)
+  if (Object.keys(filter).length > 0 && card !== undefined) {
+    const facts = await card()
+    if (
+      facts.statusError !== undefined &&
+      effectiveSelection(undefined, undefined, filter).needsStatus(facts)
+    )
+      return outputReason === undefined
+        ? { reason: facts.statusError, unavailable: true }
+        : { reason: outputReason }
+    if (!matches(filter, facts)) return { reason: `card does not match ${JSON.stringify(filter)}` }
+  }
+  return outputReason === undefined ? undefined : { reason: outputReason }
 }
 
-/** Writes `skipped` for the step about to start when its `when` does not match; a loop checks its next child. */
-async function skipIfNotWhen(
+/** Persists a known mismatch. An unavailable fact leaves the step eligible for retry. */
+async function checkWhen(
   run: RunDirectory,
   state: RunStateFile,
   step: Step,
   card: (() => Promise<CardFacts>) | undefined,
-): Promise<SkippedStep | undefined> {
+): Promise<{ step: SkippedStep; error?: string } | undefined> {
   const inLoop = step.kind === 'loop'
   const child = inLoop ? loopChild(state, step).child : undefined
   const target = child ?? step
   const id = inLoop ? `${step.id}/${target.id}` : step.id
   if (awaitingReady(state.steps[id])) return undefined
-  const why = await whenMismatch(target.when, state, card)
-  if (why === undefined) return undefined
+  const failure = await whenFailure(target.when, state, card)
+  if (failure === undefined) return undefined
+  const checked = { id, kind: target.kind as KindName }
+  if (failure.unavailable) return { step: checked, error: failure.reason }
   const entry: StepRecord = {
     state: 'skipped',
     summary: 'skipped: when did not match',
-    reason: why,
+    reason: failure.reason,
   }
   const recorded = { ...state.steps, [id]: entry }
   const progress = inLoop
@@ -724,7 +745,7 @@ async function skipIfNotWhen(
     steps: progress.steps,
     ...(progress.loops !== undefined && { loops: progress.loops }),
   })
-  return { id, kind: target.kind as KindName }
+  return { step: checked }
 }
 
 async function nextPlain(

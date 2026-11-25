@@ -2,6 +2,8 @@
 export interface CardFacts {
   readonly labels: readonly string[]
   readonly status?: string
+  /** The tracker could not read the status. Other card facts remain usable. */
+  readonly statusError?: string
   readonly assignee?: string
   readonly assignees?: readonly string[]
 }
