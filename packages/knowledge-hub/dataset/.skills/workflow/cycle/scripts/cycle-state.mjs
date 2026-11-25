@@ -3033,7 +3033,12 @@ const declRefs = (text, parse) => {
   const rest = String(text)
     .replace(/\[([^\]]*)\]\((https?:[^)]*)\)/g, (_, t, u) => (parse ? u : t))
     .replace(/https?:\/\/[^\s)>\]]+/g, u => {
-      const r = parse?.(u)
+      let r
+      try {
+        r = parse?.(u)
+      } catch (error) {
+        if (error?.kind !== 'invalid-input') throw error
+      }
       if (r?.id && r.inScope !== false) ids.push(String(r.id))
       else foreign = true
       return ' '
@@ -3057,9 +3062,9 @@ export function dependencyIds(body, self, parse, draft = false) {
     let rest = m[1]
     if (!rest.trim()) for (let j = i + 1; /^[ \t]*(?:[-*]|\d+\.)[ \t]/.test(lines[j] ?? ''); j++) rest += ` ${lines[j]}`
     const found = declRefs(rest, parse)
+    ids.push(...found.ids)
     if (found.foreign) uncertain ??= line.trim()
-    else if (found.ids.length) ids.push(...found.ids)
-    else if (canonical ? rest.trim() && !/^\s*(?:none|n\/a|no|nothing)\b/i.test(rest) : !/^\s*(?:none|n\/a|no|nothing|T-\d)\b/i.test(rest)) uncertain ??= line.trim()
+    else if (!found.ids.length && (canonical ? rest.trim() && !/^\s*(?:none|n\/a|no|nothing)\b/i.test(rest) : !/^\s*(?:none|n\/a|no|nothing|T-\d)\b/i.test(rest))) uncertain ??= line.trim()
   })
   return { ids: [...new Set(ids)].filter(id => id !== String(self)), uncertain }
 }
