@@ -114,6 +114,9 @@ beforeEach(() => {
       `---\nname: ${skill}\ndescription: Fixture skill\n---\n`,
     )
   cpSync(join(repo, cycle), join(main, cycle), { recursive: true })
+  const control = '.claude/skills/pair-next/control-state.mjs'
+  mkdirSync(dirname(join(main, control)), { recursive: true })
+  cpSync(join(repo, control), join(main, control))
   mkdirSync(dirname(join(main, script)), { recursive: true })
   cpSync(join(repo, script), join(main, script))
   commitFixture()
@@ -830,3 +833,29 @@ it('R754-01 / AC-4: holds the card across workflows until the session stops', ()
   successful(['stop', runId, ...lease])
   expect(JSON.parse(successful(args))).toMatchObject({ runId: `other-${card}`, worktree })
 })
+
+it.each([
+  { source: 'workflow', filter: 'has: [release]', label: 'release' },
+  { source: 'configuration', filter: 'has: [release]', label: 'release' },
+  { source: 'workflow', filter: 'status: [Draft]', label: undefined },
+])(
+  'R754-02: enforces the $source filter $filter before worktree setup',
+  ({ source, filter, label }) => {
+    const select = `select: { filter: { ${filter} } }\n`
+    if (source === 'workflow') write(workflowFile, workflow + select)
+    else {
+      write(workflowFile, workflow + 'select: { filter: { has: [superseded] } }\n')
+      write(configFile, configuration + select)
+    }
+    const args = ['start', 'quick', '--card', card, '--engine', 'codex', '--config', 'mine']
+    const result = invoke(args)
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('selection filter')
+    expect(existsSync(worktree)).toBe(false)
+    write(
+      cardFile,
+      `# ${title}\n\n${label === undefined ? '**Status**: Draft' : `**Status**: Ready\n**Labels**: ${label}`}\n`,
+    )
+    expect(JSON.parse(successful(args))).toMatchObject({ status: 'started', worktree })
+  },
+)
