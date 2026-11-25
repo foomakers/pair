@@ -221,12 +221,16 @@ const NO_AGENT_RESULT: StepResult = {
   summary: 'the agent ended without a final message',
 }
 
+type StepExecutionResult =
+  | StepResult
+  | { status: 'skipped'; summary: string; reason: 'card-held'; detail?: string }
+
 async function execute(
   host: WorkflowHost,
   run: RunDirectory,
   step: StepLaunch,
   exchange: Exchange = { sent: '', final: '' },
-): Promise<StepResult> {
+): Promise<StepExecutionResult> {
   if (step.pendingSuccess !== undefined)
     return recordResult(host, run, step, await confirmed(host, run, step, step.pendingSuccess))
   const kind = kindByName[step.kind]
@@ -265,7 +269,7 @@ async function executeAgent(
   run: RunDirectory,
   step: StepLaunch,
   exchange: Exchange,
-): Promise<StepResult> {
+): Promise<StepExecutionResult> {
   const kind = kindByName[step.kind]
   let message: string
   try {
@@ -283,9 +287,13 @@ async function executeAgent(
   })
   if (final === undefined) return record(run, step.id, NO_AGENT_RESULT)
   exchange.final = final
-  const result = await gated(host, step, readResult(final, kind))
+  const result = readResult(final, kind)
+  // Leave the step running on disk so the next invocation can retry it.
+  if (step.kind === 'implement' && result.status === 'failed' && result.reason === 'card-held')
+    return { ...result, status: 'skipped', reason: result.reason }
+  const checked = await gated(host, step, result)
   return recordResult(host, run, step, {
-    ...(await confirmed(host, run, step, result)),
+    ...(await confirmed(host, run, step, checked)),
     output: final,
   })
 }
@@ -329,7 +337,7 @@ async function executeMetered(
   run: RunDirectory,
   step: StepLaunch,
   writer: Writer,
-): Promise<StepResult> {
+): Promise<StepExecutionResult> {
   if (writer === undefined) return execute(host, run, step)
   const startedAt = writer.now()
   const exchange: Exchange = { sent: '', final: '' }
@@ -371,7 +379,7 @@ async function advance(host: WorkflowHost, run: RunDirectory) {
 }
 
 async function emitStep(host: WorkflowHost, event: StepEvent): Promise<void> {
-  await host.transition?.(event)
+  if (event.state !== 'skipped') await host.transition?.(event)
   host.report?.(event)
 }
 

@@ -35,7 +35,11 @@ export interface BatchOutcome {
   readonly outcome: Outcome
   readonly lastStep?: string
   readonly reason?: string
+  readonly skipReason?: 'card-held'
 }
+
+const isCompleted = (result: BatchOutcome | undefined) =>
+  result?.outcome === 'done' || (result?.outcome === 'skipped' && result.skipReason !== 'card-held')
 
 interface Schedulable {
   readonly id: string
@@ -49,11 +53,8 @@ export async function scheduleWorkflowCards<T extends Schedulable>(
   launch: (card: T) => Promise<BatchOutcome>,
 ): Promise<BatchOutcome[]> {
   const graph = dependencyGraph(cards)
-  const done = (id: string) => {
-    const outcome = prior.get(id)?.outcome
-    return outcome === 'done' || outcome === 'skipped'
-  }
-  const blocked = (id: string) => graph.get(id)?.selected.filter(dep => !done(dep)) ?? []
+  const blocked = (id: string) =>
+    graph.get(id)?.selected.filter(dep => !isCompleted(prior.get(dep))) ?? []
   await runPool<T, BatchOutcome>({
     items: cards.filter(card => !prior.has(card.id)),
     limit,
@@ -143,9 +144,7 @@ function completedFromSummary(fs: Services['fs'], summary: string): Set<string> 
   if (!fs.existsSync(summary)) return new Set()
   try {
     const saved = JSON.parse(fs.readFileSync(summary)) as { cards: BatchOutcome[] }
-    return new Set(
-      saved.cards.filter(card => ['done', 'skipped'].includes(card.outcome)).map(card => card.id),
-    )
+    return new Set(saved.cards.filter(isCompleted).map(card => card.id))
   } catch {
     return new Set()
   }

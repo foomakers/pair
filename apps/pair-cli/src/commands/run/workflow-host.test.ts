@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { start } from '@pair/workflows'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 // @ts-expect-error Vite loads the adopted definition as fixture text.
@@ -434,6 +434,95 @@ ${assign === undefined ? '' : `assign: ${assign}\n`}steps:
       ).toBe(true)
     })
   })
+})
+
+describe('#723 T-7 held cards in a batch (AC-4)', () => {
+  it.each([
+    { source: 'host assignment', hostManaged: true, routing: '' },
+    { source: 'implement skill', hostManaged: false, routing: '' },
+    {
+      source: 'implement skill with on-failed: continue',
+      hostManaged: false,
+      routing: ', on-failed: continue',
+    },
+  ])(
+    'skips for $source, runs independent work, and retries after release',
+    async ({ hostManaged, routing }) => {
+      const definition = `version: 1
+name: quick
+${hostManaged ? 'assign: me\n' : ''}steps:
+  implement: { kind: implement${routing} }
+  finish: { kind: generic, skill: my-skill }
+`
+      write('.pair/adoption/tech/workflows/quick.yaml', definition)
+      write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Host bridge fixture')
+
+      let held = true
+      const assignmentChecks: string[] = []
+      hostProcess.mockImplementation(async (_bin, args) => {
+        const [, operation, card] = args
+        expect(operation).toBe('assign-card')
+        assignmentChecks.push(card!)
+        return success(
+          JSON.stringify(
+            card === '627' && held ? { status: 'held', owners: ['alice'] } : { status: 'assigned' },
+          ),
+        )
+      })
+      const workflow: Partial<WorkflowHostDependencies> = {
+        board: { getState: async () => null, setState: async () => {} },
+        readSelection: async () => ({
+          cards: ['627', '628', '629'].map(id => ({
+            id,
+            title: `Story ${id}`,
+            body: '',
+            labels: [],
+            boardState: null,
+            closed: false,
+            prerequisites: id === '629' ? ['627'] : [],
+          })),
+        }),
+      }
+      const skills = {
+        'my-skill': () => fenced({ status: 'ok', summary: 'Finished' }),
+        'pair-process-implement': ({ cwd }: SpawnIterationInput) =>
+          !hostManaged && held && cwd === join(project, 'worktrees', '627')
+            ? fenced({ status: 'failed', reason: 'card-held', summary: 'Card held by alice' })
+            : IMPLEMENTED,
+      }
+      const batch = () => run(['quick'], skills, { card: '627,628,629' }, workflow)
+      const launches = () =>
+        launched.map(({ cwd, promptText }) => `${basename(cwd)}:${skillOf(promptText)}`)
+      const summary = (id: string) => lines.find(line => line.trimStart().startsWith(`#${id}:`))
+
+      expect.soft(await batch()).toBe(0)
+      expect
+        .soft(launches())
+        .toEqual([
+          ...(hostManaged ? [] : ['627:pair-process-implement']),
+          '628:pair-process-implement',
+          '628:my-skill',
+        ])
+      expect.soft(assignmentChecks).toEqual(hostManaged ? ['627', '628', '628'] : [])
+      expect.soft(summary('627')).toMatch(/#627: skipped.*alice.*card-held/)
+      expect.soft(summary('628')).toContain('#628: done')
+      expect.soft(summary('629')).toContain('#629: waiting — waiting for #627')
+
+      held = false
+      launched.length = 0
+      lines.length = 0
+      expect.soft(await batch()).toBe(0)
+      expect
+        .soft(launches())
+        .toEqual([
+          '627:pair-process-implement',
+          '627:my-skill',
+          '629:pair-process-implement',
+          '629:my-skill',
+        ])
+      expect.soft(summary('628')).toContain('#628: skipped — workflow already complete')
+    },
+  )
 })
 
 describe('always autonomous (AC-12)', () => {

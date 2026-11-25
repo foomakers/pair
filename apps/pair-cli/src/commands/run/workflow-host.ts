@@ -789,6 +789,10 @@ function reportRunOutcome(opened: Opened, outcome: RunOutcome): void {
   opened.report?.({
     id: opened.request.card,
     outcome: outcome.run,
+    ...(outcome.run === 'skipped' &&
+      outcome.last?.reason === 'card-held' && {
+        skipReason: outcome.last.reason,
+      }),
     ...(outcome.last && { lastStep: outcome.last.step, reason: explain(outcome.last) }),
   })
 }
