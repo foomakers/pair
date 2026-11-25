@@ -1111,14 +1111,26 @@ it('R744-13 (#678 AC-6): a timed-out task plan stays eligible on a minimal board
   expect(plan).toHaveBeenCalledTimes(2)
 })
 
-it.each([
-  { failSelected: false, status: undefined, configuredStatus: undefined },
-  { failSelected: true, status: undefined, configuredStatus: undefined },
-  { failSelected: false, status: 'Draft', configuredStatus: undefined },
-  { failSelected: false, status: 'Draft', configuredStatus: 'Ready' },
+it.each<{
+  failSelected?: boolean
+  status?: 'Draft'
+  configuredStatus?: 'Ready'
+  boardFailure?: '9' | '10'
+  error?: RegExp
+}>([
+  {},
+  { failSelected: true, error: /#9: failed — dependency unavailable/ },
+  { status: 'Draft', error: /#9: failed — board-unresolved/ },
+  { status: 'Draft', configuredStatus: 'Ready' },
+  { boardFailure: '10' },
+  {
+    status: 'Draft',
+    boardFailure: '9',
+    error: /#9: failed — board-unreadable: .* after 4 attempts: HTTP 503/,
+  },
 ])(
-  'R744-05/R744-10: selection before dependencies ($failSelected, $status, $configuredStatus)',
-  async ({ failSelected, status, configuredStatus }) => {
+  'R744-05/R744-10/R744-14: filter before failures ($failSelected, $status, $configuredStatus, $boardFailure)',
+  async ({ failSelected = false, status, configuredStatus, boardFailure, error }) => {
     if (configuredStatus)
       write(
         '.pair/adoption/tech/workflows/quick.yaml',
@@ -1143,9 +1155,16 @@ const fs = require('node:fs')
 const [command, action, id] = process.argv.slice(2)
 const out = value => process.stdout.write(JSON.stringify(value))
 if (command === 'repo') process.stdout.write('acme/pair')
-else if (command === 'project') out({ projects: [] })
+else if (command === 'project') out({ projects: ${JSON.stringify(boardFailure ? [{ id: 'P1', title: 'Pair' }] : [])} })
 else if (command === 'issue' && action === 'view') {
   if (!process.argv.includes('-q')) out({ title: 'Story ' + id, body: '', labels: id === '9' ? [{ name: 'wanted' }] : [], state: 'OPEN' })
+} else if (command === 'api' && action === 'graphql') {
+  if (process.argv.includes('n=' + ${JSON.stringify(boardFailure ?? '')})) {
+    process.stderr.write('HTTP 503\\nRetry-After: 0\\n')
+    process.exitCode = 1
+  } else out({ data: { repository: { issue: { projectItems: { nodes: [
+    { project: { id: 'P1' }, fieldValueByName: { name: 'Draft' } },
+  ] } } } } })
 } else if (command === 'api' && action.includes('/dependencies/blocked_by?')) {
   const card = action.split('/').at(-3)
   fs.appendFileSync(${JSON.stringify(reads)}, card + '\\n')
@@ -1167,16 +1186,13 @@ else if (command === 'issue' && action === 'view') {
         },
         ['quick'],
       )
-      const requiresStatus = status !== undefined && configuredStatus === undefined
-      expect(await handleRunCommand(command, fs)).toBe(failSelected || requiresStatus ? 1 : 0)
+      expect(await handleRunCommand(command, fs), lines.join('\n')).toBe(error ? 1 : 0)
       expect(lines.some(line => line.includes('#10: not-applicable'))).toBe(true)
-      if (requiresStatus) {
-        expect(lines.some(line => /#9: failed.*board-unresolved/.test(line))).toBe(true)
-        expect(fs.existsSync(reads)).toBe(false)
-      } else if (configuredStatus) {
+      if (error) expect(lines.join('\n')).toMatch(error)
+      if (configuredStatus)
         expect(lines.some(line => line.includes('#9: not-applicable'))).toBe(true)
-        expect(fs.existsSync(reads)).toBe(false)
-      } else expect(fs.readFileSync(reads)).toBe('9\n')
+      if (status) expect(fs.existsSync(reads)).toBe(false)
+      else expect(fs.readFileSync(reads)).toBe('9\n')
     } finally {
       vi.unstubAllEnvs()
     }
