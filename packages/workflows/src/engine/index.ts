@@ -161,18 +161,34 @@ async function migrateStateStatuses(run: RunDirectory, state: RunStateFile): Pro
   return migrated
 }
 
-async function migrateRunTelemetry(run: RunDirectory): Promise<void> {
-  const path = join(run.dir, TELEMETRY_FILE)
-  if (!run.files.existsSync(path)) return
+function legacyTelemetryReplacement(files: RunFiles, path: string): string | undefined {
   let text: string
   try {
-    text = run.files.readFileSync(path)
+    if (!files.existsSync(path)) return undefined
+    text = files.readFileSync(path)
   } catch {
     // Optional telemetry that cannot be read has no status we can migrate.
-    return
+    return undefined
   }
   const migrated = migrateTelemetryStatuses(text)
-  if (migrated !== text) await writeAtomic(run.files, path, migrated, { preserveMode: true })
+  return migrated === text ? undefined : migrated
+}
+
+export function hasLegacyRunTelemetry(run: RunDirectory): boolean {
+  return legacyTelemetryReplacement(run.files, join(run.dir, TELEMETRY_FILE)) !== undefined
+}
+
+/** Re-read and replace legacy telemetry while the caller holds the run lock. */
+export async function migrateRunTelemetry(run: RunDirectory): Promise<string | undefined> {
+  const path = join(run.dir, TELEMETRY_FILE)
+  const replacement = legacyTelemetryReplacement(run.files, path)
+  if (replacement === undefined) return undefined
+  try {
+    await writeAtomic(run.files, path, replacement, { preserveMode: true })
+  } catch (error) {
+    return `telemetry was not written: ${String(error)} — the run goes on without it`
+  }
+  return undefined
 }
 
 function requireState(run: RunDirectory): RunStateFile {
@@ -403,15 +419,6 @@ export function completedRun(
   identity: { card: string; workflow: string },
 ): boolean {
   const state = readState(run)
-  const path = join(run.dir, TELEMETRY_FILE)
-  try {
-    if (state !== undefined && run.files.existsSync(path)) {
-      const text = run.files.readFileSync(path)
-      if (migrateTelemetryStatuses(text) !== text) return false
-    }
-  } catch {
-    // Optional telemetry may be unreadable.
-  }
   return (
     state !== undefined &&
     state.card === identity.card &&
@@ -502,9 +509,7 @@ async function resume(
 ): Promise<Started> {
   const warnings = workflowWarnings(run, existing, source, options.card)
   const saved = await migrateStateStatuses(run, existing)
-  const telemetryWarning = await migrateRunTelemetry(run).catch(
-    (error: unknown) => `telemetry was not written: ${String(error)} — the run goes on without it`,
-  )
+  const telemetryWarning = await migrateRunTelemetry(run)
   const diagnostics = { warnings, ...(telemetryWarning !== undefined && { telemetryWarning }) }
   let state = saved
   const { configuration } = options

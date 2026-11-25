@@ -11,9 +11,11 @@ import {
   checkAgainstEngines,
   describeSettings,
   formatError,
+  hasLegacyRunTelemetry,
   kindByName,
   addressedSteps,
   frozenConfiguration,
+  migrateRunTelemetry,
   parseWorkflow,
   pendingMergeClosure,
   record,
@@ -27,6 +29,7 @@ import {
   type CardState,
   type Configuration,
   type Filter,
+  type RunDirectory,
   type RunOutcome,
   type StepResult,
   type ResultFacts,
@@ -1204,15 +1207,21 @@ async function acceptsCard(
   return matchesWorkflowCard(found, selection.accepts, run)
 }
 
-function completedWorkflow(
-  fs: FileSystemService,
-  runDir: string,
-  request: RunWorkflowRequest,
-  workflow: string,
-): boolean {
-  return (
-    !request.restart && completedRun({ files: fs, dir: runDir }, { workflow, card: request.card })
-  )
+/** Completed runs keep their outcome if optional telemetry needs a later retry. */
+export async function migrateCompletedRunTelemetry(run: RunDirectory): Promise<void> {
+  if (!hasLegacyRunTelemetry(run)) return
+  try {
+    const lock = acquireRunLock(run.dir)
+    if (lock.kind !== 'acquired') return
+    try {
+      const warning = await migrateRunTelemetry(run)
+      if (warning !== undefined) console.log(`  Warning: ${warning}`)
+    } finally {
+      lock.release()
+    }
+  } catch (error) {
+    console.log(`  Warning: telemetry migration could not acquire the run lock: ${String(error)}`)
+  }
 }
 
 export async function handleWorkflowRun(
@@ -1237,11 +1246,14 @@ async function openCard(
 ): Promise<Opened | undefined> {
   const runId = request.runId ?? `${resolved.workflow.name}-${request.card}`
   const runDir = join(resolved.main, '.pair/working/runs', runId)
+  const run = { files: services.fs, dir: runDir }
   if (
     batch === undefined &&
+    !request.restart &&
     request.flagAnswer === undefined &&
-    completedWorkflow(services.fs, runDir, request, resolved.workflow.name)
+    completedRun(run, { workflow: resolved.workflow.name, card: request.card })
   ) {
+    await migrateCompletedRunTelemetry(run)
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
     return undefined
   }
