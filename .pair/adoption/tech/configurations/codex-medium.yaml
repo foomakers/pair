@@ -4,3 +4,4 @@ defaults: { engine: codex, model: gpt-6.1-terra, effort: medium }
 aliases:
   build: { engine: codex, model: gpt-6.1-terra, effort: medium }
   judge: { engine: codex, model: gpt-6.2-sol, effort: high }
+parallel: 3

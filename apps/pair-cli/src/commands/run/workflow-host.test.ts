@@ -704,3 +704,94 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
     ])
   })
 })
+
+describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
+  it('confirms facts, prepares three cards, and skips completed cards when run again', async () => {
+    const source = '.pair/adoption/tech/workflows/refinement.yaml'
+    write(
+      source,
+      fs.readFileSync(join(__dirname, '../../../../../packages/knowledge-hub/dataset', source)),
+    )
+    write(
+      '.pair/adoption/tech/way-of-working.md',
+      '## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Todo | Draft |\n| Refined | Ready |\n',
+    )
+    for (const skill of ['pair-process-refine-story', 'pair-process-plan-tasks'])
+      write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
+    const ids = ['9', '10', '12']
+    const status = new Map(ids.map(id => [id, 'Todo']))
+    const bodies = new Map<string, string>()
+    const readSelection = async () => ({
+      cards: ids.map(id => ({
+        id,
+        title: `Story ${id}`,
+        body: bodies.get(id) ?? '',
+        labels: ['risk:green'],
+        status: status.get(id) === 'Todo' ? 'Draft' : 'Ready',
+        boardState: status.get(id) ?? null,
+        closed: false,
+        prerequisites: id === '12' ? ['9'] : [],
+      })),
+    })
+    const workflow: WorkflowHostDependencies = {
+      ...deps({}).workflow,
+      readSelection,
+      board: {
+        getState: async id => status.get(id) ?? null,
+        async setState(id, value) {
+          status.set(id, value)
+        },
+      },
+      async readResultFacts(step) {
+        const id = String(step.inputs['card'])
+        return {
+          card: {
+            boardStatus: status.get(id) ?? null,
+            labels: ['risk:green'],
+            body: bodies.get(id) ?? '',
+          },
+        }
+      },
+      async runIteration(input) {
+        const id = /- card: (\d+)/.exec(input.promptText)?.[1] ?? ''
+        const current = status.get(id)
+        launched.push(input)
+        expect(current).toBe('Todo')
+        const refine = skillOf(input.promptText) === 'pair-process-refine-story'
+        bodies.set(
+          id,
+          refine
+            ? '## Acceptance Criteria\n\n## Technical Analysis\n\n## Assumptions'
+            : `${bodies.get(id) ?? ''}\n\n## Task Breakdown\n\n- [ ] **T-1**: Add a test`,
+        )
+        input.onEvent?.({
+          type: 'result',
+          subtype: 'success',
+          result: fenced({
+            status: 'ok',
+            summary: 'Prepared',
+            boardStatus: current,
+            ...(refine ? { riskTag: 'risk:green', openQuestions: [] } : { tasks: 1 }),
+          }),
+        })
+        return { outcome: 'success', detail: 'terminal event: success' }
+      },
+    }
+    const command = parseRunCommand({ cwd: project, card: ids.join(','), parallel: '2' }, [
+      'refinement',
+    ])
+    expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
+    expect([...status.values()]).toEqual(['Refined', 'Refined', 'Refined'])
+    expect(new Set(launched.map(step => step.cwd)).size).toBe(3)
+    expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
+    expect(launched).toHaveLength(6)
+    const summaries = fs
+      .readdirSync(join(project, '.pair/working/runs'))
+      .filter(entry => entry.name.startsWith('refinement-selection-'))
+    expect(summaries).toHaveLength(1)
+    const summary = JSON.parse(
+      fs.readFileSync(join(project, '.pair/working/runs', summaries[0]!.name, 'summary.json')),
+    ) as { totals: unknown }
+    expect(summary.totals).toEqual({ skipped: 3 })
+  })
+})
