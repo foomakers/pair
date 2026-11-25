@@ -98,6 +98,8 @@ const SHARED_LOCK_OS_PATHS = [
 // A path outside migration SCOPE cannot be migrated here, so it may only be relabeled by being listed.
 const EXCEPTION_OUT_OF_SCOPE = new Set([
   ...SHARED_LOCK_OS_PATHS,
+  'packages/workflows/scripts/bundle-workflow.mjs',
+  'packages/workflows/test/bundle.test.ts',
   'packages/knowledge-hub/src/conformance/workflow-authoring.test.ts',
   'scripts/workflow-test-runner.mjs',
   'packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs',

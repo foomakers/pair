@@ -37,6 +37,8 @@ export interface StepEvent {
   readonly detail?: string
 }
 
+type AgentOutput = { readonly output?: string | undefined; readonly model?: string | undefined }
+
 /**
  * What a host implements. The package decides what runs next and what its result means; the host
  * owns everything the package must not touch: processes, the worktree, the console.
@@ -64,7 +66,7 @@ export interface WorkflowHost {
     step: StepLaunch,
     message: string,
     meter: (usage: Usage) => void,
-  ): Promise<string | { output?: string | undefined; model?: string | undefined } | undefined>
+  ): Promise<string | AgentOutput | undefined>
   /** The card as it is now: what a step's `when` reads. Absent: a `when` on card facts matches. */
   card?(): Promise<CardFacts>
   /** Applies the step's directive before it starts. Returns a reason when the card is held. */
@@ -312,8 +314,8 @@ async function executeAgent(
   const launched = await host.launch(step, message, usage => {
     exchange.usage = usage
   })
-  const final = typeof launched === 'string' ? launched : launched?.output
-  const model = typeof launched === 'object' ? launched.model : undefined
+  const agent: AgentOutput = typeof launched === 'string' ? { output: launched } : (launched ?? {})
+  const { output: final, model } = agent
   if (final === undefined) return record(run, step.id, NO_AGENT_RESULT, { host: host.id, model })
   exchange.final = final
   const result = readResult(final, kind)

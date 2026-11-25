@@ -24,6 +24,7 @@
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
+    "bundle:workflow": "node scripts/bundle-workflow.mjs",
     "prettier:fix": "prettier-fix",
     "prettier:check": "prettier-check",
     "test": "vitest run",
@@ -46,6 +47,7 @@
     "@pair/prettier-config": "workspace:*",
     "@pair/ts-config": "workspace:*",
     "@types/node": "catalog:",
+    "@vercel/ncc": "0.45.0",
     "@vitest/coverage-v8": "catalog:",
     "ts-node": "catalog:",
     "typescript": "catalog:",

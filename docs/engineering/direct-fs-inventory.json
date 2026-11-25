@@ -1,11 +1,11 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1078,
-  "files": 403,
-  "distinctContents": 368,
+  "files": 405,
+  "distinctContents": 370,
   "dispositionCounts": {
-    "standalone-script": 15,
-    "os-guarantee": 27,
+    "standalone-script": 16,
+    "os-guarantee": 28,
     "type-contract": 13,
     "in-flight-churn": 243,
     "repo-contract": 104,
@@ -6707,6 +6707,23 @@
       "testCategory": "repo-file-contract"
     },
     {
+      "path": "packages/workflows/scripts/bundle-workflow.mjs",
+      "hash": "d5614afb4e5f11d7e98742bee7d002a176915f2081a2b614027d444d60589fbc",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs/promises",
+          "line": 1
+        }
+      ],
+      "disposition": "standalone-script",
+      "producer": "packages/workflows/scripts/bundle-workflow.mjs",
+      "observedOperations": ["mkdir", "writeFile"],
+      "reason": "Build tooling emits the standalone artifact to the dataset or a caller-supplied file.",
+      "decision": "Keep direct fs in the bundle generator.",
+      "testCategory": "installed-script-smoke"
+    },
+    {
       "path": "packages/workflows/src/cli/lock-support.ts",
       "hash": "6153b74d80bac4cafac5b36efab25aab2fc466f249bf16ad3589ea79a28fd7fc",
       "dependencies": [
@@ -6739,6 +6756,23 @@
       "reason": "A run must acquire its lock file exclusively across the CLI and session hosts.",
       "decision": "Keep the exclusive file operations in the host adapter.",
       "testCategory": "real lock integration"
+    },
+    {
+      "path": "packages/workflows/test/bundle.test.ts",
+      "hash": "605da78a0809e244ff277bab071b8a0bad6297d6d0441bee3e8d02eba6d3eaf8",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/test/bundle.test.ts",
+      "observedOperations": ["mkdtempSync", "readFileSync", "rmSync"],
+      "reason": "Runs a real build to a temporary path, compares the shipped bytes and executes the output there.",
+      "decision": "Keep the filesystem and process boundaries in the shipped-bundle check.",
+      "testCategory": "real-process"
     },
     {
       "path": "scripts/dev/delivery-process-overwrite.test.mjs",
