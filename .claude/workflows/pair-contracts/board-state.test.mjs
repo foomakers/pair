@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import github from '../../skills/pair-workflow-cycle/scripts/host/github.mjs'
 import filesystem from '../../skills/pair-workflow-cycle/scripts/host/filesystem.mjs'
+import { cardView, workflowCards } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 test('AC-1/2: cardState distinguishes open, closed, and missing board membership', () => {
   let card = { state: 'OPEN', stateReason: null, projectItems: [{ status: { name: 'Review' } }] }
@@ -111,6 +112,8 @@ ${source}
 const GH_BOARD = `
 const title = p => w.projects.find(x => x.id === p).title
 const fields = p => ({ nodes: [{ id: 'F-' + p, name: 'Status', options: ['Todo', 'Review', 'Done'].map(n => ({ id: p + '-' + n, name: n })) }] })
+if (a[0] === 'repo' && a[1] === 'view') { process.stdout.write('owner/repo'); process.exit(0) }
+if (a[0] === 'api' && a[1].includes('/dependencies/blocked_by?')) { process.stdout.write('[]'); process.exit(0) }
 if (a[0] === 'issue' && a[1] === 'view') { process.stdout.write(JSON.stringify({ state: 'OPEN', stateReason: null, projectItems: w.items.map(i => ({ title: title(i.project), status: { optionId: i.status ? 'o' : '', name: i.status ?? '' } })) })); process.exit(0) }
 if (a[0] === 'project' && a[1] === 'list') { process.stdout.write(JSON.stringify({ projects: w.projects, totalCount: w.projects.length })); process.exit(0) }
 if (a[0] === 'api' && a[1] === 'graphql') {
@@ -119,11 +122,24 @@ if (a[0] === 'api' && a[1] === 'graphql') {
   if (q.includes('addProjectV2ItemById')) { w.log.push('add:' + f('project')); w.items.push({ id: 'I-' + f('project'), project: f('project'), status: null }); save(); process.stdout.write(JSON.stringify({ data: { addProjectV2ItemById: { item: { id: 'I-' + f('project') } } } })); process.exit(0) }
   if (q.includes('updateProjectV2ItemFieldValue')) { const it = w.items.find(i => i.id === f('item')); it.status = f('option').split('-').pop(); w.log.push('status:' + f('project') + ':' + it.status); save(); process.stdout.write(JSON.stringify({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: it.id, fieldValueByName: { name: it.status } } } } })); process.exit(0) }
   if (q.includes('projectsV2')) { process.stdout.write(JSON.stringify({ data: { repository: { projectsV2: { nodes: w.projects.filter(p => (w.linked ?? []).includes(p.id)) } } } })); process.exit(0) }
-  process.stdout.write(JSON.stringify({ data: { repository: { issue: { id: 'C42', projectItems: { nodes: w.items.map(i => ({ id: i.id, project: { id: i.project, title: title(i.project), fields: fields(i.project) } })) } } } } })); process.exit(0)
+  process.stdout.write(JSON.stringify({ data: { repository: { issue: { id: 'C42', projectItems: { nodes: w.items.map(i => ({ id: i.id, fieldValueByName: i.status ? { name: i.status } : null, project: { id: i.project, title: title(i.project), fields: fields(i.project) } })) } } } } })); process.exit(0)
 }
 process.stderr.write('unexpected ' + a.join(' ')); process.exit(3)
 `
 const wow = project => `- \`pm-tool\`: \`github\`\n- \`pm-project\`: \`${project}\`\n`
+test('R744-03: selection and confirmation read the adopted project ID even when titles match', () => {
+  for (const member of [true, false]) {
+    const gh = stubBin('gh', {
+      projects: [{ id: 'PA', number: 1, title: 'Same title' }, { id: 'PO', number: 2, title: 'Same title' }],
+      items: [{ id: 'I-PO', project: 'PO', status: 'Refined' }, ...(member ? [{ id: 'I-PA', project: 'PA', status: 'Todo' }] : [])],
+    }, GH_BOARD)
+    const host = { pmTool: 'github', pm: github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('1') }) }
+    const expected = member ? 'Todo' : null
+    assert.equal(cardView({ story: '42', host }).boardState, expected)
+    assert.equal(workflowCards(host, { cards: '42' }).cards[0].boardState, expected)
+    assert.equal(host.pm.cardState({ id: '42' }).boardState, expected)
+  }
+})
 test('r0-3: GitHub repairs the adopted board and never writes an unrelated project', () => {
   const gh = stubBin('gh', { projects: [{ id: 'PA', title: 'Adopted board' }, { id: 'PO', title: 'P-other' }], items: [{ id: 'I-PO', project: 'PO', status: 'Todo' }] }, GH_BOARD)
   const pm = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('Adopted board') })
