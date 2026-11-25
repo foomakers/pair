@@ -467,7 +467,7 @@ function settledStatus(
   const exhausted = stoppedLoop(workflow, state)
   if (exhausted !== undefined) return exhausted.run
   return runIsDone(workflow, state) &&
-    !workflow.steps.some(step => retryShorthandFailure(step, state.steps[step.id]?.state))
+    !workflow.steps.some(step => retryContinuedFailure(step, state.steps[step.id]?.state))
     ? 'complete'
     : undefined
 }
@@ -615,7 +615,7 @@ function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay):
 }
 
 // An interrupted or stopped step runs again. Continued outcomes usually stay recorded.
-// A finished run or a failed final gate also retries legacy continued failures.
+// A finished run or a failed final gate also retries top-level continued failures.
 function reopenedSteps(
   run: RunDirectory,
   state: RunStateFile,
@@ -625,7 +625,10 @@ function reopenedSteps(
   const steps = new Map(addressedSteps(workflow).map(step => [step.id, step]))
   const last = workflow.steps.at(-1)
   const failedFinalGate = last?.kind === 'gate' && state.steps[last.id]?.state === 'failed'
-  const retryFailures = runIsDone(workflow, state) || failedFinalGate
+  const retryFailedSteps =
+    runIsDone(workflow, state) || failedFinalGate
+      ? topLevel
+      : new Set(last === undefined ? [] : [last.id])
   return Object.fromEntries(
     Object.entries(state.steps).map(([id, saved]) => {
       const step = steps.get(id)
@@ -633,12 +636,9 @@ function reopenedSteps(
       if (saved.state === 'ok') return [id, saved]
       if (
         saved.state !== 'skipped' &&
-        (saved.state !== 'failed' || id !== last?.id) &&
+        (saved.state !== 'failed' || !retryFailedSteps.has(id)) &&
         step !== undefined &&
-        (child
-          ? childSettled(step, saved.state)
-          : stepSettled(step, saved.state) &&
-            !(retryFailures && retryShorthandFailure(step, saved.state)))
+        (child ? childSettled(step, saved.state) : stepSettled(step, saved.state))
       )
         return [id, saved]
       return [id, reopenStep(run, saved, child ? undefined : step)]
@@ -768,8 +768,8 @@ export function stepSettled(step: Step, status: StepState | undefined): boolean 
   )
 }
 
-const retryShorthandFailure = (step: Step, status: StepState | undefined): boolean =>
-  status === 'failed' && step['on-failed'] === 'continue' && step.escalate?.failed === undefined
+const retryContinuedFailure = (step: Step, status: StepState | undefined): boolean =>
+  status === 'failed' && stepSettled(step, status)
 
 function haltFor(step: Step, status: StepState | undefined): Halt | undefined {
   return status === 'exhausted' && step['on-max'] === 'fail'
