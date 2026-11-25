@@ -193,12 +193,10 @@ const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetr
     },
   )
 
-/** Appends a step record to the run's `telemetry.jsonl`. */
-export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {
-  const steps = stepsOf(run)
+function stepRecord(run: RunDirectory, execution: StepExecution): StepTelemetry {
   const { step, settings, tokens, reason, escalate, diagnosis } = execution
   const isEstimate = Object.values(tokens).some(entry => entry.source === 'estimated')
-  const record: StepTelemetry = {
+  return {
     type: 'step',
     schema: TELEMETRY_SCHEMA,
     ...identityOf(run),
@@ -220,7 +218,62 @@ export async function recordStep(run: RunDirectory, execution: StepExecution): P
     attempt: step.attempt,
     ...(step.round !== undefined && { round: step.round }),
   }
+}
+
+const attemptKey = (id: string, attempt: number, round?: number) =>
+  JSON.stringify([id, attempt, round])
+
+/** Appends a step record, or adds its escalation to a fault recovered before settlement. */
+export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {
+  const steps = stepsOf(run)
+  const record = stepRecord(run, execution)
+  if (record.diagnosis !== undefined) {
+    const key = attemptKey(record.step, record.attempt, record.round)
+    const existing = steps.find(
+      row => row.diagnosis !== undefined && attemptKey(row.step, row.attempt, row.round) === key,
+    )
+    if (existing !== undefined) {
+      const { escalate } = record
+      if (escalate !== undefined && existing.escalate === undefined)
+        await write(
+          run,
+          steps.map(row => (row === existing ? { ...row, escalate } : row)),
+        )
+      return
+    }
+  }
   await write(run, [...steps, record])
+}
+
+type RecoveredFault = Omit<StepExecution, 'durationMs' | 'tokens'> & { diagnosis: Diagnosis }
+
+/** Backfills diagnoses saved before a telemetry write, keeping existing metered rows. */
+export async function recordMissingFaultSteps(
+  run: RunDirectory,
+  faults: Iterable<RecoveredFault>,
+): Promise<void> {
+  const recovered = [...faults]
+  if (recovered.length === 0) return
+  const steps = stepsOf(run)
+  const recorded = new Set(
+    steps
+      .filter(row => row.diagnosis !== undefined)
+      .map(row => attemptKey(row.step, row.attempt, row.round)),
+  )
+  const missing = recovered.filter(
+    ({ step }) => !recorded.has(attemptKey(step.id, step.attempt, step.round)),
+  )
+  if (missing.length === 0) return
+  await write(run, [
+    ...steps,
+    ...missing.map(fault =>
+      stepRecord(run, {
+        ...fault,
+        durationMs: fault.diagnosis.elapsedMs,
+        tokens: { read: UNKNOWN, cached: UNKNOWN, written: UNKNOWN },
+      }),
+    ),
+  ])
 }
 
 function sumOf(name: TokenName, steps: readonly StepTelemetry[]): TokenSum {

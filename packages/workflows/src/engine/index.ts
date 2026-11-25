@@ -268,7 +268,7 @@ export async function escalationCommentTarget(
 }
 
 /** The frozen copy, parsed. It was valid when `start` froze it. */
-function frozenWorkflow(run: RunDirectory): Workflow {
+export function frozenWorkflow(run: RunDirectory): Workflow {
   const path = join(run.dir, FROZEN_WORKFLOW)
   const text = run.files.readFileSync(path)
   const { workflow, errors } = parseWorkflow(

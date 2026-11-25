@@ -2,6 +2,7 @@ import { buildMessage, checkAgentResult, type InvocationStyle } from '../dispatc
 import {
   escalationCommentTarget,
   faultsOf,
+  frozenWorkflow,
   next,
   priorRefinement,
   record,
@@ -15,7 +16,13 @@ import {
   type StepLaunch,
 } from '../engine'
 import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
-import { escalationAction, type Assignment, type CardState, type KindName } from '../grammar'
+import {
+  addressedSteps,
+  escalationAction,
+  type Assignment,
+  type CardState,
+  type KindName,
+} from '../grammar'
 import { violations } from '../schema'
 import type { Diagnosis, ProcessDiagnostics, StepFaults } from '../diagnosis'
 import type { CardFacts } from '../select'
@@ -25,6 +32,7 @@ import {
   reopenRun,
   estimated,
   measured,
+  recordMissingFaultSteps,
   recordStep,
   type StepExecution,
   type TelemetryHost,
@@ -263,7 +271,7 @@ async function execute(
   const fault = step.exhaustedFault
   if (fault !== undefined) {
     exchange.diagnosis = fault
-    return record(run, step.id, faultResult(step, { fault }))
+    return record(run, step.id, faultResult(step.retries, { fault }))
   }
   if (step.pendingSuccess !== undefined)
     return recordResult(host, run, step, await confirmed(host, run, step, step.pendingSuccess))
@@ -318,7 +326,8 @@ async function executeAgent(
   }
   exchange.sent = message
   const reply = await launchWithRetries(host, run, exchange, onRetry)
-  if ('fault' in reply) return record(run, step.id, faultResult(step, reply), reply.invalid?.final)
+  if ('fault' in reply)
+    return record(run, step.id, faultResult(step.retries, reply), reply.invalid?.final)
   const { result, final } = reply
   // Leave the step running on disk so the next invocation can retry it.
   if (step.kind === 'implement' && result.status === 'failed' && result.reason === 'card-held')
@@ -335,13 +344,13 @@ type AgentReply =
   | { fault: Diagnosis; invalid?: { result: StepResult; final: string } }
 
 function faultResult(
-  step: StepLaunch,
+  retries: number | undefined,
   reply: Extract<AgentReply, { fault: Diagnosis }>,
 ): StepResult {
   if (reply.invalid !== undefined) return reply.invalid.result
   const { kind, detail } = reply.fault
   if (kind === 'invalid-result') return { status: 'failed', reason: kind, summary: detail }
-  if (step.retries === undefined) return NO_AGENT_RESULT
+  if (retries === undefined) return NO_AGENT_RESULT
   return { status: 'blocked', reason: 'fault', summary: 'the agent process failed', detail }
 }
 
@@ -380,8 +389,39 @@ async function launchWithRetries(
     const next = await recordFault(run, step, reply.fault)
     exchange.diagnosis = reply.fault
     if (next === undefined) return reply
-    await onRetry?.(faultResult(step, reply))
+    await onRetry?.(faultResult(step.retries, reply))
     exchange.step = next
+  }
+}
+
+function* recoverableFaults(run: RunDirectory, telemetry: TelemetryOptions, now: () => Date) {
+  const faults = faultsOf(run)
+  if (faults.length === 0) return
+  const steps = new Map(addressedSteps(frozenWorkflow(run)).map(step => [step.id, step]))
+  const recoveredAt = now()
+  for (const { step: id, attempts } of faults) {
+    const step = steps.get(id)
+    if (step === undefined || step.kind === 'loop') continue
+    const { kind, skill, retries } = step
+    for (const { attempt, round, ...diagnosis } of attempts) {
+      const { status, reason } = faultResult(retries, { fault: diagnosis })
+      yield {
+        step: {
+          id,
+          kind,
+          uses: skill ?? kindByName[kind].defaultSkill ?? '',
+          attempt,
+          ...(round !== undefined && { round }),
+        },
+        host: telemetry.host,
+        settings: telemetry.settings(id),
+        // The exact start time was not persisted alongside the diagnosis.
+        startedAt: recoveredAt,
+        status,
+        ...(reason !== undefined && { reason }),
+        diagnosis,
+      }
+    }
   }
 }
 
@@ -390,6 +430,7 @@ async function launchWithRetries(
  * the run goes on without it.
  */
 function writerOf(run: RunDirectory, telemetry: TelemetryOptions) {
+  const now = telemetry.now ?? (() => new Date())
   let told = false
   const safe = async (write: Promise<void>): Promise<void> => {
     try {
@@ -403,7 +444,8 @@ function writerOf(run: RunDirectory, telemetry: TelemetryOptions) {
     }
   }
   return {
-    now: telemetry.now ?? (() => new Date()),
+    now,
+    reconcile: () => safe(recordMissingFaultSteps(run, recoverableFaults(run, telemetry, now))),
     step: (execution: Omit<StepExecution, 'host' | 'settings'>) =>
       safe(
         recordStep(run, {
@@ -633,6 +675,7 @@ export async function runSteps(
   const run = observedRun(host.files, dir)
   const writer = telemetry && writerOf(run, telemetry)
   if (writer === undefined) await reopenRun(run).catch(() => undefined)
+  else await writer.reconcile()
   let last: StepEvent | undefined
   for (;;) {
     const { ready, state, event } = await advance(host, run)
