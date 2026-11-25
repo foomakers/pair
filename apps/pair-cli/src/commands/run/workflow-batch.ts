@@ -146,11 +146,18 @@ async function loadDependencies(
   if (read === undefined || ids.length === 0) return selected
   const dependencies = new Map((await read(ids)).map(facts => [facts.id, facts]))
   return selected.map(card => {
-    if (prior.get(card.id)?.outcome === 'failed') return card
+    const outcome = prior.get(card.id)
+    if (outcome?.outcome === 'failed') return card
     const facts = dependencies.get(card.id)
     const reason = facts === undefined ? 'dependency facts missing' : facts.error
-    if (reason !== undefined) prior.set(card.id, { id: card.id, outcome: 'failed', reason })
-    return { ...card, ...facts }
+    if (reason === undefined) return { ...card, ...facts }
+    prior.set(
+      card.id,
+      outcome?.outcome === 'skipped'
+        ? { ...outcome, reason: `workflow already complete · dependency read: ${reason}` }
+        : { id: card.id, outcome: 'failed', reason },
+    )
+    return card
   })
 }
 
