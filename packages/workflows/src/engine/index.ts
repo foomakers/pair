@@ -367,6 +367,19 @@ function pendingReadyResult(
   return result.status === 'ok' ? result : undefined
 }
 
+function stagedBoardStatus(
+  run: RunDirectory,
+  state: RunStateFile,
+  steps: readonly Step[],
+): string | undefined {
+  for (const step of steps) {
+    const saved = state.steps[step.id]
+    const status = saved?.retryBoardStatus ?? pendingReadyResult(run, step, saved)?.['boardStatus']
+    if (typeof status === 'string') return status
+  }
+  return undefined
+}
+
 /** The board status used to reselect unfinished refinement or a Ready transition. */
 export function pendingBoardStatus(
   run: RunDirectory,
@@ -376,21 +389,20 @@ export function pendingBoardStatus(
   const state = readState(run)
   if (state?.card !== identity.card || state.workflow.name !== identity.workflow) return undefined
   const { steps } = frozenWorkflow(run)
-  for (const step of steps) {
-    const saved = state.steps[step.id]
-    const status = saved?.retryBoardStatus ?? pendingReadyResult(run, step, saved)?.['boardStatus']
-    if (typeof status === 'string') return status
-  }
+  const staged = stagedBoardStatus(run, state, steps)
+  if (staged !== undefined) return staged
   if (
+    draftBoardStatus !== undefined &&
     steps.some(step => {
       const saved = state.steps[step.id]
       return (
         (step.kind === 'refine-story' || step.kind === 'plan-tasks') &&
-        saved?.executions &&
-        saved.state !== 'ok' &&
-        saved.state !== 'skipped'
+        saved !== undefined &&
+        saved.state !== 'skipped' &&
+        (saved.state === 'ok' || Boolean(saved.executions))
       )
-    })
+    }) &&
+    settledStatus(run, state, exhaustedLoop(state)) !== 'complete'
   )
     return draftBoardStatus
   return undefined
