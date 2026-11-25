@@ -339,7 +339,7 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
   )
 
   // Pattern level is not enough: checkRootGate EXPANDS a referenced root script by
-  // inlining `{ body }` right after the match, so the `--check` sparing has to survive
+  // inlining `{ body }` before the match, so the `--check` sparing has to survive
   // the braces AND the second bare `sync-version` the body brings with it. Asserted at
   // integration level because the form a real gate would use — `pnpm sync-version
   // --check` delegating to a root script — is exactly the one the lookahead broke on.

@@ -113,10 +113,9 @@ const WRITE_MODE_FORMATTERS: readonly { readonly name: string; readonly pattern:
   // `\bsync-version\b` also matches the `sync-version-in-docs(.ts)` spelling, since
   // `-` is a word boundary — one entry covers the script name and the module path.
   // The `--check` lookahead deliberately crosses `{` and `}`, unlike the CLI patterns
-  // above: script expansion inlines a referenced body as `{ … }` immediately after the
-  // match, so a delegated `pnpm sync-version --check` puts a brace between the name and
-  // its own flag. Real separators (`&& | ;` and newline) still bound the lookahead, so a
-  // `--check` in the NEXT command cannot launder a write.
+  // above: the expanded body can contain another sync-version invocation before the
+  // closing brace and the caller's `--check`. Real separators (`&& | ;` and newline)
+  // still bound the lookahead, so a `--check` in the next command cannot launder a write.
   { name: 'sync-version', pattern: /\bsync-version\b(?![^&|;\n]*--check\b)/ },
   { name: 'test:perf', pattern: /\btest:perf\b/ },
   { name: 'benchmark-update-link', pattern: /\bbenchmark-update-link(?:\.ts)?\b/ },
@@ -223,8 +222,8 @@ export function findWriteModeFormatters(gateCommand: string): string[] {
  * gate ACTUALLY runs instead of the name it hides behind. Bounded depth + visited
  * set: a script that reaches itself is expanded once, never forever.
  *
- * The reference is kept next to its expansion (`pnpm x { … }`) so a failure
- * message shows the delegation path that reached the offender.
+ * The expansion precedes the reference so the original command retains its flags
+ * and the failure message still shows the delegation path.
  */
 export function expandScriptReferences(
   scripts: Record<string, string>,
@@ -238,7 +237,7 @@ export function expandScriptReferences(
     if (typeof body !== 'string' || visited.has(name)) return match
     const seen = new Set(visited)
     seen.add(name)
-    return `${match} { ${expandScriptReferences(scripts, body, seen, depth + 1)} }`
+    return `{ ${expandScriptReferences(scripts, body, seen, depth + 1)} } ${match}`
   })
 }
 
