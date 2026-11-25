@@ -8,6 +8,7 @@ import {
   cardStateToConfirm,
   completedRun,
   effectiveSelection,
+  escalationAction,
   checkAgainstEngines,
   describeSettings,
   formatError,
@@ -26,6 +27,8 @@ import {
   runSteps,
   settingsFor,
   start,
+  stepSettled,
+  stoppedLoop,
   validate,
   type Assignment,
   type CardState,
@@ -833,29 +836,29 @@ function cardTransitions({ request, resolved }: Opened, services: Services) {
 
 /** The ending of a run parked or failed on an exhausted loop, drawn on the console; undefined otherwise. */
 function exhaustedEnding(
-  { resolved, request, runDir }: Opened,
+  { request, runDir }: Opened,
   outcome: RunOutcome,
   sink: ConsoleSink,
   fs: Services['fs'],
 ): number | undefined {
-  const state = JSON.parse(fs.readFileSync(join(runDir, 'state.json'))) as {
-    loops?: Record<string, { exhausted?: boolean }>
-    steps: Record<string, { summary?: string; state: string }>
-  }
-  const exhausted = resolved.workflow.steps.find(step => state.loops?.[step.id]?.exhausted)
-  if (exhausted === undefined || outcome.run === 'done' || outcome.run === 'skipped')
-    return undefined
-  const last = state.steps[`${exhausted.id}/${exhausted.until}`]
-  const why = `${state.steps[exhausted.id]?.summary}; last until: ${last?.state} — ${last?.summary}`
+  if (outcome.run === 'done' || outcome.run === 'skipped') return undefined
+  const saved = savedWorkflow({ card: request.card, restart: false }, runDir, fs)
+  if (saved === undefined) return undefined
+  const stopped = stoppedLoop(saved.workflow, saved.state)
+  if (stopped?.run !== outcome.run) return undefined
+  const { id, until } = stopped.step
+  const last = saved.state.steps[`${id}/${until}`]
+  const why = `${saved.state.steps[id]?.summary}; last until: ${last?.state} — ${last?.summary}`
+  const { status, exit } = ENDINGS[stopped.run]
   sink.event({
     event: 'card-end',
     card: request.card,
-    status: outcome.run === 'failed' ? 'failed' : 'awaiting-human',
+    status,
     reason: why,
   })
-  const flag = outcome.run === 'failed' ? '--restart' : '--more-rounds <n>'
+  const flag = stopped.run === 'failed' ? '--restart' : '--more-rounds <n>'
   console.log(`  Run: ${why}. Resume with: ${resumeCommand(request)} ${flag}`)
-  return outcome.run === 'failed' ? 1 : 0
+  return exit
 }
 
 function reportRunOutcome(opened: Opened, outcome: RunOutcome): void {
@@ -979,14 +982,7 @@ async function refreshReplayInputs(
   if (saved === undefined) return undefined
   const { workflow, state } = saved
   const { resolved, request } = opened
-  const stopped = workflow.steps.find(step => {
-    const status = state.steps[step.id]?.state
-    return (
-      status !== 'ok' &&
-      status !== 'skipped' &&
-      !(status === 'failed' && step['on-failed'] === 'continue')
-    )
-  })
+  const stopped = workflow.steps.find(step => !stepSettled(step, state.steps[step.id]?.state))
   const route = stopped?.['on-resume']
   if (stopped === undefined || route === undefined) return undefined
   const failure = state.steps[stopped.id]
@@ -1227,9 +1223,10 @@ function dryRunExecution(
 }
 
 function dryRunExhaustion(step: ReturnType<typeof addressedSteps>[number]): string {
-  return step.kind === 'loop'
-    ? ` on-max=${step['on-max']}${step['on-max'] === 'escalate' ? ' (human escalation)' : ' (fails)'}`
-    : ''
+  if (step.kind !== 'loop') return ''
+  const action = escalationAction(step.escalate?.exhausted)
+  if (action !== undefined) return ` exhausted=${action}`
+  return ` on-max=${step['on-max']}${step['on-max'] === 'escalate' ? ' (human escalation)' : ' (fails)'}`
 }
 
 type BatchCard = {

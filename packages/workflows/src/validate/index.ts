@@ -296,9 +296,10 @@ function outputErrors(
   const at = (problem: string, fix: string) => [
     errorAt(workflow, [...path, 'when', 'output'], { problem, fix }),
   ]
-  if (!earlier.has(id) || target === undefined || target.kind === 'loop')
+  if (!earlier.has(id) || target === undefined)
     return at(`'${id}' is not a step before this one`, 'name an earlier step')
   if (name === 'status') return []
+  if (target.kind === 'loop') return at(`loop '${id}' has no output '${name}'`, 'use status')
   const declared = fieldsOf(kindByName[target.kind].outputs)
   return declared.includes(name)
     ? []
@@ -373,9 +374,10 @@ function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowErro
   const checkStep: CheckStep = (step, path) => {
     const id = path.filter((_, index) => index % 2 === 1).join('/')
     const earlier = new Set(seen)
-    seen.add(id)
-    if (step.kind !== 'loop')
+    if (step.kind !== 'loop') {
+      seen.add(id)
       return plainStepErrors(scope, step as Step & { kind: KindName }, path, earlier)
+    }
     let exitInputs = new Set(available)
     const errors = [
       ...loopOwnErrors(workflow, step, path),
@@ -401,6 +403,7 @@ function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowErro
         return found
       }),
     ]
+    seen.add(id)
     available.clear()
     exitInputs.forEach(input => available.add(input))
     return errors

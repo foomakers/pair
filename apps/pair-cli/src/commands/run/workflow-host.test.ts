@@ -807,7 +807,7 @@ steps:
     }
     expect(await run(['quick'], skills)).toBe(0)
     expect(states()).toMatchObject({
-      rounds: 'needs-decision',
+      rounds: 'exhausted',
       'rounds/review': 'failed',
       'rounds/fix': 'ok',
     })
@@ -840,6 +840,43 @@ steps:
       expect(output).toContain(action === 'escalate' ? '--more-rounds <n>' : '--restart')
     },
   )
+
+  it('reports a later blocked step after a loop continues past exhaustion (#728 AC-6, AC-13)', async () => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      loop.replace('on-max: escalate', 'escalate: { exhausted: continue }') +
+        `  fallback:
+    kind: implement
+    escalate: { blocked: stop }
+  later: { kind: review }
+`,
+    )
+    let implementations = 0
+    const skills = {
+      ...OK,
+      'pair-process-implement': () =>
+        ++implementations === 2
+          ? fenced({ status: 'blocked', summary: 'registry unavailable', reason: 'expired token' })
+          : IMPLEMENTED,
+      'pair-process-review': () => (implementations === 1 ? failedReview : REVIEWED),
+      'pair-process-fix': () => fixed,
+    }
+    const exit = await run(['quick'], skills)
+    expect(exit, lines.join('\n')).toBe(0)
+    expect(states()).toMatchObject({ rounds: 'exhausted', fallback: 'blocked', later: 'pending' })
+    const ending = lines.find(line => line.startsWith('  Run: '))
+    expect(ending).toContain('parked at step fallback')
+    expect(ending).toContain('registry unavailable (expired token)')
+    expect(ending).not.toContain('--more-rounds')
+
+    launched = []
+    expect(await run(['quick'], skills)).toBe(0)
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([
+      'pair-process-implement',
+      'pair-process-review',
+    ])
+    expect(states()).toMatchObject({ rounds: 'exhausted', fallback: 'ok', later: 'ok' })
+  })
 
   it('applies a configuration max override to the loop id', async () => {
     write('.pair/adoption/tech/workflows/quick.yaml', loop)

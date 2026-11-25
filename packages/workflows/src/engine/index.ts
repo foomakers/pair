@@ -6,8 +6,10 @@ import {
   assignmentFor,
   cardStateOf,
   cardStateToConfirm,
+  escalationAction,
   parseWorkflow,
   type CardState,
+  type EscalationRule,
   type KindName,
   type ResolvedAssignment,
   type Step,
@@ -49,7 +51,7 @@ export const FROZEN_CONFIGURATION = 'configuration.yaml'
 export const TELEMETRY_FILE = 'telemetry.jsonl'
 
 /** `skipped`: the step's `when` did not match when it was about to start; it produces no outputs. */
-export type StepState = 'pending' | 'running' | 'skipped' | StepStatus
+export type StepState = 'pending' | 'running' | 'skipped' | 'exhausted' | StepStatus
 export type RunState = 'running' | 'done' | 'failed' | 'parked'
 /** A held card ends the current invocation while the stored run remains resumable. */
 export type RunEndStatus = Exclude<RunState, 'running'> | 'skipped'
@@ -348,26 +350,22 @@ async function reconfigured(
 }
 
 /** The loop parked at max, when `--more-rounds` may reopen it. */
-function parkedLoop(
-  state: RunStateFile,
-  exhausted: [string, LoopRecord] | undefined,
-  moreRounds: number,
-): [string, LoopRecord] {
-  if (exhausted === undefined || state.steps[exhausted[0]]?.state !== 'needs-decision')
-    throw new Error('more-rounds-invalid: no loop is parked at max')
+function parkedLoop(state: RunStateFile, workflow: Workflow, moreRounds: number) {
+  const stopped = stoppedLoop(workflow, state)
+  if (stopped?.run !== 'parked') throw new Error('more-rounds-invalid: no loop is parked at max')
   if (!Number.isInteger(moreRounds) || moreRounds < 1)
     throw new Error('more-rounds-invalid: pass a positive integer')
-  return exhausted
+  return stopped
 }
 
 /** `--more-rounds`: reopens the loop parked at max with the extra rounds granted. */
 function withMoreRounds(
-  run: RunDirectory,
   state: RunStateFile,
-  exhausted: [string, LoopRecord] | undefined,
+  workflow: Workflow,
   options: StartOptions & { readonly moreRounds: number },
 ): RunStateFile {
-  const [id, loop] = parkedLoop(state, exhausted, options.moreRounds)
+  const { step, loop } = parkedLoop(state, workflow, options.moreRounds)
+  const { id } = step
   const grants = [
     ...(loop.grants ?? []),
     {
@@ -376,7 +374,7 @@ function withMoreRounds(
       at: (options.now ?? new Date()).toISOString(),
     },
   ]
-  const children = frozenWorkflow(run).steps.find(step => step.id === id)?.steps ?? []
+  const children = step.steps ?? []
   return {
     ...state,
     loops: {
@@ -402,12 +400,15 @@ function withMoreRounds(
   }
 }
 
-/** The loop stopped at max, parked or failed. */
-const exhaustedLoop = (state: RunStateFile): [string, LoopRecord] | undefined =>
-  Object.entries(state.loops ?? {}).find(
-    ([id, loop]) =>
-      loop.exhausted && ['needs-decision', 'failed'].includes(state.steps[id]?.state ?? ''),
-  )
+/** The first unfinished step, when it is a loop stopped at max. */
+export function stoppedLoop(workflow: Workflow, state: RunStateFile) {
+  const step = workflow.steps.find(one => !stepSettled(one, state.steps[one.id]?.state))
+  if (step?.kind !== 'loop') return undefined
+  const loop = state.loops?.[step.id]
+  if (!loop?.exhausted) return undefined
+  const run = haltFor(step, state.steps[step.id]?.state)
+  return run === undefined ? undefined : { step, loop, run }
+}
 
 /** The run must be of this card; a workflow edited since the start warns. */
 function workflowWarnings(
@@ -427,15 +428,14 @@ function workflowWarnings(
 
 /** The status a resumed run ends in without launching anything; undefined when steps remain. */
 function settledStatus(
-  run: RunDirectory,
+  workflow: Workflow,
   state: RunStateFile,
-  exhausted: ReturnType<typeof exhaustedLoop>,
 ): 'failed' | 'parked' | 'complete' | undefined {
-  if (exhausted !== undefined)
-    return state.steps[exhausted[0]]?.state === 'failed' ? 'failed' : 'parked'
-  return frozenWorkflow(run).steps.every(step =>
-    ['ok', 'skipped'].includes(state.steps[step.id]?.state ?? ''),
-  )
+  const exhausted = stoppedLoop(workflow, state)
+  if (exhausted !== undefined) return exhausted.run
+  const { steps } = workflow
+  return steps.every(step => stepSettled(step, state.steps[step.id]?.state)) &&
+    finalState(state, steps) === 'done'
     ? 'complete'
     : undefined
 }
@@ -449,7 +449,7 @@ export function completedRun(
     state !== undefined &&
     state.card === identity.card &&
     state.workflow.name === identity.workflow &&
-    settledStatus(run, state, exhaustedLoop(state)) === 'complete'
+    settledStatus(frozenWorkflow(run), state) === 'complete'
   )
 }
 
@@ -495,7 +495,8 @@ export function pendingBoardStatus(
 ): string | undefined {
   const state = readState(run)
   if (state?.card !== identity.card || state.workflow.name !== identity.workflow) return undefined
-  const { steps } = frozenWorkflow(run)
+  const workflow = frozenWorkflow(run)
+  const { steps } = workflow
   const staged = stagedBoardStatus(run, state, steps)
   if (staged !== undefined) return staged
   if (
@@ -509,7 +510,7 @@ export function pendingBoardStatus(
         (saved.state === 'ok' || Boolean(saved.executions))
       )
     }) &&
-    settledStatus(run, state, exhaustedLoop(state)) !== 'complete'
+    settledStatus(workflow, state) !== 'complete'
   )
     return draftBoardStatus
   return undefined
@@ -538,22 +539,18 @@ async function resume(
   const telemetryWarning = await migrateRunTelemetry(run)
   const diagnostics = { warnings, ...(telemetryWarning !== undefined && { telemetryWarning }) }
   let state = saved
+  const workflow = frozenWorkflow(run)
   const { configuration } = options
-  if (options.moreRounds !== undefined) parkedLoop(state, exhaustedLoop(state), options.moreRounds)
+  if (options.moreRounds !== undefined) parkedLoop(state, workflow, options.moreRounds)
   if (configuration !== undefined && options.reconfigure === true)
     state = await reconfigured(run, state, configuration)
   else warnings.push(...configurationWarnings(run, state, configuration))
-  const exhausted = exhaustedLoop(state)
   if (options.moreRounds !== undefined)
-    state = withMoreRounds(run, state, exhausted, { ...options, moreRounds: options.moreRounds })
+    state = withMoreRounds(state, workflow, { ...options, moreRounds: options.moreRounds })
   if (options.replay !== undefined) state = replayFrom(run, state, options.replay)
-  const settled = settledStatus(
-    run,
-    state,
-    options.moreRounds === undefined ? exhaustedLoop(state) : undefined,
-  )
+  const settled = settledStatus(workflow, state)
   if (settled === undefined) {
-    await writeState(run, { ...state, steps: reopenedSteps(run, state, frozenWorkflow(run)) })
+    await writeState(run, { ...state, steps: reopenedSteps(run, state, workflow) })
     return { status: 'resumed', ...diagnostics }
   }
   if (state !== saved) await writeState(run, state)
@@ -581,31 +578,41 @@ function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay):
   return { ...state, steps: records, loops, latest: {}, replay }
 }
 
-// A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
+// An interrupted or stopped step runs again. Outcomes the run continued past stay recorded.
 function reopenedSteps(
   run: RunDirectory,
   state: RunStateFile,
   workflow: Workflow,
 ): Record<string, StepRecord> {
-  const topLevel = new Map(workflow.steps.map(step => [step.id, step]))
+  const topLevel = new Set(workflow.steps.map(step => step.id))
+  const steps = new Map(addressedSteps(workflow).map(step => [step.id, step]))
+  const last = workflow.steps.at(-1)?.id
   return Object.fromEntries(
     Object.entries(state.steps).map(([id, saved]) => {
-      const step = topLevel.get(id)
-      if (saved.state === 'ok' || (saved.state === 'failed' && step === undefined))
+      const step = steps.get(id)
+      const child = !topLevel.has(id)
+      if (saved.state === 'ok') return [id, saved]
+      if (
+        saved.state !== 'skipped' &&
+        (saved.state !== 'failed' || id !== last) &&
+        step !== undefined &&
+        (child ? childSettled(step, saved.state) : stepSettled(step, saved.state))
+      )
         return [id, saved]
-      const pendingSuccess =
-        step === undefined ? saved.pendingSuccess : pendingTransitionResult(run, step, saved)
-      return [
-        id,
-        {
-          state: 'pending',
-          ...(saved.executions !== undefined && { executions: saved.executions }),
-          ...retryBoardStatusOf(saved),
-          ...(pendingSuccess !== undefined && { pendingSuccess }),
-        },
-      ]
+      return [id, reopenStep(run, saved, child ? undefined : step)]
     }),
   )
+}
+
+function reopenStep(run: RunDirectory, saved: StepRecord, step: Step | undefined): StepRecord {
+  const pendingSuccess =
+    step === undefined ? saved.pendingSuccess : pendingTransitionResult(run, step, saved)
+  return {
+    state: 'pending',
+    ...(saved.executions !== undefined && { executions: saved.executions }),
+    ...retryBoardStatusOf(saved),
+    ...(pendingSuccess !== undefined && { pendingSuccess }),
+  }
 }
 
 /** The state of a run that has not launched anything. */
@@ -676,20 +683,49 @@ function inputsBefore(
   return Object.assign({ card: state.card }, ...earlier)
 }
 
-const HALTED: Partial<Record<StepState, RunState>> = {
+type Halt = 'failed' | 'parked'
+
+const HALTED: Partial<Record<StepState, Halt>> = {
   failed: 'failed',
   blocked: 'parked',
   'needs-decision': 'parked',
+  exhausted: 'parked',
 }
 
-/** A step the run is past: `ok`, or `failed` with `on-failed: continue`. */
-const settled = (state: RunStateFile, step: Step): boolean => {
-  const at = state.steps[step.id]?.state
-  return at === 'ok' || at === 'skipped' || (at === 'failed' && step['on-failed'] === 'continue')
+/** A rule declared under `escalate` for the recorded outcome. */
+export const explicitEscalation = (
+  step: Step,
+  status: StepState | undefined,
+): EscalationRule | undefined =>
+  status === 'failed' ||
+  status === 'blocked' ||
+  status === 'needs-decision' ||
+  status === 'exhausted'
+    ? step.escalate?.[status]
+    : undefined
+
+/** An outcome that lets execution move past this top-level step. */
+export function stepSettled(step: Step, status: StepState | undefined): boolean {
+  const action = escalationAction(explicitEscalation(step, status))
+  return (
+    status === 'ok' ||
+    status === 'skipped' ||
+    (action ?? (status === 'failed' ? step['on-failed'] : undefined)) === 'continue'
+  )
 }
+
+function haltFor(step: Step, status: StepState | undefined): Halt | undefined {
+  return status === 'exhausted' && step['on-max'] === 'fail'
+    ? 'failed'
+    : HALTED[status ?? 'pending']
+}
+
+/** Without a rule, a failed child remains part of normal loop convergence. */
+const childSettled = (child: Step, status: StepState | undefined): boolean =>
+  stepSettled(child, status) || (status === 'failed' && child.escalate?.failed === undefined)
 
 /** The state of a run with nothing left to launch: the last step decides. */
-const finalState = (state: RunStateFile, steps: readonly Step[]): RunState =>
+const finalState = (state: RunStateFile, steps: readonly Step[]): 'failed' | 'done' =>
   state.steps[steps[steps.length - 1]?.id ?? '']?.state === 'failed' ? 'failed' : 'done'
 
 const pick = (produced: Record<string, unknown>, kind: KindName): Record<string, unknown> => {
@@ -709,13 +745,19 @@ function loopChild(
   state: RunStateFile,
   step: Step,
 ): { child: Step & { kind: KindName }; id: string } {
-  const child = step.steps?.find(one => {
-    const at = state.steps[`${step.id}/${one.id}`]?.state
-    return at !== 'ok' && at !== 'failed' && at !== 'skipped'
-  })
+  const child = step.steps?.find(
+    one => !childSettled(one, state.steps[`${step.id}/${one.id}`]?.state),
+  )
   if (child === undefined) throw new Error(`run-state-unreadable: loop ${step.id} has no next step`)
   if (child.kind === 'loop') throw new Error('nested loop is not launchable')
   return { child: child as Step & { kind: KindName }, id: `${step.id}/${child.id}` }
+}
+
+function haltAt(state: RunStateFile, step: Step): Halt | undefined {
+  const halted = haltFor(step, state.steps[step.id]?.state)
+  if (halted !== undefined || step.kind !== 'loop') return halted
+  const { child, id } = loopChild(state, step)
+  return haltFor(child, state.steps[id]?.state)
 }
 
 const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
@@ -790,7 +832,7 @@ async function reserveLaunch(
   return { ready: [launch], run: 'running' }
 }
 
-/** The launch of the loop child that is next, or the halt that stops the run. */
+/** Launches the next loop child if its launch check passes. */
 async function nextInLoop(
   run: RunDirectory,
   context: LaunchContext,
@@ -799,8 +841,6 @@ async function nextInLoop(
 ): Promise<NextLaunch> {
   const { state } = context
   const { child, id } = loopChild(state, step)
-  const childHalt = HALTED[state.steps[id]?.state ?? 'pending']
-  if (childHalt !== undefined) return { ready: [], run: childHalt }
   const attempt = launches(state, id)
   const round = state.loops?.[step.id]?.round ?? 1
   const saved = state.steps[id]
@@ -844,9 +884,9 @@ export async function next(
   const state = await migrateStateStatuses(run, requireState(run))
   const workflow = frozenWorkflow(run)
   const { steps } = workflow
-  const step = steps.find(one => !settled(state, one))
+  const step = steps.find(one => !stepSettled(one, state.steps[one.id]?.state))
   if (step === undefined) return { ready: [], run: finalState(state, steps), ...seen(skipped) }
-  const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
+  const halted = haltAt(state, step)
   if (halted !== undefined) return { ready: [], run: halted, ...seen(skipped) }
   const condition = await checkWhen(run, state, step, card)
   if (condition?.error !== undefined)
@@ -935,7 +975,7 @@ async function checkWhen(
   }
   const recorded = { ...state.steps, [id]: entry }
   const progress = inLoop
-    ? advanceLoop({ state, outer: step, childId: target.id, status: 'ok', outputs: {} }, recorded)
+    ? advanceLoop({ state, outer: step, child: target, status: 'ok', outputs: {} }, recorded)
     : { steps: recorded, loops: state.loops }
   await writeState(run, {
     ...state,
@@ -990,14 +1030,15 @@ export function pendingMergeClosure(
     !['failed', 'running'].includes(state.steps[merge.id]?.state ?? '')
   )
     return undefined
-  if (!steps.slice(0, -1).every(step => settled(state, step))) return undefined
+  if (!steps.slice(0, -1).every(step => stepSettled(step, state.steps[step.id]?.state)))
+    return undefined
   return plainLaunch(state, workflow, merge)
 }
 
 interface Advance {
   readonly state: RunStateFile
   readonly outer: Step
-  readonly childId: string
+  readonly child: Step
   readonly status: StepStatus
   readonly outputs: Record<string, unknown>
 }
@@ -1016,7 +1057,7 @@ function closeRound({ state, outer }: Advance, { steps, loops }: Progress): Prog
       steps: {
         ...steps,
         [outerId]: {
-          state: outer['on-max'] === 'escalate' ? 'needs-decision' : 'failed',
+          state: 'exhausted',
           outputs: loop.untilResult ?? {},
           reason: 'loop-max',
           summary: `loop ${outerId} reached ${loop.max} rounds`,
@@ -1052,19 +1093,23 @@ const withUntilResult = (
 
 /** A loop child finished: the loop is done, loops back to the next round, or stops at max. */
 function advanceLoop(a: Advance, recorded: Record<string, StepRecord>): Progress {
-  const { state, outer, childId, status, outputs } = a
-  const isUntil = childId === outer.until
+  const { state, outer, child, status, outputs } = a
+  const isUntil = child.id === outer.until
   const loops = isUntil ? withUntilResult(state, outer.id, outputs) : state.loops
   const progress = { steps: recorded, loops }
-  if (HALTED[status] === 'parked') return progress
-  if (isUntil && status === 'ok')
-    return {
-      steps: { ...recorded, [outer.id]: { state: 'ok', outputs: { ...state.latest, ...outputs } } },
-      loops,
-    }
-  const children = outer.steps ?? []
-  const last = children[children.length - 1]?.id === childId
-  return (status === 'failed' && !isUntil) || last ? closeRound(a, progress) : progress
+  if (!childSettled(child, status)) return progress
+  if (isUntil) {
+    if (status === 'ok')
+      return {
+        steps: {
+          ...recorded,
+          [outer.id]: { state: 'ok', outputs: { ...state.latest, ...outputs } },
+        },
+        loops,
+      }
+  } else if (status === 'failed' && explicitEscalation(child, status) === undefined)
+    return closeRound(a, progress)
+  return outer.steps?.at(-1)?.id === child.id ? closeRound(a, progress) : progress
 }
 
 /** The step `stepId` names (`id` or `loop/id`), with its loop; a loop itself is not launchable. */
@@ -1184,7 +1229,10 @@ export async function record(
   }
   const { steps, loops } =
     childId !== undefined && outer?.kind === 'loop'
-      ? advanceLoop({ state, outer, childId, status, outputs }, { ...state.steps, [stepId]: entry })
+      ? advanceLoop(
+          { state, outer, child: step, status, outputs },
+          { ...state.steps, [stepId]: entry },
+        )
       : { steps: { ...state.steps, [stepId]: entry }, loops: state.loops }
   await writeState(run, {
     ...state,

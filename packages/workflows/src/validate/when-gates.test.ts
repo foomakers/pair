@@ -107,6 +107,15 @@ describe('when validation (#680 AC-6, AC-9)', () => {
 `),
     ).toEqual([])
   })
+  it.each([
+    [
+      '      retry: { kind: implement, when: { output: rounds.status, is: [exhausted] } }\n',
+      ["'rounds' is not a step before this one"],
+    ],
+    ['  retry: { kind: implement, when: { output: rounds.status, is: [exhausted] } }\n', []],
+  ])('allows the loop status only after the loop (#728 AC-14, AC-16): %s', (retry, expected) => {
+    expect(problems('  implement: { kind: implement }\n' + rounds('') + retry)).toEqual(expected)
+  })
   it('wants output and is together', () => {
     expect(
       problems(
