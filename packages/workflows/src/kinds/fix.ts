@@ -10,7 +10,11 @@ export const fix: StepKind = {
     properties: {
       card: { type: 'string', description: 'The card the pull request delivers.' },
       pr: { type: 'integer', description: 'The pull request to fix.' },
-      head: { type: 'string', description: 'The head the findings are about.' },
+      head: { type: 'string', description: 'The current PR head to fix.' },
+      reviewedHead: {
+        type: 'string',
+        description: 'The head the findings and report are about. Defaults to head.',
+      },
       reportPath: { type: 'string', description: 'Local review report for the reviewed head.' },
       findings: {
         type: 'array',

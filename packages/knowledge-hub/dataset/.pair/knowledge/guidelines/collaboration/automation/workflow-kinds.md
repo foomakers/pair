@@ -63,7 +63,8 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Inputs**
   - `card`: `string` — The card the pull request delivers.
   - `pr`: `integer` — The pull request to fix.
-  - `head`: `string` — The head the findings are about.
+  - `head`: `string` — The current PR head to fix.
+  - `reviewedHead`: `string` — The head the findings and report are about. Defaults to head.
   - `reportPath`: `string` — Local review report for the reviewed head.
   - `findings`: `array of object` — The review findings: `id`, `severity`, `title`, `blocking`.
 - **Outputs**, required when `status` is `ok` or `failed`

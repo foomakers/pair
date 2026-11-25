@@ -712,6 +712,18 @@ export async function start(
   return { status: 'started', warnings: [] }
 }
 
+function mergeOutputs(
+  ...sources: (Readonly<Record<string, unknown>> | undefined)[]
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = {}
+  for (const source of sources) {
+    // A report belongs to the review that produced it.
+    if (typeof source?.['reviewedHead'] === 'string') delete merged['reportPath']
+    Object.assign(merged, source)
+  }
+  return merged
+}
+
 /** Earlier outputs, with fresh replay inputs at the boundary where they take effect. */
 function inputsBefore(
   step: Step,
@@ -722,7 +734,7 @@ function inputsBefore(
   const replayAt = steps.findIndex(one => one.id === state.replay?.from)
   if (state.replay !== undefined && replayAt >= 0 && replayAt <= earlier.length)
     earlier.splice(replayAt, 0, state.replay.inputs)
-  return Object.assign({ card: state.card }, ...earlier)
+  return mergeOutputs({ card: state.card }, ...earlier)
 }
 
 type Halt = 'failed' | 'parked'
@@ -913,7 +925,7 @@ async function nextInLoop(
     ...boardStatesOf(child),
     ...pending,
     ...assignment,
-    inputs: pick({ ...inputsBefore(step, workflow.steps, state), ...state.latest }, child.kind),
+    inputs: pick(mergeOutputs(inputsBefore(step, workflow.steps, state), state.latest), child.kind),
     attempt,
     round,
     ...replayLaunch(state),
@@ -1124,7 +1136,7 @@ function closeRound({ state, outer, outputs }: Advance, { steps, loops }: Progre
         ...steps,
         [outerId]: {
           state: 'exhausted',
-          outputs: { ...loop.untilResult, ...state.latest, ...outputs },
+          outputs: mergeOutputs(loop.untilResult, state.latest, outputs),
           reason,
           summary,
         },
@@ -1178,7 +1190,7 @@ function advanceLoop(a: Advance, recorded: Record<string, StepRecord>): Progress
       return {
         steps: {
           ...recorded,
-          [outer.id]: { state: 'ok', outputs: { ...state.latest, ...outputs } },
+          [outer.id]: { state: 'ok', outputs: mergeOutputs(state.latest, outputs) },
         },
         loops,
       }
@@ -1332,7 +1344,7 @@ export async function record(
   await writeState(run, {
     ...state,
     steps,
-    ...(loops !== undefined && { loops, latest: { ...state.latest, ...outputs } }),
+    ...(loops !== undefined && { loops, latest: mergeOutputs(state.latest, outputs) }),
   })
   observeEscalation(run, { id: stepId, round }, step, settled)
   observeExhaustion(run, progress)
