@@ -2,15 +2,17 @@
 // analyze.mjs — the numbers of pair-capability-analyze-workflow-runs (#697). Same files, same numbers.
 // Usage: node analyze.mjs <cost|time|passes|compare|trend> [--runs <dir>] [--run <id>] [--card <id>]
 //          [--workflow <name>] [--prices <file.json>] [--by card|workflow]
-// Reads `<runs>/*/telemetry.jsonl` (default `.pair/working/runs`) and writes nothing: JSON on stdout.
+// Reads `<runs>/*/telemetry.jsonl` (default `.pair/working/runs`), migrating legacy step statuses. JSON on stdout.
 // Exit: 0 answered · 2 usage or unreadable input (the cause on stderr, no numbers).
 // Rules: every number carries its `source` (measured | estimated | unknown); a sum with an estimated
 // entry is an estimate; unknown entries are listed, never counted as zero; values of different
 // sources are never compared; cost is never invented — no price row, "not calculated".
 // Prices: `{ "<model>": { "read": n, "cached": n, "written": n } }`, per million tokens, kept by hand.
 // Dependency-free.
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
-import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { hostname } from 'node:os'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const QUESTIONS = ['cost', 'time', 'passes', 'compare', 'trend']
@@ -19,20 +21,94 @@ const NOT_CALCULATED = 'not calculated'
 /** The record format this script reads (ADR-033). */
 const SCHEMAS = [1, 2]
 
-function parse(file) {
-  return readFileSync(file, 'utf8')
-    .split('\n')
-    .flatMap((line, index) => {
-      if (line === '') return []
-      let record
+function deadLocalOwner(note) {
+  try {
+    const { pid, host } = JSON.parse(note)
+    if (!Number.isInteger(pid) || pid <= 0 || host !== hostname()) return false
+    process.kill(pid, 0)
+    return false
+  } catch (error) {
+    return error.code === 'ESRCH'
+  }
+}
+
+/** Coordinate with pair run's run-lock.ts before removing a dead owner's lock. */
+function reclaimLock(lock, create) {
+  const seen = readFileSync(lock, 'utf8')
+  if (!deadLocalOwner(seen)) return
+  const guard = `${lock}.reclaim`
+  try {
+    mkdirSync(guard)
+  } catch (error) {
+    if (error.code !== 'EEXIST' || Date.now() - statSync(guard).mtimeMs < 60_000) throw error
+    rmSync(guard, { recursive: true, force: true })
+    mkdirSync(guard)
+  }
+  try {
+    if (readFileSync(lock, 'utf8') !== seen) return
+    unlinkSync(lock)
+    create()
+  } finally {
+    rmSync(guard, { recursive: true, force: true })
+  }
+}
+
+/** Use the same lock as pair run so migration cannot replace a writer's newer telemetry. */
+function persistMigration(file, original, migrated) {
+  const lock = join(dirname(file), 'run.lock')
+  let ownerFd
+  const create = () => { ownerFd = openSync(lock, 'wx') }
+  try {
+    try {
+      create()
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+      reclaimLock(lock, create)
+    }
+    if (ownerFd === undefined) return
+    writeFileSync(ownerFd, JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }))
+    if (readFileSync(file, 'utf8') !== original) return
+    const temp = `${file}.${randomUUID()}.tmp`
+    try {
+      const mode = statSync(file).mode & 0o777
+      writeFileSync(temp, migrated, { flag: 'wx', mode })
+      chmodSync(temp, mode)
+      renameSync(temp, file)
+    } finally {
+      rmSync(temp, { force: true })
+    }
+  } catch (error) {
+    if (ownerFd !== undefined || error.code !== 'EEXIST') console.error(`analyze: could not migrate ${file}: ${error.message}`)
+  } finally {
+    if (ownerFd !== undefined) {
       try {
-        record = JSON.parse(line)
-      } catch (error) {
-        throw new Error(`${file}:${index + 1}: ${error.message}`)
+        closeSync(ownerFd)
+      } finally {
+        rmSync(lock, { force: true })
       }
-      if (!SCHEMAS.includes(record.schema)) throw new Error(`${file}:${index + 1}: schema ${record.schema} is not read by this script (reads ${SCHEMAS.join(', ')})`)
-      return [record]
-    })
+    }
+  }
+}
+
+function parse(file) {
+  const original = readFileSync(file, 'utf8')
+  const records = []
+  const migrated = original.split('\n').map((line, index) => {
+    if (line === '') return line
+    let record
+    try {
+      record = JSON.parse(line)
+    } catch (error) {
+      throw new Error(`${file}:${index + 1}: ${error.message}`)
+    }
+    if (!SCHEMAS.includes(record.schema)) throw new Error(`${file}:${index + 1}: schema ${record.schema} is not read by this script (reads ${SCHEMAS.join(', ')})`)
+    records.push(record)
+    if (record.type !== 'step' || record.status !== 'needs-human') return line
+    record.status = 'needs-decision'
+    return JSON.stringify(record) + (line.endsWith('\r') ? '\r' : '')
+  }).join('\n')
+  if (migrated !== original) persistMigration(file, original, migrated)
+  return records
 }
 
 /** The runs under `dir` that hold step records, in name order: identity, outcome (`open` when not closed) and steps. */

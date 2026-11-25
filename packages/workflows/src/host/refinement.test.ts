@@ -40,7 +40,7 @@ describe('refinement kinds (#678 AC-1 and AC-9)', () => {
                     riskTag: 'risk:green',
                     openQuestions: [],
                   }
-                : { status: 'needs-human', summary: question }
+                : { status: 'needs-decision', summary: question }
               : { status: 'ok', summary: 'Planned', boardStatus: 'Draft', tasks: 2 }
           return '```json\n' + JSON.stringify(output) + '\n```'
         },

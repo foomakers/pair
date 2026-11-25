@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
 import { basename, join } from 'path'
-import { start, type RunStateFile, type RunTelemetry, type StepTelemetry } from '@pair/workflows'
+import {
+  hashOf,
+  start,
+  type RunStateFile,
+  type RunTelemetry,
+  type StepTelemetry,
+} from '@pair/workflows'
+import { fileSystemService as disk } from '@pair/content-ops'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 // @ts-expect-error Vite loads the adopted definition as fixture text.
 import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/delivery.yaml?raw'
@@ -720,15 +728,15 @@ describe('resume (AC-6)', () => {
     expect(states()).toEqual({ implement: 'ok', review: 'ok' })
   })
 
-  it('parks on needs-human: exit 0, what is needed and the command that resumes', async () => {
-    const parked = () => fenced({ status: 'needs-human', summary: 'pick the migration order' })
+  it('parks on needs-decision: exit 0, what is needed and the command that resumes', async () => {
+    const parked = () => fenced({ status: 'needs-decision', summary: 'pick the migration order' })
     expect(await run(['quick'], { ...OK, 'pair-process-review': parked }, { runId: 'mine' })).toBe(
       0,
     )
     expect(lines).toContain(
       '  Run: parked at step review — it needs a person: pick the migration order. Resume with: pair-cli run quick --card 627 --run-id mine',
     )
-    expect(states('mine')).toEqual({ implement: 'ok', review: 'needs-human' })
+    expect(states('mine')).toEqual({ implement: 'ok', review: 'needs-decision' })
   })
 
   it('runs again a step an interrupted launch left running', async () => {
@@ -799,7 +807,7 @@ steps:
     }
     expect(await run(['quick'], skills)).toBe(0)
     expect(states()).toMatchObject({
-      rounds: 'needs-human',
+      rounds: 'needs-decision',
       'rounds/review': 'failed',
       'rounds/fix': 'ok',
     })
@@ -964,6 +972,116 @@ describe('telemetry, switched by flag (US-697 AC-5)', () => {
     expect(await run(['quick'], OK, { telemetry: true })).toBe(0)
     expect(states()).toEqual({ implement: 'ok', review: 'ok' })
     expect(lines.filter(line => line.includes('telemetry was not written'))).toHaveLength(1)
+  })
+
+  it('#728 AC-3 F8: migrates a completed closed card only when its run lock is available', async () => {
+    const parked = () => fenced({ status: 'needs-decision', summary: 'waiting for a decision' })
+    await run(['quick'], { ...OK, 'pair-process-review': parked }, { telemetry: true })
+    await run(['quick'], OK, { telemetry: true })
+    const file = telemetryFile()
+    const current = fs.readFileSync(file)
+    const legacy = current.replace('"status":"needs-decision"', '"status":"needs-human"')
+    expect(legacy).not.toBe(current)
+    fs.writeFileSync(file, legacy)
+    const stateFile = join(runDir(), 'state.json')
+    const state = fs.readFileSync(stateFile)
+    const readCard = vi.fn(async () => 'closed' as const)
+    launched.length = 0
+
+    vi.mocked(acquireRunLock).mockReturnValueOnce({ kind: 'run-locked' })
+    expect(await run(['quick'], OK, {}, { readCard })).toBe(0)
+    expect(fs.readFileSync(file)).toBe(legacy)
+
+    release.mockClear()
+    vi.mocked(acquireRunLock).mockClear()
+    const rename = vi.spyOn(fs, 'rename')
+    expect(await run(['quick'], OK, {}, { readCard })).toBe(0)
+    expect(rename).toHaveBeenCalledExactlyOnceWith(`${file}.tmp`, file)
+    expect(vi.mocked(acquireRunLock)).toHaveBeenCalledExactlyOnceWith(runDir())
+    expect(vi.mocked(acquireRunLock)).toHaveBeenCalledBefore(rename)
+    expect(rename).toHaveBeenCalledBefore(release)
+    expect(fs.readFileSync(file)).toBe(current)
+    expect(fs.readFileSync(stateFile)).toBe(state)
+    expect(readCard).not.toHaveBeenCalled()
+    expect(launched).toHaveLength(0)
+  })
+
+  it('#728 AC-3 F3: resumes with unwritable legacy telemetry and warns once', async () => {
+    const parked = () => fenced({ status: 'needs-decision', summary: 'waiting for a decision' })
+    const options = { telemetry: true }
+    expect(await run(['quick'], { ...OK, 'pair-process-review': parked }, options)).toBe(0)
+    const file = telemetryFile()
+    const current = fs.readFileSync(file)
+    const legacy = current.replace('"status":"needs-decision"', '"status":"needs-human"')
+    fs.writeFileSync(file, legacy)
+    const writeFile = fs.writeFile.bind(fs)
+    const deny = vi.spyOn(fs, 'writeFile').mockImplementation(async (path, content) => {
+      if (path === `${file}.tmp`) throw new Error('EACCES: telemetry replacement')
+      await writeFile(path, content)
+    })
+
+    expect(await run(['quick'], OK, options)).toBe(0)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+    expect(lines.filter(line => line.includes('EACCES: telemetry replacement'))).toHaveLength(1)
+    expect(fs.readFileSync(file)).toBe(legacy)
+
+    deny.mockRestore()
+    expect(await run(['quick'], OK, options, { readCard: async () => 'closed' })).toBe(0)
+    expect(fs.readFileSync(file)).toBe(current)
+  })
+
+  it('#728 AC-3 F5: preserves state and telemetry modes under umask 077', async () => {
+    const dir = disk.mkdtempSync(join(tmpdir(), 'pair-legacy-run-'))
+    const text = `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 2
+    on-max: escalate
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+`
+    const statePath = join(dir, 'state.json')
+    const telemetryPath = join(dir, 'telemetry.jsonl')
+    const state = {
+      schemaVersion: 1,
+      workflow: { name: 'quick', hash: hashOf(text) },
+      card: '627',
+      steps: { implement: { state: 'ok' }, rounds: { state: 'needs-human' } },
+      loops: { rounds: { round: 2, max: 2, exhausted: true } },
+    }
+    const telemetry = { schema: 2, type: 'step', step: 'review', status: 'needs-human' }
+    const previousUmask = process.umask(0o077)
+    try {
+      disk.writeFileSync(join(dir, 'workflow.yaml'), text)
+      disk.writeFileSync(statePath, JSON.stringify(state))
+      disk.writeFileSync(telemetryPath, `${JSON.stringify(telemetry)}\n`)
+      for (const path of [statePath, telemetryPath]) disk.chmodSync(path, 0o640)
+
+      const started = await start(
+        { dir, files: disk },
+        { text, file: 'quick.yaml' },
+        { card: '627' },
+      )
+      expect(started).toEqual({ status: 'parked', warnings: [] })
+      expect(JSON.parse(disk.readFileSync(statePath))).toMatchObject({
+        steps: { rounds: { state: 'needs-decision' } },
+      })
+      expect(JSON.parse(disk.readFileSync(telemetryPath))).toEqual({
+        ...telemetry,
+        status: 'needs-decision',
+      })
+      expect([statePath, telemetryPath].map(path => disk.statSync(path).mode & 0o777)).toEqual([
+        0o640, 0o640,
+      ])
+    } finally {
+      process.umask(previousUmask)
+      disk.rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
@@ -1142,7 +1260,7 @@ it.each([
         expect(gates).toBe(1)
         expect(states('delivery-627')).toMatchObject({
           gate: 'ok',
-          approval: 'needs-human',
+          approval: 'needs-decision',
           merge: 'pending',
         })
         expect(await run(['delivery'])).toBe(0)
@@ -1212,7 +1330,7 @@ it.each([
       }
       expect(states('delivery-627')).toMatchObject({
         gate: 'ok',
-        approval: 'needs-human',
+        approval: 'needs-decision',
         merge: 'pending',
       })
       expect(notices).toBe(scenario === 'gate' ? 1 : 2)

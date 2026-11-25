@@ -16,8 +16,8 @@ export interface StepKind {
   readonly outputs: JsonSchema
   /** The options the step accepts under `with`. */
   readonly with: JsonSchema
-  /** The documented cases in which the step returns `needs-human`. */
-  readonly escalations: readonly string[]
+  /** The cases in which the kind returns each declared non-ok status. */
+  readonly returns: Readonly<Partial<Record<Exclude<StepStatus, 'ok'>, string>>>
   /**
    * The rule the kind sets on its own result, beyond the schema. It is judged from the outputs, so a
    * `failed` result the agent returns carries them too.
@@ -32,7 +32,7 @@ export interface ResultRule {
   readonly broken: (result: Readonly<Record<string, unknown>>) => string | undefined
 }
 
-export const STEP_STATUSES = ['ok', 'failed', 'needs-human'] as const
+export const STEP_STATUSES = ['ok', 'failed', 'blocked', 'needs-decision'] as const
 export type StepStatus = (typeof STEP_STATUSES)[number]
 
 /** The result every step returns, whatever its kind. */
@@ -44,4 +44,19 @@ export const COMMON_RESULT: JsonSchema = {
     summary: { type: 'string', description: 'One line: what the step did.' },
     reason: { type: 'string', description: 'Why, when the status is not `ok`.' },
   },
+}
+
+/** The common fields narrowed to the statuses the agent may return for this kind. */
+export function agentResultSchema(kind: StepKind): JsonSchema {
+  return {
+    ...COMMON_RESULT,
+    properties: {
+      ...COMMON_RESULT.properties,
+      status: {
+        enum: STEP_STATUSES.filter(
+          status => status === 'ok' || Object.hasOwn(kind.returns, status),
+        ),
+      },
+    },
+  }
 }

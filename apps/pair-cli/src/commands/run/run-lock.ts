@@ -1,4 +1,4 @@
-import { readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
+import { closeSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
 import { takeGuard } from './card-lock'
 import { hostname } from 'os'
 import { join } from 'path'
@@ -68,12 +68,20 @@ export function acquireRunLock(
   isAlive: (pid: number) => boolean = pidIsAlive,
 ): RunLockOutcome {
   const file = join(runDir, RUN_LOCK_FILE)
-  const create = () =>
-    writeFileSync(
-      file,
-      JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }),
-      { flag: 'wx' },
-    )
+  const create = () => {
+    const owner = { pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }
+    const fd = openSync(file, 'wx')
+    try {
+      try {
+        writeFileSync(fd, JSON.stringify(owner))
+      } finally {
+        closeSync(fd)
+      }
+    } catch (error) {
+      rmSync(file, { force: true })
+      throw error
+    }
+  }
   const release = () => {
     try {
       if (readNote(file).pid === process.pid) unlinkSync(file)

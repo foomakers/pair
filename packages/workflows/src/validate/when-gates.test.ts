@@ -78,6 +78,12 @@ describe('when validation (#680 AC-6, AC-9)', () => {
     ['unknown step', 'ghost.verdict', "'ghost' is not a step before this one"],
     ['later step', 'merge.merged', "'merge' is not a step before this one"],
     ['unknown output', 'review.nothing', "step 'review' has no output 'nothing'"],
+    [
+      'unknown status producer (#728 AC-16)',
+      'ghost.status',
+      "'ghost' is not a step before this one",
+    ],
+    ['later status producer (#728 AC-16)', 'merge.status', "'merge' is not a step before this one"],
   ])('refuses an output on %s', (_, output, problem) => {
     const steps = `  implement: { kind: implement }
   review: { kind: review }
@@ -91,6 +97,13 @@ describe('when validation (#680 AC-6, AC-9)', () => {
       problems(`  implement: { kind: implement }
   review: { kind: review }
   fix: { kind: fix, when: { output: review.verdict, is: [changes-requested] } }
+`),
+    ).toEqual([])
+  })
+  it('accepts the status of an earlier step (#728 AC-11)', () => {
+    expect(
+      problems(`  implement: { kind: implement, on-failed: continue }
+  retry: { kind: implement, when: { output: implement.status, is: [failed] } }
 `),
     ).toEqual([])
   })

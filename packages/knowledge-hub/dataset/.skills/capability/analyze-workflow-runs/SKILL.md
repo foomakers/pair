@@ -1,13 +1,13 @@
 ---
 name: analyze-workflow-runs
-description: "Analyzes the telemetry of workflow runs (`pair-cli run <workflow> --telemetry`): what a card or a run cost in tokens, where the time goes, how many passes each step took, how two configurations compare, the trend over a set of runs. Invoke on demand ('what did card 627 cost', 'where does the time go in quick', 'compare the two runs of 627', 'trend of the last runs'). Read-only: a deterministic script computes every number and shows its origin (measured, estimated, unknown); measured values are never compared with estimated ones; without a price table cost reads \"not calculated\"."
+description: "Analyzes the telemetry of workflow runs (`pair-cli run <workflow> --telemetry`): what a card or a run cost in tokens, where the time goes, how many passes each step took, how two configurations compare, the trend over a set of runs. Invoke on demand ('what did card 627 cost', 'where does the time go in quick', 'compare the two runs of 627', 'trend of the last runs'). A deterministic script computes every number and shows its origin (measured, estimated, unknown); measured values are never compared with estimated ones; without a price table cost reads \"not calculated\"."
 version: 0.1.0
 author: Foomakers
 ---
 
 # /analyze-workflow-runs — Cost, Time and Passes of Workflow Runs
 
-**Read-only.** It reads the `telemetry.jsonl` of each run under `.pair/working/runs/` and writes nothing, except one report under `.pair/working/reports/workflow-runs/` on request. A run records telemetry only when it is switched on (`pair-cli run <workflow> --card <id> --telemetry`).
+**Read-only after migration.** The script reads `telemetry.jsonl` under `.pair/working/runs/`. On first read it rewrites legacy step statuses from `needs-human` to `needs-decision`. If the run is locked or the file cannot be replaced, the answer uses the updated status and the next read can retry the rewrite. On request, the skill writes one report under `.pair/working/reports/workflow-runs/`. A run records telemetry only when it is switched on (`pair-cli run <workflow> --card <id> --telemetry`).
 
 **The script computes, the agent comments.** Every number in the answer comes from `scripts/analyze.mjs`: same files, same numbers. The agent never computes, sums, prices or compares a number itself.
 

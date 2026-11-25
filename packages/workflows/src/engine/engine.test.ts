@@ -211,6 +211,119 @@ steps:
     return run
   }
 
+  describe('#728 AC-3: legacy parked run migration', () => {
+    const statePath = `${DIR}/state.json`
+    const telemetryPath = `${DIR}/telemetry.jsonl`
+    const parked = { executions: 2, reason: 'needs-human', outputs: { findings } }
+    const originalState = {
+      schemaVersion: 1,
+      workflow: { name: 'quick', hash: hashOf(text) },
+      card: '627',
+      steps: {
+        implement: { state: 'ok', executions: 2, outputs: { pr: 12, head: HEAD } },
+        rounds: { state: 'needs-human', ...parked },
+        'rounds/review': { state: 'failed', round: 2, executions: 2, outputs: { findings } },
+        'rounds/fix': { state: 'ok', round: 2, executions: 2 },
+      },
+      loops: {
+        rounds: { round: 2, max: 2, exhausted: true, untilResult: { findings } },
+      },
+      latest: { status: 'needs-human', head: HEAD },
+    }
+    const identity = { schema: 2, run: 'quick-627', workflow: 'quick', card: '627' }
+    const tokens = {
+      read: { value: 12, source: 'measured' },
+      cached: { value: 4, source: 'measured' },
+      written: { value: 3, source: 'measured' },
+    }
+    const implementation = {
+      ...identity,
+      type: 'step',
+      step: 'implement',
+      kind: 'implement',
+      uses: 'pair-process-implement',
+      host: 'pair-run',
+      engine: 'codex',
+      startedAt: '2026-11-21T10:00:00.000Z',
+      durationMs: 400,
+      tokens,
+      attempt: 1,
+    }
+    const priorAttempt = { ...implementation, status: 'needs-human', reason: 'needs-human' }
+    const successfulAttempt = { ...implementation, status: 'ok', attempt: 2 }
+    const closing = {
+      ...identity,
+      type: 'run',
+      status: 'parked',
+      durationMs: 800,
+      steps: 2,
+      tokens,
+    }
+    const originalTelemetry = [priorAttempt, successfulAttempt, closing]
+    const migratedState = {
+      ...originalState,
+      steps: { ...originalState.steps, rounds: { state: 'needs-decision', ...parked } },
+    }
+    const migratedTelemetry = [
+      { ...priorAttempt, status: 'needs-decision' },
+      successfulAttempt,
+      closing,
+    ]
+    const telemetryText = (records: typeof originalTelemetry) =>
+      records.map(record => `${JSON.stringify(record)}\n`).join('')
+
+    function saved(state = originalState, telemetry = originalTelemetry) {
+      return {
+        dir: DIR,
+        files: createMemoryFiles({
+          [`${DIR}/workflow.yaml`]: text,
+          [statePath]: `${JSON.stringify(state, null, 2)}\n`,
+          [telemetryPath]: telemetryText(telemetry),
+        }),
+      }
+    }
+
+    const persistedFiles = (run: RunDirectory) => [
+      stateOf(run),
+      run.files
+        .readFileSync(telemetryPath)
+        .trimEnd()
+        .split('\n')
+        .map(line => JSON.parse(line) as unknown),
+    ]
+
+    it('renames saved statuses and preserves both files and the parked loop', async () => {
+      const run = saved()
+      expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
+      expect(persistedFiles(run)).toEqual([migratedState, migratedTelemetry])
+    })
+
+    it('leaves already migrated files untouched on resume', async () => {
+      const run = saved(migratedState, migratedTelemetry)
+      const write = vi.spyOn(run.files, 'writeFile')
+
+      expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
+      expect(write).not.toHaveBeenCalled()
+    })
+
+    it('#728 AC-3 F3: preserves telemetry when replacement is interrupted and retries', async () => {
+      const run = saved()
+      const rename = run.files.rename
+      const interrupt = vi.spyOn(run.files, 'rename').mockImplementation(async (from, to) => {
+        if (to === telemetryPath) throw new Error('interrupted migration')
+        await rename(from, to)
+      })
+
+      const started = await start(run, source, { card: '627' })
+      expect(started.status).toBe('parked')
+      expect(persistedFiles(run)).toEqual([migratedState, originalTelemetry])
+      interrupt.mockRestore()
+
+      expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
+      expect(persistedFiles(run)).toEqual([migratedState, migratedTelemetry])
+    })
+  })
+
   it('exits on the until result before later steps', async () => {
     const run = await opened()
     expect((await next(run)).ready[0]).toMatchObject({
@@ -251,7 +364,10 @@ steps:
     await next(run)
     await record(run, 'rounds/fix', fixed)
     expect((await next(run)).run).toBe('parked')
-    expect(stateOf(run).steps.rounds).toMatchObject({ state: 'needs-human', outputs: { findings } })
+    expect(stateOf(run).steps.rounds).toMatchObject({
+      state: 'needs-decision',
+      outputs: { findings },
+    })
     expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
     expect(await start(run, source, { card: '627', moreRounds: 1, requestedBy: 'rucka' })).toEqual({
       status: 'resumed',
@@ -311,10 +427,10 @@ steps:
     }
   })
 
-  it('resumes needs-human at the same step and round', async () => {
+  it('resumes needs-decision at the same step and round', async () => {
     const run = await opened()
     await next(run)
-    await record(run, 'rounds/review', { status: 'needs-human', summary: 'decision' })
+    await record(run, 'rounds/review', { status: 'needs-decision', summary: 'decision' })
     expect((await next(run)).run).toBe('parked')
     await start(run, source, { card: '627' })
     expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 1 })
@@ -378,7 +494,7 @@ describe('engine: outcomes and resume (AC-6)', () => {
 
   it.each([
     ['failed', { status: 'failed', summary: 'one blocking finding', reason: 'blocking' }, 'failed'],
-    ['needs-human', { status: 'needs-human', summary: 'a decision is needed' }, 'parked'],
+    ['needs-decision', { status: 'needs-decision', summary: 'a decision is needed' }, 'parked'],
   ] as const)('stops on a %s step and resumes from it', async (state, result, halted) => {
     const run = await runUntilReview(result)
     expect(await next(run)).toEqual({ run: halted, ready: [] })
@@ -392,6 +508,22 @@ describe('engine: outcomes and resume (AC-6)', () => {
     const resumed = await next(run)
     expect(resumed.ready.map(step => step.id)).toEqual(['review'])
     expect(resumed.ready[0]?.inputs).toEqual({ card: '627', pr: 12, head: HEAD })
+  })
+
+  it('#728 AC-3 F2: keeps a legacy step parked until explicit resume', async () => {
+    const run = await runUntilReview({ status: 'needs-decision', summary: 'a decision is needed' })
+    const path = `${DIR}/state.json`
+    const saved = stateOf(run)
+    saved.steps['review'] = { ...saved.steps['review'], state: 'needs-human' }
+    run.files.entries.set(path, JSON.stringify(saved))
+
+    expect(await next(run)).toEqual({ run: 'parked', ready: [] })
+    expect(stateOf(run).steps['review']).toEqual({
+      ...saved.steps['review'],
+      state: 'needs-decision',
+    })
+    expect((await start(run, SOURCE, { card: '627' })).status).toBe('resumed')
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'review', attempt: 2 })
   })
 
   it('records a result that breaks the kind contract as failed, invalid-result', async () => {
@@ -589,7 +721,7 @@ describe('engine: on-failed (#708 AC-7)', () => {
     expect((await next(run)).run).toBe('failed')
   })
 
-  it('needs-human parks the run whatever on-failed says', async () => {
+  it('needs-decision parks the run whatever on-failed says', async () => {
     const run = open()
     await start(
       run,
@@ -598,7 +730,7 @@ describe('engine: on-failed (#708 AC-7)', () => {
     )
     await record(run, 'implement', IMPLEMENTED)
     await next(run)
-    await record(run, 'review', { status: 'needs-human', summary: 'x', reason: 'decide' })
+    await record(run, 'review', { status: 'needs-decision', summary: 'x', reason: 'decide' })
     expect((await next(run)).run).toBe('parked')
   })
 })

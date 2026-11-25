@@ -17,7 +17,7 @@ export const kinds = () =>
         inputs: kind.inputs,
         outputs: kind.outputs,
         with: kind.with,
-        escalations: kind.escalations,
+        returns: kind.returns,
         ...(kind.rule === undefined ? {} : { rule: kind.rule.text }),
       },
     ]),

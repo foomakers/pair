@@ -17,6 +17,7 @@ import {
 import { parseFrozenConfiguration, type Configuration } from '../configuration'
 import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 import { effectiveSelection, matches, type CardFacts } from '../select'
+import { migrateTelemetryStatuses } from '../telemetry/legacy-status'
 
 /**
  * The disk, as the engine needs it: the run directory and nothing else. A structural subset of the
@@ -28,6 +29,9 @@ export interface RunFiles {
   writeFile(path: string, content: string): Promise<void>
   mkdir(path: string, options?: { recursive?: boolean }): Promise<void>
   rename(from: string, to: string): Promise<void>
+  statSync?(path: string): { mode: number }
+  chmod?(path: string, mode: number): Promise<void>
+  unlink?(path: string): Promise<void>
 }
 
 /** One run: `.pair/working/runs/<run-id>/` of the main checkout. */
@@ -111,14 +115,34 @@ export interface StepLaunch {
 export const hashOf = (text: string): string =>
   `sha256:${createHash('sha256').update(text).digest('hex')}`
 
+function existingMode(files: RunFiles, path: string): number | undefined {
+  if (files.chmod === undefined || !files.existsSync(path)) return undefined
+  return files.statSync?.(path).mode
+}
+
 /** Temp file, then rename: a reader never sees half a file. */
-export async function writeAtomic(files: RunFiles, path: string, content: string): Promise<void> {
-  await files.writeFile(`${path}.tmp`, content)
-  await files.rename(`${path}.tmp`, path)
+export async function writeAtomic(
+  files: RunFiles,
+  path: string,
+  content: string,
+  { preserveMode = false }: { preserveMode?: boolean } = {},
+): Promise<void> {
+  const temp = `${path}.tmp`
+  const mode = preserveMode ? existingMode(files, path) : undefined
+  await files.writeFile(temp, content)
+  try {
+    if (mode !== undefined) await files.chmod?.(temp, mode & 0o777)
+    await files.rename(temp, path)
+  } catch (error) {
+    if (mode !== undefined) await files.unlink?.(temp).catch(() => undefined)
+    throw error
+  }
 }
 
 const writeState = (run: RunDirectory, state: RunStateFile): Promise<void> =>
-  writeAtomic(run.files, join(run.dir, STATE_FILE), `${JSON.stringify(state, null, 2)}\n`)
+  writeAtomic(run.files, join(run.dir, STATE_FILE), `${JSON.stringify(state, null, 2)}\n`, {
+    preserveMode: true,
+  })
 
 function readState(run: RunDirectory): RunStateFile | undefined {
   const path = join(run.dir, STATE_FILE)
@@ -130,6 +154,47 @@ function readState(run: RunDirectory): RunStateFile | undefined {
         `this version reads ${String(STATE_SCHEMA_VERSION)} — start over with --restart`,
     )
   return state
+}
+
+async function migrateStateStatuses(run: RunDirectory, state: RunStateFile): Promise<RunStateFile> {
+  const legacyStatus: string = 'needs-human'
+  const legacy = Object.entries(state.steps).filter(([, step]) => step.state === legacyStatus)
+  if (legacy.length === 0) return state
+  const steps = { ...state.steps }
+  for (const [id, step] of legacy) steps[id] = { ...step, state: 'needs-decision' }
+  const migrated = { ...state, steps }
+  await writeState(run, migrated)
+  return migrated
+}
+
+function legacyTelemetryReplacement(files: RunFiles, path: string): string | undefined {
+  let text: string
+  try {
+    if (!files.existsSync(path)) return undefined
+    text = files.readFileSync(path)
+  } catch {
+    // Optional telemetry that cannot be read has no status we can migrate.
+    return undefined
+  }
+  const migrated = migrateTelemetryStatuses(text)
+  return migrated === text ? undefined : migrated
+}
+
+export function hasLegacyRunTelemetry(run: RunDirectory): boolean {
+  return legacyTelemetryReplacement(run.files, join(run.dir, TELEMETRY_FILE)) !== undefined
+}
+
+/** Re-read and replace legacy telemetry while the caller holds the run lock. */
+export async function migrateRunTelemetry(run: RunDirectory): Promise<string | undefined> {
+  const path = join(run.dir, TELEMETRY_FILE)
+  const replacement = legacyTelemetryReplacement(run.files, path)
+  if (replacement === undefined) return undefined
+  try {
+    await writeAtomic(run.files, path, replacement, { preserveMode: true })
+  } catch (error) {
+    return `telemetry was not written: ${String(error)} — the run goes on without it`
+  }
+  return undefined
 }
 
 function requireState(run: RunDirectory): RunStateFile {
@@ -225,6 +290,8 @@ export interface Started {
   /** `complete`: every step is already `ok`; nothing will run. */
   readonly status: 'started' | 'resumed' | 'complete' | 'parked' | 'failed'
   readonly warnings: readonly string[]
+  /** A telemetry replacement failed. A host can report it once for the whole launch. */
+  readonly telemetryWarning?: string
 }
 
 async function archive(run: RunDirectory, now: Date): Promise<void> {
@@ -283,7 +350,7 @@ function parkedLoop(
   exhausted: [string, LoopRecord] | undefined,
   moreRounds: number,
 ): [string, LoopRecord] {
-  if (exhausted === undefined || state.steps[exhausted[0]]?.state !== 'needs-human')
+  if (exhausted === undefined || state.steps[exhausted[0]]?.state !== 'needs-decision')
     throw new Error('more-rounds-invalid: no loop is parked at max')
   if (!Number.isInteger(moreRounds) || moreRounds < 1)
     throw new Error('more-rounds-invalid: pass a positive integer')
@@ -336,7 +403,7 @@ function withMoreRounds(
 const exhaustedLoop = (state: RunStateFile): [string, LoopRecord] | undefined =>
   Object.entries(state.loops ?? {}).find(
     ([id, loop]) =>
-      loop.exhausted && ['needs-human', 'failed'].includes(state.steps[id]?.state ?? ''),
+      loop.exhausted && ['needs-decision', 'failed'].includes(state.steps[id]?.state ?? ''),
   )
 
 /** The run must be of this card; a workflow edited since the start warns. */
@@ -459,13 +526,16 @@ export function priorRefinement(run: RunDirectory, id: string): StepRecord['outp
 
 async function resume(
   run: RunDirectory,
-  saved: RunStateFile,
+  existing: RunStateFile,
   source: { readonly text: string; readonly file: string },
   options: StartOptions,
 ): Promise<Started> {
+  const warnings = workflowWarnings(run, existing, source, options.card)
+  const saved = await migrateStateStatuses(run, existing)
+  const telemetryWarning = await migrateRunTelemetry(run)
+  const diagnostics = { warnings, ...(telemetryWarning !== undefined && { telemetryWarning }) }
   let state = saved
   const { configuration } = options
-  const warnings = workflowWarnings(run, state, source, options.card)
   if (options.moreRounds !== undefined) parkedLoop(state, exhaustedLoop(state), options.moreRounds)
   if (configuration !== undefined && options.reconfigure === true)
     state = await reconfigured(run, state, configuration)
@@ -481,10 +551,10 @@ async function resume(
   )
   if (settled === undefined) {
     await writeState(run, { ...state, steps: reopenedSteps(run, state, frozenWorkflow(run)) })
-    return { status: 'resumed', warnings }
+    return { status: 'resumed', ...diagnostics }
   }
   if (state !== saved) await writeState(run, state)
-  return { status: settled, warnings }
+  return { status: settled, ...diagnostics }
 }
 
 function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay): RunStateFile {
@@ -602,7 +672,11 @@ function inputsBefore(
   return Object.assign({ card: state.card }, ...earlier)
 }
 
-const HALTED: Partial<Record<StepState, RunState>> = { failed: 'failed', 'needs-human': 'parked' }
+const HALTED: Partial<Record<StepState, RunState>> = {
+  failed: 'failed',
+  blocked: 'parked',
+  'needs-decision': 'parked',
+}
 
 /** A step the run is past: `ok`, or `failed` with `on-failed: continue`. */
 const settled = (state: RunStateFile, step: Step): boolean => {
@@ -763,7 +837,7 @@ export async function next(
     readonly blocked?: SkippedStep & { readonly detail: string }
   }
 > {
-  const state = requireState(run)
+  const state = await migrateStateStatuses(run, requireState(run))
   const workflow = frozenWorkflow(run)
   const { steps } = workflow
   const step = steps.find(one => !settled(state, one))
@@ -794,14 +868,18 @@ export interface SkippedStep {
   readonly kind: KindName
 }
 
-/** Why the named output is not in the list; an output the producer never returned (it failed or crashed) is no mismatch. */
+/** Missing ordinary outputs match, but status conditions require a recorded outcome. */
 function outputMismatch(
   output: string,
   is: readonly unknown[] | undefined,
   state: RunStateFile,
 ): string | undefined {
   const [stepId, name] = output.split('.') as [string, string]
-  const value = state.steps[stepId]?.outputs?.[name]
+  const producer = state.steps[stepId]
+  const status = producer?.state
+  if (name === 'status' && [undefined, 'pending', 'running', 'skipped'].includes(status))
+    return `${output} has no outcome`
+  const value = name === 'status' ? status : producer?.outputs?.[name]
   return value === undefined || is?.includes(value)
     ? undefined
     : `${output} is ${JSON.stringify(value)}`
@@ -934,7 +1012,7 @@ function closeRound({ state, outer }: Advance, { steps, loops }: Progress): Prog
       steps: {
         ...steps,
         [outerId]: {
-          state: outer['on-max'] === 'escalate' ? 'needs-human' : 'failed',
+          state: outer['on-max'] === 'escalate' ? 'needs-decision' : 'failed',
           outputs: loop.untilResult ?? {},
           reason: 'loop-max',
           summary: `loop ${outerId} reached ${loop.max} rounds`,
@@ -974,7 +1052,7 @@ function advanceLoop(a: Advance, recorded: Record<string, StepRecord>): Progress
   const isUntil = childId === outer.until
   const loops = isUntil ? withUntilResult(state, outer.id, outputs) : state.loops
   const progress = { steps: recorded, loops }
-  if (status === 'needs-human') return progress
+  if (HALTED[status] === 'parked') return progress
   if (isUntil && status === 'ok')
     return {
       steps: { ...recorded, [outer.id]: { state: 'ok', outputs: { ...state.latest, ...outputs } } },

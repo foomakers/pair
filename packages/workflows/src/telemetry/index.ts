@@ -10,6 +10,7 @@ import {
 } from '../engine'
 import type { KindName } from '../grammar'
 import type { StepStatus } from '../kinds'
+import { migrateTelemetryStatuses } from './legacy-status'
 
 export { TELEMETRY_FILE }
 
@@ -120,8 +121,7 @@ const fileOf = (run: RunDirectory): string => join(run.dir, TELEMETRY_FILE)
 /** The step records of the run. A closing record is of a run that ended: it goes when the run moves again. */
 function stepsOf(run: RunDirectory): StepTelemetry[] {
   if (!run.files.existsSync(fileOf(run))) return []
-  return run.files
-    .readFileSync(fileOf(run))
+  return migrateTelemetryStatuses(run.files.readFileSync(fileOf(run)))
     .split('\n')
     .filter(line => line !== '')
     .map(line => JSON.parse(line) as StepTelemetry | RunTelemetry)
@@ -129,7 +129,14 @@ function stepsOf(run: RunDirectory): StepTelemetry[] {
 }
 
 const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetry)[]) =>
-  writeAtomic(run.files, fileOf(run), records.map(record => `${JSON.stringify(record)}\n`).join(''))
+  writeAtomic(
+    run.files,
+    fileOf(run),
+    records.map(record => `${JSON.stringify(record)}\n`).join(''),
+    {
+      preserveMode: true,
+    },
+  )
 
 /** Appends the record of one execution of a step to the run's `telemetry.jsonl`. */
 export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {

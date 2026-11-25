@@ -266,7 +266,7 @@ async function execute(
   }
   if (step.kind === 'refine-story' && step.with['mode'] !== 'autonomous')
     return record(run, step.id, {
-      status: 'needs-human',
+      status: 'needs-decision',
       reason: 'interactive-refinement',
       summary:
         'Run pair-process-refine-story in an interactive session or configure autonomous refinement.',

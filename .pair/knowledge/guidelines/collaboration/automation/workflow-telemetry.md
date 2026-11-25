@@ -70,7 +70,7 @@ No cost in currency is stored in a record.
 
 ## Reading the runs
 
-The skill `/pair-capability-analyze-workflow-runs` answers what a card or a run cost, where the time goes, how many passes each step took, how two configurations compare and the trend over a set of runs. It is read-only. A script inside the skill computes every number, so the same files give the same numbers; each number is shown with its origin, and measured values are never compared with estimated ones.
+The skill `/pair-capability-analyze-workflow-runs` answers what a card or a run cost, where the time goes, how many passes each step took, how two configurations compare and the trend over a set of runs. Analysis is read-only after the first read migrates legacy step statuses from `needs-human` to `needs-decision`. A script inside the skill computes every number, so the same files give the same numbers; each number is shown with its origin, and measured values are never compared with estimated ones.
 
 Cost needs a price table, kept by hand: per million tokens, per model.
 

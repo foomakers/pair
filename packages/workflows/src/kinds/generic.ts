@@ -8,5 +8,9 @@ export const generic: StepKind = {
   },
   outputs: { type: 'object', description: 'The common fields only.' },
   with: { type: 'object', description: 'A free object, passed to the skill as written.' },
-  escalations: ['Whatever the skill named by `skill` documents.'],
+  returns: {
+    failed: 'The named skill reports unsuccessful work.',
+    blocked: 'The named skill lacks a fact, permission or resource it needs.',
+    'needs-decision': 'The named skill needs a human to make a choice.',
+  },
 }

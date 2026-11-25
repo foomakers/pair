@@ -237,20 +237,64 @@ describe('runSteps: results and resume (AC-4, AC-6)', () => {
     expect((await runSteps(silent, DIR)).run).toBe('done')
   })
 
-  it('parks on needs-human, then resumes at that step without running the ok ones again', async () => {
-    const answers = [fenced({ status: 'needs-human', summary: 'a decision is needed' }), REVIEWED]
-    const { host, launched } = fakeHost({
-      'pair-process-implement': () => IMPLEMENTED,
-      'pair-process-review': () => answers.shift() as string,
-    })
-    const run = { files: host.files, dir: DIR }
-    await start(run, SOURCE, { card: '627' })
-    expect((await runSteps(host, DIR)).run).toBe('parked')
+  it.each(['blocked', 'needs-decision'])(
+    '#728 AC-1: records %s in state and telemetry, then resumes at the stopped step',
+    async status => {
+      const answers = [fenced({ status, summary: 'waiting' }), REVIEWED]
+      const { host, launched } = fakeHost({
+        'pair-process-implement': () => IMPLEMENTED,
+        'pair-process-review': () => answers.shift(),
+      })
+      const run = { files: host.files, dir: DIR }
+      await start(run, SOURCE, { card: '627' })
+      const outcome = await runSteps(host, DIR, {
+        host: 'pair-run',
+        settings: () => ({ engine: 'claude' }),
+      })
 
-    await start(run, SOURCE, { card: '627' })
-    expect((await runSteps(host, DIR)).run).toBe('done')
-    expect(launched.map(one => one.step)).toEqual(['implement', 'review', 'review'])
-  })
+      expect.soft(statesOf(host)).toEqual({ implement: 'ok', review: status })
+      const records = host.files
+        .readFileSync(`${DIR}/telemetry.jsonl`)
+        .trimEnd()
+        .split('\n')
+        .map(line => JSON.parse(line))
+      expect
+        .soft(records)
+        .toContainEqual(expect.objectContaining({ type: 'step', step: 'review', status }))
+      expect(outcome.run).toBe('parked')
+
+      await start(run, SOURCE, { card: '627' })
+      expect((await runSteps(host, DIR)).run).toBe('done')
+      expect(launched.map(one => one.step)).toEqual(['implement', 'review', 'review'])
+    },
+  )
+
+  it.each(['exhausted', 'skipped', 'needs-human', 'unknown'])(
+    '#728 AC-2: rejects a step result of %s and retries it on resume',
+    async status => {
+      const answers = [fenced({ status, summary: 'invalid status' }), IMPLEMENTED]
+      const { host, launched } = fakeHost({
+        'pair-process-implement': () => answers.shift(),
+        'pair-process-review': () => REVIEWED,
+      })
+      const run = { files: host.files, dir: DIR }
+      await start(run, SOURCE, { card: '627' })
+
+      const outcome = await runSteps(host, DIR)
+      expect(outcome.run).toBe('failed')
+      expect(outcome.last).toMatchObject({
+        step: 'implement',
+        state: 'failed',
+        reason: 'invalid-result',
+        detail: `status: unknown value "${status}"`,
+      })
+      expect(statesOf(host)).toEqual({ implement: 'failed', review: 'pending' })
+
+      await start(run, SOURCE, { card: '627' })
+      expect((await runSteps(host, DIR)).run).toBe('done')
+      expect(launched.map(one => one.step)).toEqual(['implement', 'implement', 'review'])
+    },
+  )
 
   it('leaves an interrupted step running on disk and runs it again at the next launch', async () => {
     const answers: FakeSkill[] = [() => Promise.reject(new Error('interrupted')), () => IMPLEMENTED]
