@@ -109,6 +109,11 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
       commands: ['pnpm format:check', 'pnpm format:check', 'pnpm format:check'],
     },
   ]
+  const policies = [
+    { policy: 'shorthand', shorthand: true, explicit: false },
+    { policy: 'explicit', shorthand: false, explicit: true },
+    { policy: 'both', shorthand: true, explicit: true },
+  ]
 
   it.each(
     sources.flatMap(source =>
@@ -126,11 +131,13 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
 
   it.each(
     sources.flatMap(source =>
-      (['ok', 'failed'] as const).map(firstGate => ({ ...source, firstGate })),
+      policies.flatMap(policy =>
+        (['ok', 'failed'] as const).map(firstGate => ({ ...source, ...policy, firstGate })),
+      ),
     ),
   )(
-    '$name quick reviews again after a $firstGate PR gate (R747-03)',
-    async ({ root, commands, firstGate }) => {
+    '$name quick reviews again with $policy after a $firstGate PR gate (R747-03, R747-08)',
+    async ({ root, commands, firstGate, shorthand, explicit }) => {
       const run = { files: createMemoryFiles(), dir: '/runs/728' }
       const head = 'a'.repeat(40)
       const replies: Record<string, StepResult> = {
@@ -164,7 +171,12 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
           },
         )
       const events: StepEvent[] = []
-      const source = { text: read(root, QUICK), file: QUICK }
+      const legacy = read(root, QUICK)
+      const text = legacy.replace(
+        '    on-failed: continue\n    escalate: { blocked: stop, needs-decision: stop }',
+        `${shorthand ? '    on-failed: continue\n' : ''}    escalate: { ${explicit ? 'failed: continue, ' : ''}blocked: stop, needs-decision: stop }`,
+      )
+      const source = { text, file: QUICK }
       let failPrGate = firstGate === 'failed'
       const execute = () =>
         runSteps(
@@ -219,6 +231,7 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
         ...(firstGate === 'failed' ? ['gate'] : []),
       ])
       expect(invoked).toEqual(firstGate === 'failed' ? commands.slice(-1) : [])
+      expect(await start(run, source, { card: '728' })).toMatchObject({ status: 'complete' })
     },
   )
 })
