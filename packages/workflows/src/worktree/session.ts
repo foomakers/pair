@@ -4,8 +4,12 @@ import { prepareCardWorktree } from './index'
 
 type Card = {
   readonly title: string | null
+  readonly body: string
   readonly labels: readonly string[]
   readonly closed: boolean
+  readonly boardState: string | null
+  readonly boardError?: string
+  readonly assignees?: readonly string[]
 }
 
 function git(cwd: string, ...args: string[]): string | undefined {
@@ -53,8 +57,26 @@ function script<T>(scripts: string, cwd: string, file: string, args: string[]): 
   throw new Error(`${file} failed: ${result.stderr.trim() || result.stdout.trim()}`)
 }
 
-export const sessionCard = (scripts: string, main: string, story: string): Card =>
-  script(scripts, main, 'cycle-state.mjs', ['workflow-card', '--story', story])
+export function sessionCard(scripts: string, main: string, story: string, owners = false): Card {
+  if (!owners) return script(scripts, main, 'cycle-state.mjs', ['workflow-card', '--story', story])
+  const { cards } = script<{ cards: readonly (Card & { error?: string })[] }>(
+    scripts,
+    main,
+    'cycle-state.mjs',
+    ['workflow-cards', '--cards', story],
+  )
+  const [view] = cards
+  if (view?.assignees === undefined)
+    throw new Error(view?.error ?? `assignees unavailable for card ${story}`)
+  return view
+}
+
+export const sessionPrHead = (scripts: string, main: string, pr: number): string =>
+  script<{ head: string }>(scripts, main, 'cycle-state.mjs', [
+    'workflow-pr-head',
+    '--ref',
+    String(pr),
+  ]).head
 
 function branchFor(scripts: string, main: string, story: string, title: () => string): string {
   const pattern = `feature/US-${story}-*`

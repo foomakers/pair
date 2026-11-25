@@ -18,7 +18,7 @@ const commands = {
   ...diagnostics,
   start: { count: 1, flags: ['card', 'engine', 'config'] },
   resume: { count: 1, flags: ['engine'] },
-  next: { count: 1, flags: ['lease'] },
+  next: { count: 1, flags: ['lease', 'answer'] },
   record: { count: 2, flags: ['lease', 'result', 'model', 'attempt'] },
   stop: { count: 1, flags: ['lease'] },
 }
@@ -28,6 +28,7 @@ const options = {
   engine: { type: 'string' },
   config: { type: 'string' },
   lease: { type: 'string' },
+  answer: { type: 'string' },
   result: { type: 'string' },
   model: { type: 'string' },
   attempt: { type: 'string' },
@@ -53,15 +54,15 @@ function attemptNumber(value: string | undefined): number | undefined {
 
 function operate(
   command: 'next' | 'record' | 'stop',
-  main: string,
+  project: Project,
   [target = '', step = '']: string[],
   values: Partial<Record<keyof typeof options, string>>,
 ) {
-  const run = sessionRun(main, target)
+  const run = sessionRun(project.main, target)
   const lease = required('lease', values.lease)
-  if (command === 'next') return nextSession(run, lease)
+  if (command === 'next') return nextSession(project, run, lease, values.answer)
   if (command === 'stop') return stopSession(run, lease)
-  return recordSession(run, lease, {
+  return recordSession(project, run, lease, {
     step,
     file: required('result', values.result),
     model: values.model,
@@ -115,7 +116,7 @@ async function main([name = '', ...args]: string[]) {
   if (command === 'resume')
     return openSession(project, { runId: target, engine: required('engine', values.engine) })
 
-  return operate(command, project.main, positionals, values)
+  return operate(command, project, positionals, values)
 }
 
 void main(process.argv.slice(2))

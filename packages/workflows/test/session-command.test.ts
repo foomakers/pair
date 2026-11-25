@@ -22,9 +22,14 @@ const script = '.claude/skills/pair-capability-workflow/scripts/workflow.mjs'
 const cycle = '.claude/skills/pair-workflow-cycle/scripts'
 const workflowFile = '.pair/adoption/tech/workflows/quick.yaml'
 const configFile = '.pair/adoption/tech/configurations/mine.yaml'
+const adoptionFile = '.pair/adoption/tech/way-of-working.md'
+const filesystemPm = '- `pm-tool`: `filesystem`\n'
 const card = '42'
 const title = 'Prepare release notes'
 const runId = `quick-${card}`
+const branch = `feature/US-${card}-prepare-release-notes`
+const backlog = '.pair/adoption/product/backlog/03-user-stories'
+const cardFile = `${backlog}/not-started/${card}.md`
 const workflow = `version: 1
 name: quick
 steps:
@@ -73,28 +78,7 @@ function git(...args: string[]) {
   })
 }
 
-beforeEach(() => {
-  main = realpathSync(mkdtempSync(join(tmpdir(), 'pair-session-command-')))
-  runDir = join(main, '.pair/working/runs', runId)
-  worktree = join(main, 'worktrees', card)
-  git('init', '-b', 'main')
-  write('.gitignore', '/worktrees/\n/.pair/working/\n')
-  write('pair.config.json', JSON.stringify({ worktreeRoot: 'worktrees' }))
-  write('.pair/adoption/tech/way-of-working.md', '- `pm-tool`: `filesystem`\n')
-  write(
-    `.pair/adoption/product/backlog/03-user-stories/not-started/${card}.md`,
-    `# ${title}\n\n**Status**: Ready\n`,
-  )
-  write(workflowFile, workflow)
-  write(configFile, configuration)
-  for (const skill of ['pair-fixture-draft', 'pair-fixture-discuss'])
-    write(
-      `.claude/skills/${skill}/SKILL.md`,
-      `---\nname: ${skill}\ndescription: Fixture skill\n---\n`,
-    )
-  cpSync(join(repo, cycle), join(main, cycle), { recursive: true })
-  mkdirSync(dirname(join(main, script)), { recursive: true })
-  cpSync(join(repo, script), join(main, script))
+function commitFixture() {
   git('add', '.')
   git(
     '-c',
@@ -107,6 +91,28 @@ beforeEach(() => {
     '-m',
     'Fixture',
   )
+}
+
+beforeEach(() => {
+  main = realpathSync(mkdtempSync(join(tmpdir(), 'pair-session-command-')))
+  runDir = join(main, '.pair/working/runs', runId)
+  worktree = join(main, 'worktrees', card)
+  git('init', '-b', 'main')
+  write('.gitignore', '/worktrees/\n/.pair/working/\n')
+  write('pair.config.json', JSON.stringify({ worktreeRoot: 'worktrees' }))
+  write(adoptionFile, filesystemPm)
+  write(cardFile, `# ${title}\n\n**Status**: Ready\n`)
+  write(workflowFile, workflow)
+  write(configFile, configuration)
+  for (const skill of ['pair-fixture-draft', 'pair-fixture-discuss'])
+    write(
+      `.claude/skills/${skill}/SKILL.md`,
+      `---\nname: ${skill}\ndescription: Fixture skill\n---\n`,
+    )
+  cpSync(join(repo, cycle), join(main, cycle), { recursive: true })
+  mkdirSync(dirname(join(main, script)), { recursive: true })
+  cpSync(join(repo, script), join(main, script))
+  commitFixture()
 })
 
 afterEach(() => rmSync(main, { recursive: true, force: true }))
@@ -313,7 +319,7 @@ async function seedHeadlessRun() {
   await next(run)
   await record(run, 'draft', drafted, { host: 'pair-run', model: 'gpt-5' })
   await next(run)
-  git('worktree', 'add', '-b', `feature/US-${card}-prepare-release-notes`, worktree, 'main')
+  git('worktree', 'add', '-b', branch, worktree, 'main')
 }
 
 it('#696 AC-4: refuses to resume a run held by the live headless lock', async () => {
@@ -352,4 +358,243 @@ it('#696 AC-4: takes over an orphaned headless run and relaunches its interrupte
     },
   })
   successful(['stop', runId, ...lease])
+})
+
+const namedWorkflow = (steps: string) => `version: 1\nname: quick\nsteps:\n${steps}`
+
+function startWorkflow(steps: string) {
+  write(workflowFile, namedWorkflow(steps))
+  return openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
+}
+
+const advance = (lease: string[]) => JSON.parse(successful(['next', runId, ...lease])) as unknown
+
+it('#696 AC-9: runs the standalone gate in the card worktree', () => {
+  write(
+    adoptionFile,
+    `${filesystemPm}
+### Custom Gate Registry
+
+| Key | Command | Target |
+| --- | --- | --- |
+| fixture-gate | mkdir -p .pair/working && pwd > .pair/working/gate.cwd | pr |
+`,
+  )
+  commitFixture()
+  const lease = startWorkflow(`  verify:
+    kind: gate
+    with: { gates: ['target:pr'] }
+`)
+
+  expect(advance(lease)).toMatchObject({
+    ready: [],
+    events: [{ step: 'verify', state: 'ok', summary: expect.any(String) }],
+  })
+  expect(readFileSync(join(worktree, '.pair/working/gate.cwd'), 'utf8').trim()).toBe(worktree)
+  expect(advance(lease)).toMatchObject({ run: 'done', ready: [] })
+})
+
+it.each([
+  { name: 'skips a step whose live card no longer matches when', label: '', ready: 'discuss' },
+  {
+    name: 'launches a step whose live card still matches when',
+    label: '**Labels**: ready-for-notes\n',
+    ready: 'draft',
+  },
+])('#696 AC-9: $name', ({ label, ready }) => {
+  const markdown = `# ${title}\n\n**Status**: Ready\n`
+  write(cardFile, `${markdown}**Labels**: ready-for-notes\n`)
+  commitFixture()
+  const lease = startWorkflow(`  draft:
+    kind: generic
+    skill: pair-fixture-draft
+    when: { has: [ready-for-notes] }
+  discuss:
+    kind: generic
+    skill: pair-fixture-discuss
+`)
+  write(cardFile, `${markdown}${label}`)
+
+  const skipped = ready === 'discuss'
+  expect(advance(lease)).toMatchObject({
+    run: 'running',
+    ready: [{ id: ready }],
+    ...(skipped && { events: [{ step: 'draft', state: 'skipped', summary: expect.any(String) }] }),
+  })
+  expect(JSON.parse(readRun('state.json'))).toMatchObject({
+    steps: { ...(skipped && { draft: { state: 'skipped' } }), [ready]: { state: 'running' } },
+  })
+})
+
+it('#696 AC-9: a failed post-step gate overrides the agent success', () => {
+  const lease = startWorkflow(`  draft:
+    kind: generic
+    skill: pair-fixture-draft
+    gates: ['command:test -f release-notes.md']
+`)
+  write('release-notes.md', 'Only in the main checkout')
+  expect(advance(lease)).toMatchObject({ ready: [{ id: 'draft', attempt: 1 }] })
+  expect(
+    JSON.parse(successful(['record', runId, 'draft', ...lease, '--result', '-'], fenced(drafted))),
+  ).toMatchObject({ status: 'failed', reason: 'gate-failed: command:test -f release-notes.md' })
+  expect(advance(lease)).toMatchObject({ run: 'failed', ready: [] })
+})
+
+const codeState = '.pair/working/fixture-code.json'
+const approver = 'release-maintainer'
+const pr = 14
+const mergeCommit = 'c'.repeat(40)
+const question = 'Approve the release notes PR?'
+const approvalStep = `  consent:
+    kind: approval
+    with: { question: ${question} }
+`
+
+function installCodeHost(permission: 'read' | 'write') {
+  write(adoptionFile, `${filesystemPm}\n## Git Workflow\n\n- \`code-host\`: \`fixture-code\`\n`)
+  write(
+    `${cycle}/host/fixture-code.mjs`,
+    `import { readFileSync, writeFileSync } from 'node:fs'
+import { defineAdapter, REQUIRED_METHODS } from './adapter-kit.mjs'
+
+const path = ${JSON.stringify(join(main, codeState))}
+const state = () => JSON.parse(readFileSync(path, 'utf8'))
+
+export default defineAdapter({
+  id: 'fixture-code',
+  binaries: [],
+  create: () => ({
+    ...Object.fromEntries(REQUIRED_METHODS.map(method => [method, () => {
+      throw new Error('Unexpected fixture code host call: ' + method)
+    }])),
+    workflowPr: () => ${pr},
+    workflowPrDetails: () => ({
+      head: state().head,
+      merged: state().merges.length > 0,
+      mergeCommit: ${JSON.stringify(mergeCommit)},
+      branch: ${JSON.stringify(branch)},
+      author: 'release-author',
+    }),
+    workflowReviews: () => [],
+    workflowReviewIdentity: () => 'review-bot',
+    workflowActor: () => ({ login: ${JSON.stringify(approver)}, human: true }),
+    readPermission: ({ user }) => user === ${JSON.stringify(approver)} ? state().permission : 'none',
+    merge(input) {
+      const saved = state()
+      writeFileSync(path, JSON.stringify({ ...saved, merges: [...saved.merges, input] }))
+    },
+    deleteBranch: () => ({ deleted: true }),
+  }),
+})
+`,
+  )
+  commitFixture()
+  const head = git('rev-parse', 'HEAD').trim()
+  write(codeState, JSON.stringify({ head, permission, merges: [] }))
+  return head
+}
+
+const parkedApproval = {
+  run: 'parked',
+  ready: [],
+  approval: { step: 'consent', question },
+}
+
+it('#696 AC-9: parks at an approval with the question for the session', () => {
+  installCodeHost('write')
+  const lease = startWorkflow(approvalStep)
+  expect(advance(lease)).toMatchObject(parkedApproval)
+  expect(JSON.parse(readRun('state.json'))).toMatchObject({
+    steps: { consent: { state: 'needs-decision' } },
+  })
+})
+
+it('#696 AC-9: a session answer from a read-only actor leaves approval parked', () => {
+  installCodeHost('read')
+  const lease = startWorkflow(approvalStep)
+  advance(lease)
+
+  expect(JSON.parse(successful(['next', runId, ...lease, '--answer', 'approve']))).toMatchObject(
+    parkedApproval,
+  )
+  expect(JSON.parse(readRun('steps/consent/result.json'))).toMatchObject({
+    status: 'needs-decision',
+  })
+})
+
+it('#696 AC-9: a session answer from an authorized actor approves its exact PR head', () => {
+  const head = installCodeHost('write')
+  const lease = startWorkflow(approvalStep)
+  advance(lease)
+
+  expect(JSON.parse(successful(['next', runId, ...lease, '--answer', 'approve']))).toMatchObject({
+    ready: [],
+    events: [{ step: 'consent', state: 'ok', summary: expect.any(String) }],
+  })
+  expect(JSON.parse(readRun('steps/consent/result.json'))).toMatchObject({
+    status: 'ok',
+    approvedBy: approver,
+    approvedPr: pr,
+    approvedHead: head,
+  })
+  expect(advance(lease)).toMatchObject({ run: 'done', ready: [] })
+})
+
+it('#696 AC-9: an authorized session rejection stops the run and retains its note', () => {
+  installCodeHost('write')
+  const lease = startWorkflow(approvalStep)
+  advance(lease)
+
+  const note = 'Release notes omit the upgrade steps'
+  expect(
+    JSON.parse(successful(['next', runId, ...lease, '--answer', `reject:${note}`])),
+  ).toMatchObject({ ready: [], events: [{ step: 'consent', state: 'failed' }] })
+  expect(JSON.parse(readRun('steps/consent/result.json'))).toMatchObject({
+    status: 'failed',
+    reason: note,
+  })
+  expect(advance(lease)).toMatchObject({ run: 'failed', ready: [] })
+})
+
+it.each([
+  { name: 'merges the head covered by review, gate and approval', matches: true, state: 'ok' },
+  { name: 'refuses merge when the gate covered another head', matches: false, state: 'failed' },
+])('#696 AC-9: $name', async ({ matches, state }) => {
+  const head = installCodeHost('write')
+  const source = namedWorkflow(`  implement: { kind: implement }
+  review: { kind: review }
+  verify: { kind: gate, with: { checks: [head-unchanged] } }
+  consent: { kind: approval }
+  land: { kind: merge, with: { method: squash } }
+`)
+  const run = { dir: runDir, files }
+  await start(run, { file: join(main, workflowFile), text: source }, { card })
+  for (const [step, outputs] of Object.entries({
+    implement: { pr, head, branch },
+    review: { verdict: 'approved', reviewedHead: head, findings: [] },
+    verify: { gatedHead: matches ? head : 'f'.repeat(40) },
+    consent: { approvedHead: head, approvedPr: pr, approvedBy: approver },
+  })) {
+    await next(run)
+    expect(
+      await record(run, step, { status: 'ok', summary: `Fixture ${step}`, ...outputs }),
+    ).toMatchObject({
+      status: 'ok',
+    })
+  }
+  const lease = openSession(['resume', runId, '--engine', 'codex'])
+
+  expect(advance(lease)).toMatchObject({
+    ready: [],
+    events: [{ step: 'land', state, summary: expect.any(String) }],
+  })
+  expect(JSON.parse(readFileSync(join(main, codeState), 'utf8'))).toMatchObject({
+    merges: matches ? [expect.objectContaining({ pr, headSha: head, strategy: 'squash' })] : [],
+  })
+  expect(JSON.parse(readRun('steps/land/result.json'))).toMatchObject(
+    matches
+      ? { status: 'ok', merged: true, mergeCommit }
+      : { status: 'failed', reason: 'head-moved' },
+  )
+  expect(existsSync(join(main, backlog, 'completed', `${card}.md`))).toBe(matches)
 })

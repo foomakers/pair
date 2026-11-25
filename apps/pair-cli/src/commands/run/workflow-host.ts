@@ -46,6 +46,7 @@ import {
   type Workflow,
   type WorkflowsConfig,
 } from '@pair/workflows'
+import { approvalPlatform, hostSteps, riskTagFamily } from '@pair/workflows/cli'
 import { prepareCardWorktree } from '@pair/workflows/worktree'
 import { loadConfigWithOverrides } from '#config'
 import type { Config } from '#registry'
@@ -96,16 +97,14 @@ import {
   readWorkflowCards,
   type WorkflowCard,
 } from './workflow-selection'
-import { assignWorkflowCard, workflowFacts, workflowOperation } from './workflow-facts'
-import { sectionBodies } from './policy-sections'
+import { assignWorkflowCard, workflowOperation } from './workflow-facts'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
 import { finalTextOf, reportedModelOf, type IterationResult } from './stream-reader'
 import { observeEngineEvent, type EngineObservation } from './telemetry'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
 import { mainCheckoutOrCwd, readRunnableCard, resolveBranch, runSetupCommand } from './cycle-wiring'
-import { performHostKind, runStepGates } from './workflow-kinds'
-import { approvalPlatform, approvalRunner } from './workflow-approval'
+import { runHostProcess } from './host-process'
 import { workflowMerge } from './workflow-merge'
 import {
   createCycleScriptsBridge,
@@ -603,40 +602,6 @@ interface Opened {
   readonly telemetryWarned?: boolean
 }
 
-const NON_RISK_PROJECTIONS = new Set([
-  'cost',
-  'light',
-  'security-relevance',
-  'business-impact',
-  'coupling-balance',
-  'change-risk',
-  'service-criticality',
-])
-
-function riskTagFamily(fs: FileSystemService, main: string): string | null | undefined {
-  const path = join(main, RISK_MATRIX)
-  if (!fs.existsSync(path)) return undefined
-  const markdown = fs
-    .readFileSync(path)
-    .replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[^\n]*$/gm, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-  const projections = sectionBodies(markdown, 'Tag Projection')
-  if (projections.length > 1) return null
-  const [projection] = projections
-  const active = projection?.join('\n').match(/^Active:[ \t]*(.+)$/m)?.[1]
-  if (active === undefined) return undefined
-  const families = new Set(
-    active
-      .split(',')
-      .map(family => family.trim())
-      .filter(Boolean),
-  )
-  if (families.has('none')) return null
-  if (families.has('risk')) return 'risk'
-  const renamed = [...families].filter(family => !NON_RISK_PROJECTIONS.has(family))
-  return renamed.length === 1 ? renamed[0]! : null
-}
-
 function hostCardFacts(resolved: Resolved, cardId: string, { fs, deps }: Services) {
   const readCard = () => readWorkflowCard({ fs, ...resolved }, cardId)
   const readResultFacts =
@@ -660,7 +625,8 @@ function hostCardFacts(resolved: Resolved, cardId: string, { fs, deps }: Service
     async readResultFacts(step: StepLaunch, result: StepResult) {
       const facts = await readResultFacts(step, result)
       if (facts.card === undefined) return facts
-      const family = riskTagFamily(fs, resolved.main)
+      const path = join(resolved.main, RISK_MATRIX)
+      const family = riskTagFamily(fs.existsSync(path) ? fs.readFileSync(path) : undefined)
       return family === undefined ? facts : { ...facts, riskTagFamily: family }
     },
   }
@@ -674,43 +640,24 @@ function hostKindsOf(
   const { fs } = services
   const path = join(resolved.main, WAY_OF_WORKING)
   const way = fs.existsSync(path) ? fs.readFileSync(path) : ''
-  const registry = readGateRegistry(way)
-  const targets = readGateTargets(way)
-  const cwd = worktree ?? resolved.cwd
   const scriptDir = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
-  const gate = performHostKind(registry, cwd, targets, step =>
-    workflowFacts(scriptDir, resolved.cwd, step),
-  )
-  const approval = approvalRunner(
-    { dir: runDir, files: fs },
-    approvalPlatform((action, card, data) =>
-      workflowOperation(scriptDir, resolved.cwd, { action, card, data }),
-    ),
+  const reply =
     flagStep !== undefined && request.flagAnswer !== undefined
       ? { step: flagStep, answer: request.flagAnswer }
-      : undefined,
-  )
-  const merge = workflowMerge(
-    (action, card, data) => workflowOperation(scriptDir, resolved.cwd, { action, card, data }),
-    resolved.main,
-  )
+      : undefined
   return {
     ...hostCardFacts(resolved, request.card, services),
+    ...hostSteps({
+      run: { dir: runDir, files: fs },
+      main: resolved.main,
+      worktree: worktree ?? resolved.cwd,
+      adoption: way,
+      operation: input => workflowOperation(scriptDir, resolved.cwd, input),
+      process: runHostProcess,
+      reply,
+    }),
     assignCard: (assign: Assignment) =>
       assignWorkflowCard(scriptDir, resolved.cwd, request.card, assign),
-    perform: async (step: StepLaunch) => {
-      if (step.kind !== 'approval' && step.kind !== 'merge') return gate(step)
-      try {
-        return await (step.kind === 'approval' ? approval(step) : merge(step))
-      } catch (error) {
-        return {
-          status: 'failed',
-          summary: `The host could not complete ${step.kind}`,
-          reason: error instanceof Error ? error.message : String(error),
-        }
-      }
-    },
-    runGates: runStepGates(registry, cwd, targets),
   }
 }
 

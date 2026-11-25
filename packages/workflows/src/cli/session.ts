@@ -1,23 +1,33 @@
 import { join } from 'node:path'
 import { configurationText, type Configuration } from '../configuration'
-import { buildMessage, readResult } from '../dispatch'
+import { buildMessage } from '../dispatch'
 import {
   FROZEN_WORKFLOW,
   STATE_FILE,
   effectiveConfiguration,
   frozenWorkflow,
   identityOf,
-  next,
-  record,
   start,
   writeAtomic,
   type RunDirectory,
+  type RunState,
   type StepLaunch,
 } from '../engine'
 import { addressedSteps, type Workflow } from '../grammar'
+import {
+  advanceStep,
+  endStep,
+  runStep,
+  settleAgentStep,
+  startStep,
+  stepInputFailure,
+  type StepEvent,
+} from '../host'
 import { kindByName } from '../kinds'
 import { sessionCard, sessionWorktree } from '../worktree/session'
-import { withSessionLease } from './run-lock'
+import { withSessionLease, type SessionApproval, type SessionLease } from './run-lock'
+import { sessionHost } from './session-host'
+import { approvalQuestion, type ApprovalTarget } from './workflow-approval'
 import { readMessage, readText, sessionFiles } from './session-files'
 import {
   cycleScripts,
@@ -168,44 +178,134 @@ function stepPacket(
   }
 }
 
-/** Session-specific host policy can hold the launch before the engine reserves it. */
-function sessionHold(workflow: Workflow, launch: StepLaunch): string | undefined {
-  const step = addressedSteps(workflow).find(candidate => candidate.id === launch.id)
-  const cardCondition = Object.keys(step?.when ?? {}).some(key => key !== 'output' && key !== 'is')
-  if (kindByName[launch.kind].host || launch.gates?.length || launch.confirmState || cardCondition)
-    return 'This step needs a host operation. Resume with pair run.'
-  return undefined
+function sessionAnswer(value: string) {
+  if (value === 'approve') return { verdict: 'approved' as const }
+  if (value.startsWith('reject:') && value.slice(7).trim() !== '')
+    return { verdict: 'rejected' as const, note: value.slice(7) }
+  throw new Error('--answer must be approve or reject:<note>')
 }
 
-export async function nextSession(run: RunDirectory, token: string) {
-  return withSessionLease(run.dir, { token }, async lease => {
+const approvalPrompt = ({ step, question, pr, head }: SessionApproval) => ({
+  approval: { step, question },
+  approvalTarget: { pr, head },
+})
+
+const needsHost = (step: StepLaunch) =>
+  kindByName[step.kind].host === true ||
+  step.pendingSuccess !== undefined ||
+  stepInputFailure(step) !== undefined
+
+type Selection = Awaited<ReturnType<typeof advanceStep>>
+type SessionNext = Partial<ReturnType<typeof approvalPrompt>> & {
+  run: RunState
+  ready: readonly ReturnType<typeof stepPacket>[]
+  events?: readonly StepEvent[]
+  held?: Selection['held']
+  blocked?: Selection['blocked']
+}
+
+function selectedResponse(selected: Selection, events: StepEvent[]): SessionNext {
+  return {
+    run: selected.held === undefined ? selected.run : 'parked',
+    ready: [],
+    events,
+    held: selected.held,
+    blocked: selected.blocked,
+  }
+}
+
+function approvalResponse(
+  result: StepEvent,
+  step: StepLaunch,
+  events: StepEvent[],
+  target?: ApprovalTarget,
+) {
+  const waiting = result.state === 'needs-decision'
+  const approval =
+    waiting && target !== undefined
+      ? { step: step.id, question: approvalQuestion(step), ...target }
+      : undefined
+  return {
+    result: {
+      run: waiting || result.state === 'blocked' ? ('parked' as const) : ('running' as const),
+      ready: [],
+      events,
+      ...(approval !== undefined && approvalPrompt(approval)),
+    },
+    approval,
+  }
+}
+
+async function advanceSession(
+  {
+    project,
+    run,
+    lease,
+    answer,
+  }: { project: Project; run: RunDirectory; lease: SessionLease; answer?: string | undefined },
+  steps: ReturnType<typeof addressedSteps>,
+  packet: (launch: StepLaunch) => ReturnType<typeof stepPacket>,
+) {
+  const parked = lease.approval
+  const events: StepEvent[] = []
+  let target: ApprovalTarget | undefined
+  const host = sessionHost(project, run, {
+    onPark: approval => {
+      target = approval
+    },
+    reply:
+      answer !== undefined && parked !== undefined
+        ? { step: parked.step, answer: sessionAnswer(answer), target: parked }
+        : undefined,
+    worktree: lease.worktree,
+    steps,
+  })
+  host.report = event => {
+    if (event.state !== 'running') events.push(event)
+  }
+  let canStart = true
+  const selected = await advanceStep(
+    host,
+    run,
+    launch => {
+      canStart = needsHost(launch) || packet(launch).settings.engine === lease.engine
+      return canStart
+    },
+    parked?.step,
+  )
+  const [step] = selected.ready
+  if (step === undefined) return { result: selectedResponse(selected, events) }
+  if (needsHost(step)) return approvalResponse(await runStep(host, run, step), step, events, target)
+  const launch = canStart ? await startStep(host, step) : step
+  return { result: { run: 'running' as const, ready: [packet(launch)], events }, launch }
+}
+
+export async function nextSession(
+  project: Project,
+  run: RunDirectory,
+  token: string,
+  answer?: string,
+) {
+  return withSessionLease<SessionNext>(run.dir, { token }, async lease => {
+    if (answer !== undefined && lease.approval === undefined)
+      throw new Error('The workflow must be parked at an approval shown in this session')
+    if (lease.approval !== undefined && answer === undefined)
+      return {
+        result: { run: 'parked', ready: [], ...approvalPrompt(lease.approval) },
+        approval: lease.approval,
+      }
+
     const workflow = frozenWorkflow(run)
     const config = effectiveConfiguration(run)
     const packet = (launch: StepLaunch) => stepPacket(workflow, config, lease, launch)
     if (lease.launch !== undefined)
-      return {
-        result: { run: 'running' as const, ready: [packet(lease.launch)] },
-        launch: lease.launch,
-      }
-
-    const selected = await next(run, undefined, [], async launch => {
-      const hold = sessionHold(workflow, launch)
-      if (hold === undefined) packet(launch)
-      return hold
-    })
-    const [launch] = selected.ready
-    return {
-      result: {
-        ...selected,
-        ...(selected.held !== undefined && { run: 'parked' as const }),
-        ready: selected.ready.map(packet),
-      },
-      ...(launch !== undefined && { launch }),
-    }
+      return { result: { run: 'running', ready: [packet(lease.launch)] }, launch: lease.launch }
+    return advanceSession({ project, run, lease, answer }, addressedSteps(workflow), packet)
   })
 }
 
 export async function recordSession(
+  project: Project,
   run: RunDirectory,
   token: string,
   input: { step: string; file: string; attempt?: number | undefined; model?: string | undefined },
@@ -215,14 +315,12 @@ export async function recordSession(
     const { step, file, model, attempt } = input
     if (launch?.id !== step || launch.attempt !== (attempt ?? 1))
       throw new Error(`step-not-reserved: ${step} needs the attempt returned by next`)
-    const output = readMessage(file)
-    const value = readResult(output, kindByName[launch.kind])
-    const result = await record(run, step, value, {
-      output,
-      host: 'session',
-      model,
-      attempt: launch.attempt,
+    const host = sessionHost(project, run, {
+      steps: addressedSteps(frozenWorkflow(run)),
+      worktree: lease.worktree,
     })
+    const result = await settleAgentStep(host, run, launch, { final: readMessage(file), model })
+    await endStep(host, launch, result)
     return { result }
   })
 }

@@ -23,7 +23,7 @@ import {
   type StepResult,
   type StepStatus,
 } from '../kinds'
-import { effectiveSelection, matches, type CardFacts } from '../select'
+import { effectiveSelection, matches, type CardFacts, type Filter } from '../select'
 import { migrateTelemetryStatuses } from '../telemetry/legacy-status'
 
 /**
@@ -775,8 +775,12 @@ const replayLaunch = (state: RunStateFile) => {
   return replayAttempt === undefined ? {} : { replayAttempt }
 }
 
+type ReadCardFacts = (filter: Filter) => Promise<CardFacts>
 type LaunchCheck = (launch: StepLaunch) => Promise<string | undefined>
-type LaunchContext = { state: RunStateFile; check: LaunchCheck | undefined }
+type LaunchControl = { check?: LaunchCheck | undefined; approval?: string | undefined }
+type LaunchContext = LaunchControl & { state: RunStateFile }
+const launchControl = (value: LaunchCheck | LaunchControl | undefined): LaunchControl =>
+  typeof value === 'function' ? { check: value } : (value ?? {})
 
 interface NextLaunch {
   readonly ready: readonly StepLaunch[]
@@ -818,10 +822,10 @@ async function nextInLoop(
   workflow: Workflow,
   step: Step,
 ): Promise<NextLaunch> {
-  const { state } = context
+  const { state, approval } = context
   const { child, id } = loopChild(state, step)
-  const childHalt = HALTED[state.steps[id]?.state ?? 'pending']
-  if (childHalt !== undefined) return { ready: [], run: childHalt }
+  const halted = launchHalt(state, id, approval)
+  if (halted !== undefined) return { ready: [], run: halted }
   const attempt = launches(state, id)
   const round = state.loops?.[step.id]?.round ?? 1
   const saved = state.steps[id]
@@ -853,9 +857,9 @@ async function nextInLoop(
  */
 export async function next(
   run: RunDirectory,
-  card?: () => Promise<CardFacts>,
+  card?: ReadCardFacts,
   skipped: SkippedStep[] = [],
-  check?: LaunchCheck,
+  control?: LaunchCheck | LaunchControl,
 ): Promise<
   NextLaunch & {
     readonly skipped?: readonly SkippedStep[]
@@ -866,9 +870,10 @@ export async function next(
   const state = await migrateStateStatuses(run, requireState(run))
   const workflow = frozenWorkflow(run)
   const { steps } = workflow
-  const step = steps.find(one => !settled(state, one))
+  const { check, approval } = launchControl(control)
+  const step = selectedStep(state, steps, approval)
   if (step === undefined) return { ready: [], run: finalState(state, steps), ...seen(skipped) }
-  const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
+  const halted = launchHalt(state, step.id, approval)
   if (halted !== undefined) return { ready: [], run: halted, ...seen(skipped) }
   const condition = await checkWhen(run, state, step, card)
   if (condition?.error !== undefined)
@@ -879,11 +884,32 @@ export async function next(
       ...seen(skipped),
     }
   if (condition !== undefined) return next(run, card, [...skipped, condition.step], check)
-  const context = { state, check }
+  const context = { state, check, approval }
   const launched = await (step.kind === 'loop'
     ? nextInLoop(run, context, workflow, step)
     : reserveLaunch(run, context, plainLaunch(state, workflow, step, run)))
   return { ...launched, ...seen(skipped) }
+}
+
+function selectedStep(state: RunStateFile, steps: readonly Step[], approval?: string) {
+  const step = steps.find(one => !settled(state, one))
+  if (
+    approval !== undefined &&
+    (step === undefined || approval !== parkedApprovalStep(state, step))
+  )
+    throw new Error('The workflow must be parked at the approval step shown in the session')
+  return step
+}
+
+const launchHalt = (state: RunStateFile, id: string, approval?: string) =>
+  id === approval ? undefined : HALTED[state.steps[id]?.state ?? 'pending']
+
+function parkedApprovalStep(state: RunStateFile, step: Step): string | undefined {
+  const { child, id } =
+    step.kind === 'loop' && state.steps[step.id]?.state === 'running'
+      ? loopChild(state, step)
+      : { child: step, id: step.id }
+  return child.kind === 'approval' && state.steps[id]?.state === 'needs-decision' ? id : undefined
 }
 
 const seen = (skipped: SkippedStep[]) => (skipped.length > 0 ? { skipped } : {})
@@ -915,13 +941,13 @@ function outputMismatch(
 async function whenFailure(
   when: When | undefined,
   state: RunStateFile,
-  card: (() => Promise<CardFacts>) | undefined,
+  card: ReadCardFacts | undefined,
 ): Promise<{ reason: string; unavailable?: true } | undefined> {
   if (when === undefined) return undefined
   const { output, is, ...filter } = when
   const outputReason = output === undefined ? undefined : outputMismatch(output, is, state)
   if (Object.keys(filter).length > 0 && card !== undefined) {
-    const facts = await card()
+    const facts = await card(filter)
     if (
       facts.statusError !== undefined &&
       effectiveSelection(undefined, undefined, filter).needsStatus(facts)
@@ -939,7 +965,7 @@ async function checkWhen(
   run: RunDirectory,
   state: RunStateFile,
   step: Step,
-  card: (() => Promise<CardFacts>) | undefined,
+  card: ReadCardFacts | undefined,
 ): Promise<{ step: SkippedStep; error?: string } | undefined> {
   const inLoop = step.kind === 'loop'
   const child = inLoop ? loopChild(state, step).child : undefined

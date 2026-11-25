@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { bindHosts } from './host/index.mjs'
+import { bindHosts, HostError } from './host/index.mjs'
 import { prereqState } from './cycle-state.mjs'
 import { closeStory } from './cycle-merge.mjs'
+import { stateMapping } from './board-sync.mjs'
 
 const [, , action, card, raw] = process.argv
 const allowed = new Set(['admin', 'maintain', 'write'])
@@ -19,6 +20,46 @@ function cardDecision(body, { pr, head }) {
   const match = /^\/(approve|reject)[ \t]+#(\d+)[ \t]+([0-9a-f]{40})(?:[ \t]+(.*))?$/.exec(line)
   if (!match || match[2] !== String(pr) || match[3] !== head) return undefined
   return { verdict: match[1] === 'approve' ? 'approved' : 'rejected', note: match[4] }
+}
+
+function approvalComments(pm, id, park) {
+  try {
+    return pm.listCardComments({ id })
+  } catch (error) {
+    if (park.channel === 'session' && error instanceof HostError
+      && error.kind === 'not-implemented' && error.method === 'listCardComments') return []
+    throw error
+  }
+}
+
+async function confirmReady(pm, id, adoption, boardState) {
+  const control = await import('../../pair-next/control-state.mjs').catch(error => {
+    if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error
+    return import('../../../next/control-state.mjs')
+  })
+  const view = pm.readCard(id, { fields: ['title', 'body'] })
+  const verdict = control.resolveControlState({ ...view, boardState }, control.parseStateMapping(adoption))
+  if (verdict.outOfProcess || verdict.readiness === 'draft')
+    throw new Error(verdict.outOfProcess ?? verdict.explanation)
+  return { confirmed: true }
+}
+
+async function boardState(pm, id, { state, adoption }) {
+  const order = ['Draft', 'Ready', 'In Progress', 'Review', 'Done']
+  if (!order.includes(state)) throw new Error(`unknown card state ${state}`)
+  const mapping = stateMapping(adoption)
+  const current = pm.cardState({ id })
+  if (current.gap) throw new Error(current.gap)
+  if (order.findIndex(key => mapping[key] === current.boardState) >= order.indexOf(state))
+    return { confirmed: true }
+  const literal = mapping[state]
+  if (literal === undefined && state === 'Ready') return confirmReady(pm, id, adoption, current.boardState)
+  if (literal === undefined) throw new Error(`no board state maps to ${state}`)
+  const membership = pm.ensureBoardMembership({ id })
+  if (!membership.confirmed) throw new Error(membership.error ?? 'membership was not confirmed')
+  const written = pm.setBoardState({ id, state: literal })
+  if (!written.confirmed) throw new Error(written.error ?? 'state was not confirmed')
+  return { confirmed: true }
 }
 
 const workflowMerge = (host, card, input) => {
@@ -72,6 +113,10 @@ try {
     const expected = JSON.parse(raw)
     const target = host.code.workflowPrDetails({ pr })
     result = pr === expected.pr && target.head === expected.head && target.merged === true
+  } else if (action === 'board-state') {
+    result = await boardState(host.pm, card, JSON.parse(raw))
+  } else if (action === 'board-mapping') {
+    result = stateMapping(JSON.parse(raw))
   } else if (action === 'approval-notice') {
     const { marker, body } = JSON.parse(raw)
     result = host.pm.commentOnCard({ id: card, marker, body })
@@ -90,7 +135,7 @@ try {
         const authorized = row => row.human && humanLogin(row.login, bot)
           && Date.parse(row.at) >= since && permission(code, row.login)
           && (!sameLogin(row.login, target.author) || row.solo)
-        const comments = pm.listCardComments({ id: card }).flatMap(row => {
+        const comments = approvalComments(pm, card, park).flatMap(row => {
           if (!originalComment(row) || Date.parse(row.createdAt) < since) return []
           const answer = { login: row.authorLogin, human: true, at: row.createdAt, channel: 'comment', pr, head: target.head }
           if (sameLogin(row.authorLogin, target.author))
@@ -103,7 +148,9 @@ try {
           row.head === target.head && ['APPROVED', 'CHANGES_REQUESTED'].includes(row.state)
         ).map(row => ({ ...row, channel: 'review' }))
         const flagged = park.flag ? [{ ...park.flag, ...code.workflowActor(), channel: 'flag', at: new Date().toISOString() }] : []
-        result = [...flagged, ...comments, ...reviews].filter(authorized).sort((a,b) => Date.parse(b.at) - Date.parse(a.at))
+        const session = park.channel === 'session' && park.session
+          ? [{ verdict: park.session.verdict, note: park.session.note, ...code.workflowActor(), channel: 'session', at: new Date().toISOString() }] : []
+        result = [...flagged, ...session, ...comments, ...reviews].filter(authorized).sort((a,b) => Date.parse(b.at) - Date.parse(a.at))
       }
     }
   } else if (action === 'prerequisites') {

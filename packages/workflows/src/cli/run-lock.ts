@@ -4,6 +4,7 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import type { StepLaunch } from '../engine'
 import { pidIsAlive, takeGuard } from './lock-support'
+import type { ApprovalTarget } from './workflow-approval'
 
 /** One driver per run directory (#691 AC5, #696 AC-4), regardless of host. */
 export const RUN_LOCK_FILE = 'run.lock'
@@ -20,12 +21,15 @@ export type RunLockOutcome =
     }
   | Locked
 
-interface Lease {
+export type SessionApproval = ApprovalTarget & { readonly step: string; readonly question: string }
+
+export interface SessionLease {
   readonly token: string
   readonly engine: string
   readonly expiresAt: number
   readonly worktree?: string
   readonly launch?: StepLaunch | undefined
+  readonly approval?: SessionApproval | undefined
 }
 
 interface LockNote {
@@ -33,7 +37,7 @@ interface LockNote {
   readonly pid?: number
   readonly startedAt?: string
   readonly ownerId?: string
-  readonly lease?: Lease
+  readonly lease?: SessionLease
 }
 
 function readNote(file: string): LockNote | undefined {
@@ -125,9 +129,12 @@ export function acquireRunLock(
   })
 }
 
-const renewed = (lease: Lease): Lease => ({ ...lease, expiresAt: Date.now() + LEASE_MS })
+const renewed = (lease: SessionLease): SessionLease => ({
+  ...lease,
+  expiresAt: Date.now() + LEASE_MS,
+})
 
-function requireLease(lease: Lease | Locked): Lease {
+function requireLease(lease: SessionLease | Locked): SessionLease {
   if ('kind' in lease)
     throw new Error(
       `run-locked: ${lease.host ?? 'another host'}${lease.pid ? ` (PID ${lease.pid})` : ''} holds this run`,
@@ -136,7 +143,7 @@ function requireLease(lease: Lease | Locked): Lease {
 }
 
 /** Claim the lease and mark the short command live before releasing the transaction guard. */
-function claim(runDir: string, input: { engine: string } | { token: string }): Lease {
+function claim(runDir: string, input: { engine: string } | { token: string }): SessionLease {
   return requireLease(
     guarded(runDir, file => {
       const note = readNote(file)
@@ -156,14 +163,18 @@ function claim(runDir: string, input: { engine: string } | { token: string }): L
   )
 }
 
-function idleLease(note: LockNote | undefined, unused: boolean, token: string): Lease | undefined {
+function idleLease(
+  note: LockNote | undefined,
+  unused: boolean,
+  token: string,
+): SessionLease | undefined {
   if (note?.lease?.token !== token || unused)
     throw new Error('invalid-lease: open the run again with resume')
   return note.host === hostname() && note.pid === undefined ? note.lease : undefined
 }
 
 /** Release the command's PID and renew the idle lease, or remove it on stop or failed open. */
-function finish(runDir: string, lease: Lease, keep: boolean): void {
+function finish(runDir: string, lease: SessionLease, keep: boolean): void {
   const file = join(runDir, RUN_LOCK_FILE)
   const note = readNote(file)
   if (note?.lease?.token !== lease.token || note.pid !== process.pid)
@@ -176,9 +187,10 @@ function finish(runDir: string, lease: Lease, keep: boolean): void {
 export async function withSessionLease<T>(
   runDir: string,
   input: { engine: string } | { token: string },
-  command: (lease: Lease) => Promise<{
+  command: (lease: SessionLease) => Promise<{
     result: T
     launch?: StepLaunch
+    approval?: SessionApproval | undefined
     worktree?: string
     stop?: boolean
   }>,
@@ -191,7 +203,7 @@ export async function withSessionLease<T>(
     finish(runDir, lease, 'token' in input)
     throw error
   }
-  const { worktree, launch, stop } = outcome
-  finish(runDir, { ...lease, ...(worktree !== undefined && { worktree }), launch }, !stop)
+  const { worktree, launch, approval, stop } = outcome
+  finish(runDir, { ...lease, ...(worktree !== undefined && { worktree }), launch, approval }, !stop)
   return outcome.result
 }

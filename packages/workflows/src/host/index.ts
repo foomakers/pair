@@ -14,7 +14,7 @@ import {
 import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
 import type { Assignment, CardState, KindName } from '../grammar'
 import { violations } from '../schema'
-import type { CardFacts } from '../select'
+import type { CardFacts, Filter } from '../select'
 import { kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 import {
   closeRun,
@@ -68,7 +68,7 @@ export interface WorkflowHost {
     meter: (usage: Usage) => void,
   ): Promise<string | AgentOutput | undefined>
   /** The card as it is now: what a step's `when` reads. Absent: a `when` on card facts matches. */
-  card?(): Promise<CardFacts>
+  card?(filter: Filter): Promise<CardFacts>
   /** Applies the step's directive before it starts. Returns a reason when the card is held. */
   assignCard?(assignment: Assignment): Promise<string | undefined>
   /** Runs a step of a host kind (`gate`, `approval`, `merge`): the result it returns, no agent. */
@@ -216,7 +216,10 @@ async function recordResult(
       run,
       step.id,
       unconfirmed(`the host cannot confirm the ${step.confirmState} transition`),
-      execution,
+      {
+        ...execution,
+        attempt: step.attempt,
+      },
     )
   if (
     step.confirmState !== undefined &&
@@ -230,7 +233,12 @@ async function recordResult(
       final = unconfirmed((error as Error).message)
     }
   }
-  return record(run, step.id, final, { output, invalidatePendingSuccess, ...execution })
+  return record(run, step.id, final, {
+    output,
+    invalidatePendingSuccess,
+    ...execution,
+    attempt: step.attempt,
+  })
 }
 
 const NO_AGENT_RESULT: StepResult = {
@@ -252,6 +260,18 @@ type StepExecutionResult =
   | StepResult
   | { status: 'skipped'; summary: string; reason: 'card-held'; detail?: string }
 
+/** The input failure, if any, before a local or delegated launch. */
+export function stepInputFailure(step: StepLaunch): StepResult | undefined {
+  const missing = violations(kindByName[step.kind].inputs, step.inputs)
+  if (missing.length === 0) return undefined
+  return {
+    status: 'failed',
+    reason: 'invalid-input',
+    summary: `The ${step.kind} step is missing valid inputs`,
+    detail: missing.map(issue => issue.path.join('.') + ': ' + issue.problem).join('; '),
+  }
+}
+
 async function execute(
   host: WorkflowHost,
   run: RunDirectory,
@@ -263,14 +283,8 @@ async function execute(
   if (step.interactive === true && host.parkInteractive !== undefined)
     return record(run, step.id, host.parkInteractive)
   const kind = kindByName[step.kind]
-  const missing = violations(kind.inputs, step.inputs)
-  if (missing.length > 0)
-    return record(run, step.id, {
-      status: 'failed',
-      reason: 'invalid-input',
-      summary: `The ${step.kind} step is missing valid inputs`,
-      detail: missing.map(issue => issue.path.join('.') + ': ' + issue.problem).join('; '),
-    })
+  const failure = stepInputFailure(step)
+  if (failure !== undefined) return record(run, step.id, failure)
   if (kind.host === true) {
     exchange.sent = JSON.stringify(step.with)
     const result: StepResult =
@@ -318,7 +332,17 @@ async function executeAgent(
   const { output: final, model } = agent
   if (final === undefined) return record(run, step.id, NO_AGENT_RESULT, { host: host.id, model })
   exchange.final = final
-  const result = readResult(final, kind)
+  return settleAgentStep(host, run, step, { final, model })
+}
+
+/** Settle the final message after a host's agent or conversation completes. */
+export async function settleAgentStep(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  { final, model }: { final: string; model?: string | undefined },
+): Promise<StepExecutionResult> {
+  const result = readResult(final, kindByName[step.kind])
   // Leave the step running on disk so the next invocation can retry it.
   if (step.kind === 'implement' && result.status === 'failed' && result.reason === 'card-held')
     return { ...result, status: 'skipped', reason: result.reason }
@@ -398,10 +422,19 @@ async function ended(
 }
 
 /** The next step, reporting every step passed over because its `when` did not match. */
-async function advance(host: WorkflowHost, run: RunDirectory) {
-  const found = await next(run, host.card?.bind(host), [], async step => {
-    const assignment = assignmentAtStart(step)
-    return assignment === undefined ? undefined : host.assignCard?.(assignment)
+export async function advanceStep(
+  host: WorkflowHost,
+  run: RunDirectory,
+  canStart?: (step: StepLaunch) => boolean,
+  approval?: string,
+) {
+  const found = await next(run, host.card?.bind(host), [], {
+    async check(step) {
+      if (canStart?.(step) === false) return undefined
+      const assignment = assignmentAtStart(step)
+      return assignment === undefined ? undefined : host.assignCard?.(assignment)
+    },
+    approval,
   })
   for (const { id, kind } of found.skipped ?? [])
     host.report?.({
@@ -410,7 +443,7 @@ async function advance(host: WorkflowHost, run: RunDirectory) {
       state: 'skipped',
       summary: 'skipped: when did not match',
     })
-  const { ready, run: state, held, blocked } = found
+  const { run: state, held, blocked } = found
   if (held !== undefined) {
     const event: StepEvent = {
       step: held.id,
@@ -420,9 +453,9 @@ async function advance(host: WorkflowHost, run: RunDirectory) {
       reason: 'card-held',
     }
     host.report?.(event)
-    return { ready, state: 'skipped' as const, event }
+    return { ...found, state: 'skipped' as const, event }
   }
-  if (blocked === undefined) return { ready, state }
+  if (blocked === undefined) return { ...found, state, event: undefined }
   const event: StepEvent = {
     step: blocked.id,
     kind: blocked.kind,
@@ -432,7 +465,7 @@ async function advance(host: WorkflowHost, run: RunDirectory) {
     detail: blocked.detail,
   }
   host.report?.(event)
-  return { ready, state, event }
+  return { ...found, state, event }
 }
 
 async function emitStep(host: WorkflowHost, event: StepEvent): Promise<void> {
@@ -462,12 +495,7 @@ function implementationLaunch(host: WorkflowHost, step: StepLaunch): StepLaunch 
   }
 }
 
-async function runStep(
-  host: WorkflowHost,
-  run: RunDirectory,
-  step: StepLaunch,
-  writer: Writer,
-): Promise<StepEvent> {
+export async function startStep(host: WorkflowHost, step: StepLaunch): Promise<StepLaunch> {
   const implementing = step.kind === 'implement' && step.pendingSuccess === undefined
   const launch = implementing ? implementationLaunch(host, step) : step
   // The skill that claims the card also applies its start state before doing work.
@@ -480,8 +508,15 @@ async function runStep(
       }),
     })
   } else await emitStep(host, starting(step))
-  const { status, summary, reason, detail } = await executeMetered(host, run, launch, writer)
-  const result = {
+  return launch
+}
+
+export async function endStep(
+  host: WorkflowHost,
+  step: StepLaunch,
+  { status, summary, reason, detail }: StepExecutionResult,
+): Promise<StepEvent> {
+  const event: StepEvent = {
     step: step.id,
     kind: step.kind,
     state: status,
@@ -489,8 +524,18 @@ async function runStep(
     ...(reason !== undefined && { reason }),
     ...(detail !== undefined && { detail }),
   }
-  await emitStep(host, result)
-  return result
+  await emitStep(host, event)
+  return event
+}
+
+export async function runStep(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  writer?: Writer,
+): Promise<StepEvent> {
+  const launch = await startStep(host, step)
+  return endStep(host, step, await executeMetered(host, run, launch, writer))
 }
 
 /** The host loop over a started run: `next` → launch → `record`, until the run is no longer running. */
@@ -504,7 +549,7 @@ export async function runSteps(
   if (writer === undefined) await reopenRun(run).catch(() => undefined)
   let last: StepEvent | undefined
   for (;;) {
-    const { ready, state, event } = await advance(host, run)
+    const { ready, state, event } = await advanceStep(host, run)
     const step = ready[0]
     if (state !== 'running' || step === undefined) return ended(state, event ?? last, writer)
     last = await runStep(host, run, step, writer)
