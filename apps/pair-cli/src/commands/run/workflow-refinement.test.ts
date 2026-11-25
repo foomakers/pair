@@ -568,6 +568,12 @@ it.each([
     exit: 0,
   },
   {
+    active: 'priority, cost, light',
+    riskTag: 'priority:green',
+    labels: ['priority:green', 'cost:red', 'light'],
+    exit: 0,
+  },
+  {
     active: 'risk',
     riskTag: 'risk:green',
     labels: ['risk:green', 'risk:red'],
