@@ -772,9 +772,25 @@ it('#696 AC-9: an authorized session rejection stops the run and retains its not
 })
 
 it.each([
-  { name: 'merges the head covered by review, gate and approval', matches: true, state: 'ok' },
-  { name: 'refuses merge when the gate covered another head', matches: false, state: 'failed' },
-])('#696 AC-9: $name', async ({ matches, state }) => {
+  {
+    name: 'merges the head covered by review, gate and approval',
+    matches: true,
+    state: 'ok',
+    closure: false,
+  },
+  {
+    name: 'refuses merge when the gate covered another head',
+    matches: false,
+    state: 'failed',
+    closure: false,
+  },
+  {
+    name: 'R754-03 finishes only verified post-merge closure',
+    matches: true,
+    state: 'ok',
+    closure: true,
+  },
+])('#696 AC-9: $name', async ({ matches, state, closure }) => {
   const head = installCodeHost('write')
   const source = namedWorkflow(`  implement: { kind: implement }
   review: { kind: review }
@@ -796,6 +812,21 @@ it.each([
     ).toMatchObject({
       status: 'ok',
     })
+  }
+  if (closure) {
+    await next(run)
+    write(codeState, JSON.stringify({ head, permission: 'write', merges: [{ pr }] }))
+    write(`${backlog}/completed/${card}.md`, `# ${title}\n\n**Status**: Done\n`)
+    rmSync(join(main, cardFile))
+    const opened = JSON.parse(successful(['resume', runId, '--engine', 'codex']))
+    expect(opened).toMatchObject({ status: 'complete' })
+    expect(existsSync(worktree)).toBe(false)
+    expect(JSON.parse(readRun('steps/land/result.json'))).toMatchObject({
+      status: 'ok',
+      merged: true,
+    })
+    expect(JSON.parse(readFileSync(join(main, codeState), 'utf8')).merges).toEqual([{ pr }])
+    return
   }
   const lease = openSession(['resume', runId, '--engine', 'codex'])
 
@@ -859,3 +890,14 @@ it.each([
     expect(JSON.parse(successful(args))).toMatchObject({ status: 'started', worktree })
   },
 )
+
+it('R754-03: refuses a closed card with unfinished agent work', async () => {
+  await seedHeadlessRun()
+  write(`${backlog}/completed/${card}.md`, `# ${title}\n\n**Status**: Done\n`)
+  rmSync(join(main, cardFile))
+  const saved = readRun('state.json')
+  const result = invoke(['resume', runId, '--engine', 'codex'])
+  expect(result.status).toBe(1)
+  expect(result.stderr).toContain('card-closed')
+  expect(readRun('state.json')).toBe(saved)
+})
