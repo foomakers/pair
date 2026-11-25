@@ -648,14 +648,19 @@ async function nextPlain(
   steps: readonly Step[],
   step: Step,
 ): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
+  const launch = plainLaunch(state, steps, step)
+  await writeState(run, {
+    ...state,
+    steps: { ...state.steps, [step.id]: { state: 'running', executions: launch.attempt } },
+  })
+  return { ready: [launch], run: 'running' }
+}
+
+function plainLaunch(state: RunStateFile, steps: readonly Step[], step: Step): StepLaunch {
   if (step.kind === 'loop') throw new Error('loop is not directly launchable')
   const attempt = launches(state, step.id)
   const replayAttempt = replayAttemptOf(state)
-  await writeState(run, {
-    ...state,
-    steps: { ...state.steps, [step.id]: { state: 'running', executions: attempt } },
-  })
-  const launch: StepLaunch = {
+  return {
     id: step.id,
     kind: step.kind,
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
@@ -665,7 +670,22 @@ async function nextPlain(
     attempt,
     ...(replayAttempt !== undefined && { replayAttempt }),
   }
-  return { ready: [launch], run: 'running' }
+}
+
+/** The previously started, final merge can finish closure without reopening prior steps or their conditions. */
+export function pendingMergeClosure(
+  workflow: Workflow,
+  state: RunStateFile,
+): StepLaunch | undefined {
+  const steps = workflow.steps
+  const merge = steps.at(-1)
+  if (
+    merge?.kind !== 'merge' ||
+    !['failed', 'running'].includes(state.steps[merge.id]?.state ?? '')
+  )
+    return undefined
+  if (!steps.slice(0, -1).every(step => settled(state, step))) return undefined
+  return plainLaunch(state, steps, merge)
 }
 
 interface Advance {

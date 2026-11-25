@@ -28,6 +28,7 @@ const workflowMerge = (host, card, input) => {
   let current = code.workflowPrDetails({ pr })
   if (current.head !== input.head) return failed('head-moved')
   if (!current.merged) {
+    if (input.closureOnly) return failed('merge-not-confirmed')
     if (current.draft) return failed('pr-is-draft')
     const author = input.approvedBy
     if (!humanLogin(author, code.workflowReviewIdentity({})) || !permission(code, author)
@@ -52,7 +53,9 @@ try {
     result = workflowMerge(host, card, JSON.parse(raw))
   } else if (action === 'merge-resume') {
     const pr = host.code.workflowPr({ id: card })
-    result = host.code.workflowPrDetails({ pr }).merged
+    const expected = JSON.parse(raw)
+    const target = host.code.workflowPrDetails({ pr })
+    result = pr === expected.pr && target.head === expected.head && target.merged === true
   } else if (action === 'approval-notice') {
     const { marker, body } = JSON.parse(raw)
     result = host.pm.commentOnCard({ id: card, marker, body })

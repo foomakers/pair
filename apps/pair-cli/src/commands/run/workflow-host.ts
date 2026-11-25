@@ -12,7 +12,8 @@ import {
   addressedSteps,
   frozenConfiguration,
   parseWorkflow,
-  type RunStateFile,
+  pendingMergeClosure,
+  record,
   parseFrozenConfiguration,
   readGateRegistry,
   readGateTargets,
@@ -806,21 +807,30 @@ async function drive(
 ): Promise<number> {
   const { resolved, request, runDir } = opened
   const { fs, deps } = services
-  if (opened.closureOnly && !(await canResumeClosure(opened, fs)))
-    throw new Error('The closed card no longer has a resumable merge')
+  if (opened.closureOnly) {
+    const step = await closureStep(opened, fs)
+    if (!step) throw new Error('The closed card no longer has a resumable merge')
+    const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
+    const finish = workflowMerge(
+      (action, card, data) => workflowOperation(locate, resolved.cwd, { action, card, data }),
+      resolved.main,
+      true,
+    )
+    const result = await record({ dir: runDir, files: fs }, step.id, await finish(step))
+    console.log(`  Run: ${result.summary}`)
+    return result.status === 'ok' ? 0 : 1
+  }
   const flagStep = parkedApproval(opened, fs)
   const replay = await refreshReplayInputs(opened, fs)
-  const prepare = async () =>
-    opened.closureOnly
-      ? resolved.main
-      : await (deps.workflow?.prepareWorktree ?? cycleWorktree)({
-          fs,
-          project: resolved.project,
-          cwd: resolved.cwd,
-          main: resolved.main,
-          card: request.card,
-          title: opened.title,
-        })
+  const prepare = () =>
+    (deps.workflow?.prepareWorktree ?? cycleWorktree)({
+      fs,
+      project: resolved.project,
+      cwd: resolved.cwd,
+      main: resolved.main,
+      card: request.card,
+      title: opened.title,
+    })
   const replayTree = replay === undefined ? undefined : await prepare()
   if (replayTree !== undefined) await prepareReplayHead(replayTree, String(replay?.inputs['head']))
   const started = await start(
@@ -910,36 +920,23 @@ function printPlan(workflow: Workflow): void {
   )
 }
 
-function onlyMergeRemains(workflow: Workflow, state: RunStateFile): boolean {
-  const merge = workflow.steps.at(-1)
-  if (
-    merge?.kind !== 'merge' ||
-    !['running', 'failed'].includes(state.steps[merge.id]?.state ?? '')
-  )
-    return false
-  if (
-    workflow.steps
-      .slice(0, -1)
-      .some(step => !['ok', 'skipped'].includes(state.steps[step.id]?.state ?? ''))
-  )
-    return false
-  return true
-}
-
-async function canResumeClosure(
+async function closureStep(
   opened: Omit<Opened, 'title'>,
   fs: FileSystemService,
-): Promise<boolean> {
+): Promise<StepLaunch | undefined> {
   const saved = savedWorkflow(opened.request, opened.runDir, fs)
-  if (saved === undefined || !onlyMergeRemains(saved.workflow, saved.state)) return false
+  if (saved === undefined) return undefined
+  const step = pendingMergeClosure(saved.workflow, saved.state)
+  if (!step) return undefined
+  const { pr, head } = step.inputs
   const { resolved, request } = opened
   const scriptDir = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
-  return (
-    (await workflowOperation(scriptDir, resolved.cwd, {
-      action: 'merge-resume',
-      card: request.card,
-    })) === true
-  )
+  const merged = await workflowOperation(scriptDir, resolved.cwd, {
+    action: 'merge-resume',
+    card: request.card,
+    data: { pr, head },
+  })
+  return merged === true ? step : undefined
 }
 
 /** Resolve the card and allow a closed-card resume only to finish a confirmed merge. */
@@ -952,7 +949,7 @@ async function preflight(opened: Omit<Opened, 'title'>, services: Services): Pro
       `card-not-found: card ${card} cannot be read from the tracker; nothing was launched.`,
     )
   if (read === 'closed') {
-    if (await canResumeClosure(opened, services.fs))
+    if (await closureStep(opened, services.fs))
       return { ...opened, title: `Card ${card}: finish post-merge closure`, closureOnly: true }
     throw new Error(`card-closed: card ${card} is closed; nothing was launched.`)
   }

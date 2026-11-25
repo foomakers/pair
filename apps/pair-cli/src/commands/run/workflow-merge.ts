@@ -2,7 +2,7 @@ import type { StepLaunch, StepResult } from '@pair/workflows'
 
 type Operation = (action: string, card: string, data?: unknown) => Promise<unknown>
 
-export function workflowMerge(call: Operation, root: string) {
+export function workflowMerge(call: Operation, root: string, closureOnly = false) {
   return async (step: StepLaunch): Promise<StepResult> => {
     const { card, pr, head, reviewedHead, gatedHead, approvedHead, approvedPr, approvedBy } =
       step.inputs
@@ -30,6 +30,7 @@ export function workflowMerge(call: Operation, root: string) {
       }
     return (await call('merge', card, {
       root,
+      ...(closureOnly && { closureOnly }),
       pr,
       head,
       approvedBy,
