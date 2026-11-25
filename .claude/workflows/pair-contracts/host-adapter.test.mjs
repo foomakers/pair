@@ -214,7 +214,13 @@ if (a[0] === 'api') {
   const methodFlag = a.findIndex(arg => ['-X', '--method'].includes(arg))
   const method = methodFlag === -1 ? 'GET' : a[methodFlag + 1]
   const endpoint = a.find(arg => arg.startsWith('repos/')) || ''
-  if (a[1] === 'user') { process.stdout.write(S.login); process.exit(0) }
+  if (a[1] === 'user') {
+    if (S.installation) fail('gh: Resource not accessible by integration (HTTP 403)')
+    process.stdout.write(S.login); process.exit(0)
+  }
+  if (a[1] === 'graphql' && S.installation && a.includes('query=query { viewer { login } }')) {
+    out({ data: { viewer: { login: S.installation } } })
+  }
   const assignable = /^repos\\/[^/]+\\/[^/]+\\/assignees\\/([^/]+)$/.exec(endpoint)
   if (assignable) {
     if (!S.assignable?.includes(decodeURIComponent(assignable[1]))) fail('gh: Not Found (HTTP 404)')
@@ -273,10 +279,10 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(3)
   return { dir, ghBin: join(dir, 'gh'), state: () => JSON.parse(readFileSync(state, 'utf8')), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
 }
 
-const assignment = ({ login = 'runner', assignable = ['alice', login], issueAssignable, assignees = [], ...options } = {}) => {
+const assignment = ({ login = 'runner', assignable = ['alice', login], issueAssignable, assignees = [], installation, ...options } = {}) => {
   const id = 7
   const repo = 'acme/app'
-  const gh = fakeGh({ login, assignable, issues: { [id]: { assignees, assignable: issueAssignable, ...options } } })
+  const gh = fakeGh({ login, assignable, installation, issues: { [id]: { assignees, assignable: issueAssignable, ...options } } })
   const pm = github.instantiate({ ghBin: gh.ghBin })
   const issue = () => gh.state().issues[id]
   const writes = () => gh.calls().filter(args => args.some(arg => ['PATCH', 'POST', 'DELETE'].includes(arg)))
@@ -293,6 +299,24 @@ for (const [intent, login] of [[undefined, 'runner'], ['me', 'bot-pair']]) {
     const last = calls().at(-1)
     assert.equal(last[1], 'view')
     assert.equal(last[last.indexOf('--json') + 1], 'assignees')
+  })
+}
+
+for (const [intent, assignees, expected] of [
+  [undefined, [], 'assigned'],
+  ['me', ['owner'], 'held'],
+  ['@me', ['owner'], 'assigned'],
+]) {
+  test(`#723 F4: installation identity resolves for ${intent ?? 'implicit claim'} on ${assignees.length ? 'a held' : 'an empty'} card`, () => {
+    const installation = 'pair-delivery[bot]'
+    const { assign, issue, writes } = assignment({ installation, issueAssignable: [installation], assignees })
+    const result = assign(intent)
+    assert.equal(result.status, expected)
+    assert.deepEqual(issue().assignees, expected === 'held' ? assignees : [installation])
+    if (expected === 'held') {
+      assert.deepEqual(result.owners, assignees)
+      assert.deepEqual(writes(), [])
+    }
   })
 }
 
