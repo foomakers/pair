@@ -113,31 +113,49 @@ describe('#728 AC 19: shipped workflow examples', () => {
     ])
   })
 
-  it('converge hands the last fix head and review findings to its fallback (R747-01)', async () => {
-    const heads = [HEAD, ...['b', 'c', 'd'].map(letter => letter.repeat(40))]
+  it.each([
+    { name: 'advanced head with a report', fixHead: 'd'.repeat(40), hasReport: true },
+    { name: 'same head with a report', fixHead: 'c'.repeat(40), hasReport: true },
+    { name: 'advanced head without a report', fixHead: 'd'.repeat(40), hasReport: false },
+  ])('converge keeps the final review and fix pins for $name (R747-01)', async row => {
+    const reviewedHead = 'c'.repeat(40)
+    const heads = [HEAD, 'b'.repeat(40), reviewedHead, row.fixHead]
+    const reportPath = (head: string) => `.pair/working/reviews/1/${head}.md`
     const latestFinding = { ...FINDING, title: 'Final round finding' }
     const fallback = vi.fn<(step: StepLaunch) => StepResult>(() => ({
       status: 'failed',
       summary: 'Finding remained unresolved',
-      head: heads[3],
+      head: row.fixHead,
       resolutions: [{ id: 'f1', status: 'not-resolved', reason: 'Needs a different approach' }],
     }))
     const { outcome, results, commentOnCard } = await simulate('converge', {
       implement: IMPLEMENTED,
-      'rounds/review': ({ round = 1 }) => ({
-        ...CHANGES_REQUESTED,
-        reviewedHead: heads[round - 1],
-        findings: [round === 3 ? latestFinding : FINDING],
-      }),
+      'rounds/review': ({ round = 1 }) => {
+        const roundHead = heads[round - 1] ?? HEAD
+        return {
+          ...CHANGES_REQUESTED,
+          reviewedHead: roundHead,
+          ...(round !== 3 || row.hasReport ? { reportPath: reportPath(roundHead) } : {}),
+          findings: [round === 3 ? latestFinding : FINDING],
+        }
+      },
       'rounds/fix': ({ round = 1 }) => ({ ...FIXED, head: heads[round] }),
       'last-chance': fallback,
     })
 
     expect(fallback).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
-        inputs: expect.objectContaining({ head: heads[3], findings: [latestFinding] }),
+        inputs: expect.objectContaining({
+          pr: 1,
+          head: row.fixHead,
+          reviewedHead,
+          findings: [latestFinding],
+        }),
       }),
     )
+    const inputs = fallback.mock.calls[0]?.[0].inputs
+    if (row.hasReport) expect(inputs).toHaveProperty('reportPath', reportPath(reviewedHead))
+    else expect(inputs).not.toHaveProperty('reportPath')
     expect(outcome.run).toBe('failed')
     const round = [
       ['rounds/review', 'failed'],
