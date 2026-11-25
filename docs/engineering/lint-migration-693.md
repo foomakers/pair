@@ -100,3 +100,22 @@ Report-only runs on base `27daf130` used Oxlint 1.95.0 and tsgolint 7.0.2008. Ea
 | `typescript/no-misused-promises` · 27 website app files       | 1.394 s / 1.463 s (+0.069 s to failure) | Same config failure. The visible benefit would be finding promises returned to void callbacks. Defer pending a compatible project and a callback-specific review.                                                              |
 
 The reported cycles are `path-operation-helpers ↔ link-batch-processor` and `replacement-applier ↔ link-processor`. Each pair needs a small dependency refactor and initialization-order tests. The typed trials need a separate project-configuration change before remediation can be sized. To reproduce, copy the resolved Oxlint profile, enable just the named rule, and run the pinned binary from the package root over `src/`, `src/http/` or `app/`. For typed runs, set `OXLINT_TSGOLINT_PATH` to the pinned backend and pass `--type-aware`.
+
+## Cutover verification
+
+The frozen install succeeds with the Node 20 and Node 24 lint runtimes. Package and direct discovery match the refreshed ESLint lists after removing each workspace's obsolete `eslint.config.cjs`. The resulting counts are 566, 51, 52, 117, 76, 111 and 83 in the workspace order above. Brand's direct profile resolves the React overlay independently of the package route.
+
+| Root lint, seven tasks | Cold samples and median             | Warm samples and median         |
+| ---------------------- | ----------------------------------- | ------------------------------- |
+| ESLint at `27daf130`   | 18.695, 22.793, 16.669 s · 18.695 s | 1.530, 1.881, 1.689 s · 1.689 s |
+| Oxlint at cutover      | 14.246, 13.378, 13.566 s · 13.566 s | 1.483, 1.632, 1.735 s · 1.632 s |
+
+The cold median improved by 27%. Both ran in this worktree on Darwin arm64 using the serial command above. Each warm sample replayed seven cached passes. Appending one newline to the shared base config changed all fourteen `lint` and `lint:fix` task hashes. Restoring the bytes restored all hashes.
+
+- `pnpm lint` and `pnpm lint:fix --force` passed across all seven workspaces. Fix mode left the clean tree unchanged. A seeded `debugger` made filtered root lint fail and left the fixture unchanged.
+- The policy tests prove that tracked Git-ignored files still reach package lint, root config files remain ignored, and nested `dist` files are still linted. They compare relative and absolute file arguments, a fixable `prefer-const` case, a diagnostic-only case and second-fix idempotence.
+- The guard tests exercise check mode, both suppression markers and every Oxlint fix flag. RED tests cover listed-file failure, off-list diagnostics and syntax errors, clean passing output, timeouts, malformed reports and configuration failures.
+- Dependency audit returned the same advisory identifiers before and after the lockfile change. The two added Oxc packages had no reported advisories. The branch secret scan found no leaks. Mutation testing was not measured.
+- CI and release keep the original lint and quality-gate entry points. The PR publication records the full gate result. Reverting the migration PR restores the previous config, lockfile, guards and workspace scripts together.
+
+The candidate examples were compared against the upstream [ESLint](https://github.com/eslint/eslint/tree/v9.34.0/tests/lib/rules), [typescript-eslint](https://github.com/typescript-eslint/typescript-eslint/tree/v8.41.0/packages/eslint-plugin/tests/rules), [React](https://github.com/jsx-eslint/eslint-plugin-react/tree/v7.37.2/tests/lib/rules) and [JSX accessibility](https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/tree/v6.10.2/__tests__/src/rules) test suites.

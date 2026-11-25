@@ -1,11 +1,11 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
-  "scanned": 1078,
-  "files": 402,
-  "distinctContents": 367,
+  "scanned": 1079,
+  "files": 403,
+  "distinctContents": 368,
   "dispositionCounts": {
     "standalone-script": 15,
-    "os-guarantee": 25,
+    "os-guarantee": 26,
     "type-contract": 13,
     "in-flight-churn": 244,
     "repo-contract": 104,
@@ -6773,6 +6773,19 @@
       "reason": "Proves OS permission bits, real process execution or installed-artifact layout; the double cannot.",
       "decision": "Exact-path exception; keep isolated temp dir with cleanup.",
       "testCategory": "real-os-integration"
+    },
+    {
+      "path": "scripts/dev/oxlint-policy.test.mjs",
+      "hash": "a2ad59230bfd2633076390b12af854e1ff99780c6f06d825ce0ecc35eff1c756",
+      "dependencies": [{ "form": "import", "specifier": "node:fs", "line": 3 }],
+      "disposition": "os-guarantee",
+      "producer": "scripts/dev/oxlint-policy.test.mjs",
+      "sourceSymbols": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
+      "observedOperations": ["mkdirSync", "mkdtempSync", "readFileSync", "rmSync", "writeFileSync"],
+      "operationConsumer": "The real Git and Oxlint subprocesses consume files in this temporary workspace.",
+      "reason": "The fixture verifies process exit status, Git ignore discovery and exact file bytes on disk.",
+      "decision": "Keep an exact-path OS integration fixture for #693.",
+      "testCategory": "real-process"
     },
     {
       "path": "scripts/dev/rtk-review-hook.mjs",
