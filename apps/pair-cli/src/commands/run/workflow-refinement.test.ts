@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { tmpdir } from 'os'
+import { spawnSync } from 'child_process'
+import { hostname, tmpdir } from 'os'
 import { join } from 'path'
 import { fileSystemService as fs } from '@pair/content-ops'
 import { next, record, start } from '@pair/workflows'
+import { CLI_ENTRY } from '../../test-utils/cli-entry'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 import type { SpawnIterationInput } from './spawn'
@@ -392,6 +394,43 @@ it.each([
       )
   }
 })
+
+it('#728 AC-3 F4: retries completed-run migration after a failed lock write', async () => {
+  expect(await run(['quick'])).toBe(0)
+  const telemetry = join(runDir(), 'telemetry.jsonl')
+  const lock = join(runDir(), 'run.lock')
+  const legacy = '{"schema":2,"type":"step","step":"review","status":"needs-human"}\n'
+  const owner = JSON.stringify({ pid: process.pid, host: hostname() })
+  fs.writeFileSync(telemetry, legacy)
+  fs.writeFileSync(lock, owner)
+
+  const args = [...CLI_ENTRY, 'run', 'quick', '--card', '627', '--cwd', project, '--no-color']
+  const invoke = (limited: boolean) => {
+    const options = { encoding: 'utf8' as const, timeout: 5_000 }
+    const result = limited
+      ? spawnSync(
+          '/bin/bash',
+          ['-c', 'trap "" XFSZ && ulimit -f 0 && exec "$@"', 'bash', process.execPath, ...args],
+          options,
+        )
+      : spawnSync(process.execPath, args, options)
+    const output = result.stdout + result.stderr
+    expect(result.status, output).toBe(0)
+    expect(output).toContain('Run: already complete')
+    return output
+  }
+
+  invoke(true)
+  expect(fs.readFileSync(lock)).toBe(owner)
+  expect(fs.readFileSync(telemetry)).toBe(legacy)
+  fs.rmSync(lock)
+
+  expect(invoke(true)).toContain('EFBIG')
+  expect(fs.readFileSync(telemetry)).toBe(legacy)
+  invoke(false)
+  expect(fs.readFileSync(telemetry)).toBe(legacy.replace('needs-human', 'needs-decision'))
+  expect(fs.existsSync(lock)).toBe(false)
+}, 15_000)
 
 it.each([
   { constraint: 'label', options: { filter: 'wanted' }, excluded: { labels: [] } },
