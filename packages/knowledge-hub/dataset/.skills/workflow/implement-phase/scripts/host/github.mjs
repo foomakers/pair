@@ -19,6 +19,7 @@ export const MAX_COMMENT_CHARS = 65536
 const ISSUE_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)$/
 const COMMENT_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:pull|issues)\/(\d+)#issuecomment-(\d+)$/
 const SHA_RE = /^[0-9a-f]{40}$/
+const REVIEW_CONTEXTS = new Set([CHECK_CONTEXT, 'pair-explicit-approval'])
 const apiRepo = repo => (repo ? `repos/${repo}` : 'repos/{owner}/{repo}')
 
 export default defineAdapter({
@@ -133,7 +134,7 @@ export default defineAdapter({
     // AL: EVERY CI check on the head (check runs AND commit statuses), as `{ name, conclusion }` with the conclusion folded to
     // success | failure | pending. The most recent run of a name wins; neutral/skipped count as success; a run still in flight,
     // or any status/conclusion this map does not know, is NOT green (cancelled, timed_out, action_required… ⇒ failure).
-    const readCiChecks = ({ sha, repo }) => {
+    const readCiChecks = ({ sha, repo, requireSuccess = false }) => {
       const byName = new Map()
       // `--paginate`: more than one page of runs/statuses must not hide a failing check on a later page.
       const pagesOf = path => {
@@ -145,17 +146,54 @@ export default defineAdapter({
       }
       const runs = pagesOf(`${apiRepo(repo)}/commits/${sha}/check-runs?per_page=100`).flatMap(page => page.check_runs ?? [])
       for (const r of [...runs].sort((a, b) => String(a.started_at ?? '').localeCompare(String(b.started_at ?? '')))) {
-        const conclusion = r.status !== 'completed' ? 'pending' : ['success', 'neutral', 'skipped'].includes(r.conclusion) ? 'success' : 'failure'
+        const success = r.conclusion === 'success' || (!requireSuccess && ['neutral', 'skipped'].includes(r.conclusion))
+        const conclusion = r.status !== 'completed' ? 'pending' : success ? 'success' : 'failure'
         byName.set(String(r.name), { conclusion, url: r.html_url ?? r.details_url ?? null })
       }
       const statuses = pagesOf(`${apiRepo(repo)}/commits/${sha}/status?per_page=100`).flatMap(page => page.statuses ?? [])
       for (const st of statuses) {
         const name = String(st.context)
-        if (!byName.has(name)) byName.set(name, { conclusion: st.state === 'success' ? 'success' : st.state === 'pending' ? 'pending' : 'failure', url: st.target_url ?? null })
+        const conclusion = st.state === 'success' ? 'success' : st.state === 'pending' ? 'pending' : 'failure'
+        const run = byName.get(name)
+        if (!run || (requireSuccess && run.conclusion !== 'failure' && conclusion !== 'success'))
+          byName.set(name, { conclusion, url: st.target_url ?? null })
       }
       // #691: the url travels with the conclusion, so a remote failure can be reported where it can be read.
       return [...byName].map(([name, c]) => ({ name, ...c }))
     }
+    // Missing required jobs have no row on the commit yet. Only absent or inaccessible protection
+    // falls back to observed mechanical checks, following the review gate's CI policy.
+    const requiredContexts = ({ base, repo }) => {
+      if (typeof base !== 'string' || !base) throw new Error('PR base branch unreadable')
+      const endpoint = `${apiRepo(repo)}/branches/${encodeURIComponent(base)}/protection/required_status_checks`
+      let raw
+      try {
+        raw = gh(['api', endpoint])
+      } catch (error) {
+        if (/HTTP (403|404)\b/i.test(String(error.detail))) return undefined
+        throw error
+      }
+      const config = parseJson(raw, { command: 'gh api required_status_checks' })
+      const { contexts, checks } = config ?? {}
+      if ((contexts === undefined && checks === undefined)
+        || (contexts !== undefined && !Array.isArray(contexts))
+        || (checks !== undefined && !Array.isArray(checks)))
+        throw new Error('Required CI contexts unreadable')
+      const names = [...(contexts ?? []), ...(checks ?? []).map(check => check?.context)]
+      if (names.some(name => typeof name !== 'string' || !name.trim()))
+        throw new Error('Required CI contexts unreadable')
+      return [...new Set(names)].filter(name => !REVIEW_CONTEXTS.has(name))
+    }
+
+    const workflowCi = ({ sha, base, repo }) => {
+      const required = requiredContexts({ base, repo })
+      const reported = readCiChecks({ sha, repo, requireSuccess: true })
+      const byName = new Map(reported.map(({ name, conclusion }) => [name, conclusion]))
+      const names = required ?? [...byName.keys()].filter(name => !name.startsWith('pair-'))
+      if (names.some(name => byName.get(name) === 'failure')) return 'red'
+      return names.length > 0 && names.every(name => byName.get(name) === 'success') ? 'green' : 'pending'
+    }
+
     const readLabels = ({ pr, repo }) => {
       const number = /^\d+$/.test(String(pr)) ? pr : parseJson(gh(withRepo(['pr', 'view', String(pr), '--json', 'number'], repo)), { command: 'gh pr view' })?.number
       if (!/^\d+$/.test(String(number))) throw new HostError('invalid-output', { message: `gh pr view ${JSON.stringify(pr)}: PR number missing` })
@@ -291,7 +329,7 @@ export default defineAdapter({
       workflowPrDetails({ pr, repo }) {
         const row = parseJson(gh(['api', `${apiRepo(repo)}/pulls/${Number(pr)}`]), { command: 'gh api pull' })
         if (!SHA_RE.test(row?.head?.sha) || !row?.user?.login || !row?.head?.ref) throw new Error('PR identity unreadable')
-        return { pr: row.number, head: row.head.sha, author: row.user.login, branch: row.head.ref, merged: row.merged === true, mergeCommit: row.merge_commit_sha, draft: row.draft === true }
+        return { pr: row.number, head: row.head.sha, author: row.user.login, branch: row.head.ref, base: row.base?.ref, merged: row.merged === true, mergeCommit: row.merge_commit_sha, draft: row.draft === true }
       },
       workflowReviews({ pr, repo }) {
         return listPages(`${apiRepo(repo)}/pulls/${Number(pr)}/reviews`).map(row => ({
@@ -517,6 +555,7 @@ export default defineAdapter({
       readCheck,
       readCheckRun,
       readCiChecks,
+      workflowCi,
       readLabels,
       isMerged,
       clearPrState,
