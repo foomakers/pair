@@ -4,6 +4,8 @@ import { matches } from '../select'
 
 export interface ResultFacts {
   readonly head?: string
+  /** The adopted label family. An omitted family uses the default; null disables risk tags. */
+  readonly riskTagFamily?: string | null
   readonly card?: {
     readonly boardStatus: string | null
     readonly labels: readonly string[]
@@ -33,7 +35,7 @@ export function confirmResult(kind: KindName, result: StepResult, facts: ResultF
     return mismatch('boardStatus', result['boardStatus'], card?.boardStatus)
   const body = cleanBody(card.body)
   return kind === 'refine-story'
-    ? confirmRefinement(result, card, body)
+    ? confirmRefinement(result, card, body, facts.riskTagFamily)
     : confirmTasks(result, body)
 }
 
@@ -46,16 +48,20 @@ function mismatch(field: string, expected: unknown, actual: unknown): StepResult
 const cleanBody = (body: string) =>
   body.replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[^\n]*$/gm, '').replace(/<!--[\s\S]*?-->/g, '')
 
-const RISK_TAGS = ['risk:green', 'risk:yellow', 'risk:red']
+const RISK_TIERS = ['green', 'yellow', 'red']
 
 function confirmRefinement(
   result: StepResult,
   card: NonNullable<ResultFacts['card']>,
   body: string,
+  family: string | null = 'risk',
 ): StepResult {
   const risk = result['riskTag']
-  if (typeof risk !== 'string' || !RISK_TAGS.includes(risk) || !matches({ has: [risk] }, card))
-    return mismatch('riskTag', risk, card.labels)
+  const observed =
+    family === null
+      ? []
+      : RISK_TIERS.map(tier => `${family}:${tier}`).filter(tag => matches({ has: [tag] }, card))
+  if (observed.length !== 1 || risk !== observed[0]) return mismatch('riskTag', risk, card.labels)
   const required = ['Acceptance Criteria', 'Technical Analysis', 'Assumptions']
   const missing = required.find(
     section => !body.split('\n').some(line => line.trimEnd() === `## ${section}`),

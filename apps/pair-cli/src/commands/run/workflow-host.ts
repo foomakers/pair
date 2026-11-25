@@ -81,6 +81,7 @@ import {
   type WorkflowCard,
 } from './workflow-selection'
 import { workflowFacts, workflowOperation } from './workflow-facts'
+import { sectionBodies } from './policy-sections'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
 import { finalTextOf, type IterationResult } from './stream-reader'
@@ -106,6 +107,7 @@ import {
 
 export const WORKFLOWS_DIR = '.pair/adoption/tech/workflows'
 const WAY_OF_WORKING = '.pair/adoption/tech/way-of-working.md'
+const RISK_MATRIX = '.pair/adoption/tech/risk-matrix.md'
 
 /** Injected in tests: no real agent, tracker or git. */
 export interface WorkflowHostDependencies {
@@ -533,8 +535,50 @@ interface Opened {
   readonly closureOnly?: true
 }
 
+const NON_RISK_PROJECTIONS = new Set([
+  'cost',
+  'security-relevance',
+  'business-impact',
+  'coupling-balance',
+  'change-risk',
+  'service-criticality',
+])
+
+function riskTagFamily(fs: FileSystemService, main: string): string | null | undefined {
+  const path = join(main, RISK_MATRIX)
+  if (!fs.existsSync(path)) return undefined
+  const markdown = fs
+    .readFileSync(path)
+    .replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[^\n]*$/gm, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+  const projections = sectionBodies(markdown, 'Tag Projection')
+  if (projections.length > 1) return null
+  const [projection] = projections
+  const active = projection?.join('\n').match(/^Active:[ \t]*(.+)$/m)?.[1]
+  if (active === undefined) return undefined
+  const families = new Set(
+    active
+      .split(',')
+      .map(family => family.trim())
+      .filter(Boolean),
+  )
+  if (families.has('none')) return null
+  if (families.has('risk')) return 'risk'
+  const renamed = [...families].filter(family => !NON_RISK_PROJECTIONS.has(family))
+  return renamed.length === 1 ? renamed[0]! : null
+}
+
 function hostCardFacts(resolved: Resolved, cardId: string, { fs, deps }: Services) {
   const readCard = () => readWorkflowCard({ fs, ...resolved }, cardId)
+  const readResultFacts =
+    deps.workflow?.readResultFacts ??
+    (async (step: StepLaunch, result: StepResult): Promise<ResultFacts> => {
+      if (step.kind === 'implement')
+        return { head: await readWorkflowPrHead({ fs, ...resolved }, Number(result['pr'])) }
+      const card = await readCard()
+      if (card.boardError !== undefined) throw new Error(card.boardError)
+      return { card: { ...card, boardStatus: card.boardState } }
+    })
   return {
     async card() {
       const { labels, boardState, boardError } = await readCard()
@@ -544,15 +588,12 @@ function hostCardFacts(resolved: Resolved, cardId: string, { fs, deps }: Service
         ...(boardError !== undefined && { statusError: boardError }),
       }
     },
-    readResultFacts:
-      deps.workflow?.readResultFacts ??
-      (async (step: StepLaunch, result: StepResult) => {
-        if (step.kind === 'implement')
-          return { head: await readWorkflowPrHead({ fs, ...resolved }, Number(result['pr'])) }
-        const card = await readCard()
-        if (card.boardError !== undefined) throw new Error(card.boardError)
-        return { card: { ...card, boardStatus: card.boardState } }
-      }),
+    async readResultFacts(step: StepLaunch, result: StepResult) {
+      const facts = await readResultFacts(step, result)
+      if (facts.card === undefined) return facts
+      const family = riskTagFamily(fs, resolved.main)
+      return family === undefined ? facts : { ...facts, riskTagFamily: family }
+    },
   }
 }
 
