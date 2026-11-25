@@ -19,7 +19,7 @@ Executable form of the **`refine-story`** step, and a composer of `define-subdom
 
 Before in-session dispatch, check the selected `refine-story` stage against the detected host with the shared resolver's `gaps --host` command. Show any gap and wait; see [workflow host gaps](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/workflow-host-gaps.md).
 
-For an unattended workflow with `mode: autonomous`, use its `card` as `$story`, set `$approval` to `auto` and `$prepare` to `hold-never`. Apply the adopted risk label and read it back as `riskTag`. After writing the story, read the literal tracker column as `boardStatus`. The host confirms the facts and handles board transitions. Return open product questions in the summary of a `needs-human` result.
+For an unattended workflow with `mode: autonomous`, use its `card` as `$story`, set `$approval` to `auto` and `$prepare` to `hold-never`. Apply the adopted risk label and read it back as `riskTag`. After writing the story, read the literal tracker column as `boardStatus`. The host confirms the facts and handles board transitions. Return open product questions in the summary of a `needs-decision` result.
 
 ## Composed Skills
 

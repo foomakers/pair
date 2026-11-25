@@ -14,9 +14,13 @@ const implement: StepLaunch = {
   inputs: { card: '627' },
 }
 
+const BLOCKED_CASE = 'The checkout is unavailable.'
+const blockedOnly = { ...kindByName.generic, returns: { blocked: BLOCKED_CASE } }
+
 describe('buildMessage (AC-4, AC-5)', () => {
   it('asks an implement step for its skill, inputs, options and result block', () => {
-    expect(buildMessage(implement, kindByName.implement, { style: 'slash', ...safe })).toBe(
+    const message = buildMessage(implement, kindByName.implement, { style: 'slash', ...safe })
+    expect(message).toContain(
       [
         '/pair-process-implement',
         '',
@@ -27,18 +31,16 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- gates: ["quality-gate"]',
         '',
         'End your turn with one JSON object in a fenced `json` block with these fields:',
-        '- status: "ok" | "failed" | "needs-human"',
+        '- status: "ok" | "failed" | "blocked" | "needs-decision"',
         '- summary: string',
         '- reason: string (optional)',
         '- branch: string matching ^[A-Za-z0-9][A-Za-z0-9._/-]*$',
         '- pr: integer',
         '- head: string matching ^[0-9a-f]{40}$',
         'Required when status is "ok": branch, pr, head.',
-        '',
-        'Execution mode: unattended.',
-        'Handoff: published-pr.',
       ].join('\n'),
     )
+    expect(message).toContain('Execution mode: unattended.\nHandoff: published-pr.')
   })
 
   it('asks a review step for its verdict and findings', () => {
@@ -76,7 +78,8 @@ describe('buildMessage (AC-4, AC-5)', () => {
       with: { audience: 'release notes', depth: 2 },
       inputs: { card: '627', branch: 'feature/US-627-x' },
     }
-    expect(buildMessage(step, kindByName.generic, { style: 'instruction', ...safe })).toBe(
+    const message = buildMessage(step, kindByName.generic, { style: 'instruction', ...safe })
+    expect(message).toContain(
       [
         'Run the my-skill skill.',
         '',
@@ -89,13 +92,22 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- depth: 2',
         '',
         'End your turn with one JSON object in a fenced `json` block with these fields:',
-        '- status: "ok" | "failed" | "needs-human"',
+        '- status: "ok" | "failed" | "blocked" | "needs-decision"',
         '- summary: string',
         '- reason: string (optional)',
-        '',
-        'Execution mode: unattended.',
       ].join('\n'),
     )
+    expect(message).toContain('Execution mode: unattended.')
+  })
+
+  it('lists only the declared status and case beside ok (#728 AC 4)', () => {
+    const step = { ...implement, kind: 'generic', uses: 'my-skill', with: {} } as const
+    const message = buildMessage(step, blockedOnly, { style: 'instruction', ...safe })
+    expect
+      .soft(message.split('\n').find(line => line.startsWith('- status: ')))
+      .toBe('- status: "ok" | "blocked"')
+    expect.soft(message).toContain(BLOCKED_CASE)
+    expect(message).not.toMatch(/\b(?:failed|needs-decision|exhausted|skipped)\b/)
   })
 
   it.each([
@@ -136,13 +148,21 @@ describe('readResult (AC-4)', () => {
     findings: [],
   }
 
+  it('accepts a declared exit and rejects an undeclared agent exit (#728 AC 4)', () => {
+    const blocked = { status: 'blocked', summary: BLOCKED_CASE }
+    expect(readResult(fenced(blocked), blockedOnly)).toEqual(blocked)
+    expect(
+      readResult(fenced({ status: 'needs-decision', summary: 'A choice is needed.' }), blockedOnly),
+    ).toMatchObject({ status: 'failed', reason: 'invalid-result' })
+  })
+
   it.each([
     ['implement', implemented],
     ['review', reviewed],
     ['generic', { status: 'ok', summary: 'done' }],
     [
       'implement',
-      { status: 'needs-human', summary: 'a decision is needed', reason: 'open question' },
+      { status: 'needs-decision', summary: 'a decision is needed', reason: 'open question' },
     ],
     [
       'review',

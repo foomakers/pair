@@ -11,9 +11,11 @@ import {
   checkAgainstEngines,
   describeSettings,
   formatError,
+  hasLegacyRunTelemetry,
   kindByName,
   addressedSteps,
   frozenConfiguration,
+  migrateRunTelemetry,
   parseWorkflow,
   pendingMergeClosure,
   record,
@@ -27,6 +29,7 @@ import {
   type CardState,
   type Configuration,
   type Filter,
+  type RunDirectory,
   type RunOutcome,
   type StepResult,
   type ResultFacts,
@@ -534,6 +537,7 @@ interface Opened {
   readonly report?: (outcome: BatchOutcome) => void
   readonly flagStep?: string
   readonly closureOnly?: true
+  readonly telemetryWarned?: boolean
 }
 
 const NON_RISK_PROJECTIONS = new Set([
@@ -656,12 +660,14 @@ const engineIdOf = (opened: Opened, id: string): keyof typeof ENGINES => {
 }
 
 /** The run's telemetry: the flag over the configuration's `telemetry` key; off when neither says. */
-const telemetryOf = (config: RunCommandConfig, { resolved, effective }: Opened) =>
+const telemetryOf = (config: RunCommandConfig, { resolved, effective, telemetryWarned }: Opened) =>
   (config.telemetry ?? effective?.telemetry) === true
     ? {
         host: 'pair-run' as const,
         settings: (id: string) => stepSettings(resolved, effective, stepOf(resolved, id)),
-        warn: (message: string) => console.log(`  Warning: ${message}`),
+        ...(!telemetryWarned && {
+          warn: (message: string) => console.log(`  Warning: ${message}`),
+        }),
       }
     : undefined
 
@@ -875,7 +881,9 @@ function parkedApproval(opened: Opened, fs: FileSystemService): string | undefin
   if (!fs.existsSync(path)) throw new Error('No parked workflow for this card')
   const state = JSON.parse(fs.readFileSync(path)) as { steps: Record<string, { state: string }> }
   const parked = addressedSteps(opened.resolved.workflow).filter(
-    step => step.kind === 'approval' && state.steps[step.id]?.state === 'needs-human',
+    step =>
+      step.kind === 'approval' &&
+      ['needs-decision', 'needs-human'].includes(state.steps[step.id]?.state ?? ''),
   )
   if (parked.length !== 1) throw new Error('The workflow must be parked at one approval step')
   return parked[0]?.id
@@ -960,6 +968,20 @@ async function finishClosure(opened: Opened, fs: FileSystemService): Promise<num
   return result.status === 'ok' ? 0 : 1
 }
 
+async function startOnConsole(opened: Opened, fs: FileSystemService, replay?: StepReplay) {
+  const { resolved, runDir } = opened
+  const started = await start(
+    { files: fs, dir: runDir },
+    resolved.source,
+    startOptions(opened, replay),
+  )
+  recordIncludeSources(fs, runDir, resolved.sources, started.status)
+  started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
+  if (started.telemetryWarning !== undefined) console.log(`  Warning: ${started.telemetryWarning}`)
+  console.log(`  Run dir: ${runDir} (${started.status})`)
+  return started
+}
+
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
 async function drive(
   config: RunCommandConfig,
@@ -982,14 +1004,7 @@ async function drive(
     })
   const replayTree = replay && (await prepare())
   if (replay && replayTree) await prepareReplayHead(replayTree, String(replay.inputs['head']))
-  const started = await start(
-    { files: fs, dir: runDir },
-    resolved.source,
-    startOptions(opened, replay),
-  )
-  recordIncludeSources(fs, runDir, resolved.sources, started.status)
-  started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
-  console.log(`  Run dir: ${runDir} (${started.status})`)
+  const started = await startOnConsole(opened, fs, replay)
   const effective = readEffective(fs, runDir)
   printSettings(resolved, effective)
   probeUnchecked(
@@ -1004,7 +1019,13 @@ async function drive(
   console.log(`  Worktree: ${worktree}`)
   return runOnConsole(
     config,
-    { ...opened, effective, worktree, ...(flagStep === undefined ? {} : { flagStep }) },
+    {
+      ...opened,
+      effective,
+      worktree,
+      telemetryWarned: started.telemetryWarning !== undefined,
+      ...(flagStep === undefined ? {} : { flagStep }),
+    },
     launcher({ config, resolved, services, worktree, effective }),
     services,
   )
@@ -1186,15 +1207,21 @@ async function acceptsCard(
   return matchesWorkflowCard(found, selection.accepts, run)
 }
 
-function completedWorkflow(
-  fs: FileSystemService,
-  runDir: string,
-  request: RunWorkflowRequest,
-  workflow: string,
-): boolean {
-  return (
-    !request.restart && completedRun({ files: fs, dir: runDir }, { workflow, card: request.card })
-  )
+/** Completed runs keep their outcome if optional telemetry needs a later retry. */
+export async function migrateCompletedRunTelemetry(run: RunDirectory): Promise<void> {
+  if (!hasLegacyRunTelemetry(run)) return
+  try {
+    const lock = acquireRunLock(run.dir)
+    if (lock.kind !== 'acquired') return
+    try {
+      const warning = await migrateRunTelemetry(run)
+      if (warning !== undefined) console.log(`  Warning: ${warning}`)
+    } finally {
+      lock.release()
+    }
+  } catch (error) {
+    console.log(`  Warning: telemetry migration could not acquire the run lock: ${String(error)}`)
+  }
 }
 
 export async function handleWorkflowRun(
@@ -1219,11 +1246,14 @@ async function openCard(
 ): Promise<Opened | undefined> {
   const runId = request.runId ?? `${resolved.workflow.name}-${request.card}`
   const runDir = join(resolved.main, '.pair/working/runs', runId)
+  const run = { files: services.fs, dir: runDir }
   if (
     batch === undefined &&
+    !request.restart &&
     request.flagAnswer === undefined &&
-    completedWorkflow(services.fs, runDir, request, resolved.workflow.name)
+    completedRun(run, { workflow: resolved.workflow.name, card: request.card })
   ) {
+    await migrateCompletedRunTelemetry(run)
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
     return undefined
   }

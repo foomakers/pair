@@ -96,6 +96,60 @@ describe('when on an output (#680 AC-9)', () => {
   })
 })
 
+describe('when on a step status (#728 AC-11, AC-12)', () => {
+  const workflow = (accepted: string, producer = 'on-failed: continue') => ({
+    file: 'workflows/quick.yaml',
+    text: `version: 1
+name: quick
+steps:
+  implement: { kind: implement, ${producer} }
+  implement-strong:
+    kind: implement
+    when: { output: implement.status, is: [${accepted}] }
+`,
+  })
+  const FAILED = { status: 'failed', summary: 'crashed', reason: 'crash' }
+  const afterImplement = async (result: object, accepted: string) => {
+    const run = open()
+    await start(run, workflow(accepted), { card: '728' })
+    await next(run)
+    await record(run, 'implement', result)
+    return next(run)
+  }
+
+  it('starts the retry after a continued failure matching the condition', async () => {
+    const after = await afterImplement(FAILED, 'failed')
+    expect(after.ready.map(step => step.id)).toEqual(['implement-strong'])
+  })
+
+  it.each([
+    ['ok', IMPLEMENTED, 'failed'],
+    ['failed', FAILED, 'ok'],
+  ])(
+    'skips when the producer is %s and the condition expects another status',
+    async (_, result, accepted) => {
+      expect(await afterImplement(result, accepted)).toMatchObject({
+        run: 'done',
+        ready: [],
+        skipped: [{ id: 'implement-strong', kind: 'implement' }],
+      })
+    },
+  )
+
+  it('skips the consumer when the producer is skipped even if the condition lists skipped', async () => {
+    const run = open()
+    await start(run, workflow('failed, skipped', 'when: { has: [risk:red] }'), { card: '728' })
+    expect(await next(run, labels('risk:green'))).toMatchObject({
+      run: 'done',
+      ready: [],
+      skipped: [
+        { id: 'implement', kind: 'implement' },
+        { id: 'implement-strong', kind: 'implement' },
+      ],
+    })
+  })
+})
+
 const LOOP = `version: 1
 name: quick
 steps:

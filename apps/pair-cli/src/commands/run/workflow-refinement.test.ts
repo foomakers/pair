@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { tmpdir } from 'os'
+import { spawnSync } from 'child_process'
+import { hostname, tmpdir } from 'os'
 import { join } from 'path'
 import { fileSystemService as fs } from '@pair/content-ops'
 import { next, record, start } from '@pair/workflows'
+import { CLI_ENTRY } from '../../test-utils/cli-entry'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 import type { SpawnIterationInput } from './spawn'
@@ -227,7 +229,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
           input.onEvent?.({
             type: 'result',
             subtype: 'success',
-            result: fenced({ status: 'needs-human', summary: 'Product decision pending' }),
+            result: fenced({ status: 'needs-decision', summary: 'Product decision pending' }),
           })
           return { outcome: 'success', detail: 'terminal event: success' }
         }
@@ -260,7 +262,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
       )
       summaryWrite.mockRestore()
       expect(status.get('9')).toBe(ready)
-      expect(states('refinement-10')['refine']).toBe('needs-human')
+      expect(states('refinement-10')['refine']).toBe('needs-decision')
 
       cycle = true
       parkCard = undefined
@@ -336,9 +338,18 @@ it.each([
   { name: 'reciprocal dependencies (R744-18)', cycle: true },
   { name: 'a dependency read error (R744-19)', error: 'tracker unavailable' },
   { name: 'a missing dependency result (R744-19)', missing: true },
-])('schedules a batch with a completed card and $name', async ({ cycle, error, missing }) => {
+  {
+    name: 'F8 legacy telemetry (#728 AC-3)',
+    error: 'tracker unavailable',
+    legacy: true,
+  },
+])('schedules a batch with a completed card and $name', async scenario => {
+  const { cycle, error, missing, legacy } = scenario
   expect(await run(['quick'], OK, { card: '9' })).toBe(0)
   launched.length = 0
+  const telemetry = join(runDir('quick-9'), 'telemetry.jsonl')
+  const historical = { schema: 2, type: 'step', step: 'review', status: 'needs-human' }
+  if (legacy) fs.writeFileSync(telemetry, `${JSON.stringify(historical)}\n`)
 
   const batch = run(
     ['quick'],
@@ -377,8 +388,49 @@ it.each([
       join(project, 'worktrees', '10'),
       join(project, 'worktrees', '10'),
     ])
+    if (legacy)
+      expect(fs.readFileSync(telemetry)).toBe(
+        `${JSON.stringify({ ...historical, status: 'needs-decision' })}\n`,
+      )
   }
 })
+
+it('#728 AC-3 F4: retries completed-run migration after a failed lock write', async () => {
+  expect(await run(['quick'])).toBe(0)
+  const telemetry = join(runDir(), 'telemetry.jsonl')
+  const lock = join(runDir(), 'run.lock')
+  const legacy = '{"schema":2,"type":"step","step":"review","status":"needs-human"}\n'
+  const owner = JSON.stringify({ pid: process.pid, host: hostname() })
+  fs.writeFileSync(telemetry, legacy)
+  fs.writeFileSync(lock, owner)
+
+  const args = [...CLI_ENTRY, 'run', 'quick', '--card', '627', '--cwd', project, '--no-color']
+  const invoke = (limited: boolean) => {
+    const options = { encoding: 'utf8' as const, timeout: 5_000 }
+    const result = limited
+      ? spawnSync(
+          '/bin/bash',
+          ['-c', 'trap "" XFSZ && ulimit -f 0 && exec "$@"', 'bash', process.execPath, ...args],
+          options,
+        )
+      : spawnSync(process.execPath, args, options)
+    const output = result.stdout + result.stderr
+    expect(result.status, output).toBe(0)
+    expect(output).toContain('Run: already complete')
+    return output
+  }
+
+  invoke(true)
+  expect(fs.readFileSync(lock)).toBe(owner)
+  expect(fs.readFileSync(telemetry)).toBe(legacy)
+  fs.rmSync(lock)
+
+  expect(invoke(true)).toContain('EFBIG')
+  expect(fs.readFileSync(telemetry)).toBe(legacy)
+  invoke(false)
+  expect(fs.readFileSync(telemetry)).toBe(legacy.replace('needs-human', 'needs-decision'))
+  expect(fs.existsSync(lock)).toBe(false)
+}, 15_000)
 
 it.each([
   { constraint: 'label', options: { filter: 'wanted' }, excluded: { labels: [] } },

@@ -26,7 +26,12 @@ import {
   type WorkflowCard,
   type WorkflowSelection,
 } from './workflow-selection'
-import { handleWorkflowRun, resolveWorkflowRun, type Services } from './workflow-host'
+import {
+  handleWorkflowRun,
+  migrateCompletedRunTelemetry,
+  resolveWorkflowRun,
+  type Services,
+} from './workflow-host'
 import type { RunCommandConfig, RunScopeOptions, RunWorkflowBatch } from './parser'
 
 type Outcome = 'done' | 'failed' | 'parked' | 'waiting' | 'skipped' | 'not-applicable'
@@ -354,7 +359,15 @@ export async function handleWorkflowBatch(
   for (const card of plan.selected) {
     if (card.uncertain) console.log(`  #${card.id}: unparsed dependency: ${card.uncertain}`)
   }
-  return config.dryRun ? previewBatch(plan) : driveBatch(input, plan)
+  if (config.dryRun) return previewBatch(plan)
+  for (const [id, outcome] of plan.prior) {
+    if (outcome.outcome === 'skipped')
+      await migrateCompletedRunTelemetry({
+        files: services.fs,
+        dir: join(resolved.main, '.pair/working/runs', plan.runId(id)),
+      })
+  }
+  return driveBatch(input, plan)
 }
 
 function legacyCycleRequested(config: RunCommandConfig): boolean {

@@ -78,10 +78,12 @@ export const fix: StepKind = {
       },
     },
   },
-  escalations: [
-    'A remaining finding needs a human decision or action.',
-    'A finding contradicts an acceptance criterion of the card.',
-  ],
+  returns: {
+    failed: 'A technical finding remains unresolved, a required gate is red or the push fails.',
+    blocked: 'A remaining finding requires a fact, permission or resource that is unavailable.',
+    'needs-decision':
+      'A remaining finding needs a human decision, such as when it contradicts an acceptance criterion of the card.',
+  },
   rule: {
     text: 'The status is "failed", never "ok", when at least one resolution is "not-resolved".',
     broken: ({ resolutions }) => {

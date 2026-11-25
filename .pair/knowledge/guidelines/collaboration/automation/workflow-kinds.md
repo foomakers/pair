@@ -8,9 +8,11 @@ A step of a [workflow file](workflow-grammar.md) has a `kind`. The kind says whi
 
 The agent ends its turn with one JSON object in a fenced `json` block. Whatever the kind, it carries:
 
-- `status`: `"ok" | "failed" | "needs-human"`
+- `status`: `"ok" | "failed" | "blocked" | "needs-decision"`
 - `summary`: `string` — One line: what the step did.
 - `reason`: `string`, optional — Why, when the status is not `ok`.
+
+An agent can return `ok` and the statuses listed for its kind below.
 
 A result that is missing, is not JSON or breaks the contract of its kind makes the step `failed` with reason `invalid-result`.
 
@@ -28,9 +30,10 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `head`: `string matching ^[0-9a-f]{40}$` — The pushed head, a 40-hex sha.
 - **Options** (`with`)
   - None.
-- **Returns `needs-human` when**
-  - A decision the card does not record blocks every remaining task.
-  - A quality gate stays red and the fix is outside the card.
+- **Non-ok returns**
+  - `failed`: Implementation or verification fails, including a red quality gate whose fix is outside the card.
+  - `blocked`: A required fact, permission or resource is unavailable.
+  - `needs-decision`: A decision the card does not record blocks every remaining task.
 
 ## review
 
@@ -48,9 +51,10 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Options** (`with`)
   - `publication`: `"always" | "first-and-approved" | "never"` — Publish every review, the first and approved reviews, or none. Default: always.
   - `blocking`: `"Critical" | "Major" | "Minor"` — The lowest severity that makes a finding blocking. Default: the review template's blocking floor.
-- **Returns `needs-human` when**
-  - The verdict needs a decision only a person can take.
-  - The pull request head moved while it was under review.
+- **Non-ok returns**
+  - `failed`: A finding is blocking, the verdict is changes-requested, or a required review check fails.
+  - `blocked`: The pull request head moved during review or required review evidence is unavailable.
+  - `needs-decision`: The verdict needs a decision only a person can take.
 
 ## fix
 
@@ -71,9 +75,10 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `findings`: `array of string` — Finding ids. When present only these are fixed.
   - `gates`: `array of string` — Keys of the Custom Gate Registry, run in order before the push. Absent or `[]` = none.
   - `continue-on-gate-failure`: `boolean` — Report failed gates and continue to the normal push. Default: false.
-- **Returns `needs-human` when**
-  - A remaining finding needs a human decision or action.
-  - A finding contradicts an acceptance criterion of the card.
+- **Non-ok returns**
+  - `failed`: A technical finding remains unresolved, a required gate is red or the push fails.
+  - `blocked`: A remaining finding requires a fact, permission or resource that is unavailable.
+  - `needs-decision`: A remaining finding needs a human decision, such as when it contradicts an acceptance criterion of the card.
 
 ## generic
 
@@ -84,8 +89,10 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - The common fields only.
 - **Options** (`with`)
   - A free object, passed to the skill as written.
-- **Returns `needs-human` when**
-  - Whatever the skill named by `skill` documents.
+- **Non-ok returns**
+  - `failed`: The named skill reports unsuccessful work.
+  - `blocked`: The named skill lacks a fact, permission or resource it needs.
+  - `needs-decision`: The named skill needs a human to make a choice.
 
 ## gate
 
@@ -101,7 +108,8 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `gates`: `array of string` — Entries run in the card worktree, in order: a key of the Custom Gate Registry, `target:<name>` (the registry rows of that target) or `command:<shell line>`.
   - `checks`: `array of "ci-green" | "head-unchanged" | "review-approved" | "prerequisites-done"` — Ready-made checks: ci-green, head-unchanged, review-approved, prerequisites-done.
   - `timeout-minutes`: `integer` — How long `ci-green` waits. Default 30.
-- **Returns `needs-human` when**
+- **Non-ok returns**
+  - None.
 
 ## approval
 
@@ -117,8 +125,9 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `approvedPr`: `integer` — The PR that was approved.
 - **Options** (`with`)
   - `question`: `string` — What is asked of the approver.
-- **Returns `needs-human` when**
-  - Always, until an authorized login approves or rejects.
+- **Non-ok returns**
+  - `failed`: An authorized login rejects the request.
+  - `needs-decision`: An authorized login has yet to approve or reject.
 
 ## merge
 
@@ -137,7 +146,8 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `mergeCommit`: `string` — The merge commit sha.
 - **Options** (`with`)
   - `method`: `"squash" | "merge" | "rebase"` — Merge method. Default `squash`.
-- **Returns `needs-human` when**
+- **Non-ok returns**
+  - None.
 
 ## refine-story
 
@@ -150,8 +160,8 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `openQuestions`: `array of string`
 - **Options** (`with`)
   - `mode`: `"interactive" | "autonomous"`
-- **Returns `needs-human` when**
-  - A question requires a product decision.
+- **Non-ok returns**
+  - `needs-decision`: A question requires a product decision.
 
 ## plan-tasks
 
@@ -163,5 +173,5 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `tasks`: `integer`
 - **Options** (`with`)
   - None.
-- **Returns `needs-human` when**
-  - The task breakdown needs a product decision.
+- **Non-ok returns**
+  - `needs-decision`: The task breakdown needs a product decision.

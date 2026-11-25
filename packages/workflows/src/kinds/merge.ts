@@ -34,5 +34,5 @@ export const merge: StepKind = {
       method: { enum: MERGE_METHODS, description: 'Merge method. Default `squash`.' },
     },
   },
-  escalations: [],
+  returns: {},
 }

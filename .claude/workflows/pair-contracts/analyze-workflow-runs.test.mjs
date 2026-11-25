@@ -4,8 +4,8 @@
 // RUNS FROM `.claude/workflows` ONLY (see word-limits.test.mjs): execute via `pnpm workflows:test`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -112,6 +112,95 @@ test('passes: executions per step, re-executions included, with the outcome of e
     { step: 'review', executions: 1, statuses: ['ok'] },
   ])
   assert.equal(run.executions, 3)
+})
+
+test('#728 AC-3 F1: passes migrates a legacy step on first read', t => {
+  const legacy = step('quick-627', 'implement', { schema: 2, status: 'needs-human', reason: 'needs-human' })
+  const dir = runsDir({ 'quick-627': [legacy, MEASURED[1], closing('quick-627', 'parked')] })
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const file = join(dir, 'quick-627', 'telemetry.jsonl')
+  const analyze = () => spawnSync(process.execPath, [CLI, 'passes', '--runs', dir], { encoding: 'utf8' })
+  const first = analyze()
+  assert.equal(first.status, 0, first.stderr)
+  assert.deepEqual(JSON.parse(first.stdout).runs[0].steps[0].statuses, ['needs-decision', 'ok'])
+  const expected = [{ ...legacy, status: 'needs-decision' }, MEASURED[1], closing('quick-627', 'parked')]
+    .map(record => `${JSON.stringify(record)}\n`).join('')
+  assert.equal(readFileSync(file, 'utf8'), expected)
+
+  utimesSync(file, 1, 1)
+  const before = statSync(file).mtimeMs
+  assert.equal(analyze().stdout, first.stdout)
+  assert.equal(readFileSync(file, 'utf8'), expected)
+  assert.equal(statSync(file).mtimeMs, before)
+})
+
+test('#728 AC-3 F4: a failed lock write leaves migration retryable', t => {
+  const dir = runsDir({ 'quick-627': [step('quick-627', 'implement', { status: 'needs-human' })] })
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const file = join(dir, 'quick-627', 'telemetry.jsonl')
+  const lock = join(dir, 'quick-627', 'run.lock')
+  const original = readFileSync(file, 'utf8')
+  const args = [CLI, 'passes', '--runs', dir]
+  const first = spawnSync('/bin/bash', ['-c', 'trap "" XFSZ && ulimit -f 0 && exec "$@"', 'bash', process.execPath, ...args], { encoding: 'utf8' })
+  assert.equal(first.status, 0, first.stderr)
+  assert.match(first.stderr, /EFBIG/)
+  assert.deepEqual(JSON.parse(first.stdout).runs[0].steps[0].statuses, ['needs-decision'])
+  assert.equal(readFileSync(file, 'utf8'), original)
+  assert.equal(existsSync(lock), false)
+
+  const retry = spawnSync(process.execPath, args, { encoding: 'utf8' })
+  assert.equal(retry.status, 0, retry.stderr)
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).status, 'needs-decision')
+})
+
+test('#728 AC-3 F4: analysis preserves a live run holder’s lock', t => {
+  const dir = runsDir({ 'quick-627': [step('quick-627', 'implement', { status: 'needs-human' })] })
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const lock = join(dir, 'quick-627', 'run.lock')
+  const file = join(dir, 'quick-627', 'telemetry.jsonl')
+  const holder = JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() })
+  writeFileSync(lock, holder)
+
+  assert.deepEqual(answer('passes', readRuns(dir)).runs[0].steps[0].statuses, ['needs-decision'])
+  assert.equal(readFileSync(lock, 'utf8'), holder)
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).status, 'needs-human')
+})
+
+for (const [scenario, host, guarded, expected] of [
+  ['dead local holder', hostname(), false, 'needs-decision'],
+  ['remote holder', `${hostname()}-remote`, false, 'needs-human'],
+  ['dead local holder under reclaim', hostname(), true, 'needs-human'],
+]) {
+  test(`#728 AC-3 F6: analysis handles a ${scenario}`, t => {
+    const dir = runsDir({ 'quick-627': [step('quick-627', 'implement', { status: 'needs-human' })] })
+    t.after(() => rmSync(dir, { recursive: true, force: true }))
+    const lock = join(dir, 'quick-627', 'run.lock')
+    const file = join(dir, 'quick-627', 'telemetry.jsonl')
+    const owner = spawnSync(process.execPath, ['-e', "require('node:fs').writeFileSync(process.argv[1], JSON.stringify({pid: process.pid, host: process.argv[2], startedAt: new Date().toISOString()}), {flag: 'wx'})", lock, host], { encoding: 'utf8' })
+    assert.equal(owner.status, 0, owner.stderr)
+    const holder = readFileSync(lock, 'utf8')
+    if (guarded) mkdirSync(`${lock}.reclaim`)
+
+    for (let read = 0; read < 2; read++) {
+      assert.deepEqual(answer('passes', readRuns(dir)).runs[0].steps[0].statuses, ['needs-decision'])
+      assert.equal(JSON.parse(readFileSync(file, 'utf8')).status, expected)
+    }
+    if (expected === 'needs-human') assert.equal(readFileSync(lock, 'utf8'), holder)
+    else assert.equal(existsSync(lock), false)
+    assert.equal(existsSync(`${lock}.reclaim`), guarded)
+  })
+}
+
+test('#728 AC-3 F5: migration preserves group read access under umask 077', t => {
+  const dir = runsDir({ 'quick-627': [step('quick-627', 'implement', { status: 'needs-human' })] })
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const file = join(dir, 'quick-627', 'telemetry.jsonl')
+  chmodSync(file, 0o640)
+
+  const result = spawnSync('/bin/sh', ['-c', 'umask 077 && exec "$@"', 'sh', process.execPath, CLI, 'passes', '--runs', dir], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).status, 'needs-decision')
+  assert.equal(statSync(file).mode & 0o777, 0o640)
 })
 
 test('compare: the runs of a card side by side; measured against estimated is refused, never compared silently', () => {
