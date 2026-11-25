@@ -932,6 +932,76 @@ it.each([
   },
 )
 
+it.each(
+  ['workflow', 'configuration'].flatMap(source =>
+    [
+      { filter: 'has: [release]', status: 'Draft', labels: '' },
+      { filter: 'lacks: [paused]', status: 'Draft', labels: 'release, paused' },
+      { filter: 'status: [Draft]', status: 'Ready', labels: 'release' },
+    ].map(change => ({ source, ...change })),
+  ),
+)('R754-02 / AC-4: rejects resume outside the saved $source filter $filter', row => {
+  const selection = `select: { filter: { ${row.filter} } }\n`
+  const startArgs = ['start', 'quick', '--card', card, '--engine', 'codex', '--config', 'mine']
+  write(cardFile, `# ${title}\n\n**Status**: Draft\n**Labels**: release\n`)
+  write(workflowFile, workflow + (row.source === 'workflow' ? selection : ''))
+  write(configFile, configuration + (row.source === 'configuration' ? selection : ''))
+  const lease = openSession(startArgs)
+  successful(['stop', runId, ...lease])
+  git('worktree', 'remove', worktree)
+
+  write(workflowFile, workflow)
+  write(configFile, configuration)
+  write(cardFile, `# ${title}\n\n**Status**: ${row.status}\n**Labels**: ${row.labels}\n`)
+  const saved = readRun('state.json')
+  for (const args of [['resume', runId, '--engine', 'codex'], startArgs]) {
+    const result = invoke(args)
+    expect(result.stderr).toContain('selection filter')
+    expect(result.status).toBe(1)
+    expect(readRun('state.json')).toBe(saved)
+    expect(existsSync(worktree)).toBe(false)
+    expect(existsSync(join(runDir, 'run.lock'))).toBe(false)
+  }
+})
+
+it('R754-02 / AC-4: resumes pending refinement after the card meets the DoR on a Draft board', async () => {
+  write(
+    adoptionFile,
+    `${filesystemPm}\n## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Todo | Draft |\n| Done | Done |\n`,
+  )
+  const draft = `# ${title}\n\n**Status**: Todo\n`
+  write(cardFile, draft)
+  write('.claude/skills/pair-process-refine-story/SKILL.md', 'Refine a story.')
+  const source =
+    namedWorkflow('  refine: { kind: refine-story }\n') +
+    'select: { filter: { status: [Draft] } }\n'
+  write(workflowFile, source)
+  const run = { dir: runDir, files }
+  await start(run, { file: join(main, workflowFile), text: source }, { card })
+  expect(await next(run)).toMatchObject({ ready: [{ id: 'refine' }] })
+
+  write(
+    cardFile,
+    `${draft}
+## Story Statement
+
+As a maintainer
+I want release notes
+So that I can announce the release
+
+## Task Breakdown
+
+- [ ] Draft the notes
+
+## Technical Analysis
+
+Design: not required
+`,
+  )
+  const lease = openSession(['resume', runId, '--engine', 'codex'])
+  expect(advance(lease)).toMatchObject({ ready: [{ id: 'refine', attempt: 2 }] })
+})
+
 it('R754-03: refuses a closed card with unfinished agent work', async () => {
   await seedHeadlessRun()
   write(`${backlog}/completed/${card}.md`, `# ${title}\n\n**Status**: Done\n`)
