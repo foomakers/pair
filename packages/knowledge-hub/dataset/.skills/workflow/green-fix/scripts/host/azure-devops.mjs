@@ -117,16 +117,17 @@ export default defineAdapter({
     const showCard = (id, expand) => azJson(['boards', 'work-item', 'show', '--id', cardId(id), ...(expand ? ['--expand', expand] : [])], 'boards work-item show')
     const orgOf = wi => /^https:\/\/dev\.azure\.com\/([^/]+)\//.exec(String(wi?.url ?? ''))?.[1]
     const cardUrl = wi => `https://dev.azure.com/${orgOf(wi)}/${wi?.fields?.['System.TeamProject']}/_workitems/edit/${wi?.id}`
+    const tagsOf = wi => String(wi?.fields?.['System.Tags'] ?? '').split(';').map(tag => tag.trim()).filter(Boolean)
     // The description, with the scope-decision marker restored from its tag when the save dropped it.
     const bodyOf = wi => {
       const body = String(wi?.fields?.['System.Description'] ?? '')
       if (MARKER_RE.test(body)) return body
-      const hex = String(wi?.fields?.['System.Tags'] ?? '').split(';').map(t => TAG_RE.exec(t.trim())?.[1]).find(Boolean)
+      const hex = tagsOf(wi).map(tag => TAG_RE.exec(tag)?.[1]).find(Boolean)
       return hex ? `<!-- pair:scope-decision:${hex.toLowerCase()} -->${body}` : body
     }
     const asCard = wi => {
       const state = wi?.fields?.['System.State'] ?? null
-      return { number: wi?.id, url: cardUrl(wi), title: wi?.fields?.['System.Title'], body: bodyOf(wi), state: state === doneState || state === 'Removed' ? 'CLOSED' : 'OPEN', stateReason: state === 'Removed' ? 'NOT_PLANNED' : state === doneState ? 'COMPLETED' : null, projectItems: state && inArea(wi) ? [{ status: { name: state } }] : [] }
+      return { number: wi?.id, url: cardUrl(wi), title: wi?.fields?.['System.Title'], body: bodyOf(wi), labels: tagsOf(wi).map(name => ({ name })), state: state === doneState || state === 'Removed' ? 'CLOSED' : 'OPEN', stateReason: state === 'Removed' ? 'NOT_PLANNED' : state === doneState ? 'COMPLETED' : null, projectItems: state && inArea(wi) ? [{ status: { name: state } }] : [] }
     }
     const relatedIds = (wi, rel) => (wi?.relations ?? []).filter(r => r.rel === rel).map(r => Number(/\/workItems\/(\d+)$/i.exec(String(r.url))?.[1])).filter(Number.isInteger)
 
@@ -276,10 +277,9 @@ export default defineAdapter({
       // Reported, never thrown, like the board write.
       labelCard({ id, label }) {
         try {
-          const tags = String(showCard(id)?.fields?.['System.Tags'] ?? '').split(';').map(t => t.trim()).filter(Boolean)
+          const tags = tagsOf(showCard(id))
           if (!tags.includes(label)) azJson(['boards', 'work-item', 'update', '--id', cardId(id), '--fields', `System.Tags=${[...tags, label].join('; ')}`], 'boards work-item update')
-          const now = String(showCard(id)?.fields?.['System.Tags'] ?? '').split(';').map(t => t.trim())
-          const has = now.includes(label)
+          const has = tagsOf(showCard(id)).includes(label)
           return { applied: label, confirmed: has, error: has ? null : `read-back: tag ${JSON.stringify(label)} is not on work item ${cardId(id)}` }
         } catch (e) {
           return { applied: label, confirmed: false, error: e.message }
@@ -288,10 +288,9 @@ export default defineAdapter({
       // US-523: remove one tag from `System.Tags` (an attended completion clears `needs-review`), READ BACK. Reported, never thrown.
       unlabelCard({ id, label }) {
         try {
-          const tags = String(showCard(id)?.fields?.['System.Tags'] ?? '').split(';').map(t => t.trim()).filter(Boolean)
+          const tags = tagsOf(showCard(id))
           if (tags.includes(label)) azJson(['boards', 'work-item', 'update', '--id', cardId(id), '--fields', `System.Tags=${tags.filter(t => t !== label).join('; ')}`], 'boards work-item update')
-          const now = String(showCard(id)?.fields?.['System.Tags'] ?? '').split(';').map(t => t.trim())
-          const has = now.includes(label)
+          const has = tagsOf(showCard(id)).includes(label)
           return { removed: label, confirmed: !has, error: has ? `read-back: tag ${JSON.stringify(label)} is still on work item ${cardId(id)}` : null }
         } catch (e) {
           return { removed: label, confirmed: false, error: e.message }
