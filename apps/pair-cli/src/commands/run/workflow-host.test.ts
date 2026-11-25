@@ -845,6 +845,74 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
 })
 
 it.each([false, true])(
+  'R744-08: bare-card retry resumes refinement (another match: %s)',
+  async other => {
+    const draft = 'Draft'
+    const ready = 'Ready'
+    let boardState = draft
+    const body = '## Task Breakdown\n\n- [ ] **T-1**: Add a test'
+    write(
+      'pair.config.json',
+      JSON.stringify({ workflows: { ...(other && { quick: {} }), refinement: {} } }),
+    )
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('name: quick', 'name: quick\nselect: { filter: { status: [Ready] } }'),
+    )
+    write(
+      '.pair/adoption/tech/workflows/refinement.yaml',
+      `version: 1
+name: refinement
+select: { filter: { status: [Draft] } }
+steps:
+  tasks:
+    kind: plan-tasks
+`,
+    )
+    write('.claude/skills/pair-process-plan-tasks/SKILL.md', '# Plan tasks\n')
+    const workflow = deps(
+      {
+        ...OK,
+        'pair-process-plan-tasks': () =>
+          fenced({ status: 'ok', summary: 'Planned', boardStatus: boardState, tasks: 1 }),
+      },
+      {
+        async readSelection() {
+          return {
+            cards: [
+              {
+                id: '12',
+                title: 'Story 12',
+                body,
+                labels: [],
+                status: boardState,
+                boardState,
+                closed: false,
+                prerequisites: [],
+              },
+            ],
+          }
+        },
+        readResultFacts: async () => ({ card: { boardStatus: boardState, labels: [], body } }),
+        board: {
+          getState: async () => boardState,
+          async setState(_id, value) {
+            boardState = value
+            throw new Error('Ready read-back failed')
+          },
+        },
+      },
+    )
+    const command = parseRunCommand({ cwd: project, card: '12' }, [])
+    expect(await handleRunCommand(command, fs, workflow)).toBe(1)
+    expect(boardState).toBe(ready)
+    expect(await handleRunCommand(command, fs, workflow)).toBe(0)
+    expect(states('refinement-12')).toEqual({ tasks: 'ok' })
+    expect(launched.map(one => skillOf(one.promptText))).toEqual(['pair-process-plan-tasks'])
+  },
+)
+
+it.each([false, true])(
   'R744-05: only selected cards read dependencies (selected read fails: %s)',
   async failSelected => {
     write(
