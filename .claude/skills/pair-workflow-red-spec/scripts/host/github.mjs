@@ -353,18 +353,37 @@ export default defineAdapter({
           // Claim additively so a concurrent owner can be seen on the read-back.
           if (implicit) write('POST', `${issue}/assignees`, { assignees })
           else write('PATCH', issue, { assignees })
-          const after = readOwners()
+          let after = readOwners()
           if (implicit && after.some(owner => !isTarget(owner))) {
             const owners = after.filter(owner => !isTarget(owner))
+            if (!after.some(isTarget)) return { status: 'held', owners }
             try {
-              if (after.some(isTarget)) {
-                write('DELETE', `${issue}/assignees`, { assignees })
-                if (readOwners().some(isTarget)) throw new Error(`Could not confirm release of ${login}`)
+              // GitHub's assignee list is not claim order. The earliest current assignment wins,
+              // including when another claimant posts after the first one has confirmed ownership.
+              const latest = new Map()
+              const events = listPages(`${issue}/events`).filter(event => event?.event === 'assigned')
+              for (const event of events.sort((a, b) => a.id - b.id))
+                latest.set(event.assignee?.login?.toLowerCase(), event)
+              const claims = after.map(owner => latest.get(owner.toLowerCase()))
+              if (claims.some(event => !Number.isSafeInteger(event?.id)))
+                throw new Error(`Could not determine assignment order on #${number}`)
+              const [first] = claims.sort((a, b) => a.id - b.id)
+              // A later deliberate assignment by someone else takes precedence over auto-claims.
+              const manual = claims.find(event => !isTarget(event.assignee.login)
+                && event.assigner?.login?.toLowerCase() !== event.assignee.login.toLowerCase())
+              const won = manual === undefined && isTarget(first.assignee.login)
+              const release = won ? owners : assignees
+              write('DELETE', `${issue}/assignees`, { assignees: release })
+              after = readOwners()
+              if (!won) {
+                if (after.some(isTarget)) throw new Error(`Could not confirm release of ${login}`)
+                return { status: 'held', owners: after }
               }
+              if (after.length !== 1 || !after.some(isTarget))
+                throw new Error(`Could not confirm sole ownership on #${number}`)
             } catch (error) {
               return { status: 'held', owners, reason: error.message }
             }
-            return { status: 'held', owners }
           }
           if (clear ? after.length !== 0 : after.length !== 1 || !isTarget(after[0]))
             throw new Error(`Could not confirm assignment on #${number}. Current owners are ${after.join(', ') || 'none'}.`)

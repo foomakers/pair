@@ -220,10 +220,11 @@ if (a[0] === 'api') {
     if (!S.assignable?.includes(decodeURIComponent(assignable[1]))) fail('gh: Not Found (HTTP 404)')
     process.exit(0)
   }
-  const issueRoute = /^repos\\/[^/]+\\/[^/]+\\/issues\\/(\\d+)(?:\\/(assignees|comments))?$/.exec(endpoint)
+  const issueRoute = /^repos\\/[^/]+\\/[^/]+\\/issues\\/(\\d+)(?:\\/(assignees|comments|events))?$/.exec(endpoint.split('?')[0])
   if (issueRoute && S.issues[issueRoute[1]]?.assignees) {
     const issue = S.issues[issueRoute[1]]
     const resource = issueRoute[2]
+    if (resource === 'events') out(issue.events || [])
     if (resource === 'comments') {
       if (method !== 'POST') out(issue.assignmentComments || [])
       const body = JSON.parse(fs.readFileSync(0, 'utf8')).body
@@ -241,7 +242,11 @@ if (a[0] === 'api') {
     issue.assignmentWritten = true
     if (!issue.ignoreWrite) {
       if (method === 'PATCH') issue.assignees = assignees
-      if (method === 'POST') issue.assignees = [...new Set([...issue.assignees, ...assignees, ...(issue.raceWith || [])])]
+      if (method === 'POST') {
+        const added = [...(issue.raceWith || []), ...assignees].filter(login => !issue.assignees.includes(login))
+        issue.events = added.map((login, index) => ({ id: index + 1, event: 'assigned', assignee: { login }, assigner: { login } }))
+        issue.assignees = [...issue.assignees, ...added]
+      }
       if (method === 'DELETE') issue.assignees = issue.assignees.filter(login => !assignees.includes(login))
     }
     save()
