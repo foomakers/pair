@@ -153,7 +153,7 @@ beforeEach(() => {
   })
 })
 
-const facts = (cwd: string, checks: string[] = []) =>
+const facts = (cwd: string, checks: readonly string[] = []) =>
   workflowFacts(() => scripts, cwd, {
     id: 'gate',
     kind: 'gate',
@@ -214,6 +214,25 @@ it('refuses facts from a replacement head after the head check (#726 AC-2)', asy
   github.head = 'b'.repeat(40)
   await expect(gate.ci()).rejects.toThrow(/head moved/i)
   await expect(gate.reviewApproved()).rejects.toThrow(/head moved/i)
+})
+
+it.each(
+  (['ci-green', 'review-approved'] as const).flatMap(check =>
+    (
+      [
+        ['head-unchanged', check],
+        [check, 'head-unchanged'],
+      ] as const
+    ).flatMap(checks =>
+      [
+        { head: 'b'.repeat(40), status: 'failed', reason: 'head-changed' },
+        { head: 'unreadable', status: 'blocked', reason: 'fact-unreadable' },
+      ].map(result => ({ checks, ...result })),
+    ),
+  ),
+)('classifies $checks as $reason on $head (R747-07)', async ({ checks, head, status, reason }) => {
+  github.head = head
+  await expect(runChecks(checks, facts(dir, checks))).resolves.toMatchObject({ status, reason })
 })
 
 it('keeps an open prerequisite blocked until the tracker confirms completion (#726 T-4)', async () => {
