@@ -707,12 +707,14 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
 
 describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
   it.each([
-    ['successful transitions', undefined, false],
-    ['a refused Ready write (R744-01)', 'refused', false],
-    ['an applied Ready write with no confirmation (R744-01)', 'unconfirmed', false],
-    ['an unconfirmed Ready write saved by an older version (R744-01)', 'legacy', false],
-    ['canonical board states (R744-01)', undefined, true],
-  ] as const)('completes and skips cards with %s', async (_name, failure, canonical) => {
+    ['successful transitions', undefined, false, undefined],
+    ['a refused Ready write (R744-01)', 'refused', false, undefined],
+    ['an applied Ready write with no confirmation (R744-01)', 'unconfirmed', false, undefined],
+    ['an unconfirmed Ready write saved by an older version (R744-01)', 'legacy', false, undefined],
+    ['canonical board states (R744-01)', undefined, true, undefined],
+    ['a stale task checklist (R744-07)', 'refused', false, 'Task Breakdown'],
+    ['stale refinement after Ready lands (R744-07)', 'unconfirmed', false, 'Assumptions'],
+  ] as const)('completes and skips cards with %s', async (_name, failure, canonical, stale) => {
     const source = '.pair/adoption/tech/workflows/refinement.yaml'
     write(
       source,
@@ -726,8 +728,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     for (const skill of ['pair-process-refine-story', 'pair-process-plan-tasks'])
       write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
     const ids = ['9', '10', '12']
-    const draft = canonical ? 'Draft' : 'Todo'
-    const ready = canonical ? 'Ready' : 'Refined'
+    const [draft, ready]: [string, string] = canonical ? ['Draft', 'Ready'] : ['Todo', 'Refined']
     const status = new Map(ids.map(id => [id, draft]))
     const bodies = new Map<string, string>()
     const prerequisiteAtLaunch: string[] = []
@@ -799,7 +800,8 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     ])
     expect(await handleRunCommand(command, fs, { workflow })).toBe(failReady ? 1 : 0)
     if (failReady) {
-      expect(status.get('9')).toBe(applied ? ready : draft)
+      const afterFailure = applied ? ready : draft
+      expect(status.get('9')).toBe(afterFailure)
       expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'failed' })
       expect(lines.some(line => line.includes('#12: waiting'))).toBe(true)
       expect(lines.some(line => line.includes('Ready write unconfirmed'))).toBe(true)
@@ -812,6 +814,15 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
         fs.writeFileSync(path, JSON.stringify(snapshot))
       }
       failReady = false
+      if (stale !== undefined) {
+        const original = bodies.get('9')!
+        bodies.set('9', original.replace(`## ${stale}`, '## Removed'))
+        expect(await handleRunCommand(command, fs, { workflow })).toBe(1)
+        expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'failed' })
+        expect(status.get('9')).toBe(afterFailure)
+        expect(lines.some(line => line.includes(`${stale}: declared`))).toBe(true)
+        bodies.set('9', original)
+      }
       expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
       expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'ok' })
       expect(launched).toHaveLength(6)
