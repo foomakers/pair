@@ -76,6 +76,8 @@ export function resolveIdleTimeout(input: {
 }
 
 export interface SpawnIterationInput extends EngineArgsInput {
+  /** Capture process facts for workflow attempt history. */
+  readonly diagnoseProcess?: boolean
   /** Opt-in total wall-clock cap per iteration (`--iteration-timeout`); absent ⇒ none (US-573). */
   readonly timeoutSeconds?: number | undefined
   /** The hang guard: seconds without an engine event before the engine is stopped (default 30 min). */
@@ -88,6 +90,8 @@ export interface SpawnIterationInput extends EngineArgsInput {
   readonly maxFixRounds?: number | undefined
 }
 
+type ProcessStop = { kind: 'idle' | 'timeout'; detail: string }
+
 /**
  * The two bounds on one iteration (US-573 AC5): the idle timer, re-armed by every decoded event, and
  * the opt-in total cap. Whichever fires first stops the engine; the first reason is kept, naming the
@@ -97,24 +101,25 @@ function createWatchdog(
   input: Pick<SpawnIterationInput, 'idleTimeoutSeconds' | 'timeoutSeconds'>,
   kill: (signal: 'SIGTERM' | 'SIGKILL') => void,
 ) {
-  let stopped: string | undefined
+  let stopped: ProcessStop | undefined
   let where = ''
   // US-600: after the soft stop a bounded grace elapses, then the read is abandoned (`grace`).
   let graceOver!: () => void
   const grace = new Promise<undefined>(done => (graceOver = () => done(undefined)))
-  const stop = (detail: () => string) => () => {
+  const stop = (kind: ProcessStop['kind'], detail: () => string) => () => {
     if (stopped === undefined) setTimeout(graceOver, ENGINE_GRACE_MS).unref()
-    stopped ??= detail()
+    stopped ??= { kind, detail: detail() }
     kill('SIGTERM')
   }
   const idleSeconds = input.idleTimeoutSeconds ?? DEFAULT_IDLE_TIMEOUT_SECONDS
-  const onIdle = stop(() => `timed out (idle)${where}: no engine event for ${idleSeconds}s`)
+  const onIdle = stop('idle', () => `timed out (idle)${where}: no engine event for ${idleSeconds}s`)
   let idle = setTimeout(onIdle, idleSeconds * 1000)
   const cap =
     input.timeoutSeconds === undefined
       ? undefined
       : setTimeout(
           stop(
+            'timeout',
             () =>
               `stalled: no terminal event within ${input.timeoutSeconds}s — the engine was stopped`,
           ),
@@ -245,13 +250,14 @@ function transportFailure(childError: Error | undefined, pipeError: Error | unde
   return pipeError ?? childError
 }
 
-function watchTransport(child: EngineChild, engine: EngineDefinition) {
+function watchTransport(child: EngineChild, input: SpawnIterationInput) {
   let pipeError: Error | undefined
   let childError: Error | undefined
   let settled = false
   let fail!: () => void
   const failed = new Promise<undefined>(done => (fail = () => done(undefined)))
-  const capture = (error: Error) => {
+  const capture = (failure: unknown) => {
+    const error = failure instanceof Error ? failure : new Error(String(failure))
     const code = (error as NodeJS.ErrnoException).code
     if (code === 'ABORT_ERR') return
     if (settled) {
@@ -272,11 +278,15 @@ function watchTransport(child: EngineChild, engine: EngineDefinition) {
   // Ending the terminal-event reader cancels its iterator; Node reports ABORT_ERR on the pipe.
   child.stdout.on('error', capture)
   child.stderr.on('error', capture)
-  const stderr = relayLines(child.stderr, engine.id).catch(error => {
-    capture(error instanceof Error ? error : new Error(String(error)))
-  })
+  const stderrTail: string[] = []
+  const stderr = relayLines(
+    child.stderr,
+    input.engine.id,
+    input.diagnoseProcess ? stderrTail : undefined,
+  ).catch(capture)
   return {
     stderr,
+    stderrTail,
     failed,
     capture,
     hasError: () => (pipeError ?? childError) !== undefined,
@@ -285,8 +295,8 @@ function watchTransport(child: EngineChild, engine: EngineDefinition) {
       const failure = transportFailure(childError, pipeError)
       if (!failure) return undefined
       const code = (failure as NodeJS.ErrnoException).code
-      if (code !== 'EPIPE' && code !== 'ENOENT') throw failure
-      return { outcome: 'failed', detail: `${engine.command}: ${failure.message}` }
+      if (!input.diagnoseProcess && code !== 'EPIPE' && code !== 'ENOENT') throw failure
+      return { outcome: 'failed', detail: `${input.engine.command}: ${failure.message}` }
     },
   }
 }
@@ -326,6 +336,33 @@ function handleReadError(error: unknown, transport: ReturnType<typeof watchTrans
   if (code === 'EPIPE') transport.capture(error)
 }
 
+function diagnosedIteration(
+  child: ChildProcess,
+  result: IterationResult | undefined,
+  {
+    failure,
+    stopped,
+    started,
+    stderrTail,
+  }: {
+    failure: IterationResult | undefined
+    stopped: ProcessStop | undefined
+    started: number
+    stderrTail: readonly string[]
+  },
+): IterationResult {
+  return {
+    ...(stopped === undefined && failure ? failure : stalledOrResult(result, stopped?.detail)),
+    process: {
+      exitCode: child.exitCode,
+      signal: child.signalCode,
+      elapsedMs: Math.round(performance.now() - started),
+      stderrTail,
+      ...(stopped !== undefined && { stoppedBy: stopped.kind }),
+    },
+  }
+}
+
 /**
  * Runs one iteration and returns what its STREAM said.
  *
@@ -335,6 +372,7 @@ function handleReadError(error: unknown, transport: ReturnType<typeof watchTrans
  * silent for any other reason, and the iteration then fails as `timed-out`.
  */
 export async function spawnIteration(input: SpawnIterationInput): Promise<IterationResult> {
+  const started = performance.now()
   // r1-2: once the driver was signalled, the engine it is stopping must not be replaced by the next.
   if (isInterrupted())
     throw new Error('interrupted: the driver received a signal, no engine is started')
@@ -349,7 +387,7 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
     // US-573 AC7: an engine's own env (claude: no background-wait ceiling) over the driver's.
     ...engineEnv(input.engine, isolation),
   })
-  const transport = watchTransport(child, input.engine)
+  const transport = watchTransport(child, input)
   // Tracked so a SIGTERM/SIGINT on the driver stops it instead of orphaning it (r1-2).
   trackEngine(child)
 
@@ -366,9 +404,16 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
     // ponytail: 1s drain bound — a grandchild holding stderr open must not hold the iteration.
     await Promise.race([transport.stderr, new Promise(done => setTimeout(done, 1000).unref())])
   }
+  const stopped = watchdog.stopped()
   const failure = transport.finish()
-  if (failure) return failure
-  return stalledOrResult(result, watchdog.stopped())
+  return input.diagnoseProcess
+    ? diagnosedIteration(child, result, {
+        failure,
+        stopped,
+        started,
+        stderrTail: transport.stderrTail,
+      })
+    : (failure ?? stalledOrResult(result, stopped?.detail))
 }
 
 /** codex prints this on a non-TTY stdin even though stdin is closed (US-603): cosmetic noise. */
@@ -377,8 +422,13 @@ const CODEX_STDIN_NOISE = 'Reading additional input from stdin...'
 export async function relayLines(
   stream: AsyncIterable<string | Uint8Array>,
   engineId?: string,
+  stderrTail?: string[],
 ): Promise<void> {
   for await (const line of toLines(stream)) {
+    if (stderrTail !== undefined) {
+      if (stderrTail.length === 20) stderrTail.shift()
+      stderrTail.push(line)
+    }
     if (!line.trim() || (engineId === 'codex' && line.trim() === CODEX_STDIN_NOISE)) continue
     console.log(line)
   }

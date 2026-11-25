@@ -428,6 +428,7 @@ steps:
     ['retries', 1.5],
     ['timeout-minutes', 0],
     ['timeout-minutes', 1.5],
+    ['timeout-minutes', 35_792],
   ])('rejects %s: %s', (key, value) => {
     expect(errors('implement', `${key}: ${value}`)).toContainEqual(
       expect.objectContaining({ key: `steps.work.${key}` }),

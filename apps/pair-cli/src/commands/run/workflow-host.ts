@@ -107,7 +107,7 @@ import { assignWorkflowCard, workflowFacts, workflowOperation } from './workflow
 import { sectionBodies } from './policy-sections'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
-import { finalTextOf, type IterationResult } from './stream-reader'
+import { finalTextOf, noTerminalEvent, type IterationResult } from './stream-reader'
 import { observeEngineEvent, type EngineObservation } from './telemetry'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
 import { mainCheckoutOrCwd, readRunnableCard, resolveBranch, runSetupCommand } from './cycle-wiring'
@@ -444,6 +444,25 @@ function policiesOf({ config, resolved, services }: Launch) {
   }
 }
 
+function agentOutcome(
+  result: IterationResult,
+  final: string | undefined,
+  elapsedMs: number,
+): AgentLaunchResult {
+  const { stoppedBy, ...process } = result.process ?? {
+    exitCode: null,
+    signal: null,
+    elapsedMs,
+    stderrTail: [],
+  }
+  if (stoppedBy === undefined && result.outcome === 'success' && final !== undefined)
+    return { final, process }
+  const cleanExitWithoutResult = process.exitCode === 0 && noTerminalEvent(result)
+  const kind =
+    stoppedBy ?? (result.outcome === 'success' || cleanExitWithoutResult ? 'no-result' : 'crash')
+  return { fault: { kind, detail: result.detail, ...process } }
+}
+
 /** One agent per step, in the card's worktree, on the engine, model and effort its settings say. */
 function launcher(run: Launch) {
   const { config, resolved, services } = run
@@ -459,6 +478,7 @@ function launcher(run: Launch) {
     const { autonomyArgs, idle } = policyOf(engine)
     let text: string | undefined
     let observed: EngineObservation = {}
+    const started = performance.now()
     const result = await runIteration({
       engine,
       promptText: message,
@@ -466,7 +486,11 @@ function launcher(run: Launch) {
       autonomyArgs,
       model: settings.model,
       effort: settings.effort,
-      timeoutSeconds: config.iterationTimeoutSeconds,
+      timeoutSeconds:
+        step.timeoutMinutes === undefined
+          ? config.iterationTimeoutSeconds
+          : step.timeoutMinutes * 60,
+      diagnoseProcess: true,
       idleTimeoutSeconds: idle,
       onEvent: payload => {
         text = finalTextOf(engine, payload) ?? text
@@ -479,17 +503,7 @@ function launcher(run: Launch) {
     })
     // An interrupted run records nothing: the step stays `running` on disk and runs again at the next launch.
     if (isInterrupted()) throw new Error('interrupted')
-    if (result.outcome === 'success' && text !== undefined) return { final: text }
-    return {
-      fault: {
-        kind: result.outcome === 'success' ? 'no-result' : 'crash',
-        detail: result.detail,
-        exitCode: null,
-        signal: null,
-        elapsedMs: 0,
-        stderrTail: [],
-      },
-    }
+    return agentOutcome(result, text, Math.round(performance.now() - started))
   }
 }
 

@@ -185,11 +185,14 @@ export const stepSchema: JsonSchema = {
     'timeout-minutes': {
       type: 'integer',
       minimum: 1,
+      // The host's timer uses a signed 32-bit millisecond delay.
+      maximum: Math.floor((2 ** 31 - 1) / 60_000),
       description: 'Agent process timeout in minutes. Absent = the run timeout.',
     },
     retries: {
       type: 'integer',
       minimum: 0,
+      maximum: Number.MAX_SAFE_INTEGER,
       description: 'Additional attempts after an agent process fault. Absent = 0.',
     },
     'on-failed': {

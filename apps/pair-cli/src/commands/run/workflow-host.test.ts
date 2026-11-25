@@ -705,6 +705,32 @@ describe('validation before any launch (AC-2, AC-3)', () => {
   })
 })
 
+it.each([
+  ['    timeout-minutes: 2\n', 120],
+  ['', 7],
+])(
+  '#704 AC-1: uses the step timeout or falls back to the run cap (%s)',
+  async (timeout, seconds) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('    kind: implement\n', `    kind: implement\n${timeout}`),
+    )
+    const limits: (number | undefined)[] = []
+    const recordLimit = (input: SpawnIterationInput) => {
+      limits.push(input.timeoutSeconds)
+      return IMPLEMENTED
+    }
+    expect(
+      await run(
+        ['quick'],
+        { ...OK, 'pair-process-implement': recordLimit },
+        { iterationTimeout: '7' },
+      ),
+    ).toBe(0)
+    expect(limits).toEqual([seconds])
+  },
+)
+
 describe('skill and options of a step (AC-4, AC-5)', () => {
   it('runs the skill named by `skill` with the options of `with`, then asks for the result of the kind', async () => {
     write(

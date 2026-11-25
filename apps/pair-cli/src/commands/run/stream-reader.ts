@@ -1,3 +1,4 @@
+import type { ProcessDiagnostics } from '@pair/workflows'
 import type { EngineDefinition, TerminalEventRule } from './engines'
 import { eventBodyRuns, parseRunEvent, progressRunEvents, type RunEvent } from './run-events'
 
@@ -27,6 +28,7 @@ export interface IterationResult {
   readonly outcome: IterationOutcome
   /** Why, in one line — the terminal event's own detail, or the fail-closed reason. */
   readonly detail: string
+  readonly process?: ProcessDiagnostics & { readonly stoppedBy?: 'idle' | 'timeout' }
   /**
    * The continue-token the skill printed, if any (ADR-017 §4 / `pair-loop`'s output format).
    *
@@ -145,6 +147,9 @@ const NO_TERMINAL_EVENT: IterationResult = {
   outcome: 'failed',
   detail: 'no terminal event in the engine stream (fail-closed: the exit code is never consulted)',
 }
+
+export const noTerminalEvent = (result: IterationResult): boolean =>
+  result.detail === NO_TERMINAL_EVENT.detail
 
 /**
  * `pair-loop`'s own one-card-path marker, borrowed verbatim — the driver invents no protocol.

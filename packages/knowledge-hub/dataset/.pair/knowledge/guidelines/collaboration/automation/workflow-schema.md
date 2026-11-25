@@ -206,11 +206,13 @@ These schemas come from the workflow validator.
             "timeout-minutes": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 35791,
               "description": "Agent process timeout in minutes. Absent = the run timeout."
             },
             "retries": {
               "type": "integer",
               "minimum": 0,
+              "maximum": 9007199254740991,
               "description": "Additional attempts after an agent process fault. Absent = 0."
             },
             "on-failed": {
