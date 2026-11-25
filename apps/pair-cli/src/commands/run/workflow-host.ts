@@ -537,6 +537,7 @@ interface Opened {
 
 const NON_RISK_PROJECTIONS = new Set([
   'cost',
+  'light',
   'security-relevance',
   'business-impact',
   'coupling-balance',
