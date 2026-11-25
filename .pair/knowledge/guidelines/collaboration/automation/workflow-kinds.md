@@ -107,6 +107,8 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Default skill**: none: the host runs it, no agent
 - **Inputs**
   - `card`: `string` — The card.
+  - `reviewedHead`: `string` — The head verified by a preceding review.
+  - `gatedHead`: `string` — The head verified by a preceding gate.
   - `pr`: `integer` — The pull request, whose native reviews count.
 - **Outputs**, required when `status` is `ok`
   - `approvedBy`: `string` — The login that approved.
