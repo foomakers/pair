@@ -96,7 +96,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 Skills never write board-specific labels — `$status` is always a canonical macrostate (`Draft`, `Ready`, `In Progress`, `Review`, `Done`). Resolve it to a board state before touching the board field.
 
 1. **Check**: Is `$status` provided?
-2. **Skip**: If `$status` is absent, proceed to Step 7 — no board field update is requested.
+2. **Skip**: If `$status` is absent, proceed to Step 6b — no board field update is requested; assignee resolution still runs.
 3. **Act**: Resolve `$status` per [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md):
    - Read the `## State Mapping` section in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md), if present.
    - **Mapped**: find all board states mapped to the `$status` macrostate, in the order listed; target the **first listed** one.
@@ -326,11 +326,11 @@ When invoked **independently**:
 - **Template not found** (Step 3) — missing knowledge base file.
 - **Target macrostate has no mapped board state** (Step 6) — reports the gap instead of guessing.
 - **Malformed `state-mapping` section** (Step 6) — points to canonical-states.md.
-- **Board membership could not be confirmed** by the re-read after adding it (Step 7b) — the item is off the board, and a skipped board write is never reported as success. Fires whenever a tracked view is named, `$status` or not (membership does not depend on a requested state). **Not** the minimal-board case (Step 6), which is a documented skip of the **state field** only. **Not a HALT under `$on-failure: report`** — returned as `membership-unconfirmed` (Step 8b).
+- **Board membership could not be confirmed** by the re-read after adding it (Step 7b) — the item is off the board, and a skipped board write is never reported as success. Fires whenever a tracked view is named, `$status` or not (membership does not depend on a requested state). **Not** the minimal-board case (Step 6), which is a documented skip of the **state field** only. **Not a HALT under `$on-failure: report` on update** — returned as `membership-unconfirmed` (Step 8b).
 - **`$id` provided but issue not found** (Step 7) — issue does not exist. **Not a HALT in `comment` mode** — warn with the manual-link instruction (Step 7c.2). **Not a HALT under `$on-failure: report`** — returned as `not-found` (Step 8b).
-- **PM tool error** (Step 8) — no fallback, descriptive error reported. **Not a HALT in `comment` mode** — warn (Step 7c.2). **Not a HALT under `$on-failure: report`** — returned as `write-failed` (Step 8b).
+- **PM tool error** (Step 8) — no fallback, descriptive error reported. **Not a HALT in `comment` mode** — warn (Step 7c.2). **Not a HALT under `$on-failure: report` on update** — returned as `write-failed` (Step 8b).
 
-The three rows above are the **tracker-side** failures, and they are the only ones `$on-failure: report` exempts: they are intermittent (a 5xx, a secondary rate limit, an add that exited 0 having done nothing), so a caller that can carry on has something to carry on with. Every other row is a caller or configuration bug — deterministic, identical on re-invocation — and stays a HALT for every caller.
+The three rows above are the **tracker-side** failures, and they are the only update failures `$on-failure: report` exempts: they are intermittent (a 5xx, a secondary rate limit, an add that exited 0 having done nothing), so a caller that can carry on has something to carry on with. Every other row is a caller or configuration bug — deterministic, identical on re-invocation — and stays a HALT for every caller.
 
 ## Extensibility
 
