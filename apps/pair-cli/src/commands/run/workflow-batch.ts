@@ -1,11 +1,12 @@
 import { createHash } from 'crypto'
-import { join, resolve } from 'path'
+import { dirname, join, resolve } from 'path'
 import {
   chooseWorkflow,
   completedRun,
   dependencyGraph,
   effectiveSelection,
   orderCards,
+  type CardSelection,
   type Filter,
   type WorkflowsConfig,
 } from '@pair/workflows'
@@ -103,29 +104,67 @@ interface Plan {
   readonly excluded: readonly BatchOutcome[]
   readonly prior: Map<string, BatchOutcome>
   readonly limit: number
-  readonly runs: string
   readonly runId: (id: string) => string
-  readonly workflow: string
+  readonly summary: string
 }
 
 type BatchRequest = { config: RunCommandConfig; request: RunWorkflowBatch; services: Services }
 
+function summaryDirectory(
+  request: RunWorkflowBatch,
+  runs: string,
+  workflow: string,
+  statusScope?: { filter: CardSelection['filter']; flags: Filter },
+): string {
+  const scope = createHash('sha256')
+    .update(
+      JSON.stringify({
+        cards: request.cards,
+        root: request.root,
+        filter: request.filter,
+        assignee: request.assignee,
+        status: request.status,
+        configuration: request.config,
+        override: request.configOverride,
+        runId: request.runId,
+        statusScope,
+      }),
+    )
+    .digest('hex')
+    .slice(0, 16)
+  return join(runs, `${workflow}-selection-${scope}`)
+}
+
+function completedSelection(fs: Services['fs'], summary: string): Set<string> {
+  if (!fs.existsSync(summary)) return new Set()
+  try {
+    const saved = JSON.parse(fs.readFileSync(summary)) as { cards: BatchOutcome[] }
+    return new Set(
+      saved.cards.filter(card => ['done', 'skipped'].includes(card.outcome)).map(card => card.id),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
 function selectCards(
   cards: readonly WorkflowCard[],
   selection: ReturnType<typeof effectiveSelection>,
-  accepts: (card: WorkflowCard, done: boolean) => boolean,
+  accepts: (card: WorkflowCard, done: boolean, mayHaveAdvanced: boolean) => boolean,
   completed: (id: string) => boolean,
+  previouslySelected: ReadonlySet<string>,
 ) {
   const prior = new Map<string, BatchOutcome>()
   const excluded: BatchOutcome[] = []
   const selected = orderCards(cards, selection.order).filter(card => {
     const done = card.error === undefined && completed(card.id)
-    const error = card.error ?? (done ? undefined : selectionBoardError(card, selection))
+    const mayHaveAdvanced = done && previouslySelected.has(card.id)
+    const error = card.error ?? (mayHaveAdvanced ? undefined : selectionBoardError(card, selection))
     if (error !== undefined) {
       prior.set(card.id, { id: card.id, outcome: 'failed', reason: error })
       return true
     }
-    if (!accepts(card, done)) {
+    if (!accepts(card, done, mayHaveAdvanced)) {
       excluded.push({
         id: card.id,
         outcome: 'not-applicable',
@@ -173,12 +212,12 @@ async function planBatch(
   )({ fs, ...resolved }, request)
   const workflow = resolved.workflow.name
   const configuration = resolved.configuration?.configuration
-  const selection = effectiveSelection(
-    resolved.workflow.select,
-    configuration?.select,
-    flagsOf(request, assignee),
-  )
+  const flags = flagsOf(request, assignee)
+  const selection = effectiveSelection(resolved.workflow.select, configuration?.select, flags)
   const runs = join(resolved.main, '.pair/working/runs')
+  const filter = configuration?.select?.filter ?? resolved.workflow.select?.filter
+  const statusScope = filter?.status || flags.status ? { filter, flags } : undefined
+  const summary = join(summaryDirectory(request, runs, workflow, statusScope), 'summary.json')
   const runId = (id: string) => `${request.runId ?? workflow}-${id}`
   const runOf = (id: string) => ({
     files: fs,
@@ -188,21 +227,28 @@ async function planBatch(
   })
   const completed = (id: string) =>
     !request.restart && completedRun(runOf(id), { card: id, workflow })
-  // Completion can move a card past the selected status. Current scope still applies.
-  const accepts = (card: WorkflowCard, done: boolean) =>
+  // Only a completed member of this selection can bypass its original status filter.
+  const accepts = (card: WorkflowCard, done: boolean, mayHaveAdvanced: boolean) =>
     matchesWorkflowCard(
       card,
-      done ? facts => selection.accepts(facts) || selection.needsStatus(facts) : selection.accepts,
+      mayHaveAdvanced
+        ? facts => selection.accepts(facts) || selection.needsStatus(facts)
+        : selection.accepts,
       request.restart || done ? undefined : runOf(card.id),
     )
-  const candidates = selectCards(cards, selection, accepts, completed)
+  const candidates = selectCards(
+    cards,
+    selection,
+    accepts,
+    completed,
+    statusScope === undefined || request.restart ? new Set() : completedSelection(fs, summary),
+  )
   return {
     ...candidates,
     selected: await loadDependencies(candidates, readDependencies),
     limit: request.parallel ?? configuration?.parallel ?? 1,
-    runs,
     runId,
-    workflow,
+    summary,
   }
 }
 
@@ -226,34 +272,13 @@ function previewBatch(plan: Plan): number {
   return [...plan.prior.values()].some(card => card.outcome === 'failed') ? 1 : 0
 }
 
-function writeSummary(
-  { request, services: { fs } }: BatchRequest,
-  plan: Plan,
-  cards: readonly BatchOutcome[],
-): number {
-  const scope = createHash('sha256')
-    .update(
-      JSON.stringify({
-        cards: request.cards,
-        root: request.root,
-        filter: request.filter,
-        assignee: request.assignee,
-        status: request.status,
-        configuration: request.config,
-        override: request.configOverride,
-        runId: request.runId,
-      }),
-    )
-    .digest('hex')
-    .slice(0, 16)
-  const dir = join(plan.runs, `${plan.workflow}-selection-${scope}`)
+function writeSummary(fs: Services['fs'], summary: string, cards: readonly BatchOutcome[]): number {
   const totals: Partial<Record<Outcome, number>> = {}
   for (const result of cards) {
     totals[result.outcome] = (totals[result.outcome] ?? 0) + 1
     printOutcome(result)
   }
-  fs.mkdirSync(dir, { recursive: true })
-  const summary = join(dir, 'summary.json')
+  fs.mkdirSync(dirname(summary), { recursive: true })
   fs.writeFileSync(summary, `${JSON.stringify({ cards, totals }, null, 2)}\n`)
   console.log(`  Summary: ${summary} · ${JSON.stringify(totals)}`)
   if (totals.waiting || totals.parked)
@@ -278,7 +303,7 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
   return await whileInterruptible(
     () => releases.forEach(release => release()),
     async () =>
-      writeSummary(input, plan, [
+      writeSummary(services.fs, plan.summary, [
         ...(await scheduleWorkflowCards(selected, limit, prior, launch)),
         ...excluded,
       ]),
