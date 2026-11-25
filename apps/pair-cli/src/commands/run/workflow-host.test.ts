@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { basename, join } from 'path'
-import { start } from '@pair/workflows'
+import { start, type RunStateFile, type RunTelemetry, type StepTelemetry } from '@pair/workflows'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 // @ts-expect-error Vite loads the adopted definition as fixture text.
 import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/delivery.yaml?raw'
@@ -434,6 +434,54 @@ ${assign === undefined ? '' : `assign: ${assign}\n`}steps:
         lines.some(line => /skipp/i.test(line) && line.includes('alice') && line.includes('bob')),
       ).toBe(true)
     })
+
+    it.each(['implement', 'rounds/review'])(
+      '#723 F6: a held %s resumes at execution one',
+      async step => {
+        const inLoop = step === 'rounds/review'
+        const definition = inLoop
+          ? `${implementOnly()}  rounds:
+    kind: loop
+    until: review
+    max: 1
+    on-max: escalate
+    steps:
+      review: { kind: review, assign: me }
+`
+          : implementOnly('me')
+        write('.pair/adoption/tech/workflows/quick.yaml', definition)
+        const board = withBoard(async () => {})
+        const telemetry = () =>
+          fs
+            .readFileSync(join(runDir(), 'telemetry.jsonl'))
+            .trimEnd()
+            .split('\n')
+            .map(line => JSON.parse(line) as RunTelemetry | StepTelemetry)
+        const executions = () =>
+          (JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile).steps[step]
+            ?.executions ?? 0
+
+        assignmentHost([], success(JSON.stringify({ status: 'held', owners: ['alice'] })))
+        expect(await run(['quick'], OK, { telemetry: true }, board)).toBe(0)
+        expect.soft(executions()).toBe(0)
+        expect(launched).toHaveLength(inLoop ? 1 : 0)
+        expect(telemetry().at(-1)).toMatchObject({
+          type: 'run',
+          status: 'skipped',
+          steps: inLoop ? 1 : 0,
+        })
+
+        assignmentHost([])
+        expect(await run(['quick'], OK, { telemetry: true }, board)).toBe(0)
+        expect.soft(executions()).toBe(1)
+        expect(launched).toHaveLength(inLoop ? 2 : 1)
+        const executionsOfStep = telemetry().flatMap(row =>
+          row.type === 'step' && row.step === step ? [row.attempt] : [],
+        )
+        expect(executionsOfStep).toEqual([1])
+        expect(telemetry().at(-1)).toMatchObject({ type: 'run', status: 'done' })
+      },
+    )
   })
 })
 
