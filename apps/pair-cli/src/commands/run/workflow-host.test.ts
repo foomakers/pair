@@ -1,16 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { hostname, tmpdir } from 'os'
 import { join } from 'path'
-import { fileSystemService as fs } from '@pair/content-ops'
+import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
+// @ts-expect-error Vite loads the adopted definition as fixture text.
+import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/delivery.yaml?raw'
+// @ts-expect-error Vite loads the shipped definition as fixture text.
+import quickDefinition from '../../../../../packages/knowledge-hub/dataset/.pair/adoption/tech/workflows/quick.yaml?raw'
+import baseConfig from '../../../config.json'
+import { acquireRunLock } from './run-lock'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 import type { SpawnIterationInput } from './spawn'
+import { runHostProcess } from './host-process'
 import type { WorkflowHostDependencies } from './workflow-host'
 
 /**
  * US-652 — `pair run <workflow> --card <id>`, through the command's own entry point, with a fake
- * launcher and fake skills: no real agent, tracker or git. The disk is real (a temp project).
+ * launcher, fake skills, and in-memory project files.
  */
+
+vi.mock('#config/kb-resolver', () => ({
+  getKnowledgeHubDatasetPath: () => '/kb/dataset',
+}))
+vi.mock('./run-lock', () => ({ acquireRunLock: vi.fn() }))
+vi.mock('./host-process', () => ({ runHostProcess: vi.fn() }))
+vi.mock('./cycle-wiring', async importOriginal => ({
+  ...(await importOriginal<typeof import('./cycle-wiring')>()),
+  mainCheckoutOrCwd: (cwd: string) => cwd,
+  readCardFacts: async () => ({}),
+}))
+
+const hostProcess = vi.mocked(runHostProcess)
+const success = (stdout = '') => ({ status: 0, stdout, stderr: '' })
 
 const HEAD = 'a'.repeat(40)
 const fenced = (value: unknown) => `Done.\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\``
@@ -48,7 +68,9 @@ const REGISTRY = `### Custom Gate Registry
 type FakeSkill = (input: SpawnIterationInput) => string | undefined
 type Launched = Pick<SpawnIterationInput, 'promptText' | 'cwd' | 'autonomyArgs'>
 
-let project: string
+const project = '/project'
+let fs: InMemoryFileSystemService
+const release = vi.fn()
 let lines: string[]
 let launched: Launched[]
 
@@ -112,9 +134,19 @@ const run = (
   )
 
 beforeEach(() => {
-  project = fs.mkdtempSync(join(tmpdir(), 'pair-workflow-'))
+  fs = new InMemoryFileSystemService(
+    {
+      '/project/config.json': JSON.stringify(baseConfig),
+      '/kb/dataset/.pair/adoption/tech/workflows/quick.yaml': quickDefinition as string,
+    },
+    project,
+    project,
+  )
+  release.mockReset()
+  vi.mocked(acquireRunLock).mockReset().mockReturnValue({ kind: 'acquired', release })
   lines = []
   launched = []
+  hostProcess.mockReset().mockResolvedValue(success())
   for (const skill of [
     'pair-process-implement',
     'pair-process-review',
@@ -132,7 +164,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-  fs.rmSync(project, { recursive: true, force: true })
 })
 
 describe('card state (AC-13)', () => {
@@ -406,6 +437,7 @@ describe('resume (AC-6)', () => {
   it('leaves a complete run as it is, and starts it over with --restart', async () => {
     await run(['quick'])
     launched = []
+    hostProcess.mockReset().mockResolvedValue(success())
     expect(await run(['quick'])).toBe(0)
     expect(launched).toEqual([])
     expect(lines).toContain(
@@ -462,6 +494,7 @@ steps:
       'rounds/fix': 'ok',
     })
     launched = []
+    hostProcess.mockReset().mockResolvedValue(success())
     expect(await run(['quick'], skills)).toBe(0)
     expect(launched).toHaveLength(0)
     expect(await run(['quick'], skills, { moreRounds: '1' })).toBe(0)
@@ -535,24 +568,16 @@ describe('the run directory (AC-7)', () => {
   })
 
   it('exits at once when another live process holds the run', async () => {
-    fs.mkdirSync(runDir(), { recursive: true })
-    fs.writeFileSync(
-      join(runDir(), 'run.lock'),
-      JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }),
-    )
+    vi.mocked(acquireRunLock).mockReturnValue({ kind: 'run-locked', pid: 42, host: 'worker' })
     expect(await run(['quick'])).toBe(1)
-    expect(
-      lines.some(line =>
-        line.startsWith(`  run-locked: pid ${String(process.pid)} on ${hostname()}`),
-      ),
-    ).toBe(true)
+    expect(lines.some(line => line.startsWith('  run-locked: pid 42 on worker'))).toBe(true)
     expect(launched).toEqual([])
     expect(fs.existsSync(join(runDir(), 'state.json'))).toBe(false)
   })
 
   it('releases the lock when the run ends', async () => {
     await run(['quick'])
-    expect(fs.existsSync(join(runDir(), 'run.lock'))).toBe(false)
+    expect(release).toHaveBeenCalled()
   })
 })
 
@@ -704,89 +729,162 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
   })
 })
 
-it.each(['unchanged', 'moved', 'returned'] as const)(
-  'only reuses approval while the reviewed head is current (head moved: %s, #726)',
+it.each(['unchanged', 'moved', 'returned', 'gate', 'fix', 'no-route'] as const)(
+  'replays only a changed review boundary (%s, 726-ac4-head-move-resume)',
   async scenario => {
     const moved = scenario !== 'unchanged'
     const newHead = scenario === 'returned' ? HEAD : 'b'.repeat(40)
+    const fixedHead = 'c'.repeat(40)
+    let currentHead = HEAD
+    let staleWorktree = scenario === 'gate'
+    let moveAt = scenario === 'gate' ? 'head' : undefined
+    let notices = 0
+    let gates = 0
     const delivery = '.pair/adoption/tech/workflows/delivery.yaml'
-    write(delivery, fs.readFileSync(join(__dirname, '../../../../..', delivery)))
+    const definition = deliveryDefinition as string
+    write(
+      delivery,
+      scenario === 'no-route' ? definition.replace(/^ {4}on-resume:.*\n/gm, '') : definition,
+    )
     write(
       '.pair/adoption/tech/way-of-working.md',
       `### Custom Gate Registry
 
 | Order | Key | Gate | Command | Scope Key | Target | Required | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | adopted | PR gate | \`touch adopted-pr-gate\` | quality | pr | Yes | Project gate |
+| 1 | adopted | PR gate | \`check-pr\` | quality | pr | Yes | Project gate |
 `,
     )
     write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Fixture host bridge\n')
-    write(
-      '.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs',
-      `
-import { appendFileSync, existsSync } from 'node:fs'
-const [, , action, card, raw] = process.argv
-if (card !== '627') throw new Error('Wrong card')
-const data = raw === undefined ? {} : JSON.parse(raw)
-const head = existsSync('move-head') ? '${newHead}' : '${HEAD}'
-let value
-switch (action) {
-  case 'head': value = head; break
-  case 'approval-target': value = {pr:12,head}; break
-  case 'approval-notice': appendFileSync('approval-notices.log', 'one\\n'); value = {}; break
-  case 'approval-answers': value = data.flag ? [{...data.flag,login:'maintainer',channel:'flag'}] : []; break
-  case 'merge':
-    if (existsSync('move-on-merge') && !existsSync('move-head')) {
-      appendFileSync('move-head', 'new PR head')
-      value = {status:'failed',reason:'head-moved',summary:'PR head moved'}
-      break
+    write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+    const moveFailure = { status: 'failed', reason: 'head-moved', summary: 'PR head moved' }
+    const respond = (action: string | undefined, data: { flag?: object; head?: string }) => {
+      switch (action) {
+        case 'head':
+          return currentHead
+        case 'approval-target':
+          return { pr: 12, head: currentHead }
+        case 'approval-notice':
+          notices++
+          return {}
+        case 'approval-answers':
+          return data.flag ? [{ ...data.flag, login: 'maintainer', channel: 'flag' }] : []
+        case 'merge':
+          if (data.head !== currentHead) return moveFailure
+          expect(data).toMatchObject({ head: currentHead, approvedBy: 'maintainer', pr: 12 })
+          return { status: 'ok', summary: 'Merged and closed', merged: true, mergeCommit: HEAD }
+        default:
+          throw new Error('Unknown action ' + action)
+      }
     }
-    if (data.head !== head) {
-      value = {status:'failed',reason:'head-moved',summary:'PR head moved'}
-      break
-    }
-    if (data.head !== head || data.approvedBy !== 'maintainer' || data.pr !== 12)
-      throw new Error('Wrong merge handoff')
-    value = {status:'ok',summary:'Merged and closed',merged:true,mergeCommit:'${HEAD}'}
-    break
-  default: throw new Error('Unknown action '+action)
-}
-console.log(JSON.stringify(value))
-`,
-    )
-    expect(await run(['delivery'])).toBe(0)
-    expect(fs.existsSync(join(project, 'worktrees/627/adopted-pr-gate'))).toBe(true)
-    expect(states('delivery-627')).toMatchObject({
-      gate: 'ok',
-      approval: 'needs-human',
-      merge: 'pending',
+    hostProcess.mockImplementation(async (bin, args, cwd) => {
+      if (bin === 'sh') {
+        expect(args).toEqual(['-c', 'check-pr'])
+        expect(cwd).toBe(join(project, 'worktrees/627'))
+        gates++
+        return success()
+      }
+      if (bin === 'git')
+        return success(args[0] === 'rev-parse' ? (staleWorktree ? HEAD : currentHead) : '')
+      expect(bin).toBe(process.execPath)
+      const [, action, card, raw] = args
+      expect(card).toBe('627')
+      if (action === moveAt) {
+        currentHead = newHead
+        moveAt = undefined
+        if (action === 'merge') return success(JSON.stringify(moveFailure))
+      }
+      return success(JSON.stringify(respond(action, JSON.parse(raw ?? '{}'))))
     })
-    expect(await run(['delivery'])).toBe(0)
-    expect(fs.readFileSync(join(project, 'approval-notices.log'))).toBe('one\n')
-    if (moved) {
-      write('move-on-merge', 'new PR head')
-      expect(await run(['delivery'], OK, { approve: '627' })).toBe(1)
+
+    const runUntilHeadChanges = async () => {
+      expect(await run(['delivery'])).toBe(scenario === 'gate' ? 1 : 0)
+      if (scenario === 'gate') {
+        expect(states('delivery-627')).toMatchObject({ gate: 'failed', approval: 'pending' })
+        expect(notices).toBe(0)
+      } else {
+        expect(gates).toBe(1)
+        expect(states('delivery-627')).toMatchObject({
+          gate: 'ok',
+          approval: 'needs-human',
+          merge: 'pending',
+        })
+        expect(await run(['delivery'])).toBe(0)
+        expect(notices).toBe(1)
+        if (moved) {
+          moveAt = 'merge'
+          expect(await run(['delivery'], OK, { approve: '627' })).toBe(1)
+        }
+      }
+    }
+    await runUntilHeadChanges()
+    if (scenario === 'no-route') {
+      expect(await run(['delivery'])).toBe(1)
+      expect(launched.map(one => skillOf(one.promptText))).toEqual([
+        'pair-process-implement',
+        'pair-process-review',
+      ])
+      return
+    }
+    const replayReview = async () => {
+      const reviewInputs: string[] = []
+      const fixInputs: string[] = []
       const recheck = {
         ...OK,
         'pair-process-review': (input: SpawnIterationInput) => {
-          expect(input.promptText).toContain(newHead)
-          return REVIEWED.replaceAll(HEAD, newHead)
+          reviewInputs.push(input.promptText)
+          return scenario === 'fix' && currentHead === newHead
+            ? fenced({
+                status: 'failed',
+                summary: 'Replacement needs a fix',
+                reason: 'blocking-findings',
+                verdict: 'changes-requested',
+                reviewedHead: newHead,
+                reportPath: `.pair/working/reviews/12/${newHead}.md`,
+                findings: [{ id: 'F1', severity: 'Major', title: 'Regression', blocking: true }],
+              })
+            : REVIEWED.replaceAll(HEAD, currentHead)
+        },
+        'pair-process-fix': (input: SpawnIterationInput) => {
+          fixInputs.push(input.promptText)
+          currentHead = fixedHead
+          return fenced({ status: 'ok', summary: 'Fixed', head: fixedHead, resolutions: [] })
         },
       }
+      if (scenario === 'gate') {
+        expect(await run(['delivery'], recheck), lines.join('\n')).toBe(1)
+        expect(lines.join('\n')).toContain('gate-worktree-mismatch')
+        expect(gates).toBe(0)
+        expect(notices).toBe(0)
+        staleWorktree = false
+      }
       expect(await run(['delivery'], recheck), lines.join('\n')).toBe(0)
+      expect(reviewInputs).toHaveLength(scenario === 'fix' ? 2 : 1)
+      expect(reviewInputs[0]).toContain(newHead)
+      if (scenario === 'fix') {
+        expect(fixInputs).toHaveLength(1)
+        expect(fixInputs[0]).toContain(`- head: ${newHead}`)
+        expect(fixInputs[0]).toContain('F1')
+        expect(fixInputs[0]).toContain(`.pair/working/reviews/12/${newHead}.md`)
+        expect(reviewInputs[1]).toContain(fixedHead)
+      }
       expect(states('delivery-627')).toMatchObject({
         gate: 'ok',
         approval: 'needs-human',
         merge: 'pending',
       })
-      expect(fs.readFileSync(join(project, 'approval-notices.log'))).toBe('one\none\n')
+      expect(notices).toBe(scenario === 'gate' ? 1 : 2)
     }
+    if (moved) await replayReview()
     expect(await run(['delivery'], OK, { approve: '627' })).toBe(0)
     expect(states('delivery-627')).toMatchObject({ gate: 'ok', approval: 'ok', merge: 'ok' })
+    for (const review of launched.filter(one => skillOf(one.promptText) === 'pair-process-review'))
+      expect(review.promptText).toContain('- publication: first-and-approved')
     expect(launched.map(one => skillOf(one.promptText))).toEqual([
       'pair-process-implement',
       'pair-process-review',
       ...(moved ? ['pair-process-review'] : []),
+      ...(scenario === 'fix' ? ['pair-process-fix', 'pair-process-review'] : []),
     ])
   },
 )

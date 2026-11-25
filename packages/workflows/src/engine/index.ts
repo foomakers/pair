@@ -348,7 +348,7 @@ async function resume(
   const settled = settledStatus(
     run,
     state,
-    options.moreRounds === undefined ? exhausted : undefined,
+    options.moreRounds === undefined ? exhaustedLoop(state) : undefined,
   )
   if (settled === undefined) {
     await writeState(run, { ...state, steps: reopenedSteps(state, frozenWorkflow(run)) })
@@ -368,7 +368,7 @@ function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay):
     const executions = records[step.id]?.executions
     records[step.id] = { state: 'pending', ...(executions !== undefined && { executions }) }
     if (step.kind === 'loop') {
-      delete loops[step.id]
+      loops[step.id] = { round: 1, max: loopMax(frozenConfiguration(run), step) }
       for (const child of step.steps ?? []) {
         const id = `${step.id}/${child.id}`
         const count = records[id]?.executions
@@ -449,8 +449,8 @@ export async function start(
   return { status: 'started', warnings: [] }
 }
 
-/** What `step` receives: the launch input and the outputs of the steps before it. */
-function inputsOf(
+/** Earlier outputs, with fresh replay inputs at the boundary where they take effect. */
+function inputsBefore(
   step: Step,
   steps: readonly Step[],
   state: RunStateFile,
@@ -459,13 +459,7 @@ function inputsOf(
   const replayAt = steps.findIndex(one => one.id === state.replay?.from)
   if (state.replay !== undefined && replayAt >= 0 && replayAt <= earlier.length)
     earlier.splice(replayAt, 0, state.replay.inputs)
-  const produced: Record<string, unknown> = Object.assign({ card: state.card }, ...earlier)
-  if (step.kind === 'loop') throw new Error('loop is not directly launchable')
-  const declared = fieldsOf(kindByName[step.kind].inputs)
-  // A typed kind receives the inputs it declares; `generic` receives every scalar produced so far.
-  const wanted = (name: string) =>
-    declared.length > 0 ? declared.includes(name) : typeof produced[name] !== 'object'
-  return Object.fromEntries(Object.entries(produced).filter(([name]) => wanted(name)))
+  return Object.assign({ card: state.card }, ...earlier)
 }
 
 const HALTED: Partial<Record<StepState, RunState>> = { failed: 'failed', 'needs-human': 'parked' }
@@ -491,18 +485,6 @@ const pick = (produced: Record<string, unknown>, kind: KindName): Record<string,
 
 /** The number of this launch of `id`. */
 const launches = (state: RunStateFile, id: string): number => (state.steps[id]?.executions ?? 0) + 1
-
-/** What the steps before `step` produced, then the loop's latest outputs. */
-const producedBefore = (
-  state: RunStateFile,
-  steps: readonly Step[],
-  step: Step,
-): Record<string, unknown> =>
-  Object.assign(
-    { card: state.card },
-    ...steps.slice(0, steps.indexOf(step)).map(one => state.steps[one.id]?.outputs ?? {}),
-    state.latest ?? {},
-  ) as Record<string, unknown>
 
 /** The loop child that is next, with its id. */
 function loopChild(
@@ -534,19 +516,6 @@ const replayLaunch = (state: RunStateFile) => {
   return replayAttempt === undefined ? {} : { replayAttempt }
 }
 
-function loopInputs(
-  state: RunStateFile,
-  steps: readonly Step[],
-  step: Step,
-  child: Step & { kind: KindName },
-) {
-  const replay =
-    state.replay?.from === step.id && state.steps[step.id]?.state === 'pending'
-      ? state.replay.inputs
-      : {}
-  return pick({ ...producedBefore(state, steps, step), ...replay }, child.kind)
-}
-
 /** The launch of the loop child that is next, or the halt that stops the run. */
 async function nextInLoop(
   run: RunDirectory,
@@ -574,7 +543,7 @@ async function nextInLoop(
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
     ...gatesOf(child),
-    inputs: loopInputs(state, steps, step, child),
+    inputs: pick({ ...inputsBefore(step, steps, state), ...state.latest }, child.kind),
     attempt,
     round,
     ...replay,
@@ -692,7 +661,7 @@ async function nextPlain(
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
     ...gatesOf(step),
-    inputs: inputsOf(step, steps, state),
+    inputs: pick(inputsBefore(step, steps, state), step.kind),
     attempt,
     ...(replayAttempt !== undefined && { replayAttempt }),
   }

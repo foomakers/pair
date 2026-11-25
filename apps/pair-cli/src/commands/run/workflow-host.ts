@@ -745,7 +745,7 @@ function parkedApproval(opened: Opened, fs: FileSystemService): string | undefin
   return parked[0]?.id
 }
 
-async function refreshMergeInputs(
+async function refreshReplayInputs(
   opened: Opened,
   fs: FileSystemService,
 ): Promise<StepReplay | undefined> {
@@ -753,26 +753,32 @@ async function refreshMergeInputs(
   if (saved === undefined) return undefined
   const { workflow, state } = saved
   const { resolved, request } = opened
-  const merge = workflow.steps.findIndex(
-    step => step.kind === 'merge' && state.steps[step.id]?.reason === 'head-moved',
-  )
-  if (merge < 0) return undefined
-  const earlier = workflow.steps.slice(0, merge).reverse()
-  const review = earlier.find(
-    step =>
-      step.kind === 'review' ||
-      (step.kind === 'loop' && step.steps?.some(child => child.kind === 'review')),
-  )
-  const published = earlier.find(step => typeof state.steps[step.id]?.outputs?.['pr'] === 'number')
-  if (review === undefined || published === undefined) return undefined
+  const stopped = workflow.steps.find(step => {
+    const status = state.steps[step.id]?.state
+    return (
+      status !== 'ok' &&
+      status !== 'skipped' &&
+      !(status === 'failed' && step['on-failed'] === 'continue')
+    )
+  })
+  const route = stopped?.['on-resume']
+  if (stopped === undefined || route === undefined) return undefined
+  const failure = state.steps[stopped.id]
+  if (failure?.state !== 'failed' || failure.reason !== route.reason) return undefined
+  const from = workflow.steps.findIndex(step => step.id === route.step)
+  const pr = workflow.steps
+    .slice(0, from)
+    .reverse()
+    .map(step => state.steps[step.id]?.outputs?.['pr'])
+    .find(value => typeof value === 'number')
+  if (pr === undefined) throw new Error('Cannot replay without the original workflow PR')
   const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
   const platform = approvalPlatform((action, card, data) =>
     workflowOperation(locate, resolved.cwd, { action, card, data }),
   )
   const current = await platform.target(request.card)
-  if (current.pr !== state.steps[published.id]?.outputs?.['pr'])
-    throw new Error('The workflow PR changed; start a new run for that PR')
-  return { from: review.id, inputs: { head: current.head } }
+  if (current.pr !== pr) throw new Error('The workflow PR changed; start a new run for that PR')
+  return { from: route.step, inputs: { head: current.head } }
 }
 
 function recordIncludeSources(
@@ -803,7 +809,7 @@ async function drive(
   if (opened.closureOnly && !(await canResumeClosure(opened, fs)))
     throw new Error('The closed card no longer has a resumable merge')
   const flagStep = parkedApproval(opened, fs)
-  const replay = await refreshMergeInputs(opened, fs)
+  const replay = await refreshReplayInputs(opened, fs)
   const started = await start(
     { files: fs, dir: runDir },
     resolved.source,

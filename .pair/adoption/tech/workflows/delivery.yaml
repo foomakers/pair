@@ -19,10 +19,13 @@ steps:
         with: { continue-on-gate-failure: true }
   gate:
     kind: gate
+    on-resume: { reason: head-changed, step: review-rounds }
     with:
       gates: [target:pr]
       checks: [head-unchanged]
   approval:
     kind: approval
     with: { question: 'Approve merging this reviewed head?' }
-  merge: { kind: merge }
+  merge:
+    kind: merge
+    on-resume: { reason: head-moved, step: review-rounds }

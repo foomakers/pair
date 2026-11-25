@@ -6,13 +6,16 @@ aliases:
   judge: { effort: high }
 steps:
   implement: { kind: implement, alias: build }
-  review: { kind: review, alias: judge }
+  review: { kind: review, alias: judge, with: { publication: first-and-approved } }
   gate:
     kind: gate
+    on-resume: { reason: head-changed, step: review }
     with:
       gates: [target:pr]
       checks: [head-unchanged]
   approval:
     kind: approval
     with: { question: 'Approve merging this reviewed head?' }
-  merge: { kind: merge }
+  merge:
+    kind: merge
+    on-resume: { reason: head-moved, step: review }
