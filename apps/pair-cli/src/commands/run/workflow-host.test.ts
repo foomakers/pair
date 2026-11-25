@@ -173,8 +173,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('card state (AC-13)', () => {
-  const MAPPING = `## State Mapping
+const MAPPING = `## State Mapping
 
 | Board State | Macrostate |
 | --- | --- |
@@ -184,6 +183,8 @@ describe('card state (AC-13)', () => {
 | Checking | Review |
 | Finished | Done |
 `
+
+describe('card state (AC-13)', () => {
   // A fake board that remembers the state it was given; `current` is what the card holds at the start.
   const withBoard = (
     setState: (card: string, state: string) => Promise<void>,
@@ -456,8 +457,10 @@ ${hostManaged ? 'assign: me\n' : ''}steps:
 `
       write('.pair/adoption/tech/workflows/quick.yaml', definition)
       write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Host bridge fixture')
+      write('.pair/adoption/tech/way-of-working.md', REGISTRY + MAPPING)
 
       let held = true
+      const boardWrites: string[] = []
       const assignmentChecks: string[] = []
       hostProcess.mockImplementation(async (_bin, args) => {
         const [, operation, card] = args
@@ -470,7 +473,10 @@ ${hostManaged ? 'assign: me\n' : ''}steps:
         )
       })
       const workflow: Partial<WorkflowHostDependencies> = {
-        board: { getState: async () => null, setState: async () => {} },
+        board: {
+          getState: async () => null,
+          setState: async id => void boardWrites.push(id),
+        },
         readSelection: async () => ({
           cards: ['627', '628', '629'].map(id => ({
             id,
@@ -505,6 +511,8 @@ ${hostManaged ? 'assign: me\n' : ''}steps:
         ])
       expect.soft(assignmentChecks).toEqual(hostManaged ? ['627', '628', '628'] : [])
       expect.soft(summary('627')).toMatch(/#627: skipped.*alice.*card-held/)
+      expect.soft(boardWrites).not.toContain('627') // #723 AC-4, F1
+      expect.soft(boardWrites).toContain('628')
       expect.soft(summary('628')).toContain('#628: done')
       expect.soft(summary('629')).toContain('#629: waiting — waiting for #627')
 
