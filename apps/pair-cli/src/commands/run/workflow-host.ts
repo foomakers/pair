@@ -740,7 +740,9 @@ function parkedApproval(opened: Opened, fs: FileSystemService): string | undefin
   if (!fs.existsSync(path)) throw new Error('No parked workflow for this card')
   const state = JSON.parse(fs.readFileSync(path)) as { steps: Record<string, { state: string }> }
   const parked = addressedSteps(opened.resolved.workflow).filter(
-    step => step.kind === 'approval' && state.steps[step.id]?.state === 'needs-human',
+    step =>
+      step.kind === 'approval' &&
+      ['needs-decision', 'needs-human'].includes(state.steps[step.id]?.state ?? ''),
   )
   if (parked.length !== 1) throw new Error('The workflow must be parked at one approval step')
   return parked[0]?.id

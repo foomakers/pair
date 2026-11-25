@@ -47,8 +47,8 @@ describe('fix result (#708 AC-1, AC-5, AC-6)', () => {
     ['resolved', fixed({})],
     ['empty scope', fixed({ resolutions: [] })],
     [
-      'needs-human with no outputs',
-      { status: 'needs-human', summary: 'x', reason: 'F2 needs a decision' },
+      'needs-decision with no outputs',
+      { status: 'needs-decision', summary: 'x', reason: 'F2 needs a decision' },
     ],
     [
       'failed with a not-resolved finding',

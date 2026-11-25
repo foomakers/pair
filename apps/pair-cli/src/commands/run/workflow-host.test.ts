@@ -412,15 +412,15 @@ describe('resume (AC-6)', () => {
     expect(states()).toEqual({ implement: 'ok', review: 'ok' })
   })
 
-  it('parks on needs-human: exit 0, what is needed and the command that resumes', async () => {
-    const parked = () => fenced({ status: 'needs-human', summary: 'pick the migration order' })
+  it('parks on needs-decision: exit 0, what is needed and the command that resumes', async () => {
+    const parked = () => fenced({ status: 'needs-decision', summary: 'pick the migration order' })
     expect(await run(['quick'], { ...OK, 'pair-process-review': parked }, { runId: 'mine' })).toBe(
       0,
     )
     expect(lines).toContain(
       '  Run: parked at step review — it needs a person: pick the migration order. Resume with: pair-cli run quick --card 627 --run-id mine',
     )
-    expect(states('mine')).toEqual({ implement: 'ok', review: 'needs-human' })
+    expect(states('mine')).toEqual({ implement: 'ok', review: 'needs-decision' })
   })
 
   it('runs again a step an interrupted launch left running', async () => {
@@ -834,7 +834,7 @@ it.each([
         expect(gates).toBe(1)
         expect(states('delivery-627')).toMatchObject({
           gate: 'ok',
-          approval: 'needs-human',
+          approval: 'needs-decision',
           merge: 'pending',
         })
         expect(await run(['delivery'])).toBe(0)
@@ -904,7 +904,7 @@ it.each([
       }
       expect(states('delivery-627')).toMatchObject({
         gate: 'ok',
-        approval: 'needs-human',
+        approval: 'needs-decision',
         merge: 'pending',
       })
       expect(notices).toBe(scenario === 'gate' ? 1 : 2)

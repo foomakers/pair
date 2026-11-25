@@ -309,10 +309,10 @@ steps:
     }
   })
 
-  it('resumes needs-human at the same step and round', async () => {
+  it('resumes needs-decision at the same step and round', async () => {
     const run = await opened()
     await next(run)
-    await record(run, 'rounds/review', { status: 'needs-human', summary: 'decision' })
+    await record(run, 'rounds/review', { status: 'needs-decision', summary: 'decision' })
     expect((await next(run)).run).toBe('parked')
     await start(run, source, { card: '627' })
     expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 1 })
@@ -376,7 +376,7 @@ describe('engine: outcomes and resume (AC-6)', () => {
 
   it.each([
     ['failed', { status: 'failed', summary: 'one blocking finding', reason: 'blocking' }, 'failed'],
-    ['needs-human', { status: 'needs-human', summary: 'a decision is needed' }, 'parked'],
+    ['needs-decision', { status: 'needs-decision', summary: 'a decision is needed' }, 'parked'],
   ] as const)('stops on a %s step and resumes from it', async (state, result, halted) => {
     const run = await runUntilReview(result)
     expect(await next(run)).toEqual({ run: halted, ready: [] })
@@ -587,7 +587,7 @@ describe('engine: on-failed (#708 AC-7)', () => {
     expect((await next(run)).run).toBe('failed')
   })
 
-  it('needs-human parks the run whatever on-failed says', async () => {
+  it('needs-decision parks the run whatever on-failed says', async () => {
     const run = open()
     await start(
       run,
@@ -596,7 +596,7 @@ describe('engine: on-failed (#708 AC-7)', () => {
     )
     await record(run, 'implement', IMPLEMENTED)
     await next(run)
-    await record(run, 'review', { status: 'needs-human', summary: 'x', reason: 'decide' })
+    await record(run, 'review', { status: 'needs-decision', summary: 'x', reason: 'decide' })
     expect((await next(run)).run).toBe('parked')
   })
 })

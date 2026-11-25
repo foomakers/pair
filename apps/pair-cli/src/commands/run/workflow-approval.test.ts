@@ -23,8 +23,8 @@ it('parks once and continues only on a fresh authorized answer (#726 AC-2/3)', a
   }
   const files = createMemoryFiles()
   const run = approvalRunner({ dir: '/run', files }, platform)
-  expect(await run(step)).toMatchObject({ status: 'needs-human' })
-  expect(await run(step)).toMatchObject({ status: 'needs-human' })
+  expect(await run(step)).toMatchObject({ status: 'needs-decision' })
+  expect(await run(step)).toMatchObject({ status: 'needs-decision' })
   expect(notice).toHaveBeenCalledExactlyOnceWith(
     '726',
     expect.stringContaining('pair-workflow-approval:'),
@@ -57,7 +57,7 @@ it('keeps the rejection note and requests a new answer when the PR head moves (#
   await run(step)
   expect(await run(step)).toMatchObject({ status: 'failed', reason: 'Fix the gate' })
   target.mockResolvedValue({ pr: 735, head: 'b'.repeat(40) })
-  expect(await run(step)).toMatchObject({ status: 'needs-human' })
+  expect(await run(step)).toMatchObject({ status: 'needs-decision' })
   expect(answers).toHaveBeenCalledTimes(1)
 })
 
@@ -77,9 +77,9 @@ it('reports and retries a structured notice failure (#726 AC-2)', async () => {
   })
   const run = approvalRunner({ dir: '/run', files: createMemoryFiles() }, platform)
   expect(await run(step)).toMatchObject({
-    status: 'needs-human',
+    status: 'needs-decision',
     reason: expect.stringContaining('card comment missing'),
   })
-  expect(await run(step)).toMatchObject({ status: 'needs-human' })
+  expect(await run(step)).toMatchObject({ status: 'needs-decision' })
   expect(notices).toBe(2)
 })

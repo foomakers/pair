@@ -35,7 +35,7 @@ function section(name: (typeof KIND_NAMES)[number]): string[] {
     ...(kind.rule === undefined ? [] : [`- **Rule**: ${kind.rule.text}`]),
     '- **Options** (`with`)',
     ...fields(kind.with),
-    '- **Returns `needs-human` when**',
+    '- **Escalation cases**',
     ...kind.escalations.map(when => `  - ${when}`),
     '',
   ]

@@ -27,7 +27,7 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- gates: ["quality-gate"]',
         '',
         'End your turn with one JSON object in a fenced `json` block with these fields:',
-        '- status: "ok" | "failed" | "needs-human"',
+        '- status: "ok" | "failed" | "blocked" | "needs-decision"',
         '- summary: string',
         '- reason: string (optional)',
         '- branch: string matching ^[A-Za-z0-9][A-Za-z0-9._/-]*$',
@@ -89,7 +89,7 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- depth: 2',
         '',
         'End your turn with one JSON object in a fenced `json` block with these fields:',
-        '- status: "ok" | "failed" | "needs-human"',
+        '- status: "ok" | "failed" | "blocked" | "needs-decision"',
         '- summary: string',
         '- reason: string (optional)',
         '',
@@ -142,7 +142,7 @@ describe('readResult (AC-4)', () => {
     ['generic', { status: 'ok', summary: 'done' }],
     [
       'implement',
-      { status: 'needs-human', summary: 'a decision is needed', reason: 'open question' },
+      { status: 'needs-decision', summary: 'a decision is needed', reason: 'open question' },
     ],
     [
       'review',

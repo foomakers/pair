@@ -8,7 +8,7 @@ A step of a [workflow file](workflow-grammar.md) has a `kind`. The kind says whi
 
 The agent ends its turn with one JSON object in a fenced `json` block. Whatever the kind, it carries:
 
-- `status`: `"ok" | "failed" | "needs-human"`
+- `status`: `"ok" | "failed" | "blocked" | "needs-decision"`
 - `summary`: `string` — One line: what the step did.
 - `reason`: `string`, optional — Why, when the status is not `ok`.
 
@@ -28,7 +28,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `head`: `string matching ^[0-9a-f]{40}$` — The pushed head, a 40-hex sha.
 - **Options** (`with`)
   - None.
-- **Returns `needs-human` when**
+- **Escalation cases**
   - A decision the card does not record blocks every remaining task.
   - A quality gate stays red and the fix is outside the card.
 
@@ -48,7 +48,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Options** (`with`)
   - `publication`: `"always" | "first-and-approved" | "never"` — Publish every review, the first and approved reviews, or none. Default: always.
   - `blocking`: `"Critical" | "Major" | "Minor"` — The lowest severity that makes a finding blocking. Default: the review template's blocking floor.
-- **Returns `needs-human` when**
+- **Escalation cases**
   - The verdict needs a decision only a person can take.
   - The pull request head moved while it was under review.
 
@@ -71,7 +71,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `findings`: `array of string` — Finding ids. When present only these are fixed.
   - `gates`: `array of string` — Keys of the Custom Gate Registry, run in order before the push. Absent or `[]` = none.
   - `continue-on-gate-failure`: `boolean` — Report failed gates and continue to the normal push. Default: false.
-- **Returns `needs-human` when**
+- **Escalation cases**
   - A remaining finding needs a human decision or action.
   - A finding contradicts an acceptance criterion of the card.
 
@@ -84,7 +84,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - The common fields only.
 - **Options** (`with`)
   - A free object, passed to the skill as written.
-- **Returns `needs-human` when**
+- **Escalation cases**
   - Whatever the skill named by `skill` documents.
 
 ## gate
@@ -101,7 +101,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `gates`: `array of string` — Entries run in the card worktree, in order: a key of the Custom Gate Registry, `target:<name>` (the registry rows of that target) or `command:<shell line>`.
   - `checks`: `array of "ci-green" | "head-unchanged" | "review-approved" | "prerequisites-done"` — Ready-made checks: ci-green, head-unchanged, review-approved, prerequisites-done.
   - `timeout-minutes`: `integer` — How long `ci-green` waits. Default 30.
-- **Returns `needs-human` when**
+- **Escalation cases**
 
 ## approval
 
@@ -117,7 +117,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `approvedPr`: `integer` — The PR that was approved.
 - **Options** (`with`)
   - `question`: `string` — What is asked of the approver.
-- **Returns `needs-human` when**
+- **Escalation cases**
   - Always, until an authorized login approves or rejects.
 
 ## merge
@@ -137,4 +137,4 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `mergeCommit`: `string` — The merge commit sha.
 - **Options** (`with`)
   - `method`: `"squash" | "merge" | "rebase"` — Merge method. Default `squash`.
-- **Returns `needs-human` when**
+- **Escalation cases**

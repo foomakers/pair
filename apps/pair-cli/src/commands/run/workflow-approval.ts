@@ -143,7 +143,7 @@ async function notifyParked(
       reason += `; card comment missing: ${error instanceof Error ? error.message : String(error)}`
     }
   }
-  return { status: 'needs-human', summary: 'Waiting for an authorized approval', reason }
+  return { status: 'needs-decision', summary: 'Waiting for an authorized approval', reason }
 }
 
 type Operation = (name: string, card: string, data?: unknown) => Promise<unknown>

@@ -16,7 +16,7 @@ export interface StepKind {
   readonly outputs: JsonSchema
   /** The options the step accepts under `with`. */
   readonly with: JsonSchema
-  /** The documented cases in which the step returns `needs-human`. */
+  /** The documented cases in which the step needs help to proceed. */
   readonly escalations: readonly string[]
   /**
    * The rule the kind sets on its own result, beyond the schema. It is judged from the outputs, so a
@@ -32,7 +32,7 @@ export interface ResultRule {
   readonly broken: (result: Readonly<Record<string, unknown>>) => string | undefined
 }
 
-export const STEP_STATUSES = ['ok', 'failed', 'needs-human'] as const
+export const STEP_STATUSES = ['ok', 'failed', 'blocked', 'needs-decision'] as const
 export type StepStatus = (typeof STEP_STATUSES)[number]
 
 /** The result every step returns, whatever its kind. */

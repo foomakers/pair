@@ -32,7 +32,7 @@ export const FROZEN_CONFIGURATION = 'configuration.yaml'
 export const TELEMETRY_FILE = 'telemetry.jsonl'
 
 /** `skipped`: the step's `when` did not match when it was about to start; it produces no outputs. */
-export type StepState = 'pending' | 'running' | 'skipped' | StepStatus
+export type StepState = 'pending' | 'running' | 'skipped' | 'needs-human' | StepStatus
 export type RunState = 'running' | 'done' | 'failed' | 'parked'
 
 export interface StepRecord {
@@ -462,7 +462,12 @@ function inputsBefore(
   return Object.assign({ card: state.card }, ...earlier)
 }
 
-const HALTED: Partial<Record<StepState, RunState>> = { failed: 'failed', 'needs-human': 'parked' }
+const HALTED: Partial<Record<StepState, RunState>> = {
+  failed: 'failed',
+  blocked: 'parked',
+  'needs-decision': 'parked',
+  'needs-human': 'parked',
+}
 
 /** A step the run is past: `ok`, or `failed` with `on-failed: continue`. */
 const settled = (state: RunStateFile, step: Step): boolean => {
@@ -750,7 +755,7 @@ function advanceLoop(a: Advance, recorded: Record<string, StepRecord>): Progress
   const isUntil = childId === outer.until
   const loops = isUntil ? withUntilResult(state, outer.id, outputs) : state.loops
   const progress = { steps: recorded, loops }
-  if (status === 'needs-human') return progress
+  if (HALTED[status] === 'parked') return progress
   if (isUntil && status === 'ok')
     return {
       steps: { ...recorded, [outer.id]: { state: 'ok', outputs: { ...state.latest, ...outputs } } },
