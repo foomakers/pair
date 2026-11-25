@@ -445,6 +445,28 @@ describe('#707 T-3 workflow tier selection (AC-1, AC-2)', () => {
     expect(launched).toEqual([])
   })
 
+  it('707-F1: applies the tier filter before loading batch dependencies', async () => {
+    writeConfig('tier', `${CONFIG}select: { filter: { has: [release-approved] } }\n`)
+    const readDependencies = vi.fn(async (ids: readonly string[]) =>
+      ids.map(id => ({ id, prerequisites: [] })),
+    )
+    const readSelection = async () => ({
+      cards: [
+        cardWithLabels(['risk:red', 'release-approved']),
+        { ...cardWithLabels(['risk:red']), id: '628' },
+        { ...cardWithLabels([]), id: '629' },
+      ],
+      readDependencies,
+    })
+
+    expect(await run(['quick'], OK, { card: '627,628,629', dryRun: true }, { readSelection })).toBe(
+      0,
+    )
+
+    expect(lines.join('\n')).toContain('#628: not-applicable — selection filter')
+    expect(readDependencies).toHaveBeenCalledExactlyOnceWith(['627', '629'])
+  })
+
   it.each(['tracker request', 'card lookup'])(
     'warns and uses the fallback after a failed %s',
     async failure => {
