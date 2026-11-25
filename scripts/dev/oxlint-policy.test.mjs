@@ -29,13 +29,18 @@ function lint(cwd, ...args) {
   return { diagnostics, status: result.status }
 }
 
-test('#693 AC-2 preserves tracked lint scope and check/fix behavior', t => {
+test('#693 AC-2 preserves package lint scope and check/fix behavior', t => {
   const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
   const typed = 'export const value: any = 1\n'
   const fixable = 'export let value = 1\n'
   mkdirSync(join(cwd, 'nested/dist'), { recursive: true })
-  writeFileSync(join(cwd, '.gitignore'), 'tracked.ts\n')
+  mkdirSync(join(cwd, 'generated'))
+  writeFileSync(join(cwd, '.gitignore'), 'tracked.ts\ngenerated/\n')
   writeFileSync(join(cwd, 'tracked.ts'), typed)
+  writeFileSync(join(cwd, 'generated/untracked.ts'), 'debugger\n')
+  writeFileSync(join(cwd, 'ignored.vue'), '<script>const x = ;</script>')
+  writeFileSync(join(cwd, 'ignored.svelte'), '<script>const x = ;</script>')
+  writeFileSync(join(cwd, 'ignored.astro'), '---\nconst x = ;\n---')
   writeFileSync(join(cwd, 'nested/dist/covered.ts'), typed)
   writeFileSync(join(cwd, 'ignored.config.ts'), typed)
   writeFileSync(join(cwd, 'fixable.ts'), fixable)
@@ -45,7 +50,7 @@ test('#693 AC-2 preserves tracked lint scope and check/fix behavior', t => {
 
   const check = lint(cwd, '--workspace')
   assert.equal(check.status, 1)
-  assert.deepEqual(check.diagnostics.map(item => item.filename).sort(), ['fixable.ts', 'nested/dist/covered.ts', 'tracked.ts'])
+  assert.deepEqual(check.diagnostics.map(item => item.filename).sort(), ['fixable.ts', 'generated/untracked.ts', 'nested/dist/covered.ts', 'tracked.ts'])
   assert.equal(readFileSync(join(cwd, 'fixable.ts'), 'utf8'), fixable)
   assert.equal(lint(cwd, 'tracked.ts').status, 1)
   assert.equal(lint(cwd, join(cwd, 'tracked.ts')).status, 1)
@@ -53,11 +58,11 @@ test('#693 AC-2 preserves tracked lint scope and check/fix behavior', t => {
 
   const fix = lint(cwd, '--workspace', '--fix')
   assert.equal(fix.status, 1)
-  assert.deepEqual(fix.diagnostics.map(item => item.filename).sort(), ['nested/dist/covered.ts', 'tracked.ts'])
+  assert.deepEqual(fix.diagnostics.map(item => item.filename).sort(), ['generated/untracked.ts', 'nested/dist/covered.ts', 'tracked.ts'])
   assert.equal(readFileSync(join(cwd, 'fixable.ts'), 'utf8'), 'export const value = 1\n')
   assert.equal(readFileSync(join(cwd, 'tracked.ts'), 'utf8'), typed)
   assert.equal(readFileSync(join(cwd, 'ignored.config.ts'), 'utf8'), typed)
-  assert.equal(lint(cwd, '--workspace', '--fix').diagnostics.length, 2)
+  assert.equal(lint(cwd, '--workspace', '--fix').diagnostics.length, 3)
   assert.equal(readFileSync(join(cwd, 'fixable.ts'), 'utf8'), 'export const value = 1\n')
 })
 
