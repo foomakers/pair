@@ -508,6 +508,7 @@ interface Opened {
   readonly worktree?: string
   readonly flagStep?: string
   readonly closureOnly?: true
+  readonly telemetryWarned?: boolean
 }
 
 /** What the package asks of this host besides an agent: the card's facts, and the steps it runs itself. */
@@ -569,12 +570,14 @@ const engineIdOf = (opened: Opened, id: string): keyof typeof ENGINES => {
 }
 
 /** The run's telemetry: the flag over the configuration's `telemetry` key; off when neither says. */
-const telemetryOf = (config: RunCommandConfig, { resolved, effective }: Opened) =>
+const telemetryOf = (config: RunCommandConfig, { resolved, effective, telemetryWarned }: Opened) =>
   (config.telemetry ?? effective?.telemetry) === true
     ? {
         host: 'pair-run' as const,
         settings: (id: string) => stepSettings(resolved, effective, stepOf(resolved, id)),
-        warn: (message: string) => console.log(`  Warning: ${message}`),
+        ...(!telemetryWarned && {
+          warn: (message: string) => console.log(`  Warning: ${message}`),
+        }),
       }
     : undefined
 
@@ -816,6 +819,20 @@ async function finishClosure(opened: Opened, fs: FileSystemService): Promise<num
   return result.status === 'ok' ? 0 : 1
 }
 
+async function startOnConsole(opened: Opened, fs: FileSystemService, replay?: StepReplay) {
+  const { resolved, runDir } = opened
+  const started = await start(
+    { files: fs, dir: runDir },
+    resolved.source,
+    startOptions(opened, replay),
+  )
+  recordIncludeSources(fs, runDir, resolved.sources, started.status)
+  started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
+  if (started.telemetryWarning !== undefined) console.log(`  Warning: ${started.telemetryWarning}`)
+  console.log(`  Run dir: ${runDir} (${started.status})`)
+  return started
+}
+
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
 async function drive(
   config: RunCommandConfig,
@@ -838,14 +855,7 @@ async function drive(
     })
   const replayTree = replay && (await prepare())
   if (replay && replayTree) await prepareReplayHead(replayTree, String(replay.inputs['head']))
-  const started = await start(
-    { files: fs, dir: runDir },
-    resolved.source,
-    startOptions(opened, replay),
-  )
-  recordIncludeSources(fs, runDir, resolved.sources, started.status)
-  started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
-  console.log(`  Run dir: ${runDir} (${started.status})`)
+  const started = await startOnConsole(opened, fs, replay)
   const effective = readEffective(fs, runDir)
   printSettings(resolved, effective)
   probeUnchecked(
@@ -860,7 +870,13 @@ async function drive(
   console.log(`  Worktree: ${worktree}`)
   return runOnConsole(
     config,
-    { ...opened, effective, worktree, ...(flagStep === undefined ? {} : { flagStep }) },
+    {
+      ...opened,
+      effective,
+      worktree,
+      telemetryWarned: started.telemetryWarning !== undefined,
+      ...(flagStep === undefined ? {} : { flagStep }),
+    },
     launcher({ config, resolved, services, worktree, effective }),
     services,
   )

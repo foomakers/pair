@@ -209,6 +209,8 @@ export interface Started {
   /** `complete`: every step is already `ok`; nothing will run. */
   readonly status: 'started' | 'resumed' | 'complete' | 'parked' | 'failed'
   readonly warnings: readonly string[]
+  /** A telemetry replacement failed. A host can report it once for the whole launch. */
+  readonly telemetryWarning?: string
 }
 
 async function archive(run: RunDirectory, now: Date): Promise<void> {
@@ -362,7 +364,10 @@ async function resume(
 ): Promise<Started> {
   const warnings = workflowWarnings(run, existing, source, options.card)
   const saved = await migrateStateStatuses(run, existing)
-  await migrateRunTelemetry(run)
+  const telemetryWarning = await migrateRunTelemetry(run).catch(
+    (error: unknown) => `telemetry was not written: ${String(error)} — the run goes on without it`,
+  )
+  const diagnostics = { warnings, ...(telemetryWarning !== undefined && { telemetryWarning }) }
   let state = saved
   const { configuration } = options
   if (options.moreRounds !== undefined) parkedLoop(state, exhaustedLoop(state), options.moreRounds)
@@ -380,10 +385,10 @@ async function resume(
   )
   if (settled === undefined) {
     await writeState(run, { ...state, steps: reopenedSteps(state, frozenWorkflow(run)) })
-    return { status: 'resumed', warnings }
+    return { status: 'resumed', ...diagnostics }
   }
   if (state !== saved) await writeState(run, state)
-  return { status: settled, warnings }
+  return { status: settled, ...diagnostics }
 }
 
 function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay): RunStateFile {

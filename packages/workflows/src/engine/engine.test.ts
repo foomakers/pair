@@ -516,7 +516,10 @@ describe('engine: outcomes and resume (AC-6)', () => {
     run.files.entries.set(path, JSON.stringify(saved))
 
     expect(await next(run)).toEqual({ run: 'parked', ready: [] })
-    expect(stateOf(run).steps['review']).toEqual({ ...saved.steps['review'], state: 'needs-decision' })
+    expect(stateOf(run).steps['review']).toEqual({
+      ...saved.steps['review'],
+      state: 'needs-decision',
+    })
     expect((await start(run, SOURCE, { card: '627' })).status).toBe('resumed')
     expect((await next(run)).ready[0]).toMatchObject({ id: 'review', attempt: 2 })
   })
