@@ -224,15 +224,25 @@ async function awaitGroupExit(child: ChildProcess): Promise<void> {
   await new Promise<void>(done => setTimeout(done, 20))
 }
 
-/** Leaves no engine behind; after a timeout it is SIGKILLed and its pipes released (US-600). */
-async function reap(child: ChildProcess, hardStop: boolean): Promise<void> {
-  const exited = child.exitCode !== null || child.signalCode !== null
-  if (!hardStop) return void (exited || child.kill('SIGTERM'))
+const hasExited = (child: ChildProcess): boolean =>
+  child.exitCode !== null || child.signalCode !== null
+
+/** Hard stops kill the process group, including descendants of a leader that already exited. */
+async function reap(child: ChildProcess, forced: boolean, diagnoseProcess = false): Promise<void> {
+  if (!forced) {
+    if (!diagnoseProcess) {
+      if (!hasExited(child)) child.kill('SIGTERM')
+      return
+    }
+    // Keep the natural exit status when possible. Even a successful terminal event
+    // can carry an invalid result, so every workflow attempt needs group cleanup.
+    await waitForExit(child)
+  }
   // The engine leads its own process group (detached): descendants die with it, even after it exited.
   try {
     process.kill(-child.pid!, 'SIGKILL')
   } catch {
-    if (!exited) child.kill('SIGKILL')
+    if (!hasExited(child)) child.kill('SIGKILL')
   }
   child.stdout?.destroy()
   await awaitGroupExit(child)
@@ -338,7 +348,7 @@ function handleReadError(error: unknown, transport: ReturnType<typeof watchTrans
 
 async function waitForExit(child: ChildProcess): Promise<void> {
   // Pipe EOF can arrive before the child emits exit, even after a signal killed it.
-  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return
+  if (child.pid === undefined || hasExited(child)) return
   await new Promise<void>(resolve => {
     const done = () => {
       clearTimeout(timer)
@@ -381,8 +391,8 @@ async function diagnosedIteration(
 /**
  * Runs one iteration and returns what its STREAM said.
  *
- * The child's exit code is deliberately never read (AC7): the outcome comes from the terminal
- * event alone. `stdin` is closed, so an engine that unexpectedly asks for input gets EOF instead
+ * The outcome comes from the terminal event alone (AC7); workflow launches also collect process
+ * diagnostics. `stdin` is closed, so an engine that unexpectedly asks for input gets EOF instead
  * of hanging; the idle watchdog (re-armed by every decoded event, US-573) kills a child that goes
  * silent for any other reason, and the iteration then fails as `timed-out`.
  */
@@ -415,7 +425,11 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   } finally {
     watchdog.clear()
     channel?.close()
-    await reap(child, watchdog.stopped() !== undefined || transport.hasError())
+    await reap(
+      child,
+      watchdog.stopped() !== undefined || transport.hasError(),
+      input.diagnoseProcess,
+    )
     // ponytail: 1s drain bound — a grandchild holding stderr open must not hold the iteration.
     await Promise.race([transport.stderr, new Promise(done => setTimeout(done, 1000).unref())])
   }
