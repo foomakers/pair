@@ -1,5 +1,5 @@
 import { savedWorkflow } from './workflow-saved-state'
-import { prepareReplayHead, recoverWorktree } from './workflow-worktree'
+import { prepareReplayHead } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
@@ -37,6 +37,7 @@ import {
   type Usage,
   type Workflow,
 } from '@pair/workflows'
+import { prepareCardWorktree } from '@pair/workflows/worktree'
 import { loadConfigWithOverrides } from '#config'
 import type { Config } from '#registry'
 import { getKnowledgeHubDatasetPath } from '#config/kb-resolver'
@@ -176,28 +177,25 @@ export function locateWorkflow(
 async function cycleWorktree(input: WorktreeInput): Promise<string> {
   const location = locateCycleScripts(input.fs, input.project, input.cwd)
   const bridge = createCycleScriptsBridge(location, input.cwd)
-  const resolve = (pr?: number) => resolveBranch(input.card, input.title, pr, input.cwd)
-  const made = await recoverWorktree(
-    resolve(),
-    branch =>
-      bridge.worktree({
-        main: input.main,
-        story: input.card,
-        branch,
-        base: readCycleDefaults(location).baseBranch,
-        worktreeRoot: resolveCycleWorktreeRoot(location, input.main, undefined),
-      }),
-    async () => {
-      const platform = approvalPlatform((action, card, data) =>
-        workflowOperation(() => location.scriptsDir, input.cwd, { action, card, data }),
-      )
-      return (await platform.target(input.card)).pr
+  return prepareCardWorktree(
+    {
+      main: input.main,
+      story: input.card,
+      base: readCycleDefaults(location).baseBranch,
+      worktreeRoot: resolveCycleWorktreeRoot(location, input.main, undefined),
     },
-    resolve,
+    {
+      worktree: bridge.worktree,
+      resolveBranch: pr => resolveBranch(input.card, input.title, pr, input.cwd),
+      async linkedPr() {
+        const platform = approvalPlatform((action, card, data) =>
+          workflowOperation(() => location.scriptsDir, input.cwd, { action, card, data }),
+        )
+        return (await platform.target(input.card)).pr
+      },
+      setup: runSetupCommand,
+    },
   )
-  const failed = made.created ? await runSetupCommand(input.main, made.path) : undefined
-  if (failed !== undefined) throw new Error(`worktree-setup-failed: ${failed}`)
-  return made.path
 }
 
 interface Resolved {

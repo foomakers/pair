@@ -1,20 +1,6 @@
 import { runHostProcess } from './host-process'
 
-/** Retry a branch conflict only after resolving the card's linked PR. */
-export async function recoverWorktree<T>(
-  branch: string,
-  prepare: (branch: string) => T,
-  linkedPr: () => Promise<number>,
-  resolve: (pr: number) => string,
-): Promise<T> {
-  try {
-    return prepare(branch)
-  } catch (error) {
-    if (!(error instanceof Error) || !error.message.startsWith('worktree-conflict:')) throw error
-    const pr = await linkedPr()
-    return prepare(resolve(pr))
-  }
-}
+export { recoverWorktree } from '@pair/workflows/worktree'
 
 /** A replay can advance a clean card branch only to its own upstream PR head. */
 export async function prepareReplayHead(worktree: string, target: string): Promise<void> {

@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./worktree": {
+      "types": "./dist/worktree/index.d.ts",
+      "import": "./dist/worktree/index.js",
+      "require": "./dist/worktree/index.js"
     }
   },
   "scripts": {
