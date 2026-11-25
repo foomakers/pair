@@ -19,6 +19,8 @@ Executable form of the **`plan-tasks`** step, and a composer of `define-bounded-
 
 Before in-session dispatch, check the selected `plan-tasks` stage against the detected host with the shared resolver's `gaps --host` command. Show any gap and wait; see [workflow host gaps](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/workflow-host-gaps.md).
 
+For an unattended workflow, use its `card` as `$story` and set `$approval` to `auto`. After writing or confirming the Task Breakdown, return the number of task checklist entries as `tasks` and read the literal tracker column as `boardStatus`. The host confirms the facts and handles board transitions. Return `needs-human` if the breakdown requires a product decision.
+
 ## Composed Skills
 
 | Skill          | Type       | Required                                                   |

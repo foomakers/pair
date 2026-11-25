@@ -55,7 +55,6 @@
       "behavior": "overwrite",
       "exclude": [
         "pair-implement-batch.test.mjs",
-        "pair-refine-batch.test.mjs",
         "pair-profile-batch-regressions.test.mjs",
         "pair-loop.test.mjs",
         "pair-contracts/autonomy-policy.test.mjs",

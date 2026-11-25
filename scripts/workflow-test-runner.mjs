@@ -7,7 +7,7 @@ import { isNodeTestCandidate, planWorkflowTests, shardArguments } from './workfl
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../.claude/workflows')
 const board = 'pair-contracts/board-sync.test.mjs'
-const knownHash = '6716d68c50ec4496d0fc5473369805466df2dbb3f04d5fed489df7981e568e7d'
+const knownHash = 'd944992f63e07ca0eb0f557a5470d88a06d49e52fb9412009e4b9cd5bfb758f3'
 
 function candidates(dir = root) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {

@@ -2,7 +2,10 @@
 export interface CardFacts {
   readonly labels: readonly string[]
   readonly status?: string
+  /** The tracker could not read the status. Other card facts remain usable. */
+  readonly statusError?: string
   readonly assignee?: string
+  readonly assignees?: readonly string[]
 }
 
 /** `select.filter` and `when`: AND between keys, any-of inside a list. */
@@ -13,6 +16,9 @@ export interface Filter {
   readonly assignee?: readonly string[]
 }
 
+const owners = (card: CardFacts) =>
+  card.assignees ?? (card.assignee === undefined ? [] : [card.assignee])
+
 /** Whether `card` matches `filter`; a filter with no key matches everything. */
 export function matches(filter: Filter, card: CardFacts): boolean {
   const { has, lacks, status, assignee } = filter
@@ -20,6 +26,64 @@ export function matches(filter: Filter, card: CardFacts): boolean {
     (has === undefined || has.some(label => card.labels.includes(label))) &&
     (lacks === undefined || !lacks.some(label => card.labels.includes(label))) &&
     (status === undefined || (card.status !== undefined && status.includes(card.status))) &&
-    (assignee === undefined || (card.assignee !== undefined && assignee.includes(card.assignee)))
+    (assignee === undefined || owners(card).some(login => assignee.includes(login)))
   )
+}
+
+export const ORDER_KEYS = ['priority', 'number', 'created', 'status'] as const
+type OrderKey = (typeof ORDER_KEYS)[number]
+
+export interface CardSelection {
+  readonly filter?: Omit<Filter, 'assignee'> & { readonly assignee?: string }
+  readonly order?: readonly OrderKey[]
+}
+
+function selectionFilter(value: CardSelection['filter'] = {}): Filter {
+  const { assignee, ...filter } = value
+  return assignee === undefined ? filter : { ...filter, assignee: [assignee] }
+}
+
+const statusOverlap = (status?: readonly string[], flags?: readonly string[]) =>
+  (status ?? flags)?.some(one => flags === undefined || flags.includes(one)) === true
+
+export function effectiveSelection(
+  workflow?: CardSelection,
+  configuration?: CardSelection,
+  flags: Filter = {},
+) {
+  const selected = selectionFilter(configuration?.filter ?? workflow?.filter)
+  const { status, ...otherSelected } = selected
+  const { status: flagStatus, ...otherFlags } = flags
+  const statusCanMatch = statusOverlap(status, flagStatus)
+  return {
+    order: configuration?.order ?? workflow?.order ?? (['priority', 'number'] as const),
+    accepts: (card: CardFacts) => matches(selected, card) && matches(flags, card),
+    needsStatus: (card: CardFacts) =>
+      statusCanMatch && matches(otherSelected, card) && matches(otherFlags, card),
+  }
+}
+
+export interface OrderableCard {
+  readonly id: string
+  readonly priority?: number
+  readonly created?: string
+  readonly status?: string
+}
+
+export function orderCards<T extends OrderableCard>(
+  cards: readonly T[],
+  order: readonly OrderKey[],
+): T[] {
+  return [...cards].sort((a, b) => {
+    for (const key of order) {
+      const result =
+        key === 'number'
+          ? a.id.localeCompare(b.id, 'en', { numeric: true })
+          : key === 'priority'
+            ? (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER)
+            : (a[key] ?? '\uffff').localeCompare(b[key] ?? '\uffff')
+      if (result !== 0) return result
+    }
+    return 0
+  })
 }

@@ -2929,26 +2929,76 @@ export function worktreeClean({ cwd, dir, story }) {
 // `parked` (open and labelled for a human), `open`. Anything that cannot be read is `unknown` and BLOCKS (fail closed).
 // US-572: the card as every PM-agnostic consumer reads it (pair-cli run, the batch engine) — through the BOUND
 // adapter, never a tracker CLI of the caller's own: { id, title, body, labels: [names], state: OPEN|CLOSED,
-// closed, stateReason, closedAt, boardState }. `boardState`: the board item's Status (`projectItems`, which a
-// token without `read:project` cannot read — retried without it), else null; the caller falls back to the body.
+// closed, stateReason, closedAt, boardState }. Workflow callers scope Status to the adopted board.
+// A token without `read:project` can still read the card without Status.
 const CARD_FIELDS = ['title', 'body', 'labels', 'state', 'stateReason', 'closedAt']
-export function cardView({ story, dir, host }) {
+export function cardView({ story, dir, host, selection, scopedBoard = selection }) {
   const h = host ?? bindHosts(dir ? { dir } : { from: process.cwd() })
-  if (!h.pm.parseCardRef(story)) return { error: `not-a-card: ${JSON.stringify(story)} is not a ${h.pmTool} card` }
+  const ref = h.pm.parseCardRef(story)
+  if (!ref || (scopedBoard && ref.inScope === false)) return { error: `not-a-card: ${JSON.stringify(story)} is not a ${h.pmTool} card` }
+  const fields = selection ? [...CARD_FIELDS, 'assignees', 'createdAt'] : CARD_FIELDS
   let c
+  let boardState = null
+  let boardError
   try {
     try {
-      c = h.pm.readCard(story, { fields: [...CARD_FIELDS, 'projectItems'] })
+      c = h.pm.readCard(story, { fields: [...fields, 'projectItems'] })
+      if (scopedBoard) {
+        try {
+          const state = h.pm.cardState({ id: ref.id, card: c })
+          boardState = state.boardState
+          boardError = state.gap
+        } catch (error) {
+          boardError = `board-unreadable: ${hostDetail(error)}`
+        }
+      } else {
+        boardState = (c?.projectItems ?? []).map(i => String(i?.status?.name ?? '').trim()).find(Boolean) ?? null
+      }
     } catch (error) {
       if (error?.kind === 'transient-exhausted') throw error
-      c = h.pm.readCard(story, { fields: CARD_FIELDS })
+      if (scopedBoard) boardError = `board-unreadable: ${hostDetail(error)}`
+      c = h.pm.readCard(story, { fields })
     }
   } catch (e) {
     return { error: `card-unreadable: ${hostDetail(e)}` }
   }
   const closed = String(c?.state ?? '').toUpperCase() === 'CLOSED'
-  const boardState = (c?.projectItems ?? []).map(i => String(i?.status?.name ?? '').trim()).find(Boolean) ?? null
-  return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState }
+  return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState, ...(boardError && { boardError }), ...(selection ? { assignees: (c?.assignees ?? []).map(one => String(one.login ?? one)), created: c?.createdAt ?? undefined } : {}) }
+}
+
+function workflowCardId(host, ref) {
+  const found = host.pm.parseCardRef(ref)
+  if (!found?.id || found.inScope === false) throw new Error(`card-out-of-scope: ${ref}`)
+  return String(found.id)
+}
+
+export function workflowCards(host, { root, cards, filter, assignee } = {}) {
+  const requested = cards?.split(',').map(id => ({ id: workflowCardId(host, id) }))
+  const candidates = requested ?? (root === undefined
+    ? host.pm.listCards({ labels: filter && filter !== '*' ? filter.split(',').map(label => label.trim()) : undefined })
+    : host.pm.childCards({ id: workflowCardId(host, root) }))
+  const selected = [...new Set(candidates.filter(card => !card.closed).map(card => String(card.id)))]
+  const facts = selected.flatMap(id => {
+    const view = cardView({ story: id, host, selection: true })
+    if (view.error) return [{ id, error: view.error }]
+    if (view.closed && requested === undefined) return []
+    return [view]
+  })
+  return { cards: facts, ...(assignee === '@me' ? { assignee: host.pm.resolveUser() } : {}) }
+}
+
+function workflowDependencies(host, cards) {
+  return cards.split(',').map(ref => {
+    const id = workflowCardId(host, ref)
+    try {
+      const { body } = host.pm.readCard(id)
+      const declared = dependencyIds(body, undefined, ref => host.pm.parseCardRef(ref), true)
+      const native = host.pm.blockedBy({ id })
+      return { id, prerequisites: [...new Set([...declared.ids, ...native])], uncertain: declared.uncertain }
+    } catch (error) {
+      return { id, prerequisites: [], error: hostDetail(error) }
+    }
+  })
 }
 
 export function prLabelsView({ ref, dir, host }) {
@@ -2983,7 +3033,12 @@ const declRefs = (text, parse) => {
   const rest = String(text)
     .replace(/\[([^\]]*)\]\((https?:[^)]*)\)/g, (_, t, u) => (parse ? u : t))
     .replace(/https?:\/\/[^\s)>\]]+/g, u => {
-      const r = parse?.(u)
+      let r
+      try {
+        r = parse?.(u)
+      } catch (error) {
+        if (error?.kind !== 'invalid-input') throw error
+      }
       if (r?.id && r.inScope !== false) ids.push(String(r.id))
       else foreign = true
       return ' '
@@ -2992,7 +3047,7 @@ const declRefs = (text, parse) => {
   for (const m of rest.matchAll(/(?<![\w/])#(\d+)/g)) ids.push(m[1])
   return { ids, foreign }
 }
-export function dependencyIds(body, self, parse) {
+export function dependencyIds(body, self, parse, draft = false) {
   const text = String(body ?? '')
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1.*$/gm, '')
@@ -3001,15 +3056,15 @@ export function dependencyIds(body, self, parse) {
   const lines = text.split('\n')
   let uncertain
   lines.forEach((line, i) => {
-    const m = DEP_LINE_RE.exec(line) ?? PREREQ_RE.exec(line)
+    const m = DEP_LINE_RE.exec(line) ?? PREREQ_RE.exec(line) ?? (draft ? /^\*\*Story Dependencies\*\*:[ \t]*(.*)$/.exec(line) : null)
     if (!m) return
     const canonical = !DEP_LINE_RE.test(line)
     let rest = m[1]
     if (!rest.trim()) for (let j = i + 1; /^[ \t]*(?:[-*]|\d+\.)[ \t]/.test(lines[j] ?? ''); j++) rest += ` ${lines[j]}`
     const found = declRefs(rest, parse)
+    ids.push(...found.ids)
     if (found.foreign) uncertain ??= line.trim()
-    else if (found.ids.length) ids.push(...found.ids)
-    else if (canonical ? rest.trim() && !/^\s*(?:none|n\/a|no|nothing)\b/i.test(rest) : !/^\s*(?:none|n\/a|no|nothing|T-\d)\b/i.test(rest)) uncertain ??= line.trim()
+    else if (!found.ids.length && (canonical ? rest.trim() && !/^\s*(?:none|n\/a|no|nothing)\b/i.test(rest) : !/^\s*(?:none|n\/a|no|nothing|T-\d)\b/i.test(rest))) uncertain ??= line.trim()
   })
   return { ids: [...new Set(ids)].filter(id => id !== String(self)), uncertain }
 }
@@ -4571,6 +4626,10 @@ if (isMain()) {
       'worktree-clean': ['cwd', 'dir', 'story'],
       'prereq-state': ['dir', 'story'],
       card: ['dir', 'story'],
+      'workflow-cards': ['root', 'cards', 'filter', 'assignee'],
+      'workflow-card': ['story'],
+      'workflow-dependencies': ['cards'],
+      'workflow-pr-head': ['ref'],
       'pr-labels': ['dir', 'ref'],
       whoami: ['dir'],
     }
@@ -4755,9 +4814,19 @@ if (isMain()) {
       out = prereqState({ story: opts.story, dir: opts.dir })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else if (cmd === 'card') {
+    } else if (cmd === 'workflow-cards' || cmd === 'workflow-pr-head') {
+      const h = bindHosts({ from: process.cwd() })
+      out = cmd === 'workflow-cards'
+        ? workflowCards(h, opts)
+        : { head: h.code.prHead({ pr: opts.ref }) }
+      process.stdout.write(JSON.stringify(out) + '\n')
+    } else if (cmd === 'workflow-dependencies') {
+      need('cards')
+      out = workflowDependencies(bindHosts({ from: process.cwd() }), opts.cards)
+      process.stdout.write(JSON.stringify(out) + '\n')
+    } else if (cmd === 'card' || cmd === 'workflow-card') {
       need('story')
-      out = cardView({ story: opts.story, dir: opts.dir })
+      out = cardView({ story: opts.story, dir: opts.dir, scopedBoard: cmd === 'workflow-card' })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.error ? 1 : 0)
     } else if (cmd === 'pr-labels') {

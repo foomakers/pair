@@ -25,9 +25,9 @@ export const REQUIRED_METHODS = INTERFACE_METHODS.filter(m => m !== 'cardHash')
 // Primitives the cycle's scope-decision and pr-state paths already used through `gh` beyond the
 // eight (card create/search/edit, one comment read, the check/label read-backs, ref parsing). An
 // adapter MAY omit them: the feature that needs one then fails typed, naming the method.
-export const SUPPORT_METHODS = ['createCard', 'findCards', 'listCards', 'linkedPr', 'workflowPr', 'workflowActor', 'workflowPrDetails', 'workflowReviews', 'workflowReviewIdentity', 'workflowApprovalToken', 'syncEpic', 'updateCard', 'parseCardRef', 'listCardComments', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'workflowCi', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState', 'ensureBoardMembership', 'closeCard', 'resolveUser', 'readPermission']
+export const SUPPORT_METHODS = ['createCard', 'findCards', 'listCards', 'childCards', 'blockedBy', 'linkedPr', 'workflowPr', 'workflowActor', 'workflowPrDetails', 'workflowReviews', 'workflowReviewIdentity', 'workflowApprovalToken', 'syncEpic', 'updateCard', 'parseCardRef', 'listCardComments', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'workflowCi', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState', 'ensureBoardMembership', 'closeCard', 'resolveUser', 'readPermission']
 // ADR-018's split: card operations resolve `pm-tool`, pull-request operations resolve `code-host`.
-export const PM_METHODS = ['readCard', 'cardHash', 'cardState', 'closeAndCascade', 'closeCard', 'ensureBoardMembership', 'syncEpic', 'createCard', 'findCards', 'listCards', 'updateCard', 'parseCardRef', 'listCardComments', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard', 'resolveUser']
+export const PM_METHODS = ['readCard', 'cardHash', 'cardState', 'closeAndCascade', 'closeCard', 'ensureBoardMembership', 'syncEpic', 'createCard', 'findCards', 'listCards', 'childCards', 'blockedBy', 'updateCard', 'parseCardRef', 'listCardComments', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard', 'resolveUser']
 export const CODE_METHODS = ['prHead', 'linkedPr', 'workflowPr', 'workflowActor', 'workflowPrDetails', 'workflowReviews', 'workflowReviewIdentity', 'workflowApprovalToken', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'workflowCi', 'readLabels', 'setClassification', 'deleteBranch', 'readPermission']
 // setClassification's family/value vocabulary (the review's classification tags, pr-states.md /
 // quality-model.md §5): each family carries its own chromatic enum — never shared across families.
@@ -394,10 +394,9 @@ export function defineAdapter(spec) {
           const { body } = readCard(id, { ...opts, fields: undefined })
           return canonicalCardHash(body)
         },
-        cardState({ id, repo }) {
-          const card = readCard(id, { repo, fields: ['state', 'stateReason', 'projectItems'] })
+        cardState({ id, repo, card = readCard(id, { repo, fields: ['state', 'stateReason', 'projectItems'] }) }) {
           // An adapter whose card can sit on several boards scopes membership to the adopted one.
-          const scoped = typeof methods.boardItems === 'function' ? methods.boardItems({ items: card.projectItems ?? [], repo }) : card.projectItems ?? []
+          const scoped = typeof methods.boardItems === 'function' ? methods.boardItems({ id, repo }) : card.projectItems ?? []
           // An unresolved board is a reported gap, never "not a member" (that would reset the Status).
           if (!Array.isArray(scoped)) return { issueState: card.state ?? null, issueReason: card.stateReason ?? null, boardState: null, member: false, gap: scoped.gap }
           const items = scoped

@@ -13,6 +13,8 @@ const SOURCE_SCRIPT = resolve(
 )
 const BUNDLED_SCRIPT = resolve(__dirname, '../../assets/control-state.mjs')
 const PACKAGED_SCRIPT = resolve(__dirname, 'assets/control-state.mjs')
+const FALLBACK_SCRIPTS = [PACKAGED_SCRIPT, BUNDLED_SCRIPT, SOURCE_SCRIPT]
+const DEFAULT_SCRIPT = FALLBACK_SCRIPTS.find(existsSync) ?? SOURCE_SCRIPT
 const requireScript = createRequire(__filename)
 export const WAY_OF_WORKING_PATH = '.pair/adoption/tech/way-of-working.md'
 export const MACROSTATES = ['Draft', 'Ready', 'In Progress', 'Review', 'Done'] as const
@@ -109,21 +111,21 @@ export function locateControlStateScript(
     const script = installedScriptInTarget(fs, resolve(projectRoot, target), names)
     if (script !== undefined) return script
   }
-  const fallback = [PACKAGED_SCRIPT, BUNDLED_SCRIPT, SOURCE_SCRIPT].find(existsSync)
+  const fallback = FALLBACK_SCRIPTS.find(existsSync)
   if (fallback) return fallback
   throw new Error(
     `control-state-load-failed: pair-next is not installed under configured skills targets and the bundled resolver is missing`,
   )
 }
 
-export function parseStateMapping(markdown: string, script = SOURCE_SCRIPT): StateMapping {
+export function parseStateMapping(markdown: string, script = DEFAULT_SCRIPT): StateMapping {
   return authority(script).parseStateMapping(markdown)
 }
 
 export function readStateMapping(
   fs: FileSystemService,
   projectRoot: string,
-  script = SOURCE_SCRIPT,
+  script = DEFAULT_SCRIPT,
 ): StateMapping {
   const path = join(projectRoot, WAY_OF_WORKING_PATH)
   return fs.existsSync(path) ? parseStateMapping(fs.readFileSync(path), script) : undefined
@@ -132,22 +134,22 @@ export function readStateMapping(
 export function resolveMacrostate(
   literal: string,
   mapping: StateMapping,
-  script = SOURCE_SCRIPT,
+  script = DEFAULT_SCRIPT,
 ): Macrostate | undefined {
   return authority(script).resolveMacrostate(literal, mapping)
 }
 
-export function readyBoardState(mapping: StateMapping, script = SOURCE_SCRIPT): string {
+export function readyBoardState(mapping: StateMapping, script = DEFAULT_SCRIPT): string {
   return authority(script).readyBoardState(mapping)
 }
 
-export function hasTaskBreakdown(body: string, script = SOURCE_SCRIPT): boolean {
+export function hasTaskBreakdown(body: string, script = DEFAULT_SCRIPT): boolean {
   return authority(script).hasTaskBreakdown(body)
 }
 
 export function unmetReadinessCriteria(
   card: Pick<CardDocument, 'title' | 'body'>,
-  script = SOURCE_SCRIPT,
+  script = DEFAULT_SCRIPT,
 ): string[] {
   return authority(script).unmetReadinessCriteria(card)
 }
@@ -155,17 +157,25 @@ export function unmetReadinessCriteria(
 export function validateStatusFilter(
   value: string,
   mapping: StateMapping,
-  script = SOURCE_SCRIPT,
+  script = DEFAULT_SCRIPT,
 ): string[] {
   return authority(script).validateStatusFilter(value, mapping)
+}
+
+export function resolveControlState(
+  card: CardDocument,
+  mapping: StateMapping,
+  script = DEFAULT_SCRIPT,
+) {
+  return authority(script).resolveControlState(card, mapping)
 }
 
 export function resolveCardReadiness(
   card: CardDocument,
   mapping: StateMapping,
-  script = SOURCE_SCRIPT,
+  script = DEFAULT_SCRIPT,
 ): ReadinessVerdict {
-  const result = authority(script).resolveControlState(card, mapping)
+  const result = resolveControlState(card, mapping, script)
   if (result.outOfProcess !== undefined) {
     throw new CardOutOfScopeError(
       `card-out-of-scope: ${result.outOfProcess} — nothing to prepare or drive, so nothing was spawned`,

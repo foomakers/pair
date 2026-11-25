@@ -111,7 +111,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 3,
         key: 'descripton',
         problem: "unknown key 'descripton'",
-        fix: 'use one of version, name, description, outputs, aliases, steps',
+        fix: 'use one of version, name, select, description, outputs, aliases, steps',
       },
     ],
     [
@@ -131,7 +131,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 10,
         key: 'steps.review.kind',
         problem: 'unknown value "deploy"',
-        fix: 'use one of "implement", "review", "fix", "generic", "gate", "approval", "merge", "loop"',
+        fix: 'use one of "implement", "review", "fix", "generic", "gate", "approval", "merge", "refine-story", "plan-tasks", "loop"',
       },
     ],
     [
@@ -286,7 +286,7 @@ describe('parseWorkflow (AC-2)', () => {
   it('formats an error as file:line: key: problem — fix', () => {
     const { errors } = parseWorkflow(seeded('kind: review', 'kind: deploy'), 'quick.yaml')
     expect(errors.map(formatError)).toEqual([
-      'quick.yaml:10: steps.review.kind: unknown value "deploy" — fix: use one of "implement", "review", "fix", "generic", "gate", "approval", "merge", "loop"',
+      'quick.yaml:10: steps.review.kind: unknown value "deploy" — fix: use one of "implement", "review", "fix", "generic", "gate", "approval", "merge", "refine-story", "plan-tasks", "loop"',
     ])
   })
 })

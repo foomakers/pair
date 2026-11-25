@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import github from '../../skills/pair-workflow-cycle/scripts/host/github.mjs'
 import filesystem from '../../skills/pair-workflow-cycle/scripts/host/filesystem.mjs'
+import { cardView, workflowCards } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 test('AC-1/2: cardState distinguishes open, closed, and missing board membership', () => {
   let card = { state: 'OPEN', stateReason: null, projectItems: [{ status: { name: 'Review' } }] }
@@ -111,6 +112,8 @@ ${source}
 const GH_BOARD = `
 const title = p => w.projects.find(x => x.id === p).title
 const fields = p => ({ nodes: [{ id: 'F-' + p, name: 'Status', options: ['Todo', 'Review', 'Done'].map(n => ({ id: p + '-' + n, name: n })) }] })
+if (a[0] === 'repo' && a[1] === 'view') { process.stdout.write('owner/repo'); process.exit(0) }
+if (a[0] === 'api' && a[1].includes('/dependencies/blocked_by?')) { process.stdout.write('[]'); process.exit(0) }
 if (a[0] === 'issue' && a[1] === 'view') { process.stdout.write(JSON.stringify({ state: 'OPEN', stateReason: null, projectItems: w.items.map(i => ({ title: title(i.project), status: { optionId: i.status ? 'o' : '', name: i.status ?? '' } })) })); process.exit(0) }
 if (a[0] === 'project' && a[1] === 'list') { process.stdout.write(JSON.stringify({ projects: w.projects, totalCount: w.projects.length })); process.exit(0) }
 if (a[0] === 'api' && a[1] === 'graphql') {
@@ -119,11 +122,24 @@ if (a[0] === 'api' && a[1] === 'graphql') {
   if (q.includes('addProjectV2ItemById')) { w.log.push('add:' + f('project')); w.items.push({ id: 'I-' + f('project'), project: f('project'), status: null }); save(); process.stdout.write(JSON.stringify({ data: { addProjectV2ItemById: { item: { id: 'I-' + f('project') } } } })); process.exit(0) }
   if (q.includes('updateProjectV2ItemFieldValue')) { const it = w.items.find(i => i.id === f('item')); it.status = f('option').split('-').pop(); w.log.push('status:' + f('project') + ':' + it.status); save(); process.stdout.write(JSON.stringify({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: it.id, fieldValueByName: { name: it.status } } } } })); process.exit(0) }
   if (q.includes('projectsV2')) { process.stdout.write(JSON.stringify({ data: { repository: { projectsV2: { nodes: w.projects.filter(p => (w.linked ?? []).includes(p.id)) } } } })); process.exit(0) }
-  process.stdout.write(JSON.stringify({ data: { repository: { issue: { id: 'C42', projectItems: { nodes: w.items.map(i => ({ id: i.id, project: { id: i.project, title: title(i.project), fields: fields(i.project) } })) } } } } })); process.exit(0)
+  process.stdout.write(JSON.stringify({ data: { repository: { issue: { id: 'C42', projectItems: { nodes: w.items.map(i => ({ id: i.id, fieldValueByName: i.status ? { name: i.status } : null, project: { id: i.project, title: title(i.project), fields: fields(i.project) } })) } } } } })); process.exit(0)
 }
 process.stderr.write('unexpected ' + a.join(' ')); process.exit(3)
 `
 const wow = project => `- \`pm-tool\`: \`github\`\n- \`pm-project\`: \`${project}\`\n`
+test('R744-03: selection and confirmation read the adopted project ID even when titles match', () => {
+  for (const member of [true, false]) {
+    const gh = stubBin('gh', {
+      projects: [{ id: 'PA', number: 1, title: 'Same title' }, { id: 'PO', number: 2, title: 'Same title' }],
+      items: [{ id: 'I-PO', project: 'PO', status: 'Refined' }, ...(member ? [{ id: 'I-PA', project: 'PA', status: 'Todo' }] : [])],
+    }, GH_BOARD)
+    const host = { pmTool: 'github', pm: github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('1') }) }
+    const expected = member ? 'Todo' : null
+    assert.equal(cardView({ story: '42', host, scopedBoard: true }).boardState, expected)
+    assert.equal(workflowCards(host, { cards: '42' }).cards[0].boardState, expected)
+    assert.equal(host.pm.cardState({ id: '42' }).boardState, expected)
+  }
+})
 test('r0-3: GitHub repairs the adopted board and never writes an unrelated project', () => {
   const gh = stubBin('gh', { projects: [{ id: 'PA', title: 'Adopted board' }, { id: 'PO', title: 'P-other' }], items: [{ id: 'I-PO', project: 'PO', status: 'Todo' }] }, GH_BOARD)
   const pm = github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('Adopted board') })
@@ -203,6 +219,22 @@ process.stderr.write('unexpected ' + a.join(' ')); process.exit(3)
 `
 const azItem = (state, extra = {}) => ({ 'System.Title': 'S', 'System.Description': '', 'System.TeamProject': 'Proj', 'System.State': state, 'System.WorkItemType': 'User Story', 'System.AreaPath': 'Proj\\Team A', ...extra })
 const AGILE = 'Team: Team A. Area path: Proj\\Team A.\n\n## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| New | Draft |\n| Active | In Progress |\n| Resolved | Review |\n| Closed | Done |\n'
+test('R744-22: Azure workflow selection reads creation and assignee facts', () => {
+  const created = '2026-01-21T10:00:00Z'
+  const items = {
+    1: azItem('New', { 'System.CreatedDate': created, 'System.AssignedTo': { displayName: 'Alice', uniqueName: 'alice@example.com' } }),
+    2: azItem('New', { 'System.CreatedDate': created, 'System.AssignedTo': 'Alice <alice@example.com>' }),
+    3: azItem('New', { 'System.CreatedDate': created }),
+  }
+  const az = stubBin('az', { items }, AZ)
+  const pm = azure.instantiate({ azBin: az.bin, wayOfWorking: AGILE })
+  const { cards } = workflowCards({ pm, pmTool: 'azure-devops' }, { cards: '1,2,3' })
+  assert.deepEqual(cards.map(card => [card.id, card.created, card.assignees]), [
+    ['1', created, ['alice@example.com']],
+    ['2', created, ['alice@example.com']],
+    ['3', created, []],
+  ])
+})
 test('r0-2: Azure closes a merged story to the adopted Done state and an abandoned one to Removed', () => {
   const az = stubBin('az', { states: ['New', 'Active', 'Resolved', 'Closed', 'Removed'], items: { 7: azItem('Resolved'), 8: azItem('Resolved') }, prs: [] }, AZ)
   const pm = azure.instantiate({ azBin: az.bin, wayOfWorking: AGILE })
@@ -239,7 +271,7 @@ test('r0-8: Azure linkedPr matches opaque bound PM ids exactly', () => {
 })
 
 // r0-3: a Linear project-view board makes `projectId` part of membership.
-test('r0-3: Linear membership follows the adopted project view and is repaired through projectId', () => {
+test('r0-3 and R744-22: Linear membership and workflow selection read issue facts', () => {
   const dir = mkdtempSync(join(tmpdir(), 'pair-linear-view-'))
   const file = join(dir, 'world.json')
   writeFileSync(file, JSON.stringify({ project: null, log: [] }))
@@ -251,7 +283,11 @@ const req = JSON.parse(fs.readFileSync(0, 'utf8'))
 const op = /^(?:query|mutation)\\s+(\\w+)/.exec(req.query)[1]
 const reply = data => { fs.writeFileSync(${JSON.stringify(file)}, JSON.stringify(w)); process.stdout.write(JSON.stringify({ data }) + '\\n200'); process.exit(0) }
 const issue = () => ({ id: 'u1', identifier: 'ENG-1', url: 'https://linear.app/acme/issue/ENG-1', title: 't', description: '', completedAt: null, state: { name: 'Todo', type: 'unstarted' }, team: { id: 't1', key: 'ENG' }, labels: { nodes: [] }, project: w.project })
-if (op === 'PairIssue') reply({ issue: issue() })
+if (op === 'PairIssue') reply({ issue: {
+  ...issue(),
+  ...(req.query.includes('createdAt') && { createdAt: '2026-01-21T10:00:00Z' }),
+  ...(req.query.includes('assignee { email }') && { assignee: { email: 'alice@example.com' } }),
+} })
 if (op === 'PairProject') reply({ projects: { nodes: req.variables.name === 'Roadmap' ? [{ id: 'p1', name: 'Roadmap' }] : [] } })
 if (op === 'PairSetProject') { w.project = { id: req.variables.projectId, name: 'Roadmap' }; w.log.push('project:' + req.variables.projectId); reply({ issueUpdate: { success: true } }) }
 process.stderr.write('unexpected ' + op); process.exit(3)
@@ -263,6 +299,9 @@ process.stderr.write('unexpected ' + op); process.exit(3)
   assert.equal(pm.ensureBoardMembership({ id: 'ENG-1' }).confirmed, true)
   assert.deepEqual(pm.cardState({ id: 'ENG-1' }), { issueState: 'OPEN', issueReason: null, boardState: 'Todo', member: true })
   assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).log, ['project:p1'])
+  const { cards: [card] } = workflowCards({ pm, pmTool: 'linear' }, { cards: 'ENG-1' })
+  assert.equal(card.created, '2026-01-21T10:00:00Z')
+  assert.deepEqual(card.assignees, ['alice@example.com'])
 })
 
 // r3-13: a failing host call never echoes argv values or card text — not even a short body.

@@ -181,13 +181,22 @@ export default defineAdapter({
         return { id, number: id, inScope: !team || key === team }
       },
       readCard(ref, { fields } = {}) {
-        const v = view(issue(ref))
+        const extra = [fields?.includes('assignees') ? 'assignee { email }' : '', fields?.includes('createdAt') ? 'createdAt' : ''].join(' ')
+        const i = issue(ref, 'readCard', extra)
+        const login = i.assignee?.email
+        const v = { ...view(i), assignees: login ? [{ login }] : [], createdAt: i.createdAt }
         return fields ? Object.fromEntries(fields.map(f => [f, v[f]])) : { body: v.body }
       },
       findCards({ search } = {}) {
         const filter = { description: { contains: String(search ?? '') }, ...(team ? { team: { key: { eq: team } } } : {}) }
         const rows = gql(`query PairFind($filter: IssueFilter) { issues(filter: $filter, first: 50) { nodes { ${ISSUE} } } }`, { filter })?.issues?.nodes ?? []
         return rows.map(view).map(({ number, url, title, body }) => ({ number, url, title, body }))
+      },
+      childCards({ id }) {
+        return (issue(id, 'childCards', 'children(first: 100) { nodes { identifier } pageInfo { hasNextPage } }').children?.nodes ?? []).map(child => ({ id: child.identifier }))
+      },
+      blockedBy({ id }) {
+        return (issue(id, 'blockedBy', 'inverseRelations(first: 100) { nodes { type issue { identifier } } }').inverseRelations?.nodes ?? []).filter(rel => rel.type === 'blocks').map(rel => rel.issue.identifier)
       },
       listCards() {
         const cards = []

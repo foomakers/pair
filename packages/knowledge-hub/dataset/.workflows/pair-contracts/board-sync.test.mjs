@@ -539,7 +539,7 @@ async function repairCliWire(statePath, tool) {
         state.board = 'Done'; persist()
         return out({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { fieldValueByName: { name: 'Done' } } } } })
       }
-      return out({ data: { repository: { issue: { id: 'issue', projectItems: { nodes: [{ id: 'item', project: { id: 'project', title: 'Fixture', fields: { nodes: [{ id: 'status', name: 'Status', options: [{ id: 'done', name: 'Done' }] }] } } }] } } } } })
+      return out({ data: { repository: { issue: { id: 'issue', projectItems: { nodes: [{ id: 'item', fieldValueByName: { name: state.board }, project: { id: 'project', title: 'Fixture', fields: { nodes: [{ id: 'status', name: 'Status', options: [{ id: 'done', name: 'Done' }] }] } } }] } } } } })
     }
   }
   if (tool === 'azure-devops') {

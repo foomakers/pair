@@ -1,13 +1,13 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1078,
-  "files": 403,
-  "distinctContents": 368,
+  "files": 402,
+  "distinctContents": 367,
   "dispositionCounts": {
     "standalone-script": 15,
     "os-guarantee": 25,
     "type-contract": 13,
-    "in-flight-churn": 245,
+    "in-flight-churn": 244,
     "repo-contract": 104,
     "boundary-adapter": 1
   },
@@ -5126,22 +5126,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "packages/knowledge-hub/dataset/.workflows/pair-profile-batch-regressions.test.mjs",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.test.mjs",
-      "hash": "58cca1761412744c2d1000205e538c0df29ca0beeb1a513a371e94ca1717d64b",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 13
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-refine-batch.test.mjs",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"

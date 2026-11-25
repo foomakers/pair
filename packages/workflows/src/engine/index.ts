@@ -1,9 +1,20 @@
 import { createHash } from 'node:crypto'
 import { basename, join } from 'node:path'
-import { parseWorkflow, type KindName, type Step, type When, type Workflow } from '../grammar'
+import { readResult } from '../dispatch'
+import {
+  addressedSteps,
+  cardStateOf,
+  cardStateToConfirm,
+  parseWorkflow,
+  type CardState,
+  type KindName,
+  type Step,
+  type When,
+  type Workflow,
+} from '../grammar'
 import { parseFrozenConfiguration } from '../configuration'
 import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
-import { matches, type CardFacts } from '../select'
+import { effectiveSelection, matches, type CardFacts } from '../select'
 
 /**
  * The disk, as the engine needs it: the run directory and nothing else. A structural subset of the
@@ -44,6 +55,10 @@ export interface StepRecord {
   readonly reason?: string
   readonly detail?: string
   readonly outputs?: Readonly<Record<string, unknown>>
+  /** A confirmed result waiting for the host's Ready transition. */
+  readonly pendingSuccess?: StepResult
+  /** Selection status before a Ready transition whose staged result became stale. */
+  readonly retryBoardStatus?: string
 }
 
 /** `state.json`: the only source for `next`. */
@@ -79,6 +94,10 @@ export interface StepLaunch {
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
   readonly round?: number
+  readonly confirmState?: CardState
+  readonly pendingSuccess?: StepResult
+  readonly retryBoardStatus?: string
+
   /** Distinguishes a replay from earlier executions that used the same inputs. */
   readonly replayAttempt?: number
 }
@@ -328,6 +347,93 @@ function settledStatus(
     : undefined
 }
 
+export function completedRun(
+  run: RunDirectory,
+  identity: { card: string; workflow: string },
+): boolean {
+  const state = readState(run)
+  return (
+    state !== undefined &&
+    state.card === identity.card &&
+    state.workflow.name === identity.workflow &&
+    settledStatus(run, state, exhaustedLoop(state)) === 'complete'
+  )
+}
+
+// Older runs saved the failed transition and the original agent result separately.
+const legacyReadyFailure = (saved: StepRecord) =>
+  saved.state === 'failed' &&
+  saved.reason === 'result-not-confirmed' &&
+  /^card state .+ not set: /.test(saved.detail ?? '')
+
+function pendingTransitionResult(
+  run: RunDirectory,
+  step: Step,
+  saved?: StepRecord,
+): StepResult | undefined {
+  if (saved === undefined || step.kind === 'loop') return undefined
+  if (saved.pendingSuccess !== undefined) return saved.pendingSuccess
+  if (cardStateOf(step)?.state !== 'Ready' || !legacyReadyFailure(saved)) return undefined
+  const log = join(resultDir(run, step.id, undefined), 'output.log')
+  if (!run.files.existsSync(log)) return undefined
+  const result = readResult(run.files.readFileSync(log), kindByName[step.kind])
+  return result.status === 'ok' ? result : undefined
+}
+
+function stagedBoardStatus(
+  run: RunDirectory,
+  state: RunStateFile,
+  steps: readonly Step[],
+): string | undefined {
+  for (const step of steps) {
+    const saved = state.steps[step.id]
+    const status =
+      saved?.retryBoardStatus ?? pendingTransitionResult(run, step, saved)?.['boardStatus']
+    if (typeof status === 'string') return status
+  }
+  return undefined
+}
+
+/** The board status used to reselect unfinished refinement or a staged transition. */
+export function pendingBoardStatus(
+  run: RunDirectory,
+  identity: { card: string; workflow: string },
+  draftBoardStatus?: string,
+): string | undefined {
+  const state = readState(run)
+  if (state?.card !== identity.card || state.workflow.name !== identity.workflow) return undefined
+  const { steps } = frozenWorkflow(run)
+  const staged = stagedBoardStatus(run, state, steps)
+  if (staged !== undefined) return staged
+  if (
+    draftBoardStatus !== undefined &&
+    steps.some(step => {
+      const saved = state.steps[step.id]
+      return (
+        (step.kind === 'refine-story' || step.kind === 'plan-tasks') &&
+        saved !== undefined &&
+        saved.state !== 'skipped' &&
+        (saved.state === 'ok' || Boolean(saved.executions))
+      )
+    }) &&
+    settledStatus(run, state, exhaustedLoop(state)) !== 'complete'
+  )
+    return draftBoardStatus
+  return undefined
+}
+
+/** The latest successful refinement before a task-planning step. */
+export function priorRefinement(run: RunDirectory, id: string): StepRecord['outputs'] {
+  const state = requireState(run)
+  let outputs: StepRecord['outputs']
+  for (const step of addressedSteps(frozenWorkflow(run))) {
+    if (step.id === id) break
+    const saved = state.steps[step.id]
+    if (step.kind === 'refine-story' && saved?.state === 'ok') outputs = saved.outputs
+  }
+  return outputs
+}
+
 async function resume(
   run: RunDirectory,
   saved: RunStateFile,
@@ -351,7 +457,7 @@ async function resume(
     options.moreRounds === undefined ? exhaustedLoop(state) : undefined,
   )
   if (settled === undefined) {
-    await writeState(run, { ...state, steps: reopenedSteps(state, frozenWorkflow(run)) })
+    await writeState(run, { ...state, steps: reopenedSteps(run, state, frozenWorkflow(run)) })
     return { status: 'resumed', warnings }
   }
   if (state !== saved) await writeState(run, state)
@@ -380,18 +486,29 @@ function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay):
 }
 
 // A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
-function reopenedSteps(state: RunStateFile, workflow: Workflow): Record<string, StepRecord> {
-  const topLevelIds = new Set(workflow.steps.map(step => step.id))
+function reopenedSteps(
+  run: RunDirectory,
+  state: RunStateFile,
+  workflow: Workflow,
+): Record<string, StepRecord> {
+  const topLevel = new Map(workflow.steps.map(step => [step.id, step]))
   return Object.fromEntries(
-    Object.entries(state.steps).map(([id, step]) => [
-      id,
-      step.state === 'ok' || (step.state === 'failed' && !topLevelIds.has(id))
-        ? step
-        : {
-            state: 'pending' as const,
-            ...(step.executions !== undefined && { executions: step.executions }),
-          },
-    ]),
+    Object.entries(state.steps).map(([id, saved]) => {
+      const step = topLevel.get(id)
+      if (saved.state === 'ok' || (saved.state === 'failed' && step === undefined))
+        return [id, saved]
+      const pendingSuccess =
+        step === undefined ? saved.pendingSuccess : pendingTransitionResult(run, step, saved)
+      return [
+        id,
+        {
+          state: 'pending',
+          ...(saved.executions !== undefined && { executions: saved.executions }),
+          ...retryBoardStatusOf(saved),
+          ...(pendingSuccess !== undefined && { pendingSuccess }),
+        },
+      ]
+    }),
   )
 }
 
@@ -502,6 +619,20 @@ function loopChild(
 
 const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 
+const pendingOf = (saved?: Pick<StepRecord, 'pendingSuccess'>) =>
+  saved?.pendingSuccess === undefined ? {} : { pendingSuccess: saved.pendingSuccess }
+
+const retryBoardStatusOf = (saved?: Pick<StepRecord, 'retryBoardStatus'>) =>
+  saved?.retryBoardStatus === undefined ? {} : { retryBoardStatus: saved.retryBoardStatus }
+
+const awaitingTransition = (saved?: StepRecord) =>
+  saved?.pendingSuccess !== undefined || saved?.retryBoardStatus !== undefined
+
+const confirmationOf = (step: Step) => {
+  const confirmState = cardStateToConfirm(step)
+  return confirmState === undefined ? {} : { confirmState }
+}
+
 const replayAttemptOf = (state: RunStateFile): number | undefined => {
   if (!state.replay) return undefined
   const from = state.replay.from
@@ -528,13 +659,16 @@ async function nextInLoop(
   if (childHalt !== undefined) return { ready: [], run: childHalt }
   const attempt = launches(state, id)
   const round = state.loops?.[step.id]?.round ?? 1
+  const saved = state.steps[id]
+  const pending = { ...pendingOf(saved), ...retryBoardStatusOf(saved) }
+
   const replay = replayLaunch(state)
   await writeState(run, {
     ...state,
     steps: {
       ...state.steps,
       [step.id]: { state: 'running', round },
-      [id]: { state: 'running', executions: attempt, round },
+      [id]: { state: 'running', executions: attempt, round, ...pending },
     },
   })
   const launch: StepLaunch = {
@@ -543,6 +677,8 @@ async function nextInLoop(
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
     ...gatesOf(child),
+    ...confirmationOf(child),
+    ...pending,
     inputs: pick({ ...inputsBefore(step, steps, state), ...state.latest }, child.kind),
     attempt,
     round,
@@ -563,6 +699,8 @@ export async function next(
   readonly ready: readonly StepLaunch[]
   readonly run: RunState
   readonly skipped?: readonly SkippedStep[]
+  /** The condition needs an unavailable fact. The stored step remains unchanged. */
+  readonly blocked?: SkippedStep & { readonly detail: string }
 }> {
   const state = requireState(run)
   const { steps } = frozenWorkflow(run)
@@ -570,8 +708,15 @@ export async function next(
   if (step === undefined) return { ready: [], run: finalState(state, steps), ...seen(skipped) }
   const halted = HALTED[state.steps[step.id]?.state ?? 'pending']
   if (halted !== undefined) return { ready: [], run: halted, ...seen(skipped) }
-  const skip = await skipIfNotWhen(run, state, step, card)
-  if (skip !== undefined) return next(run, card, [...skipped, skip])
+  const condition = await checkWhen(run, state, step, card)
+  if (condition?.error !== undefined)
+    return {
+      ready: [],
+      run: 'failed',
+      blocked: { ...condition.step, detail: condition.error },
+      ...seen(skipped),
+    }
+  if (condition !== undefined) return next(run, card, [...skipped, condition.step])
   const launched = await (step.kind === 'loop'
     ? nextInLoop(run, state, steps, step)
     : nextPlain(run, state, steps, step))
@@ -599,36 +744,49 @@ function outputMismatch(
     : `${output} is ${JSON.stringify(value)}`
 }
 
-/** Why `when` does not match now, or `undefined` when the step runs. */
-async function whenMismatch(
+/** The mismatch or unavailable fact preventing `when` from matching. */
+async function whenFailure(
   when: When | undefined,
   state: RunStateFile,
   card: (() => Promise<CardFacts>) | undefined,
-): Promise<string | undefined> {
+): Promise<{ reason: string; unavailable?: true } | undefined> {
   if (when === undefined) return undefined
   const { output, is, ...filter } = when
-  if (Object.keys(filter).length > 0 && card !== undefined && !matches(filter, await card()))
-    return `card does not match ${JSON.stringify(filter)}`
-  return output === undefined ? undefined : outputMismatch(output, is, state)
+  const outputReason = output === undefined ? undefined : outputMismatch(output, is, state)
+  if (Object.keys(filter).length > 0 && card !== undefined) {
+    const facts = await card()
+    if (
+      facts.statusError !== undefined &&
+      effectiveSelection(undefined, undefined, filter).needsStatus(facts)
+    )
+      return outputReason === undefined
+        ? { reason: facts.statusError, unavailable: true }
+        : { reason: outputReason }
+    if (!matches(filter, facts)) return { reason: `card does not match ${JSON.stringify(filter)}` }
+  }
+  return outputReason === undefined ? undefined : { reason: outputReason }
 }
 
-/** Writes `skipped` for the step about to start when its `when` does not match; a loop checks its next child. */
-async function skipIfNotWhen(
+/** Persists a known mismatch. An unavailable fact leaves the step eligible for retry. */
+async function checkWhen(
   run: RunDirectory,
   state: RunStateFile,
   step: Step,
   card: (() => Promise<CardFacts>) | undefined,
-): Promise<SkippedStep | undefined> {
+): Promise<{ step: SkippedStep; error?: string } | undefined> {
   const inLoop = step.kind === 'loop'
   const child = inLoop ? loopChild(state, step).child : undefined
   const target = child ?? step
   const id = inLoop ? `${step.id}/${target.id}` : step.id
-  const why = await whenMismatch(target.when, state, card)
-  if (why === undefined) return undefined
+  if (awaitingTransition(state.steps[id])) return undefined
+  const failure = await whenFailure(target.when, state, card)
+  if (failure === undefined) return undefined
+  const checked = { id, kind: target.kind as KindName }
+  if (failure.unavailable) return { step: checked, error: failure.reason }
   const entry: StepRecord = {
     state: 'skipped',
     summary: 'skipped: when did not match',
-    reason: why,
+    reason: failure.reason,
   }
   const recorded = { ...state.steps, [id]: entry }
   const progress = inLoop
@@ -639,7 +797,7 @@ async function skipIfNotWhen(
     steps: progress.steps,
     ...(progress.loops !== undefined && { loops: progress.loops }),
   })
-  return { id, kind: target.kind as KindName }
+  return { step: checked }
 }
 
 async function nextPlain(
@@ -651,7 +809,15 @@ async function nextPlain(
   const launch = plainLaunch(state, steps, step)
   await writeState(run, {
     ...state,
-    steps: { ...state.steps, [step.id]: { state: 'running', executions: launch.attempt } },
+    steps: {
+      ...state.steps,
+      [step.id]: {
+        state: 'running',
+        executions: launch.attempt,
+        ...pendingOf(launch),
+        ...retryBoardStatusOf(launch),
+      },
+    },
   })
   return { ready: [launch], run: 'running' }
 }
@@ -660,12 +826,16 @@ function plainLaunch(state: RunStateFile, steps: readonly Step[], step: Step): S
   if (step.kind === 'loop') throw new Error('loop is not directly launchable')
   const attempt = launches(state, step.id)
   const replayAttempt = replayAttemptOf(state)
+  const saved = state.steps[step.id]
   return {
     id: step.id,
     kind: step.kind,
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
     ...gatesOf(step),
+    ...confirmationOf(step),
+    ...pendingOf(saved),
+    ...retryBoardStatusOf(saved),
     inputs: pick(inputsBefore(step, steps, state), step.kind),
     attempt,
     ...(replayAttempt !== undefined && { replayAttempt }),
@@ -795,6 +965,21 @@ async function writeResult(
 const loopRound = (state: RunStateFile, outer: Step | undefined): number | undefined =>
   state.loops?.[outer?.id ?? '']?.round
 
+/** Preserve the confirmed result before the host attempts a remote state write. */
+export async function stageSuccess(
+  run: RunDirectory,
+  id: string,
+  result: StepResult,
+): Promise<void> {
+  const state = requireState(run)
+  const step = state.steps[id]
+  if (step?.state !== 'running' || step.pendingSuccess !== undefined) return
+  await writeState(run, {
+    ...state,
+    steps: { ...state.steps, [id]: { ...step, pendingSuccess: result } },
+  })
+}
+
 /** The `state.json` entry of a settled result. */
 function recordOf(
   { status, summary, reason, detail }: StepResult,
@@ -813,6 +998,25 @@ function recordOf(
   }
 }
 
+type RecordOptions = {
+  readonly output?: string | undefined
+  readonly invalidatePendingSuccess?: boolean | undefined
+}
+
+function retryAfter(status: StepStatus, previous?: StepRecord, invalidate?: boolean) {
+  if (status === 'ok') return {}
+  const retryBoardStatus =
+    previous?.retryBoardStatus ??
+    (invalidate ? previous?.pendingSuccess?.['boardStatus'] : undefined)
+  return {
+    ...(status === 'failed' && !invalidate ? pendingOf(previous) : {}),
+    ...(typeof retryBoardStatus === 'string' && { retryBoardStatus }),
+  }
+}
+
+const recordOptions = (value: string | RecordOptions | undefined): RecordOptions =>
+  typeof value === 'string' ? { output: value } : (value ?? {})
+
 /**
  * Records the result of a step: validated against its kind (a result that breaks the contract is
  * recorded `failed`, `invalid-result`), written to `steps/<id>/result.json`, then to `state.json`.
@@ -822,8 +1026,9 @@ export async function record(
   run: RunDirectory,
   stepId: string,
   result: unknown,
-  output?: string,
+  outputOrOptions?: string | RecordOptions,
 ): Promise<StepResult> {
+  const { output, invalidatePendingSuccess } = recordOptions(outputOrOptions)
   const state = requireState(run)
   const { step, outer, childId } = launchable(run, stepId)
   const kind = kindByName[step.kind]
@@ -836,7 +1041,11 @@ export async function record(
       .filter(name => name in settled)
       .map(name => [name, settled[name]]),
   )
-  const entry = recordOf(settled, outputs, round, state.steps[stepId]?.executions)
+  const previous = state.steps[stepId]
+  const entry = {
+    ...recordOf(settled, outputs, round, previous?.executions),
+    ...retryAfter(status, previous, invalidatePendingSuccess),
+  }
   const { steps, loops } =
     childId !== undefined && outer?.kind === 'loop'
       ? advanceLoop({ state, outer, childId, status, outputs }, { ...state.steps, [stepId]: entry })

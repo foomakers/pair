@@ -53,6 +53,8 @@ Board facts come from the adopted view only: GitHub's `pm-project` project, Line
 | `createCard`      | pm-tool        | `createCard({ repo, title, body })` → returns the created card (adapter-shaped, at least a `url`)               |
 | `findCards`       | pm-tool        | `findCards({ repo, search })` → an array of matching cards                                                       |
 | `listCards`       | pm-tool        | `listCards({ repo })` → all user-story cards as `{ id }` rows for the board audit; paginate instead of silently truncating |
+| `childCards` | pm-tool | `childCards({ id, repo })` → direct children as `{ id, closed? }[]` |
+| `blockedBy` | pm-tool | `blockedBy({ id, repo })` → card identifiers from incoming native dependency links |
 | `linkedPr`        | code-host      | `linkedPr({ id, repo })` → `open`, `merged`, `closed-unmerged`, `none`, `unknown` for unreadable linkage, or `{ gap: 'pr-link-ambiguous', prs, candidates }` when a PR mentioning the card links several cards (`resolveLinked` in the adapter kit); only same-repository PRs count (a fork's PR never links); several linked PRs resolve merged > open > closed-unmerged; read the PR listing once per adapter instance; the audit treats `unknown` as a gap |
 | `workflowPr` | code-host | `workflowPr({ id, repo })` → the unique linked PR number. Throws when absent or ambiguous. |
 | `workflowActor` | code-host | `workflowActor()` → `{ login, human }` for the authenticated caller. |
