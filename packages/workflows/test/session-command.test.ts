@@ -140,6 +140,83 @@ function openSession(args: string[], cwd?: string) {
 
 const readRun = (file: string) => readFileSync(join(runDir, file), 'utf8')
 
+it('#696 AC-8: validates and previews effective settings without opening a run', () => {
+  expect(
+    JSON.parse(successful(['validate', 'quick', '--engine', 'codex', '--config', 'mine'])),
+  ).toMatchObject({
+    file: join(main, workflowFile),
+    workflow: 'quick',
+    configuration: 'mine',
+    steps: [
+      { id: 'draft', settings: { engine: 'codex', model: 'gpt-5', effort: 'medium' } },
+      { id: 'discuss', settings: { engine: 'codex', model: 'gpt-5', effort: 'high' } },
+    ],
+    warnings: [],
+  })
+  expect(existsSync(dirname(runDir))).toBe(false)
+  expect(git('worktree', 'list', '--porcelain')).not.toContain(`worktree ${worktree}\n`)
+})
+
+it('#696 AC-8: validates the mapped configuration from a staged non-Git project', () => {
+  const staged = realpathSync(mkdtempSync(join(tmpdir(), 'pair-workflow-staged-')))
+  try {
+    for (const folder of ['.pair', '.claude'])
+      cpSync(join(main, folder), join(staged, folder), { recursive: true })
+    writeFileSync(
+      join(staged, 'pair.config.json'),
+      JSON.stringify({ workflows: { quick: { configuration: 'mine' } } }),
+    )
+
+    expect(JSON.parse(successful(['validate', 'quick'], undefined, staged))).toMatchObject({
+      file: join(staged, workflowFile),
+      configuration: 'mine',
+    })
+  } finally {
+    rmSync(staged, { recursive: true, force: true })
+  }
+})
+
+it('#696 AC-8: rejects validation when a workflow requires a missing skill', () => {
+  write(workflowFile, workflow.replace('pair-fixture-draft', 'pair-missing-skill'))
+
+  const result = invoke(['validate', 'quick', '--engine', 'codex'])
+  expect(result.status).toBe(1)
+  expect(JSON.parse(result.stderr)).toMatchObject({
+    error: expect.stringMatching(
+      /workflow-invalid:[\s\S]*skill 'pair-missing-skill' is not installed/,
+    ),
+  })
+})
+
+it('#696 design §2: exposes serializable workflow kinds', () => {
+  expect(JSON.parse(successful(['kinds']))).toMatchObject({
+    generic: { name: 'generic', defaultInteractive: false },
+  })
+})
+
+it('#696 design §2: lists project workflows and configurations by source', () => {
+  expect(JSON.parse(successful(['list']))).toMatchObject({
+    workflows: expect.arrayContaining([
+      { name: 'quick', file: join(main, workflowFile), source: 'project' },
+    ]),
+    configurations: expect.arrayContaining([
+      { name: 'mine', file: join(main, configFile), source: 'project' },
+    ]),
+  })
+})
+
+it('#696 design §2: expands included workflow steps in order', () => {
+  write(
+    '.pair/adoption/tech/workflows/nested.yaml',
+    'version: 1\nname: nested\nsteps:\n  included: { kind: generic, uses: quick }\n',
+  )
+
+  expect(JSON.parse(successful(['expand', 'nested']))).toMatchObject({
+    name: 'nested',
+    steps: [{ id: 'included/draft' }, { id: 'included/discuss' }],
+  })
+})
+
 it('#696 AC-1/AC-2/AC-5: advances a session run through the shipped script and resumes its frozen inputs', () => {
   const lease = openSession([
     'start',

@@ -32,6 +32,10 @@ export function sessionMain(cwd: string): string {
   return main
 }
 
+/** Authoring also runs in temporary directories outside Git. */
+export const diagnosticMain = (cwd: string): string =>
+  git(cwd, 'rev-parse', '--git-common-dir') ? sessionMain(cwd) : cwd
+
 function script<T>(scripts: string, cwd: string, file: string, args: string[]): T {
   const result = spawnSync(process.execPath, [join(scripts, file), ...args], {
     cwd,

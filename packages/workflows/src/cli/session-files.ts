@@ -30,11 +30,11 @@ export function isFile(file: string): boolean {
 export const readOptional = (file: string): string | undefined =>
   isFile(file) ? readText(file) : undefined
 
-export const yamlNames = (dir: string): string[] =>
+export const yamlFiles = (dir: string): string[] =>
   existsSync(dir)
     ? readdirSync(dir, { withFileTypes: true })
         .filter(entry => entry.isFile() && /\.ya?ml$/.test(entry.name))
-        .map(entry => entry.name.replace(/\.ya?ml$/, ''))
+        .map(entry => entry.name)
     : []
 
 export function projectConfig(root: string): Record<string, unknown> | undefined {

@@ -1,10 +1,21 @@
 import { dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { schemas } from '../describe'
-import { sessionMain } from '../worktree/session'
+import { kinds, schemas } from '../describe'
+import { diagnosticMain, sessionMain } from '../worktree/session'
 import { nextSession, openSession, recordSession, sessionRun, stopSession } from './session'
+import { workflowDefinition, workflowList, type Project } from './session-project'
+import { validateWorkflow } from './workflow-diagnostics'
+
+const diagnostics = {
+  list: { count: 0, flags: [] },
+  expand: { count: 1, flags: [] },
+  validate: { count: 1, flags: ['engine', 'config'] },
+}
 
 const commands = {
+  schema: { count: 0, flags: [] },
+  kinds: { count: 0, flags: [] },
+  ...diagnostics,
   start: { count: 1, flags: ['card', 'engine', 'config'] },
   resume: { count: 1, flags: ['engine'] },
   next: { count: 1, flags: ['lease'] },
@@ -24,6 +35,8 @@ const options = {
 
 type Command = keyof typeof commands
 const isCommand = (value: string): value is Command => Object.hasOwn(commands, value)
+const isDiagnostic = (command: Command): command is keyof typeof diagnostics =>
+  Object.hasOwn(diagnostics, command)
 
 function required(flag: string, value: string | undefined): string {
   if (value === undefined || value.trim() === '') throw new Error(`--${flag} is required`)
@@ -58,28 +71,40 @@ function operate(
 
 function parseCommand(command: string, args: string[]) {
   if (!isCommand(command))
-    throw new Error('Usage: node workflow.mjs schema|start|resume|next|record|stop')
+    throw new Error(`Usage: node workflow.mjs ${Object.keys(commands).join('|')}`)
 
   const { values, positionals } = parseArgs({ args, allowPositionals: true, options })
   const spec = commands[command]
+  const allowed: readonly string[] = spec.flags
   if (
     positionals.length !== spec.count ||
-    Object.keys(values).some(flag => !spec.flags.includes(flag))
+    Object.keys(values).some(flag => !allowed.includes(flag))
   )
     throw new Error(`invalid arguments for ${command}`)
   return { command, positionals, values }
 }
 
+function inspect(
+  command: keyof typeof diagnostics,
+  project: Project,
+  target: string,
+  values: Partial<Record<keyof typeof options, string>>,
+) {
+  if (command === 'list') return workflowList(project)
+  if (command === 'expand') return workflowDefinition(project, target).workflow
+  return validateWorkflow(project, target, values)
+}
+
 async function main([name = '', ...args]: string[]) {
-  if (name === 'schema' && args.length === 0) return schemas()
   const { command, positionals, values } = parseCommand(name, args)
+  if (command === 'schema') return schemas()
+  if (command === 'kinds') return kinds()
   const [target = ''] = positionals
   const cwd = process.cwd()
-  const project = {
-    cwd,
-    main: sessionMain(cwd),
-    scriptDir: dirname(resolve(process.argv[1] ?? '')),
-  }
+  const scriptDir = dirname(resolve(process.argv[1] ?? ''))
+  if (isDiagnostic(command))
+    return inspect(command, { cwd, main: diagnosticMain(cwd), scriptDir }, target, values)
+  const project = { cwd, main: sessionMain(cwd), scriptDir }
   if (command === 'start')
     return openSession(project, {
       workflow: target,

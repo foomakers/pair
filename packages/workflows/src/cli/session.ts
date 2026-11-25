@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { settingsFor, type Configuration } from '../configuration'
+import { configurationText, type Configuration } from '../configuration'
 import { buildMessage, readResult } from '../dispatch'
 import {
   FROZEN_WORKFLOW,
@@ -14,25 +14,22 @@ import {
   type RunDirectory,
   type StepLaunch,
 } from '../engine'
-import { addressedSteps, type Step, type Workflow } from '../grammar'
-import { interactiveOf, kindByName } from '../kinds'
+import { addressedSteps, type Workflow } from '../grammar'
+import { kindByName } from '../kinds'
 import { sessionCard, sessionWorktree } from '../worktree/session'
 import { withSessionLease } from './run-lock'
 import { readMessage, readText, sessionFiles } from './session-files'
 import {
   cycleScripts,
+  effectiveSettings,
   isSafeText,
   readAdoption,
   workflowConfiguration,
   workflowDefinition,
   workflowName,
+  workflowSummary,
+  type Project,
 } from './session-project'
-
-interface SessionProject {
-  readonly cwd: string
-  readonly main: string
-  readonly scriptDir: string
-}
 
 export function sessionRun(main: string, runId: string): RunDirectory {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(runId) || runId.includes('..'))
@@ -40,22 +37,11 @@ export function sessionRun(main: string, runId: string): RunDirectory {
   return { dir: join(main, '.pair/working/runs', runId), files: sessionFiles }
 }
 
-function effectiveSettings(
-  configuration: Configuration | undefined,
-  workflow: Workflow,
-  step: Step,
-  engine: string,
-) {
-  return configuration === undefined
-    ? { engine }
-    : settingsFor(configuration, step, workflow.aliases)
-}
-
 type StartInput = { workflow: string; card: string; engine: string; config?: string | undefined }
 type OpenInput = { runId: string; engine: string } | StartInput
 type Definition = ReturnType<typeof workflowDefinition>
 
-function startCoordinates(project: SessionProject, input: StartInput) {
+function startCoordinates(project: Project, input: StartInput) {
   const { card } = input
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(card) || card.includes('..'))
     throw new Error(`card-invalid: ${card}`)
@@ -68,12 +54,7 @@ function startCoordinates(project: SessionProject, input: StartInput) {
 
 type Card = ReturnType<typeof sessionCard>
 
-function prepareSessionWorktree(
-  project: SessionProject,
-  scripts: string,
-  card: string,
-  view?: Card,
-) {
+function prepareSessionWorktree(project: Project, scripts: string, card: string, view?: Card) {
   return sessionWorktree(scripts, {
     main: project.main,
     story: card,
@@ -87,7 +68,7 @@ function prepareSessionWorktree(
 }
 
 async function startFresh(
-  project: SessionProject,
+  project: Project,
   run: RunDirectory,
   input: StartInput,
   definition: Definition,
@@ -96,14 +77,20 @@ async function startFresh(
   const { card } = input
   const view = sessionCard(scripts, project.main, card)
   if (view.closed) throw new Error(`card-closed: ${card}`)
-  const configuration = workflowConfiguration(project, {
+  const selected = workflowConfiguration(project, {
     workflow: definition.workflow.name,
     engine: input.engine,
     flag: input.config,
     labels: view.labels,
   })
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
-  const started = await start(run, definition.source, { card, ...configuration })
+  const started = await start(run, definition.source, {
+    card,
+    ...(selected !== undefined && {
+      configuration: { text: configurationText(selected.configuration) },
+      cardLabels: selected.cardLabels,
+    }),
+  })
   await writeAtomic(
     run.files,
     join(run.dir, 'sources.json'),
@@ -113,7 +100,7 @@ async function startFresh(
 }
 
 async function resumeSaved(
-  project: SessionProject,
+  project: Project,
   run: RunDirectory,
   input: OpenInput,
   definition: Definition | undefined,
@@ -133,29 +120,7 @@ async function resumeSaved(
   return { ...(await start(run, { file, text }, { card })), card, worktree }
 }
 
-function startSummary(run: RunDirectory, engine: string) {
-  const workflow = frozenWorkflow(run)
-  const effective = effectiveConfiguration(run)
-  return {
-    workflow: workflow.name,
-    configuration: effective?.name,
-    steps: addressedSteps(workflow).flatMap(step =>
-      step.kind === 'loop'
-        ? []
-        : [
-            {
-              id: step.id,
-              kind: step.kind,
-              skill: step.skill ?? kindByName[step.kind].defaultSkill,
-              interactive: interactiveOf(step),
-              settings: effectiveSettings(effective, workflow, step, engine),
-            },
-          ],
-    ),
-  }
-}
-
-export async function openSession(project: SessionProject, input: OpenInput) {
+export async function openSession(project: Project, input: OpenInput) {
   const { runId, definition } =
     'card' in input
       ? startCoordinates(project, input)
@@ -174,7 +139,7 @@ export async function openSession(project: SessionProject, input: OpenInput) {
       worktree: opened.worktree,
       result: {
         ...opened,
-        ...startSummary(run, lease.engine),
+        ...workflowSummary(frozenWorkflow(run), effectiveConfiguration(run), lease.engine),
         runId,
         lease: lease.token,
       },
