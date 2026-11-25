@@ -31,7 +31,7 @@ export const refineStory: StepKind = {
     properties: { mode: { enum: ['interactive', 'autonomous'] } },
   },
   guidance:
-    'Pass the card input as $story and $approval: auto and $prepare: hold-never to the skill. Record evidence-backed answers in ## Assumptions. Leave the board transition to the host. Return open product questions in the summary of a needs-human result.',
+    'Pass the card input as $story and $approval: auto and $prepare: hold-never to the skill. Record evidence-backed answers in ## Assumptions. Apply the adopted risk label in the tracker and read it back before returning ok. Leave the board transition to the host. Return open product questions in the summary of a needs-human result.',
   escalations: ['A question requires a product decision.'],
 }
 
