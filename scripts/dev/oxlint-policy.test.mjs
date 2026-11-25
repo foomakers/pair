@@ -55,6 +55,9 @@ test('#693 AC-2 preserves package lint scope and check/fix behavior', t => {
   assert.equal(lint(cwd, 'tracked.ts').status, 1)
   assert.equal(lint(cwd, join(cwd, 'tracked.ts')).status, 1)
   assert.equal(lint(cwd, 'ignored.config.ts').status, 0)
+  for (const file of ['ignored.vue', 'ignored.svelte', 'ignored.astro']) {
+    assert.deepEqual(lint(cwd, file), { diagnostics: [], status: 0 }, `#693 R5: ${file}`)
+  }
 
   const fix = lint(cwd, '--workspace', '--fix')
   assert.equal(fix.status, 1)
