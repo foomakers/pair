@@ -11,7 +11,9 @@ import assert from 'node:assert/strict'
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { execFile, spawnSync } from 'node:child_process'
+import { createServer } from 'node:http'
+import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
 import {
@@ -354,6 +356,97 @@ test('#723 assignment: release only the runner when the read-back discovers a ra
   assert.deepEqual(result.owners, ['other-runner'])
   assert.deepEqual(issue().assignees, ['other-runner'])
 })
+
+for (const lateWrite of [false, true]) {
+  test(`#723 F2: concurrent claims keep the first owner (late write: ${lateWrite})`, async t => {
+    const owners = []
+    const events = []
+    const firstReads = []
+    const readBacks = []
+    const reads = new Map()
+    const posts = new Map()
+    let firstConfirmed = false
+    const respond = (response, data) => response.end(JSON.stringify(data))
+    const issue = () => ({ assignees: owners.slice().sort().map(login => ({ login })) })
+    const claim = login => {
+      owners.push(login)
+      events.push({ id: events.length + 1, event: 'assigned', assignee: { login }, assigner: { login } })
+    }
+    const server = createServer(async (request, response) => {
+      const [, login, action] = request.url.split('/')
+      if (action === 'user') return response.end(login)
+      if (action === 'events') return respond(response, events)
+      if (action === 'DELETE') {
+        const chunks = []
+        for await (const chunk of request) chunks.push(chunk)
+        for (const owner of JSON.parse(Buffer.concat(chunks)).assignees) {
+          const index = owners.indexOf(owner)
+          if (index !== -1) owners.splice(index, 1)
+        }
+        return respond(response, issue())
+      }
+      if (action === 'POST') {
+        if (lateWrite && login === 'zulu') {
+          claim(login)
+          return respond(response, issue())
+        }
+        posts.set(login, response)
+        if (lateWrite ? firstConfirmed : posts.size === 2) {
+          if (!lateWrite) claim('zulu')
+          claim('alice')
+          for (const post of posts.values()) respond(post, issue())
+        }
+        return
+      }
+      assert.equal(action, 'read')
+      const count = (reads.get(login) ?? 0) + 1
+      reads.set(login, count)
+      if (count === 1 || (count === 2 && !lateWrite)) {
+        const pending = count === 1 ? firstReads : readBacks
+        pending.push(response)
+        if (pending.length === 2) for (const read of pending) respond(read, issue())
+        return
+      }
+      respond(response, issue())
+      if (lateWrite && login === 'zulu' && count === 2) {
+        firstConfirmed = true
+        if (posts.has('alice')) {
+          claim('alice')
+          respond(posts.get('alice'), issue())
+        }
+      }
+    })
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+    t.after(() => { server.closeAllConnections(); server.close() })
+    const gh = join(mkdtempSync(join(tmpdir(), 'gh-claim-')), 'gh')
+    writeFileSync(gh, `#!/usr/bin/env node
+const fs = require('node:fs')
+const [command, path, method] = process.argv.slice(2)
+const action = path === 'user' ? 'user' : command === 'issue' ? 'read' : path.includes('/events') ? 'events' : method
+const body = action === 'DELETE' ? fs.readFileSync(0, 'utf8') : undefined
+fetch('http://127.0.0.1:${server.address().port}/' + process.env.PAIR_TEST_CLAIM_LOGIN + '/' + action, {
+  method: body ? 'POST' : 'GET', body,
+}).then(response => response.text()).then(data => process.stdout.write(data))
+`)
+    chmodSync(gh, 0o755)
+    const run = promisify(execFile)
+    const adapter = new URL('../../skills/pair-workflow-review-phase/scripts/host/github.mjs', import.meta.url).href
+    const assign = async login => {
+      const { stdout } = await run(process.execPath, ['--input-type=module', '-e', `
+        import github from ${JSON.stringify(adapter)}
+        const pm = github.instantiate({ ghBin: process.argv[1] })
+        process.stdout.write(JSON.stringify(pm.assignCard({ id: 7, repo: 'acme/app' })))
+      `, gh], { env: { ...process.env, PAIR_TEST_CLAIM_LOGIN: login }, timeout: 5000 })
+      return JSON.parse(stdout)
+    }
+    const first = assign('zulu')
+    // Both callers read an empty card. In the late schedule Alice posts only after Zulu confirms.
+    const [winner, loser] = await Promise.all([first, assign('alice')])
+    assert.equal(winner.status, 'assigned')
+    assert.deepEqual(loser, { status: 'held', owners: ['zulu'] })
+    assert.deepEqual(owners, ['zulu'])
+  })
+}
 
 test('github readComment returns the comment`s CANONICAL identity (numeric id, repo from html_url) and its created/updated times — whatever spelling the ref used', () => {
   const comment = { id: 555, html_url: 'https://github.com/Acme/App/pull/7#issuecomment-555', issue_url: 'https://api.github.com/repos/Acme/App/issues/7', body: 'b', user: { login: 'rucka', type: 'User' }, created_at: '2026-11-15T10:00:00Z', updated_at: '2026-11-15T10:05:00Z' }
