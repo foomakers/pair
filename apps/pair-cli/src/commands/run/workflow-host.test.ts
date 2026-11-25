@@ -830,7 +830,7 @@ it('#704 F6: the default live terminal prints the final stderr tail (AC-4)', asy
     ),
   ).toBe(0)
   expect(output).toContain('Process fault — implement attempt 1')
-  expect(output).toContain('    stderr: Connection refused\n')
+  expect(output).toContain('  stderr: Connection refused\n')
 })
 
 it('#704 AC-4: quick retries a killed agent and records both diagnoses', async () => {
@@ -880,11 +880,11 @@ it('#704 AC-4: quick retries a killed agent and records both diagnoses', async (
     expect.arrayContaining([
       expect.stringMatching(/Process fault — implement attempt 1 .*signal=SIGKILL/),
       expect.stringMatching(/Process fault — implement attempt 2 .*signal=SIGKILL/),
-      '    stderr: line 25',
+      '  stderr: line 25',
       expect.stringContaining('Run: parked at step implement'),
     ]),
   )
-  expect(lines).not.toContain('    stderr: line 5')
+  expect(lines).not.toContain('  stderr: line 5')
 })
 
 describe('skill and options of a step (AC-4, AC-5)', () => {

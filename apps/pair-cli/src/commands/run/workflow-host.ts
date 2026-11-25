@@ -555,7 +555,7 @@ function reportProcessFaults(outcome: RunOutcome): void {
       console.log(
         `  Process fault — ${location} attempt ${attempt} (${kind}): ${detail} [${process}]`,
       )
-      for (const line of stderrTail) console.log(`    stderr: ${line}`)
+      for (const line of stderrTail) console.log(`  stderr: ${line}`)
     }
   }
 }
