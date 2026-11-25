@@ -270,11 +270,29 @@ export function agentMessageOf(engine: EngineDefinition, payload: unknown): stri
   return typeof text === 'string' ? text : undefined
 }
 
+function piFinalText(payload: unknown): string | undefined {
+  if (!matches(payload, { type: 'message_end', 'message.role': 'assistant' })) return undefined
+  const reason = fieldAt(payload, 'message.stopReason')
+  if (reason !== 'stop' && reason !== 'endTurn') return undefined
+  const content = fieldAt(payload, 'message.content')
+  if (!Array.isArray(content)) return undefined
+  const parts = content.flatMap(part => {
+    const value = fieldAt(part, 'text')
+    return fieldAt(part, 'type') === 'text' && typeof value === 'string' ? [value] : []
+  })
+  return parts.length === 0 ? undefined : parts.join('\n')
+}
+
 /**
  * US-652: the agent's final text as ONE decoded event carries it — a terminal event's `resultField`,
  * else the engine's agent message. The last defined value over a stream is the agent's final message.
  */
 export function finalTextOf(engine: EngineDefinition, payload: unknown): string | undefined {
+  if (engine.id === 'pi') return piFinalText(payload)
+  if (engine.id === 'opencode' && matches(payload, { type: 'text', 'part.type': 'text' })) {
+    const text = fieldAt(payload, 'part.text')
+    return typeof text === 'string' ? text : undefined
+  }
   const rule = engine.terminalEvents.find(candidate => matches(payload, candidate.match))
   const text = rule?.resultField ? fieldAt(payload, rule.resultField) : undefined
   return typeof text === 'string' ? text : agentMessageOf(engine, payload)
