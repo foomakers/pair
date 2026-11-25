@@ -48,6 +48,7 @@ const run = (reviewed: string) => {
       return { outcome: 'success', detail: 'terminal event: success' }
     },
     readCard: async () => ({ title: 'A card' }),
+    readResultFacts: async () => ({ head: HEAD }),
     prepareWorktree: async ({ main, card }) => join(main, 'worktrees', card),
     engineAvailable: () => true,
   }

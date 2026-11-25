@@ -218,7 +218,7 @@ async function readGh(
   throw new Error('host-transient: gh read exhausted')
 }
 
-async function readCard(card: string, cwd: string): Promise<CardView> {
+export async function readCard(card: string, cwd: string): Promise<CardView> {
   const script = join(cwd, CYCLE_STATE_REL)
   if (existsSync(script)) {
     const r = await runHostProcess(process.execPath, [script, 'card', '--story', card], cwd)

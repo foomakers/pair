@@ -3,6 +3,8 @@ import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
 import {
   cardStateOf,
+  completedRun,
+  effectiveSelection,
   checkAgainstEngines,
   describeSettings,
   formatError,
@@ -20,6 +22,8 @@ import {
   type CardState,
   type Configuration,
   type RunOutcome,
+  type StepResult,
+  type ResultFacts,
   type StepEvent,
   type StepLaunch,
   type StepSettings,
@@ -58,6 +62,9 @@ import { ENGINES, isEngineId, type EngineDefinition } from './engines'
 import { engineFacts, resolveConfiguration, type ConfigurationPlan } from './workflow-configuration'
 import { isSafePromptText } from './prompt-safety'
 import { acquireRunLock } from './run-lock'
+import { acquireCardLock } from './card-lock'
+import type { BatchOutcome } from './workflow-batch'
+import { readWorkflowPrHead, readWorkflowCards, type WorkflowCard } from './workflow-facts'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
 import { finalTextOf, type IterationResult } from './stream-reader'
@@ -66,6 +73,7 @@ import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-rende
 import {
   mainCheckoutOrCwd,
   readCardFacts,
+  readCard,
   readRunnableCard,
   resolveBranch,
   runSetupCommand,
@@ -94,6 +102,8 @@ export interface WorkflowHostDependencies {
   readonly runIteration?: (input: SpawnIterationInput) => Promise<IterationResult>
   /** The card's title, or why it cannot be run (shipped: the PM adapter read). */
   readonly readCard?: typeof readRunnableCard
+  readonly readSelection?: typeof readWorkflowCards
+  readonly readResultFacts?: (step: StepLaunch, result: StepResult) => Promise<ResultFacts>
   /** Creates or reuses the card's worktree and returns its path (shipped: the cycle's own mechanism). */
   readonly prepareWorktree?: (input: WorktreeInput) => Promise<string>
   /** Whether an executable is on PATH (shipped: a PATH probe). */
@@ -115,7 +125,7 @@ export interface WorktreeInput {
   readonly title: string
 }
 
-interface Services {
+export interface Services {
   readonly fs: FileSystemService
   readonly deps: RunHandlerDependencies
 }
@@ -285,10 +295,11 @@ const hasExpansion = (workflow: Workflow) =>
   )
 
 /** Workflow, validation and engine: everything decided before the card is read or anything is launched. */
-function resolveWorkflowRun(
+export function resolveWorkflowRun(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
   services: Services,
+  resume = true,
 ): Resolved | undefined {
   const { fs } = services
   const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
@@ -299,7 +310,9 @@ function resolveWorkflowRun(
     [source.file]: createHash('sha256').update(source.text).digest('hex'),
   }
   const checked =
-    (config.dryRun ? undefined : resumeWorkflow(fs, request, source, { main, sources })) ??
+    (config.dryRun || !resume
+      ? undefined
+      : resumeWorkflow(fs, request, source, { main, sources })) ??
     checkWorkflow(fs, project, { cwd, main, sources }, source)
   console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
   checked.warnings.forEach(warning => console.log(`  Warning: ${formatError(warning)}`))
@@ -485,13 +498,22 @@ interface Opened {
   readonly effective?: Configuration | undefined
   /** The card's worktree, where gate commands run. */
   readonly worktree?: string
+  readonly report?: (outcome: BatchOutcome) => void
 }
 
 /** What the package asks of this host besides an agent: the card's facts, and the steps it runs itself. */
-function hostKindsOf({ resolved, request, worktree }: Opened, fs: FileSystemService) {
+function hostKindsOf({ resolved, request, worktree }: Opened, { fs, deps }: Services) {
   const way = join(resolved.main, WAY_OF_WORKING)
   return {
     card: () => readCardFacts(request.card, resolved.cwd),
+    readResultFacts:
+      deps.workflow?.readResultFacts ??
+      (async (step: StepLaunch, result: StepResult) => {
+        if (step.kind === 'implement')
+          return { head: await readWorkflowPrHead({ fs, ...resolved }, Number(result['pr'])) }
+        const card = await readCard(request.card, resolved.cwd)
+        return { card: { ...card, boardStatus: card.boardState } }
+      }),
     perform: performHostKind(
       readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
       worktree ?? resolved.cwd,
@@ -605,7 +627,6 @@ async function runOnConsole(
     plain: config.verbose !== true,
   })
   const restore = routeConsoleTo(sink)
-  const pending: Promise<void>[] = []
   try {
     sink.event({ event: 'card-start', card: request.card, title: opened.title })
     const outcome = await runSteps(
@@ -615,24 +636,26 @@ async function runOnConsole(
         isSafeText: isSafePromptText,
         styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
-        ...hostKindsOf(opened, fs),
+        ...hostKindsOf(opened, services),
         report: event => {
           if (event.state === 'running')
             sink.event({ event: 'stage', card: request.card, stage: event.step })
           else console.log(stepLine(event))
+        },
+        async transition(event) {
           const set = cardStateOf(stepOf(resolved, event.step))
           if (set !== undefined && set.when === whenOf(event.state))
-            pending.push(
-              (pending.at(-1) ?? Promise.resolve()).then(() =>
-                setCardState(request.card, set.state, resolved, services),
-              ),
-            )
+            await setCardState(request.card, set.state, resolved, services)
         },
       },
       runDir,
       telemetryOf(config, opened),
     )
-    await Promise.all(pending)
+    opened.report?.({
+      id: request.card,
+      outcome: outcome.run,
+      ...(outcome.last && { lastStep: outcome.last.step, reason: explain(outcome.last) }),
+    })
     return exhaustedEnding(opened, outcome, sink, fs) ?? conclude(outcome, request, sink)
   } finally {
     sink.finish()
@@ -709,7 +732,19 @@ async function drive(
     deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   )
   const stopped = stopOf(started.status, request)
-  if (stopped !== undefined) return stopped
+  if (stopped !== undefined) {
+    opened.report?.({
+      id: request.card,
+      outcome:
+        started.status === 'complete'
+          ? 'skipped'
+          : started.status === 'parked'
+            ? 'parked'
+            : 'failed',
+      reason: started.status === 'complete' ? 'workflow already complete' : 'loop exhausted',
+    })
+    return stopped
+  }
   const worktree = await (deps.workflow?.prepareWorktree ?? cycleWorktree)({
     fs,
     project: resolved.project,
@@ -833,8 +868,13 @@ export async function handleWorkflowRun(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
   services: Services,
+  batch?: {
+    card: WorkflowCard
+    report: (outcome: BatchOutcome) => void
+    releases: Set<() => void>
+  },
 ): Promise<number> {
-  const { fs } = services
+  const { fs, deps } = services
   const resolved = resolveWorkflowRun(config, request, services)
   if (resolved === undefined) return 1
   printPlan(resolved.workflow)
@@ -849,10 +889,71 @@ export async function handleWorkflowRun(
     console.log('  Dry run: the workflow is valid; nothing was launched.')
     return 0
   }
-  const title = await preflight(resolved, request.card, services)
   const runId = request.runId ?? `${resolved.workflow.name}-${request.card}`
   const runDir = join(resolved.main, '.pair/working/runs', runId)
-  fs.mkdirSync(runDir, { recursive: true })
+  if (
+    batch === undefined &&
+    !request.restart &&
+    completedRun(
+      { files: fs, dir: runDir },
+      { workflow: resolved.workflow.name, card: request.card },
+    )
+  ) {
+    console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
+    return 0
+  }
+  const filter =
+    resolved.configuration?.configuration.select?.filter ?? resolved.workflow.select?.filter
+  if (batch === undefined && filter !== undefined) {
+    const { cards } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
+      { fs, ...resolved },
+      { cards: [request.card] },
+    )
+    const card = cards[0]
+    if (
+      card === undefined ||
+      card.closed ||
+      !effectiveSelection(
+        resolved.workflow.select,
+        resolved.configuration?.configuration.select,
+      ).accepts(card)
+    ) {
+      console.log(`  #${request.card}: not-applicable — selection filter`)
+      return 0
+    }
+  }
+  const title = batch?.card.title ?? (await preflight(resolved, request.card, services))
+  const cardLock = acquireCardLock({
+    workingArea: join(resolved.main, '.pair/working'),
+    card: request.card,
+  })
+  if (cardLock.kind !== 'acquired') {
+    batch?.report({ id: request.card, outcome: 'parked', reason: 'card already locked' })
+    console.log(`  card-locked: ${cardLock.path}; nothing was launched.`)
+    return 0
+  }
+  try {
+    return await runLocked(
+      config,
+      { resolved, request, runDir, title, ...(batch && { report: batch.report }) },
+      services,
+      cardLock.lock.release,
+      batch?.releases,
+    )
+  } finally {
+    cardLock.lock.release()
+  }
+}
+
+async function runLocked(
+  config: RunCommandConfig,
+  opened: Opened,
+  services: Services,
+  releaseCard: () => void,
+  releases?: Set<() => void>,
+): Promise<number> {
+  const { runDir } = opened
+  services.fs.mkdirSync(runDir, { recursive: true })
   const lock = acquireRunLock(runDir)
   if (lock.kind === 'run-locked') {
     const holder = lock.pid === undefined ? 'another process' : `pid ${String(lock.pid)}`
@@ -861,12 +962,16 @@ export async function handleWorkflowRun(
     )
     return 1
   }
-  try {
-    return await whileInterruptible(
-      () => lock.release(),
-      () => drive(config, { resolved, request, runDir, title }, services),
-    )
-  } finally {
+  const release = () => {
     lock.release()
+    releaseCard()
+  }
+  const run = () => drive(config, opened, services)
+  releases?.add(release)
+  try {
+    return await (releases === undefined ? whileInterruptible(release, run) : run())
+  } finally {
+    releases?.delete(release)
+    release()
   }
 }

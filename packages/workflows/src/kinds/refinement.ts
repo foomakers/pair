@@ -8,7 +8,8 @@ const inputs = {
 
 const boardStatus = {
   type: 'string',
-  description: 'The current board status read from the card.',
+  description:
+    'The current literal board status read from the card before the host transitions it.',
 } as const
 
 export const refineStory: StepKind = {
@@ -30,7 +31,7 @@ export const refineStory: StepKind = {
     properties: { mode: { enum: ['interactive', 'autonomous'] } },
   },
   guidance:
-    'Pass $approval: auto and $prepare: hold-never to the skill. Record evidence-backed answers in ## Assumptions. Leave the board transition to the host. Return open product questions in the summary of a needs-human result.',
+    'Pass the card input as $story and $approval: auto and $prepare: hold-never to the skill. Record evidence-backed answers in ## Assumptions. Leave the board transition to the host. Return open product questions in the summary of a needs-human result.',
   escalations: ['A question requires a product decision.'],
 }
 
@@ -45,6 +46,6 @@ export const planTasks: StepKind = {
   },
   with: { type: 'object', additionalProperties: false, properties: {} },
   guidance:
-    'Pass $approval: auto. Write the Task Breakdown and leave the board transition to the host.',
+    'Pass the card input as $story and $approval: auto. Write the Task Breakdown and leave the board transition to the host.',
   escalations: ['The task breakdown needs a product decision.'],
 }

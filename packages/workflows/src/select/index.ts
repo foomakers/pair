@@ -3,6 +3,7 @@ export interface CardFacts {
   readonly labels: readonly string[]
   readonly status?: string
   readonly assignee?: string
+  readonly assignees?: readonly string[]
 }
 
 /** `select.filter` and `when`: AND between keys, any-of inside a list. */
@@ -20,7 +21,10 @@ export function matches(filter: Filter, card: CardFacts): boolean {
     (has === undefined || has.some(label => card.labels.includes(label))) &&
     (lacks === undefined || !lacks.some(label => card.labels.includes(label))) &&
     (status === undefined || (card.status !== undefined && status.includes(card.status))) &&
-    (assignee === undefined || (card.assignee !== undefined && assignee.includes(card.assignee)))
+    (assignee === undefined ||
+      (card.assignees ?? (card.assignee === undefined ? [] : [card.assignee])).some(login =>
+        assignee.includes(login),
+      ))
   )
 }
 

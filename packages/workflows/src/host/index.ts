@@ -7,6 +7,7 @@ import {
   type RunState,
   type StepLaunch,
 } from '../engine'
+import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
 import type { KindName } from '../grammar'
 import type { CardFacts } from '../select'
 import { kindByName, type StepResult, type StepStatus } from '../kinds'
@@ -61,8 +62,11 @@ export interface WorkflowHost {
   perform?(step: StepLaunch): Promise<unknown>
   /** Runs the `gates` of a step that ended `ok`: `undefined` when all pass, else the failed result. */
   runGates?(entries: readonly string[], step: StepLaunch): Promise<StepResult | undefined>
+  /** The result's observable platform facts. */
+  readResultFacts?(step: StepLaunch, result: StepResult): Promise<ResultFacts>
   /** Sees every step start and every recorded result, in order. */
   report?(event: StepEvent): void
+  transition?(event: StepEvent): Promise<void>
 }
 
 /** The settings a step launches with. */
@@ -113,6 +117,20 @@ async function gated(
   return (await host.runGates(step.gates ?? [], step)) ?? result
 }
 
+async function confirmed(
+  host: WorkflowHost,
+  step: StepLaunch,
+  result: StepResult,
+): Promise<StepResult> {
+  if (result.status !== 'ok' || !hasResultFacts(step.kind) || host.readResultFacts === undefined)
+    return result
+  try {
+    return confirmResult(step.kind, result, await host.readResultFacts(step, result))
+  } catch (error) {
+    return unconfirmed((error as Error).message)
+  }
+}
+
 /** Launches the agent; a red gate sends the step back to it with the gate output, up to `GATE_RETRIES`. */
 async function launchGated(
   host: WorkflowHost,
@@ -148,7 +166,7 @@ async function launchGated(
     const result = await gated(host, step, read)
     if (retry < GATE_RETRIES && read.status === 'ok' && result.reason?.startsWith('gate-failed'))
       prompt = `${message}\n\nThe host ran the quality gates after your last result and one is red. Fix it, then end your turn with the result block again.\n${(result.detail ?? result.summary).slice(-4000)}`
-    else return record(run, step.id, result, final)
+    else return record(run, step.id, await confirmed(host, step, result), final)
   }
 }
 
@@ -267,7 +285,12 @@ async function ended(
 async function advance(host: WorkflowHost, run: RunDirectory) {
   const found = await next(run, host.card?.bind(host))
   for (const { id, kind } of found.skipped ?? [])
-    host.report?.({ step: id, kind, state: 'skipped', summary: 'skipped: when did not match' })
+    host.report?.({
+      step: id,
+      kind,
+      state: 'skipped',
+      summary: 'skipped: when did not match',
+    })
   return found
 }
 
@@ -285,7 +308,9 @@ export async function runSteps(
     const { ready, run: state } = await advance(host, run)
     const step = ready[0]
     if (state !== 'running' || step === undefined) return ended(state, last, writer)
-    host.report?.({ step: step.id, kind: step.kind, state: 'running' })
+    const launchEvent = { step: step.id, kind: step.kind, state: 'running' } as const
+    host.report?.(launchEvent)
+    await host.transition?.(launchEvent)
     const { status, summary, reason, detail } = await executeMetered(host, run, step, writer)
     last = {
       step: step.id,
@@ -295,6 +320,7 @@ export async function runSteps(
       ...(reason !== undefined && { reason }),
       ...(detail !== undefined && { detail }),
     }
+    await host.transition?.(last)
     host.report?.(last)
   }
 }

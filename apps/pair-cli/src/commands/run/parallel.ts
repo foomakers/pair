@@ -87,26 +87,27 @@ export function outcomeOfExit(id: string, exit: CardProcessExit): Omit<CardOutco
 
 // ── the pool ───────────────────────────────────────────────────────────────────────────────────
 
-export interface PoolInput<T> {
+export interface PoolInput<T, Outcome = CardOutcome> {
   readonly items: readonly T[]
   readonly limit: number
-  readonly worker: (item: T) => Promise<CardOutcome>
+  readonly worker: (item: T) => Promise<Outcome>
+  readonly ready?: (item: T) => boolean
   /** Conflicting resources cannot be active together; waiting items stay in this finite batch. */
   readonly resources?: (item: T) => readonly string[]
   /** Whether a NOT-yet-started item may still start (false once the driver was signalled). */
   readonly mayStart?: () => boolean
   /** Outcome of an item the pool never started (interrupted before its turn). */
-  readonly notStarted: (item: T) => CardOutcome
+  readonly notStarted: (item: T) => Outcome
   /** Outcome of a worker that threw — isolation: the pool never rejects on one card (AC4). */
-  readonly onWorkerError: (item: T, error: unknown) => CardOutcome
+  readonly onWorkerError: (item: T, error: unknown) => Outcome
 }
 
 /** At most `limit` workers in flight; results in input order; never rejects. */
-function startPoolTask<T>(
-  input: PoolInput<T>,
+function startPoolTask<T, Outcome>(
+  input: PoolInput<T, Outcome>,
   index: number,
   state: {
-    results: CardOutcome[]
+    results: Outcome[]
     active: Map<number, Promise<void>>
     held: Set<string>
   },
@@ -127,8 +128,10 @@ function startPoolTask<T>(
   state.active.set(index, task)
 }
 
-export async function runPool<T>(input: PoolInput<T>): Promise<CardOutcome[]> {
-  const results: CardOutcome[] = new Array(input.items.length)
+export async function runPool<T, Outcome = CardOutcome>(
+  input: PoolInput<T, Outcome>,
+): Promise<Outcome[]> {
+  const results: Outcome[] = new Array(input.items.length)
   const mayStart = input.mayStart ?? (() => true)
   const pending = input.items.map((_, index) => index)
   const active = new Map<number, Promise<void>>()
@@ -139,14 +142,19 @@ export async function runPool<T>(input: PoolInput<T>): Promise<CardOutcome[]> {
       for (const index of pending.splice(0)) results[index] = input.notStarted(input.items[index]!)
     }
     while (active.size < input.limit && pending.length > 0) {
-      const position = pending.findIndex(index =>
-        (input.resources?.(input.items[index]!) ?? []).every(resource => !held.has(resource)),
+      const position = pending.findIndex(
+        index =>
+          (input.ready?.(input.items[index]!) ?? true) &&
+          (input.resources?.(input.items[index]!) ?? []).every(resource => !held.has(resource)),
       )
       if (position < 0) break
       const [index] = pending.splice(position, 1)
       startPoolTask(input, index!, state)
     }
-    if (active.size === 0) break
+    if (active.size === 0) {
+      for (const index of pending) results[index] = input.notStarted(input.items[index]!)
+      break
+    }
     await Promise.race(active.values())
   }
   return results

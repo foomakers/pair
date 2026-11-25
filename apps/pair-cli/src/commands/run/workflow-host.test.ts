@@ -86,6 +86,7 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
         : { outcome: 'success', detail: 'terminal event: success' }
     },
     readCard: async () => ({ title: 'A card' }),
+    readResultFacts: async () => ({ head: HEAD }),
     prepareWorktree: async ({ main, card }) => {
       const dir = join(main, 'worktrees', card)
       fs.mkdirSync(dir, { recursive: true })

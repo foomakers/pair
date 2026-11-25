@@ -318,6 +318,19 @@ function settledStatus(
     : undefined
 }
 
+export function completedRun(
+  run: RunDirectory,
+  identity: { card: string; workflow: string },
+): boolean {
+  const state = readState(run)
+  return (
+    state !== undefined &&
+    state.card === identity.card &&
+    state.workflow.name === identity.workflow &&
+    settledStatus(run, state, exhaustedLoop(state)) === 'complete'
+  )
+}
+
 async function resume(
   run: RunDirectory,
   saved: RunStateFile,

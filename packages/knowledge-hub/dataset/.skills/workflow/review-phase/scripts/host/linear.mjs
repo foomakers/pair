@@ -189,6 +189,12 @@ export default defineAdapter({
         const rows = gql(`query PairFind($filter: IssueFilter) { issues(filter: $filter, first: 50) { nodes { ${ISSUE} } } }`, { filter })?.issues?.nodes ?? []
         return rows.map(view).map(({ number, url, title, body }) => ({ number, url, title, body }))
       },
+      childCards({ id }) {
+        return (issue(id, 'childCards', 'children(first: 100) { nodes { identifier } pageInfo { hasNextPage } }').children?.nodes ?? []).map(child => ({ id: child.identifier }))
+      },
+      blockedBy({ id }) {
+        return (issue(id, 'blockedBy', 'inverseRelations(first: 100) { nodes { type issue { identifier } } }').inverseRelations?.nodes ?? []).filter(rel => rel.type === 'blocks').map(rel => rel.issue.identifier)
+      },
       listCards() {
         const cards = []
         let after = null
