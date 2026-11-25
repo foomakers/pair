@@ -215,6 +215,7 @@ export default defineAdapter({
         if (batch.length < 100) return rows
       }
     }
+    const issueRelations = (id, relation, repo) => listPages(`${apiRepo(repo)}/issues/${id}/${relation}?sort=created`).map(issue => ({ id: String(issue.number), closed: issue.state === 'closed' }))
     const BOARD_QUERY = 'query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){issue(number:$n){id projectItems(first:20){nodes{id project{id title fields(first:30){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}}}}'
     const BOARD_MUTATION = 'mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}'
 
@@ -259,7 +260,14 @@ export default defineAdapter({
         const rows = parseJson(gh(['issue', 'list', '--repo', resolveRepo(repo), '--search', search, '--json', 'number,url,title,body']), { command: 'gh issue list' })
         return Array.isArray(rows) ? rows : []
       },
-      listCards({ repo }) {
+      childCards({ id, repo }) {
+        return issueRelations(id, 'sub_issues', repo)
+      },
+      blockedBy({ id, repo }) {
+        return issueRelations(id, 'dependencies/blocked_by', repo).map(card => card.id)
+      },
+      listCards({ repo, labels }) {
+        if (labels) return labels.flatMap(label => listPages(`${apiRepo(repo)}/issues?state=open&labels=${encodeURIComponent(label)}`)).filter(issue => !issue.pull_request).map(issue => ({ id: String(issue.number) }))
         const label = storyLabel()
         return listPages(`${apiRepo(repo)}/issues?state=all`).filter(issue => !issue.pull_request && (/^## Story Statement\s*$/m.test(String(issue.body ?? '')) || (label && issue.labels?.some(item => item.name === label)))).map(issue => ({ id: String(issue.number) }))
       },

@@ -201,6 +201,12 @@ export default defineAdapter({
         const rows = azJson(['boards', 'query', '--wiql', wiql], 'boards query')
         return (Array.isArray(rows) ? rows : []).map(asCard)
       },
+      childCards({ id }) {
+        return relatedIds(showCard(id, 'relations'), 'System.LinkTypes.Hierarchy-Forward').map(id => ({ id: String(id) }))
+      },
+      blockedBy({ id }) {
+        return relatedIds(showCard(id, 'relations'), 'System.LinkTypes.Dependency-Reverse').map(String)
+      },
       listCards({ repo }) {
         const { project } = splitRepo(repo)
         const types = storyType ? [storyType] : DEFAULT_STORY_TYPES

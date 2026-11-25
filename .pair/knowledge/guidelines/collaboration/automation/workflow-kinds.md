@@ -122,3 +122,30 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Options** (`with`)
   - `method`: `"squash" | "merge" | "rebase"` — Merge method. Default `squash`.
 - **Returns `needs-human` when**
+
+## refine-story
+
+- **Default skill**: `pair-process-refine-story`
+- **Inputs**
+  - `card`: `string` — The card to prepare.
+- **Outputs**, required when `status` is `ok`
+  - `boardStatus`: `string` — The current literal board status read from the card before the host transitions it.
+  - `riskTag`: `string` — The risk label on the card.
+  - `openQuestions`: `array of string`
+- **Options** (`with`)
+  - `mode`: `"interactive" | "autonomous"`
+- **Returns `needs-human` when**
+  - A question requires a product decision.
+
+## plan-tasks
+
+- **Default skill**: `pair-process-plan-tasks`
+- **Inputs**
+  - `card`: `string` — The card to prepare.
+- **Outputs**, required when `status` is `ok`
+  - `boardStatus`: `string` — The current literal board status read from the card before the host transitions it.
+  - `tasks`: `integer`
+- **Options** (`with`)
+  - None.
+- **Returns `needs-human` when**
+  - The task breakdown needs a product decision.
