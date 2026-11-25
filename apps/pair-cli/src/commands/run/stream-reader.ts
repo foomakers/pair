@@ -283,19 +283,27 @@ function piFinalText(payload: unknown): string | undefined {
   return parts.length === 0 ? undefined : parts.join('\n')
 }
 
+function openCodeFinalText(payload: unknown, previous: string | undefined): string | undefined {
+  if (matches(payload, { type: 'step_start' })) return undefined
+  if (!matches(payload, { type: 'text', 'part.type': 'text' })) return previous
+  const text = fieldAt(payload, 'part.text')
+  return typeof text === 'string' ? text : previous
+}
+
 /**
- * US-652: the agent's final text as ONE decoded event carries it — a terminal event's `resultField`,
- * else the engine's agent message. The last defined value over a stream is the agent's final message.
+ * US-652: update the candidate final message from one decoded event. OpenCode text belongs
+ * to the current step, so a new step starts with no candidate.
  */
-export function finalTextOf(engine: EngineDefinition, payload: unknown): string | undefined {
-  if (engine.id === 'pi') return piFinalText(payload)
-  if (engine.id === 'opencode' && matches(payload, { type: 'text', 'part.type': 'text' })) {
-    const text = fieldAt(payload, 'part.text')
-    return typeof text === 'string' ? text : undefined
-  }
+export function finalTextOf(
+  engine: EngineDefinition,
+  payload: unknown,
+  previous?: string,
+): string | undefined {
+  if (engine.id === 'pi') return piFinalText(payload) ?? previous
+  if (engine.id === 'opencode') return openCodeFinalText(payload, previous)
   const rule = engine.terminalEvents.find(candidate => matches(payload, candidate.match))
   const text = rule?.resultField ? fieldAt(payload, rule.resultField) : undefined
-  return typeof text === 'string' ? text : agentMessageOf(engine, payload)
+  return typeof text === 'string' ? text : (agentMessageOf(engine, payload) ?? previous)
 }
 
 const TAIL_CHARS = 500

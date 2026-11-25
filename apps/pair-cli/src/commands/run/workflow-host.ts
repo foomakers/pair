@@ -494,7 +494,7 @@ function launcher(run: Launch) {
       diagnoseProcess: true,
       idleTimeoutSeconds: idle,
       onEvent: payload => {
-        text = finalTextOf(engine, payload) ?? text
+        text = finalTextOf(engine, payload, text)
         // The usage the engine reports, read by the per-engine parsers; none reported, none metered.
         observed = observeEngineEvent(observed, engine.id, payload)
         const { tokens } = observed
