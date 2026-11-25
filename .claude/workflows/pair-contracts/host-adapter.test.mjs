@@ -220,6 +220,12 @@ if (a[0] === 'api') {
     if (!S.assignable?.includes(decodeURIComponent(assignable[1]))) fail('gh: Not Found (HTTP 404)')
     process.exit(0)
   }
+  const issueAssignee = /^repos\\/[^/]+\\/[^/]+\\/issues\\/(\\d+)\\/assignees\\/([^/]+)$/.exec(endpoint)
+  if (issueAssignee) {
+    const allowed = S.issues[issueAssignee[1]]?.assignable ?? S.assignable
+    if (!allowed?.includes(decodeURIComponent(issueAssignee[2]))) fail('gh: Not Found (HTTP 404)')
+    process.exit(0)
+  }
   const issueRoute = /^repos\\/[^/]+\\/[^/]+\\/issues\\/(\\d+)(?:\\/(assignees|comments|events))?$/.exec(endpoint.split('?')[0])
   if (issueRoute && S.issues[issueRoute[1]]?.assignees) {
     const issue = S.issues[issueRoute[1]]
@@ -267,10 +273,10 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(3)
   return { dir, ghBin: join(dir, 'gh'), state: () => JSON.parse(readFileSync(state, 'utf8')), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
 }
 
-const assignment = ({ login = 'runner', assignable = ['alice', login], assignees = [], ...options } = {}) => {
+const assignment = ({ login = 'runner', assignable = ['alice', login], issueAssignable, assignees = [], ...options } = {}) => {
   const id = 7
   const repo = 'acme/app'
-  const gh = fakeGh({ login, assignable, issues: { [id]: { assignees, ...options } } })
+  const gh = fakeGh({ login, assignable, issues: { [id]: { assignees, assignable: issueAssignable, ...options } } })
   const pm = github.instantiate({ ghBin: gh.ghBin })
   const issue = () => gh.state().issues[id]
   const writes = () => gh.calls().filter(args => args.some(arg => ['PATCH', 'POST', 'DELETE'].includes(arg)))
@@ -315,7 +321,8 @@ test('#723 assignment: none leaves the card untouched without consulting GitHub'
 
 for (const [intent, login] of [['alice', 'alice'], ['@me', 'runner']]) {
   test(`#723 assignment: explicit ${intent} replaces the owners and names them in the card comment`, () => {
-    const { assign, issue } = assignment({ assignees: ['owner', 'reviewer'] })
+    // #723 F3: an issue participant can be eligible without being a repository assignee.
+    const { assign, issue } = assignment({ assignable: [], assignees: ['owner', 'reviewer'], issueAssignable: [login] })
     assert.equal(assign(intent).status, 'assigned')
     assert.deepEqual(issue().assignees, [login])
     assert.equal(issue().assignmentComments.length, 1)
@@ -331,7 +338,7 @@ test('#723 assignment: unassign clears every owner', () => {
 })
 
 test('#723 assignment: an unassignable login warns and preserves owners without a write', () => {
-  const { assign, issue, writes } = assignment({ assignees: ['owner'] })
+  const { assign, issue, writes } = assignment({ assignable: ['missing-user'], issueAssignable: [], assignees: ['owner'] })
   const result = assign('missing-user')
   assert.equal(result.status, 'warning')
   assert.match(result.reason, /missing-user/i)
