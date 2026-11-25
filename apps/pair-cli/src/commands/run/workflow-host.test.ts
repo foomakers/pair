@@ -20,7 +20,7 @@ import baseConfig from '../../../config.json'
 import { acquireRunLock } from './run-lock'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
-import type { SpawnIterationInput } from './spawn'
+import { spawnIteration, type SpawnIterationInput } from './spawn'
 import { runHostProcess } from './host-process'
 import type { WorkflowHostDependencies } from './workflow-host'
 
@@ -730,6 +730,59 @@ it.each([
     expect(limits).toEqual([seconds])
   },
 )
+
+it('#704 AC-4: quick retries a killed agent and records both diagnoses', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
+  )
+  const killAgent = `const {writeSync} = require('node:fs')
+    for (let i = 1; i <= 25; i++) writeSync(2, 'line ' + i + '\\n')
+    process.kill(process.pid, 'SIGKILL')`
+  const prompts: string[] = []
+  const runIteration = async (input: SpawnIterationInput) => {
+    prompts.push(input.promptText)
+    return spawnIteration({
+      ...input,
+      cwd: tmpdir(),
+      engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', killAgent, '--'] },
+    })
+  }
+
+  expect(await run(['quick'], OK, { telemetry: true }, { runIteration })).toBe(0)
+  expect(prompts).toEqual([prompts[0], prompts[0]])
+  const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+  const diagnosis = {
+    kind: 'crash',
+    detail: expect.stringContaining('no terminal event'),
+    exitCode: null,
+    signal: 'SIGKILL',
+    elapsedMs: expect.any(Number),
+    stderrTail: Array.from({ length: 20 }, (_, i) => `line ${i + 6}`),
+  }
+  expect(state.steps['implement']).toMatchObject({
+    state: 'blocked',
+    reason: 'fault',
+    attempts: [
+      { attempt: 1, ...diagnosis },
+      { attempt: 2, ...diagnosis },
+    ],
+  })
+  const telemetry = fs.readFileSync(join(runDir(), 'telemetry.jsonl')).trim().split('\n')
+  expect(telemetry.slice(0, 2).map(line => JSON.parse(line))).toEqual([
+    expect.objectContaining({ step: 'implement', attempt: 1, diagnosis }),
+    expect.objectContaining({ step: 'implement', attempt: 2, diagnosis }),
+  ])
+  expect(lines).toEqual(
+    expect.arrayContaining([
+      expect.stringMatching(/Process fault — implement attempt 1 .*signal=SIGKILL/),
+      expect.stringMatching(/Process fault — implement attempt 2 .*signal=SIGKILL/),
+      '    stderr: line 25',
+      expect.stringContaining('Run: parked at step implement'),
+    ]),
+  )
+  expect(lines).not.toContain('    stderr: line 5')
+})
 
 describe('skill and options of a step (AC-4, AC-5)', () => {
   it('runs the skill named by `skill` with the options of `with`, then asks for the result of the kind', async () => {

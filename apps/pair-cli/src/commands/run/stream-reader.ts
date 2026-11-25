@@ -6,9 +6,8 @@ import { eventBodyRuns, parseRunEvent, progressRunEvents, type RunEvent } from '
  * The JSONL terminal-event reader (US-451 T-7) — the ONLY thing that decides an iteration's
  * outcome.
  *
- * The exit code is never consulted, anywhere: pi documents no exit-code contract, so an outcome
- * inferred from it would be noise. An explicit terminal event in the stream is the signal; its
- * ABSENCE is a FAILURE (AC7, BR6 — when in doubt, fail).
+ * The reader decides success from terminal events. A missing terminal event fails closed
+ * regardless of the process exit code, which the workflow host can use to diagnose the failure.
  *
  * The reader is engine-agnostic: which line is terminal, and what makes it a success, are
  * `TerminalEventRule`s in the engine map. Stream content is untrusted input — a malformed line

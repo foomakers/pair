@@ -336,7 +336,21 @@ function handleReadError(error: unknown, transport: ReturnType<typeof watchTrans
   if (code === 'EPIPE') transport.capture(error)
 }
 
-function diagnosedIteration(
+async function waitForExit(child: ChildProcess): Promise<void> {
+  // Pipe EOF can arrive before the child emits exit, even after a signal killed it.
+  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return
+  await new Promise<void>(resolve => {
+    const done = () => {
+      clearTimeout(timer)
+      child.off('exit', done)
+      resolve()
+    }
+    const timer = setTimeout(done, 1000).unref()
+    child.once('exit', done)
+  })
+}
+
+async function diagnosedIteration(
   child: ChildProcess,
   result: IterationResult | undefined,
   {
@@ -350,14 +364,15 @@ function diagnosedIteration(
     started: number
     stderrTail: readonly string[]
   },
-): IterationResult {
+): Promise<IterationResult> {
+  await waitForExit(child)
   return {
     ...(stopped === undefined && failure ? failure : stalledOrResult(result, stopped?.detail)),
     process: {
       exitCode: child.exitCode,
       signal: child.signalCode,
       elapsedMs: Math.round(performance.now() - started),
-      stderrTail,
+      stderrTail: [...stderrTail],
       ...(stopped !== undefined && { stoppedBy: stopped.kind }),
     },
   }
