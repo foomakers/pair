@@ -918,6 +918,7 @@ it.each([
 
 it.each([
   { constraint: 'label', options: { filter: 'wanted' }, excluded: { labels: [] } },
+  { constraint: 'status (R744-21)', options: { status: 'Ready' }, excluded: { status: 'Draft' } },
   {
     constraint: 'assignee',
     options: { assignee: 'maintainer' },
@@ -944,6 +945,7 @@ it.each([
             body: '',
             labels: ['wanted'],
             assignees: ['maintainer'],
+            status: 'Ready',
             boardState: null,
             closed: false,
             prerequisites: [],
