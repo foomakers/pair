@@ -61,6 +61,16 @@ test('#693 AC-2 preserves tracked lint scope and check/fix behavior', t => {
   assert.equal(readFileSync(join(cwd, 'fixable.ts'), 'utf8'), 'export const value = 1\n')
 })
 
+test('#693 R3 fix mode fails on an error introduced by an applied fix', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const path = join(cwd, 'array.ts')
+  writeFileSync(path, 'Array();\n')
+  const fixed = lint(cwd, '--workspace', '--fix')
+  assert.equal(readFileSync(path, 'utf8'), '[];\n')
+  assert.equal(fixed.status, 1)
+  assert.deepEqual(fixed.diagnostics.map(item => item.code), ['eslint(no-unused-expressions)'])
+})
+
 test('#693 AC-1 preserves TypeScript assertions and enforces unsafe optional chaining', t => {
   const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
   writeFileSync(join(cwd, 'asserted.ts'), 'export const assert = (r?: { prop: string }) => (r?.prop as string).startsWith("a")\n')
