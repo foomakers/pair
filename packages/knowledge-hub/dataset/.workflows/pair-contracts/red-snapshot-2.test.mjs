@@ -242,11 +242,17 @@ test('#693 AC-3: Oxlint package diagnostics scope to the exact listed path', () 
   const unrelated = oxlintPackage([oxlintError('other/src/a.test.js')])
   assert.equal(unrelated.sealed, true, JSON.stringify(unrelated))
   assert.equal(unrelated.preSeal.staticGates.at(-1).scoped, true)
-  const syntax = oxlintPackage([{
-    filename: 'src/other.ts', severity: 'error', code: null, message: 'Unexpected token',
-    labels: [{ span: { line: 1, column: 1 } }],
-  }])
-  assert.equal(syntax.sealed, true, JSON.stringify(syntax))
+  for (const code of [undefined, null]) {
+    const diagnostic = {
+      filename: 'src/other.ts', severity: 'error', code, message: 'Unexpected token',
+      labels: [{ span: { line: 1, column: 1 } }],
+    }
+    const syntax = oxlintPackage([diagnostic])
+    assert.equal(syntax.sealed, true, JSON.stringify(syntax))
+    const syntaxInWitness = oxlintPackage([{ ...diagnostic, filename: 'src/a.test.js' }])
+    assert.equal(syntaxInWitness.sealed, false)
+    assert.match(syntaxInWitness.path, /src\/a\.test\.js$/)
+  }
 
   const listed = oxlintPackage([oxlintError('src/other.ts'), oxlintError('src/a.test.js')])
   assert.equal(listed.sealed, false)
@@ -258,6 +264,7 @@ test('#693 AC-3: an incomplete Oxlint report or a mixed operational failure refu
   for (const report of [
     oxlintPackage('{ "diagnostics":['),
     oxlintPackage([{ ...oxlintError('src/other.ts'), filename: undefined }]),
+    oxlintPackage([{ ...oxlintError('src/other.ts'), code: undefined }]),
     oxlintPackage([{ ...oxlintError('src/other.ts'), severity: 'warning' }]),
     oxlintPackage([oxlintError('src/other.ts')], { stderr: 'Failed to load configuration' }),
     oxlintPackage([oxlintError('src/other.ts'), { ...oxlintError('tsconfig.json'), code: 'typescript(tsconfig-error)' }]),
