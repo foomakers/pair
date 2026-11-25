@@ -124,7 +124,7 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
 
 1. **Check**: Use `$assignee`, when the caller passed one, on create and update. An empty value is absent, not an empty-string assignee. Never apply the adoption default on create or update; assignment when development starts is a separate operation. The fallback is never the authenticated user, including a bot token.
 2. **Act**: Write an explicit assignee as part of the create and of the update, never as a follow-up step. On create without `$assignee`, write the item unassigned without warning. On update without `$assignee`, leave the existing assignee unchanged, including an unassigned item, without warning: omit the assignee field rather than clearing it.
-3. **Act (rejected explicit assignee)**: report what the tool answered and preserve the current assignment on update; on create, write the item without an assignee and warn that it is invisible in an assignee-filtered view. Never drop it silently; this bookkeeping field never sinks the item and is never a HALT.
+3. **Act (rejected explicit assignee)**: report what the tool answered. If the tracker rejected an update because of the assignee, retry the item write once without the assignee and preserve the current assignment. On create, write the item without an assignee and warn that it is invisible in an assignee-filtered view; retry a rejected create only after confirming it created no item, never when creation is ambiguous. Never drop it silently; this bookkeeping field never sinks the item and is never a HALT.
 4. **Verify**: re-read the item and report the observed assignment; if an explicit assignee was rejected, report the rejection. The `default-assignee` in `## Assignment` remains available for development activation and PR assignment, not this write.
 
 ### Step 7: Create or Update Issue
@@ -149,7 +149,7 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
    - If not found → **HALT**: `Issue #$id not found.` — **unless `$on-failure: report`**, which returns `not-found` to the caller instead (Step 8b) and writes nothing.
    - Update the issue body with the formatted content — in **write mode** (`$mode: write`) this is a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below). That contract is also what makes a comment durable where the item **is** a file: on `filesystem` the back-link lives in the body's `## Activity Log` section, so a later write-mode render preserves it only because the caller read-merges the current body first — dropping the section is a caller bug, not an accepted behavior. Comment mode (Step 7c) never reaches here and never writes the body.
    - Preserve existing labels and hierarchy links unless explicitly changed.
-   - Apply the assignee only when the caller explicitly passed `$assignee`; otherwise omit the field and leave the existing assignee untouched, including when unassigned. Never clear one as a side effect. Whether the adapter adds or replaces assignees is the adapter's concern; follow its guide.
+   - Apply the assignee only when the caller explicitly passed `$assignee`; otherwise omit the field and leave the existing assignee untouched, including when unassigned. For filesystem updates, preserve the existing assignee header in the rendered body when `$assignee` is omitted; omit the header if the item had none. Never clear one as a side effect. Whether the adapter adds or replaces assignees is the adapter's concern; follow its guide.
    - **Step 7b runs on every update too**, **not only when `$status` was provided**: an item that already exists may still never have been added to the tracked view (it was filed before the board, or an earlier add exited 0 having done nothing), so membership is established and confirmed there on this path as well. The board field itself — when Step 6 resolved a state — is written in **Step 7b** (membership → confirm → state), never here: this step writes the item, not the board.
 4. **Verify**: The item was created or updated **and re-read**: the read shows the body, the labels and the assignee now in effect. Report the labels the read observed on the `Labels` output row — a label the tracker dropped or refused is a **finding**, never an assumed success. Step 7b runs next and owns the board — membership on **every** write-mode write, the state field only when Step 6 resolved one.
 
@@ -191,7 +191,7 @@ The **non-destructive** path: it appends a comment to the item and writes nothin
 
 ### Step 8: Handle Errors
 
-1. **Check**: Did the PM tool return an error during Step 7?
+1. **Check**: Did the PM tool return an error during Step 7? A specifically identified assignee rejection follows Step 6b first; a failed retry or any other error follows this step.
 2. **Skip**: If no error, proceed to output. **Comment mode is exempt** — its failures were already handled as warnings in Step 7c.2 and never reach here. **`$on-failure: report` is exempt too** — the error is returned as `write-failed` (Step 8b), not raised.
 3. **Act**: **HALT** with descriptive error:
 

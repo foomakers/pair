@@ -271,6 +271,8 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
     expect(body).toContain('on update without $assignee, leave the existing assignee unchanged')
     expect(body).toContain('never apply the adoption default on create or update')
     expect(body).toContain('without warning')
+    expect(normalize(content)).toContain('preserve the existing assignee header')
+    expect(body).toContain('retry the item write once without the assignee')
   })
 
   it.each(writeIssueCases)('$corpus: has a dedicated assignee-resolution step', ({ content }) => {

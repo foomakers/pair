@@ -472,7 +472,7 @@ gh issue create --title "[title]" --body-file [file] --project "[project title]"
 # That is the Step 1 no-project outcome, not a workaround — there is no board to
 # be absent from, so the item is not invisible.
 
-# Existing issue — --add-assignee adds without replacing, so it is safe to run unconditionally
+# Existing issue — run only when an assignee was explicitly supplied; --add-assignee adds without replacing
 gh issue edit [NUMBER] --add-assignee "[login]"
 ```
 

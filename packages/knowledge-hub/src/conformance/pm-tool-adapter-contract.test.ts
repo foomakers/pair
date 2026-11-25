@@ -419,9 +419,9 @@ describe('github-implementation.md — assignee is part of the write (#402 AC3)'
     expect(body).toContain('assignees: ["[login]"]  # optional: only when explicitly supplied')
   })
 
-  it.each(githubCases)('$corpus: adding an assignee is safe to re-run', ({ content }) => {
+  it.each(githubCases)('$corpus: update assignment requires explicit intent', ({ content }) => {
     expect(normalize(section(content, VISIBILITY_HEADING))).toContain(
-      'adds without replacing, so it is safe to run unconditionally',
+      'only when an assignee was explicitly supplied',
     )
   })
 
