@@ -72,7 +72,7 @@ const verdicts: Record<CheckName, (facts: FactReader, options: CheckOptions) => 
     },
   }
 
-/** Runs `names` in order; the first that does not pass fails the step with its reason. */
+/** Runs `names` in order and returns the first failure or unavailable fact. */
 export async function runChecks(
   names: readonly CheckName[],
   facts: FactReader,
@@ -84,9 +84,9 @@ export async function runChecks(
       if (reason !== undefined) return { status: 'failed', reason, summary: `check ${name} failed` }
     } catch (error) {
       return {
-        status: 'failed',
+        status: 'blocked',
         reason: 'fact-unreadable',
-        summary: `check ${name} failed`,
+        summary: `check ${name} is blocked`,
         detail: error instanceof Error ? error.message : String(error),
       }
     }
@@ -144,7 +144,7 @@ export async function runGate(
     readonly registry: Readonly<Record<string, string>>
     readonly targets?: Readonly<Record<string, readonly string[]>>
     readonly run: RunCommand
-    /** The platform facts; absent, a gate with `checks` fails `no-platform-adapter` rather than assume. */
+    /** Without platform facts, a gate with checks is blocked. */
     readonly facts?: FactReader
   } & CheckOptions,
 ): Promise<StepResult> {
@@ -155,7 +155,7 @@ export async function runGate(
     return (step.checks ?? []).length === 0
       ? { status: 'ok', summary: `${(step.gates ?? []).length} gate(s) passed` }
       : {
-          status: 'failed',
+          status: 'blocked',
           reason: 'no-platform-adapter',
           summary: 'this host cannot read the platform facts the checks need',
         }

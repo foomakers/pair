@@ -167,6 +167,8 @@ escalate:
 
 `continue` records the outcome and moves on in file order. `stop` fails the run on `failed` and parks it on `blocked`, `needs-decision` or explicit `exhausted`. A final failed step still makes the run failed when no step follows. Set `on-failed` or `escalate.failed` to the same action when both appear. `on-max: escalate` agrees with `escalate.exhausted: stop`. `on-max: fail` preserves its original hard failure when used alone.
 
+A gate returns `blocked` when it cannot read a required platform fact. A command or check that runs and finds a problem returns `failed`.
+
 The long form also posts to the card. `{reason}` substitutes the step reason or `no reason given` when absent. Retrying the same outcome at the same step and round reuses the comment. The action still applies if the host cannot write the comment, and the run reports the failure.
 
 ## Card assignment
