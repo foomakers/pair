@@ -6,6 +6,20 @@ const card = { boardStatus: 'Todo', labels: ['risk:green'], body }
 const ok = { status: 'ok', summary: 'finished' } as const
 
 describe('host result confirmation (#678 AC-7)', () => {
+  it.each(['user story', 'cost:green', 'risk:blue'])(
+    'rejects observed label %s as a risk tag (R744-26)',
+    riskTag => {
+      const result = { ...ok, boardStatus: 'Todo', riskTag, openQuestions: [] }
+      const facts = { card: { ...card, labels: [riskTag] } }
+
+      expect(confirmResult('refine-story', result, facts)).toMatchObject({
+        status: 'failed',
+        reason: 'result-not-confirmed',
+        detail: expect.stringContaining('riskTag'),
+      })
+    },
+  )
+
   it.each([
     [
       'refine-story',
