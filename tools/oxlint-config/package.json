@@ -13,6 +13,7 @@
     "eslint-plugin-react": "catalog:",
     "eslint-plugin-react-hooks": "catalog:",
     "eslint-plugin-jsx-a11y": "catalog:",
+    "fast-glob": "3.3.3",
     "oxlint": "catalog:",
     "oxlint-plugin-eslint": "catalog:"
   }

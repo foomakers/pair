@@ -675,6 +675,9 @@ importers:
       eslint-plugin-react-hooks:
         specifier: 'catalog:'
         version: 5.1.0(eslint@9.34.0(jiti@2.7.0))
+      fast-glob:
+        specifier: 3.3.3
+        version: 3.3.3
       oxlint:
         specifier: 'catalog:'
         version: 1.95.0
