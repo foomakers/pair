@@ -11,11 +11,12 @@ const wf = (steps: string) => `version: 1\nname: quick\nsteps:\n${steps}`
 const check = (steps: string) => validate(wf(steps), 'quick.yaml', deps)
 const problems = (steps: string) => check(steps).errors.map(e => e.problem)
 const warned = (steps: string) => check(steps).warnings.map(e => e.problem)
-const FULL = `  implement: { kind: implement }
-  review: { kind: review }
+const allStops = 'failed: stop, blocked: stop, needs-decision: stop'
+const approval = '  approve: { kind: approval, escalate: { failed: stop, needs-decision: stop } }\n'
+const FULL = `  implement: { kind: implement, escalate: { ${allStops} } }
+  review: { kind: review, escalate: { ${allStops} } }
   checks: { kind: gate, with: { checks: [head-unchanged] } }
-  approve: { kind: approval }
-  merge: { kind: merge }
+${approval}  merge: { kind: merge }
 `
 
 describe('host kinds validate without a skill (#680 AC-1, AC-3, AC-5)', () => {
@@ -35,7 +36,9 @@ describe('host kinds validate without a skill (#680 AC-1, AC-3, AC-5)', () => {
 
 describe('merge warnings (#680 AC-7)', () => {
   it('warns on each missing guard and never refuses', () => {
-    const result = check('  implement: { kind: implement }\n  merge: { kind: merge }\n')
+    const result = check(
+      `  implement: { kind: implement, escalate: { ${allStops} } }\n  merge: { kind: merge }\n`,
+    )
     expect(result.errors).toEqual([])
     expect(result.workflow).toBeDefined()
     expect(result.warnings.map(w => w.problem)).toEqual([
@@ -45,9 +48,9 @@ describe('merge warnings (#680 AC-7)', () => {
     ])
   })
   it('a review before the last fix does not count', () => {
-    expect(warned(FULL.replace('  checks', '  fix: { kind: fix }\n  checks'))).toEqual([
-      'merge has no review after the last code-changing step',
-    ])
+    expect(
+      warned(FULL.replace('  checks', `  fix: { kind: fix, escalate: { ${allStops} } }\n  checks`)),
+    ).toEqual(['merge has no review after the last code-changing step'])
   })
 })
 
@@ -138,12 +141,7 @@ describe('escalation diagnostics (#728 AC-15)', () => {
     kind: implement
     ${rules}
 `
-  const allStops = 'failed: stop, blocked: stop, needs-decision: stop'
-  const delivery = (status: string) =>
-    FULL.replace(
-      '{ kind: implement }',
-      `{ kind: implement, escalate: { ${allStops.replace(`${status}: stop`, `${status}: continue`)} } }`,
-    )
+  const delivery = (status: string) => FULL.replace(`${status}: stop`, `${status}: continue`)
 
   it('warns about the declared outcome left to its default', () => {
     const result = check(implement('on-failed: stop\n    escalate: { needs-decision: stop }'))
@@ -189,8 +187,8 @@ describe('escalation diagnostics (#728 AC-15)', () => {
 
   it('accepts a condition reading the outcome of a continued failure', () => {
     expect(
-      check(`  implement: { kind: implement, on-failed: continue }
-  retry: { kind: implement, when: { output: implement.status, is: [failed] } }
+      check(`  implement: { kind: implement, on-failed: continue, escalate: { blocked: stop, needs-decision: stop } }
+  retry: { kind: implement, escalate: { ${allStops} }, when: { output: implement.status, is: [failed] } }
 `),
     ).toMatchObject({ errors: [], warnings: [] })
   })
@@ -218,8 +216,8 @@ describe('escalation diagnostics (#728 AC-15)', () => {
   it.each([
     ['blocked', ''],
     ['needs-decision', '  late: { kind: approval }\n'],
-  ])('warns about bypassing %s before a merge without prior approval', (status, approval) => {
-    const result = check(delivery(status).replace('  approve: { kind: approval }\n', '') + approval)
+  ])('warns about bypassing %s before a merge without prior approval', (status, lateApproval) => {
+    const result = check(delivery(status).replace(approval, '') + lateApproval)
     expect(result.errors).toEqual([])
     expect(result.warnings).toContainEqual(
       expect.objectContaining({ problem: expect.stringContaining(status) }),

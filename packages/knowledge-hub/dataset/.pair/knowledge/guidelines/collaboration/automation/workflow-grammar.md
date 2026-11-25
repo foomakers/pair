@@ -245,7 +245,7 @@ An error refuses the workflow. A warning does not.
 | Warning | When |
 | ------- | ---- |
 | `on-failed: continue` on the last step | Nothing consumes the failure. |
-| Unhandled return | A step declares `escalate` and a declared return still uses its default. |
+| Unhandled return | A declared return has neither an escalation rule nor a matching shorthand. |
 | Unreachable rule or status condition | The step cannot produce that outcome, or the condition cannot read it. |
 | Card comment unavailable | The installed host lacks card-comment support. |
 | Decision or block continued before merge | A `merge` follows with no prior approval step. |
@@ -263,10 +263,11 @@ aliases:
   build: { effort: medium }
   judge: { effort: high }
 steps:
-  implement: { kind: implement, alias: build }
-  review: { kind: review, alias: judge, on-failed: continue }
+  implement: { kind: implement, alias: build, escalate: { failed: stop, blocked: stop, needs-decision: stop } }
+  review: { kind: review, alias: judge, on-failed: continue, escalate: { blocked: stop, needs-decision: stop } }
   fix:
     kind: fix
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
     alias: build
     when: { output: review.verdict, is: [changes-requested] }
 ```
@@ -291,7 +292,7 @@ steps:
     alias: strong
     when: { output: implement.status, is: [failed] }
     escalate: { failed: stop, blocked: stop, needs-decision: stop }
-  review: { kind: review, alias: strong }
+  review: { kind: review, alias: strong, escalate: { failed: stop, blocked: stop, needs-decision: stop } }
 ```
 
 ### Converge takes a final pass after exhaustion
@@ -325,6 +326,7 @@ steps:
         escalate: { failed: continue, blocked: stop, needs-decision: stop }
       fix:
         kind: fix
+        escalate: { failed: continue, blocked: stop, needs-decision: stop }
         alias: build
         when: { output: rounds/review.verdict, is: [changes-requested] }
   last-chance:
@@ -351,13 +353,14 @@ steps:
       failed: stop
       blocked: stop
       needs-decision: { do: stop, comment: 'Decision needed: {reason}' }
-  review: { kind: review }
+  review: { kind: review, escalate: { failed: stop, blocked: stop, needs-decision: stop } }
   gate:
     kind: gate
     with: { checks: [head-unchanged] }
     escalate: { blocked: continue }
   approval:
     kind: approval
+    escalate: { failed: stop, needs-decision: stop }
     when: { output: gate.status, is: [ok] }
   merge:
     kind: merge

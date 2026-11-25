@@ -24,6 +24,7 @@ steps:
         escalate: { failed: continue, blocked: stop, needs-decision: stop }
       fix:
         kind: fix
+        escalate: { failed: continue, blocked: stop, needs-decision: stop }
         alias: build
         when: { output: rounds/review.verdict, is: [changes-requested] }
   last-chance:

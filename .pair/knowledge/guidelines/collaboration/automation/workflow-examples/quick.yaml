@@ -4,9 +4,10 @@ aliases:
   build: { effort: medium }
   judge: { effort: high }
 steps:
-  implement: { kind: implement, alias: build }
-  review: { kind: review, alias: judge, on-failed: continue }
+  implement: { kind: implement, alias: build, escalate: { failed: stop, blocked: stop, needs-decision: stop } }
+  review: { kind: review, alias: judge, on-failed: continue, escalate: { blocked: stop, needs-decision: stop } }
   fix:
     kind: fix
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
     alias: build
     when: { output: review.verdict, is: [changes-requested] }

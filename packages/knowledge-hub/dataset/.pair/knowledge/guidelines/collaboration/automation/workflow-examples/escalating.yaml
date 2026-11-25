@@ -13,4 +13,4 @@ steps:
     alias: strong
     when: { output: implement.status, is: [failed] }
     escalate: { failed: stop, blocked: stop, needs-decision: stop }
-  review: { kind: review, alias: strong }
+  review: { kind: review, alias: strong, escalate: { failed: stop, blocked: stop, needs-decision: stop } }

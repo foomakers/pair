@@ -31,7 +31,7 @@ Use workflow-local policies and keep grammar version 1.
 - A stopped failed step makes the run failed. Blocked and decision outcomes park by default and resume at the stopped step. Explicit exhaustion stops park and accept `--more-rounds`. `on-failed` preserves its stop or continue behavior. Legacy `on-max: escalate` parks and `on-max: fail` fails the run. Unconfigured loop children retain their convergence behavior.
 - `when` can read `<step>.status` or `<loop>.status` after the producer. A skipped producer leaves that output absent. Execution stays in file order. A stronger retry is a later step with another alias. Jumps are invalid.
 - First runtime reads migrate legacy `needs-human` in persisted state and telemetry to `needs-decision`. The step result contract rejects the old spelling. Telemetry schema 2 gains optional fired-rule metadata and a zero-token record for exhaustion. Compatible additions retain the schema number.
-- The workflow validator reports rules that cannot fire, impossible status conditions and comments without host support. When a step declares `escalate`, it lists declared returns still falling through to their default. A workflow that continues past a block or decision and reaches a merge without prior approval gets a warning.
+- The workflow validator reports rules that cannot fire, impossible status conditions and comments without host support. It lists declared returns handled by neither an escalation rule nor a shorthand, including when `escalate` is absent. Shipped workflows declare their existing actions to preserve warning parity. A workflow that continues past a block or decision and reaches a merge without prior approval gets a warning.
 
 ## Consequences
 

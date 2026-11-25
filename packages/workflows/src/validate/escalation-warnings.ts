@@ -38,10 +38,10 @@ function ruleWarnings(
   path: readonly string[],
   canCommentOnCard: () => boolean,
 ): WorkflowError[] {
-  if (step.escalate === undefined) return []
   const at = [...path, 'escalate']
   const possible = possibleStatuses(step)
-  const warnings = Object.entries(step.escalate).flatMap(([status, rule]) => [
+  const policy = step.escalate ?? {}
+  const warnings = Object.entries(policy).flatMap(([status, rule]) => [
     ...(possible.has(status)
       ? []
       : [
@@ -61,7 +61,7 @@ function ruleWarnings(
   ])
   if (step.kind === 'loop') return warnings
   for (const status of Object.keys(kindByName[step.kind].returns)) {
-    if (Object.hasOwn(step.escalate, status)) continue
+    if (Object.hasOwn(policy, status)) continue
     if (status === 'failed' && step['on-failed'] !== undefined) continue
     warnings.push(
       errorAt(workflow, at, {

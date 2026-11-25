@@ -8,14 +8,17 @@ aliases:
 steps:
   implement:
     kind: implement
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
     alias: build
     gates: [target:increment]
   review:
     kind: review
     alias: judge
     on-failed: continue
+    escalate: { blocked: stop, needs-decision: stop }
   fix:
     kind: fix
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
     alias: build
     gates: [target:increment]
     when: { output: review.verdict, is: [changes-requested] }
