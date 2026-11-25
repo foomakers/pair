@@ -24,10 +24,10 @@ function gitIgnoredFiles() {
 
 const args = process.argv.slice(2)
 const options = []
+for (const pattern of ['*.vue', '*.svelte', '*.astro']) options.push('--ignore-pattern', pattern)
 if (args[0] === '--workspace') {
   args.shift()
   options.push('--no-error-on-unmatched-pattern')
-  for (const pattern of ['*.vue', '*.svelte', '*.astro']) options.push('--ignore-pattern', pattern)
   args.push('.', ...gitIgnoredFiles().map(file => `./${file}`))
 } else if (args.length && args.every(arg => existsSync(arg))) {
   options.push('--no-error-on-unmatched-pattern')
