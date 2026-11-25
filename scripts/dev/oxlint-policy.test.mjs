@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
@@ -96,7 +96,7 @@ test('#693 R5 direct lint restores Git-ignored files within the requested direct
   for (const path of ['src', join(cwd, 'src')]) {
     const check = lint(cwd, path)
     assert.equal(check.status, 1)
-    assert.deepEqual(check.diagnostics.map(item => item.filename), ['src/generated/tracked.ts'])
+    assert.deepEqual(check.diagnostics.map(item => resolve(cwd, item.filename)), [join(cwd, 'src/generated/tracked.ts')])
   }
 })
 
@@ -110,8 +110,11 @@ test('#693 R5 direct lint accepts ignored files with options and rejects a missi
     assert.deepEqual(lint(cwd, ...args), { diagnostics: [], status: 0 }, args.join(' '))
   }
   assert.equal(readFileSync(join(cwd, 'Widget.vue'), 'utf8'), vue)
-  const missing = spawnSync(process.execPath, [runner, '--format=json', 'missing.ts'], { cwd })
-  assert.equal(missing.status, 1)
+  writeFileSync(join(cwd, 'clean.ts'), 'export const value = 1\n')
+  for (const paths of [['missing.ts'], ['clean.ts', 'missing.ts']]) {
+    const missing = spawnSync(process.execPath, [runner, '--format=json', ...paths], { cwd })
+    assert.equal(missing.status, 1)
+  }
 })
 
 for (const [name, source, expected, status] of [
