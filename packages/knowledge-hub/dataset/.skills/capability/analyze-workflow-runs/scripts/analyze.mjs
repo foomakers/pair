@@ -2,15 +2,17 @@
 // analyze.mjs — the numbers of pair-capability-analyze-workflow-runs (#697). Same files, same numbers.
 // Usage: node analyze.mjs <cost|time|passes|compare|trend> [--runs <dir>] [--run <id>] [--card <id>]
 //          [--workflow <name>] [--prices <file.json>] [--by card|workflow]
-// Reads `<runs>/*/telemetry.jsonl` (default `.pair/working/runs`) and writes nothing: JSON on stdout.
+// Reads `<runs>/*/telemetry.jsonl` (default `.pair/working/runs`), migrating legacy step statuses. JSON on stdout.
 // Exit: 0 answered · 2 usage or unreadable input (the cause on stderr, no numbers).
 // Rules: every number carries its `source` (measured | estimated | unknown); a sum with an estimated
 // entry is an estimate; unknown entries are listed, never counted as zero; values of different
 // sources are never compared; cost is never invented — no price row, "not calculated".
 // Prices: `{ "<model>": { "read": n, "cached": n, "written": n } }`, per million tokens, kept by hand.
 // Dependency-free.
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
-import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { existsSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { hostname } from 'node:os'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const QUESTIONS = ['cost', 'time', 'passes', 'compare', 'trend']
@@ -19,20 +21,50 @@ const NOT_CALCULATED = 'not calculated'
 /** The record format this script reads (ADR-033). */
 const SCHEMAS = [1, 2]
 
+/** Use the same lock as pair run so migration cannot replace a writer's newer telemetry. */
+function persistMigration(file, original, migrated) {
+  const lock = join(dirname(file), 'run.lock')
+  try {
+    writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }), { flag: 'wx' })
+  } catch (error) {
+    if (error.code !== 'EEXIST') console.error(`analyze: could not migrate ${file}: ${error.message}`)
+    return
+  }
+  const temp = `${file}.${randomUUID()}.tmp`
+  try {
+    if (readFileSync(file, 'utf8') !== original) return
+    try {
+      writeFileSync(temp, migrated, { flag: 'wx', mode: statSync(file).mode & 0o777 })
+      renameSync(temp, file)
+    } finally {
+      rmSync(temp, { force: true })
+    }
+  } catch (error) {
+    console.error(`analyze: could not migrate ${file}: ${error.message}`)
+  } finally {
+    rmSync(lock, { force: true })
+  }
+}
+
 function parse(file) {
-  return readFileSync(file, 'utf8')
-    .split('\n')
-    .flatMap((line, index) => {
-      if (line === '') return []
-      let record
-      try {
-        record = JSON.parse(line)
-      } catch (error) {
-        throw new Error(`${file}:${index + 1}: ${error.message}`)
-      }
-      if (!SCHEMAS.includes(record.schema)) throw new Error(`${file}:${index + 1}: schema ${record.schema} is not read by this script (reads ${SCHEMAS.join(', ')})`)
-      return [record]
-    })
+  const original = readFileSync(file, 'utf8')
+  const records = []
+  const migrated = original.split('\n').map((line, index) => {
+    if (line === '') return line
+    let record
+    try {
+      record = JSON.parse(line)
+    } catch (error) {
+      throw new Error(`${file}:${index + 1}: ${error.message}`)
+    }
+    if (!SCHEMAS.includes(record.schema)) throw new Error(`${file}:${index + 1}: schema ${record.schema} is not read by this script (reads ${SCHEMAS.join(', ')})`)
+    records.push(record)
+    if (record.type !== 'step' || record.status !== 'needs-human') return line
+    record.status = 'needs-decision'
+    return JSON.stringify(record) + (line.endsWith('\r') ? '\r' : '')
+  }).join('\n')
+  if (migrated !== original) persistMigration(file, original, migrated)
+  return records
 }
 
 /** The runs under `dir` that hold step records, in name order: identity, outcome (`open` when not closed) and steps. */
