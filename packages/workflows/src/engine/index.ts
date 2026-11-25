@@ -618,14 +618,18 @@ export interface SkippedStep {
   readonly kind: KindName
 }
 
-/** Why the named output is not in the list; an output the producer never returned (it failed or crashed) is no mismatch. */
+/** Missing ordinary outputs match, but status conditions require a recorded outcome. */
 function outputMismatch(
   output: string,
   is: readonly unknown[] | undefined,
   state: RunStateFile,
 ): string | undefined {
   const [stepId, name] = output.split('.') as [string, string]
-  const value = state.steps[stepId]?.outputs?.[name]
+  const producer = state.steps[stepId]
+  const status = producer?.state
+  if (name === 'status' && [undefined, 'pending', 'running', 'skipped'].includes(status))
+    return `${output} has no outcome`
+  const value = name === 'status' ? status : producer?.outputs?.[name]
   return value === undefined || is?.includes(value)
     ? undefined
     : `${output} is ${JSON.stringify(value)}`

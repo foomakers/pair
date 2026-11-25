@@ -250,13 +250,14 @@ function outputErrors(
   ]
   if (!earlier.has(id) || target === undefined || target.kind === 'loop')
     return at(`'${id}' is not a step before this one`, 'name an earlier step')
+  if (name === 'status') return []
   const declared = fieldsOf(kindByName[target.kind].outputs)
   return declared.includes(name)
     ? []
     : at(`step '${id}' has no output '${name}'`, `use one of ${declared.join(', ')}`)
 }
 
-/** Where `when.output` points: an earlier step (`id` or `loop/id`) and an output it declares. */
+/** `when.output` reads the status or a declared output of an earlier step (`id` or `loop/id`). */
 function whenErrors(
   { workflow }: Scope,
   step: Step,
