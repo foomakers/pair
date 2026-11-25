@@ -22,6 +22,13 @@ const IMPLEMENTED = fenced({
   head: HEAD,
 })
 
+const telemetryOf = (host: WorkflowHost) =>
+  host.files
+    .readFileSync(`${DIR}/telemetry.jsonl`)
+    .trimEnd()
+    .split('\n')
+    .map(line => JSON.parse(line))
+
 describe('loop telemetry (#670 AC-6)', () => {
   it('records each inner execution with its round', async () => {
     const text = `version: 1
@@ -60,11 +67,7 @@ steps:
     expect(
       (await runSteps(host, DIR, { host: 'pair-run', settings: () => ({ engine: 'claude' }) })).run,
     ).toBe('done')
-    const records = host.files
-      .readFileSync(`${DIR}/telemetry.jsonl`)
-      .trimEnd()
-      .split('\n')
-      .map(line => JSON.parse(line))
+    const records = telemetryOf(host)
     expect(
       records.filter(record => record.type === 'step').map(record => [record.step, record.round]),
     ).toEqual([
@@ -75,6 +78,124 @@ steps:
     ])
   })
 })
+
+describe('#728 AC-17: escalation telemetry', () => {
+  it.each([
+    ['failed', 'escalate: { failed: continue }', 'done', 'continue'],
+    [
+      'needs-decision',
+      'escalate: { needs-decision: { do: stop, comment: Pick } }',
+      'parked',
+      'stop',
+    ],
+    ['blocked', '', 'parked', undefined],
+    ['failed', 'on-failed: continue', 'done', undefined],
+    ['ok', 'escalate: { failed: stop }', 'done', undefined],
+  ])(
+    'records %s with policy %s only when its explicit rule fires',
+    async (status, rule, end, action) => {
+      const { host } = fakeHost({
+        'pair-process-implement': () => IMPLEMENTED,
+        'pair-process-review': () =>
+          status === 'ok' ? REVIEWED : fenced({ status, summary: 'waiting', reason: 'condition' }),
+      })
+      const text = `${QUICK}${rule === '' ? '' : `    ${rule}\n`}  later: { kind: implement }\n`
+      await start({ files: host.files, dir: DIR }, { ...SOURCE, text }, { card: '627' })
+
+      const outcome = await runSteps(host, DIR, {
+        host: 'pair-run',
+        settings: () => ({ engine: 'claude' }),
+      })
+
+      expect(outcome.run).toBe(end)
+      const row = telemetryOf(host).find(
+        record => record.type === 'step' && record.step === 'review',
+      )
+      expect(row).toMatchObject({ schema: 2, status })
+      if (action === undefined) expect(row).not.toHaveProperty('escalate')
+      else expect(row?.escalate).toEqual({ status, do: action })
+    },
+  )
+
+  it.each([
+    ['escalate: { exhausted: continue }', '', 'done', 'continue', 3],
+    [
+      'escalate: { exhausted: stop }',
+      ', when: { output: implement.status, is: [failed] }',
+      'parked',
+      'stop',
+      2,
+    ],
+    ['on-max: fail', '', 'failed', undefined, 3],
+    ['on-max: escalate', '', 'parked', undefined, 3],
+  ])('records exhausted with policy %s and child condition %s', async (...scenario) => {
+    const [rule, when, end, action, steps] = scenario
+    const text = `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 1
+    ${rule}
+    steps:
+      review: { kind: review }
+      fix: { kind: implement${when} }
+`
+    const { host, launched } = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => fenced({ status: 'failed', summary: 'gap' }),
+    })
+    const metered: WorkflowHost = {
+      ...host,
+      launch: (step, message, meter) => {
+        meter({ read: 7, cached: 3, written: 2 })
+        return host.launch(step, message, meter)
+      },
+    }
+    await start({ files: host.files, dir: DIR }, { ...SOURCE, text }, { card: '627' })
+
+    let tick = 0
+    const outcome = await runSteps(metered, DIR, {
+      host: 'pair-run',
+      settings: () => ({ engine: 'claude' }),
+      now: () => new Date(10 * tick++),
+    })
+
+    expect(outcome.run).toBe(end)
+    expect(statesOf(host)).toMatchObject({
+      rounds: 'exhausted',
+      'rounds/fix': when === '' ? 'ok' : 'skipped',
+    })
+    expect(launched).toHaveLength(steps)
+    const records = telemetryOf(host)
+    const rounds = records.filter(record => record.type === 'step' && record.step === 'rounds')
+    expect(rounds).toMatchObject([
+      {
+        schema: 2,
+        kind: 'loop',
+        status: 'exhausted',
+        round: 1,
+        tokens: { read: { value: 0 }, cached: { value: 0 }, written: { value: 0 } },
+      },
+    ])
+    if (action === undefined) expect(rounds[0]).not.toHaveProperty('escalate')
+    else expect(rounds[0]?.escalate).toEqual({ status: 'exhausted', do: action })
+    expect(records.at(-1)).toMatchObject({
+      type: 'run',
+      status: end,
+      steps,
+      durationMs: 10 * steps,
+      tokens: {
+        read: { value: 7 * steps, source: 'measured' },
+        cached: { value: 3 * steps, source: 'measured' },
+        written: { value: 2 * steps, source: 'measured' },
+      },
+    })
+  })
+})
+
 const REVIEWED = fenced({
   status: 'ok',
   summary: 'approved',

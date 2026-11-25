@@ -4,6 +4,7 @@ import {
   priorRefinement,
   record,
   stageSuccess,
+  type EngineOutcome,
   type RunDirectory,
   type RunEndStatus,
   type RunFiles,
@@ -11,7 +12,7 @@ import {
   type StepLaunch,
 } from '../engine'
 import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
-import type { Assignment, CardState, KindName } from '../grammar'
+import { escalationAction, type Assignment, type CardState, type KindName } from '../grammar'
 import { violations } from '../schema'
 import type { CardFacts } from '../select'
 import { kindByName, settle, type StepResult, type StepStatus } from '../kinds'
@@ -332,7 +333,10 @@ function writerOf(run: RunDirectory, telemetry: TelemetryOptions) {
         recordStep(run, {
           ...execution,
           host: telemetry.host,
-          settings: telemetry.settings(execution.step.id),
+          settings:
+            execution.step.kind === 'loop'
+              ? { engine: 'pair' }
+              : telemetry.settings(execution.step.id),
         }),
       ),
     close: (status: RunOutcome['run']) => safe(closeRun(run, status)),
@@ -341,10 +345,41 @@ function writerOf(run: RunDirectory, telemetry: TelemetryOptions) {
 
 type Writer = ReturnType<typeof writerOf> | undefined
 
+interface ObservedRun extends RunDirectory {
+  readonly outcomes: EngineOutcome[]
+}
+
+function observedRun(files: RunFiles, dir: string): ObservedRun {
+  const outcomes: EngineOutcome[] = []
+  return { files, dir, outcomes, observeOutcome: outcome => outcomes.push(outcome) }
+}
+
+function escalationOf(outcome: EngineOutcome | undefined): Pick<StepExecution, 'escalate'> {
+  if (outcome === undefined) return {}
+  const action = escalationAction(outcome.rule)
+  return action === undefined ? {} : { escalate: { status: outcome.status, do: action } }
+}
+
+async function flushOutcomes(outcomes: EngineOutcome[], writer: Writer): Promise<void> {
+  for (const outcome of outcomes.splice(0)) {
+    if (writer === undefined || outcome.status !== 'exhausted') continue
+    const { id, round, reason, status } = outcome
+    await writer.step({
+      step: { id, kind: 'loop', uses: '', attempt: round, round },
+      startedAt: writer.now(),
+      durationMs: 0,
+      tokens: measured({ read: 0, cached: 0, written: 0 }),
+      status,
+      reason,
+      ...escalationOf(outcome),
+    })
+  }
+}
+
 /** One step, timed and metered when telemetry is on. */
 async function executeMetered(
   host: WorkflowHost,
-  run: RunDirectory,
+  run: ObservedRun,
   step: StepLaunch,
   writer: Writer,
 ): Promise<StepExecutionResult> {
@@ -361,6 +396,7 @@ async function executeMetered(
     tokens: usage === undefined ? estimated(sent, final) : measured(usage),
     status: result.status,
     ...(result.reason !== undefined && { reason: result.reason }),
+    ...escalationOf(run.outcomes.find(outcome => outcome.id === step.id)),
   })
   return result
 }
@@ -459,6 +495,7 @@ async function runStep(
     })
   } else await emitStep(host, starting(step))
   const { status, summary, reason, detail } = await executeMetered(host, run, launch, writer)
+  await flushOutcomes(run.outcomes, writer)
   const result = {
     step: step.id,
     kind: step.kind,
@@ -477,12 +514,13 @@ export async function runSteps(
   dir: string,
   telemetry?: TelemetryOptions,
 ): Promise<RunOutcome> {
-  const run = { files: host.files, dir }
+  const run = observedRun(host.files, dir)
   const writer = telemetry && writerOf(run, telemetry)
   if (writer === undefined) await reopenRun(run).catch(() => undefined)
   let last: StepEvent | undefined
   for (;;) {
     const { ready, state, event } = await advance(host, run)
+    await flushOutcomes(run.outcomes, writer)
     const step = ready[0]
     if (state !== 'running' || step === undefined) return ended(state, event ?? last, writer)
     last = await runStep(host, run, step, writer)

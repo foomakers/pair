@@ -40,6 +40,8 @@ export interface RunFiles {
 export interface RunDirectory {
   readonly files: RunFiles
   readonly dir: string
+  /** Observes explicit escalation and loop exhaustion after the engine saves the outcome. */
+  readonly observeOutcome?: (outcome: EngineOutcome) => void
 }
 
 export const STATE_SCHEMA_VERSION = 1
@@ -55,6 +57,23 @@ export type StepState = 'pending' | 'running' | 'skipped' | 'exhausted' | StepSt
 export type RunState = 'running' | 'done' | 'failed' | 'parked'
 /** A held card ends the current invocation while the stored run remains resumable. */
 export type RunEndStatus = Exclude<RunState, 'running'> | 'skipped'
+
+export type EngineOutcome = {
+  readonly id: string
+  readonly summary: string
+} & (
+  | {
+      readonly status: Exclude<StepStatus, 'ok'>
+      readonly rule: EscalationRule
+      readonly reason?: string
+    }
+  | {
+      readonly status: 'exhausted'
+      readonly round: number
+      readonly rule?: EscalationRule
+      readonly reason: 'loop-max'
+    }
+)
 
 export interface StepRecord {
   readonly state: StepState
@@ -974,7 +993,7 @@ async function checkWhen(
     reason: failure.reason,
   }
   const recorded = { ...state.steps, [id]: entry }
-  const progress = inLoop
+  const progress: Progress = inLoop
     ? advanceLoop({ state, outer: step, child: target, status: 'ok', outputs: {} }, recorded)
     : { steps: recorded, loops: state.loops }
   await writeState(run, {
@@ -982,6 +1001,7 @@ async function checkWhen(
     steps: progress.steps,
     ...(progress.loops !== undefined && { loops: progress.loops }),
   })
+  observeExhaustion(run, progress)
   return { step: checked }
 }
 
@@ -1045,6 +1065,11 @@ interface Advance {
 interface Progress {
   steps: Record<string, StepRecord>
   loops: RunStateFile['loops']
+  exhaustion?: Extract<EngineOutcome, { status: 'exhausted' }>
+}
+
+function observeExhaustion(run: RunDirectory, { exhaustion }: Progress): void {
+  if (exhaustion !== undefined) run.observeOutcome?.(exhaustion)
 }
 
 /** The round is over and the loop goes on: max stops it, otherwise the children run again. */
@@ -1052,19 +1077,31 @@ function closeRound({ state, outer }: Advance, { steps, loops }: Progress): Prog
   const outerId = outer.id
   const loop = loops?.[outerId]
   if (loop === undefined) throw new Error(`run-state-unreadable: loop ${outerId} has no round`)
-  if (loop.round >= loop.max)
+  if (loop.round >= loop.max) {
+    const reason = 'loop-max'
+    const summary = `loop ${outerId} reached ${loop.max} rounds`
+    const rule = explicitEscalation(outer, 'exhausted')
     return {
       steps: {
         ...steps,
         [outerId]: {
           state: 'exhausted',
           outputs: loop.untilResult ?? {},
-          reason: 'loop-max',
-          summary: `loop ${outerId} reached ${loop.max} rounds`,
+          reason,
+          summary,
         },
       },
       loops: { ...state.loops, [outerId]: { ...loop, exhausted: true } },
+      exhaustion: {
+        id: outerId,
+        status: 'exhausted',
+        round: loop.round,
+        reason,
+        summary,
+        ...(rule !== undefined && { rule }),
+      },
     }
+  }
   return {
     steps: {
       ...steps,
@@ -1198,6 +1235,13 @@ function retryAfter(status: StepStatus, previous?: StepRecord, invalidate?: bool
 const recordOptions = (value: string | RecordOptions | undefined): RecordOptions =>
   typeof value === 'string' ? { output: value } : (value ?? {})
 
+function observeEscalation(run: RunDirectory, id: string, step: Step, result: StepResult): void {
+  const { status, summary, reason } = result
+  const rule = explicitEscalation(step, status)
+  if (status !== 'ok' && rule !== undefined)
+    run.observeOutcome?.({ id, status, rule, summary, ...(reason !== undefined && { reason }) })
+}
+
 /**
  * Records the result of a step: validated against its kind (a result that breaks the contract is
  * recorded `failed`, `invalid-result`), written to `steps/<id>/result.json`, then to `state.json`.
@@ -1227,17 +1271,20 @@ export async function record(
     ...recordOf(settled, outputs, round, previous?.executions),
     ...retryAfter(status, previous, invalidatePendingSuccess),
   }
-  const { steps, loops } =
+  const progress: Progress =
     childId !== undefined && outer?.kind === 'loop'
       ? advanceLoop(
           { state, outer, child: step, status, outputs },
           { ...state.steps, [stepId]: entry },
         )
       : { steps: { ...state.steps, [stepId]: entry }, loops: state.loops }
+  const { steps, loops } = progress
   await writeState(run, {
     ...state,
     steps,
     ...(loops !== undefined && { loops, latest: { ...state.latest, ...outputs } }),
   })
+  observeEscalation(run, stepId, step, settled)
+  observeExhaustion(run, progress)
   return settled
 }
