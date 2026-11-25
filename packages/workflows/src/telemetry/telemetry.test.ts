@@ -100,6 +100,33 @@ describe('step record (US-697 AC-1, AC-3)', () => {
     expect(recordsOf(run)).toMatchObject([{ step: 'implement', attempt: 3 }])
   })
 
+  it('#704 F1: persists only known-safe process diagnostic text (AC-4, ADR-033)', async () => {
+    const run = await open()
+    const diagnosis = {
+      kind: 'crash' as const,
+      detail: 'Authorization: Bearer synthetic-detail-secret',
+      exitCode: 1,
+      signal: null,
+      elapsedMs: 42,
+      stderrTail: [
+        'Connection refused',
+        'Authorization: Bearer synthetic-stderr-secret',
+        'synthetic-unlabelled-secret',
+      ],
+    }
+    await recordStep(run, { ...IMPLEMENT, status: 'blocked', reason: 'fault', diagnosis })
+
+    expect(recordsOf(run)).toMatchObject([
+      {
+        diagnosis: {
+          ...diagnosis,
+          detail: '[redacted]',
+          stderrTail: ['Connection refused', '[redacted]', '[redacted]'],
+        },
+      },
+    ])
+  })
+
   it('migrates a historical step status when reading telemetry to append a step (#728 AC-3)', async () => {
     const run = await open()
     const legacy = {
