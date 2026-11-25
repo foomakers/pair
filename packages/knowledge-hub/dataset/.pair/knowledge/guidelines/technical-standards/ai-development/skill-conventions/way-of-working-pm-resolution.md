@@ -93,7 +93,7 @@ Skills route by field, never by assumption. The `Reads` column names the field e
 | Branches and pushes, **pull request** create/update/read (body, tier, approvals)   | `code-host` | `/publish-pr`, `/implement`, `/verify-done` (PR tier + approval count, Step 3)     |
 | PR **labels/tags** and required checks (CI gate)                                  | `code-host` | `/verify-quality` (tier from the PR), `/setup-gates`, `/classify` (in review context — the target is the PR) |
 | **Classification** matrix + chromatic tags — written on whichever side the target is | both, by target | `/classify`: refinement ⇒ the **card** (`pm-tool`); review ⇒ the **PR** (`code-host`) |
-| **Item / pull request assignee** — who the work is assigned to (see [Assignee resolution](#assignee-resolution)) | both, by target | `/write-issue` writes the item's (`pm-tool`); `/publish-pr` writes the PR's (`code-host`) |
+| **Item / pull request assignee** — who the work is assigned to (see [Assignee resolution](#assignee-resolution)) | both, by target | `/write-issue` and `/implement` write the item's (`pm-tool`); `/publish-pr` writes the PR's (`code-host`) |
 | Code **review** submission (approve / request-changes / comment) and PR **merge**  | `code-host` | `/review`, `/review` merge cascade                                                |
 | Open-PR detection                                                                | `code-host` | `/next`                                                                           |
 
@@ -107,25 +107,17 @@ Invariants this table encodes:
 
 Who an item or a pull request is **assigned to**. This is a resolution rule rather than bookkeeping because the board is read **filtered by assignee**: an unassigned item is invisible there even when it is open, green and carries a PR. A project's own `## Assignment` paragraph in way-of-working.md carries the *rationale*; this section is the **machine-readable half** — the key a skill can actually resolve, and the resolution rules for each operation.
 
-| Field                | Default                | Meaning                                                                                                       |
-| -------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `default-assignee`   | *(none)*               | The identifier (login / user id) a PR or an item taken in charge is assigned to when no explicit assignee is passed. Declared under `## Assignment` in way-of-working.md. |
-| `code-host-assignee` | *(`default-assignee`)* | Declare **only** when the code host knows the same human by a different identifier than the PM tool does (a split configuration). Read by **code-host** writes (the PR assignee) in step 2b below; a PM-tool write never reads it. |
+| Field | Default | Meaning |
+| ----- | ------- | ------- |
+| `default-assignee` | *(none)* | The fallback PR assignee and maintainer login. Declare it under `## Assignment` in way-of-working.md. |
+| `code-host-assignee` | *(`default-assignee`)* | The code host's identifier for the same person when it differs from the PM-tool identifier. |
 
-1. **Check**: did the caller pass `$assignee`? Use it.
-2. **Skip**: otherwise read the adoption default from `## Assignment` in [way-of-working.md](../../../../../../.pair/adoption/tech/way-of-working.md) — **which key depends on the side the write is on** (routing table above):
-   - **PM-tool write** by `/write-issue` → never apply `default-assignee` on create or update. With no `$assignee`, create unassigned or preserve the existing assignment on update, without warning. Development activation may use `default-assignee` when taking an unassigned card in charge ([#723](https://github.com/foomakers/pair/issues/723)).
-   - **Code-host write** (the pull request assignee) → **`code-host-assignee` when declared, else `default-assignee`** (step 2b). This branch is the whole reason the key exists: on a split project the two tools rarely spell the same human the same way, and handing the code host the PM tool's login gets it **rejected** — the PR is then published unassigned with a warning, the exact invisibility this rule removes.
+- **Card write** (`/write-issue`): apply an explicit `$assignee`. Omission leaves a new card unassigned or preserves the existing assignment on update, without warning.
+- **Development activation** claims unassigned cards as the authenticated runner in `/implement` Step 0.1b. An implicit claim stops when another login holds the card. An explicit login or `@me` can take it over. With `none`, proceed with assignment untouched.
+- **PR assignment** (`/publish-pr`): the argument first, then the adoption default, then none. The adoption default is **`code-host-assignee` when declared, else `default-assignee`**. An empty value is absent for either key. A PR without a resolvable assignee is published unassigned with a warning about assignee-filtered views. Report the assignee confirmed by a read.
+- **Maintainer decision comments**: resolve the maintainer login from `code-host-assignee`, else `default-assignee`.
 
-   **An empty value is absent**, not an empty-string assignee — for either key.
-3. **Act**: otherwise **none** — a PR with no resolvable assignee is still written, **unassigned**, with a warning naming the consequence (invisible in an assignee-filtered view). **Never a HALT**: an item created and half-visible beats an item not created.
-4. **Verify**: an assignee was resolved and written *as part of* the create/update, or an item was deliberately unassigned or left unchanged without warning, or the warning was surfaced.
-
-One order, stated once — **the argument first, then the adoption default, then none** — for PR assignment and development activation; `/write-issue` uses the explicit argument only, preserving the item otherwise as described in step 2. A cascade defined twice is a cascade that drifts, and the drift is silent: the failure mode is an invisible item, not an error.
-
-**Never the authenticated user.** The fallback is the *declared* field, never "whoever is running the command": that is right only in the solo-maintainer case and wrong the moment an agent runs under a **bot token**, which would assign every item to the bot and pass its own check while defeating the rule's purpose.
-
-**Two sides, distinct rules.** The item assignee is a PM-tool write and the pull request assignee is a code-host write (routing table above). On a single-tool project the two coincide, nothing extra is declared, and step 2b falls straight through to `default-assignee`; on a split one the same human often carries two identifiers, which is what `code-host-assignee` is for — and step 2b is the one place it is read, by `/publish-pr`. And on the PR side the distinction that actually bites: a PR's **author is not its assignee** — the host fills `author` from the token, an assignee-filtered view reads `assignees`.
+**Two sides, distinct rules.** The item assignee is a PM-tool write and the pull request assignee is a code-host write (routing table above). On a single-tool project the two coincide, nothing extra is declared, and PR assignment falls through to `default-assignee`; on a split one the same human often carries two identifiers, which is what `code-host-assignee` is for — and `/publish-pr` uses it for PR assignment. And on the PR side the distinction that actually bites: a PR's **author is not its assignee** — the host fills `author` from the token, an assignee-filtered view reads `assignees`.
 
 **Rejected by the tool** (not a collaborator, typo, deactivated account): report what the tool answered; preserve an existing item assignment on update or warn when a create is unassigned. Never drop it silently, and never let a bookkeeping field sink the item.
 
