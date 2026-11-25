@@ -503,7 +503,7 @@ function implementationLaunch(host: WorkflowHost, step: StepLaunch): StepLaunch 
 
 async function runStep(
   host: WorkflowHost,
-  run: RunDirectory,
+  run: ObservedRun,
   step: StepLaunch,
   writer: Writer,
 ): Promise<StepEvent> {

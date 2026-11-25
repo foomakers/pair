@@ -80,6 +80,57 @@ steps:
 })
 
 describe('#728 AC-17: escalation telemetry', () => {
+  it('records exhaustion before ending a run skipped by assignment (#723 AC-4, #728 AC-13/14/17)', async () => {
+    const text = `version: 1
+name: quick
+assign: none
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 1
+    escalate: { exhausted: continue }
+    steps:
+      review: { kind: review }
+      fix: { kind: implement, when: { output: implement.status, is: [failed] } }
+  fallback:
+    kind: implement
+    assign: me
+    when: { output: rounds.status, is: [exhausted] }
+`
+    const { host, launched } = fakeHost({
+      'pair-process-implement': () => IMPLEMENTED,
+      'pair-process-review': () => fenced({ status: 'failed', summary: 'gap' }),
+    })
+    const assignCard: NonNullable<WorkflowHost['assignCard']> = async assign =>
+      assign === 'me' ? 'held by alice' : undefined
+    await start({ files: host.files, dir: DIR }, { ...SOURCE, text }, { card: '627' })
+
+    const outcome = await runSteps({ ...host, assignCard }, DIR, {
+      host: 'pair-run',
+      settings: () => ({ engine: 'claude' }),
+    })
+
+    expect(outcome).toMatchObject({
+      run: 'skipped',
+      last: { step: 'fallback', reason: 'card-held', summary: 'held by alice' },
+    })
+    expect(launched.map(one => one.step)).toEqual(['implement', 'rounds/review'])
+    expect(statesOf(host)).toMatchObject({ rounds: 'exhausted', fallback: 'pending' })
+    const records = telemetryOf(host)
+    expect(records.filter(record => record.type === 'step').map(record => record.step)).toEqual([
+      'implement',
+      'rounds/review',
+      'rounds',
+    ])
+    expect(records.at(-2)).toMatchObject({
+      status: 'exhausted',
+      escalate: { status: 'exhausted', do: 'continue' },
+    })
+    expect(records.at(-1)).toMatchObject({ type: 'run', status: 'skipped' })
+  })
+
   it.each([
     ['failed', 'escalate: { failed: continue }', 'done', 'continue'],
     [
