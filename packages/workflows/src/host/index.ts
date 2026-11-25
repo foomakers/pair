@@ -1,16 +1,19 @@
 import { buildMessage, readResult, type InvocationStyle } from '../dispatch'
 import {
   next,
+  priorRefinement,
   record,
+  stageSuccess,
   type RunDirectory,
   type RunFiles,
   type RunState,
   type StepLaunch,
 } from '../engine'
-import type { KindName } from '../grammar'
+import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
+import type { CardState, KindName } from '../grammar'
 import { violations } from '../schema'
 import type { CardFacts } from '../select'
-import { kindByName, type StepResult, type StepStatus } from '../kinds'
+import { kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 import {
   closeRun,
   reopenRun,
@@ -62,8 +65,15 @@ export interface WorkflowHost {
   perform?(step: StepLaunch): Promise<unknown>
   /** Runs the `gates` of a step that ended `ok`: `undefined` when all pass, else the failed result. */
   runGates?(entries: readonly string[], step: StepLaunch): Promise<StepResult | undefined>
-  /** Sees every step start and every recorded result, in order. */
+  /** The result's observable platform facts. */
+  readResultFacts?(step: StepLaunch, result: StepResult): Promise<ResultFacts>
+  /** Whether the observed board status has already reached the target macrostate. */
+  isAtLeastBoardStatus?(status: string | null, target: CardState): boolean
+  /** Confirms the board transition before success becomes durable. */
+  confirmState?(target: CardState): Promise<void>
+  /** Sees step starts, results and condition failures in order. */
   report?(event: StepEvent): void
+  transition?(event: StepEvent): Promise<void>
 }
 
 /** The settings a step launches with. */
@@ -86,7 +96,7 @@ export interface TelemetryOptions {
 
 export interface RunOutcome {
   readonly run: Exclude<RunState, 'running'>
-  /** The last step this launch recorded. */
+  /** The last step result or condition failure from this launch. */
   readonly last?: StepEvent
 }
 
@@ -113,6 +123,95 @@ async function gated(
   return (await host.runGates(step.gates ?? [], step)) ?? result
 }
 
+type Confirmation = { result: StepResult; invalidatePendingSuccess?: boolean }
+
+async function confirmed(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  result: StepResult,
+): Promise<Confirmation> {
+  if (result.status !== 'ok' || !hasResultFacts(step.kind)) return { result }
+  const staged = step.pendingSuccess !== undefined
+  if (host.readResultFacts === undefined)
+    return { result: staged ? unconfirmed('the host cannot revalidate the staged result') : result }
+  try {
+    const facts = await host.readResultFacts(step, result)
+    if (staged) return checkStagedResult({ host, run }, step, result, facts)
+    const checked = confirmResult(step.kind, result, facts)
+    return {
+      result: checked.status === 'ok' ? confirmPriorRefinement(run, step, checked, facts) : checked,
+    }
+  } catch (error) {
+    return { result: unconfirmed((error as Error).message) }
+  }
+}
+
+function checkStagedResult(
+  { host, run }: { host: WorkflowHost; run: RunDirectory },
+  step: StepLaunch,
+  result: StepResult,
+  facts: ResultFacts,
+): Confirmation {
+  const boardStatus = facts.card?.boardStatus
+  const declaration =
+    boardStatus !== undefined &&
+    step.confirmState !== undefined &&
+    host.isAtLeastBoardStatus?.(boardStatus, step.confirmState)
+      ? { ...result, boardStatus }
+      : result
+  const checked = confirmResult(step.kind, declaration, facts)
+  if (checked.status === 'ok') return { result: confirmPriorRefinement(run, step, result, facts) }
+  const observed = step.kind === 'implement' ? facts.head : facts.card
+  return { result: checked, invalidatePendingSuccess: observed !== undefined }
+}
+
+function confirmPriorRefinement(
+  run: RunDirectory,
+  step: StepLaunch,
+  result: StepResult,
+  facts: ResultFacts,
+): StepResult {
+  if (step.kind !== 'plan-tasks' || step.confirmState !== 'Ready' || facts.card === undefined)
+    return result
+  const refinement = priorRefinement(run, step.id)
+  if (refinement === undefined) return result
+  const checked = confirmResult(
+    'refine-story',
+    { ...result, ...refinement, boardStatus: facts.card.boardStatus },
+    facts,
+  )
+  return checked.status === 'ok' ? result : checked
+}
+
+async function recordResult(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  { result, output, invalidatePendingSuccess }: Confirmation & { output?: string },
+): Promise<StepResult> {
+  let final = result
+  if (step.pendingSuccess !== undefined && !host.confirmState && result.status === 'ok')
+    return record(
+      run,
+      step.id,
+      unconfirmed(`the host cannot confirm the ${step.confirmState} transition`),
+    )
+  if (
+    step.confirmState !== undefined &&
+    host.confirmState &&
+    settle(kindByName[step.kind], result).status === 'ok'
+  ) {
+    await stageSuccess(run, step.id, result)
+    try {
+      await host.confirmState(step.confirmState)
+    } catch (error) {
+      final = unconfirmed((error as Error).message)
+    }
+  }
+  return record(run, step.id, final, { output, invalidatePendingSuccess })
+}
+
 const NO_AGENT_RESULT: StepResult = {
   status: 'failed',
   reason: 'no-result',
@@ -125,6 +224,8 @@ async function execute(
   step: StepLaunch,
   exchange: Exchange = { sent: '', final: '' },
 ): Promise<StepResult> {
+  if (step.pendingSuccess !== undefined)
+    return recordResult(host, run, step, await confirmed(host, run, step, step.pendingSuccess))
   const kind = kindByName[step.kind]
   const missing = violations(kind.inputs, step.inputs)
   if (missing.length > 0)
@@ -136,18 +237,33 @@ async function execute(
     })
   if (kind.host === true) {
     exchange.sent = JSON.stringify(step.with)
-    return record(
-      run,
-      step.id,
+    const result: StepResult =
       host.perform === undefined
         ? {
             status: 'failed',
             reason: 'no-executor',
             summary: `the host cannot run a ${step.kind} step`,
           }
-        : await gated(host, step, (await host.perform(step)) as StepResult),
-    )
+        : await gated(host, step, (await host.perform(step)) as StepResult)
+    return recordResult(host, run, step, { result })
   }
+  if (step.kind === 'refine-story' && step.with['mode'] !== 'autonomous')
+    return record(run, step.id, {
+      status: 'needs-decision',
+      reason: 'interactive-refinement',
+      summary:
+        'Run pair-process-refine-story in an interactive session or configure autonomous refinement.',
+    })
+  return executeAgent(host, run, step, exchange)
+}
+
+async function executeAgent(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  exchange: Exchange,
+): Promise<StepResult> {
+  const kind = kindByName[step.kind]
   let message: string
   try {
     message = buildMessage(step, kind, {
@@ -164,8 +280,11 @@ async function execute(
   })
   if (final === undefined) return record(run, step.id, NO_AGENT_RESULT)
   exchange.final = final
-  const result = readResult(final, kind)
-  return record(run, step.id, await gated(host, step, result), final)
+  const result = await gated(host, step, readResult(final, kind))
+  return recordResult(host, run, step, {
+    ...(await confirmed(host, run, step, result)),
+    output: final,
+  })
 }
 
 /**
@@ -239,8 +358,18 @@ async function ended(
 async function advance(host: WorkflowHost, run: RunDirectory) {
   const found = await next(run, host.card?.bind(host))
   for (const { id, kind } of found.skipped ?? [])
-    host.report?.({ step: id, kind, state: 'skipped', summary: 'skipped: when did not match' })
+    host.report?.({
+      step: id,
+      kind,
+      state: 'skipped',
+      summary: 'skipped: when did not match',
+    })
   return found
+}
+
+async function emitStep(host: WorkflowHost, event: StepEvent): Promise<void> {
+  await host.transition?.(event)
+  host.report?.(event)
 }
 
 /** The host loop over a started run: `next` → launch → `record`, until the run is no longer running. */
@@ -254,10 +383,22 @@ export async function runSteps(
   if (writer === undefined) await reopenRun(run).catch(() => undefined)
   let last: StepEvent | undefined
   for (;;) {
-    const { ready, run: state } = await advance(host, run)
+    const { ready, run: state, blocked } = await advance(host, run)
+    if (blocked !== undefined) {
+      last = {
+        step: blocked.id,
+        kind: blocked.kind,
+        state: 'failed',
+        summary: 'could not evaluate when',
+        reason: 'card-status-unavailable',
+        detail: blocked.detail,
+      }
+      host.report?.(last)
+    }
     const step = ready[0]
     if (state !== 'running' || step === undefined) return ended(state, last, writer)
-    host.report?.({ step: step.id, kind: step.kind, state: 'running' })
+    const launchEvent = { step: step.id, kind: step.kind, state: 'running' } as const
+    await emitStep(host, launchEvent)
     const { status, summary, reason, detail } = await executeMetered(host, run, step, writer)
     last = {
       step: step.id,
@@ -267,6 +408,6 @@ export async function runSteps(
       ...(reason !== undefined && { reason }),
       ...(detail !== undefined && { detail }),
     }
-    host.report?.(last)
+    await emitStep(host, last)
   }
 }

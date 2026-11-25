@@ -1,5 +1,6 @@
 import { basename, extname } from 'node:path'
 import { isAlias, isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, visit } from 'yaml'
+import { ORDER_KEYS, type CardSelection } from '../select'
 import { violations, type JsonSchema, type Path } from '../schema'
 
 /** The step kinds of grammar v1. A kind's contract lives in `kinds/`. */
@@ -11,11 +12,15 @@ export const KIND_NAMES = [
   'gate',
   'approval',
   'merge',
+  'refine-story',
+  'plan-tasks',
 ] as const
 export type KindName = (typeof KIND_NAMES)[number]
 /** The macrostates of a card, as the adopted state mapping names them. */
 export const CARD_STATES = ['Draft', 'Ready', 'In Progress', 'Review', 'Done'] as const
 export type CardState = (typeof CARD_STATES)[number]
+
+const isRefinement = (kind: KindName | 'loop') => kind === 'refine-story' || kind === 'plan-tasks'
 
 /** The card state a step sets, and when: Ready and Done as the step ends `ok`, the others as it starts. */
 export function cardStateOf(step: {
@@ -23,14 +28,27 @@ export function cardStateOf(step: {
   readonly state?: CardState | 'none'
 }): { readonly state: CardState; readonly when: 'start' | 'end' } | undefined {
   // A loop has no kind of its own: its inner steps set the state.
-  const state =
-    step.state ??
-    ({ implement: 'In Progress', fix: 'In Progress', review: 'Review', merge: 'Done' } as const)[
-      step.kind as 'implement'
-    ]
+  const defaults: Partial<Record<KindName | 'loop', CardState>> = {
+    implement: 'In Progress',
+    fix: 'In Progress',
+    review: 'Review',
+    merge: 'Done',
+    'refine-story': 'Ready',
+    'plan-tasks': 'Ready',
+  }
+  const state = step.state ?? defaults[step.kind]
   return state === undefined || state === 'none'
     ? undefined
-    : { state, when: state === 'Ready' || state === 'Done' ? 'end' : 'start' }
+    : {
+        state,
+        when: isRefinement(step.kind) || state === 'Ready' || state === 'Done' ? 'end' : 'start',
+      }
+}
+
+/** The board transition that must be confirmed before the step can record success. */
+export function cardStateToConfirm(step: Parameters<typeof cardStateOf>[0]): CardState | undefined {
+  const state = cardStateOf(step)?.state
+  return state === 'Ready' || isRefinement(step.kind) ? state : undefined
 }
 
 /** A step id names a directory of the run and a row of the output: lower-case, digits and hyphens. */
@@ -66,6 +84,24 @@ export interface When {
 /** `<step>.<name>` or `<loop>/<step>.<name>`. */
 const OUTPUT_REF = '^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)?\\.[A-Za-z][A-Za-z0-9]*$'
 const names = { type: 'array', items: text } as const
+export const selectSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    filter: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        has: names,
+        lacks: names,
+        status: { ...names, items: { enum: CARD_STATES } },
+        assignee: text,
+      },
+    },
+    order: { type: 'array', items: { enum: ORDER_KEYS } },
+  },
+}
+
 const reason = { type: 'string', pattern: '\\S' } as const
 export const whenSchema: JsonSchema = {
   type: 'object',
@@ -149,6 +185,7 @@ export const workflowSchemaV1: JsonSchema = {
   properties: {
     version: { const: 1, description: 'The grammar version.' },
     name: { type: 'string', description: 'Equals the file name without its extension.' },
+    select: selectSchema,
     description: { type: 'string' },
     outputs: {
       type: 'object',
@@ -240,6 +277,7 @@ export interface Step {
 export interface Workflow {
   readonly version: 1
   readonly name: string
+  readonly select?: CardSelection
   readonly description?: string
   readonly outputs?: { readonly from: string }
   /** The declared aliases, each with its defaults. */

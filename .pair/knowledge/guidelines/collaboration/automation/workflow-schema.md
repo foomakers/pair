@@ -23,6 +23,56 @@ These schemas come from the workflow validator.
         "type": "string",
         "description": "Equals the file name without its extension."
       },
+      "select": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "filter": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "has": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "lacks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "status": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "Draft",
+                    "Ready",
+                    "In Progress",
+                    "Review",
+                    "Done"
+                  ]
+                }
+              },
+              "assignee": {
+                "type": "string"
+              }
+            }
+          },
+          "order": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "priority",
+                "number",
+                "created",
+                "status"
+              ]
+            }
+          }
+        }
+      },
       "description": {
         "type": "string"
       },
@@ -83,6 +133,8 @@ These schemas come from the workflow validator.
                 "gate",
                 "approval",
                 "merge",
+                "refine-story",
+                "plan-tasks",
                 "loop"
               ],
               "description": "What the step does and what it returns."
@@ -295,6 +347,60 @@ These schemas come from the workflow validator.
       },
       "telemetry": {
         "type": "boolean"
+      },
+      "select": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "filter": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "has": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "lacks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "status": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "Draft",
+                    "Ready",
+                    "In Progress",
+                    "Review",
+                    "Done"
+                  ]
+                }
+              },
+              "assignee": {
+                "type": "string"
+              }
+            }
+          },
+          "order": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "priority",
+                "number",
+                "created",
+                "status"
+              ]
+            }
+          }
+        }
+      },
+      "parallel": {
+        "type": "integer",
+        "minimum": 1
       }
     }
   }

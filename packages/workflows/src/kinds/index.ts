@@ -7,6 +7,7 @@ import { generic } from './generic'
 import { implement } from './implement'
 import { agentResultSchema, COMMON_RESULT, type StepKind, type StepStatus } from './kind'
 import { merge } from './merge'
+import { refineStory, planTasks } from './refinement'
 import { review } from './review'
 
 export {
@@ -26,6 +27,8 @@ export const kindByName: Readonly<Record<KindName, StepKind>> = {
   gate,
   approval,
   merge,
+  'refine-story': refineStory,
+  'plan-tasks': planTasks,
 }
 
 /** The names of the fields a kind declares in `inputs` or `outputs`. */

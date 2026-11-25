@@ -12,19 +12,14 @@ description: Contributor notes on the Claude Code workflows that drive a batch o
 
 They install **unconditionally**, on every project, whatever tool you use.
 
-Three workflows ship:
+Two Claude Code workflows ship:
 
 | Workflow               | What it drives                                                                                                                          |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `pair-implement-batch` | a batch of cards, each to a review-approved PR through four judgment stages (preparation, independent contract validation + seal, implementation, independent final verification) resuming a cycle from its first incomplete step |
-| `pair-refine-batch`    | a batch of backlog cards, classify, refine, or read-only triage; under the default `hold-always` gate the refine prompt is unchanged and writes Ready as before; under a declared `hold-never`/`hold-when` gate Ready is written only by `complete` after a task breakdown, so a refine-only run leaves cards `held`. By its dispatched prompts it writes to the PM tool only and touches no file in the repo: that is process, not permission: see the note below the agent table |
 | `pair-loop`            | the unattended delivery loop, selects eligible cards via `/pair-next`, runs a dependency + mutex analysis, composes `pair-implement-batch` for the actual batch, hands the autonomy policy (until / prepare / merge) to the batch, which merges a review-approved card only when the merge gate allows it, and evaluates the stop predicate. Realization for the `/pair-loop` skill in Claude Code (ADR-017 §4); elsewhere the skill takes a degraded one-card + continue-token path and this workflow never runs |
 
-`pair-refine-batch` takes an optional `prepare` argument (`hold-always` | `hold-never` | `hold-when[; has: <labels>][; lacks: <labels>]`) for `refine` items. The effective gate is resolved with the precedence argument > `## Autonomy` in `automation.md` > default `hold-always`. Under `hold-always` the human path is unchanged. Under `hold-never` the card is refined unattended (`$approval: auto`), assumptions are recorded, and Ready is written only after a task breakdown. `hold-when` does the same unless a listed condition fires at a stage boundary, then the card stays Draft with `needs-review` and one escalation comment. The result gains a `held` bucket: cards refined or escalated but not Ready.
-
-`pair-refine-batch` deliberately carries neither of the two knobs `pair-implement-batch` has. It has **no parallelism cap** because each card costs one API round trip and holds no worktree, no branch and no CPU: the cap exists on the implement engine because a card there occupies a working tree.
-
-And it has **no `args.pipeline`** because it drives pair's own refinement lifecycle by name (`/pair-capability-classify`, `/pair-process-refine-story`, …) rather than a configurable one; generalizing it is a separate change, and the file says so at the top.
+Use [the refinement workflow](/docs/process-lifecycle/refinement-workflow) to refine a batch through `pair-cli`.
 
 ## Workflows are Claude-Code-specific
 
@@ -49,13 +44,6 @@ Under Claude Code they are not inert, and it is worth knowing exactly what arriv
 | `pair-fix-test-author`    | `Read, Edit, Write, Bash, Grep, Glob, Skill` | the preparation owner (`/pair-workflow-red-spec`): inventory, grouping, tests and fixtures only; it cannot commit, push, post or edit production artifacts by instruction |
 | `pair-red-contract-verifier` | `Read, Write, Grep, Glob, Bash, Skill` | the independent validator and sealer (`/pair-workflow-red-verify`): reproduce the contract, seal accepted evidence and publish the typed handoff |
 | `pair-contract-generator` | `Read, Write, Bash`                        | read a KB template and write the derived `*.contract.json` cache beside it    |
-
-**One more agent type arrives with no definition of ours: `general-purpose`.** `pair-refine-batch`
-spawns it at both of its stages. It is a host built-in of Claude Code, not a file `pair-cli install`
-writes, so it is not in the table above, and that is precisely why it is worth naming here: it
-carries your tool configuration's **unrestricted** set, `Bash` included, which is wider than any
-of the shipped definitions above. What keeps that engine to PM-tool writes is the read-only clause
-in every prompt it dispatches, not a tool grant.
 
 **Read the third column as process, not as permission.** `Bash` is unrestricted wherever it is
 declared, so writing files, committing, pushing and `gh pr merge` are all technically inside the

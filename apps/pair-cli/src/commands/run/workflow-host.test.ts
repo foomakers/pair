@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'path'
 import { hashOf, start } from '@pair/workflows'
 import { fileSystemService as disk } from '@pair/content-ops'
-import { readCardFacts } from './cycle-wiring'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 // @ts-expect-error Vite loads the adopted definition as fixture text.
 import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/delivery.yaml?raw'
@@ -30,7 +29,6 @@ vi.mock('./host-process', () => ({ runHostProcess: vi.fn() }))
 vi.mock('./cycle-wiring', async importOriginal => ({
   ...(await importOriginal<typeof import('./cycle-wiring')>()),
   mainCheckoutOrCwd: (cwd: string) => cwd,
-  readCardFacts: vi.fn(async () => ({ labels: [] })),
 }))
 
 const hostProcess = vi.mocked(runHostProcess)
@@ -112,6 +110,7 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
         : { outcome: 'success', detail: 'terminal event: success' }
     },
     readCard: async () => ({ title: 'A card' }),
+    readResultFacts: async () => ({ head: HEAD }),
     prepareWorktree: async ({ main, card }) => {
       const dir = join(main, 'worktrees', card)
       fs.mkdirSync(dir, { recursive: true })
@@ -120,7 +119,13 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
     engineAvailable: () => true,
     ...over,
   }
-  return { workflow }
+  return {
+    workflow,
+    acquireLock: () => ({
+      kind: 'acquired' as const,
+      lock: { path: '/card-lock', release: vi.fn() },
+    }),
+  }
 }
 
 const OK = { 'pair-process-implement': () => IMPLEMENTED, 'pair-process-review': () => REVIEWED }
@@ -1040,7 +1045,6 @@ steps:
       },
     }
     fs.writeFileSync(path, JSON.stringify(state))
-    vi.mocked(readCardFacts).mockResolvedValue({ status: 'Done', labels: [] })
     const actions: string[] = []
     hostProcess.mockImplementation(async (_, args) => {
       const [, action, , raw] = args

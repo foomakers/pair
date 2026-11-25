@@ -4,3 +4,4 @@ defaults: { engine: claude, model: claude-sonnet-5-5, effort: medium }
 aliases:
   build: { engine: claude, model: claude-sonnet-5-5, effort: medium }
   judge: { engine: claude, model: claude-opus-5-5, effort: high }
+parallel: 3

@@ -178,6 +178,10 @@ export default defineAdapter({
           .map(f => view(load(idOf(f))))
           .map(({ number, url, title, body }) => ({ number, url, title, body }))
       },
+      childCards({ id }) {
+        return this.listCards().filter(card => card.id.slice(0, card.id.lastIndexOf('-')) === id)
+      },
+      blockedBy() { return [] },
       listCards() {
         return files().filter(f => relative(backlog, f).split(/[\\/]/).includes('03-user-stories')).map(f => ({ id: /^(?:\d+(?:-\d+){2}|[A-Za-z]+-\d+)/.exec(idOf(f))?.[0] ?? idOf(f) }))
       },

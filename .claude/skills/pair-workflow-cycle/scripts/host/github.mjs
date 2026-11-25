@@ -283,8 +283,24 @@ export default defineAdapter({
         if (batch.length < 100) return rows
       }
     }
-    const BOARD_QUERY = 'query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){issue(number:$n){id projectItems(first:20){nodes{id project{id title fields(first:30){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}}}}'
+    const issueRelations = (id, relation, repo) => {
+      const rows = listPages(`${apiRepo(repo)}/issues/${id}/${relation}?sort=created`)
+      if (rows.length === 0) return []
+      const bound = resolveRepo(repo).toLowerCase()
+      return rows.map(issue => {
+        const slug = /\/repos\/([^/]+\/[^/]+)$/.exec(issue?.repository_url ?? '')?.[1]
+        if (!slug || !Number.isInteger(issue.number))
+          throw new HostError('invalid-output', { message: `gh api ${relation}: missing issue number or repository` })
+        return { id: String(issue.number), closed: issue.state === 'closed', foreign: slug.toLowerCase() === bound ? null : `${slug}#${issue.number}` }
+      })
+    }
+    const BOARD_QUERY = 'query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){issue(number:$n){id projectItems(first:100){nodes{id fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}} project{id title fields(first:30){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}}}}'
     const BOARD_MUTATION = 'mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}'
+    const boardIssue = (id, slug) => {
+      const [owner, name] = slug.split('/')
+      return parseJson(gh(['api', 'graphql', '-f', `query=${BOARD_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `n=${Number(id)}`]), { command: 'gh api graphql board' })?.data?.repository?.issue
+    }
+    const boardItems = (issue, board) => (issue?.projectItems?.nodes ?? []).filter(item => item?.project?.id === board.id)
 
     return {
       checkContext: CHECK_CONTEXT,
@@ -319,15 +335,27 @@ export default defineAdapter({
         }
       },
       // A resolution error propagates (a transient failure is never "not a member").
-      boardItems({ items, repo }) {
-        const board = resolveBoard(repo)
-        return board.gap ? { gap: board.gap, error: board.error } : items.filter(item => item?.title === board.title)
+      boardItems({ id, repo }) {
+        const slug = resolveRepo(repo)
+        const board = resolveBoard(slug)
+        return board.gap ? board : boardItems(boardIssue(id, slug), board).map(item => ({ status: item.fieldValueByName }))
       },
       findCards({ repo, search }) {
         const rows = parseJson(gh(['issue', 'list', '--repo', resolveRepo(repo), '--search', search, '--json', 'number,url,title,body']), { command: 'gh issue list' })
         return Array.isArray(rows) ? rows : []
       },
-      listCards({ repo }) {
+      childCards({ id, repo }) {
+        return issueRelations(id, 'sub_issues', repo).flatMap(({ id, closed, foreign }) => {
+          if (closed && foreign) return []
+          if (foreign) throw new HostError('invalid-input', { message: `card-out-of-scope: ${foreign}` })
+          return [{ id, closed }]
+        })
+      },
+      blockedBy({ id, repo }) {
+        return issueRelations(id, 'dependencies/blocked_by', repo).map(card => card.foreign ?? card.id)
+      },
+      listCards({ repo, labels }) {
+        if (labels) return labels.flatMap(label => listPages(`${apiRepo(repo)}/issues?state=open&labels=${encodeURIComponent(label)}`)).filter(issue => !issue.pull_request).map(issue => ({ id: String(issue.number) }))
         const label = storyLabel()
         return listPages(`${apiRepo(repo)}/issues?state=all`).filter(issue => !issue.pull_request && (/^## Story Statement\s*$/m.test(String(issue.body ?? '')) || (label && issue.labels?.some(item => item.name === label)))).map(issue => ({ id: String(issue.number) }))
       },
@@ -450,17 +478,16 @@ export default defineAdapter({
       },
       ensureBoardMembership({ id, repo }) {
         try {
-          const board = resolveBoard(repo)
+          const slug = resolveRepo(repo)
+          const board = resolveBoard(slug)
           if (board.gap) return { confirmed: false, gap: board.gap, error: board.error }
-          const [owner, name] = resolveRepo(repo).split('/')
-          const query = () => parseJson(gh(['api', 'graphql', '-f', `query=${BOARD_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `n=${Number(id)}`]), { command: 'gh api graphql board' })?.data?.repository?.issue
-          const before = query()
+          const before = boardIssue(id, slug)
           if (!before?.id) return { confirmed: false, gap: 'issue-unresolved', error: `issue #${id} has no node id` }
-          if (!(before.projectItems?.nodes ?? []).some(item => item.project?.id === board.id)) {
+          if (boardItems(before, board).length === 0) {
             const mutation = 'mutation($project:ID!,$content:ID!){addProjectV2ItemById(input:{projectId:$project,contentId:$content}){item{id}}}'
             gh(['api', 'graphql', '-f', `query=${mutation}`, '-F', `project=${board.id}`, '-F', `content=${before.id}`])
           }
-          const confirmed = (query()?.projectItems?.nodes ?? []).some(item => item.project?.id === board.id)
+          const confirmed = boardItems(boardIssue(id, slug), board).length > 0
           return { confirmed, error: confirmed ? null : `read-back: issue #${id} is absent from ${board.title}` }
         } catch (e) {
           return { confirmed: false, gap: 'membership-write-failed', error: e.message }
@@ -473,11 +500,10 @@ export default defineAdapter({
       // item, sits on several boards, or whose board has no such option is `confirmed: false`.
       setBoardState({ id, state, repo }) {
         try {
-          const board = resolveBoard(repo)
+          const slug = resolveRepo(repo)
+          const board = resolveBoard(slug)
           if (board.gap) return { applied: state, confirmed: false, gap: board.gap, error: board.error }
-          const [owner, name] = resolveRepo(repo).split('/')
-          const q = parseJson(gh(['api', 'graphql', '-f', `query=${BOARD_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `n=${Number(id)}`]), { command: 'gh api graphql board' })
-          const items = (q?.data?.repository?.issue?.projectItems?.nodes ?? []).filter(item => item?.project?.id === board.id)
+          const items = boardItems(boardIssue(id, slug), board)
           if (items.length === 0) return { applied: state, confirmed: false, error: `issue #${id} is not an item of ${board.title} — no board field to write` }
           if (items.length > 1) return { applied: state, confirmed: false, error: `issue #${id} sits on ${items.length} projects (${items.map(i => i.project?.title).join(', ')}) — the board is never guessed` }
           const [item] = items

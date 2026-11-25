@@ -28,7 +28,7 @@ import {
 } from '../../skills/pair-workflow-review-phase/scripts/host/index.mjs'
 import github from '../../skills/pair-workflow-review-phase/scripts/host/github.mjs'
 import azure from '../../skills/pair-workflow-review-phase/scripts/host/azure-devops.mjs'
-import { cardHash, applyScopeDecisions, publish, scopeBaselineHashOf, discoverDecisions, readDecisions } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
+import { cardHash, cardView, applyScopeDecisions, publish, scopeBaselineHashOf, discoverDecisions, readDecisions } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
 import { createHash } from 'node:crypto'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
@@ -202,6 +202,8 @@ if (a[0] === 'issue' && a[1] === 'close') { S.issues[a[2]].state = 'closed'; sav
 if (a[0] === 'pr' && a[1] === 'view') { process.stdout.write(S.prs[a[2]].head + '\\n'); process.exit(0) }
 if (a[0] === 'pr' && a[1] === 'merge') { S.prs[a[2]].merged = a.slice(3); save(); process.exit(0) }
 if (a[0] === 'api') {
+  const relation = S.relations?.[a[1].split('?')[0]]
+  if (relation) { process.stdout.write(JSON.stringify(relation)); process.exit(0) }
   const cm = /^repos\\/[^/]+\\/[^/]+\\/issues\\/comments\\/(\\d+)$/.exec(a[1])
   if (cm) { const c = (S.comments || {})[Number(cm[1])]; if (!c) { process.stderr.write('gh: Not Found (HTTP 404)'); process.exit(1) } process.stdout.write(JSON.stringify(c)); process.exit(0) }
   const m = /issues\\/(\\d+)\\/(parent|sub_issues)$/.exec(a[1])
@@ -225,6 +227,24 @@ test('github readComment returns the comment`s CANONICAL identity (numeric id, r
   )
 })
 
+test('R744-02 and R744-06: scope open children and blockers by repository', () => {
+  const issue = (repo, number) => ({ number, state: 'open', repository_url: `https://api.github.com/repos/${repo}` })
+  const local = issue('Acme/App', 7)
+  const foreign = issue('Acme/Other', 7)
+  const paths = 'repos/acme/app/issues'
+  const gh = fakeGh({ relations: {
+    [`${paths}/10/sub_issues`]: [local],
+    [`${paths}/11/sub_issues`]: [foreign],
+    [`${paths}/12/dependencies/blocked_by`]: [local, foreign],
+    [`${paths}/13/sub_issues`]: [{ ...foreign, state: 'closed' }, local],
+  } })
+  const pm = github.instantiate({ ghBin: gh.ghBin })
+  assert.deepEqual(pm.childCards({ id: 10, repo: 'acme/app' }), [{ id: '7', closed: false }])
+  assert.throws(() => pm.childCards({ id: 11, repo: 'acme/app' }), /card-out-of-scope: Acme\/Other#7/)
+  assert.deepEqual(pm.blockedBy({ id: 12, repo: 'acme/app' }), ['7', 'Acme/Other#7'])
+  assert.deepEqual(pm.childCards({ id: 13, repo: 'acme/app' }), [{ id: '7', closed: false }])
+})
+
 const wowDir = text => {
   const root = mkdtempSync(join(tmpdir(), 'wow-'))
   mkdirSync(join(root, '.pair', 'adoption', 'tech'), { recursive: true })
@@ -235,6 +255,16 @@ const wowDir = text => {
 }
 const AZURE_WOW = '# Way of Working\n\n- Azure DevOps is adopted for project management.\n  Organization: acme. Project: Proj.\n'
 const SPLIT_WOW = '# Way of Working\n\n- Azure DevOps is adopted for project management.\n\n## Git Workflow\n\n- `code-host`: `github` — repository `acme/app`.\n'
+
+test('R744-04: Azure card facts include each stored risk and team tag', () => {
+  const az = fakeAz({ workItems: {
+    7: { fields: { 'System.Tags': ' risk:green ; ; team:cli ' } },
+    8: { fields: {} },
+  } })
+  const host = { pmTool: 'azure-devops', pm: azure.instantiate({ azBin: az.azBin }) }
+  assert.deepEqual(cardView({ story: '7', host }).labels, ['risk:green', 'team:cli'])
+  assert.deepEqual(cardView({ story: '8', host }).labels, [])
+})
 
 // ── T-1: the interface + the shared canonicalization ─────────────────────────────────────────
 test('AC1/T-1: the interface is exactly the eight named methods, and both shipped adapters implement every one', () => {

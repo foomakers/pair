@@ -17,7 +17,7 @@
 <rect x="200" y="110" width="270" height="70" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
 <text x="335.0" y="149.0" text-anchor="middle" fill="#222">process skills by hand</text>
 <rect x="490" y="110" width="270" height="70" rx="6" fill="#fff6df" stroke="#a06a00" stroke-width="1.3"/>
-<text x="625.0" y="141.0" text-anchor="middle" fill="#222" font-weight="bold">/pair-refine-batch</text>
+<text x="625.0" y="141.0" text-anchor="middle" fill="#222" font-weight="bold">pair-cli run refinement</text>
 <text x="625.0" y="157.0" text-anchor="middle" fill="#222">run --until ready</text>
 <rect x="780" y="110" width="270" height="70" rx="6" fill="#e9f6ec" stroke="#2f7d46" stroke-width="1.3"/>
 <text x="915.0" y="149.0" text-anchor="middle" fill="#222">prepare gate, escalation</text>

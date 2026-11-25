@@ -218,7 +218,7 @@ async function readGh(
   throw new Error('host-transient: gh read exhausted')
 }
 
-async function readCard(card: string, cwd: string): Promise<CardView> {
+export async function readCard(card: string, cwd: string): Promise<CardView> {
   const script = join(cwd, CYCLE_STATE_REL)
   if (existsSync(script)) {
     const r = await runHostProcess(process.execPath, [script, 'card', '--story', card], cwd)
@@ -351,15 +351,6 @@ export async function readCardTitle(card: string, cwd: string): Promise<string |
   } catch {
     return undefined
   }
-}
-
-/** The card's facts a workflow step's `when` reads, live: its labels and board state. */
-export async function readCardFacts(
-  card: string,
-  cwd: string,
-): Promise<{ readonly labels: readonly string[]; readonly status?: string }> {
-  const view = await readCard(card, cwd)
-  return { labels: view.labels, ...(view.boardState !== null && { status: view.boardState }) }
 }
 
 /** US-652: the card a workflow run is about — its title, or why it cannot be run. An unreadable card is `missing`. */

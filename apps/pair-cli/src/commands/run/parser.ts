@@ -90,10 +90,20 @@ export interface RunWorkflowRequest {
   readonly flagAnswer?: WorkflowFlagAnswer
 }
 
+export interface RunWorkflowBatch extends Omit<RunWorkflowRequest, 'card'> {
+  readonly cards?: readonly string[]
+  readonly root?: string
+  readonly filter?: string
+  readonly status?: string
+  readonly assignee?: string
+  readonly parallel?: number
+}
+
 export interface RunCommandConfig {
   command: 'run'
   /** US-652: present only when a workflow name was passed as the positional argument. */
   workflow?: RunWorkflowRequest
+  workflowBatch?: RunWorkflowBatch
   /** Internal immutable configuration passed from the root/parallel parent. */
   runSnapshot?: string
   /** AC-24: explicit --telemetry / --no-telemetry; absent reads the adoption. */
@@ -746,15 +756,10 @@ function explicitParallel(
 const FLAGS_NOT_FOR_A_WORKFLOW = [
   ['skill', '--skill'],
   ['prompt', '--prompt'],
-  ['root', '--root'],
-  ['filter', '--filter'],
-  ['assignee', '--assignee'],
-  ['status', '--status'],
   ['cards', '--cards'],
   ['cardTags', '--card-tags'],
   ['pr', '--pr'],
   ['rounds', '--rounds'],
-  ['parallel', '--parallel'],
   ['stateOrder', '--state-order'],
   ['watch', '--watch'],
   ['interval', '--interval'],
@@ -838,9 +843,40 @@ function refuseStrayWorkflowFlags(options: ParseRunOptions): undefined {
 function resolveWorkflowRun(
   name: string | undefined,
   options: ParseRunOptions,
-): RunWorkflowRequest | undefined {
-  if (name === undefined) return refuseStrayWorkflowFlags(options)
+): Pick<RunCommandConfig, 'workflow' | 'workflowBatch'> {
+  if (name === undefined) {
+    refuseStrayWorkflowFlags(options)
+    return {}
+  }
   const workflow = promptSafeText(name, 'the workflow name')!
+  assertWorkflowFlags(workflow, options)
+  const { cards, ...scope } = parseWorkflowScope(workflow, options)
+  const request = workflowRequest(workflow, options)
+  if (cards?.length === 1 && Object.keys(scope).length === 0 && options.parallel === undefined) {
+    const card = cards[0]!
+    const flagAnswer = workflowFlagAnswer(options, card)
+    return { workflow: { ...request, card, ...(flagAnswer !== undefined && { flagAnswer }) } }
+  }
+  if (
+    passed(options, [
+      ['approve', '--approve'],
+      ['reject', '--reject'],
+    ]).length > 0
+  )
+    throw new Error('Approval flags require a single-card workflow run')
+  return {
+    workflowBatch: {
+      ...request,
+      ...scope,
+      ...(cards !== undefined && { cards }),
+      ...(options.parallel !== undefined && {
+        parallel: parsePositiveInteger('--parallel', options.parallel),
+      }),
+    },
+  }
+}
+
+function assertWorkflowFlags(workflow: string, options: ParseRunOptions): void {
   const configured = passed(options, [
     ['profile', '--profile'],
     ['workflowConfig', '--workflow-config'],
@@ -856,10 +892,34 @@ function resolveWorkflowRun(
       `${foreign.join(', ')} cannot be combined with a workflow name: \`pair-cli run ${workflow}\` takes ` +
         '--card, --engine, --config, --config-override, --reconfigure, --run-id, --restart, --dry-run, --cwd, the timeouts and the output flags.',
     )
-  const card = identifierText(options.card, '--card')
-  if (card === undefined)
-    throw new Error(`\`pair-cli run ${workflow}\` needs --card <id>: a workflow runs on one card`)
-  const flagAnswer = workflowFlagAnswer(options, card)
+}
+
+function workflowCards(value: ParseRunOptions['card']): string[] | undefined {
+  if (value === undefined) return undefined
+  return [
+    ...new Set(
+      String(value)
+        .split(',')
+        .map(raw => {
+          const card = identifierText(raw.trim(), '--card')
+          if (card === undefined) throw new Error('--card contains an empty identifier')
+          return card
+        }),
+    ),
+  ]
+}
+
+function parseWorkflowScope(workflow: string, options: ParseRunOptions) {
+  const scope = resolveScope(options)
+  const cards = workflowCards(options.card)
+  if (cards !== undefined && scope.root !== undefined)
+    throw new Error('--card cannot be combined with --root')
+  if (cards === undefined && scope.root === undefined && scope.filter === undefined)
+    throw new Error(`pair-cli run ${workflow} needs --card <id>, --root <id> or --filter <label>`)
+  return { cards, ...scope }
+}
+
+function workflowRequest(workflow: string, options: ParseRunOptions) {
   const runId = identifierText(options.runId, '--run-id')
   const moreRounds =
     options.moreRounds === undefined
@@ -867,29 +927,37 @@ function resolveWorkflowRun(
       : parsePositiveInteger('--more-rounds', options.moreRounds)
   return {
     name: workflow,
-    card,
     ...(runId !== undefined && { runId }),
     restart: options.restart === true,
     ...configurationOf(options),
     ...(moreRounds !== undefined && { moreRounds }),
-    ...(flagAnswer !== undefined && { flagAnswer }),
   }
 }
 
+function withoutWorkflowScope(input: ParseRunOptions): ParseRunOptions {
+  const common = { ...input }
+  for (const key of ['card', 'root', 'filter', 'assignee', 'status', 'parallel'] as const)
+    delete common[key]
+  return common
+}
+
 /** The one positional argument `run` takes: a workflow name (US-652). */
-function workflowOf(args: string[], input: ParseRunOptions): Pick<RunCommandConfig, 'workflow'> {
+function workflowOf(
+  args: string[],
+  input: ParseRunOptions,
+): Pick<RunCommandConfig, 'workflow' | 'workflowBatch'> {
   if (args.length > 1) {
     throw new Error(
       `Command 'run' accepts one positional argument, the workflow name: ${args.join(', ')}`,
     )
   }
-  const workflow = resolveWorkflowRun(args[0], input)
-  return workflow === undefined ? {} : { workflow }
+  return resolveWorkflowRun(args[0], input)
 }
 
 export function parseRunCommand(input: ParseRunOptions, args: string[] = []): RunCommandConfig {
   const workflow = workflowOf(args, input)
-  const options = withImpliedParallel(input)
+  const options =
+    workflow.workflowBatch === undefined ? withImpliedParallel(input) : withoutWorkflowScope(input)
 
   const engine = resolveEngineFlag(options.engine)
   const cwd = optionalText(options.cwd, '--cwd')

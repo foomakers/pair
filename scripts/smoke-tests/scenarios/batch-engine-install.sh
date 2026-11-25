@@ -36,7 +36,8 @@ assert_dir ".claude/agents"
 # the skill that runs it (a skill is portable as one folder): shipping a phase skill without its
 # script produces a stage that dies at its first step.
 assert_file ".claude/workflows/pair-implement-batch.js"
-assert_file ".claude/workflows/pair-refine-batch.js"
+assert_file ".pair/adoption/tech/workflows/refinement.yaml"
+assert_no_file ".claude/workflows/pair-refine-batch.js"
 assert_file ".claude/workflows/pair-loop.js"
 assert_file ".claude/skills/pair-workflow-contract-phase/scripts/ensure-contract.mjs"
 for skill in red-spec red-verify implement-phase green-fix review-phase; do

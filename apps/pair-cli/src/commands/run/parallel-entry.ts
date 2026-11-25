@@ -631,7 +631,7 @@ function createBatch(ctx: BatchContext): {
       console.log(`  Interrupted by ${signal}: running card processes were stopped.`)
     },
     run: async () => {
-      const outcomes = await runPool({
+      const outcomes = await runPool<RootCandidate>({
         items: plan.run,
         limit: plan.limit.effective,
         resources: card => card.mutexResources,

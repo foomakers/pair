@@ -21,10 +21,6 @@ Minor
 
 tag:risk:red ⇒ Done
 
-## Max Parallelism
-
-3
-
 ## Audit Location
 
 automation/loop-audit.md
