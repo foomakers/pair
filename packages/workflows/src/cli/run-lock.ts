@@ -29,7 +29,9 @@ export interface SessionLease {
   readonly expiresAt: number
   readonly worktree?: string
   readonly launch?: StepLaunch | undefined
+  readonly launchStartedAt?: number | undefined
   readonly approval?: SessionApproval | undefined
+  telemetryWarned?: true
 }
 
 interface LockNote {
@@ -190,6 +192,7 @@ export async function withSessionLease<T>(
   command: (lease: SessionLease) => Promise<{
     result: T
     launch?: StepLaunch
+    launchStartedAt?: number | undefined
     approval?: SessionApproval | undefined
     worktree?: string
     stop?: boolean
@@ -203,7 +206,11 @@ export async function withSessionLease<T>(
     finish(runDir, lease, 'token' in input)
     throw error
   }
-  const { worktree, launch, approval, stop } = outcome
-  finish(runDir, { ...lease, ...(worktree !== undefined && { worktree }), launch, approval }, !stop)
+  const { worktree, launch, launchStartedAt, approval, stop } = outcome
+  finish(
+    runDir,
+    { ...lease, ...(worktree !== undefined && { worktree }), launch, launchStartedAt, approval },
+    !stop,
+  )
   return outcome.result
 }

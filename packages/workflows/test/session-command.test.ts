@@ -43,10 +43,11 @@ steps:
     interactive: true
     escalate: { failed: stop, blocked: stop, needs-decision: stop }
 `
-const configuration = `version: 1
+const configurationDefaults = `version: 1
 name: mine
 defaults: { engine: codex, model: gpt-5, effort: medium }
-steps:
+`
+const configuration = `${configurationDefaults}steps:
   discuss: { effort: high }
 `
 const drafted = { status: 'ok', summary: 'Draft prepared' }
@@ -370,6 +371,115 @@ function startWorkflow(steps: string) {
 }
 
 const advance = (lease: string[]) => JSON.parse(successful(['next', runId, ...lease])) as unknown
+
+function startTelemetrySession(enabled: boolean) {
+  write(workflowFile, namedWorkflow('  draft: { kind: generic, skill: pair-fixture-draft }\n'))
+  write(configFile, `${configurationDefaults}telemetry: ${String(enabled)}\n`)
+  const lease = openSession([
+    'start',
+    'quick',
+    '--card',
+    card,
+    '--engine',
+    'codex',
+    '--config',
+    'mine',
+  ])
+  write(configFile, `${configurationDefaults}telemetry: ${String(!enabled)}\n`)
+  return lease
+}
+
+const readTelemetry = () =>
+  readRun('telemetry.jsonl')
+    .trimEnd()
+    .split('\n')
+    .map(line => JSON.parse(line) as unknown)
+
+it.each(['measured', 'estimated'] as const)('#696 AC-10: records %s session usage', source => {
+  const lease = startTelemetrySession(true)
+  const launch = advance(lease) as { ready: [{ message: string; attempt: number }] }
+  expect(launch).toMatchObject({ ready: [{ id: 'draft', attempt: 1 }] })
+  const [{ message, attempt }] = launch.ready
+  const final = fenced(drafted)
+  const usage = { read: 113, cached: 17, written: 29 }
+  expect(
+    JSON.parse(
+      successful(
+        [
+          'record',
+          runId,
+          'draft',
+          ...lease,
+          '--attempt',
+          String(attempt),
+          '--result',
+          '-',
+          '--model',
+          'gpt-6-sol',
+          ...(source === 'measured' ? ['--usage', JSON.stringify(usage)] : []),
+        ],
+        final,
+      ),
+    ),
+  ).toMatchObject(drafted)
+
+  const identity = { schema: 2, run: runId, workflow: 'quick', card }
+  const tokens = {
+    read: { value: source === 'measured' ? usage.read : Math.ceil(message.length / 4), source },
+    cached:
+      source === 'measured' ? { value: usage.cached, source } : { value: null, source: 'unknown' },
+    written: { value: source === 'measured' ? usage.written : Math.ceil(final.length / 4), source },
+  }
+  const steps = readTelemetry()
+  expect(steps).toMatchObject([
+    {
+      ...identity,
+      type: 'step',
+      step: 'draft',
+      kind: 'generic',
+      uses: 'pair-fixture-draft',
+      host: 'session',
+      engine: 'codex',
+      model: 'gpt-6-sol',
+      effort: 'medium',
+      attempt: 1,
+      status: 'ok',
+      durationMs: expect.any(Number),
+      tokens,
+      ...(source === 'estimated' && { estimate: 'lower-bound-from-text' }),
+    },
+  ])
+  if (source === 'measured') expect(steps[0]).not.toHaveProperty('estimate')
+
+  expect(advance(lease)).toMatchObject({ run: 'done', ready: [] })
+  expect(readTelemetry()).toMatchObject([
+    ...steps,
+    {
+      ...identity,
+      type: 'run',
+      status: 'done',
+      steps: 1,
+      durationMs: expect.any(Number),
+      tokens: {
+        ...tokens,
+        cached: {
+          ...tokens.cached,
+          ...(source === 'estimated' && { unknown: ['draft#1'] }),
+        },
+      },
+    },
+  ])
+})
+
+it('#696 AC-10: leaves telemetry unwritten when frozen configuration disables it', () => {
+  const lease = startTelemetrySession(false)
+  expect(advance(lease)).toMatchObject({ ready: [{ id: 'draft', attempt: 1 }] })
+  expect(
+    JSON.parse(successful(['record', runId, 'draft', ...lease, '--result', '-'], fenced(drafted))),
+  ).toMatchObject(drafted)
+  expect(advance(lease)).toMatchObject({ run: 'done', ready: [] })
+  expect(existsSync(join(runDir, 'telemetry.jsonl'))).toBe(false)
+})
 
 it('#696 AC-9: runs the standalone gate in the card worktree', () => {
   write(

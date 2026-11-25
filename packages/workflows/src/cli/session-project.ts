@@ -7,6 +7,7 @@ import {
   selectConfiguration,
   settingsFor,
   type Configuration,
+  type ResolvedSettings,
   type WorkflowsConfig,
 } from '../configuration'
 import { list } from '../describe'
@@ -175,7 +176,7 @@ export function effectiveSettings(
   workflow: Workflow,
   step: Step,
   engine: string,
-) {
+): Partial<ResolvedSettings> & { engine: string } {
   return configuration === undefined
     ? { engine }
     : settingsFor(configuration, step, workflow.aliases)

@@ -1,6 +1,7 @@
 import { dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { kinds, schemas } from '../describe'
+import type { Usage } from '../telemetry'
 import { diagnosticMain, sessionMain } from '../worktree/session'
 import { nextSession, openSession, recordSession, sessionRun, stopSession } from './session'
 import { workflowDefinition, workflowList, type Project } from './session-project'
@@ -19,7 +20,7 @@ const commands = {
   start: { count: 1, flags: ['card', 'engine', 'config'] },
   resume: { count: 1, flags: ['engine'] },
   next: { count: 1, flags: ['lease', 'answer'] },
-  record: { count: 2, flags: ['lease', 'result', 'model', 'attempt'] },
+  record: { count: 2, flags: ['lease', 'result', 'model', 'attempt', 'usage'] },
   stop: { count: 1, flags: ['lease'] },
 }
 
@@ -32,6 +33,7 @@ const options = {
   result: { type: 'string' },
   model: { type: 'string' },
   attempt: { type: 'string' },
+  usage: { type: 'string' },
 } as const
 
 type Command = keyof typeof commands
@@ -52,6 +54,27 @@ function attemptNumber(value: string | undefined): number | undefined {
   return attempt
 }
 
+const isTokenCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+
+function usageOf(value: string | undefined): Usage | undefined {
+  if (value === undefined) return undefined
+  const invalid = new Error(
+    '--usage must be a JSON object with non-negative integer read, cached and written counts',
+  )
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw invalid
+  }
+  if (parsed === null || typeof parsed !== 'object' || Object.keys(parsed).length !== 3)
+    throw invalid
+  const { read, cached, written } = parsed as Partial<Record<keyof Usage, unknown>>
+  if (!isTokenCount(read) || !isTokenCount(cached) || !isTokenCount(written)) throw invalid
+  return { read, cached, written }
+}
+
 function operate(
   command: 'next' | 'record' | 'stop',
   project: Project,
@@ -67,6 +90,7 @@ function operate(
     file: required('result', values.result),
     model: values.model,
     attempt: attemptNumber(values.attempt),
+    usage: usageOf(values.usage),
   })
 }
 

@@ -121,8 +121,10 @@ export interface RunOutcome {
 interface Exchange {
   sent: string
   final: string
-  usage?: Usage
+  usage?: Usage | undefined
 }
+
+type TimedExchange = Exchange & { startedAt: Date; model?: string | undefined }
 
 /** The result of a step, unless it is `ok` and its `gates` are not all green. */
 async function gated(
@@ -364,11 +366,11 @@ export async function settleAgentStep(
  * The run's telemetry, when it is on. It never fails a run: the first write error is reported, and
  * the run goes on without it.
  */
-function writerOf(run: RunDirectory, telemetry: TelemetryOptions) {
+export function telemetryWriter(run: ObservedRun, telemetry: TelemetryOptions) {
   let told = false
-  const safe = async (write: Promise<void>): Promise<void> => {
+  const safe = async (write: () => Promise<void>): Promise<void> => {
     try {
-      await write
+      await write()
     } catch (error) {
       if (!told)
         telemetry.warn?.(
@@ -377,24 +379,43 @@ function writerOf(run: RunDirectory, telemetry: TelemetryOptions) {
       told = true
     }
   }
+  const now = telemetry.now ?? (() => new Date())
+  const step = (execution: Omit<StepExecution, 'host' | 'settings'>, model?: string) =>
+    safe(() =>
+      recordStep(run, {
+        ...execution,
+        host: telemetry.host,
+        settings:
+          execution.step.kind === 'loop'
+            ? { engine: 'pair' }
+            : { ...telemetry.settings(execution.step.id), ...(model !== undefined && { model }) },
+      }),
+    )
   return {
-    now: telemetry.now ?? (() => new Date()),
-    step: (execution: Omit<StepExecution, 'host' | 'settings'>) =>
-      safe(
-        recordStep(run, {
-          ...execution,
-          host: telemetry.host,
-          settings:
-            execution.step.kind === 'loop'
-              ? { engine: 'pair' }
-              : telemetry.settings(execution.step.id),
-        }),
+    now,
+    step,
+    execution: (launch: StepLaunch, result: StepExecutionResult, exchange: TimedExchange) =>
+      step(
+        {
+          step: launch,
+          startedAt: exchange.startedAt,
+          durationMs: Math.max(0, now().getTime() - exchange.startedAt.getTime()),
+          tokens:
+            exchange.usage === undefined
+              ? estimated(exchange.sent, exchange.final)
+              : measured(exchange.usage),
+          status: result.status,
+          ...(result.reason !== undefined && { reason: result.reason }),
+          ...escalationOf(run.outcomes.find(outcome => outcome.id === launch.id)),
+        },
+        exchange.model,
       ),
-    close: (status: RunOutcome['run']) => safe(closeRun(run, status)),
+    reopen: () => safe(() => reopenRun(run)),
+    close: (status: RunOutcome['run']) => safe(() => closeRun(run, status)),
   }
 }
 
-type Writer = ReturnType<typeof writerOf> | undefined
+type Writer = ReturnType<typeof telemetryWriter> | undefined
 
 interface ObservedRun extends RunDirectory {
   readonly outcomes: EngineOutcome[]
@@ -462,17 +483,7 @@ async function executeMetered(
   const startedAt = writer.now()
   const exchange: Exchange = { sent: '', final: '' }
   const result = await execute(host, run, step, exchange)
-  const { sent, final, usage } = exchange
-  await writer.step({
-    step,
-    startedAt,
-    durationMs: writer.now().getTime() - startedAt.getTime(),
-    // A host that cannot measure: the estimate from the two texts.
-    tokens: usage === undefined ? estimated(sent, final) : measured(usage),
-    status: result.status,
-    ...(result.reason !== undefined && { reason: result.reason }),
-    ...escalationOf(run.outcomes.find(outcome => outcome.id === step.id)),
-  })
+  await writer.execution(step, result, { ...exchange, startedAt })
   return result
 }
 
@@ -612,7 +623,7 @@ export async function runSteps(
   telemetry?: TelemetryOptions,
 ): Promise<RunOutcome> {
   const run = observeRun({ files: host.files, dir })
-  const writer = telemetry && writerOf(run, telemetry)
+  const writer = telemetry && telemetryWriter(run, telemetry)
   if (writer === undefined) await reopenRun(run).catch(() => undefined)
   let last: StepEvent | undefined
   for (;;) {
