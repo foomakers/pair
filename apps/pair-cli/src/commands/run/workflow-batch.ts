@@ -113,7 +113,7 @@ type BatchRequest = { config: RunCommandConfig; request: RunWorkflowBatch; servi
 function selectCards(
   cards: readonly WorkflowCard[],
   selection: ReturnType<typeof effectiveSelection>,
-  accepts: (card: WorkflowCard) => boolean,
+  accepts: (card: WorkflowCard, done: boolean) => boolean,
   completed: (id: string) => boolean,
 ) {
   const prior = new Map<string, BatchOutcome>()
@@ -123,9 +123,9 @@ function selectCards(
     const error = card.error ?? (done ? undefined : selectionBoardError(card, selection))
     if (error !== undefined) {
       prior.set(card.id, { id: card.id, outcome: 'failed', reason: error })
-    } else if (done) {
-      prior.set(card.id, { id: card.id, outcome: 'skipped', reason: 'workflow already complete' })
-    } else if (!accepts(card)) {
+      return true
+    }
+    if (!accepts(card, done)) {
       excluded.push({
         id: card.id,
         outcome: 'not-applicable',
@@ -133,6 +133,8 @@ function selectCards(
       })
       return false
     }
+    if (done)
+      prior.set(card.id, { id: card.id, outcome: 'skipped', reason: 'workflow already complete' })
     return true
   })
   return { selected, prior, excluded }
@@ -186,8 +188,13 @@ async function planBatch(
   })
   const completed = (id: string) =>
     !request.restart && completedRun(runOf(id), { card: id, workflow })
-  const accepts = (card: WorkflowCard) =>
-    matchesWorkflowCard(card, selection.accepts, request.restart ? undefined : runOf(card.id))
+  // Completion can move a card past the selected status. Current scope still applies.
+  const accepts = (card: WorkflowCard, done: boolean) =>
+    matchesWorkflowCard(
+      card,
+      done ? facts => selection.accepts(facts) || selection.needsStatus(facts) : selection.accepts,
+      request.restart || done ? undefined : runOf(card.id),
+    )
   const candidates = selectCards(cards, selection, accepts, completed)
   return {
     ...candidates,
