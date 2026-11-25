@@ -433,7 +433,20 @@ describe('#723 T-6 assignment configuration (AC-7, AC-9)', () => {
 
     expect(assignments).toEqual(['me'])
     expect(launched[0]?.promptText).toContain('- assignee: none')
-    expect(lines.join('\n')).not.toContain('assign=')
+    printsAssignment('implement', 'me', 'default')
+    expect(lines.filter(line => line.includes('assign='))).toHaveLength(1)
+  })
+
+  it('previews implicit me alongside a configured review assignee', async () => {
+    write(workflowPath, QUICK)
+    writeConfig('mine', `${CONFIG}steps:\n  review: { assign: alice }\n`)
+
+    expect(await run(['quick'], OK, { config: 'mine', dryRun: true })).toBe(0)
+
+    printsAssignment('implement', 'me', 'default')
+    printsAssignment('review', 'alice', 'configuration.steps.review.assign')
+    expect(assignments).toEqual([])
+    expect(launched).toEqual([])
   })
 
   it('runs quick --card 123 --config-override with explicit none and no named configuration', async () => {
