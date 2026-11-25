@@ -916,6 +916,53 @@ it.each([
   }
 })
 
+it.each([
+  { constraint: 'label', options: { filter: 'wanted' }, excluded: { labels: [] } },
+  {
+    constraint: 'assignee',
+    options: { assignee: 'maintainer' },
+    excluded: { assignees: ['other'] },
+  },
+  { constraint: 'closure', options: {}, excluded: { closed: true } },
+])(
+  'R744-20: excludes a completed card by $constraint before reading dependencies',
+  async ({ options, excluded }) => {
+    expect(await run(['quick'], OK, { card: '9' })).toBe(0)
+    launched.length = 0
+    const readDependencies = vi.fn(async (ids: readonly string[]) =>
+      ids.map(id => ({ id, prerequisites: [id === '9' ? '10' : '9'] })),
+    )
+    const exit = await run(
+      ['quick'],
+      OK,
+      { card: '9,10', ...options },
+      {
+        readSelection: async () => ({
+          cards: ['9', '10'].map(id => ({
+            id,
+            title: `Story ${id}`,
+            body: '',
+            labels: ['wanted'],
+            assignees: ['maintainer'],
+            boardState: null,
+            closed: false,
+            prerequisites: [],
+            ...(id === '9' && excluded),
+          })),
+          readDependencies,
+        }),
+      },
+    )
+
+    expect(exit).toBe(0)
+    expect(readDependencies).toHaveBeenCalledExactlyOnceWith(['10'])
+    expect(lines).toContain(
+      `  #9: not-applicable — ${excluded.closed ? 'card closed' : 'selection filter'}`,
+    )
+    expect(lines.join('\n')).toMatch(/#10: done[^\n]*outside selection: #9/)
+  },
+)
+
 it.each([false, true])(
   'R744-08: bare-card retry resumes refinement (another match: %s)',
   async other => {
