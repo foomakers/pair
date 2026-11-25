@@ -46,7 +46,7 @@ import {
 } from './workflow-profile'
 import { ENGINE_IDS, isEngineId } from './engines'
 import { handleParallelRun } from './parallel-entry'
-import { handleWorkflowBatch } from './workflow-batch'
+import { handleMappedWorkflow, handleWorkflowBatch } from './workflow-batch'
 import { handleWorkflowRun } from './workflow-host'
 import {
   declaredEngine,
@@ -455,6 +455,8 @@ async function runCommand(
     return await handleWorkflowBatch(rawConfig, rawConfig.workflowBatch, { fs, deps: callerDeps })
   if (rawConfig.workflow !== undefined)
     return await handleWorkflowRun(rawConfig, rawConfig.workflow, { fs, deps: callerDeps })
+  const mapped = await handleMappedWorkflow(rawConfig, { fs, deps: callerDeps })
+  if (mapped !== undefined) return mapped
   const dispatch = rawConfig.dispatch
   if (!dispatch || rawConfig.telemetry !== true)
     return await runCommandInner(rawConfig, fs, callerDeps)

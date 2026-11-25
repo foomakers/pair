@@ -1,11 +1,13 @@
 import { createHash } from 'crypto'
 import { join, resolve } from 'path'
 import {
+  chooseWorkflow,
   completedRun,
   dependencyGraph,
   effectiveSelection,
   orderCards,
   type Filter,
+  type WorkflowsConfig,
 } from '@pair/workflows'
 import { loadConfigWithOverrides } from '#config'
 import { MACROSTATES } from './card-readiness'
@@ -195,4 +197,61 @@ export async function handleWorkflowBatch(
       return all.some(card => card.outcome === 'failed') ? 1 : 0
     },
   )
+}
+
+/** Explicitly named workflow mappings opt a project into routing a bare card to YAML. */
+export async function handleMappedWorkflow(
+  config: RunCommandConfig,
+  services: Services,
+): Promise<number | undefined> {
+  const card = config.dispatch?.card
+  if (
+    !card ||
+    config.dispatch?.pr ||
+    config.profile ||
+    config.workflowConfig ||
+    config.autonomy ||
+    config.eligibilityFilter ||
+    config.approveIneligible ||
+    config.dispatch?.tagsObserved ||
+    config.dispatch?.rounds ||
+    config.runSnapshot ||
+    config.cards
+  )
+    return undefined
+  const { fs, deps } = services
+  const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
+  const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
+  const names = Object.keys((project['workflows'] as WorkflowsConfig | undefined) ?? {}).filter(
+    name => name !== 'default',
+  )
+  if (names.length === 0) return undefined
+  const main = mainCheckoutOrCwd(cwd)
+  const { cards } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
+    { fs, project, cwd, main },
+    { cards: [card] },
+  )
+  const found = cards[0]
+  const cardId = found?.id ?? card
+  function* candidates() {
+    for (const name of names) {
+      const request = { name, card: cardId, restart: false }
+      const resolved = resolveWorkflowRun(config, request, services, false)
+      if (resolved === undefined) throw new Error(`workflow-invalid: ${name}`)
+      yield {
+        request,
+        selection: effectiveSelection(
+          resolved.workflow.select,
+          resolved.configuration?.configuration.select,
+        ),
+      }
+    }
+  }
+  const selected =
+    found === undefined || found.closed ? undefined : chooseWorkflow(candidates(), found)
+  if (selected === undefined)
+    throw new Error(
+      `workflow-not-applicable: no mapped workflow accepts card ${card}; pass a workflow name explicitly`,
+    )
+  return await handleWorkflowRun(config, selected.request, services)
 }
