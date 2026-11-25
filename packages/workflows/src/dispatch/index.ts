@@ -1,5 +1,5 @@
 import type { StepLaunch } from '../engine'
-import { COMMON_RESULT, settle, type StepKind, type StepResult } from '../kinds'
+import { agentResultSchema, settle, type StepKind, type StepResult } from '../kinds'
 import { textsOf, type JsonSchema } from '../schema'
 
 /** How an engine is told to run a skill; the host passes its engine's own style, the package holds no engine table. */
@@ -32,7 +32,8 @@ const fieldLines = (schema: JsonSchema, optional: (name: string) => boolean): st
 
 /** The fixed block that asks for the result, generated from the kind contract. */
 export function resultBlock(kind: StepKind): string {
-  const common = fieldLines(COMMON_RESULT, name => !COMMON_RESULT.required?.includes(name))
+  const schema = agentResultSchema(kind)
+  const common = fieldLines(schema, name => !schema.required?.includes(name))
   const outputs = fieldLines(kind.outputs, () => false)
   return [
     'End your turn with one JSON object in a fenced `json` block with these fields:',
@@ -44,6 +45,7 @@ export function resultBlock(kind: StepKind): string {
         ]
       : []),
     ...(kind.rule === undefined ? [] : [kind.rule.text]),
+    ...Object.entries(kind.returns).map(([status, when]) => `- "${status}" — ${when}`),
   ].join('\n')
 }
 
@@ -89,7 +91,7 @@ const invalid = (kind: StepKind, detail: string): StepResult => ({
 
 /**
  * The step's result, from the agent's final message: its last fenced `json` block, validated
- * against the common fields and the kind's outputs. Missing or invalid: `failed`, `invalid-result`.
+ * against the kind's declared statuses and outputs. Missing or invalid: `failed`, `invalid-result`.
  */
 export function readResult(finalMessage: string, kind: StepKind): StepResult {
   const block = [...finalMessage.matchAll(FENCED_JSON)].pop()?.[1]
@@ -100,5 +102,5 @@ export function readResult(finalMessage: string, kind: StepKind): StepResult {
   } catch (error) {
     return invalid(kind, `the last fenced json block is not JSON: ${(error as Error).message}`)
   }
-  return settle(kind, value)
+  return settle(kind, value, 'agent')
 }

@@ -16,10 +16,22 @@ describe('workflow authoring descriptions (AC-7)', () => {
         inputs: kind.inputs,
         outputs: kind.outputs,
         with: kind.with,
-        escalations: kind.escalations,
       })
       expect(JSON.parse(JSON.stringify(result[name]))).toEqual(result[name])
     }
+  })
+
+  it('exposes the implement decision case in the kind contract (#728 AC 18)', () => {
+    expect(kinds().implement).toMatchObject({
+      returns: {
+        'needs-decision': 'A decision the card does not record blocks every remaining task.',
+      },
+    })
+    expect(kinds().implement).not.toHaveProperty('escalations')
+  })
+
+  it.each(['gate', 'merge'])('declares no agent return cases for %s (#728 T-3)', kind => {
+    expect(kinds()[kind]).toHaveProperty('returns', {})
   })
 })
 

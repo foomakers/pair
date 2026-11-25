@@ -46,5 +46,5 @@ export const gate: StepKind = {
       },
     },
   },
-  escalations: [],
+  returns: {},
 }

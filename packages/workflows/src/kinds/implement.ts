@@ -27,8 +27,10 @@ export const implement: StepKind = {
     },
   },
   with: { type: 'object', additionalProperties: false, properties: {} },
-  escalations: [
-    'A decision the card does not record blocks every remaining task.',
-    'A quality gate stays red and the fix is outside the card.',
-  ],
+  returns: {
+    failed:
+      'Implementation or verification fails, including a red quality gate whose fix is outside the card.',
+    blocked: 'A required fact, permission or resource is unavailable.',
+    'needs-decision': 'A decision the card does not record blocks every remaining task.',
+  },
 }

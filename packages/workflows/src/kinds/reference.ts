@@ -17,6 +17,7 @@ function fields(schema: JsonSchema, marked = false): string[] {
 
 function section(name: (typeof KIND_NAMES)[number]): string[] {
   const kind = kindByName[name]
+  const returns = Object.entries(kind.returns)
   const skill =
     kind.host === true
       ? 'none: the host runs it, no agent'
@@ -35,8 +36,10 @@ function section(name: (typeof KIND_NAMES)[number]): string[] {
     ...(kind.rule === undefined ? [] : [`- **Rule**: ${kind.rule.text}`]),
     '- **Options** (`with`)',
     ...fields(kind.with),
-    '- **Escalation cases**',
-    ...kind.escalations.map(when => `  - ${when}`),
+    '- **Non-ok returns**',
+    ...(returns.length === 0
+      ? ['  - None.']
+      : returns.map(([status, when]) => `  - \`${status}\`: ${when}`)),
     '',
   ]
 }
@@ -55,6 +58,8 @@ export function renderKindReference(): string {
     'The agent ends its turn with one JSON object in a fenced `json` block. Whatever the kind, it carries:',
     '',
     ...fields(COMMON_RESULT, true).map(line => line.slice(2)),
+    '',
+    'An agent can return `ok` and the statuses listed for its kind below.',
     '',
     'A result that is missing, is not JSON or breaks the contract of its kind makes the step `failed` with reason `invalid-result`.',
     '',
