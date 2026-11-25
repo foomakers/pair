@@ -1,11 +1,11 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
-  "scanned": 1078,
-  "files": 405,
-  "distinctContents": 370,
+  "scanned": 1083,
+  "files": 407,
+  "distinctContents": 372,
   "dispositionCounts": {
-    "standalone-script": 16,
-    "os-guarantee": 28,
+    "standalone-script": 17,
+    "os-guarantee": 29,
     "type-contract": 13,
     "in-flight-churn": 243,
     "repo-contract": 104,
@@ -6742,7 +6742,7 @@
     },
     {
       "path": "packages/workflows/src/cli/run-lock.ts",
-      "hash": "673e87dc0bf36716b0ff11ba47fc4b8588582a301a6d4eae900c4a0140a110fa",
+      "hash": "128fad909e7955a9479d696062a696203fbbcbbd92bf2d68e255bc9f71560a48",
       "dependencies": [
         {
           "form": "import",
@@ -6752,10 +6752,49 @@
       ],
       "disposition": "os-guarantee",
       "producer": "packages/workflows/src/cli/run-lock.ts",
-      "observedOperations": ["readFileSync", "rmSync", "unlinkSync", "writeFileSync"],
+      "observedOperations": [
+        "linkSync",
+        "readFileSync",
+        "renameSync",
+        "rmSync",
+        "unlinkSync",
+        "writeFileSync"
+      ],
       "reason": "A run must acquire its lock file exclusively across the CLI and session hosts.",
       "decision": "Keep the exclusive file operations in the host adapter.",
       "testCategory": "real lock integration"
+    },
+    {
+      "path": "packages/workflows/src/cli/session-files.ts",
+      "hash": "e0b89798093d348958f082ccdd420f6101adebb15debc8757d8cee614df65082",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        },
+        {
+          "form": "import",
+          "specifier": "node:fs/promises",
+          "line": 2
+        }
+      ],
+      "disposition": "standalone-script",
+      "producer": "packages/workflows/src/cli/session-files.ts",
+      "observedOperations": [
+        "chmod",
+        "existsSync",
+        "mkdir",
+        "readdirSync",
+        "readFileSync",
+        "rename",
+        "statSync",
+        "unlink",
+        "writeFile"
+      ],
+      "reason": "The installed standalone command reads project sources, streams stdin and passes a native run-files port to the interpreter.",
+      "decision": "Keep direct filesystem access in the session boundary adapter.",
+      "testCategory": "installed-script-smoke"
     },
     {
       "path": "packages/workflows/test/bundle.test.ts",
@@ -6772,6 +6811,40 @@
       "observedOperations": ["mkdtempSync", "readFileSync", "rmSync"],
       "reason": "Runs a real build to a temporary path, compares the shipped bytes and executes the output there.",
       "decision": "Keep the filesystem and process boundaries in the shipped-bundle check.",
+      "testCategory": "real-process"
+    },
+    {
+      "path": "packages/workflows/test/session-command.test.ts",
+      "hash": "f5ed17bdd8e93e7b77581640c5889782b9f33d13a3aa4828ddc17ca34bfcc58d",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 12
+        },
+        {
+          "form": "import",
+          "specifier": "node:fs/promises",
+          "line": 13
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/test/session-command.test.ts",
+      "observedOperations": [
+        "cpSync",
+        "existsSync",
+        "mkdir",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "realpathSync",
+        "rename",
+        "rmSync",
+        "writeFile",
+        "writeFileSync"
+      ],
+      "reason": "Runs the installed script in a real Git fixture and verifies actual worktree reuse and cross-process ownership.",
+      "decision": "Keep direct filesystem access at the integration boundary.",
       "testCategory": "real-process"
     },
     {

@@ -238,7 +238,7 @@ export function identityOf(run: RunDirectory): RunIdentity {
 }
 
 /** The frozen copy, parsed. It was valid when `start` froze it. */
-function frozenWorkflow(run: RunDirectory): Workflow {
+export function frozenWorkflow(run: RunDirectory): Workflow {
   const path = join(run.dir, FROZEN_WORKFLOW)
   const text = run.files.readFileSync(path)
   const { workflow, errors } = parseWorkflow(
@@ -1164,6 +1164,7 @@ function recordOf(
 type RecordOptions = StepExecutionIdentity & {
   readonly output?: string | undefined
   readonly invalidatePendingSuccess?: boolean | undefined
+  readonly attempt?: number | undefined
 }
 
 function retryAfter(status: StepStatus, previous?: StepRecord, invalidate?: boolean) {
@@ -1180,6 +1181,11 @@ function retryAfter(status: StepStatus, previous?: StepRecord, invalidate?: bool
 const recordOptions = (value: string | RecordOptions | undefined): RecordOptions =>
   typeof value === 'string' ? { output: value } : (value ?? {})
 
+function checkAttempt(id: string, step: StepRecord | undefined, attempt: number | undefined): void {
+  if (attempt !== undefined && (step?.state !== 'running' || step.executions !== attempt))
+    throw new Error(`step-not-reserved: ${id} attempt ${attempt} is no longer running`)
+}
+
 /**
  * Records the result of a step: validated against its kind (a result that breaks the contract is
  * recorded `failed`, `invalid-result`), written to `steps/<id>/result.json`, then to `state.json`.
@@ -1195,6 +1201,8 @@ export async function record(
   const options = recordOptions(outputOrOptions)
   const { output, invalidatePendingSuccess } = options
   const state = requireState(run)
+  const previous = state.steps[stepId]
+  checkAttempt(stepId, previous, options.attempt)
   const { step, outer, childId } = launchable(run, stepId)
   const kind = kindByName[step.kind]
   const settled = settle(kind, result)
@@ -1206,7 +1214,6 @@ export async function record(
       .filter(name => name in settled)
       .map(name => [name, settled[name]]),
   )
-  const previous = state.steps[stepId]
   const entry = {
     ...recordOf(settled, outputs, round, previous?.executions),
     ...executionOf(previous?.pendingSuccess === undefined ? options : previous),

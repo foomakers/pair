@@ -99,7 +99,9 @@ const SHARED_LOCK_OS_PATHS = [
 const EXCEPTION_OUT_OF_SCOPE = new Set([
   ...SHARED_LOCK_OS_PATHS,
   'packages/workflows/scripts/bundle-workflow.mjs',
+  'packages/workflows/src/cli/session-files.ts',
   'packages/workflows/test/bundle.test.ts',
+  'packages/workflows/test/session-command.test.ts',
   'packages/knowledge-hub/src/conformance/workflow-authoring.test.ts',
   'scripts/workflow-test-runner.mjs',
   'packages/knowledge-hub/src/conformance/fixtures/red-snapshot-r5-mutation.mjs',

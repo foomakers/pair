@@ -10,6 +10,7 @@ import {
   effectiveSelection,
   checkAgainstEngines,
   describeSettings,
+  expandedWorkflowSource,
   formatError,
   interactiveOf,
   hasConfigurationTiers,
@@ -270,19 +271,6 @@ export function configureWorkflowRun(
   }
 }
 
-/** Serialize the expanded workflow for the engine's frozen source. */
-function expandedSource(workflow: Workflow): string {
-  const entries = (steps: Workflow['steps']): Record<string, unknown> =>
-    Object.fromEntries(
-      steps.map(({ id, steps: children, ...step }) => [
-        id,
-        { ...step, ...(children && { steps: entries(children) }) },
-      ]),
-    )
-  const { version, name, description, aliases, select, assign, steps } = workflow
-  return `${JSON.stringify({ version, name, description, aliases, select, assign, steps: entries(steps) }, null, 2)}\n`
-}
-
 function checkWorkflow(
   fs: Services['fs'],
   project: ReturnType<typeof loadConfigWithOverrides>['config'],
@@ -348,11 +336,6 @@ function resumeWorkflow(
   return { ...parseWorkflow(fs.readFileSync(frozen), source.file, true), warnings: [] }
 }
 
-const hasExpansion = (workflow: Workflow) =>
-  workflow.steps.some(
-    step => step.id.includes('/') || step.steps?.some(child => child.id.includes('/')),
-  )
-
 function reportValidation(
   checked: ReturnType<typeof checkWorkflow> | NonNullable<ReturnType<typeof resumeWorkflow>>,
 ): void {
@@ -397,9 +380,7 @@ export function resolveWorkflowDefinition(
   }
   return {
     workflow: checked.workflow,
-    source: hasExpansion(checked.workflow)
-      ? { ...source, text: expandedSource(checked.workflow) }
-      : source,
+    source: expandedWorkflowSource(checked.workflow, source),
     project,
     engine,
     main,

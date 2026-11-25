@@ -49,6 +49,8 @@ Choose option 2.
 
 The interpreter boundary applies to the `@pair/workflows` root entry and its core modules. Separate host entry points share worktree preparation through the existing Git bridge and lock the run directory through the existing PID-based lock. The import guard enforces the direction from host adapters to interpreter. Step state can record the host and the model used for execution independently of telemetry. [Technical design and acceptance criteria for #696](https://github.com/foomakers/pair/issues/696#issuecomment-7039644396).
 
+The standalone session commands open the same run directory as `pair run`. Each open returns a token for a one-hour idle lease in `run.lock`. A command claims the lease with its live PID and renews it when it exits. Calling `next` during a long step renews the lease and returns the outstanding packet with the same attempt. `stop` releases the lease. A new owner on the same machine can take over after the idle lease expires or the active PID dies. It gets a new token and reopens the interrupted step from the frozen run. A host on another machine keeps its ownership.
+
 ## Consequences
 
 ### Benefits

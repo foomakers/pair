@@ -14,6 +14,8 @@ function forbiddenImports(path: string, source: string): string[] {
   if (isTest) allowed.add('vitest')
   if (isHost) allowed.add('node:fs')
   if (path === 'cli/run-lock.ts') allowed.add('node:os')
+  if (path === 'cli/session-files.ts') allowed.add('node:fs/promises')
+  if (path === 'cli/workflow.ts') allowed.add('node:util')
   if (path.startsWith('worktree/')) allowed.add('node:child_process')
   return [...source.matchAll(SPECIFIER)]
     .map(match => match[1] as string)

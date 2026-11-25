@@ -1,106 +1,197 @@
-import { closeSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { linkSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
+import type { StepLaunch } from '../engine'
 import { pidIsAlive, takeGuard } from './lock-support'
 
-/**
- * One driver per run directory (#691 AC5, #696 AC-4). `<runDir>/run.lock` ({ pid, host, startedAt })
- * is created exclusively (`wx`). A live holder or one on another machine keeps the lock.
- * A dead pid on this machine is taken over and reported.
- */
+/** One driver per run directory (#691 AC5, #696 AC-4), regardless of host. */
 export const RUN_LOCK_FILE = 'run.lock'
+const LEASE_MS = 60 * 60_000
+
+type Owner = { readonly pid: number; readonly host: string }
+type Locked = { readonly kind: 'run-locked'; readonly pid?: number; readonly host?: string }
 
 export type RunLockOutcome =
   | {
       readonly kind: 'acquired'
       readonly release: () => void
-      readonly takenOver?: { readonly pid: number; readonly host: string }
+      readonly takenOver?: Owner
     }
-  | { readonly kind: 'run-locked'; readonly pid?: number; readonly host?: string }
+  | Locked
 
-const readRaw = (file: string): string | undefined => {
-  try {
-    return readFileSync(file, 'utf8')
-  } catch {
-    return undefined
-  }
+interface Lease {
+  readonly token: string
+  readonly engine: string
+  readonly expiresAt: number
+  readonly worktree?: string
+  readonly launch?: StepLaunch | undefined
 }
 
-const readNote = (file: string): { pid?: number; host?: string } => {
-  try {
-    const raw = JSON.parse(readFileSync(file, 'utf8')) as { pid?: unknown; host?: unknown }
-    return {
-      ...(Number.isInteger(raw.pid) && { pid: raw.pid as number }),
-      ...(typeof raw.host === 'string' && { host: raw.host }),
-    }
-  } catch {
-    return {}
-  }
+interface LockNote {
+  readonly host?: string
+  readonly pid?: number
+  readonly startedAt?: string
+  readonly ownerId?: string
+  readonly lease?: Lease
 }
 
-const isExists = (error: unknown) => (error as NodeJS.ErrnoException).code === 'EEXIST'
-
-/**
- * Takeover under the exclusive sidecar guard: reclaimers are serialized, and the note is re-read inside
- * it — a lock that changed since it was read dead (another taker already took it) is never removed.
- */
-function takeOver(file: string, seen: string | undefined, create: () => void): boolean {
-  const guard = `${file}.reclaim`
-  if (!takeGuard(guard)) return false
+function readNote(file: string): LockNote | undefined {
   try {
-    const now = readRaw(file)
-    if (now !== undefined && now !== seen) return false
-    if (now !== undefined) unlinkSync(file)
-    create()
-    return true
+    const note: unknown = JSON.parse(readFileSync(file, 'utf8'))
+    return typeof note === 'object' && note !== null ? (note as LockNote) : {}
   } catch (error) {
-    if (!isExists(error)) throw error
-    return false
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    return {} // An unreadable owner is never evidence of an orphan.
+  }
+}
+
+const locked = ({ pid, host }: LockNote = {}): Locked => ({
+  kind: 'run-locked',
+  ...(typeof pid === 'number' && { pid }),
+  ...(typeof host === 'string' && { host }),
+})
+
+function guarded<T>(runDir: string, transact: (file: string) => T): T | Locked {
+  const file = join(runDir, RUN_LOCK_FILE)
+  const guard = `${file}.reclaim`
+  if (!takeGuard(guard)) return locked(readNote(file))
+  try {
+    return transact(file)
   } finally {
     rmSync(guard, { recursive: true, force: true })
   }
 }
 
+function publish(file: string, note: LockNote, exclusive = false): boolean {
+  const temporary = `${file}.${randomUUID()}.tmp`
+  try {
+    writeFileSync(temporary, JSON.stringify(note), { flag: 'wx', mode: 0o600 })
+    if (exclusive) linkSync(temporary, file)
+    else renameSync(temporary, file)
+    return true
+  } catch (error) {
+    if (!exclusive || (error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    return false
+  } finally {
+    rmSync(temporary, { force: true })
+  }
+}
+
+function orphaned(note: LockNote, isAlive: (pid: number) => boolean): boolean {
+  if (note.host !== hostname()) return false
+  if (note.pid !== undefined) {
+    if (!Number.isSafeInteger(note.pid) || note.pid < 1 || isAlive(note.pid)) return false
+    return true
+  }
+  const expiresAt = note.lease?.expiresAt
+  return typeof expiresAt === 'number' && expiresAt <= Date.now()
+}
+
+const active = () => ({
+  pid: process.pid,
+  host: hostname(),
+  startedAt: new Date().toISOString(),
+})
+
 export function acquireRunLock(
   runDir: string,
   isAlive: (pid: number) => boolean = pidIsAlive,
 ): RunLockOutcome {
-  const file = join(runDir, RUN_LOCK_FILE)
-  const create = () => {
-    const owner = { pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }
-    const fd = openSync(file, 'wx')
-    try {
+  const seen = readNote(join(runDir, RUN_LOCK_FILE))
+  if (seen !== undefined && !orphaned(seen, isAlive)) return locked(seen)
+  return guarded(runDir, file => {
+    const current = readNote(file)
+    if (current !== undefined && JSON.stringify(current) !== JSON.stringify(seen))
+      return locked(current)
+
+    const owner = { ...active(), ownerId: randomUUID() }
+    if (!publish(file, owner, current === undefined)) return locked(readNote(file))
+    const release = () => {
       try {
-        writeFileSync(fd, JSON.stringify(owner))
-      } finally {
-        closeSync(fd)
+        if (readNote(file)?.ownerId === owner.ownerId) unlinkSync(file)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       }
-    } catch (error) {
-      rmSync(file, { force: true })
-      throw error
     }
-  }
-  const release = () => {
-    try {
-      if (readNote(file).pid === process.pid) unlinkSync(file)
-    } catch {
-      // already gone: release is idempotent
-    }
-  }
-  try {
-    create()
-    return { kind: 'acquired', release }
-  } catch (error) {
-    if (!isExists(error)) throw error
-  }
-  const seen = readRaw(file)
-  const { pid, host } = readNote(file)
-  if (pid === undefined || host !== hostname() || isAlive(pid))
     return {
-      kind: 'run-locked',
-      ...(pid !== undefined && { pid }),
-      ...(host !== undefined && { host }),
+      kind: 'acquired',
+      release,
+      ...(seen?.pid !== undefined &&
+        seen.host !== undefined && {
+          takenOver: { pid: seen.pid, host: seen.host },
+        }),
     }
-  if (!takeOver(file, seen, create)) return { kind: 'run-locked', ...readNote(file) }
-  return { kind: 'acquired', release, takenOver: { pid, host } }
+  })
+}
+
+const renewed = (lease: Lease): Lease => ({ ...lease, expiresAt: Date.now() + LEASE_MS })
+
+function requireLease(lease: Lease | Locked): Lease {
+  if ('kind' in lease)
+    throw new Error(
+      `run-locked: ${lease.host ?? 'another host'}${lease.pid ? ` (PID ${lease.pid})` : ''} holds this run`,
+    )
+  return lease
+}
+
+/** Claim the lease and mark the short command live before releasing the transaction guard. */
+function claim(runDir: string, input: { engine: string } | { token: string }): Lease {
+  return requireLease(
+    guarded(runDir, file => {
+      const note = readNote(file)
+      const unused = note === undefined || orphaned(note, pidIsAlive)
+      const lease =
+        'engine' in input
+          ? unused
+            ? { token: randomUUID(), engine: input.engine, expiresAt: 0 }
+            : undefined
+          : idleLease(note, unused, input.token)
+      if (lease === undefined) return locked(note)
+      const refreshed = renewed(lease)
+      return publish(file, { ...active(), lease: refreshed }, note === undefined)
+        ? refreshed
+        : locked(readNote(file))
+    }),
+  )
+}
+
+function idleLease(note: LockNote | undefined, unused: boolean, token: string): Lease | undefined {
+  if (note?.lease?.token !== token || unused)
+    throw new Error('invalid-lease: open the run again with resume')
+  return note.host === hostname() && note.pid === undefined ? note.lease : undefined
+}
+
+/** Release the command's PID and renew the idle lease, or remove it on stop or failed open. */
+function finish(runDir: string, lease: Lease, keep: boolean): void {
+  const file = join(runDir, RUN_LOCK_FILE)
+  const note = readNote(file)
+  if (note?.lease?.token !== lease.token || note.pid !== process.pid)
+    throw new Error('invalid-lease: session ownership changed')
+  // Other commands cannot replace a live PID. Publish the renewed idle note in one rename.
+  if (keep) publish(file, { host: hostname(), lease: renewed(lease) })
+  else unlinkSync(file)
+}
+
+export async function withSessionLease<T>(
+  runDir: string,
+  input: { engine: string } | { token: string },
+  command: (lease: Lease) => Promise<{
+    result: T
+    launch?: StepLaunch
+    worktree?: string
+    stop?: boolean
+  }>,
+): Promise<T> {
+  const lease = claim(runDir, input)
+  let outcome
+  try {
+    outcome = await command(lease)
+  } catch (error) {
+    finish(runDir, lease, 'token' in input)
+    throw error
+  }
+  const { worktree, launch, stop } = outcome
+  finish(runDir, { ...lease, ...(worktree !== undefined && { worktree }), launch }, !stop)
+  return outcome.result
 }

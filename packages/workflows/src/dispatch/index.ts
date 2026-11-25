@@ -7,6 +7,7 @@ export type InvocationStyle = 'slash' | 'instruction'
 
 export interface MessageOptions {
   readonly style: InvocationStyle
+  readonly worktree?: string | undefined
   /** The host's prompt-safety check; every value spliced into the message passes it. */
   readonly isSafeText: (value: string) => boolean
 }
@@ -70,12 +71,15 @@ export function buildMessage(step: StepLaunch, kind: StepKind, options: MessageO
     throw new Error(`unsafe-value: ${JSON.stringify(unsafe)} cannot be handed to an agent`)
   return [
     options.style === 'slash' ? `/${step.uses}` : `Run the ${step.uses} skill.`,
+    ...(options.worktree === undefined
+      ? []
+      : [`Use ${JSON.stringify(options.worktree)} as the working directory for this step.`]),
     ...section('Inputs', step.inputs),
     ...section('Options', step.with),
     '',
     resultBlock(kind),
     '',
-    'Execution mode: unattended.',
+    ...(step.interactive === true ? [] : ['Execution mode: unattended.']),
     ...(kind.handoff === undefined ? [] : [`Handoff: ${kind.handoff}.`]),
   ].join('\n')
 }
