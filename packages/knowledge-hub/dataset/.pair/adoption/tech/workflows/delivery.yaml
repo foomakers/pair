@@ -5,8 +5,15 @@ aliases:
   build: { effort: medium }
   judge: { effort: high }
 steps:
-  implement: { kind: implement, alias: build }
-  review: { kind: review, alias: judge, with: { publication: first-and-approved } }
+  implement:
+    kind: implement
+    alias: build
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
+  review:
+    kind: review
+    alias: judge
+    with: { publication: first-and-approved }
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
   gate:
     kind: gate
     on-resume: { reason: head-changed, step: review }
@@ -15,6 +22,7 @@ steps:
       checks: [head-unchanged]
   approval:
     kind: approval
+    escalate: { failed: stop, needs-decision: stop }
     on-resume: { reason: head-moved, step: review }
     with: { question: 'Approve merging this reviewed head?' }
   merge:

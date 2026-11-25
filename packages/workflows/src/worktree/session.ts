@@ -44,7 +44,7 @@ function script<T>(scripts: string, cwd: string, file: string, args: string[]): 
   const result = spawnSync(process.execPath, [join(scripts, file), ...args], {
     cwd,
     encoding: 'utf8',
-    timeout: 90_000,
+    timeout: args[0] === 'card-comment-support' ? 5_000 : 90_000,
   })
   if (result.error) throw result.error
   try {
@@ -55,6 +55,15 @@ function script<T>(scripts: string, cwd: string, file: string, args: string[]): 
     if (!(error instanceof SyntaxError)) throw error
   }
   throw new Error(`${file} failed: ${result.stderr.trim() || result.stdout.trim()}`)
+}
+
+/** Ask the installed adapter about local capability without contacting the tracker. */
+export function canCommentOnCard(scripts: () => string, cwd: string): boolean {
+  try {
+    return script<unknown>(scripts(), cwd, 'workflow-facts.mjs', ['card-comment-support']) === true
+  } catch {
+    return false
+  }
 }
 
 export function sessionCard(scripts: string, main: string, story: string, owners = false): Card {

@@ -112,6 +112,28 @@ describe('workflow aliases (#672 AC-11)', () => {
   })
 })
 
+describe('escalate grammar (#728 T-5)', () => {
+  it('reads short actions and a long action with a card comment', () => {
+    const text = seeded(
+      '    kind: implement',
+      `    kind: implement
+    escalate:
+      failed: continue
+      blocked: stop
+      needs-decision: { do: stop, comment: "Decision needed: {reason}" }`,
+    )
+    const { workflow, errors } = parseWorkflow(text, 'workflows/quick.yaml')
+    expect(errors).toEqual([])
+    expect(workflow?.steps[0]).toMatchObject({
+      escalate: {
+        failed: 'continue',
+        blocked: 'stop',
+        'needs-decision': { do: 'stop', comment: 'Decision needed: {reason}' },
+      },
+    })
+  })
+})
+
 describe('workflow assignment (#723 AC-6)', () => {
   const ASSIGNMENT = `version: 1
 name: quick

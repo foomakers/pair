@@ -36,10 +36,12 @@ steps:
   draft:
     kind: generic
     skill: pair-fixture-draft
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
   discuss:
     kind: generic
     skill: pair-fixture-discuss
     interactive: true
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
 `
 const configuration = `version: 1
 name: mine

@@ -100,6 +100,10 @@ export function sessionHost(
       return cardFacts(sessionCard(scripts, main, card, filter.assignee !== undefined))
     },
     assignCard: assign => assignCard(operation, card, assign, warn),
+    async commentOnCard({ marker, body }) {
+      await call('comment-on-card', { marker, body })
+    },
+    warn,
     ...hostSteps({
       run,
       main,

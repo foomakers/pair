@@ -11,6 +11,7 @@
 - No formal scalability or performance constraints are adopted.
 - No external integrations are required for initial release.
 - The `@pair/workflows` interpreter owns YAML grammar, validation, step kinds, `next`, `record` and dispatch messages. File access goes through a host-supplied port. Its import guard keeps filesystem, process, Git and PM access at the host boundary. Shared locking and worktree preparation live in separate host entry points. `apps/pair-cli` uses them for `pair-cli run <workflow>` ([ADR-031](adr/adr-031-workflows-package-and-hosts.md), [ADR-032](adr/adr-032-step-kinds-contracts-and-result-collection.md)).
+- Workflow kinds declare their result cases. YAML steps declare their escalation actions and status conditions. The engine applies those rules in file order and sends card comments through the host. See [ADR-037](adr/adr-037-workflow-escalation.md).
 
 ## Knowledge Base Distribution
 

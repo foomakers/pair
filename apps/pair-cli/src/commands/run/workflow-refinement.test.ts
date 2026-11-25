@@ -1061,32 +1061,48 @@ function fakeWorkflowBoard(boardFailure?: string, failSelected = false) {
   const gh = join(project, 'gh')
   write(
     'gh',
-    `#!/usr/bin/env node
-const fs = require('node:fs')
-const [command, action, id] = process.argv.slice(2)
-const out = value => process.stdout.write(JSON.stringify(value))
-if (command === 'repo') process.stdout.write('acme/pair')
-else if (command === 'project') out({ projects: ${JSON.stringify(boardFailure ? [{ id: 'P1', title: 'Pair' }] : [])} })
-else if (command === 'issue' && action === 'view') {
-  if (!process.argv.includes('-q')) out({ title: 'Story ' + id, body: '', labels: id === '9' ? [{ name: 'wanted' }] : [], state: 'OPEN' })
-} else if (command === 'api' && action === 'graphql') {
-  if (process.argv.includes('n=' + process.env.PAIR_TEST_BOARD_OUTAGE)) {
-    process.stderr.write('HTTP 503\\nRetry-After: 0\\n')
-    process.exitCode = 1
-  } else out({ data: { repository: { issue: { projectItems: { nodes: [
-    { project: { id: 'P1' }, fieldValueByName: { name: 'Draft' } },
-  ] } } } } })
-} else if (command === 'api' && action.includes('/dependencies/blocked_by?')) {
-  const card = action.split('/').at(-3)
-  fs.appendFileSync(${JSON.stringify(reads)}, card + '\\n')
-  if (card === '10' || ${failSelected}) { process.stderr.write('dependency unavailable'); process.exitCode = 1 }
-  else out([])
-} else process.exitCode = 3
+    `#!/bin/sh
+case "$1 $2" in
+  'repo view') printf 'acme/pair' ;;
+  'project list')
+    printf '%s' '${JSON.stringify({ projects: boardFailure ? [{ id: 'P1', title: 'Pair' }] : [] })}'
+    ;;
+  'issue view')
+    for arg do [ "$arg" != '-q' ] || exit 0; done
+    labels='[]'
+    if [ "$3" = '9' ]; then labels='[{"name":"wanted"}]'; fi
+    printf '{"title":"Story %s","body":"","labels":%s,"state":"OPEN"}' "$3" "$labels"
+    ;;
+  'api graphql')
+    for arg do
+      if [ "$arg" = "n=$PAIR_TEST_BOARD_OUTAGE" ]; then
+        printf 'HTTP 503\\nRetry-After: 0\\n' >&2
+        exit 1
+      fi
+    done
+    printf '%s' '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"id":"P1"},"fieldValueByName":{"name":"Draft"}}]}}}}}'
+    ;;
+  "api "*/dependencies/blocked_by[?]*)
+    case "$2" in
+      */issues/9/*) card=9 ;;
+      */issues/10/*) card=10 ;;
+      *) exit 3 ;;
+    esac
+    printf '%s\\n' "$card" >> "$PAIR_TEST_DEPENDENCY_READS"
+    if [ "$card" = '10' ] || ${failSelected}; then
+      printf 'dependency unavailable' >&2
+      exit 1
+    fi
+    printf '[]'
+    ;;
+  *) exit 3 ;;
+esac
 `,
   )
   fs.chmodSync(gh, 0o755)
   vi.stubEnv('PAIR_GH_BIN', gh)
   vi.stubEnv('PAIR_TEST_BOARD_OUTAGE', boardFailure)
+  vi.stubEnv('PAIR_TEST_DEPENDENCY_READS', reads)
   return reads
 }
 

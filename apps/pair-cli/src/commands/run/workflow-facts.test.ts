@@ -153,7 +153,7 @@ beforeEach(() => {
   })
 })
 
-const facts = (cwd: string, checks: string[] = []) =>
+const facts = (cwd: string, checks: readonly string[] = []) =>
   workflowFacts(() => scripts, cwd, {
     id: 'gate',
     kind: 'gate',
@@ -171,6 +171,21 @@ it('uses the linked GitHub PR head and the prior review handoff (#726 T-1)', asy
 it('refuses multiple linked PRs and names them (#726 T-1)', async () => {
   github.pulls = [pr(735), pr(736)]
   await expect(facts(dir).head()).rejects.toThrow(/#735, #736/)
+})
+
+it.each([
+  ['prefers the open PR over a historical merge', 'open'],
+  ['falls back to the lone merged PR when there is no open PR', 'merged'],
+] as const)('%s (#728 T-9)', async (_name, state) => {
+  const merged = { state: 'closed', merged_at: '2026-11-25T08:00:00Z' }
+  github.pulls = [
+    { ...pr(736), ...(state === 'open' ? merged : { state: 'closed' }) },
+    { ...pr(735), ...(state === 'merged' && merged) },
+  ]
+
+  await expect(
+    workflowOperation(() => scripts, dir, { action: 'approval-target', card: '726' }),
+  ).resolves.toEqual({ pr: 735, head: sha })
 })
 
 it.each([
@@ -199,6 +214,25 @@ it('refuses facts from a replacement head after the head check (#726 AC-2)', asy
   github.head = 'b'.repeat(40)
   await expect(gate.ci()).rejects.toThrow(/head moved/i)
   await expect(gate.reviewApproved()).rejects.toThrow(/head moved/i)
+})
+
+it.each(
+  (['ci-green', 'review-approved'] as const).flatMap(check =>
+    (
+      [
+        ['head-unchanged', check],
+        [check, 'head-unchanged'],
+      ] as const
+    ).flatMap(checks =>
+      [
+        { head: 'b'.repeat(40), status: 'failed', reason: 'head-changed' },
+        { head: 'unreadable', status: 'blocked', reason: 'fact-unreadable' },
+      ].map(result => ({ checks, ...result })),
+    ),
+  ),
+)('classifies $checks as $reason on $head (R747-07)', async ({ checks, head, status, reason }) => {
+  github.head = head
+  await expect(runChecks(checks, facts(dir, checks))).resolves.toMatchObject({ status, reason })
 })
 
 it('keeps an open prerequisite blocked until the tracker confirms completion (#726 T-4)', async () => {

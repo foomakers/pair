@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { FactReader } from '../checks'
+import { HeadChangedError, type FactReader } from '../checks'
 import type { Assignment } from '../grammar'
 import type { StepLaunch } from '../engine'
 import type { HostProcess } from '../worktree/host-process'
@@ -60,18 +60,18 @@ export function stepFacts(operation: HostOperation, step: StepLaunch): FactReade
   const checks = step.with['checks']
   const reviewedHead = step.inputs['reviewedHead']
   const pinHead = Array.isArray(checks) && checks.includes('head-unchanged')
-  const read = (action: string, timeout?: number): Promise<unknown> => {
+  const read = async (action: string, timeout?: number): Promise<unknown> => {
     const card = step.inputs['card']
     if (typeof card !== 'string' || card.length === 0) throw new Error('workflow card is missing')
-    return operation({
+    const pinned = pinHead && (action === 'ci' || action === 'review')
+    const value = await operation({
       action,
       card,
-      ...(pinHead &&
-        (action === 'ci' || action === 'review') && {
-          data: { expectedHead: reviewedHead },
-        }),
+      ...(pinned && { data: { expectedHead: reviewedHead } }),
       ...(timeout === undefined ? {} : { timeout }),
     })
+    if (pinned && isHeadChanged(value)) throw new HeadChangedError()
+    return value
   }
   return {
     head: async () => {
@@ -102,3 +102,9 @@ export function stepFacts(operation: HostOperation, step: StepLaunch): FactReade
     },
   }
 }
+
+const isHeadChanged = (value: unknown): boolean =>
+  typeof value === 'object' &&
+  value !== null &&
+  'headChanged' in value &&
+  value.headChanged === true

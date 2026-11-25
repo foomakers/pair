@@ -15,6 +15,7 @@ import type { KbCacheCommandConfig } from './kb-cache/parser'
 import type { RunCommandConfig } from './run/parser'
 import type { TokensCommandConfig } from './tokens/parser'
 import type { TelemetryCommandConfig } from './telemetry/parser'
+import type { WorkflowCommandConfig } from './workflow'
 
 export type {
   TokensCommandConfig,
@@ -71,6 +72,7 @@ import { handleTelemetryCommand } from './telemetry/handler'
 import { telemetryCommandMetadata } from './telemetry/metadata'
 import { handleTokensCommand } from './tokens/handler'
 import { tokensCommandMetadata } from './tokens/metadata'
+import { handleWorkflowCommand, parseWorkflowCommand, workflowCommandMetadata } from './workflow'
 
 export {
   handleTokensCommand,
@@ -114,6 +116,7 @@ export type CommandConfig =
   | RunCommandConfig
   | TokensCommandConfig
   | TelemetryCommandConfig
+  | WorkflowCommandConfig
 
 /**
  * Command registry mapping command names to their parse/handle/metadata functions.
@@ -173,6 +176,11 @@ export const commandRegistry = {
     parse: parseRunCommand,
     handle: handleRunCommand,
     metadata: runCommandMetadata,
+  },
+  workflow: {
+    parse: parseWorkflowCommand,
+    handle: handleWorkflowCommand,
+    metadata: workflowCommandMetadata,
   },
   tokens: {
     parse: parseTokensCommand,

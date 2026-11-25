@@ -1,4 +1,5 @@
 import { kindByName, settle } from '.'
+import { resultBlock } from '../dispatch'
 import { violations } from '../schema'
 import { validate } from '../validate'
 
@@ -43,6 +44,12 @@ describe('fix kind (#708 AC-1..AC-3)', () => {
 })
 
 describe('fix result (#708 AC-1, AC-5, AC-6)', () => {
+  it('allows the declared non-ok outcomes for unresolved findings in the prompt (R747-06)', () => {
+    expect(resultBlock(kindByName.fix)).toContain(
+      'When a resolution is "not-resolved", choose "failed", "blocked" or "needs-decision" according to the reason.',
+    )
+  })
+
   it.each([
     ['resolved', fixed({})],
     ['empty scope', fixed({ resolutions: [] })],

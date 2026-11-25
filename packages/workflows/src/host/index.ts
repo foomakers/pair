@@ -1,9 +1,11 @@
 import { buildMessage, readResult, type InvocationStyle } from '../dispatch'
 import {
+  escalationCommentTarget,
   next,
   priorRefinement,
   record,
   stageSuccess,
+  type EngineOutcome,
   type RunDirectory,
   type RunEndStatus,
   type RunFiles,
@@ -12,7 +14,7 @@ import {
   type StepLaunch,
 } from '../engine'
 import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
-import type { Assignment, CardState, KindName } from '../grammar'
+import { escalationAction, type Assignment, type CardState, type KindName } from '../grammar'
 import { violations } from '../schema'
 import type { CardFacts, Filter } from '../select'
 import { kindByName, settle, type StepResult, type StepStatus } from '../kinds'
@@ -71,6 +73,10 @@ export interface WorkflowHost {
   card?(filter: Filter): Promise<CardFacts>
   /** Applies the step's directive before it starts. Returns a reason when the card is held. */
   assignCard?(assignment: Assignment): Promise<string | undefined>
+  /** Upsert an escalation comment using its stable marker on the card. */
+  commentOnCard?(comment: { card: string; marker: string; body: string }): Promise<void>
+  /** Reports a failed escalation comment. */
+  warn?(message: string): void
   /** Runs a step of a host kind (`gate`, `approval`, `merge`): the result it returns, no agent. */
   perform?(step: StepLaunch): Promise<unknown>
   /** Runs the `gates` of a step that ended `ok`: `undefined` when all pass, else the failed result. */
@@ -378,7 +384,10 @@ function writerOf(run: RunDirectory, telemetry: TelemetryOptions) {
         recordStep(run, {
           ...execution,
           host: telemetry.host,
-          settings: telemetry.settings(execution.step.id),
+          settings:
+            execution.step.kind === 'loop'
+              ? { engine: 'pair' }
+              : telemetry.settings(execution.step.id),
         }),
       ),
     close: (status: RunOutcome['run']) => safe(closeRun(run, status)),
@@ -387,10 +396,65 @@ function writerOf(run: RunDirectory, telemetry: TelemetryOptions) {
 
 type Writer = ReturnType<typeof writerOf> | undefined
 
+interface ObservedRun extends RunDirectory {
+  readonly outcomes: EngineOutcome[]
+}
+
+export function observeRun(run: RunDirectory): ObservedRun {
+  const outcomes: EngineOutcome[] = []
+  return { ...run, outcomes, observeOutcome: outcome => outcomes.push(outcome) }
+}
+
+function escalationOf(outcome: EngineOutcome | undefined): Pick<StepExecution, 'escalate'> {
+  if (outcome === undefined) return {}
+  const action = escalationAction(outcome.rule)
+  return action === undefined ? {} : { escalate: { status: outcome.status, do: action } }
+}
+
+async function commentOnEscalation(
+  host: WorkflowHost,
+  run: RunDirectory,
+  outcome: EngineOutcome,
+): Promise<void> {
+  if (typeof outcome.rule !== 'object') return
+  try {
+    if (host.commentOnCard === undefined) throw new Error('the host does not support card comments')
+    const body = outcome.rule.comment.replaceAll(
+      '{reason}',
+      () => outcome.reason ?? 'no reason given',
+    )
+    await host.commentOnCard({ ...(await escalationCommentTarget(run, outcome)), body })
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    host.warn?.(`${outcome.id}: escalation comment was not written (${reason})`)
+  }
+}
+
+export async function flushOutcomes(
+  host: WorkflowHost,
+  run: ObservedRun,
+  writer?: Writer,
+): Promise<void> {
+  for (const outcome of run.outcomes.splice(0)) {
+    await commentOnEscalation(host, run, outcome)
+    if (writer === undefined || outcome.status !== 'exhausted') continue
+    const { id, round, reason, status } = outcome
+    await writer.step({
+      step: { id, kind: 'loop', uses: '', attempt: round, round },
+      startedAt: writer.now(),
+      durationMs: 0,
+      tokens: measured({ read: 0, cached: 0, written: 0 }),
+      status,
+      reason,
+      ...escalationOf(outcome),
+    })
+  }
+}
+
 /** One step, timed and metered when telemetry is on. */
 async function executeMetered(
   host: WorkflowHost,
-  run: RunDirectory,
+  run: ObservedRun,
   step: StepLaunch,
   writer: Writer,
 ): Promise<StepExecutionResult> {
@@ -407,6 +471,7 @@ async function executeMetered(
     tokens: usage === undefined ? estimated(sent, final) : measured(usage),
     status: result.status,
     ...(result.reason !== undefined && { reason: result.reason }),
+    ...escalationOf(run.outcomes.find(outcome => outcome.id === step.id)),
   })
   return result
 }
@@ -530,12 +595,14 @@ export async function endStep(
 
 export async function runStep(
   host: WorkflowHost,
-  run: RunDirectory,
+  run: ObservedRun,
   step: StepLaunch,
   writer?: Writer,
 ): Promise<StepEvent> {
   const launch = await startStep(host, step)
-  return endStep(host, step, await executeMetered(host, run, launch, writer))
+  const result = await executeMetered(host, run, launch, writer)
+  await flushOutcomes(host, run, writer)
+  return endStep(host, step, result)
 }
 
 /** The host loop over a started run: `next` → launch → `record`, until the run is no longer running. */
@@ -544,12 +611,13 @@ export async function runSteps(
   dir: string,
   telemetry?: TelemetryOptions,
 ): Promise<RunOutcome> {
-  const run = { files: host.files, dir }
+  const run = observeRun({ files: host.files, dir })
   const writer = telemetry && writerOf(run, telemetry)
   if (writer === undefined) await reopenRun(run).catch(() => undefined)
   let last: StepEvent | undefined
   for (;;) {
     const { ready, state, event } = await advanceStep(host, run)
+    await flushOutcomes(host, run, writer)
     const step = ready[0]
     if (state !== 'running' || step === undefined) return ended(state, event ?? last, writer)
     last = await runStep(host, run, step, writer)

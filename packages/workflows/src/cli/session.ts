@@ -8,6 +8,7 @@ import {
   frozenWorkflow,
   identityOf,
   start,
+  stepSettled,
   writeAtomic,
   type RunDirectory,
   type RunState,
@@ -17,6 +18,8 @@ import { addressedSteps, type Workflow } from '../grammar'
 import {
   advanceStep,
   endStep,
+  flushOutcomes,
+  observeRun,
   runStep,
   settleAgentStep,
   startStep,
@@ -263,20 +266,21 @@ async function advanceSession(
   host.report = event => {
     if (event.state !== 'running') events.push(event)
   }
-  let canStart = true
-  const selected = await advanceStep(
-    host,
-    run,
-    launch => {
-      canStart = needsHost(launch) || packet(launch).settings.engine === lease.engine
-      return canStart
-    },
-    parked?.step,
-  )
+  const observed = observeRun(run)
+  const canStart = (step: StepLaunch) =>
+    needsHost(step) || packet(step).settings.engine === lease.engine
+  const selected = await advanceStep(host, observed, canStart, parked?.step)
+  await flushOutcomes(host, observed)
   const [step] = selected.ready
   if (step === undefined) return { result: selectedResponse(selected, events) }
-  if (needsHost(step)) return approvalResponse(await runStep(host, run, step), step, events, target)
-  const launch = canStart ? await startStep(host, step) : step
+  if (needsHost(step)) {
+    const result = await runStep(host, observed, step)
+    const definition = steps.find(candidate => candidate.id === step.id)
+    if (definition !== undefined && stepSettled(definition, result.state))
+      return { result: { run: 'running' as const, ready: [], events } }
+    return approvalResponse(result, step, events, target)
+  }
+  const launch = canStart(step) ? await startStep(host, step) : step
   return { result: { run: 'running' as const, ready: [packet(launch)], events }, launch }
 }
 
@@ -319,7 +323,12 @@ export async function recordSession(
       steps: addressedSteps(frozenWorkflow(run)),
       worktree: lease.worktree,
     })
-    const result = await settleAgentStep(host, run, launch, { final: readMessage(file), model })
+    const observed = observeRun(run)
+    const result = await settleAgentStep(host, observed, launch, {
+      final: readMessage(file),
+      model,
+    })
+    await flushOutcomes(host, observed)
     await endStep(host, launch, result)
     return { result }
   })

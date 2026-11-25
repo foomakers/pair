@@ -84,7 +84,7 @@ async function runBoundGate(
   facts: FactReader | undefined,
 ): Promise<StepResult> {
   if (worktree !== undefined) {
-    if (facts === undefined) return UNWIRED('the head-unchanged check')
+    if (facts === undefined) return { ...UNWIRED('the head-unchanged check'), status: 'blocked' }
     const current = await runChecks(['head-unchanged'], facts)
     if (current.status !== 'ok') return current
     const mismatch = await worktree()

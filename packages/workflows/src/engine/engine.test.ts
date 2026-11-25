@@ -237,9 +237,9 @@ steps:
     resolutions: [{ id: 'a', status: 'resolved', reason: 'fixed' }],
   }
 
-  async function opened() {
+  async function opened(definition = source) {
     const run = open()
-    await start(run, source, { card: '627' })
+    await start(run, definition, { card: '627' })
     await next(run)
     await record(run, 'implement', IMPLEMENTED)
     return run
@@ -413,7 +413,7 @@ steps:
     await record(run, 'rounds/fix', fixed)
     expect((await next(run)).run).toBe('parked')
     expect(stateOf(run).steps.rounds).toMatchObject({
-      state: 'needs-decision',
+      state: 'exhausted',
       outputs: { findings },
     })
     expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
@@ -498,6 +498,7 @@ steps:
     await next(run)
     await record(run, 'rounds/fix', fixed)
     expect((await next(run)).run).toBe('failed')
+    expect(statesOf(run).rounds).toBe('exhausted')
     expect(await start(run, failSource, { card: '627' })).toEqual({
       status: 'failed',
       warnings: [],
@@ -517,6 +518,89 @@ steps:
     expect((await next(run)).run).toBe('done')
   })
 
+  it.each([
+    ['exhaustion', failedReview, 'exhausted'],
+    ['convergence', REVIEWED, 'ok'],
+  ] as const)(
+    'routes to the fallback only after %s (#728 AC-13, AC-14)',
+    async (_, result, state) => {
+      const definition = {
+        ...source,
+        text:
+          text
+            .replace('max: 2', 'max: 1')
+            .replace('on-max: escalate', 'escalate: { exhausted: continue }') +
+          '  fallback: { kind: implement, when: { output: rounds.status, is: [exhausted] } }\n',
+      }
+      const run = await opened(definition)
+      expect((await next(run)).ready[0]?.id).toBe('rounds/review')
+      await record(run, 'rounds/review', result)
+      if (state === 'exhausted') {
+        expect((await next(run)).ready[0]?.id).toBe('rounds/fix')
+        await record(run, 'rounds/fix', fixed)
+        expect((await next(run)).ready[0]?.id).toBe('fallback')
+      } else {
+        expect(await next(run)).toMatchObject({
+          run: 'done',
+          ready: [],
+          skipped: [{ id: 'fallback' }],
+        })
+      }
+      expect(statesOf(run).rounds).toBe(state)
+    },
+  )
+
+  it('parks at an explicit exhaustion stop and reopens only that loop with a grant (#728 AC-7, AC-13)', async () => {
+    const definition = {
+      ...source,
+      text:
+        text
+          .replace('max: 2', 'max: 1')
+          .replace('on-max: escalate', 'escalate: { exhausted: { do: stop, comment: Stuck } }') +
+        '  final: { kind: review }\n',
+    }
+    const run = await opened(definition)
+    await next(run)
+    await record(run, 'rounds/review', failedReview)
+    await next(run)
+    await record(run, 'rounds/fix', fixed)
+    expect(await next(run)).toEqual({ run: 'parked', ready: [] })
+    expect(statesOf(run)).toMatchObject({ implement: 'ok', rounds: 'exhausted', final: 'pending' })
+    expect((await start(run, definition, { card: '627' })).status).toBe('parked')
+    expect((await start(run, definition, { card: '627', moreRounds: 1 })).status).toBe('resumed')
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 2 })
+  })
+
+  it.each([
+    ['stop', 'failed', []],
+    ['continue', 'running', ['rounds/review']],
+  ] as const)(
+    'applies a child failed rule of %s before the until step (#728 AC-5, AC-7)',
+    async (action, status, ready) => {
+      const definition = {
+        ...source,
+        text: text.replace(
+          '      review: { kind: review }\n      fix: { kind: fix }',
+          `      build: { kind: implement, escalate: { failed: ${action} } }\n      review: { kind: review }`,
+        ),
+      }
+      const run = await opened(definition)
+      expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/build', round: 1 })
+      await record(run, 'rounds/build', { status: 'failed', summary: 'build failed' })
+      const after = await next(run)
+      expect(after.run).toBe(status)
+      expect(after.ready.map(step => step.id)).toEqual(ready)
+      if (action === 'stop') {
+        expect((await start(run, definition, { card: '627' })).status).toBe('resumed')
+        expect((await next(run)).ready[0]).toMatchObject({
+          id: 'rounds/build',
+          round: 1,
+          attempt: 2,
+        })
+      }
+    },
+  )
+
   it('uses only the frozen configuration max for a loop', async () => {
     const run = open()
     await start(run, source, {
@@ -530,9 +614,9 @@ steps:
 })
 
 describe('engine: outcomes and resume (AC-6)', () => {
-  async function runUntilReview(result: unknown) {
+  async function runUntilReview(result: unknown, source = SOURCE) {
     const run = open()
-    await start(run, SOURCE, { card: '627' })
+    await start(run, source, { card: '627' })
     await next(run)
     await record(run, 'implement', IMPLEMENTED)
     await next(run)
@@ -556,6 +640,52 @@ describe('engine: outcomes and resume (AC-6)', () => {
     const resumed = await next(run)
     expect(resumed.ready.map(step => step.id)).toEqual(['review'])
     expect(resumed.ready[0]?.inputs).toEqual({ card: '627', pr: 12, head: HEAD })
+  })
+
+  it.each([
+    ['failed', 'failed'],
+    ['blocked', 'parked'],
+    ['needs-decision', 'parked'],
+  ] as const)(
+    'stops on explicit %s and resumes only that step (#728 AC-6, AC-7)',
+    async (status, halted) => {
+      const source = {
+        ...SOURCE,
+        text: `${QUICK}    escalate: { ${status}: stop }\n  later: { kind: implement }\n`,
+      }
+      const run = await runUntilReview({ status, summary: 'check failed', reason: 'check' }, source)
+      expect(await next(run)).toEqual({ run: halted, ready: [] })
+      expect(statesOf(run)).toEqual({ implement: 'ok', review: status, later: 'pending' })
+
+      expect((await start(run, source, { card: '627' })).status).toBe('resumed')
+      expect((await next(run)).ready[0]).toMatchObject({ id: 'review', attempt: 2 })
+    },
+  )
+
+  it('keeps a continued failure settled when resuming a later blocked step (#728 AC-5, AC-7)', async () => {
+    const source = {
+      ...SOURCE,
+      text: `version: 1
+name: quick
+steps:
+  implement: { kind: implement, on-failed: continue }
+  fallback:
+    kind: implement
+    when: { output: implement.status, is: [failed] }
+    escalate: { blocked: stop }
+`,
+    }
+    const run = open()
+    await start(run, source, { card: '627' })
+    await next(run)
+    await record(run, 'implement', { status: 'failed', summary: 'first model failed' })
+    expect((await next(run)).ready[0]?.id).toBe('fallback')
+    await record(run, 'fallback', { status: 'blocked', summary: 'no token' })
+    expect((await next(run)).run).toBe('parked')
+
+    expect((await start(run, source, { card: '627' })).status).toBe('resumed')
+    expect(statesOf(run).implement).toBe('failed')
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'fallback', attempt: 2 })
   })
 
   it('#728 AC-3 F2: keeps a legacy step parked until explicit resume', async () => {

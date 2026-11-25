@@ -8,6 +8,7 @@ import {
   cardStateToConfirm,
   completedRun,
   effectiveSelection,
+  escalationAction,
   checkAgainstEngines,
   describeSettings,
   expandedWorkflowSource,
@@ -23,12 +24,12 @@ import {
   parseWorkflow,
   pendingMergeClosure,
   record,
-  readGateRegistry,
-  readGateTargets,
   runSteps,
   settingsFor,
   start,
-  validate,
+  stepSettled,
+  stoppedApproval,
+  stoppedLoop,
   type Assignment,
   type CardState,
   type Configuration,
@@ -44,13 +45,13 @@ import {
   type StepSettings,
   type Usage,
   type Workflow,
+  type WorkflowHost,
   type WorkflowsConfig,
 } from '@pair/workflows'
 import { approvalPlatform, hostSteps, riskTagFamily } from '@pair/workflows/cli'
 import { prepareCardWorktree } from '@pair/workflows/worktree'
 import { loadConfigWithOverrides } from '#config'
 import type { Config } from '#registry'
-import { getKnowledgeHubDatasetPath } from '#config/kb-resolver'
 import type { RunCommandConfig, RunWorkflowRequest } from './parser'
 import type { RunHandlerDependencies } from './run-context'
 import {
@@ -77,7 +78,6 @@ import {
   type StateMapping,
 } from './card-readiness'
 import { createExecutableProbe } from './path-probe'
-import { createSkillProbe } from './skill-probe'
 import { ENGINES, isEngineId, type EngineDefinition } from './engines'
 import {
   engineFacts,
@@ -86,6 +86,13 @@ import {
   type ConfigurationPlan,
 } from './workflow-configuration'
 import { isSafePromptText } from './prompt-safety'
+import {
+  WAY_OF_WORKING,
+  checkWorkflow,
+  locateWorkflow,
+  reportValidation,
+  type Located,
+} from './workflow-source'
 import { acquireRunLock } from './run-lock'
 import { acquireCardLock } from './card-lock'
 import type { BatchOutcome } from './workflow-batch'
@@ -120,8 +127,6 @@ import {
  * must not touch: the workflow file, the card, the engine process, the worktree, the lock, the console.
  */
 
-export const WORKFLOWS_DIR = '.pair/adoption/tech/workflows'
-const WAY_OF_WORKING = '.pair/adoption/tech/way-of-working.md'
 const RISK_MATRIX = '.pair/adoption/tech/risk-matrix.md'
 
 /** Injected in tests: no real agent, tracker or git. */
@@ -157,33 +162,6 @@ export interface WorktreeInput {
 export interface Services {
   readonly fs: FileSystemService
   readonly deps: RunHandlerDependencies
-}
-
-interface Located {
-  readonly file: string
-  readonly text: string
-}
-
-/** A path if the argument is an existing file; else the adoption workflow; else the knowledge-base default. */
-export function locateWorkflow(
-  fs: FileSystemService,
-  at: { readonly cwd: string; readonly main: string },
-  name: string,
-): Located {
-  const adopted = join(at.main, WORKFLOWS_DIR, `${name}.yaml`)
-  const candidates = [resolve(at.cwd, name), adopted]
-  try {
-    candidates.push(join(getKnowledgeHubDatasetPath(fs), WORKFLOWS_DIR, `${name}.yaml`))
-  } catch {
-    // no knowledge base beside this CLI: the two project locations are the only candidates
-  }
-  const file = candidates.find(path => fs.existsSync(path) && fs.statSync(path).isFile())
-  if (file === undefined)
-    throw new Error(
-      `workflow-not-found: '${name}' is neither a workflow file nor a workflow name — ` +
-        `looked for ${candidates.join(', ')}. Pass the path of a file, or add ${adopted}.`,
-    )
-  return { file, text: fs.readFileSync(file) }
 }
 
 /** The cycle's own worktree mechanism: `<worktree root>/<card>`, the card's branch, the setup command on a fresh one. */
@@ -270,49 +248,6 @@ export function configureWorkflowRun(
   }
 }
 
-function checkWorkflow(
-  fs: Services['fs'],
-  project: ReturnType<typeof loadConfigWithOverrides>['config'],
-  { cwd, main, sources }: { cwd: string; main: string; sources: Record<string, string> },
-  source: { text: string; file: string },
-) {
-  const registry = join(main, WAY_OF_WORKING)
-  const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
-  return validate(source.text, source.file, {
-    skillExists: createSkillProbe(fs, project, cwd),
-    gateKeys: Object.keys(readGateRegistry(registryText)),
-    gateTargets: Object.keys(readGateTargets(registryText)),
-    launchInputs: ['card'],
-    isSafeText: isSafePromptText,
-    availableWorkflows: [
-      join(main, WORKFLOWS_DIR),
-      ...(() => {
-        try {
-          return [join(getKnowledgeHubDatasetPath(fs), WORKFLOWS_DIR)]
-        } catch {
-          return []
-        }
-      })(),
-    ].flatMap(dir =>
-      fs.existsSync(dir)
-        ? fs
-            .readdirSync(dir)
-            .filter(entry => entry.isFile() && entry.name.endsWith('.yaml'))
-            .map(entry => entry.name.slice(0, -5))
-        : [],
-    ),
-    resolveWorkflow: name => {
-      try {
-        const included = locateWorkflow(fs, { cwd, main }, name)
-        sources[included.file] = createHash('sha256').update(included.text).digest('hex')
-        return included
-      } catch {
-        return undefined
-      }
-    },
-  })
-}
-
 function resumeWorkflow(
   fs: Services['fs'],
   request: RunWorkflowRequest,
@@ -333,15 +268,6 @@ function resumeWorkflow(
       sources[file] = createHash('sha256').update(fs.readFileSync(file)).digest('hex')
   }
   return { ...parseWorkflow(fs.readFileSync(frozen), source.file, true), warnings: [] }
-}
-
-function reportValidation(
-  checked: ReturnType<typeof checkWorkflow> | NonNullable<ReturnType<typeof resumeWorkflow>>,
-): void {
-  checked.warnings.forEach(warning => console.log(`  Warning: ${formatError(warning)}`))
-  if (checked.workflow !== undefined) return
-  checked.errors.forEach(error => console.error(`  ${formatError(error)}`))
-  console.error(`  Refused: ${String(checked.errors.length)} error(s); nothing was launched.`)
 }
 
 /** Validate the workflow and tier declarations before looking up card labels. */
@@ -636,7 +562,10 @@ function hostCardFacts(resolved: Resolved, cardId: string, { fs, deps }: Service
 function hostKindsOf(
   { resolved, request, runDir, worktree, flagStep }: Opened,
   services: Services,
-) {
+): Pick<
+  WorkflowHost,
+  'card' | 'readResultFacts' | 'assignCard' | 'commentOnCard' | 'warn' | 'perform' | 'runGates'
+> {
   const { fs } = services
   const path = join(resolved.main, WAY_OF_WORKING)
   const way = fs.existsSync(path) ? fs.readFileSync(path) : ''
@@ -658,6 +587,14 @@ function hostKindsOf(
     }),
     assignCard: (assign: Assignment) =>
       assignWorkflowCard(scriptDir, resolved.cwd, request.card, assign),
+    commentOnCard: async ({ card, marker, body }) => {
+      await workflowOperation(scriptDir, resolved.cwd, {
+        action: 'comment-on-card',
+        card,
+        data: { marker, body },
+      })
+    },
+    warn: (message: string) => console.log(`  Warning: ${message}`),
   }
 }
 
@@ -770,29 +707,29 @@ function cardTransitions({ request, resolved }: Opened, services: Services) {
 
 /** The ending of a run parked or failed on an exhausted loop, drawn on the console; undefined otherwise. */
 function exhaustedEnding(
-  { resolved, request, runDir }: Opened,
+  { request, runDir }: Opened,
   outcome: RunOutcome,
   sink: ConsoleSink,
   fs: Services['fs'],
 ): number | undefined {
-  const state = JSON.parse(fs.readFileSync(join(runDir, 'state.json'))) as {
-    loops?: Record<string, { exhausted?: boolean }>
-    steps: Record<string, { summary?: string; state: string }>
-  }
-  const exhausted = resolved.workflow.steps.find(step => state.loops?.[step.id]?.exhausted)
-  if (exhausted === undefined || outcome.run === 'done' || outcome.run === 'skipped')
-    return undefined
-  const last = state.steps[`${exhausted.id}/${exhausted.until}`]
-  const why = `${state.steps[exhausted.id]?.summary}; last until: ${last?.state} — ${last?.summary}`
+  if (outcome.run === 'done' || outcome.run === 'skipped') return undefined
+  const saved = savedWorkflow({ card: request.card, restart: false }, runDir, fs)
+  if (saved === undefined) return undefined
+  const stopped = stoppedLoop(saved.workflow, saved.state)
+  if (stopped?.run !== outcome.run) return undefined
+  const { id, until } = stopped.step
+  const last = saved.state.steps[`${id}/${until}`]
+  const why = `${saved.state.steps[id]?.summary}; last until: ${last?.state} — ${last?.summary}`
+  const { status, exit } = ENDINGS[stopped.run]
   sink.event({
     event: 'card-end',
     card: request.card,
-    status: outcome.run === 'failed' ? 'failed' : 'awaiting-human',
+    status,
     reason: why,
   })
-  const flag = outcome.run === 'failed' ? '--restart' : '--more-rounds <n>'
+  const flag = stopped.run === 'failed' ? '--restart' : '--more-rounds <n>'
   console.log(`  Run: ${why}. Resume with: ${resumeCommand(request)} ${flag}`)
-  return outcome.run === 'failed' ? 1 : 0
+  return exit
 }
 
 function reportRunOutcome(opened: Opened, outcome: RunOutcome): void {
@@ -898,16 +835,11 @@ function stopOf(status: string, request: Opened['request']): number | undefined 
 
 function parkedApproval(opened: Opened, fs: FileSystemService): string | undefined {
   if (opened.request.flagAnswer === undefined) return undefined
-  const path = join(opened.runDir, 'state.json')
-  if (!fs.existsSync(path)) throw new Error('No parked workflow for this card')
-  const state = JSON.parse(fs.readFileSync(path)) as { steps: Record<string, { state: string }> }
-  const parked = addressedSteps(opened.resolved.workflow).filter(
-    step =>
-      step.kind === 'approval' &&
-      ['needs-decision', 'needs-human'].includes(state.steps[step.id]?.state ?? ''),
-  )
-  if (parked.length !== 1) throw new Error('The workflow must be parked at one approval step')
-  return parked[0]?.id
+  const saved = savedWorkflow(opened.request, opened.runDir, fs)
+  if (saved === undefined) throw new Error('No parked workflow for this card')
+  const parked = stoppedApproval(saved.workflow, saved.state)
+  if (parked === undefined) throw new Error('The workflow must be parked at one approval step')
+  return parked
 }
 
 async function refreshReplayInputs(
@@ -918,14 +850,7 @@ async function refreshReplayInputs(
   if (saved === undefined) return undefined
   const { workflow, state } = saved
   const { resolved, request } = opened
-  const stopped = workflow.steps.find(step => {
-    const status = state.steps[step.id]?.state
-    return (
-      status !== 'ok' &&
-      status !== 'skipped' &&
-      !(status === 'failed' && step['on-failed'] === 'continue')
-    )
-  })
+  const stopped = workflow.steps.find(step => !stepSettled(step, state.steps[step.id]?.state))
   const route = stopped?.['on-resume']
   if (stopped === undefined || route === undefined) return undefined
   const failure = state.steps[stopped.id]
@@ -1173,9 +1098,10 @@ function dryRunExecution(
 }
 
 function dryRunExhaustion(step: ReturnType<typeof addressedSteps>[number]): string {
-  return step.kind === 'loop'
-    ? ` on-max=${step['on-max']}${step['on-max'] === 'escalate' ? ' (human escalation)' : ' (fails)'}`
-    : ''
+  if (step.kind !== 'loop') return ''
+  const action = escalationAction(step.escalate?.exhausted)
+  if (action !== undefined) return ` exhausted=${action}`
+  return ` on-max=${step['on-max']}${step['on-max'] === 'escalate' ? ' (human escalation)' : ' (fails)'}`
 }
 
 type BatchCard = {

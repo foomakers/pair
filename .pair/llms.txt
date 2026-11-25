@@ -57,6 +57,7 @@
 - [ADR-034: Workflow configuration: files, model ids, replace not merge](.pair/adoption/tech/adr/adr-034-workflow-configuration-files.md)
 - [ADR-035: Bounded workflow loops](.pair/adoption/tech/adr/adr-035-bounded-workflow-loops.md)
 - [ADR-036: No hidden rules — approvals and gates are steps](.pair/adoption/tech/adr/adr-036-no-hidden-rules-approvals-and-gates-are-steps.md)
+- [ADR-037: Workflow escalation and status routing](.pair/adoption/tech/adr/adr-037-workflow-escalation.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Bounded Context Catalog (Grouped)](.pair/adoption/tech/boundedcontext/README.md)

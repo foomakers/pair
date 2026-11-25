@@ -9,6 +9,13 @@ export const CHECK_NAMES = [
 ] as const
 export type CheckName = (typeof CHECK_NAMES)[number]
 
+/** The host confirmed that a fact belongs to a replacement PR head. */
+export class HeadChangedError extends Error {
+  constructor() {
+    super('PR head moved since review')
+  }
+}
+
 /** Facts the host reads from the platform; the package never reads them itself. */
 export interface FactReader {
   /** CI on the PR head: `pending` while it runs. */
@@ -46,7 +53,7 @@ async function ciGreen(facts: FactReader, options: CheckOptions): Promise<Verdic
     const budget = deadline - now()
     if (budget <= 0) return 'ci-timeout'
     const ci = await facts.ci(budget).catch(error => {
-      if (now() >= deadline) return 'pending'
+      if (!(error instanceof HeadChangedError) && now() >= deadline) return 'pending'
       throw error
     })
     const remaining = deadline - now()
@@ -72,7 +79,7 @@ const verdicts: Record<CheckName, (facts: FactReader, options: CheckOptions) => 
     },
   }
 
-/** Runs `names` in order; the first that does not pass fails the step with its reason. */
+/** Runs `names` in order and returns the first failure or unavailable fact. */
 export async function runChecks(
   names: readonly CheckName[],
   facts: FactReader,
@@ -83,10 +90,12 @@ export async function runChecks(
       const reason = await verdicts[name](facts, options)
       if (reason !== undefined) return { status: 'failed', reason, summary: `check ${name} failed` }
     } catch (error) {
+      if (error instanceof HeadChangedError)
+        return { status: 'failed', reason: 'head-changed', summary: error.message }
       return {
-        status: 'failed',
+        status: 'blocked',
         reason: 'fact-unreadable',
-        summary: `check ${name} failed`,
+        summary: `check ${name} is blocked`,
         detail: error instanceof Error ? error.message : String(error),
       }
     }
@@ -144,7 +153,7 @@ export async function runGate(
     readonly registry: Readonly<Record<string, string>>
     readonly targets?: Readonly<Record<string, readonly string[]>>
     readonly run: RunCommand
-    /** The platform facts; absent, a gate with `checks` fails `no-platform-adapter` rather than assume. */
+    /** Without platform facts, a gate with checks is blocked. */
     readonly facts?: FactReader
   } & CheckOptions,
 ): Promise<StepResult> {
@@ -155,7 +164,7 @@ export async function runGate(
     return (step.checks ?? []).length === 0
       ? { status: 'ok', summary: `${(step.gates ?? []).length} gate(s) passed` }
       : {
-          status: 'failed',
+          status: 'blocked',
           reason: 'no-platform-adapter',
           summary: 'this host cannot read the platform facts the checks need',
         }

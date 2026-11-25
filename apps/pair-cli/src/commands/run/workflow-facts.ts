@@ -1,3 +1,4 @@
+import { canCommentOnCard } from '@pair/workflows/cli'
 import type { Assignment, StepLaunch } from '@pair/workflows'
 import {
   assignCard,
@@ -6,6 +7,8 @@ import {
   type HostOperation,
 } from '@pair/workflows/cli'
 import { runHostProcess } from './host-process'
+
+export { canCommentOnCard }
 
 export const workflowOperation = (
   scriptDir: () => string,

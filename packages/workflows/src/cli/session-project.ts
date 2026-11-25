@@ -15,9 +15,12 @@ import { expandedWorkflowSource } from '../expand'
 import { addressedSteps, formatError, type Step, type Workflow } from '../grammar'
 import { interactiveOf, kindByName, readGateRegistry, readGateTargets } from '../kinds'
 import { validate } from '../validate'
+import { canCommentOnCard } from '../worktree/session'
 import { isFile, projectConfig, readOptional, readText, yamlFiles } from './session-files'
 
 const TECH = '.pair/adoption/tech'
+const PORTABLE_QUICK =
+  '.pair/knowledge/guidelines/collaboration/automation/workflow-examples/quick.yaml'
 
 export const isSafeText = (value: string): boolean =>
   value.length > 0 &&
@@ -95,9 +98,14 @@ export const readAdoption = ({ main }: Project) =>
 export const workflowName = (source: string) => basename(source, extname(source))
 
 function readWorkflowSource(project: Project, name: string) {
-  const file = [resolve(project.cwd, name), ...namedCandidates(project, 'workflows', name)].find(
-    isFile,
-  )
+  const candidates = namedCandidates(project, 'workflows', name)
+  if (name === 'quick') {
+    const dataset = resolve(project.scriptDir, '../../../..')
+    candidates.splice(2, 0, join(project.main, PORTABLE_QUICK))
+    if (project.scriptDir === join(dataset, '.skills/capability/workflow/scripts'))
+      candidates.splice(3, 0, join(dataset, PORTABLE_QUICK))
+  }
+  const file = [resolve(project.cwd, name), ...candidates].find(isFile)
   return file === undefined ? undefined : { file, text: readText(file) }
 }
 
@@ -117,6 +125,7 @@ export function workflowDefinition(project: Project, name: string) {
     gateTargets: Object.keys(readGateTargets(adoption)),
     launchInputs: ['card'],
     isSafeText,
+    canCommentOnCard: () => canCommentOnCard(() => cycleScripts(project), project.main),
     availableWorkflows: directories(project, 'workflows').flatMap(({ directory }) =>
       yamlFiles(directory).map(workflowName),
     ),

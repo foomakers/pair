@@ -37,8 +37,10 @@ export function finalExitCode(pending: unknown): number {
 
 type ResolvedOptions = ReturnType<typeof resolveOptions>
 
-/** kb-* inspection/validation commands (+ tokens), split out to keep each dispatch small */
-type KbCommandConfig = Extract<CommandConfig, { command: `kb-${string}` | 'tokens' | 'telemetry' }>
+type AuxiliaryCommandConfig = Extract<
+  CommandConfig,
+  { command: `kb-${string}` | 'tokens' | 'telemetry' | 'workflow' }
+>
 
 /**
  * Dispatch CommandConfig to appropriate handler using command registry
@@ -74,16 +76,18 @@ export async function dispatchCommand(
       // explicit failure one) must never read as success to a CI job or a cron wrapper.
       return dispatchWithExitCode(() => commandRegistry.run.handle(config, fs))
     default:
-      return dispatchKbCommand(config, fs, opts)
+      return dispatchAuxiliaryCommand(config, fs, opts)
   }
 }
 
-function dispatchKbCommand(
-  config: KbCommandConfig,
+function dispatchAuxiliaryCommand(
+  config: AuxiliaryCommandConfig,
   fs: FileSystemService,
   opts: ResolvedOptions,
 ): Promise<void> {
   switch (config.command) {
+    case 'workflow':
+      return dispatchWithExitCode(() => commandRegistry.workflow.handle(config, fs))
     case 'telemetry':
       return dispatchWithExitCode(() => commandRegistry.telemetry.handle(config, fs))
     case 'tokens':
