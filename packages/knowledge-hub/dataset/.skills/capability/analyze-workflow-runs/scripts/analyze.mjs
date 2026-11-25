@@ -10,7 +10,7 @@
 // Prices: `{ "<model>": { "read": n, "cached": n, "written": n } }`, per million tokens, kept by hand.
 // Dependency-free.
 import { randomUUID } from 'node:crypto'
-import { chmodSync, closeSync, existsSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -21,17 +21,52 @@ const NOT_CALCULATED = 'not calculated'
 /** The record format this script reads (ADR-033). */
 const SCHEMAS = [1, 2]
 
+function deadLocalOwner(note) {
+  try {
+    const { pid, host } = JSON.parse(note)
+    if (!Number.isInteger(pid) || pid <= 0 || host !== hostname()) return false
+    process.kill(pid, 0)
+    return false
+  } catch (error) {
+    return error.code === 'ESRCH'
+  }
+}
+
+/** Coordinate with pair run's run-lock.ts before removing a dead owner's lock. */
+function reclaimLock(lock, create) {
+  const seen = readFileSync(lock, 'utf8')
+  if (!deadLocalOwner(seen)) return
+  const guard = `${lock}.reclaim`
+  try {
+    mkdirSync(guard)
+  } catch (error) {
+    if (error.code !== 'EEXIST' || Date.now() - statSync(guard).mtimeMs < 60_000) throw error
+    rmSync(guard, { recursive: true, force: true })
+    mkdirSync(guard)
+  }
+  try {
+    if (readFileSync(lock, 'utf8') !== seen) return
+    unlinkSync(lock)
+    create()
+  } finally {
+    rmSync(guard, { recursive: true, force: true })
+  }
+}
+
 /** Use the same lock as pair run so migration cannot replace a writer's newer telemetry. */
 function persistMigration(file, original, migrated) {
   const lock = join(dirname(file), 'run.lock')
   let ownerFd
+  const create = () => { ownerFd = openSync(lock, 'wx') }
   try {
-    ownerFd = openSync(lock, 'wx')
     try {
-      writeFileSync(ownerFd, JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }))
-    } finally {
-      closeSync(ownerFd)
+      create()
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+      reclaimLock(lock, create)
     }
+    if (ownerFd === undefined) return
+    writeFileSync(ownerFd, JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }))
     if (readFileSync(file, 'utf8') !== original) return
     const temp = `${file}.${randomUUID()}.tmp`
     try {
@@ -45,7 +80,13 @@ function persistMigration(file, original, migrated) {
   } catch (error) {
     if (ownerFd !== undefined || error.code !== 'EEXIST') console.error(`analyze: could not migrate ${file}: ${error.message}`)
   } finally {
-    if (ownerFd !== undefined) rmSync(lock, { force: true })
+    if (ownerFd !== undefined) {
+      try {
+        closeSync(ownerFd)
+      } finally {
+        rmSync(lock, { force: true })
+      }
+    }
   }
 }
 
