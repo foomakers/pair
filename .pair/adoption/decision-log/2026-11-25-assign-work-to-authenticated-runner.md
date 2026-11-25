@@ -26,7 +26,7 @@ Work-start assignment uses the PM adapter's identity lookup, exposed by `whoami`
 
 ## Consequences
 
-The assignee-filtered board shows a bot claim under the bot login. If the adapter cannot resolve a login, such as with a GitHub App installation token on the `/user` endpoint, assignment warns and leaves the card unchanged. Use an explicit login to assign a human. Card writes still apply only explicit assignees. PR assignment and maintainer decision comments retain their configured defaults.
+The assignee-filtered board shows a bot claim under the bot login. For a GitHub App installation token, the adapter reads the authenticated GraphQL viewer when REST `/user` rejects the credential. If the adapter cannot resolve a login, assignment warns and leaves the card unchanged. Use an explicit login to assign a human. Card writes still apply only explicit assignees. PR assignment and maintainer decision comments retain their configured defaults.
 
 ## Adoption Impact
 

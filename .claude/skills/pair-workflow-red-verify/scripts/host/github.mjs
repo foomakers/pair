@@ -620,7 +620,17 @@ export default defineAdapter({
       },
       // US-572: `--assignee @me` — the login the tracker CLI is authenticated as.
       resolveUser() {
-        const login = gh(['api', 'user', '-q', '.login']).trim()
+        let login
+        try {
+          login = gh(['api', 'user', '-q', '.login']).trim()
+        } catch (error) {
+          if (!/resource not accessible by integration.*HTTP 403/i.test(error.detail ?? '')) throw error
+          // Installation credentials have a GraphQL viewer but cannot call REST /user.
+          const viewer = parseJson(gh(['api', 'graphql', '-f', 'query=query { viewer { login } }']), { command: 'gh api graphql viewer' })?.data?.viewer?.login
+          if (typeof viewer !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]*\[bot\]$/.test(viewer))
+            throw new HostError('invalid-output', { message: 'gh api graphql viewer: expected an installation bot login', method: 'resolveUser' })
+          login = viewer
+        }
         if (!login) throw new HostError('invalid-output', { message: 'gh api user: empty login', method: 'resolveUser' })
         return login
       },
