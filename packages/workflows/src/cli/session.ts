@@ -517,6 +517,15 @@ export async function recordSession(
   })
 }
 
+export async function renewSession(run: RunDirectory, token: string) {
+  return withCardSessionLease(run, { token }, async lease => ({
+    result: { renewed: true },
+    ...(lease.launch !== undefined && { launch: lease.launch }),
+    launchStartedAt: lease.launchStartedAt,
+    approval: lease.approval,
+  }))
+}
+
 export async function stopSession(run: RunDirectory, token: string) {
   return withCardSessionLease(run, { token }, async () => ({
     result: { stopped: true },

@@ -39,8 +39,13 @@ On success, use the JSON response's `runId`, `lease` and `worktree`. Keep the le
 
 ```sh
 node "$WORKFLOW_SCRIPT" next <run-id> --lease <lease>
+node "$WORKFLOW_SCRIPT" renew <run-id> --lease <lease>
 node "$WORKFLOW_SCRIPT" record <run-id> <step-id> --lease <lease> --attempt <attempt> --result - [--model <actual-model>] [--usage '<usage-json>']
 ```
+
+Renew the lease immediately before a potentially long wait and every five minutes while a subagent or interactive step is active or an approval answer is pending. Use bounded polls of the subagent or a cancellable timer owned by the session. Keep renewing during human input waits with a session-owned timer that remains active while the conversation is paused. Cancel the timer and wait for any renewal in flight before calling `next`, `record` or `stop`. On renewal failure, cancel active work and report that the run must be resumed.
+
+With no timer that can run during human input, release the lease before waiting on an approval. On reply, resume, call `next` without the answer, and confirm the step, PR and head still match the displayed question before submitting the answer. Ask again if they changed. If the harness cannot renew during an interactive step or a subagent wait, park before dispatch and report how to resume in a session that supports renewal.
 
 Report any telemetry warning on stderr and continue processing the command's JSON response.
 

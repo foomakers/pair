@@ -3,7 +3,14 @@ import { parseArgs } from 'node:util'
 import { kinds, schemas } from '../describe'
 import type { Usage } from '../telemetry'
 import { diagnosticMain, sessionMain } from '../worktree/session'
-import { nextSession, openSession, recordSession, sessionRun, stopSession } from './session'
+import {
+  nextSession,
+  openSession,
+  recordSession,
+  renewSession,
+  sessionRun,
+  stopSession,
+} from './session'
 import { workflowDefinition, workflowList, type Project } from './session-project'
 import { validateWorkflow } from './workflow-diagnostics'
 
@@ -21,6 +28,7 @@ const commands = {
   resume: { count: 1, flags: ['engine'] },
   next: { count: 1, flags: ['lease', 'answer'] },
   record: { count: 2, flags: ['lease', 'result', 'model', 'attempt', 'usage'] },
+  renew: { count: 1, flags: ['lease'] },
   stop: { count: 1, flags: ['lease'] },
 }
 
@@ -76,7 +84,7 @@ function usageOf(value: string | undefined): Usage | undefined {
 }
 
 function operate(
-  command: 'next' | 'record' | 'stop',
+  command: 'next' | 'record' | 'renew' | 'stop',
   project: Project,
   [target = '', step = '']: string[],
   values: Partial<Record<keyof typeof options, string>>,
@@ -84,6 +92,7 @@ function operate(
   const run = sessionRun(project.main, target)
   const lease = required('lease', values.lease)
   if (command === 'next') return nextSession(project, run, lease, values.answer)
+  if (command === 'renew') return renewSession(run, lease)
   if (command === 'stop') return stopSession(run, lease)
   return recordSession(project, run, lease, {
     step,
