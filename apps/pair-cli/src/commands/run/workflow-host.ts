@@ -799,6 +799,21 @@ function recordIncludeSources(
   }
 }
 
+async function finishClosure(opened: Opened, fs: FileSystemService): Promise<number> {
+  const { resolved, runDir } = opened
+  const step = await closureStep(opened, fs)
+  if (!step) throw new Error('The closed card no longer has a resumable merge')
+  const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
+  const finish = workflowMerge(
+    (action, card, data) => workflowOperation(locate, resolved.cwd, { action, card, data }),
+    resolved.main,
+    true,
+  )
+  const result = await record({ dir: runDir, files: fs }, step.id, await finish(step))
+  console.log(`  Run: ${result.summary}`)
+  return result.status === 'ok' ? 0 : 1
+}
+
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
 async function drive(
   config: RunCommandConfig,
@@ -807,19 +822,7 @@ async function drive(
 ): Promise<number> {
   const { resolved, request, runDir } = opened
   const { fs, deps } = services
-  if (opened.closureOnly) {
-    const step = await closureStep(opened, fs)
-    if (!step) throw new Error('The closed card no longer has a resumable merge')
-    const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
-    const finish = workflowMerge(
-      (action, card, data) => workflowOperation(locate, resolved.cwd, { action, card, data }),
-      resolved.main,
-      true,
-    )
-    const result = await record({ dir: runDir, files: fs }, step.id, await finish(step))
-    console.log(`  Run: ${result.summary}`)
-    return result.status === 'ok' ? 0 : 1
-  }
+  if (opened.closureOnly) return finishClosure(opened, fs)
   const flagStep = parkedApproval(opened, fs)
   const replay = await refreshReplayInputs(opened, fs)
   const prepare = () =>
@@ -831,8 +834,8 @@ async function drive(
       card: request.card,
       title: opened.title,
     })
-  const replayTree = replay === undefined ? undefined : await prepare()
-  if (replayTree !== undefined) await prepareReplayHead(replayTree, String(replay?.inputs['head']))
+  const replayTree = replay && (await prepare())
+  if (replay && replayTree) await prepareReplayHead(replayTree, String(replay.inputs['head']))
   const started = await start(
     { files: fs, dir: runDir },
     resolved.source,

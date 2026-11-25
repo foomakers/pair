@@ -790,6 +790,20 @@ it.each([
           throw new Error('Unknown action ' + action)
       }
     }
+    const git = (args: readonly string[]) => {
+      if (args[0] === 'status') return success(obstacle === 'dirty' ? '?? local-work' : '')
+      if (args[0] === 'rev-parse')
+        return success(args.includes('FETCH_HEAD') ? currentHead : localHead)
+      if (args[0] === 'symbolic-ref') return success('refs/heads/feature/US-627-x')
+      if (args[0] === 'merge-base')
+        return { ...success(), status: obstacle === 'divergent' ? 1 : 0 }
+      if (args[0] === 'merge') {
+        expect(args).toEqual(['merge', '--ff-only', currentHead])
+        expect(obstacle).toBeUndefined()
+        localHead = currentHead
+      }
+      return success()
+    }
     hostProcess.mockImplementation(async (bin, args, cwd) => {
       if (bin === 'sh') {
         expect(args).toEqual(['-c', 'check-pr'])
@@ -797,20 +811,7 @@ it.each([
         gates++
         return success()
       }
-      if (bin === 'git') {
-        if (args[0] === 'status') return success(obstacle === 'dirty' ? '?? local-work' : '')
-        if (args[0] === 'rev-parse')
-          return success(args.includes('FETCH_HEAD') ? currentHead : localHead)
-        if (args[0] === 'symbolic-ref') return success('refs/heads/feature/US-627-x')
-        if (args[0] === 'merge-base')
-          return { ...success(), status: obstacle === 'divergent' ? 1 : 0 }
-        if (args[0] === 'merge') {
-          expect(args).toEqual(['merge', '--ff-only', currentHead])
-          expect(obstacle).toBeUndefined()
-          localHead = currentHead
-        }
-        return success()
-      }
+      if (bin === 'git') return git(args)
       expect(bin).toBe(process.execPath)
       const [, action, card, raw] = args
       expect(card).toBe('627')

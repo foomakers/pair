@@ -32,6 +32,27 @@ function parkKey(run: RunDirectory, step: StepLaunch, target: ApprovalTarget): s
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex')
 }
 
+function approvalMismatch(step: StepLaunch, live: ApprovalTarget): StepResult | undefined {
+  const pr = step.inputs['pr']
+  if (pr !== undefined && pr !== live.pr)
+    return {
+      status: 'failed',
+      summary: 'Approval PR no longer matches the linked PR',
+      reason: 'pr-changed',
+    }
+  if (
+    [step.inputs['reviewedHead'], step.inputs['gatedHead']].some(
+      head => head !== undefined && head !== live.head,
+    )
+  )
+    return {
+      status: 'failed',
+      summary: 'Review or gate covered an earlier head',
+      reason: 'head-moved',
+    }
+  return undefined
+}
+
 export function approvalRunner(
   run: RunDirectory,
   platform: ApprovalPlatform,
@@ -40,23 +61,8 @@ export function approvalRunner(
   return async (step: StepLaunch): Promise<StepResult> => {
     const card = String(step.inputs['card'])
     const live = await platform.target(card)
-    const pr = step.inputs['pr']
-    if (pr !== undefined && pr !== live.pr)
-      return {
-        status: 'failed',
-        summary: 'Approval PR no longer matches the linked PR',
-        reason: 'pr-changed',
-      }
-    if (
-      [step.inputs['reviewedHead'], step.inputs['gatedHead']].some(
-        head => head !== undefined && head !== live.head,
-      )
-    )
-      return {
-        status: 'failed',
-        summary: 'Review or gate covered an earlier head',
-        reason: 'head-moved',
-      }
+    const moved = approvalMismatch(step, live)
+    if (moved) return moved
     const key = parkKey(run, step, live)
     const dir = join(run.dir, 'steps', step.id, 'approval')
     const path = join(dir, key + '.json')
