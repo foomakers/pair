@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'path'
+import { start } from '@pair/workflows'
+import { readCardFacts } from './cycle-wiring'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 // @ts-expect-error Vite loads the adopted definition as fixture text.
 import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/delivery.yaml?raw'
@@ -26,7 +28,7 @@ vi.mock('./host-process', () => ({ runHostProcess: vi.fn() }))
 vi.mock('./cycle-wiring', async importOriginal => ({
   ...(await importOriginal<typeof import('./cycle-wiring')>()),
   mainCheckoutOrCwd: (cwd: string) => cwd,
-  readCardFacts: async () => ({}),
+  readCardFacts: vi.fn(async () => ({ labels: [] })),
 }))
 
 const hostProcess = vi.mocked(runHostProcess)
@@ -911,5 +913,71 @@ it.each([
       ...(moved ? ['pair-process-review'] : []),
       ...(scenario === 'fix' ? ['pair-process-fix', 'pair-process-review'] : []),
     ])
+  },
+)
+
+it.each([true, false])(
+  'resumes only unfinished closure on its already-merged PR (matching=%s, #726 AC-4)',
+  async matches => {
+    const file = '.pair/adoption/tech/workflows/closure.yaml'
+    const text = `version: 1
+name: closure
+steps:
+  implement: { kind: implement }
+  late: { kind: generic, skill: my-skill, when: { status: [Done] } }
+  review: { kind: review }
+  gate: { kind: gate, with: { checks: [head-unchanged] } }
+  approval: { kind: approval }
+  merge: { kind: merge, when: { status: [Review] } }
+`
+    write(file, text)
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Cycle')
+    write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+    const dir = runDir('closure-627')
+    await start({ files: fs, dir }, { file, text }, { card: '627' })
+    const path = join(dir, 'state.json')
+    const state = JSON.parse(fs.readFileSync(path))
+    state.steps = {
+      implement: { state: 'ok', outputs: { pr: 12, head: HEAD } },
+      late: { state: 'skipped' },
+      review: { state: 'ok', outputs: { reviewedHead: HEAD } },
+      gate: { state: 'ok', outputs: { gatedHead: HEAD } },
+      approval: {
+        state: 'ok',
+        outputs: { approvedPr: 12, approvedHead: HEAD, approvedBy: 'maintainer' },
+      },
+      merge: {
+        state: 'failed',
+        reason: 'cascade-incomplete',
+        outputs: { merged: true, mergeCommit: HEAD },
+      },
+    }
+    fs.writeFileSync(path, JSON.stringify(state))
+    vi.mocked(readCardFacts).mockResolvedValue({ status: 'Done', labels: [] })
+    const actions: string[] = []
+    hostProcess.mockImplementation(async (_, args) => {
+      const [, action, , raw] = args
+      actions.push(String(action))
+      const data = JSON.parse(raw ?? '{}')
+      if (action === 'merge-resume')
+        return success(
+          JSON.stringify(matches && (raw === undefined || (data.pr === 12 && data.head === HEAD))),
+        )
+      expect(action).toBe('merge')
+      expect(data).toMatchObject({ pr: 12, head: HEAD, closureOnly: true })
+      return success(
+        JSON.stringify({ status: 'ok', summary: 'Closed', merged: true, mergeCommit: HEAD }),
+      )
+    })
+    const resumed = run(['closure'], {}, {}, { readCard: async () => 'closed' })
+    if (matches) {
+      expect(await resumed).toBe(0)
+      expect(states('closure-627')).toMatchObject({ late: 'skipped', merge: 'ok' })
+      expect(actions.filter(action => action === 'merge')).toHaveLength(1)
+    } else {
+      await expect(resumed).rejects.toThrow('card-closed')
+      expect(actions).not.toContain('merge')
+    }
+    expect(launched).toEqual([])
   },
 )

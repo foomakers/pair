@@ -463,3 +463,18 @@ it('ignores late comments without a matching target and accepts a matching appro
     { channel: 'comment', login: 'maintainer', verdict: 'approved', note: 'Good to merge' },
   ])
 })
+
+it('refuses closure of an open PR before attempting a merge (#726 AC-4)', async () => {
+  await expect(
+    workflowOperation(() => scripts, dir, {
+      action: 'merge',
+      card: '726',
+      data: { pr: 735, head: sha, approvedBy: 'maintainer', root: dir, closureOnly: true },
+    }),
+  ).resolves.toMatchObject({ reason: 'merge-not-confirmed' })
+  expect(
+    transport.mock.calls.some(
+      ([, args]) => Array.isArray(args) && args[0] === 'pr' && args[1] === 'merge',
+    ),
+  ).toBe(false)
+})
