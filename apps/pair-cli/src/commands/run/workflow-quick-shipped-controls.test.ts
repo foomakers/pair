@@ -124,9 +124,13 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
     )
   })
 
-  it.each(sources)(
-    '$name quick runs its gates and reviews again on the next invocation (R747-03)',
-    async ({ root, commands }) => {
+  it.each(
+    sources.flatMap(source =>
+      (['ok', 'failed'] as const).map(firstGate => ({ ...source, firstGate })),
+    ),
+  )(
+    '$name quick reviews again after a $firstGate PR gate (R747-03)',
+    async ({ root, commands, firstGate }) => {
       const run = { files: createMemoryFiles(), dir: '/runs/728' }
       const head = 'a'.repeat(40)
       const replies: Record<string, StepResult> = {
@@ -147,7 +151,7 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
       }
       const registryText = read(root, WAY_OF_WORKING)
       const invoked: string[] = []
-      const gates = (entries: readonly string[]) =>
+      const gates = (entries: readonly string[], fail = false) =>
         runGate(
           { gates: entries },
           {
@@ -155,12 +159,13 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
             targets: readGateTargets(registryText),
             run: async command => {
               invoked.push(command)
-              return { code: 0, output: '' }
+              return { code: fail ? 1 : 0, output: '' }
             },
           },
         )
       const events: StepEvent[] = []
       const source = { text: read(root, QUICK), file: QUICK }
+      let failPrGate = firstGate === 'failed'
       const execute = () =>
         runSteps(
           {
@@ -176,14 +181,18 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
               const result = await gates(entries)
               return result.status === 'ok' ? undefined : result
             },
-            perform: async step => gates(step.with['gates'] as readonly string[]),
+            perform: async step => {
+              const result = await gates(step.with['gates'] as readonly string[], failPrGate)
+              failPrGate = false
+              return result
+            },
             report: event => events.push(event),
           },
           run.dir,
         )
 
       await start(run, source, { card: '728' })
-      expect((await execute()).run).toBe('done')
+      expect((await execute()).run).toBe(firstGate === 'ok' ? 'done' : 'failed')
       expect(invoked).toEqual(commands)
       expect(
         events.filter(event => event.state !== 'running').map(event => [event.step, event.state]),
@@ -191,7 +200,7 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
         ['implement', 'ok'],
         ['review', 'failed'],
         ['fix', 'ok'],
-        ['gate', 'ok'],
+        ['gate', firstGate],
       ])
 
       replies['review'] = {
@@ -202,11 +211,14 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
         findings: [],
       }
       events.length = 0
+      invoked.length = 0
       expect(await start(run, source, { card: '728' })).toMatchObject({ status: 'resumed' })
       expect((await execute()).run).toBe('done')
       expect(events.filter(event => event.state === 'running').map(event => event.step)).toEqual([
         'review',
+        ...(firstGate === 'failed' ? ['gate'] : []),
       ])
+      expect(invoked).toEqual(firstGate === 'failed' ? commands.slice(-1) : [])
     },
   )
 })
