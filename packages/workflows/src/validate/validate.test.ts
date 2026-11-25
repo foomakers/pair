@@ -406,3 +406,41 @@ it.each([
   const { errors } = check(QUICK + `    on-resume: { reason: head-moved, step: ${step} }\n`)
   expect(errors.map(error => error.key)).toEqual(valid ? [] : ['steps.review.on-resume.step'])
 })
+
+describe('#704 AC-6: agent execution options', () => {
+  function errors(kind: string, options: string) {
+    return check(
+      `version: 1
+name: quick
+steps:
+  work: { kind: ${kind}, ${options} }
+`,
+      { launchInputs: ['card', 'pr', 'head', 'reviewedHead', 'gatedHead'] },
+    ).errors
+  }
+
+  it('accepts an agent timeout and zero retries', () => {
+    expect(errors('implement', 'timeout-minutes: 2, retries: 0')).toEqual([])
+  })
+
+  it.each([
+    ['retries', -1],
+    ['retries', 1.5],
+    ['timeout-minutes', 0],
+    ['timeout-minutes', 1.5],
+  ])('rejects %s: %s', (key, value) => {
+    expect(errors('implement', `${key}: ${value}`)).toContainEqual(
+      expect.objectContaining({ key: `steps.work.${key}` }),
+    )
+  })
+
+  it.each(['gate', 'merge', 'approval'])('rejects agent options on %s', kind => {
+    const options = kind === 'gate' ? 'with: { checks: [ci-green] }, ' : ''
+    expect(errors(kind, options + 'timeout-minutes: 2, retries: 1')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'steps.work.timeout-minutes' }),
+        expect.objectContaining({ key: 'steps.work.retries' }),
+      ]),
+    )
+  })
+})
