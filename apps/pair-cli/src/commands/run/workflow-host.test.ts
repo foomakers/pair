@@ -1009,6 +1009,67 @@ ${design ? 'Design: not required' : ''}
   } else expect(lines.some(line => line.includes('unmet: Design flag'))).toBe(true)
 })
 
+it('R744-12 (#678 AC-2): Draft selection excludes cards that meet the DoR on a minimal board', async () => {
+  const path = '.pair/adoption/tech/workflows/refinement.yaml'
+  write(
+    path,
+    fs.readFileSync(join(__dirname, '../../../../../packages/knowledge-hub/dataset', path)),
+  )
+  for (const skill of ['pair-process-refine-story', 'pair-process-plan-tasks'])
+    write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
+  write(
+    '.pair/adoption/tech/way-of-working.md',
+    `- \`pm-tool\`: \`filesystem\`
+
+## Git Workflow
+
+- \`code-host\`: \`github\`
+
+## State Mapping
+
+| Board State | Macrostate |
+| --- | --- |
+| Todo | Draft |
+| In Progress | In Progress |
+| Done | Done |
+`,
+  )
+  const skill = '.claude/skills/pair-workflow-cycle'
+  write(`${skill}/SKILL.md`, '# Cycle\n')
+  fs.symlinkSync(
+    join(__dirname, '../../../../../', skill, 'scripts'),
+    join(project, skill, 'scripts'),
+  )
+  const backlog = '.pair/adoption/product/backlog/03-user-stories/not-started'
+  write(
+    `${backlog}/12.md`,
+    `# Prepared story
+
+**Status**: Todo
+
+## Story Statement
+
+As a maintainer
+I want Draft selection
+So that I can refine unfinished stories
+
+## Technical Analysis
+
+Design: not required
+
+## Task Breakdown
+
+- [ ] Verify workflow selection
+`,
+  )
+  write(`${backlog}/13.md`, '# Draft story\n\n**Status**: Todo\n')
+
+  const command = parseRunCommand({ cwd: project, card: '12,13', dryRun: true }, ['refinement'])
+  expect(await handleRunCommand(command, fs), lines.join('\n')).toBe(0)
+  expect(lines, lines.join('\n')).toContain('  Dry run: 13; parallel 1. Nothing was launched.')
+  expect(lines).toContain('  #12: not-applicable — selection filter')
+})
+
 it.each([
   { failSelected: false, status: undefined, configuredStatus: undefined },
   { failSelected: true, status: undefined, configuredStatus: undefined },
