@@ -4790,7 +4790,6 @@ if (isMain()) {
         ? workflowCards(h, opts)
         : { head: h.code.prHead({ pr: opts.ref }) }
       process.stdout.write(JSON.stringify(out) + '\n')
-      process.exit(0)
     } else if (cmd === 'card') {
       need('story')
       out = cardView({ story: opts.story, dir: opts.dir })

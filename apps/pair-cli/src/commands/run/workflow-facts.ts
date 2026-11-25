@@ -42,7 +42,10 @@ async function readPlatform<T>(at: Platform, args: string[], timeout = 30_000): 
 }
 
 export async function readWorkflowCards(at: Platform, scope: WorkflowScope) {
-  const output = await readPlatform<{ cards: (WorkflowCard | { id: string; error: string })[]; assignee?: string }>(
+  const output = await readPlatform<{
+    cards: (WorkflowCard | { id: string; error: string })[]
+    assignee?: string
+  }>(
     at,
     [
       'workflow-cards',

@@ -935,28 +935,35 @@ export async function handleWorkflowRun(
   services: Services,
   batch?: BatchCard,
 ): Promise<number> {
-  const { fs } = services
   const resolved = resolveWorkflowRun(config, request, services)
   if (resolved === undefined) return 1
   printPlan(resolved.workflow)
   if (config.dryRun) return printWorkflowPreview(resolved)
+  const opened = await openCard(resolved, request, services, batch)
+  return opened === undefined ? 0 : runWithCardLock(config, opened, services, batch?.releases)
+}
+
+async function openCard(
+  resolved: Resolved,
+  request: RunWorkflowRequest,
+  services: Services,
+  batch?: BatchCard,
+): Promise<Opened | undefined> {
   const runId = request.runId ?? `${resolved.workflow.name}-${request.card}`
   const runDir = join(resolved.main, '.pair/working/runs', runId)
-  if (batch === undefined && completedWorkflow(fs, runDir, request, resolved.workflow.name)) {
+  if (
+    batch === undefined &&
+    completedWorkflow(services.fs, runDir, request, resolved.workflow.name)
+  ) {
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
-    return 0
+    return undefined
   }
   if (batch === undefined && !(await acceptsCard(resolved, request.card, services))) {
     console.log(`  #${request.card}: not-applicable — selection filter`)
-    return 0
+    return undefined
   }
   const title = batch?.card.title ?? (await preflight(resolved, request.card, services))
-  return await runWithCardLock(
-    config,
-    { resolved, request, runDir, title, ...(batch && { report: batch.report }) },
-    services,
-    batch?.releases,
-  )
+  return { resolved, request, runDir, title, ...(batch && { report: batch.report }) }
 }
 
 async function runWithCardLock(
