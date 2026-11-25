@@ -583,7 +583,7 @@ describe('BOTH merge paths carry the synthesis precondition (round 3)', () => {
       IMPLEMENT.split('## Idempotent Re-invocation')[1]?.split('## Graceful Degradation')[0] ?? ''
     expect(closing).toMatch(/published-pr[^\n]*return[^\n]*before[^\n]*review/i)
     expect(resume).toMatch(/published-pr[^\n]*return[^\n]*ready-to-merge/i)
-    expect(PUBLISH).toMatch(/published-pr[^\n]*pending[^\n]*return/i)
+    expect(PUBLISH_PR).toMatch(/published-pr[^\n]*pending[^\n]*return/i)
   })
 
   it('implement Phase 4 Step 4.1 re-synthesizes and HALTs instead of counting approvals', () => {

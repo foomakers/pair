@@ -27,6 +27,7 @@ function section(name: (typeof KIND_NAMES)[number]): string[] {
     `## ${name}`,
     '',
     `- **Default skill**: ${skill}`,
+    ...(kind.handoff === undefined ? [] : [`- **Handoff**: \`${kind.handoff}\``]),
     '- **Inputs**',
     ...fields(kind.inputs),
     `- **Outputs**, required when \`status\` is \`ok\`${kind.rule === undefined ? '' : ' or `failed`'}`,

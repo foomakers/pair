@@ -19,6 +19,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## implement
 
 - **Default skill**: `pair-process-implement`
+- **Handoff**: `published-pr`
 - **Inputs**
   - `card`: `string` — The card to implement.
 - **Outputs**, required when `status` is `ok`

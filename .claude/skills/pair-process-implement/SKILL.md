@@ -39,6 +39,7 @@ Executable form of the **`implement`** step. A **direct** invocation while a ste
 | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$story` | No       | Story ID to implement, supplied by the invocation (e.g. `/pair-process-implement #256`). If omitted, detected from session context or the current branch (`feature/US-<id>-*`). This is the id the resume probe (Step 0.0) uses and the closing phase forwards to `/pair-capability-checkpoint` and `/pair-capability-publish-pr`. If it cannot be resolved when a checkpoint operation needs it → **HALT**. |
 | `$gates` | No       | `none` = run no quality gate of this skill's own (Step 2.7 and the closing `/pair-capability-publish-pr`): the caller runs them. Default: run them. |
+| `$boundary` | No | `published-pr` (also supplied as `Handoff: published-pr.`) returns the published PR, branch and current head to the caller. Omitted for the standalone lifecycle. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
 
@@ -333,6 +334,8 @@ The checkpoint is the boundary artifact (R4.2) and the **input contract for `/pa
 
 The PR is produced on a **guaranteed-clean context**: a fresh subagent whose entire prompt is the handoff, nothing from this session. This is mechanical isolation (D23) — an **anonymous** subagent, **no named role**. A skill cannot `/clear` its own context (D7), so the reset is achieved by delegating to a subagent.
 
+For `published-pr`, pass `$boundary=published-pr` to the publisher on both paths, including every publication retry. After verified publication, return the PR, branch and pushed head before dispatching review. The workflow selects the subsequent step.
+
 1. **Check**: Is subagent spawning available in this tool/environment?
 2. **Act — primary path (subagent)**: Spawn an **anonymous subagent** whose prompt is the **handoff document only** — the checkpoint contents (or the path `.pair/working/checkpoints/<story-id>.md`) plus a single instruction: run `/pair-capability-publish-pr $story=<story-id> $handoff=.pair/working/checkpoints/<story-id>.md`. Pass **no other session context** — the subagent's context is the handoff and nothing else (clean context / fresh context reset within one execution, R4.1). The subagent runs `/pair-capability-publish-pr` (gate → PR → tags → ready-for-review → board) and returns the PR number/URL and board result.
 3. **Act — degraded inline path**: If subagent spawning is **unavailable** (tool/environment cannot spawn one — subagent spawning unavailable), do NOT skip the split: the checkpoint is already written (Step 3.2), then compose `/pair-capability-publish-pr` **inline** in the current session (`$story`, `$handoff` = the checkpoint). **Note the degradation in the output** (`Context: degraded — inline publish, no subagent reset`). Behavior is otherwise equivalent to the primary path.
@@ -351,6 +354,8 @@ The PR is produced on a **guaranteed-clean context**: a fresh subagent whose ent
 Note: the checkpoint is **not** removed here — it must survive the review/fix loop so a re-review or fix round can resume from it. Cleanup happens at merge (Phase 4).
 
 ## Phase 4: Post-Review Merge
+
+This phase belongs to standalone invocations. A `published-pr` invocation ends at the verified publication handoff.
 
 After code review approval (typically via `/pair-process-review`), re-invoke `/pair-process-implement` to merge and close — see [post-review-merge.md](./post-review-merge.md) for the merge-precondition, merge-commit, merge, parent-cascade, and checkpoint-cleanup steps (Steps 4.1–4.5) plus the completion output.
 
@@ -405,7 +410,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 4. **Tasks**: scans task checklist and git log to identify completed tasks, and does **not re-run them** — this is **not the `skipped` outcome** (Step 2.1): a task an earlier invocation completed is neither re-written nor queued, so a re-invocation that finds everything done reaches Step 3.1b with an empty queue and posts nothing.
 5. **PR**: the closing phase re-composes `/pair-capability-publish-pr`, which detects an existing PR and updates it in place — never a duplicate. A subagent that failed mid-PR is recovered this way (the checkpoint stays valid, the rerun is idempotent).
 6. **Quality gates**: re-runs all gates (fast if already passing).
-7. **Merge**: if a PR exists and its state synthesizes to `ready-to-merge`, proceed to Phase 4 (merge). If all implementation tasks are complete and the PR is published but review is pending or requests changes, implementation is complete: return the PR, branch and current head; do not enter Phase 4. Review and remediation remain separate work. For other unmet merge conditions, Phase 4's Step 4.1 HALTs with the unmet condition.
+7. **Merge**: With `published-pr` and a completed implementation, verify the existing PR and return its PR number, branch and current head even when it is `ready-to-merge`. With the standalone boundary, if a PR exists and its state synthesizes to `ready-to-merge`, proceed to Phase 4 (merge). If all implementation tasks are complete and the PR is published but review is pending or requests changes, implementation is complete: return the PR, branch and current head; do not enter Phase 4. Review and remediation remain separate work. For other unmet merge conditions, Phase 4's Step 4.1 HALTs with the unmet condition.
 
 The skill resumes from the first incomplete step — never re-does completed work.
 

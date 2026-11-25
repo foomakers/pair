@@ -74,6 +74,7 @@ export function buildMessage(step: StepLaunch, kind: StepKind, options: MessageO
     resultBlock(kind),
     '',
     'Execution mode: unattended.',
+    ...(kind.handoff === undefined ? [] : [`Handoff: ${kind.handoff}.`]),
   ].join('\n')
 }
 
