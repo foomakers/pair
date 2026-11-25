@@ -780,6 +780,28 @@ it.each([
   },
 )
 
+it.each([
+  { subtype: 'success', attempts: 1, reason: 'approval-required' },
+  { subtype: 'error_during_execution', attempts: 2, reason: 'fault' },
+])('#704 F5: a $subtype terminal event uses the correct retry path (AC-2)', async row => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
+  )
+  const result = fenced({
+    status: 'blocked',
+    summary: 'pair-loop: HALT — approval required',
+    reason: 'approval-required',
+  })
+  const stream = JSON.stringify({ type: 'result', subtype: row.subtype, result }) + '\n'
+  const runIteration = vi.fn((input: SpawnIterationInput) => replayEngine(input, stream))
+
+  expect(await run(['quick'], OK, {}, { runIteration })).toBe(0)
+  expect(runIteration).toHaveBeenCalledTimes(row.attempts)
+  const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+  expect(state.steps['implement']).toMatchObject({ state: 'blocked', reason: row.reason })
+})
+
 it('#704 AC-4: quick retries a killed agent and records both diagnoses', async () => {
   write(
     '.pair/adoption/tech/workflows/quick.yaml',
