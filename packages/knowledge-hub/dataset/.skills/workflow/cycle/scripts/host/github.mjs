@@ -345,9 +345,9 @@ export default defineAdapter({
             return before.some(isTarget) ? { status: 'unchanged' } : { status: 'held', owners: before }
           if (clear ? before.length === 0 : before.length === 1 && isTarget(before[0]))
             return { status: 'unchanged' }
-          if (!clear && !implicit) gh(['api', `repos/${slug}/assignees/${encodeURIComponent(login)}`])
-
           const issue = `repos/${slug}/issues/${number}`
+          if (!clear && !implicit) gh(['api', `${issue}/assignees/${encodeURIComponent(login)}`])
+
           const write = (method, path, body) => gh(['api', '-X', method, path, '--input', '-'], { input: JSON.stringify(body) })
           const assignees = clear ? [] : [login]
           // Claim additively so a concurrent owner can be seen on the read-back.
