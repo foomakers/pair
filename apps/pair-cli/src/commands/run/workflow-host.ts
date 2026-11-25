@@ -230,6 +230,31 @@ function reportConfigurationErrors(errors: readonly string[]): void {
   console.error(`  Refused: ${String(errors.length)} error(s); nothing was launched.`)
 }
 
+export function workflowConfiguration(
+  config: RunCommandConfig,
+  request: RunWorkflowRequest,
+  services: Services,
+  at: Resolved,
+  card?: WorkflowCard,
+) {
+  const { fs } = services
+  const labels =
+    card === undefined ? at.cardLabels : (frozenTierLabels(at, request, fs) ?? card.labels)
+  return resolveConfiguration({
+    fs,
+    cwd: at.cwd,
+    main: at.main,
+    project: at.project,
+    workflow: at.workflow,
+    labels,
+    flag: request.config,
+    override: request.configOverride,
+    engineFlag: config.engine,
+    engine: at.engine.engine.id,
+    probe: services.deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
+  })
+}
+
 /** The configuration of the run, its warnings and refusals printed; `undefined`: refused. */
 function configure(
   config: RunCommandConfig,
@@ -237,20 +262,7 @@ function configure(
   services: Services,
   at: Resolved,
 ): Resolved | undefined {
-  const { fs } = services
-  const outcome = resolveConfiguration({
-    fs,
-    cwd: at.cwd,
-    main: at.main,
-    project: at.project,
-    workflow: at.workflow,
-    labels: at.cardLabels,
-    flag: request.config,
-    override: request.configOverride,
-    engineFlag: config.engine,
-    engine: at.engine.engine.id,
-    probe: services.deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
-  })
+  const outcome = workflowConfiguration(config, request, services, at)
   outcome.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   if (outcome.errors.length > 0) {
     reportConfigurationErrors(outcome.errors)
@@ -400,9 +412,11 @@ function resolveWorkflowDefinition(
   }
 }
 
-function usesTierLabels(resolved: Resolved, request: RunWorkflowRequest): boolean {
+export function usesTierLabels(
+  resolved: Resolved,
+  request: Pick<RunWorkflowRequest, 'config'>,
+): boolean {
   return (
-    request.card !== '' &&
     request.config === undefined &&
     hasConfigurationTiers(
       resolved.project['workflows'] as WorkflowsConfig | undefined,
@@ -432,9 +446,10 @@ export function resolveWorkflowRun(
 ): Resolved | undefined {
   const resolved = resolveWorkflowDefinition(config, request, services, resume)
   if (resolved === undefined) return undefined
-  const labels = usesTierLabels(resolved, request)
-    ? (frozenTierLabels(resolved, request, services.fs) ?? card?.labels)
-    : undefined
+  const labels =
+    request.card !== '' && usesTierLabels(resolved, request)
+      ? (frozenTierLabels(resolved, request, services.fs) ?? card?.labels)
+      : undefined
   return configure(config, request, services, { ...resolved, cardLabels: labels })
 }
 

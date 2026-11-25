@@ -30,6 +30,8 @@ import {
   handleWorkflowRun,
   migrateCompletedRunTelemetry,
   resolveWorkflowRun,
+  usesTierLabels,
+  workflowConfiguration,
   type Services,
 } from './workflow-host'
 import type { RunCommandConfig, RunScopeOptions, RunWorkflowBatch } from './parser'
@@ -115,7 +117,7 @@ interface Plan {
   readonly limit: number
   readonly runId: (id: string) => string
   readonly summary: string
-  readonly members?: string
+  readonly members: ReadonlyMap<string, string>
 }
 
 type BatchRequest = { config: RunCommandConfig; request: RunWorkflowBatch; services: Services }
@@ -182,23 +184,13 @@ function selectionOutcome(
 
 function selectCards(
   cards: readonly WorkflowCard[],
-  selection: Selection,
-  runOf: (id: string) => SelectionRun | undefined,
-  wasSelected: (id: string) => boolean,
+  order: Selection['order'],
+  outcomeFor: (card: WorkflowCard) => BatchOutcome | undefined,
 ) {
   const prior = new Map<string, BatchOutcome>()
   const excluded: BatchOutcome[] = []
-  const selected = orderCards(cards, selection.order).filter(card => {
-    const run = runOf(card.id)
-    const done =
-      card.error === undefined &&
-      run !== undefined &&
-      completedRun(run, { card: card.id, workflow: run.workflow })
-    const outcome = selectionOutcome(card, selection, {
-      run,
-      done,
-      pastStatus: done && wasSelected(card.id),
-    })
+  const selected = orderCards(cards, order).filter(card => {
+    const outcome = outcomeFor(card)
     if (outcome?.outcome === 'not-applicable') {
       excluded.push(outcome)
       return false
@@ -242,42 +234,69 @@ function selectedStatus(
 }
 
 async function planBatch(
-  { request, services }: BatchRequest,
+  { config, request, services }: BatchRequest,
   resolved: NonNullable<ReturnType<typeof resolveWorkflowRun>>,
 ): Promise<Plan> {
   const { fs, deps } = services
   const { cards, assignee, readDependencies } = await (
     deps.workflow?.readSelection ?? readWorkflowCards
   )({ fs, ...resolved }, request)
-  const workflow = resolved.workflow.name
+  const { name: workflow, select } = resolved.workflow
   const configuration = resolved.configuration?.configuration
   const flags = flagsOf(request, assignee)
   const configured = configuration?.select
-  const selection = effectiveSelection(resolved.workflow.select, configured, flags)
+  const selection = effectiveSelection(select, configured, flags)
   const runs = join(resolved.main, '.pair/working/runs')
-  const statusScope = selectedStatus(resolved.workflow.select, configured, flags)
+  const statusScope = selectedStatus(select, configured, flags)
   const directory = summaryDirectory(request, runs, workflow, statusScope)
   const summary = join(directory, 'summary.json')
-  const members = statusScope === undefined ? undefined : join(directory, 'members')
+  const members = new Map<string, string>()
   const runId = (id: string) => `${request.runId ?? workflow}-${id}`
   const runOf = (id: string) =>
     request.restart
       ? undefined
       : { files: fs, dir: join(runs, runId(id)), workflow, main: resolved.main }
   const completed = completedFromSummary(fs, summary)
-  const candidates = selectCards(
-    cards,
-    selection,
-    runOf,
-    id => completed.has(id) || (members !== undefined && fs.existsSync(memberPath(members, id))),
-  )
+  const tiered = usesTierLabels(resolved, request)
+  const candidates = selectCards(cards, selection.order, card => {
+    const { id } = card
+    let cardSelection = configured
+    if (tiered && !card.closed && card.error === undefined) {
+      const outcome = workflowConfiguration(
+        config,
+        { ...request, card: id, runId: runId(id) },
+        services,
+        resolved,
+        card,
+      )
+      if (outcome.errors.length > 0)
+        return { id, outcome: 'failed', reason: outcome.errors.join(' · ') }
+      cardSelection = outcome.plan?.configuration.select
+    }
+    const cardScope = selectedStatus(select, cardSelection, flags)
+    const cardDirectory = summaryDirectory(request, runs, workflow, cardScope)
+    const member = memberPath(join(cardDirectory, 'members'), id)
+    if (cardScope !== undefined) members.set(id, member)
+    const run = runOf(id)
+    const done =
+      card.error === undefined && run !== undefined && completedRun(run, { card: id, workflow })
+    const pastStatus =
+      done &&
+      cardScope !== undefined &&
+      ((cardDirectory === directory && completed.has(id)) || fs.existsSync(member))
+    return selectionOutcome(card, effectiveSelection(select, cardSelection, flags), {
+      run,
+      done,
+      pastStatus,
+    })
+  })
   return {
     ...candidates,
     selected: await loadDependencies(candidates, readDependencies),
     limit: request.parallel ?? configuration?.parallel ?? 1,
     runId,
     summary,
-    ...(members !== undefined && { members }),
+    members,
   }
 }
 
@@ -319,11 +338,10 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
   const { config, request, services } = input
   const { selected, limit, prior, excluded, runId, members } = plan
   // Save selection membership before a card can advance past its original status filter.
-  if (members !== undefined) {
-    for (const { id } of selected) {
-      if (prior.get(id)?.outcome !== 'failed')
-        services.fs.mkdirSync(memberPath(members, id), { recursive: true })
-    }
+  for (const { id } of selected) {
+    const member = members.get(id)
+    if (member !== undefined && prior.get(id)?.outcome !== 'failed')
+      services.fs.mkdirSync(member, { recursive: true })
   }
   const releases = new Set<() => void>()
   const launch = (card: WorkflowCard): Promise<BatchOutcome> =>
