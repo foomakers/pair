@@ -124,7 +124,7 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
 
 1. **Check**: Use `$assignee`, when the caller passed one, on create and update. An empty value is absent, not an empty-string assignee. Never apply the adoption default on create or update; assignment when development starts is a separate operation. The fallback is never the authenticated user, including a bot token.
 2. **Act**: Write an explicit assignee as part of the create and of the update, never as a follow-up step. On create without `$assignee`, write the item unassigned without warning. On update without `$assignee`, leave the existing assignee unchanged, including an unassigned item, without warning: omit the assignee field rather than clearing it.
-3. **Act (rejected explicit assignee)**: report what the tool answered. If the tracker rejected an update because of the assignee, retry the item write once without the assignee and preserve the current assignment. On create, write the item without an assignee and warn that it is invisible in an assignee-filtered view; retry a rejected create only after confirming it created no item. If a matching item is confirmed, recover its identifier and continue board membership. If creation remains ambiguous, report the unconfirmed outcome without retrying or claiming success. Never drop it silently; this bookkeeping field never sinks the item and is never a HALT.
+3. **Act (rejected explicit assignee)**: report what the tool answered. If the tracker rejected an update because of the assignee, retry the item write once without the assignee and preserve the current assignment. On create, write the item without an assignee and warn that it is invisible in an assignee-filtered view; retry a rejected create only after confirming it created no item. If a matching item is confirmed, recover its identifier and continue board membership and every remaining create step, including establishing and verifying the parent link. If creation remains ambiguous, report the unconfirmed outcome without retrying or claiming success. Never drop it silently; this bookkeeping field never sinks the item and is never a HALT.
 4. **Verify**: re-read the item and report the observed assignment; if an explicit assignee was rejected, report the rejection. The `default-assignee` in `## Assignment` remains available for development activation and PR assignment, not this write.
 
 ### Step 7: Create or Update Issue
@@ -193,7 +193,7 @@ The **non-destructive** path: it appends a comment to the item and writes nothin
 
 1. **Check**: Did the PM tool return an error during Step 7? A specifically identified assignee rejection follows Step 6b first; a failed retry or any other error follows this step.
 2. **Skip**: If no error, proceed to output. **Comment mode is exempt** — its failures were already handled as warnings in Step 7c.2 and never reach here. **`$on-failure: report` is exempt too** — the error is returned as `write-failed` (Step 8b), not raised.
-3. **Act**: For a create with an unknown outcome (for example a timeout or lost response), reconcile an unknown create outcome before another create: recover a uniquely confirmed item and continue membership, or report the outcome as unconfirmed without re-invoking creation. For any other error, **HALT** with descriptive error:
+3. **Act**: For a create with an unknown outcome (for example a timeout or lost response), reconcile an unknown create outcome before another create: recover a uniquely confirmed item, complete and verify all remaining create steps including parent linking and membership, or HALT with `create-unconfirmed` without re-invoking creation. The caller must not count the item as created or retry until reconciliation resolves the outcome. For any other error, **HALT** with descriptive error:
 
    > PM tool error: `[error description]`. No fallback to alternative tools — resolve the issue with the adopted PM tool and re-invoke.
 
@@ -236,7 +236,7 @@ Every value on the `Labels`, `Assignee` and `Board` rows is what a **read** retu
 
 In **comment mode** the five `n-a (comment mode)` values are the specified rendering, not an omission — one reason per row: no `$type` is taken, no template is resolved, no hierarchy is touched, no label is written and no assignee is touched, so there is nothing to report on those rows (`Status: Success` on a posted comment, or the warning text from Step 7c.2).
 
-**Return value**: The issue identifier (e.g., `#42`) — used by composing skills in chain operations.
+**Return value**: The confirmed issue identifier (e.g., `#42`) — used by composing skills in chain operations. An unresolved create HALTs with `create-unconfirmed`, returns no identifier, and must not be counted or retried by the caller until reconciled.
 
 ## Example: Creating a Task Issue
 

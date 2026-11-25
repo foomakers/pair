@@ -277,6 +277,8 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
     expect(normalize(content)).toContain(
       'reconcile an unknown create outcome before another create',
     )
+    expect(normalize(content)).toContain('complete and verify all remaining create steps')
+    expect(normalize(content)).toContain('create-unconfirmed')
   })
 
   it.each(writeIssueCases)('$corpus: has a dedicated assignee-resolution step', ({ content }) => {
