@@ -419,9 +419,9 @@ describe('github-implementation.md — assignee is part of the write (#402 AC3)'
     expect(body).toContain('assignees: ["[login]"]  # optional: only when explicitly supplied')
   })
 
-  it.each(githubCases)('$corpus: adding an assignee is safe to re-run', ({ content }) => {
+  it.each(githubCases)('$corpus: update assignment requires explicit intent', ({ content }) => {
     expect(normalize(section(content, VISIBILITY_HEADING))).toContain(
-      'adds without replacing, so it is safe to run unconditionally',
+      'only when an assignee was explicitly supplied',
     )
   })
 
@@ -702,7 +702,7 @@ it('adoption preserves PR assignment and explicit card assignment (R739-07)', ()
     join(__dirname, '../../../../.pair/adoption/tech/way-of-working.md'),
     'utf-8',
   )
-  expect(body).toContain('cards created without an explicit assignee remain unassigned')
+  expect(body).toContain('create an unassigned card or preserve the existing assignment on update')
   expect(body).toContain('PRs retain their default assignee at creation')
 })
 

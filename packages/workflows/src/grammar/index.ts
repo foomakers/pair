@@ -92,6 +92,7 @@ export const selectSchema: JsonSchema = {
   },
 }
 
+const reason = { type: 'string', pattern: '\\S' } as const
 export const whenSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,
@@ -137,6 +138,14 @@ export const stepSchema: JsonSchema = {
       enum: ['stop', 'continue'],
       description:
         'What a `failed` step does to the run. `stop` (default) stops it; `continue` records the failure and runs the next step.',
+    },
+    'on-resume': {
+      type: 'object',
+      required: ['reason', 'step'],
+      additionalProperties: false,
+      properties: { reason, step: { type: 'string', pattern: STEP_ID } },
+      description:
+        'On resume after this step failed with the given reason, refresh the linked PR head and replay from the named earlier step.',
     },
     alias: { type: 'string', description: 'The alias, declared in `aliases`, the step runs with.' },
     state: {
@@ -202,6 +211,10 @@ export const expandedStepSchema: JsonSchema = {
         output: { type: 'string', pattern: `${expandedId.slice(0, -1)}\\.[A-Za-z][A-Za-z0-9]*$` },
       },
     },
+    'on-resume': {
+      ...stepSchema.properties?.['on-resume'],
+      properties: { reason, step: { type: 'string', pattern: expandedId } },
+    },
     until: { type: 'string', pattern: expandedId },
     steps: { ...stepSchema.properties?.['steps'], propertyNames: { pattern: expandedId } },
   },
@@ -240,6 +253,7 @@ export interface Step {
   readonly gates?: readonly string[]
   readonly when?: When
   readonly 'on-failed'?: 'stop' | 'continue'
+  readonly 'on-resume'?: { readonly reason: string; readonly step: string }
   /** One of the workflow's `aliases`: what a configuration sets for the step. */
   readonly alias?: string
   /** The card's board state the host sets for the step; `none` sets nothing. */

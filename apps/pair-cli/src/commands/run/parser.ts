@@ -67,6 +67,11 @@ export interface RunDispatchRequest {
 }
 
 /** US-652: `pair run <workflow> --card <id>` — a workflow file run step by step, its own path beside the cycle. */
+export type WorkflowFlagAnswer = {
+  readonly verdict: 'approved' | 'rejected'
+  readonly note?: string
+}
+
 export interface RunWorkflowRequest {
   /** A workflow name, or the path of a workflow file. */
   readonly name: string
@@ -82,6 +87,7 @@ export interface RunWorkflowRequest {
   /** `--reconfigure`: replace the run's frozen configuration. */
   readonly reconfigure?: true
   readonly moreRounds?: number
+  readonly flagAnswer?: WorkflowFlagAnswer
 }
 
 export interface RunWorkflowBatch extends Omit<RunWorkflowRequest, 'card'> {
@@ -222,6 +228,8 @@ interface ParseRunOptions {
   configOverride?: string
   reconfigure?: boolean
   moreRounds?: string | number
+  approve?: string
+  reject?: string
 }
 
 function parsePositiveInteger(flag: string, raw: string | number): number {
@@ -804,25 +812,58 @@ function configurationOf(
  * US-652: the positional argument names a workflow. `--profile` and `--workflow-config` are refused
  * with it — a workflow run has one engine and its default model for every step until #672.
  */
+function workflowFlagAnswer(
+  options: ParseRunOptions,
+  card: string,
+): WorkflowFlagAnswer | undefined {
+  if (options.approve === undefined && options.reject === undefined) return undefined
+  if (options.restart === true || options.dryRun === true)
+    throw new Error('An approval flag requires a parked workflow; omit --restart and --dry-run')
+  if (options.approve !== undefined) {
+    if (options.reject !== undefined) throw new Error('Use only one of --approve and --reject')
+    if (identifierText(options.approve, '--approve') !== card)
+      throw new Error('--approve names another card; it must match --card')
+    return { verdict: 'approved' }
+  }
+  return { verdict: 'rejected', note: promptSafeText(options.reject, '--reject')! }
+}
+
+function refuseStrayWorkflowFlags(options: ParseRunOptions): undefined {
+  if (options.restart === true)
+    throw new Error(
+      '--restart was passed without a workflow name: it restarts `pair-cli run <workflow> --card <id>`',
+    )
+  refuseStrayConfiguration(options)
+  if (options.moreRounds !== undefined) throw new Error('--more-rounds needs a workflow name')
+  if (options.approve !== undefined || options.reject !== undefined)
+    throw new Error('Approval flags need a workflow name')
+  return undefined
+}
+
 function resolveWorkflowRun(
   name: string | undefined,
   options: ParseRunOptions,
 ): Pick<RunCommandConfig, 'workflow' | 'workflowBatch'> {
   if (name === undefined) {
-    if (options.restart === true)
-      throw new Error(
-        '--restart was passed without a workflow name: it restarts `pair-cli run <workflow> --card <id>`',
-      )
-    refuseStrayConfiguration(options)
-    if (options.moreRounds !== undefined) throw new Error('--more-rounds needs a workflow name')
+    refuseStrayWorkflowFlags(options)
     return {}
   }
   const workflow = promptSafeText(name, 'the workflow name')!
   assertWorkflowFlags(workflow, options)
   const { cards, ...scope } = parseWorkflowScope(workflow, options)
   const request = workflowRequest(workflow, options)
-  if (cards?.length === 1 && Object.keys(scope).length === 0 && options.parallel === undefined)
-    return { workflow: { ...request, card: cards[0]! } }
+  if (cards?.length === 1 && Object.keys(scope).length === 0 && options.parallel === undefined) {
+    const card = cards[0]!
+    const flagAnswer = workflowFlagAnswer(options, card)
+    return { workflow: { ...request, card, ...(flagAnswer !== undefined && { flagAnswer }) } }
+  }
+  if (
+    passed(options, [
+      ['approve', '--approve'],
+      ['reject', '--reject'],
+    ]).length > 0
+  )
+    throw new Error('Approval flags require a single-card workflow run')
   return {
     workflowBatch: {
       ...request,

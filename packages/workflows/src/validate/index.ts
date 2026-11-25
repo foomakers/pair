@@ -164,7 +164,7 @@ function loopOwnErrors(workflow: Workflow, step: Step, path: readonly string[]):
         fix: 'remove it',
       }),
     )
-  for (const key of ['skill', 'uses', 'with', 'gates'] as const)
+  for (const key of ['skill', 'uses', 'with', 'gates', 'on-resume'] as const)
     if (step[key] !== undefined)
       errors.push(
         errorAt(workflow, [...path, key], {
@@ -200,6 +200,13 @@ function loopChildErrors(
       errorAt(workflow, [...childPath, 'on-failed'], {
         problem: 'on-failed is not allowed inside a loop',
         fix: 'remove it',
+      }),
+    )
+  if (child['on-resume'] !== undefined)
+    errors.push(
+      errorAt(workflow, [...childPath, 'on-resume'], {
+        problem: 'on-resume is not allowed inside a loop',
+        fix: 'declare the route on a top-level step',
       }),
     )
   return [...errors, ...checkStep(child, childPath)]
@@ -335,6 +342,20 @@ function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowErro
   return workflow.steps.flatMap(step => checkStep(step, ['steps', step.id]))
 }
 
+function resumeRouteErrors(workflow: Workflow): WorkflowError[] {
+  return workflow.steps.flatMap((step, index) => {
+    const route = step['on-resume']
+    if (route === undefined || workflow.steps.slice(0, index).some(one => one.id === route.step))
+      return []
+    return [
+      errorAt(workflow, ['steps', step.id, 'on-resume', 'step'], {
+        problem: `'${route.step}' is not an earlier top-level step`,
+        fix: 'name an earlier step or loop',
+      }),
+    ]
+  })
+}
+
 /** `on-failed: continue` on the last step: nothing consumes the failure. */
 function warnings(workflow: Workflow): WorkflowError[] {
   const last = workflow.steps[workflow.steps.length - 1]
@@ -399,7 +420,10 @@ export function validate(text: string, file: string, deps: ValidationDeps): Vali
     }
     return error
   }
-  const errors = coherenceErrors(parsed.workflow, deps).map(locate)
+  const errors = [
+    ...coherenceErrors(parsed.workflow, deps),
+    ...resumeRouteErrors(parsed.workflow),
+  ].map(locate)
   return errors.length > 0
     ? { errors, warnings: [] }
     : {

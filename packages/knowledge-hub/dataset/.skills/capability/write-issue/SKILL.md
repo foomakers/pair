@@ -24,7 +24,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 | `$status`  | No       | Target **macrostate** — one of `Draft`, `Ready`, `In Progress`, `Review`, `Done` (never a board-specific label). Resolved to the actual board state via the `state-mapping` resolution rule ([canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)) before the board field is updated. **Ignored in `comment` mode** (Step 6 and the board write never run — comment mode touches no board field). |
 | `$labels`  | No       | Additional **topical** labels to apply alongside the type label, e.g. `tech-debt` when a debt or quality finding is promoted to the backlog deliberately. A list of label names (created if the PM tool supports it). **Ignored in `comment` mode** (Step 7.2 never runs — labels are left byte-identical). |
 | `$on-failure` | No     | What a **tracker-side** failure does in write mode. `halt` (default) — it **HALTs**, as every other caller of this skill expects. `report` — it is **returned to the caller** as an outcome (`not-found`, `membership-unconfirmed`, `write-failed`) and this skill returns instead of HALTing (Step 8b). Only legitimate when the write is an **additive annotation** whose loss degrades the caller's reporting and invalidates none of its work — today exactly one composition passes it: `/implement`'s task-progress **tick**. It exempts the three tracker-side HALTs **only** (Step 7 not-found, Step 7b beat 4 membership, Step 8 error); argument and configuration HALTs (Steps 1, 3, 6) still fire. **Ignored in `comment` mode**, which already warns instead of HALTing. |
-| `$assignee` | No      | Who the item is **assigned to** — a login/identifier the PM tool accepts. Resolved through the cascade in Step 6b (the argument first, then the adoption default on update only, then none) and written **as part of the create and of the update, never as a follow-up step**. An omitted create assignee leaves the item unassigned without warning; an unresolved update or rejected assignee is reported with a warning. **Ignored in `comment` mode** (an existing item's assignee is never touched by a comment). |
+| `$assignee` | No | An explicit PM-tool assignee, applied on create or update. When omitted, create unassigned or preserve the existing assignment on update, without warning (Step 6b). **Ignored in `comment` mode**. |
 
 **In `comment` mode only `$id` and `$comment` are read**; `$type`, `$content`, `$status`, `$labels`, `$assignee` and `$parent` are ignored — passing one is a caller mistake, never a partial write. `$on-failure` is ignored there too, for a different reason: comment mode already warns instead of HALTing, so there is nothing left for it to exempt.
 
@@ -96,7 +96,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 Skills never write board-specific labels — `$status` is always a canonical macrostate (`Draft`, `Ready`, `In Progress`, `Review`, `Done`). Resolve it to a board state before touching the board field.
 
 1. **Check**: Is `$status` provided?
-2. **Skip**: If `$status` is absent, proceed to Step 7 — no board field update is requested.
+2. **Skip**: If `$status` is absent, proceed to Step 6b — no board field update is requested; assignee resolution still runs.
 3. **Act**: Resolve `$status` per [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md):
    - Read the `## State Mapping` section in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md), if present.
    - **Mapped**: find all board states mapped to the `$status` macrostate, in the order listed; target the **first listed** one.
@@ -122,19 +122,10 @@ Skills never write board-specific labels — `$status` is always a canonical mac
 
 The board is read **filtered by assignee**, so an item with no assignee is invisible there even when it is open, green and carries a PR (the Assignment rule in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)). This step resolves **who**; the field or flag that actually writes it belongs to the implementation guide resolved in Step 5 — **never invent one**: one rule stated here, every mechanic in its adapter.
 
-1. **Check**: Resolve the assignee in one order — **the argument first, then (update only) the adoption default, then none**. **Create mode never applies the adoption default**: a card is assigned when development is taken in charge, not when it is filed.
-   - `$assignee`, when the caller passed one, on create and update;
-   - else, **on update only**, the adoption's `default-assignee` — [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Assignment` (schema and cascade: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)). This is a **PM-tool** write, so it reads that key and never `code-host-assignee` — the split-configuration key belongs to the code-host branch of the same cascade (`/publish-pr`, the PR assignee). **An empty value is absent, not an empty-string assignee.**
-   - else none.
-2. **Act (resolved)**: carry it into Step 7 and write it **as part of the create and of the update, never as a follow-up step**.
-3. **Act (create with no `$assignee`)**: write the item unassigned, no warning: it is assigned when development starts.
-4. **Act (update with nothing resolved, or the tool rejects what was resolved)**: **write the item without an assignee and warn** — **never a HALT**:
-
-   > Item written without an assignee — it will be **invisible in an assignee-filtered view**. Pass `$assignee`, or declare `default-assignee` under `## Assignment` in way-of-working.md.
-
-   An item created and half-visible beats an item not created, so this bookkeeping field **never sinks the item**. A **rejected** assignee (not a collaborator, typo, deactivated account) takes this same branch: report what the tool answered and **never drop it silently**.
-5. **Act — never the authenticated user.** The default comes from the declared adoption field, not from whoever is running the command: an agent running under a **bot token** would assign every item to the bot, satisfying the letter of the Assignment rule while defeating its purpose.
-6. **Verify**: either an assignee is resolved and carried into Step 7, the create is deliberately unassigned, or the warning above was surfaced — and in both cases the item is still written.
+1. **Check**: Use `$assignee`, when the caller passed one, on create and update. An empty value is absent, not an empty-string assignee. Never apply the adoption default on create or update; assignment when development starts is a separate operation. The fallback is never the authenticated user, including a bot token.
+2. **Act**: Write an explicit assignee as part of the create and of the update, never as a follow-up step. On create without `$assignee`, write the item unassigned without warning. On update without `$assignee`, leave the existing assignee unchanged, including an unassigned item, without warning: omit the assignee field rather than clearing it.
+3. **Act (rejected explicit assignee)**: report what the tool answered and never drop it silently; on create, write the item without an assignee and warn that it is invisible in an assignee-filtered view. On update, preserve the current assignment. This bookkeeping field never sinks the item and is never a HALT.
+4. **Verify**: re-read the item and report the observed assignment; if an explicit assignee was rejected, report the rejection. The `default-assignee` in `## Assignment` remains available for development activation and PR assignment, not this write.
 
 ### Step 7: Create or Update Issue
 
@@ -158,7 +149,7 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
    - If not found → **HALT**: `Issue #$id not found.` — **unless `$on-failure: report`**, which returns `not-found` to the caller instead (Step 8b) and writes nothing.
    - Update the issue body with the formatted content — in **write mode** (`$mode: write`) this is a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below). That contract is also what makes a comment durable where the item **is** a file: on `filesystem` the back-link lives in the body's `## Activity Log` section, so a later write-mode render preserves it only because the caller read-merges the current body first — dropping the section is a caller bug, not an accepted behavior. Comment mode (Step 7c) never reaches here and never writes the body.
    - Preserve existing labels and hierarchy links unless explicitly changed.
-   - Apply the assignee resolved in Step 6b **conditionally**: write it when the caller passed `$assignee` **explicitly**, or when the read above shows the item currently has **no** assignee. Otherwise **leave the existing assignee untouched** — an item deliberately assigned to someone else must not be reassigned as a side effect of a body update (the adoption default would otherwise silently pull every updated item back to the maintainer and out of that person's filtered view — the same invisibility failure, inverted). Resolved to none ⇒ leave whatever assignee the item already has; never clear one. Whether the adapter's call **adds** to or **replaces** the assignee set is the adapter's concern, documented in its guide — this skill states only which value applies and when.
+   - Apply the assignee only when the caller explicitly passed `$assignee`; otherwise omit the field and leave the existing assignee untouched, including when unassigned. For filesystem updates, preserve the existing assignee header in the rendered body when `$assignee` is omitted; omit the header if the item had none. Never clear one as a side effect. Whether the adapter adds or replaces assignees is the adapter's concern; follow its guide.
    - **Step 7b runs on every update too**, **not only when `$status` was provided**: an item that already exists may still never have been added to the tracked view (it was filed before the board, or an earlier add exited 0 having done nothing), so membership is established and confirmed there on this path as well. The board field itself — when Step 6 resolved a state — is written in **Step 7b** (membership → confirm → state), never here: this step writes the item, not the board.
 4. **Verify**: The item was created or updated **and re-read**: the read shows the body, the labels and the assignee now in effect. Report the labels the read observed on the `Labels` output row — a label the tracker dropped or refused is a **finding**, never an assumed success. Step 7b runs next and owns the board — membership on **every** write-mode write, the state field only when Step 6 resolved one.
 
@@ -234,7 +225,7 @@ ISSUE WRITTEN:
 ├── Template: [template file used | n-a (comment mode)]
 ├── Parent:   [parent issue ID | "none" | n-a (comment mode)]
 ├── Labels:   [type label + topical labels — confirmed by read | dropped by tracker: label — finding | n-a (comment mode)]
-├── Assignee: [login — confirmed by read | unchanged: login — confirmed by read | none — deliberately unassigned (create) | none — WARNING: invisible in an assignee-filtered view | n-a (comment mode)]
+├── Assignee: [login — confirmed by read | unchanged: login — confirmed by read | none — deliberately unassigned (create) | unchanged: none — confirmed by read | none — WARNING: invisible in an assignee-filtered view | n-a (comment mode)]
 ├── Board:    [board state — confirmed by read | member of <view> — confirmed by read; no state written (no $status) | n-a (no tracked view) | n-a (implicit membership; no $status, or no board state maps to the macrostate — readiness falls back to the item body) | membership-unconfirmed — reported, not raised ($on-failure: report) | HALT — reason]
 └── Status:   [Success | Reported — not-found | membership-unconfirmed | write-failed (Step 8b, $on-failure: report) | HALT — reason]
 ```
@@ -351,7 +342,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - PM tool not configured/accessible, or the template file missing → **HALT** (no fallback — this skill's entire job is writing to the PM tool via a template).
 - If the PM tool implementation guide is not found, warn and proceed with default behavior (a genuine degrade, not a HALT).
-- **No assignee resolvable on update, or a resolved assignee rejected** → write the item **unassigned** and warn (Step 6b) — a genuine degrade, never a HALT. The item is then invisible in an assignee-filtered view, which is why the warning names that consequence rather than reporting a bare success.
+- **An explicit assignee rejected** → report the rejection and preserve any existing assignment; on create, warn that the unassigned item is invisible in an assignee-filtered view (Step 6b). Never a HALT.
 - If `way-of-working.md` has no `## State Mapping` section, canonical macrostate names are assumed for board writes — this is the zero-configuration default, not a degradation.
 
 ## Notes

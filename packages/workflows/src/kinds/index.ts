@@ -39,7 +39,12 @@ export interface StepResult {
 }
 
 /** The reasons of a failure the host or the validator wrote: the agent returned no result of the kind to hold to its outputs. */
-const HOST_REASONS: readonly string[] = ['no-result', 'unsafe-value', 'invalid-result']
+const HOST_REASONS: readonly string[] = [
+  'no-result',
+  'unsafe-value',
+  'invalid-result',
+  'invalid-input',
+]
 
 /** The outputs of `kind` as `result` must carry them: all required of an `ok` step and, when the kind has a `rule`, of a `failed` one the agent returned. */
 const outputsOf = (kind: StepKind, { status, reason }: StepResult): StepKind['outputs'] =>

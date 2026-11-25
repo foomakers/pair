@@ -809,7 +809,8 @@ unattended loop (`ADR-021` tier 2: the external driver).
 skill, perimeter, autonomy) and never *what* to work on: eligibility, the stop predicate, the
 parallelism ceiling and the audit location are read from
 [`.pair/adoption/tech/automation.md`](/docs/reference/quality-model) with the names `pair-loop`
-already defines, and that file is never written. **It never merges, in any mode.**
+already defines, and that file is read-only. Workflows that declare a merge step can merge an
+approved PR after the required checks pass.
 
 ### Usage
 
@@ -823,6 +824,8 @@ pair-cli run [workflow] [options]
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `[workflow]`                    | A workflow file path or name. Select cards with `--card`, `--root` or `--filter`. See [Run a workflow file](#run-a-workflow-file-pair-cli-run-workflow) |
 | `--restart`                     | With a workflow name: archive the run directory and start the run over                              |
+| `--approve <card>`              | Resume a workflow parked for approval on the matching `--card`, as the authenticated platform user |
+| `--reject <reason>`             | Reject the approval requested by a parked workflow for `--card`                                    |
 | `--config <name\|file>`         | With a workflow name: the configuration (engine, model, effort per step). Else `pair.config.json` `workflows.<workflow>.configuration`, then `workflows.default.configuration`, then the engine default |
 | `--config-override <json>`      | With a workflow name: a JSON object deep-merged over the configuration, validated and recorded in the run |
 | `--reconfigure`                 | With a workflow name and `--config` and/or `--config-override`: replace the run's frozen configuration; steps already `ok` are not run again |
@@ -1009,7 +1012,7 @@ pair-cli run quick --card 627
 | Card not found or closed        | Refused before any launch                                                         |
 
 With a workflow name the command takes `--card`, `--engine`, `--config`, `--config-override`,
-`--reconfigure`, `--more-rounds`, `--run-id`, `--restart`, `--dry-run`,
+`--reconfigure`, `--more-rounds`, `--run-id`, `--restart`, `--dry-run`, `--approve`, `--reject`,
 `--cwd`, `--autonomous`, `--approve-project-trust`, `--telemetry` / `--no-telemetry`, the timeouts
 and the output flags. `--profile`
 and `--workflow-config` are refused: a workflow run is configured with `--config`. The flags of the
@@ -1291,11 +1294,17 @@ keeps its trail up to the last event:
 
 ### Merge
 
-`pair-cli run` never merges, on any path. What it reports is the **policy's** posture: with
-`## Auto-Advance` at its `(none)` default nothing is pushed or merged unattended, and with a tier
-declared there the invoked skill may push and merge that tier itself once its PR is review-approved
-and its gates are green. The command prints whichever of the two holds, rather than promising the
-gate is always human.
+In a named workflow, an explicit `merge` step requires an authorized approval and checks that
+the current PR head matches the gated, reviewed and approved head. On a parked run, reply on the card
+with `/approve #<pr> <sha>` or `/reject #<pr> <sha> <reason>` using the full SHA in the notice.
+Eligible PR authors with solo approval enabled use `/approve <sha>`.
+
+In `delivery`, resume after a head change at the gate or merge to review the replacement head
+and request fresh approval. Local gates require a clean card worktree at the reviewed commit.
+
+Outside named workflows, `## Auto-Advance` governs the invoked skill. With its `(none)` default,
+publication and merge require a person. A declared tier allows the invoked skill to publish and
+merge PRs in that tier after review approval and passing gates.
 
 ### Examples
 

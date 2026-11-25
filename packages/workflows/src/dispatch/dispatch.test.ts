@@ -35,7 +35,8 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- head: string matching ^[0-9a-f]{40}$',
         'Required when status is "ok": branch, pr, head.',
         '',
-        'This is an unattended run in one session. Never ask for confirmation. Do RED, GREEN and REFACTOR in this session, with one commit per task, all on one branch and in one pull request. Attempt every task, in order: never judge the card too big and stop before trying. A task that needs a person (manual, interactive, a real run with human approval) is skipped; a task you attempted and could not finish is parked, left unticked with its reason. Neither is a reason to stop: finish all the others, publish the PR and list the skipped and parked tasks in the result. Return status "ok" when every task that can be automated is done. Return status "failed" only once every task has been attempted and the rest is confirmed not completable, naming each with its reason, after publishing the PR with the finished work. Do not end your turn while a task is not yet attempted. Review findings still open after the PR is published are not a failure: return status "ok", list them in the summary, and leave them to the review and fix steps. Return status "needs-human" only in these cases: A decision the card does not record blocks every remaining task. A quality gate stays red and the fix is outside the card.',
+        'Execution mode: unattended.',
+        'Handoff: published-pr.',
       ].join('\n'),
     )
   })
@@ -92,17 +93,8 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- summary: string',
         '- reason: string (optional)',
         '',
-        'This is an unattended run in one session. Never ask for confirmation. Return status "needs-human" only in these cases: ' +
-          kindByName.generic.escalations.join(' '),
+        'Execution mode: unattended.',
       ].join('\n'),
-    )
-  })
-
-  it('tells a kind with no escalations that it never returns needs-human', () => {
-    const gate: StepLaunch = { id: 'gate', kind: 'gate', uses: 'x', with: {}, inputs: {} }
-    const message = buildMessage(gate, kindByName.gate, { style: 'slash', ...safe })
-    expect(message.split('\n').at(-1)).toBe(
-      'This is an unattended run in one session. Never ask for confirmation. Never return status "needs-human".',
     )
   })
 
@@ -119,10 +111,11 @@ describe('buildMessage (AC-4, AC-5)', () => {
 })
 
 describe('a step with gates (#729 AC-7)', () => {
-  it('tells the agent the host runs the gates, so it runs none', () => {
+  it('keeps the skill invocation identical when a host gate is declared', () => {
     const step = { ...implement, with: {}, gates: ['target:pr'] }
-    expect(buildMessage(step, kindByName.implement, { style: 'slash', ...safe })).toContain(
-      'The host runs the quality gates after you finish: run none yourself.',
+    const options = { style: 'slash', ...safe } as const
+    expect(buildMessage(step, kindByName.implement, options)).toBe(
+      buildMessage({ ...implement, with: {} }, kindByName.implement, options),
     )
   })
 })

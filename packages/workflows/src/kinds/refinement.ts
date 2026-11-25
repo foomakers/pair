@@ -12,9 +12,6 @@ const boardStatus = {
     'The current literal board status read from the card before the host transitions it.',
 } as const
 
-const boardGuidance =
-  'Read the current tracker column after the body write. Copy the exact value into boardStatus. The host transitions the board after confirmation.'
-
 export const refineStory: StepKind = {
   name: 'refine-story',
   defaultSkill: 'pair-process-refine-story',
@@ -33,7 +30,6 @@ export const refineStory: StepKind = {
     additionalProperties: false,
     properties: { mode: { enum: ['interactive', 'autonomous'] } },
   },
-  guidance: `Pass the card input as $story and $approval: auto and $prepare: hold-never to the skill. Record evidence-backed answers in ## Assumptions. Apply the adopted risk label in the tracker and read it back before returning ok. Return open product questions in the summary of a needs-human result. ${boardGuidance}`,
   escalations: ['A question requires a product decision.'],
 }
 
@@ -47,6 +43,5 @@ export const planTasks: StepKind = {
     properties: { boardStatus, tasks: { type: 'integer', minimum: 1 } },
   },
   with: { type: 'object', additionalProperties: false, properties: {} },
-  guidance: `Pass the card input as $story and $approval: auto. Write the Task Breakdown and report the number of task checklist entries. ${boardGuidance}`,
   escalations: ['The task breakdown needs a product decision.'],
 }

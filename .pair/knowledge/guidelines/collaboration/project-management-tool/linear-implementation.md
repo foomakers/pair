@@ -239,7 +239,7 @@ linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ suc
        "variables":{"i":{"teamId":"<team-id>","title":"[title]",
        "projectId":"<project-id>"}}}'
 
-# Existing issue — assigning is idempotent, so it is safe to run unconditionally
+# Existing issue — run only when an assignee was explicitly supplied; this replaces the assignee
 linear_gql '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
      "variables":{"id":"<issue-id>","i":{"assigneeId":"<user-id>"}}}'
 ```

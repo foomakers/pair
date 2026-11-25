@@ -129,3 +129,38 @@ describe('gate checks (#680 AC-2)', () => {
     expect(t).toBe(60_000)
   })
 })
+
+it('fails a check when platform facts cannot be read (#726 AC-1)', async () => {
+  const result = await runGate(
+    { checks: ['ci-green'] },
+    {
+      registry,
+      run: run(),
+      facts: facts({
+        ci: async () => {
+          throw new Error('offline')
+        },
+      }),
+    },
+  )
+  expect(result).toMatchObject({ status: 'failed', reason: 'fact-unreadable', detail: 'offline' })
+})
+
+it('does not accept a green read that finishes after the CI deadline (#726 T-5)', async () => {
+  let time = 0
+  const result = await runGate(
+    { checks: ['ci-green'], 'timeout-minutes': 1 },
+    {
+      registry,
+      run: run(),
+      now: () => time,
+      facts: facts({
+        ci: async () => {
+          time = 60_001
+          return 'green'
+        },
+      }),
+    },
+  )
+  expect(result).toMatchObject({ status: 'failed', reason: 'ci-timeout' })
+})

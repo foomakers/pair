@@ -39,6 +39,21 @@
 
 **Next immediate action:** [the single next concrete step the resuming session should take]
 
+## 6. Task State
+
+| Task | State | Evidence or reason |
+| ---- | ----- | ------------------ |
+| T-1  | done  | [commit or durable completion evidence] |
+| T-3  | pending | [partial work, or a dash] |
+
+## TDD Handoff
+
+**Task:** [T-N]
+**Next phase:** GREEN
+**Test file:** [path relative to the worktree]
+**Test command:** [exact command run in RED]
+**Expected failure:** [observed failing assertion or error]
+
 ---
 
 ## Template Notes
@@ -48,4 +63,6 @@ Everything below this line is authoring guidance — omit it from rendered check
 - **File location:** `.pair/working/checkpoints/<story-id>.md` — one file per story, updated in place, never duplicated.
 - **Source of truth:** the file. If an issue-body mirror exists, it must be explicitly marked as a copy and must not diverge in meaning from the file.
 - **Resume parsing:** a resuming session reads sections 1–5 top to bottom. It should not need the original conversation to continue safely.
+- **Task State:** Optional. Include one row per task only when a complete inventory is available. Supported states: `pending`, `done`, `failed`, `blocked`, `needs-human`. Supply evidence or a reason for every state except `pending`. Legacy checkpoints omit section 6.
+- **TDD Handoff:** Optional. Include only after observing the expected RED failure. The Branch section identifies the worktree. Leave the task pending until GREEN and task verification are complete.
 - **Unknown state:** if a value cannot be reconstructed confidently, write `[unknown — needs confirmation]` rather than guessing.

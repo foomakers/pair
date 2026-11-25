@@ -107,9 +107,13 @@ function expandLoop(state: ExpansionState, context: StepContext, chain: readonly
 
 function rebaseStep(step: Step, id: string): Step {
   const prefix = id.slice(0, id.length - step.id.length)
-  return step.when?.output && prefix
-    ? { ...step, when: { ...step.when, output: `${prefix}${step.when.output}` } }
-    : step
+  const route = step['on-resume']
+  return {
+    ...step,
+    ...(step.when?.output &&
+      prefix && { when: { ...step.when, output: `${prefix}${step.when.output}` } }),
+    ...(route && prefix && { 'on-resume': { ...route, step: `${prefix}${route.step}` } }),
+  }
 }
 
 function expandStep(state: ExpansionState, context: StepContext, chain: readonly string[]): Step[] {
@@ -119,7 +123,9 @@ function expandStep(state: ExpansionState, context: StepContext, chain: readonly
     recordOrigins(state.origins, workflow, step, id)
     return [expandLoop(state, { ...context, step: rebaseStep(step, id) }, chain)]
   }
-  const unsupported = (['when', 'gates', 'state'] as const).find(key => step[key] !== undefined)
+  const unsupported = (['when', 'gates', 'state', 'on-resume'] as const).find(
+    key => step[key] !== undefined,
+  )
   if (unsupported) {
     state.errors.push(
       errorAt(workflow, ['steps', step.id, unsupported], {

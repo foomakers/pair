@@ -202,7 +202,7 @@ describe('validate (AC-3, AC-5)', () => {
         line: 10,
         key: 'steps.review.with.floor',
         problem: "unknown key 'floor'",
-        fix: 'use one of blocking',
+        fix: 'use one of publication, blocking',
       },
     ],
     [
@@ -272,4 +272,13 @@ describe('validate: on-failed (#708 AC-7)', () => {
     const { errors } = check(QUICK.replace('kind: review', 'kind: review\n    on-failed: retry'))
     expect(errors.map(one => one.key)).toEqual(['steps.review.on-failed'])
   })
+})
+
+it.each([
+  { step: 'implement', valid: true },
+  { step: 'review', valid: false },
+  { step: 'missing', valid: false },
+])('validates that a resume route names an earlier step ($step, #726)', ({ step, valid }) => {
+  const { errors } = check(QUICK + `    on-resume: { reason: head-moved, step: ${step} }\n`)
+  expect(errors.map(error => error.key)).toEqual(valid ? [] : ['steps.review.on-resume.step'])
 })

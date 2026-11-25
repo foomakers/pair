@@ -19,6 +19,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## implement
 
 - **Default skill**: `pair-process-implement`
+- **Handoff**: `published-pr`
 - **Inputs**
   - `card`: `string` — The card to implement.
 - **Outputs**, required when `status` is `ok`
@@ -40,10 +41,12 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `head`: `string` — The head to review.
 - **Outputs**, required when `status` is `ok` or `failed`
   - `verdict`: `"approved" | "changes-requested"`
+  - `reportPath`: `string` — Local report for this PR and reviewed head.
   - `reviewedHead`: `string matching ^[0-9a-f]{40}$` — The head the verdict is about, a 40-hex sha.
   - `findings`: `array of { id: string, severity: string, title: string, blocking: boolean }` — Every finding. The step is `failed` when at least one is blocking.
 - **Rule**: The status is "failed", never "ok", when at least one finding is blocking or the verdict is "changes-requested".
 - **Options** (`with`)
+  - `publication`: `"always" | "first-and-approved" | "never"` — Publish every review, the first and approved reviews, or none. Default: always.
   - `blocking`: `"Critical" | "Major" | "Minor"` — The lowest severity that makes a finding blocking. Default: the review template's blocking floor.
 - **Returns `needs-human` when**
   - The verdict needs a decision only a person can take.
@@ -56,17 +59,20 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `card`: `string` — The card the pull request delivers.
   - `pr`: `integer` — The pull request to fix.
   - `head`: `string` — The head the findings are about.
+  - `reportPath`: `string` — Local review report for the reviewed head.
   - `findings`: `array of object` — The review findings: `id`, `severity`, `title`, `blocking`.
 - **Outputs**, required when `status` is `ok` or `failed`
   - `head`: `string matching ^[0-9a-f]{40}$` — The head after the push, or the input head when nothing changed.
   - `resolutions`: `array of { id: string, status: "resolved" | "not-resolved", reason: string }` — One per finding in scope.
+  - `gateFailures`: `array of { gate: string, reason: string }` — Failed gates reported when continuation is enabled.
 - **Rule**: The status is "failed", never "ok", when at least one resolution is "not-resolved".
 - **Options** (`with`)
   - `severity`: `"Critical" | "Major" | "Minor"` — The lowest severity to fix. Default `Minor`, the review's blocking floor. Ignored when `findings` is given.
   - `findings`: `array of string` — Finding ids. When present only these are fixed.
   - `gates`: `array of string` — Keys of the Custom Gate Registry, run in order before the push. Absent or `[]` = none.
+  - `continue-on-gate-failure`: `boolean` — Report failed gates and continue to the normal push. Default: false.
 - **Returns `needs-human` when**
-  - A finding needs a product decision.
+  - A remaining finding needs a human decision or action.
   - A finding contradicts an acceptance criterion of the card.
 
 ## generic
@@ -88,8 +94,9 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `card`: `string` — The card.
   - `pr`: `integer` — The pull request, for the checks that read it.
   - `head`: `string` — The head the earlier steps produced.
+  - `reviewedHead`: `string` — The head verified by the review step.
 - **Outputs**, required when `status` is `ok`
-  - The common fields only.
+  - `gatedHead`: `string matching ^[0-9a-f]{40}$` — Head verified by a passing head-unchanged check, when present.
 - **Options** (`with`)
   - `gates`: `array of string` — Entries run in the card worktree, in order: a key of the Custom Gate Registry, `target:<name>` (the registry rows of that target) or `command:<shell line>`.
   - `checks`: `array of "ci-green" | "head-unchanged" | "review-approved" | "prerequisites-done"` — Ready-made checks: ci-green, head-unchanged, review-approved, prerequisites-done.
@@ -101,9 +108,13 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 - **Default skill**: none: the host runs it, no agent
 - **Inputs**
   - `card`: `string` — The card.
+  - `reviewedHead`: `string` — The head verified by a preceding review.
+  - `gatedHead`: `string` — The head verified by a preceding gate.
   - `pr`: `integer` — The pull request, whose native reviews count.
 - **Outputs**, required when `status` is `ok`
   - `approvedBy`: `string` — The login that approved.
+  - `approvedHead`: `string matching ^[0-9a-f]{40}$` — The head that was approved.
+  - `approvedPr`: `integer` — The PR that was approved.
 - **Options** (`with`)
   - `question`: `string` — What is asked of the approver.
 - **Returns `needs-human` when**
@@ -116,6 +127,11 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `card`: `string` — The card, closed after the merge.
   - `pr`: `integer` — The pull request to merge.
   - `head`: `string` — The head the PR must still have.
+  - `reviewedHead`: `string` — The head verified by the review step.
+  - `gatedHead`: `string` — The head that passed the gate.
+  - `approvedHead`: `string` — The head authorized by the approval step.
+  - `approvedPr`: `integer` — The PR authorized by the approval step.
+  - `approvedBy`: `string` — The authorized approver.
 - **Outputs**, required when `status` is `ok`
   - `merged`: `boolean` — Whether the PR is merged.
   - `mergeCommit`: `string` — The merge commit sha.

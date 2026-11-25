@@ -1,166 +1,74 @@
-import { pendingBoardStatus, type CardFacts, type effectiveSelection } from '@pair/workflows'
-import { locateCycleScripts } from './cycle-scripts'
+import { join } from 'node:path'
+import type { FactReader, StepLaunch } from '@pair/workflows'
 import { runHostProcess } from './host-process'
-import { join } from 'path'
-import type { FileSystemService } from '@pair/content-ops'
-import type { Config } from '#registry'
-import {
-  MACROSTATES,
-  readStateMapping,
-  resolveControlState,
-  resolveMacrostate,
-} from './card-readiness'
+import { operationTimeout } from './workflow-facts-budget'
 
-type Platform = { fs: FileSystemService; project: Config; cwd: string; main: string }
-
-export interface WorkflowCard extends CardFacts {
-  readonly id: string
-  readonly body: string
-  readonly title: string
-  readonly boardState: string | null
-  readonly boardError?: string
-  readonly closed: boolean
-  readonly created?: string
-  readonly priority?: number
-  readonly prerequisites: readonly string[]
-  readonly uncertain?: string
-  readonly error?: string
-}
-
-export interface WorkflowScope {
-  readonly cards?: readonly string[]
-  readonly root?: string
-  readonly filter?: string
-  readonly assignee?: string
-}
-
-type DependencyFacts = Pick<WorkflowCard, 'id' | 'prerequisites' | 'uncertain' | 'error'>
-export interface WorkflowSelection {
-  readonly cards: readonly WorkflowCard[]
-  readonly assignee?: string
-  readonly readDependencies?: (ids: readonly string[]) => Promise<readonly DependencyFacts[]>
-}
-
-type SelectionRun = { files: FileSystemService; dir: string; workflow: string; main: string }
-
-export function selectionBoardError(
-  card: WorkflowCard,
-  selection: ReturnType<typeof effectiveSelection>,
-): string | undefined {
-  return !card.closed && card.boardError !== undefined && selection.needsStatus(card)
-    ? card.boardError
-    : undefined
-}
-
-/** Match current scope, allowing unfinished refinement to retain its original status. */
-export function matchesWorkflowCard(
-  card: WorkflowCard,
-  accepts: (facts: CardFacts) => boolean,
-  run?: SelectionRun,
-): boolean {
-  if (card.closed) return false
-  if (accepts(card)) return true
-  const pending = run && pendingWorkflowCard(card, run)
-  return pending !== undefined && accepts(pending)
-}
-
-/** Selection facts from before the Ready transition, with labels and assignees still current. */
-export function pendingWorkflowCard(
-  card: WorkflowCard,
-  run: SelectionRun,
-): WorkflowCard | undefined {
-  const statusIndex = MACROSTATES.findIndex(state => state === card.status)
-  if (card.closed || statusIndex < MACROSTATES.indexOf('Ready')) return undefined
-  const mapping = readStateMapping(run.files, run.main)
-  // Refinement can complete the DoR before returning a result, while the board is still Draft.
-  const draft =
-    card.status === 'Ready' &&
-    card.boardState !== null &&
-    resolveMacrostate(card.boardState, mapping) === 'Draft'
-      ? card.boardState
-      : undefined
-  const previous = pendingBoardStatus(run, { card: card.id, workflow: run.workflow }, draft)
-  if (previous === undefined) return undefined
-  const status = resolveMacrostate(previous, mapping)
-  return status === undefined ? undefined : { ...card, status }
-}
-
-const unreadableCard = {
-  labels: [],
-  boardState: null,
-  closed: false,
-  title: '',
-  body: '',
-  prerequisites: [],
-}
-
-async function readPlatform<T>(at: Platform, args: string[], timeout = 30_000): Promise<T> {
-  const { scriptsDir } = locateCycleScripts(at.fs, at.project, at.cwd)
-  const result = await runHostProcess(
-    process.execPath,
-    [join(scriptsDir, 'cycle-state.mjs'), ...args],
-    at.cwd,
-    { timeout },
-  )
-  if (result.status !== 0 || result.error)
-    throw new Error(result.error?.message ?? (result.stderr || result.stdout).trim())
-  return JSON.parse(result.stdout) as T
-}
-
-export async function readWorkflowCards(
-  at: Platform,
-  scope: WorkflowScope,
-): Promise<WorkflowSelection> {
-  const output = await readPlatform<{
-    cards: (Omit<WorkflowCard, 'prerequisites'> | { id: string; error: string })[]
-    assignee?: string
-  }>(
-    at,
-    [
-      'workflow-cards',
-      ...(scope.cards ? ['--cards', scope.cards.join(',')] : []),
-      ...(scope.root ? ['--root', scope.root] : []),
-      ...(scope.filter && !scope.cards && !scope.root ? ['--filter', scope.filter] : []),
-      ...(scope.assignee === '@me' ? ['--assignee', '@me'] : []),
-    ],
-    180_000,
-  )
-  const mapping = readStateMapping(at.fs, at.main)
-  return {
-    ...output,
-    readDependencies: ids =>
-      readPlatform<DependencyFacts[]>(
-        at,
-        ['workflow-dependencies', '--cards', ids.join(',')],
-        180_000,
-      ),
-    cards: output.cards.map(card => {
-      if (!('title' in card)) return { ...unreadableCard, ...card }
-      const { macrostate } = resolveControlState(
-        { title: card.title ?? '', body: card.body, boardState: card.boardState ?? undefined },
-        mapping,
-      )
-      const priority = /^\s*(?:-\s+)?(?:\*\*Priority:?\*\*:?|Priority:)\s*P(\d+)\b/im.exec(
-        card.body,
-      )?.[1]
-      return {
-        prerequisites: [],
-        ...card,
-        ...(macrostate && { status: macrostate }),
-        ...(priority !== undefined && { priority: Number(priority) }),
-      }
-    }),
-  }
-}
-
-export async function readWorkflowPrHead(at: Platform, pr: number): Promise<string> {
-  return (await readPlatform<{ head: string }>(at, ['workflow-pr-head', '--ref', String(pr)])).head
-}
-
-export function readWorkflowCard(at: Platform, card: string) {
-  return readPlatform<Pick<WorkflowCard, 'body' | 'labels' | 'boardState' | 'boardError'>>(at, [
-    'workflow-card',
-    '--story',
+/** Call the installed host adapter without involving the agent. */
+export async function workflowOperation(
+  scriptDir: () => string,
+  cwd: string,
+  {
+    action,
     card,
-  ])
+    data,
+    timeout,
+  }: { action: string; card: string; data?: unknown; timeout?: number },
+): Promise<unknown> {
+  const script = join(scriptDir(), 'workflow-facts.mjs')
+  const args = [script, action, card, ...(data === undefined ? [] : [JSON.stringify(data)])]
+  const result = await runHostProcess(process.execPath, args, cwd, {
+    timeout: operationTimeout(action, timeout),
+  })
+  if (result.status !== 0)
+    throw new Error(
+      result.error?.message ?? (result.stderr.trim() || 'workflow host operation failed'),
+    )
+  return JSON.parse(result.stdout) as unknown
+}
+
+export function workflowFacts(scriptDir: () => string, cwd: string, step: StepLaunch): FactReader {
+  const checks = step.with['checks']
+  const reviewedHead = step.inputs['reviewedHead']
+  const pinHead = Array.isArray(checks) && checks.includes('head-unchanged')
+  const read = (action: string, timeout?: number): Promise<unknown> => {
+    const card = step.inputs['card']
+    if (typeof card !== 'string' || card.length === 0) throw new Error('workflow card is missing')
+    return workflowOperation(scriptDir, cwd, {
+      action,
+      card,
+      ...(pinHead &&
+        (action === 'ci' || action === 'review') && {
+          data: { expectedHead: reviewedHead },
+        }),
+      ...(timeout === undefined ? {} : { timeout }),
+    })
+  }
+  return {
+    head: async () => {
+      const head = await read('head')
+      if (typeof head !== 'string' || !/^[0-9a-f]{40}$/.test(head))
+        throw new Error('unreadable PR head')
+      return head
+    },
+    reviewedHead: async () => {
+      const head = step.inputs['reviewedHead']
+      return typeof head === 'string' ? head : undefined
+    },
+    ci: async timeout => {
+      const ci = await read('ci', timeout)
+      if (ci !== 'green' && ci !== 'pending' && ci !== 'red') throw new Error('unreadable CI state')
+      return ci
+    },
+    reviewApproved: async () => {
+      const approved = await read('review')
+      if (typeof approved !== 'boolean') throw new Error('unreadable review state')
+      return approved
+    },
+    openPrerequisites: async () => {
+      const ids = await read('prerequisites')
+      if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string'))
+        throw new Error('unreadable prerequisite state')
+      return ids as string[]
+    },
+  }
 }

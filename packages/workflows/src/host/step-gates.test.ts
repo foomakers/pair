@@ -1,5 +1,4 @@
 import { runSteps, type StepEvent, type WorkflowHost } from '.'
-import type { StepResult } from '../engine'
 import { start } from '../engine'
 import { createMemoryFiles } from '../engine/memory-files'
 
@@ -13,6 +12,25 @@ const OK = `\`\`\`json
 { "status": "ok", "summary": "done", "branch": "feature/US-729-x", "pr": 1, "head": "${'a'.repeat(40)}" }
 \`\`\``
 const FAILED = '```json\n{ "status": "failed", "summary": "no" }\n```'
+
+it.each([{ unattempted: ['T-1', 'T-2'] }, { unattempted: undefined }])(
+  'records partial implementation without relaunching (%j)',
+  async ({ unattempted }) => {
+    const sent: string[] = []
+    const final =
+      '```json\n' +
+      JSON.stringify({
+        status: 'failed',
+        summary: 'partial',
+        reason: 'tasks-unattempted',
+        unattempted,
+      }) +
+      '\n```'
+    const { outcome } = await run('', final, undefined, sent)
+    expect(sent).toHaveLength(1)
+    expect(outcome).toMatchObject({ run: 'failed', last: { reason: 'tasks-unattempted' } })
+  },
+)
 
 async function run(
   gates: string,
@@ -73,65 +91,18 @@ describe('step gates: validation the host runs after an ok step (#729 AC-7)', ()
   })
 })
 
-describe('a red gate goes back to the agent (#729 AC-10)', () => {
-  const red = (detail: string): StepResult => ({
-    status: 'failed',
-    reason: 'gate-failed: command:x',
-    summary: 'gate command:x failed',
-    detail,
-  })
-
-  it('sums measured usage across gate retries (#726 AC-8)', async () => {
-    const files = createMemoryFiles()
-    await start(
-      { files, dir: DIR },
-      { text: TEXT(", gates: ['command:x']"), file: 'quick.yaml' },
-      { card: '729' },
-    )
-    let attempts = 0
-    await runSteps(
-      {
-        files,
-        style: { skill: name => name } as never,
-        isSafeText: () => true,
-        launch: async (_step, _message, meter) => {
-          meter({ read: ++attempts === 1 ? 2000 : 3000, cached: 0, written: 0 })
-          return OK
-        },
-        runGates: async () => (attempts === 1 ? red('red') : undefined),
-      },
-      DIR,
-      { host: 'pair-run', settings: () => ({ engine: 'test' }) },
-    )
-    const record = JSON.parse(files.readFileSync(`${DIR}/telemetry.jsonl`).split('\n')[0]!)
-    expect(record.tokens.read).toEqual({ value: 5000, source: 'measured' })
-  })
-
-  it('relaunches the step with the gate output, and the step is ok once the gate passes', async () => {
-    const sent: string[] = []
-    let calls = 0
-    const { outcome } = await run(
-      ", gates: ['command:x']",
-      OK,
-      async () => (++calls === 1 ? red('mirror drift in SKILL.md') : undefined),
-      sent,
-    )
-    expect(outcome.run).toBe('done')
-    expect(sent).toHaveLength(2)
-    expect(sent[0]).not.toContain('mirror drift')
-    expect(sent[1]).toContain('mirror drift in SKILL.md')
-  })
-
-  it('fails the step with the last gate result after 2 retries', async () => {
-    const sent: string[] = []
-    const { outcome, events } = await run(
-      ", gates: ['command:x']",
-      OK,
-      async () => red('still red'),
-      sent,
-    )
-    expect(outcome.run).toBe('failed')
-    expect(sent).toHaveLength(3)
-    expect(events.at(-1)).toMatchObject({ state: 'failed', reason: 'gate-failed: command:x' })
-  })
+it('does not relaunch a skill when a declared post-step gate fails', async () => {
+  const sent: string[] = []
+  const { outcome } = await run(
+    ", gates: ['command:x']",
+    OK,
+    async () => ({
+      status: 'failed',
+      reason: 'gate-failed: command:x',
+      summary: 'red gate',
+    }),
+    sent,
+  )
+  expect(sent).toHaveLength(1)
+  expect(outcome).toMatchObject({ run: 'failed', last: { reason: 'gate-failed: command:x' } })
 })

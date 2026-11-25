@@ -21,9 +21,10 @@ import {
   pendingWorkflowCard,
   readWorkflowCards,
   selectionBoardError,
+  type SelectionRun,
   type WorkflowCard,
   type WorkflowSelection,
-} from './workflow-facts'
+} from './workflow-selection'
 import { handleWorkflowRun, resolveWorkflowRun, type Services } from './workflow-host'
 import type { RunCommandConfig, RunWorkflowBatch } from './parser'
 
@@ -147,33 +148,53 @@ function completedSelection(fs: Services['fs'], summary: string): Set<string> {
   }
 }
 
+type Selection = ReturnType<typeof effectiveSelection>
+
+function selectionOutcome(
+  card: WorkflowCard,
+  selection: Selection,
+  { run, done, pastStatus }: { run: SelectionRun | undefined; done: boolean; pastStatus: boolean },
+): BatchOutcome | undefined {
+  const { id } = card
+  const error = card.error ?? (pastStatus ? undefined : selectionBoardError(card, selection))
+  if (error !== undefined) return { id, outcome: 'failed', reason: error }
+  // Only a completed member of this selection can bypass its original status filter.
+  const accepts: Selection['accepts'] = pastStatus
+    ? facts => selection.accepts(facts) || selection.needsStatus(facts)
+    : selection.accepts
+  if (!matchesWorkflowCard(card, accepts, done ? undefined : run))
+    return {
+      id,
+      outcome: 'not-applicable',
+      reason: card.closed ? 'card closed' : 'selection filter',
+    }
+  return done ? { id, outcome: 'skipped', reason: 'workflow already complete' } : undefined
+}
+
 function selectCards(
   cards: readonly WorkflowCard[],
-  selection: ReturnType<typeof effectiveSelection>,
-  accepts: (card: WorkflowCard, done: boolean, mayHaveAdvanced: boolean) => boolean,
-  completed: (id: string) => boolean,
+  selection: Selection,
+  runOf: (id: string) => SelectionRun | undefined,
   previouslySelected: ReadonlySet<string>,
 ) {
   const prior = new Map<string, BatchOutcome>()
   const excluded: BatchOutcome[] = []
   const selected = orderCards(cards, selection.order).filter(card => {
-    const done = card.error === undefined && completed(card.id)
-    const mayHaveAdvanced = done && previouslySelected.has(card.id)
-    const error = card.error ?? (mayHaveAdvanced ? undefined : selectionBoardError(card, selection))
-    if (error !== undefined) {
-      prior.set(card.id, { id: card.id, outcome: 'failed', reason: error })
-      return true
-    }
-    if (!accepts(card, done, mayHaveAdvanced)) {
-      excluded.push({
-        id: card.id,
-        outcome: 'not-applicable',
-        reason: card.closed ? 'card closed' : 'selection filter',
-      })
+    const run = runOf(card.id)
+    const done =
+      card.error === undefined &&
+      run !== undefined &&
+      completedRun(run, { card: card.id, workflow: run.workflow })
+    const outcome = selectionOutcome(card, selection, {
+      run,
+      done,
+      pastStatus: done && previouslySelected.has(card.id),
+    })
+    if (outcome?.outcome === 'not-applicable') {
+      excluded.push(outcome)
       return false
     }
-    if (done)
-      prior.set(card.id, { id: card.id, outcome: 'skipped', reason: 'workflow already complete' })
+    if (outcome !== undefined) prior.set(card.id, outcome)
     return true
   })
   return { selected, prior, excluded }
@@ -202,6 +223,15 @@ async function loadDependencies(
   })
 }
 
+function selectedStatus(
+  workflow: CardSelection | undefined,
+  config: CardSelection | undefined,
+  flags: Filter,
+) {
+  const filter = config?.filter ?? workflow?.filter
+  return filter?.status || flags.status ? { filter, flags } : undefined
+}
+
 async function planBatch(
   { request, services }: BatchRequest,
   resolved: NonNullable<ReturnType<typeof resolveWorkflowRun>>,
@@ -213,36 +243,17 @@ async function planBatch(
   const workflow = resolved.workflow.name
   const configuration = resolved.configuration?.configuration
   const flags = flagsOf(request, assignee)
-  const selection = effectiveSelection(resolved.workflow.select, configuration?.select, flags)
+  const configured = configuration?.select
+  const selection = effectiveSelection(resolved.workflow.select, configured, flags)
   const runs = join(resolved.main, '.pair/working/runs')
-  const filter = configuration?.select?.filter ?? resolved.workflow.select?.filter
-  const statusScope = filter?.status || flags.status ? { filter, flags } : undefined
+  const statusScope = selectedStatus(resolved.workflow.select, configured, flags)
   const summary = join(summaryDirectory(request, runs, workflow, statusScope), 'summary.json')
   const runId = (id: string) => `${request.runId ?? workflow}-${id}`
-  const runOf = (id: string) => ({
-    files: fs,
-    dir: join(runs, runId(id)),
-    workflow,
-    main: resolved.main,
-  })
-  const completed = (id: string) =>
-    !request.restart && completedRun(runOf(id), { card: id, workflow })
-  // Only a completed member of this selection can bypass its original status filter.
-  const accepts = (card: WorkflowCard, done: boolean, mayHaveAdvanced: boolean) =>
-    matchesWorkflowCard(
-      card,
-      mayHaveAdvanced
-        ? facts => selection.accepts(facts) || selection.needsStatus(facts)
-        : selection.accepts,
-      request.restart || done ? undefined : runOf(card.id),
-    )
-  const candidates = selectCards(
-    cards,
-    selection,
-    accepts,
-    completed,
-    statusScope === undefined || request.restart ? new Set() : completedSelection(fs, summary),
-  )
+  const runOf = (id: string) =>
+    request.restart
+      ? undefined
+      : { files: fs, dir: join(runs, runId(id)), workflow, main: resolved.main }
+  const candidates = selectCards(cards, selection, runOf, completedSelection(fs, summary))
   return {
     ...candidates,
     selected: await loadDependencies(candidates, readDependencies),

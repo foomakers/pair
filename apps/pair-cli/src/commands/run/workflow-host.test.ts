@@ -1,18 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { hostname, tmpdir } from 'os'
 import { join } from 'path'
-import { fileSystemService as fs } from '@pair/content-ops'
-import { next, record, start } from '@pair/workflows'
+import { start } from '@pair/workflows'
+import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
+// @ts-expect-error Vite loads the adopted definition as fixture text.
+import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/delivery.yaml?raw'
+// @ts-expect-error Vite loads the shipped definition as fixture text.
+import quickDefinition from '../../../../../packages/knowledge-hub/dataset/.pair/adoption/tech/workflows/quick.yaml?raw'
+import baseConfig from '../../../config.json'
+import { acquireRunLock } from './run-lock'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 import type { SpawnIterationInput } from './spawn'
-import { readWorkflowCards } from './workflow-facts'
+import { runHostProcess } from './host-process'
 import type { WorkflowHostDependencies } from './workflow-host'
 
 /**
  * US-652 — `pair run <workflow> --card <id>`, through the command's own entry point, with a fake
- * launcher and fake skills: no real agent, tracker or git. The disk is real (a temp project).
+ * launcher, fake skills, and in-memory project files.
  */
+
+vi.mock('#config/kb-resolver', () => ({
+  getKnowledgeHubDatasetPath: () => '/kb/dataset',
+}))
+vi.mock('./run-lock', () => ({ acquireRunLock: vi.fn() }))
+vi.mock('./host-process', () => ({ runHostProcess: vi.fn() }))
+vi.mock('./cycle-wiring', async importOriginal => ({
+  ...(await importOriginal<typeof import('./cycle-wiring')>()),
+  mainCheckoutOrCwd: (cwd: string) => cwd,
+}))
+
+const hostProcess = vi.mocked(runHostProcess)
+const success = (stdout = '') => ({ status: 0, stdout, stderr: '' })
 
 const HEAD = 'a'.repeat(40)
 const fenced = (value: unknown) => `Done.\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\``
@@ -47,10 +65,12 @@ const REGISTRY = `### Custom Gate Registry
 `
 
 /** A fake skill answers with the agent's final message, `undefined` when the agent dies, or throws on a crash. */
-type FakeSkill = () => string | undefined
+type FakeSkill = (input: SpawnIterationInput) => string | undefined
 type Launched = Pick<SpawnIterationInput, 'promptText' | 'cwd' | 'autonomyArgs'>
 
-let project: string
+const project = '/project'
+let fs: InMemoryFileSystemService
+const release = vi.fn()
 let lines: string[]
 let launched: Launched[]
 
@@ -81,7 +101,7 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
         cwd: input.cwd,
         autonomyArgs: input.autonomyArgs,
       })
-      const text = (skills[skillOf(input.promptText)] as FakeSkill)()
+      const text = (skills[skillOf(input.promptText)] as FakeSkill)(input)
       if (text !== undefined) input.onEvent?.({ type: 'result', subtype: 'success', result: text })
       return text === undefined
         ? { outcome: 'failed', detail: 'timed out (idle): no engine event for 1800s' }
@@ -97,7 +117,13 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
     engineAvailable: () => true,
     ...over,
   }
-  return { workflow }
+  return {
+    workflow,
+    acquireLock: () => ({
+      kind: 'acquired' as const,
+      lock: { path: '/card-lock', release: vi.fn() },
+    }),
+  }
 }
 
 const OK = { 'pair-process-implement': () => IMPLEMENTED, 'pair-process-review': () => REVIEWED }
@@ -115,9 +141,19 @@ const run = (
   )
 
 beforeEach(() => {
-  project = fs.mkdtempSync(join(tmpdir(), 'pair-workflow-'))
+  fs = new InMemoryFileSystemService(
+    {
+      '/project/config.json': JSON.stringify(baseConfig),
+      '/kb/dataset/.pair/adoption/tech/workflows/quick.yaml': quickDefinition as string,
+    },
+    project,
+    project,
+  )
+  release.mockReset()
+  vi.mocked(acquireRunLock).mockReset().mockReturnValue({ kind: 'acquired', release })
   lines = []
   launched = []
+  hostProcess.mockReset().mockResolvedValue(success())
   for (const skill of [
     'pair-process-implement',
     'pair-process-review',
@@ -135,7 +171,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-  fs.rmSync(project, { recursive: true, force: true })
 })
 
 describe('card state (AC-13)', () => {
@@ -409,6 +444,7 @@ describe('resume (AC-6)', () => {
   it('leaves a complete run as it is, and starts it over with --restart', async () => {
     await run(['quick'])
     launched = []
+    hostProcess.mockReset().mockResolvedValue(success())
     expect(await run(['quick'])).toBe(0)
     expect(launched).toEqual([])
     expect(lines).toContain(
@@ -465,6 +501,7 @@ steps:
       'rounds/fix': 'ok',
     })
     launched = []
+    hostProcess.mockReset().mockResolvedValue(success())
     expect(await run(['quick'], skills)).toBe(0)
     expect(launched).toHaveLength(0)
     expect(await run(['quick'], skills, { moreRounds: '1' })).toBe(0)
@@ -538,24 +575,16 @@ describe('the run directory (AC-7)', () => {
   })
 
   it('exits at once when another live process holds the run', async () => {
-    fs.mkdirSync(runDir(), { recursive: true })
-    fs.writeFileSync(
-      join(runDir(), 'run.lock'),
-      JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }),
-    )
+    vi.mocked(acquireRunLock).mockReturnValue({ kind: 'run-locked', pid: 42, host: 'worker' })
     expect(await run(['quick'])).toBe(1)
-    expect(
-      lines.some(line =>
-        line.startsWith(`  run-locked: pid ${String(process.pid)} on ${hostname()}`),
-      ),
-    ).toBe(true)
+    expect(lines.some(line => line.startsWith('  run-locked: pid 42 on worker'))).toBe(true)
     expect(launched).toEqual([])
     expect(fs.existsSync(join(runDir(), 'state.json'))).toBe(false)
   })
 
   it('releases the lock when the run ends', async () => {
     await run(['quick'])
-    expect(fs.existsSync(join(runDir(), 'run.lock'))).toBe(false)
+    expect(release).toHaveBeenCalled()
   })
 })
 
@@ -707,743 +736,259 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
   })
 })
 
-describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
-  it.each([
-    ['successful transitions', undefined, false, undefined],
-    ['a refused Ready write (R744-01)', 'refused', false, undefined],
-    ['an applied Ready write with no confirmation (R744-01)', 'unconfirmed', false, undefined],
-    ['an unconfirmed Ready write saved by an older version (R744-01)', 'legacy', false, undefined],
-    ['canonical board states (R744-01)', undefined, true, undefined],
-    ['a stale task count after a refused write (R744-11)', 'refused', false, 'tasks'],
-    ['a stale task count after Ready lands (R744-11)', 'unconfirmed', false, 'tasks'],
-    ['stale refinement after Ready lands (R744-07)', 'unconfirmed', false, 'Assumptions'],
-  ] as const)('completes and skips cards with %s', async (_name, failure, canonical, stale) => {
-    const source = '.pair/adoption/tech/workflows/refinement.yaml'
+it.each([
+  'unchanged',
+  'moved',
+  'returned',
+  'gate',
+  'parked',
+  'answer-race',
+  'dirty',
+  'divergent',
+  'fix',
+  'no-route',
+] as const)(
+  'replays only a changed review boundary (%s, 726-ac4-head-move-resume)',
+  async scenario => {
+    const moved = scenario !== 'unchanged'
+    const newHead = scenario === 'returned' ? HEAD : 'b'.repeat(40)
+    const fixedHead = 'c'.repeat(40)
+    let currentHead = HEAD
+    let localHead = HEAD
+    let obstacle: string | undefined
+    let moveAt = scenario === 'gate' ? 'head' : undefined
+    let notices = 0
+    let gates = 0
+    const delivery = '.pair/adoption/tech/workflows/delivery.yaml'
+    const definition = deliveryDefinition as string
     write(
-      source,
-      fs.readFileSync(join(__dirname, '../../../../../packages/knowledge-hub/dataset', source)),
+      delivery,
+      scenario === 'no-route' ? definition.replace(/^ {4}on-resume:.*\n/gm, '') : definition,
     )
-    if (!canonical)
-      write(
-        '.pair/adoption/tech/way-of-working.md',
-        '## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Todo | Draft |\n| Refined | Ready |\n',
-      )
-    for (const skill of ['pair-process-refine-story', 'pair-process-plan-tasks'])
-      write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
-    const ids = ['9', '10', '12']
-    const [draft, ready]: [string, string] = canonical ? ['Draft', 'Ready'] : ['Todo', 'Refined']
-    const status = new Map(ids.map(id => [id, draft]))
-    const bodies = new Map<string, string>()
-    const prerequisiteAtLaunch: string[] = []
-    let failRead = false
-    let failReady = failure !== undefined
-    const applied = failure === 'unconfirmed' || failure === 'legacy'
-    function prepareCard(id: string, refine: boolean) {
-      if (refine) {
-        bodies.set(id, '## Acceptance Criteria\n\n## Technical Analysis\n\n## Assumptions')
-        return { riskTag: 'risk:green', openQuestions: [] }
+    write(
+      '.pair/adoption/tech/way-of-working.md',
+      `### Custom Gate Registry
+
+| Order | Key | Gate | Command | Scope Key | Target | Required | Description |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | adopted | PR gate | \`check-pr\` | quality | pr | Yes | Project gate |
+`,
+    )
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Fixture host bridge\n')
+    write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+    const moveFailure = { status: 'failed', reason: 'head-moved', summary: 'PR head moved' }
+    const respond = (action: string | undefined, data: { flag?: object; head?: string }) => {
+      switch (action) {
+        case 'head':
+          return currentHead
+        case 'approval-target':
+          return { pr: 12, head: currentHead }
+        case 'approval-notice':
+          notices++
+          return {}
+        case 'approval-answers':
+          return data.flag ? [{ ...data.flag, login: 'maintainer', channel: 'flag' }] : []
+        case 'merge':
+          if (data.head !== currentHead) return moveFailure
+          expect(data).toMatchObject({ head: currentHead, approvedBy: 'maintainer', pr: 12 })
+          return { status: 'ok', summary: 'Merged and closed', merged: true, mergeCommit: HEAD }
+        default:
+          throw new Error('Unknown action ' + action)
       }
-      const body = bodies.get(id) ?? ''
-      if (body.includes('**T-2**:')) return { tasks: 2 }
-      bodies.set(id, `${body}\n\n## Task Breakdown\n\n- [ ] **T-1**: Add a test`)
-      return { tasks: 1 }
     }
-    const readSelection = async () => ({
-      cards: ids.map(id => ({
-        id,
-        title: `Story ${id}`,
-        body: bodies.get(id) ?? '',
-        labels: ['risk:green'],
-        status: status.get(id) === draft ? 'Draft' : 'Ready',
-        boardState: status.get(id) ?? null,
-        closed: false,
-        prerequisites: id === '12' ? ['9'] : [],
-      })),
+    const git = (args: readonly string[]) => {
+      if (args[0] === 'status') return success(obstacle === 'dirty' ? '?? local-work' : '')
+      if (args[0] === 'rev-parse')
+        return success(args.includes('FETCH_HEAD') ? currentHead : localHead)
+      if (args[0] === 'symbolic-ref') return success('refs/heads/feature/US-627-x')
+      if (args[0] === 'merge-base')
+        return { ...success(), status: obstacle === 'divergent' ? 1 : 0 }
+      if (args[0] === 'merge') {
+        expect(args).toEqual(['merge', '--ff-only', currentHead])
+        expect(obstacle).toBeUndefined()
+        localHead = currentHead
+      }
+      return success()
+    }
+    hostProcess.mockImplementation(async (bin, args, cwd) => {
+      if (bin === 'sh') {
+        expect(args).toEqual(['-c', 'check-pr'])
+        expect(cwd).toBe(join(project, 'worktrees/627'))
+        gates++
+        return success()
+      }
+      if (bin === 'git') return git(args)
+      expect(bin).toBe(process.execPath)
+      const [, action, card, raw] = args
+      expect(card).toBe('627')
+      if (action === moveAt) {
+        currentHead = newHead
+        moveAt = undefined
+        if (action === 'merge') return success(JSON.stringify(moveFailure))
+        if (action === 'approval-answers') return success(JSON.stringify({ reason: 'head-moved' }))
+      }
+      return success(JSON.stringify(respond(action, JSON.parse(raw ?? '{}'))))
     })
-    const workflow: WorkflowHostDependencies = {
-      ...deps({}).workflow,
-      readSelection,
-      board: {
-        getState: async id => status.get(id) ?? null,
-        async setState(id, value) {
-          if (id === '9' && failReady) {
-            if (applied) status.set(id, value)
-            throw new Error('Ready write unconfirmed')
-          }
-          status.set(id, value)
-        },
-      },
-      async readResultFacts(step) {
-        const id = String(step.inputs['card'])
-        if (id === '9' && failRead) throw new Error('tracker unavailable')
-        return {
-          card: {
-            boardStatus: status.get(id) ?? null,
-            labels: ['risk:green'],
-            body: bodies.get(id) ?? '',
-          },
-        }
-      },
-      async runIteration(input) {
-        const id = /- card: (\d+)/.exec(input.promptText)?.[1] ?? ''
-        const current = status.get(id)
-        launched.push(input)
-        if (id === '12') prerequisiteAtLaunch.push(states('refinement-9')['tasks'] ?? '')
-        const result = prepareCard(id, skillOf(input.promptText) === 'pair-process-refine-story')
-        expect(current).toBe(result.tasks === 2 && applied ? ready : draft)
-        input.onEvent?.({
-          type: 'result',
-          subtype: 'success',
-          result: fenced({
-            status: 'ok',
-            summary: 'Prepared',
-            boardStatus: current,
-            ...result,
-          }),
+
+    const runUntilHeadChanges = async () => {
+      expect(await run(['delivery'])).toBe(scenario === 'gate' ? 1 : 0)
+      if (scenario === 'gate') {
+        expect(states('delivery-627')).toMatchObject({ gate: 'failed', approval: 'pending' })
+        expect(notices).toBe(0)
+      } else {
+        expect(gates).toBe(1)
+        expect(states('delivery-627')).toMatchObject({
+          gate: 'ok',
+          approval: 'needs-human',
+          merge: 'pending',
         })
-        return { outcome: 'success', detail: 'terminal event: success' }
-      },
-    }
-    const command = parseRunCommand({ cwd: project, card: ids.join(','), parallel: '2' }, [
-      'refinement',
-    ])
-    async function retryReady() {
-      const afterFailure = applied ? ready : draft
-      expect(status.get('9')).toBe(afterFailure)
-      expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'failed' })
-      expect(lines.some(line => line.includes('#12: waiting'))).toBe(true)
-      expect(lines.some(line => line.includes('Ready write unconfirmed'))).toBe(true)
-      if (failure === 'legacy') {
-        const path = join(runDir('refinement-9'), 'state.json')
-        const snapshot = JSON.parse(fs.readFileSync(path)) as {
-          steps: { tasks: { pendingSuccess?: unknown } }
+        expect(await run(['delivery'])).toBe(0)
+        expect(notices).toBe(1)
+        if (moved) {
+          moveAt =
+            new Map([
+              ['parked', 'approval-target'],
+              ['answer-race', 'approval-answers'],
+            ]).get(scenario) ?? 'merge'
+          expect(await run(['delivery'], OK, { approve: '627' })).toBe(1)
+          expect(notices).toBe(1)
+          if (scenario === 'dirty' || scenario === 'divergent') obstacle = scenario
         }
-        delete snapshot.steps.tasks.pendingSuccess
-        fs.writeFileSync(path, JSON.stringify(snapshot))
       }
-      failReady = false
-      if (failure === 'refused' && stale === undefined) {
-        failRead = true
-        expect(await handleRunCommand(command, fs, { workflow })).toBe(1)
-        expect(lines.some(line => line.includes('tracker unavailable'))).toBe(true)
-        expect(launched).toHaveLength(4)
-        failRead = false
-      }
-      if (stale !== undefined) {
-        const original = bodies.get('9')!
-        bodies.set(
-          '9',
-          stale === 'tasks'
-            ? `${original}\n- [ ] **T-2**: Add another test`
-            : original.replace(`## ${stale}`, '## Removed'),
-        )
-        expect(await handleRunCommand(command, fs, { workflow })).toBe(1)
-        expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'failed' })
-        expect(status.get('9')).toBe(afterFailure)
-        expect(lines.some(line => line.includes(`${stale}: declared`))).toBe(true)
-        expect(launched).toHaveLength(4)
-        if (stale !== 'tasks') bodies.set('9', original)
-      }
-      expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
-      expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'ok' })
-      expect(launched).toHaveLength(stale === 'tasks' ? 7 : 6)
     }
-    expect(await handleRunCommand(command, fs, { workflow })).toBe(failReady ? 1 : 0)
-    if (failReady) await retryReady()
-    expect(prerequisiteAtLaunch).toEqual(['ok', 'ok'])
-    expect([...status.values()]).toEqual([ready, ready, ready])
-    expect(new Set(launched.map(step => step.cwd)).size).toBe(3)
-    const executions = launched.length
-    expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
-    expect(launched).toHaveLength(executions)
-    const summaries = fs
-      .readdirSync(join(project, '.pair/working/runs'))
-      .filter(entry => entry.name.startsWith('refinement-selection-'))
-    expect(summaries).toHaveLength(1)
-    const summary = JSON.parse(
-      fs.readFileSync(join(project, '.pair/working/runs', summaries[0]!.name, 'summary.json')),
-    ) as { totals: unknown }
-    expect(summary.totals).toEqual({ skipped: 3 })
-  })
-})
-
-it.each([
-  { name: 'acyclic dependencies' },
-  { name: 'reciprocal dependencies (R744-18)', cycle: true },
-  { name: 'a dependency read error (R744-19)', error: 'tracker unavailable' },
-  { name: 'a missing dependency result (R744-19)', missing: true },
-])('schedules a batch with a completed card and $name', async ({ cycle, error, missing }) => {
-  expect(await run(['quick'], OK, { card: '9' })).toBe(0)
-  launched.length = 0
-
-  const batch = run(
-    ['quick'],
-    OK,
-    { card: '9,10' },
-    {
-      readSelection: async () => ({
-        cards: ['9', '10'].map(id => ({
-          id,
-          title: `Story ${id}`,
-          body: '',
-          labels: [],
-          boardState: null,
-          closed: false,
-          prerequisites: [],
-        })),
-        readDependencies: async ids =>
-          ids
-            .filter(id => id !== '9' || !missing)
-            .map(id => ({
-              id,
-              prerequisites: id === '10' ? ['9'] : cycle ? ['10'] : [],
-              ...(id === '9' && error !== undefined && { error }),
-            })),
-      }),
-    },
-  )
-  if (cycle) {
-    await expect(batch).rejects.toThrow('dependency-cycle: #9 → #10 → #9')
-    expect(launched).toHaveLength(0)
-  } else {
-    expect(await batch).toBe(0)
-    expect(lines.join('\n')).toContain('#9: skipped — workflow already complete')
-    if (error || missing) expect(lines.join('\n')).toContain(error ?? 'dependency facts missing')
-    expect(launched.map(step => step.cwd)).toEqual([
-      join(project, 'worktrees', '10'),
-      join(project, 'worktrees', '10'),
-    ])
-  }
-})
-
-it.each([
-  { constraint: 'label', options: { filter: 'wanted' }, excluded: { labels: [] } },
-  { constraint: 'status (R744-21)', options: { status: 'Ready' }, excluded: { status: 'Draft' } },
-  {
-    constraint: 'assignee',
-    options: { assignee: 'maintainer' },
-    excluded: { assignees: ['other'] },
-  },
-  { constraint: 'closure', options: {}, excluded: { closed: true } },
-])(
-  'R744-20: excludes a completed card by $constraint before reading dependencies',
-  async ({ options, excluded }) => {
-    expect(await run(['quick'], OK, { card: '9' })).toBe(0)
-    launched.length = 0
-    const readDependencies = vi.fn(async (ids: readonly string[]) =>
-      ids.map(id => ({ id, prerequisites: [id === '9' ? '10' : '9'] })),
-    )
-    const exit = await run(
-      ['quick'],
-      OK,
-      { card: '9,10', ...options },
-      {
-        readSelection: async () => ({
-          cards: ['9', '10'].map(id => ({
-            id,
-            title: `Story ${id}`,
-            body: '',
-            labels: ['wanted'],
-            assignees: ['maintainer'],
-            status: 'Ready',
-            boardState: null,
-            closed: false,
-            prerequisites: [],
-            ...(id === '9' && excluded),
-          })),
-          readDependencies,
-        }),
-      },
-    )
-
-    expect(exit).toBe(0)
-    expect(readDependencies).toHaveBeenCalledExactlyOnceWith(['10'])
-    expect(lines).toContain(
-      `  #9: not-applicable — ${excluded.closed ? 'card closed' : 'selection filter'}`,
-    )
-    expect(lines.join('\n')).toMatch(/#10: done[^\n]*outside selection: #9/)
-  },
-)
-
-it.each([false, true])(
-  'R744-08: bare-card retry resumes refinement (another match: %s)',
-  async other => {
-    const draft = 'Draft'
-    const ready = 'Ready'
-    let boardState = draft
-    const body = '## Task Breakdown\n\n- [ ] **T-1**: Add a test'
-    write(
-      'pair.config.json',
-      JSON.stringify({ workflows: { ...(other && { quick: {} }), refinement: {} } }),
-    )
-    write(
-      '.pair/adoption/tech/workflows/quick.yaml',
-      QUICK.replace('name: quick', 'name: quick\nselect: { filter: { status: [Ready] } }'),
-    )
-    write(
-      '.pair/adoption/tech/workflows/refinement.yaml',
-      `version: 1
-name: refinement
-select: { filter: { status: [Draft] } }
-steps:
-  tasks:
-    kind: plan-tasks
-`,
-    )
-    write('.claude/skills/pair-process-plan-tasks/SKILL.md', '# Plan tasks\n')
-    const workflow = deps(
-      {
+    await runUntilHeadChanges()
+    if (scenario === 'no-route') {
+      expect(await run(['delivery'])).toBe(1)
+      expect(launched.map(one => skillOf(one.promptText))).toEqual([
+        'pair-process-implement',
+        'pair-process-review',
+      ])
+      return
+    }
+    const replayReview = async () => {
+      const reviewInputs: string[] = []
+      const fixInputs: string[] = []
+      const recheck = {
         ...OK,
-        'pair-process-plan-tasks': () =>
-          fenced({ status: 'ok', summary: 'Planned', boardStatus: boardState, tasks: 1 }),
-      },
-      {
-        async readSelection() {
-          return {
-            cards: [
-              {
-                id: '12',
-                title: 'Story 12',
-                body,
-                labels: [],
-                status: boardState,
-                boardState,
-                closed: false,
-                prerequisites: [],
-              },
-            ],
-          }
+        'pair-process-review': (input: SpawnIterationInput) => {
+          reviewInputs.push(input.promptText)
+          return scenario === 'fix' && currentHead === newHead
+            ? fenced({
+                status: 'failed',
+                summary: 'Replacement needs a fix',
+                reason: 'blocking-findings',
+                verdict: 'changes-requested',
+                reviewedHead: newHead,
+                reportPath: `.pair/working/reviews/12/${newHead}.md`,
+                findings: [{ id: 'F1', severity: 'Major', title: 'Regression', blocking: true }],
+              })
+            : REVIEWED.replaceAll(HEAD, currentHead)
         },
-        readResultFacts: async () => ({ card: { boardStatus: boardState, labels: [], body } }),
-        board: {
-          getState: async () => boardState,
-          async setState(_id, value) {
-            boardState = value
-            throw new Error('Ready read-back failed')
-          },
+        'pair-process-fix': (input: SpawnIterationInput) => {
+          fixInputs.push(input.promptText)
+          localHead = fixedHead
+          currentHead = fixedHead
+          return fenced({ status: 'ok', summary: 'Fixed', head: fixedHead, resolutions: [] })
         },
-      },
-    )
-    const command = parseRunCommand({ cwd: project, card: '12' }, [])
-    expect(await handleRunCommand(command, fs, workflow)).toBe(1)
-    expect(boardState).toBe(ready)
-    expect(await handleRunCommand(command, fs, workflow)).toBe(0)
-    expect(states('refinement-12')).toEqual({ tasks: 'ok' })
-    expect(launched.map(one => skillOf(one.promptText))).toEqual(['pair-process-plan-tasks'])
-  },
-)
-
-it.each([true, false])('R744-09: a minimal board uses the DoR (design flag: %s)', async design => {
-  const path = '.pair/adoption/tech/workflows/refinement.yaml'
-  write(
-    path,
-    fs.readFileSync(join(__dirname, '../../../../../packages/knowledge-hub/dataset', path)),
-  )
-  write(
-    '.pair/adoption/tech/way-of-working.md',
-    `## State Mapping
-
-| Board State | Macrostate |
-| --- | --- |
-| Todo | Draft |
-| In Progress | In Progress |
-| Done | Done |
-`,
-  )
-  for (const skill of ['pair-process-refine-story', 'pair-process-plan-tasks'])
-    write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
-  const labels = ['risk:green']
-  const result = { status: 'ok', summary: 'Prepared', boardStatus: 'Todo' }
-  let body = `## Story Statement
-
-As a user
-I want to run a workflow
-So that I can refine a story
-
-## Acceptance Criteria
-
-## Technical Analysis
-
-${design ? 'Design: not required' : ''}
-
-## Assumptions`
-  const setState = vi.fn(async () => {})
-  const workflow = deps(
-    {
-      'pair-process-refine-story': () =>
-        fenced({ ...result, riskTag: 'risk:green', openQuestions: [] }),
-      'pair-process-plan-tasks': () => {
-        body += '\n\n## Task Breakdown\n\n- [ ] **T-1**: Add a test'
-        return fenced({ ...result, tasks: 1 })
-      },
-    },
-    {
-      readSelection: async () => ({
-        cards: [
-          {
-            id: '12',
-            title: 'Story 12',
-            body,
-            labels,
-            status: 'Draft',
-            boardState: 'Todo',
-            closed: false,
-            prerequisites: [],
-          },
-        ],
-      }),
-      readResultFacts: async () => ({ card: { boardStatus: 'Todo', labels, body } }),
-      board: { getState: async () => 'Todo', setState },
-    },
-  )
-  const command = parseRunCommand({ cwd: project, card: '12' }, ['refinement'])
-  expect(await handleRunCommand(command, fs, workflow)).toBe(design ? 0 : 1)
-  expect(states('refinement-12')).toEqual({ refine: 'ok', tasks: design ? 'ok' : 'failed' })
-  expect(setState).not.toHaveBeenCalled()
-  if (design) {
-    expect(await handleRunCommand(command, fs, workflow)).toBe(0)
-    expect(launched.map(one => skillOf(one.promptText))).toEqual([
-      'pair-process-refine-story',
-      'pair-process-plan-tasks',
-    ])
-  } else expect(lines.some(line => line.includes('unmet: Design flag'))).toBe(true)
-})
-
-function minimalRefinementBoard() {
-  const path = '.pair/adoption/tech/workflows/refinement.yaml'
-  write(
-    path,
-    fs.readFileSync(join(__dirname, '../../../../../packages/knowledge-hub/dataset', path)),
-  )
-  for (const skill of ['pair-process-refine-story', 'pair-process-plan-tasks'])
-    write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
-  write(
-    '.pair/adoption/tech/way-of-working.md',
-    `- \`pm-tool\`: \`filesystem\`
-
-## Git Workflow
-
-- \`code-host\`: \`github\`
-
-## State Mapping
-
-| Board State | Macrostate |
-| --- | --- |
-| Todo | Draft |
-| In Progress | In Progress |
-| Done | Done |
-`,
-  )
-  const skill = '.claude/skills/pair-workflow-cycle'
-  write(`${skill}/SKILL.md`, '# Cycle\n')
-  fs.symlinkSync(
-    join(__dirname, '../../../../../', skill, 'scripts'),
-    join(project, skill, 'scripts'),
-  )
-  return '.pair/adoption/product/backlog/03-user-stories/not-started'
-}
-
-const STORY_BEFORE_TASKS = `# Prepared story
-
-**Status**: Todo
-
-## Story Statement
-
-As a maintainer
-I want Draft selection
-So that I can refine unfinished stories
-
-## Technical Analysis
-
-Design: not required
-`
-
-const STORY_TASKS = '\n## Task Breakdown\n\n- [ ] **T-1**: Verify workflow selection\n'
-
-it('R744-12 (#678 AC-2): Draft selection excludes cards that meet the DoR on a minimal board', async () => {
-  const backlog = minimalRefinementBoard()
-  write(`${backlog}/12.md`, STORY_BEFORE_TASKS + STORY_TASKS)
-  write(`${backlog}/13.md`, '# Draft story\n\n**Status**: Todo\n')
-
-  const command = parseRunCommand({ cwd: project, card: '12,13', dryRun: true }, ['refinement'])
-  expect(await handleRunCommand(command, fs), lines.join('\n')).toBe(0)
-  expect(lines, lines.join('\n')).toContain('  Dry run: 13; parallel 1. Nothing was launched.')
-  expect(lines).toContain('  #12: not-applicable — selection filter')
-})
-
-it.each(['refine', 'tasks'])(
-  'R744-13 (#678 AC-6): timed-out %s stays eligible on a minimal board',
-  async step => {
-    const backlog = minimalRefinementBoard()
-    const card = `${backlog}/12.md`
-    const body =
-      STORY_BEFORE_TASKS + '\n**Labels**: risk:green\n\n## Acceptance Criteria\n\n## Assumptions\n'
-    const ready = body + STORY_TASKS
-    write(card, step === 'refine' ? ready.replace('Design: not required', '') : body)
-    const facts = { boardStatus: 'Todo', labels: ['risk:green'] }
-    const result = { status: 'ok', summary: 'Prepared', boardStatus: facts.boardStatus }
-    const refine = vi.fn<FakeSkill>(() =>
-      fenced({ ...result, riskTag: 'risk:green', openQuestions: [] }),
-    )
-    const plan = vi.fn<FakeSkill>(() => fenced({ ...result, tasks: 1 }))
-    const interrupted = step === 'refine' ? refine : plan
-    interrupted.mockImplementationOnce(() => {
-      write(card, ready)
-      return undefined
-    })
-    const workflow = deps(
-      {
-        'pair-process-refine-story': refine,
-        'pair-process-plan-tasks': plan,
-      },
-      {
-        readResultFacts: async () => ({
-          card: { ...facts, body: fs.readFileSync(join(project, card)) },
-        }),
-        board: { getState: async () => facts.boardStatus, setState: async () => {} },
-      },
-    )
-    const options = { cwd: project, card: '12,13', filter: 'risk:green' }
-    write(`${backlog}/13.md`, STORY_BEFORE_TASKS + STORY_TASKS)
-    const command = parseRunCommand(options, ['refinement'])
-    expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(1)
-    expect(states('refinement-12')).toEqual(
-      step === 'refine'
-        ? { refine: 'failed', tasks: 'pending' }
-        : { refine: 'ok', tasks: 'failed' },
-    )
-
-    write(card, ready.replace('risk:green', 'risk:yellow'))
-    expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(0)
-    expect(lines).toContain('  #12: not-applicable — selection filter')
-    expect(interrupted).toHaveBeenCalledTimes(1)
-
-    write(card, ready)
-    expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(0)
-    expect(states('refinement-12')).toEqual({ refine: 'ok', tasks: 'ok' })
-    expect(interrupted).toHaveBeenCalledTimes(2)
-  },
-)
-
-it.each(['batch', 'single card'])(
-  'R744-16 (#678 AC-6): %s resumes after successful refinement on a minimal board',
-  async route => {
-    const backlog = minimalRefinementBoard()
-    const card = `${backlog}/12.md`
-    const ready =
-      STORY_BEFORE_TASKS +
-      '\n**Labels**: risk:green\n\n## Acceptance Criteria\n\n## Assumptions\n' +
-      STORY_TASKS
-    write(card, ready.replace('Design: not required', ''))
-    write(`${backlog}/13.md`, STORY_BEFORE_TASKS + STORY_TASKS)
-    const file = join(project, '.pair/adoption/tech/workflows/refinement.yaml')
-    const snapshot = { files: fs, dir: runDir('refinement-12') }
-    const withCheck = route === 'single card'
-    let text = fs.readFileSync(file)
-    if (withCheck) {
-      text = text.replace('  tasks:', '  check: { kind: generic, skill: my-skill }\n  tasks:')
-      fs.writeFileSync(file, text)
-    }
-    const result = { status: 'ok', summary: 'Prepared', boardStatus: 'Todo' }
-    await start(snapshot, { file, text }, { card: '12' })
-    await next(snapshot)
-    write(card, ready)
-    await record(snapshot, 'refine', { ...result, riskTag: 'risk:green', openQuestions: [] })
-    if (withCheck) {
-      await next(snapshot)
-      await record(snapshot, 'check', {
-        status: 'failed',
-        summary: 'No result',
-        reason: 'engine-error',
+      }
+      if (obstacle !== undefined) {
+        await expect(run(['delivery'], recheck)).rejects.toThrow('replay-worktree')
+        expect(reviewInputs).toHaveLength(0)
+        expect(localHead).toBe(HEAD)
+        obstacle = undefined
+      }
+      expect(await run(['delivery'], recheck), lines.join('\n')).toBe(0)
+      expect(reviewInputs).toHaveLength(scenario === 'fix' ? 2 : 1)
+      expect(reviewInputs[0]).toContain(newHead)
+      if (scenario === 'fix') {
+        expect(fixInputs).toHaveLength(1)
+        expect(fixInputs[0]).toContain(`- head: ${newHead}`)
+        expect(fixInputs[0]).toContain('F1')
+        expect(fixInputs[0]).toContain(`.pair/working/reviews/12/${newHead}.md`)
+        expect(reviewInputs[1]).toContain(fixedHead)
+      }
+      expect(states('delivery-627')).toMatchObject({
+        gate: 'ok',
+        approval: 'needs-human',
+        merge: 'pending',
       })
+      expect(notices).toBe(scenario === 'gate' ? 1 : 2)
     }
-    expect(states('refinement-12')).toEqual({
-      refine: 'ok',
-      ...(withCheck && { check: 'failed' }),
-      tasks: 'pending',
-    })
-
-    let assignees = ['maintainer']
-    const workflow = deps(
-      {
-        'my-skill': () => fenced({ status: 'ok', summary: 'Checked' }),
-        'pair-process-plan-tasks': () => fenced({ ...result, tasks: 1 }),
-      },
-      {
-        async readSelection(at, scope) {
-          const selection = await readWorkflowCards(at, scope)
-          return { ...selection, cards: selection.cards.map(card => ({ ...card, assignees })) }
-        },
-        readResultFacts: async () => ({
-          card: { boardStatus: 'Todo', labels: ['risk:green'], body: ready },
-        }),
-        board: { getState: async () => 'Todo', setState: async () => {} },
-      },
-    )
-    const command = parseRunCommand(
-      {
-        cwd: project,
-        card: withCheck ? '12' : '12,13',
-        ...(withCheck ? {} : { filter: 'risk:green', assignee: 'maintainer' }),
-      },
-      ['refinement'],
-    )
-    if (!withCheck) {
-      write(card, ready.replace('risk:green', 'risk:yellow'))
-      expect(await handleRunCommand(command, fs, workflow)).toBe(0)
-      expect(launched).toHaveLength(0)
-
-      write(card, ready)
-      assignees = ['other']
-      expect(await handleRunCommand(command, fs, workflow)).toBe(0)
-      expect(launched).toHaveLength(0)
-      assignees = ['maintainer']
-    }
-    expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(0)
-    expect(states('refinement-12'), lines.join('\n')).toEqual({
-      refine: 'ok',
-      ...(withCheck && { check: 'ok' }),
-      tasks: 'ok',
-    })
+    if (moved) await replayReview()
+    expect(await run(['delivery'], OK, { approve: '627' })).toBe(0)
+    expect(states('delivery-627')).toMatchObject({ gate: 'ok', approval: 'ok', merge: 'ok' })
+    for (const review of launched.filter(one => skillOf(one.promptText) === 'pair-process-review'))
+      expect(review.promptText).toContain('- publication: first-and-approved')
     expect(launched.map(one => skillOf(one.promptText))).toEqual([
-      ...(withCheck ? ['my-skill'] : []),
-      'pair-process-plan-tasks',
+      'pair-process-implement',
+      'pair-process-review',
+      ...(moved ? ['pair-process-review'] : []),
+      ...(scenario === 'fix' ? ['pair-process-fix', 'pair-process-review'] : []),
     ])
   },
 )
 
-function fakeWorkflowBoard(boardFailure?: string, failSelected = false) {
-  write(
-    '.pair/adoption/tech/way-of-working.md',
-    REGISTRY + '\n- `pm-tool`: `github`\n- `pm-project`: `Pair`\n',
-  )
-  const skill = '.claude/skills/pair-workflow-cycle'
-  write(`${skill}/SKILL.md`, '# Cycle\n')
-  fs.symlinkSync(
-    join(__dirname, '../../../../../', skill, 'scripts'),
-    join(project, skill, 'scripts'),
-  )
-  const reads = join(project, 'dependencies.log')
-  const gh = join(project, 'gh')
-  write(
-    'gh',
-    `#!/usr/bin/env node
-const fs = require('node:fs')
-const [command, action, id] = process.argv.slice(2)
-const out = value => process.stdout.write(JSON.stringify(value))
-if (command === 'repo') process.stdout.write('acme/pair')
-else if (command === 'project') out({ projects: ${JSON.stringify(boardFailure ? [{ id: 'P1', title: 'Pair' }] : [])} })
-else if (command === 'issue' && action === 'view') {
-  if (!process.argv.includes('-q')) out({ title: 'Story ' + id, body: '', labels: id === '9' ? [{ name: 'wanted' }] : [], state: 'OPEN' })
-} else if (command === 'api' && action === 'graphql') {
-  if (process.argv.includes('n=' + process.env.PAIR_TEST_BOARD_OUTAGE)) {
-    process.stderr.write('HTTP 503\\nRetry-After: 0\\n')
-    process.exitCode = 1
-  } else out({ data: { repository: { issue: { projectItems: { nodes: [
-    { project: { id: 'P1' }, fieldValueByName: { name: 'Draft' } },
-  ] } } } } })
-} else if (command === 'api' && action.includes('/dependencies/blocked_by?')) {
-  const card = action.split('/').at(-3)
-  fs.appendFileSync(${JSON.stringify(reads)}, card + '\\n')
-  if (card === '10' || ${failSelected}) { process.stderr.write('dependency unavailable'); process.exitCode = 1 }
-  else out([])
-} else process.exitCode = 3
-`,
-  )
-  fs.chmodSync(gh, 0o755)
-  vi.stubEnv('PAIR_GH_BIN', gh)
-  vi.stubEnv('PAIR_TEST_BOARD_OUTAGE', boardFailure)
-  return reads
-}
-
-it.each<{
-  failSelected?: boolean
-  status?: 'Draft'
-  configuredStatus?: 'Ready'
-  boardFailure?: '9' | '10'
-  error?: RegExp
-}>([
-  {},
-  { failSelected: true, error: /#9: failed — dependency unavailable/ },
-  { status: 'Draft', error: /#9: failed — board-unresolved/ },
-  { status: 'Draft', configuredStatus: 'Ready' },
-  { boardFailure: '10' },
-  {
-    status: 'Draft',
-    boardFailure: '9',
-    error: /#9: failed — board-unreadable: .* after 4 attempts: HTTP 503/,
-  },
-])(
-  'R744-05/R744-10/R744-14: filter before failures ($failSelected, $status, $configuredStatus, $boardFailure)',
-  async ({ failSelected = false, status, configuredStatus, boardFailure, error }) => {
-    if (configuredStatus)
-      write(
-        '.pair/adoption/tech/workflows/quick.yaml',
-        `${QUICK}select: { filter: { status: [${configuredStatus}] } }\n`,
-      )
-    const reads = fakeWorkflowBoard(boardFailure, failSelected)
-    try {
-      const command = parseRunCommand(
-        {
-          cwd: project,
-          card: '9,10',
-          filter: 'wanted',
-          dryRun: true,
-          ...(status !== undefined && { status }),
-        },
-        ['quick'],
-      )
-      expect(await handleRunCommand(command, fs), lines.join('\n')).toBe(error ? 1 : 0)
-      expect(lines.some(line => line.includes('#10: not-applicable'))).toBe(true)
-      if (error) expect(lines.join('\n')).toMatch(error)
-      if (configuredStatus)
-        expect(lines.some(line => line.includes('#9: not-applicable'))).toBe(true)
-      if (status) expect(fs.existsSync(reads)).toBe(false)
-      else expect(fs.readFileSync(reads)).toBe('9\n')
-    } finally {
-      vi.unstubAllEnvs()
+it.each([true, false])(
+  'resumes only unfinished closure on its already-merged PR (matching=%s, #726 AC-4)',
+  async matches => {
+    const file = '.pair/adoption/tech/workflows/closure.yaml'
+    const text = `version: 1
+name: closure
+steps:
+  implement: { kind: implement }
+  late: { kind: generic, skill: my-skill, when: { status: [Done] } }
+  review: { kind: review }
+  gate: { kind: gate, with: { checks: [head-unchanged] } }
+  approval: { kind: approval }
+  merge: { kind: merge, when: { status: [Review] } }
+`
+    write(file, text)
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Cycle')
+    write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+    const dir = runDir('closure-627')
+    await start({ files: fs, dir }, { file, text }, { card: '627' })
+    const path = join(dir, 'state.json')
+    const state = JSON.parse(fs.readFileSync(path))
+    state.steps = {
+      implement: { state: 'ok', outputs: { pr: 12, head: HEAD } },
+      late: { state: 'skipped' },
+      review: { state: 'ok', outputs: { reviewedHead: HEAD } },
+      gate: { state: 'ok', outputs: { gatedHead: HEAD } },
+      approval: {
+        state: 'ok',
+        outputs: { approvedPr: 12, approvedHead: HEAD, approvedBy: 'maintainer' },
+      },
+      merge: {
+        state: 'failed',
+        reason: 'cascade-incomplete',
+        outputs: { merged: true, mergeCommit: HEAD },
+      },
     }
+    fs.writeFileSync(path, JSON.stringify(state))
+    const actions: string[] = []
+    hostProcess.mockImplementation(async (_, args) => {
+      const [, action, , raw] = args
+      actions.push(String(action))
+      const data = JSON.parse(raw ?? '{}')
+      if (action === 'merge-resume')
+        return success(
+          JSON.stringify(matches && (raw === undefined || (data.pr === 12 && data.head === HEAD))),
+        )
+      expect(action).toBe('merge')
+      expect(data).toMatchObject({ pr: 12, head: HEAD, closureOnly: true })
+      return success(
+        JSON.stringify({ status: 'ok', summary: 'Closed', merged: true, mergeCommit: HEAD }),
+      )
+    })
+    const resumed = run(['closure'], {}, {}, { readCard: async () => 'closed' })
+    if (matches) {
+      expect(await resumed).toBe(0)
+      expect(states('closure-627')).toMatchObject({ late: 'skipped', merge: 'ok' })
+      expect(actions.filter(action => action === 'merge')).toHaveLength(1)
+    } else {
+      await expect(resumed).rejects.toThrow('card-closed')
+      expect(actions).not.toContain('merge')
+    }
+    expect(launched).toEqual([])
   },
 )
-
-it('R744-15: resumes a status-conditioned step after a board outage', async () => {
-  fakeWorkflowBoard('9')
-  try {
-    write(
-      '.pair/adoption/tech/workflows/quick.yaml',
-      `version: 1
-name: quick
-steps:
-  label: { kind: generic, skill: my-skill, when: { has: [wanted] } }
-  excluded: { kind: generic, skill: my-skill, when: { has: [missing], status: [Draft] } }
-  check: { kind: generic, skill: my-skill, when: { status: [Draft] } }
-  ready: { kind: generic, skill: my-skill, when: { status: [Ready] } }
-`,
-    )
-    const skills = { 'my-skill': () => fenced({ status: 'ok', summary: 'Checked' }) }
-    const options = { card: '9' }
-    expect(await run(['quick'], skills, options), lines.join('\n')).toBe(1)
-    expect(lines.join('\n')).toMatch(
-      /check: failed.*board-unreadable: .* after 4 attempts: HTTP 503/,
-    )
-    expect(states('quick-9')).toEqual({
-      label: 'ok',
-      excluded: 'skipped',
-      check: 'pending',
-      ready: 'pending',
-    })
-    expect(launched).toHaveLength(1)
-
-    vi.stubEnv('PAIR_TEST_BOARD_OUTAGE', undefined)
-    expect(await run(['quick'], skills, options), lines.join('\n')).toBe(0)
-    expect(states('quick-9')).toEqual({
-      label: 'ok',
-      excluded: 'skipped',
-      check: 'ok',
-      ready: 'skipped',
-    })
-    expect(launched).toHaveLength(2)
-  } finally {
-    vi.unstubAllEnvs()
-  }
-})

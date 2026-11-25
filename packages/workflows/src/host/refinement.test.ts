@@ -49,8 +49,8 @@ describe('refinement kinds (#678 AC-1 and AC-9)', () => {
     )
     expect(result.run).toBe(outcome)
     expect(messages).toHaveLength(options === '' ? 0 : question === undefined ? 2 : 1)
-    if (options !== '') expect(messages[0]).toContain('$prepare: hold-never')
-    if (outcome === 'done') expect(messages[1]).toContain('Copy the exact value into boardStatus')
+    if (options !== '') expect(messages[0]).toContain('- mode: autonomous')
+    if (outcome === 'done') expect(messages[1]).toContain('boardStatus')
     if (question !== undefined) expect(result.last?.summary).toBe(question)
   })
 

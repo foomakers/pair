@@ -7,7 +7,8 @@
 //
 // Transport: `gh` from PATH, or `transport.ghBin` / PAIR_GH_BIN (a test's recorder). `gh`
 // authenticates itself; this file never reads a token.
-import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, prLinks, resolveLinked } from './adapter-kit.mjs'
+import { fileURLToPath } from 'node:url'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES, updateEpicBody, adoptionText, prLinks, resolveLinked, selectLink } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const STATE_LABELS = ['pr-state:to-be-reviewed', 'pr-state:ready-to-merge', 'pr-state:not-approved']
@@ -18,6 +19,7 @@ export const MAX_COMMENT_CHARS = 65536
 const ISSUE_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)$/
 const COMMENT_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:pull|issues)\/(\d+)#issuecomment-(\d+)$/
 const SHA_RE = /^[0-9a-f]{40}$/
+const REVIEW_CONTEXTS = new Set([CHECK_CONTEXT, 'pair-explicit-approval'])
 const apiRepo = repo => (repo ? `repos/${repo}` : 'repos/{owner}/{repo}')
 
 export default defineAdapter({
@@ -92,6 +94,15 @@ export default defineAdapter({
       return boards.get(slug)
     }
     const pulls = new Map()
+    const linkedRows = repo => {
+      // One listing per repository per adapter instance: an audit asks for every card.
+      const key = apiRepo(repo)
+      if (!pulls.has(key)) pulls.set(key, listPages(`${key}/pulls?state=all`))
+      // Same-repository PRs only (Maintainer Decision): a fork's PR never moves or closes a card.
+      const sameRepo = pr => Boolean(pr.head?.repo?.full_name) && pr.head.repo.full_name === pr.base?.repo?.full_name
+      const state = pr => (pr.merged_at ? 'merged' : pr.state === 'open' ? 'open' : pr.state === 'closed' ? 'closed-unmerged' : 'unknown')
+      return pulls.get(key).filter(sameRepo).map(pr => ({ number: pr.number, links: prLinks({ body: pr.body, branch: pr.head?.ref }), state: state(pr) }))
+    }
 
     const listComments = ({ pr, repo }) => {
       const out = gh(['api', '--paginate', `${apiRepo(repo)}/issues/${pr}/comments`])
@@ -102,7 +113,7 @@ export default defineAdapter({
         throw new HostError('invalid-json', { message: e.message, command: 'gh api --paginate' })
       }
       // The author as the host reports it (US-647) — the CREATOR — and the timestamps that prove the body was never edited since.
-      return pages.flat().map(c => ({ id: c.id, body: String(c.body ?? ''), url: c.html_url, authorLogin: c.user?.login, authorIsUser: c.user?.type === 'User', createdAt: c.created_at, updatedAt: c.updated_at }))
+      return pages.flat().map(c => ({ id: c.id, body: String(c.body ?? ''), url: c.html_url, authorLogin: c.user?.login, authorIsUser: c.user?.type === 'User', authorAssociation: c.author_association, performedViaApp: Boolean(c.performed_via_github_app), createdAt: c.created_at, updatedAt: c.updated_at }))
     }
     const readCheck = ({ sha, repo, context = CHECK_CONTEXT }) => {
       const combined = JSON.parse(gh(['api', `${apiRepo(repo)}/commits/${sha}/status`]))
@@ -123,7 +134,7 @@ export default defineAdapter({
     // AL: EVERY CI check on the head (check runs AND commit statuses), as `{ name, conclusion }` with the conclusion folded to
     // success | failure | pending. The most recent run of a name wins; neutral/skipped count as success; a run still in flight,
     // or any status/conclusion this map does not know, is NOT green (cancelled, timed_out, action_required… ⇒ failure).
-    const readCiChecks = ({ sha, repo }) => {
+    const readCiChecks = ({ sha, repo, requireSuccess = false }) => {
       const byName = new Map()
       // `--paginate`: more than one page of runs/statuses must not hide a failing check on a later page.
       const pagesOf = path => {
@@ -135,17 +146,74 @@ export default defineAdapter({
       }
       const runs = pagesOf(`${apiRepo(repo)}/commits/${sha}/check-runs?per_page=100`).flatMap(page => page.check_runs ?? [])
       for (const r of [...runs].sort((a, b) => String(a.started_at ?? '').localeCompare(String(b.started_at ?? '')))) {
-        const conclusion = r.status !== 'completed' ? 'pending' : ['success', 'neutral', 'skipped'].includes(r.conclusion) ? 'success' : 'failure'
-        byName.set(String(r.name), { conclusion, url: r.html_url ?? r.details_url ?? null })
+        const success = r.conclusion === 'success' || (!requireSuccess && ['neutral', 'skipped'].includes(r.conclusion))
+        const conclusion = r.status !== 'completed' ? 'pending' : success ? 'success' : 'failure'
+        const name = String(r.name)
+        const appId = r.app?.id
+        const key = requireSuccess ? JSON.stringify(['run', name, appId]) : name
+        byName.set(key, { name, ...(requireSuccess && { appId }), conclusion, url: r.html_url ?? r.details_url ?? null })
       }
       const statuses = pagesOf(`${apiRepo(repo)}/commits/${sha}/status?per_page=100`).flatMap(page => page.statuses ?? [])
       for (const st of statuses) {
         const name = String(st.context)
-        if (!byName.has(name)) byName.set(name, { conclusion: st.state === 'success' ? 'success' : st.state === 'pending' ? 'pending' : 'failure', url: st.target_url ?? null })
+        const conclusion = st.state === 'success' ? 'success' : st.state === 'pending' ? 'pending' : 'failure'
+        const key = requireSuccess ? JSON.stringify(['status', name]) : name
+        const run = byName.get(key)
+        if (!run)
+          byName.set(key, { name, conclusion, url: st.target_url ?? null })
       }
       // #691: the url travels with the conclusion, so a remote failure can be reported where it can be read.
-      return [...byName].map(([name, c]) => ({ name, ...c }))
+      return [...byName.values()]
     }
+    const requirement = (context, publisher) => {
+      if (typeof context !== 'string' || !context.trim()
+        || (publisher != null && publisher !== -1 && !(Number.isSafeInteger(publisher) && publisher > 0)))
+        throw new Error('Required CI contexts unreadable')
+      return { name: context, appId: publisher > 0 ? publisher : undefined }
+    }
+    const classicRequirements = branchEndpoint => {
+      let raw
+      try {
+        raw = gh(['api', `${branchEndpoint}/protection/required_status_checks`])
+      } catch (error) {
+        if (/HTTP 404\b/i.test(String(error.detail))) {
+          // An opaque 404 can conceal missing access. GitHub's explicit absence or branch metadata confirms it.
+          if (/Branch not protected|Required status checks not enabled/i.test(String(error.detail))) return []
+          const branch = parseJson(gh(['api', branchEndpoint]), { command: 'gh api branch' })
+          if (branch?.protected === false) return []
+        }
+        throw error
+      }
+      const { contexts, checks } = parseJson(raw, { command: 'gh api required_status_checks' }) ?? {}
+      if ((contexts === undefined && checks === undefined)
+        || (contexts !== undefined && !Array.isArray(contexts))
+        || (checks !== undefined && !Array.isArray(checks)))
+        throw new Error('Required CI contexts unreadable')
+      const sourced = (checks ?? []).map(check => requirement(check?.context, check?.app_id))
+      return sourced.concat((contexts ?? []).filter(name => !sourced.some(check => check.name === name)).map(name => requirement(name)))
+    }
+    const workflowCi = ({ sha, base, repo }) => {
+      if (typeof base !== 'string' || !base) throw new Error('PR base branch unreadable')
+      const branch = encodeURIComponent(base)
+      const root = apiRepo(repo)
+      const classic = classicRequirements(`${root}/branches/${branch}`)
+      const rules = listPages(`${root}/rules/branches/${branch}`).filter(rule => rule.type === 'required_status_checks')
+      const requirements = classic.concat(rules.flatMap(rule => {
+        if (!Array.isArray(rule.parameters?.required_status_checks)) throw new Error('Required ruleset CI contexts unreadable')
+        return rule.parameters.required_status_checks.map(check => requirement(check?.context, check?.integration_id))
+      }))
+      const reported = readCiChecks({ sha, repo, requireSuccess: true })
+      const required = requirements.length
+        ? requirements.filter(row => !REVIEW_CONTEXTS.has(row.name))
+        : reported.filter(row => !row.name.startsWith('pair-'))
+      const results = required.map(({ name, appId }) => {
+        const matching = reported.filter(row => row.name === name && (appId === undefined || row.appId === appId))
+        if (matching.some(row => row.conclusion === 'failure')) return 'red'
+        return matching.length && matching.every(row => row.conclusion === 'success') ? 'green' : 'pending'
+      })
+      return results.includes('red') ? 'red' : results.length && results.every(result => result === 'green') ? 'green' : 'pending'
+    }
+
     const readLabels = ({ pr, repo }) => {
       const number = /^\d+$/.test(String(pr)) ? pr : parseJson(gh(withRepo(['pr', 'view', String(pr), '--json', 'number'], repo)), { command: 'gh pr view' })?.number
       if (!/^\d+$/.test(String(number))) throw new HostError('invalid-output', { message: `gh pr view ${JSON.stringify(pr)}: PR number missing` })
@@ -209,7 +277,7 @@ export default defineAdapter({
     const listPages = path => {
       const rows = []
       for (let page = 1; ; page++) {
-        const batch = parseJson(gh(['api', `${path}&per_page=100&page=${page}`]), { command: 'gh api' })
+        const batch = parseJson(gh(['api', `${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`]), { command: 'gh api' })
         if (!Array.isArray(batch)) throw new HostError('invalid-output', { message: 'gh api: listing page is not an array', command: 'gh api' })
         rows.push(...batch)
         if (batch.length < 100) return rows
@@ -292,13 +360,56 @@ export default defineAdapter({
         return listPages(`${apiRepo(repo)}/issues?state=all`).filter(issue => !issue.pull_request && (/^## Story Statement\s*$/m.test(String(issue.body ?? '')) || (label && issue.labels?.some(item => item.name === label)))).map(issue => ({ id: String(issue.number) }))
       },
       linkedPr({ id, repo }) {
-        // One listing per repository per adapter instance: an audit asks for every card.
-        const key = apiRepo(repo)
-        if (!pulls.has(key)) pulls.set(key, listPages(`${key}/pulls?state=all`))
-        // Same-repository PRs only (Maintainer Decision): a fork's PR never moves or closes a card.
-        const sameRepo = pr => Boolean(pr.head?.repo?.full_name) && pr.head.repo.full_name === pr.base?.repo?.full_name
-        const state = pr => (pr.merged_at ? 'merged' : pr.state === 'open' ? 'open' : pr.state === 'closed' ? 'closed-unmerged' : 'unknown')
-        return resolveLinked(pulls.get(key).filter(sameRepo).map(pr => ({ number: pr.number, links: prLinks({ body: pr.body, branch: pr.head?.ref }), state: state(pr) })), id)
+        return resolveLinked(linkedRows(repo), id)
+      },
+      workflowPr({ id, repo }) {
+        const rows = linkedRows(repo)
+        const link = resolveLinked(rows, id)
+        if (link?.gap) throw new Error(`ambiguous link for card ${id}: PRs ${link.prs.map(n => '#' + n).join(', ')}`)
+        const hits = rows.filter(row => row.state !== 'closed-unmerged' && selectLink(row.links)?.id === String(id))
+        if (hits.length !== 1) throw new Error(`expected one PR for card ${id}; found ${hits.length}${hits.length ? ': ' + hits.map(row => '#' + row.number).join(', ') : ''}`)
+        return hits[0].number
+      },
+      workflowActor() {
+        const actor = parseJson(gh(['api', 'user']), { command: 'gh api user' })
+        return { login: actor.login, human: actor.type === 'User' }
+      },
+      workflowPrDetails({ pr, repo }) {
+        const row = parseJson(gh(['api', `${apiRepo(repo)}/pulls/${Number(pr)}`]), { command: 'gh api pull' })
+        if (!SHA_RE.test(row?.head?.sha) || !row?.user?.login || !row?.head?.ref) throw new Error('PR identity unreadable')
+        return { pr: row.number, head: row.head.sha, author: row.user.login, branch: row.head.ref, base: row.base?.ref, merged: row.merged === true, mergeCommit: row.merge_commit_sha, draft: row.draft === true }
+      },
+      workflowReviews({ pr, repo }) {
+        return listPages(`${apiRepo(repo)}/pulls/${Number(pr)}/reviews`).map(row => ({
+          login: row.user?.login, human: row.user?.type === 'User' && !row.performed_via_github_app, at: row.submitted_at,
+          state: row.state, head: row.commit_id, body: row.body,
+        }))
+      },
+      workflowReviewIdentity({ repo }) {
+        // Read only the exclusion value. A successful empty listing confirms the variable is absent.
+        const login = gh(['api', '--paginate', `${apiRepo(repo)}/actions/variables?per_page=100`, '--jq', '.variables[] | select(.name == "REVIEW_IDENTITY_LOGIN") | .value']).trim()
+        if (!login && /Review identity[^\n]*:\s*`?(?:bot-user|user)\b/i.test(adoption()))
+          throw new Error('REVIEW_IDENTITY_LOGIN unavailable')
+        return login || null
+      },
+      workflowApprovalToken({ repo, head, author, comment }) {
+        let optIn
+        try {
+          optIn = gh(['variable', 'get', 'PAIR_SOLO_APPROVAL_TOKEN', '--repo', resolveRepo(repo)])
+        } catch (error) {
+          if (/HTTP 404\b/i.test(String(error.message))) return false
+          throw error
+        }
+        if (optIn.replace(/\s/g, '').toLowerCase() !== 'true') return false
+        const policy = fileURLToPath(new URL('../../../../../.pair/knowledge/assets/pr-state.sh', import.meta.url))
+        const args = ['-c', 'source "$1" || exit; export HEAD_SHA="$2" PR_AUTHOR="$3" SOLO_APPROVAL_TOKEN=true; jq -r "$(human_token_approval_login_jq_filter)"', 'pair-approval', policy, head, author]
+        const input = JSON.stringify([{
+          user: { login: comment.authorLogin, type: comment.authorIsUser ? 'User' : '' },
+          author_association: comment.authorAssociation,
+          performed_via_github_app: comment.performedViaApp || null,
+          body: comment.body,
+        }])
+        return runCli({ bin: 'bash', args, input, label: 'approval-policy' }).trim() === comment.authorLogin
       },
       createCard({ repo, title, body }) {
         const out = gh(['issue', 'create', '--repo', resolveRepo(repo), '--title', title, '--body', body])
@@ -490,6 +601,7 @@ export default defineAdapter({
       readCheck,
       readCheckRun,
       readCiChecks,
+      workflowCi,
       readLabels,
       isMerged,
       clearPrState,

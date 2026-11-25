@@ -205,6 +205,25 @@ These schemas come from the workflow validator.
               ],
               "description": "What a `failed` step does to the run. `stop` (default) stops it; `continue` records the failure and runs the next step."
             },
+            "on-resume": {
+              "type": "object",
+              "required": [
+                "reason",
+                "step"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "step": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$"
+                }
+              },
+              "description": "On resume after this step failed with the given reason, refresh the linked PR head and replay from the named earlier step."
+            },
             "alias": {
               "type": "string",
               "description": "The alias, declared in `aliases`, the step runs with."
