@@ -336,9 +336,18 @@ it.each([
   { name: 'reciprocal dependencies (R744-18)', cycle: true },
   { name: 'a dependency read error (R744-19)', error: 'tracker unavailable' },
   { name: 'a missing dependency result (R744-19)', missing: true },
-])('schedules a batch with a completed card and $name', async ({ cycle, error, missing }) => {
+  {
+    name: 'F8 legacy telemetry (#728 AC-3)',
+    error: 'tracker unavailable',
+    legacy: true,
+  },
+])('schedules a batch with a completed card and $name', async scenario => {
+  const { cycle, error, missing, legacy } = scenario
   expect(await run(['quick'], OK, { card: '9' })).toBe(0)
   launched.length = 0
+  const telemetry = join(runDir('quick-9'), 'telemetry.jsonl')
+  const historical = { schema: 2, type: 'step', step: 'review', status: 'needs-human' }
+  if (legacy) fs.writeFileSync(telemetry, `${JSON.stringify(historical)}\n`)
 
   const batch = run(
     ['quick'],
@@ -377,6 +386,10 @@ it.each([
       join(project, 'worktrees', '10'),
       join(project, 'worktrees', '10'),
     ])
+    if (legacy)
+      expect(fs.readFileSync(telemetry)).toBe(
+        `${JSON.stringify({ ...historical, status: 'needs-decision' })}\n`,
+      )
   }
 })
 

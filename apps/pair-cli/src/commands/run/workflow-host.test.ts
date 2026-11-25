@@ -665,6 +665,38 @@ describe('telemetry, switched by flag (US-697 AC-5)', () => {
     expect(lines.filter(line => line.includes('telemetry was not written'))).toHaveLength(1)
   })
 
+  it('#728 AC-3 F8: migrates a completed closed card only when its run lock is available', async () => {
+    const parked = () => fenced({ status: 'needs-decision', summary: 'waiting for a decision' })
+    await run(['quick'], { ...OK, 'pair-process-review': parked }, { telemetry: true })
+    await run(['quick'], OK, { telemetry: true })
+    const file = telemetryFile()
+    const current = fs.readFileSync(file)
+    const legacy = current.replace('"status":"needs-decision"', '"status":"needs-human"')
+    expect(legacy).not.toBe(current)
+    fs.writeFileSync(file, legacy)
+    const stateFile = join(runDir(), 'state.json')
+    const state = fs.readFileSync(stateFile)
+    const readCard = vi.fn(async () => 'closed' as const)
+    launched.length = 0
+
+    vi.mocked(acquireRunLock).mockReturnValueOnce({ kind: 'run-locked' })
+    expect(await run(['quick'], OK, {}, { readCard })).toBe(0)
+    expect(fs.readFileSync(file)).toBe(legacy)
+
+    release.mockClear()
+    vi.mocked(acquireRunLock).mockClear()
+    const rename = vi.spyOn(fs, 'rename')
+    expect(await run(['quick'], OK, {}, { readCard })).toBe(0)
+    expect(rename).toHaveBeenCalledExactlyOnceWith(`${file}.tmp`, file)
+    expect(vi.mocked(acquireRunLock)).toHaveBeenCalledExactlyOnceWith(runDir())
+    expect(vi.mocked(acquireRunLock)).toHaveBeenCalledBefore(rename)
+    expect(rename).toHaveBeenCalledBefore(release)
+    expect(fs.readFileSync(file)).toBe(current)
+    expect(fs.readFileSync(stateFile)).toBe(state)
+    expect(readCard).not.toHaveBeenCalled()
+    expect(launched).toHaveLength(0)
+  })
+
   it('#728 AC-3 F3: resumes with unwritable legacy telemetry and warns once', async () => {
     const parked = () => fenced({ status: 'needs-decision', summary: 'waiting for a decision' })
     const options = { telemetry: true }
@@ -685,7 +717,7 @@ describe('telemetry, switched by flag (US-697 AC-5)', () => {
     expect(fs.readFileSync(file)).toBe(legacy)
 
     deny.mockRestore()
-    expect(await run(['quick'], OK, options)).toBe(0)
+    expect(await run(['quick'], OK, options, { readCard: async () => 'closed' })).toBe(0)
     expect(fs.readFileSync(file)).toBe(current)
   })
 
