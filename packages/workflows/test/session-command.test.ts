@@ -965,3 +965,18 @@ it('R754-06: starts from a redirected skills target and resolves prefixed names'
   const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
   expect(advance(lease)).toMatchObject({ ready: [{ id: 'draft', uses: 'pair-fixture-draft' }] })
 })
+
+it.each([
+  { options: '{ mode: interactive }', interactive: true },
+  { options: '{}', interactive: true },
+  { options: '{ mode: autonomous }', interactive: false },
+])('R754-07 / AC-2: routes refinement with $options', ({ options, interactive }) => {
+  write('.claude/skills/pair-process-refine-story/SKILL.md', 'Refine a story.')
+  const lease = startWorkflow(`  refine:
+    kind: refine-story
+    with: ${options}
+`)
+  const packet = advance(lease).ready[0]
+  expect(packet).toMatchObject({ id: 'refine', interactive })
+  expect(packet?.message.includes('Execution mode: unattended.')).toBe(!interactive)
+})
