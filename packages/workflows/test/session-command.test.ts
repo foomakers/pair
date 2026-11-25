@@ -1,5 +1,6 @@
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { once } from 'node:events'
 import {
   chmodSync,
   cpSync,
@@ -505,7 +506,26 @@ it('#696 AC-10: leaves telemetry unwritten when frozen configuration disables it
   expect(existsSync(join(runDir, 'telemetry.jsonl'))).toBe(false)
 })
 
-it('#696 AC-9: runs the standalone gate in the card worktree', () => {
+it('R754-08 / AC-7 and AC-9: reports the gate start before it finishes in the worktree', async () => {
+  const ready = '.pair/working/gate-start-observed'
+  write(
+    'fixture-gate.cjs',
+    `const { existsSync, watch } = require('node:fs')
+const { dirname } = require('node:path')
+const path = process.argv[2]
+const observer = watch(dirname(path), finish)
+const timeout = setTimeout(() => {
+  observer.close()
+  process.exitCode = 1
+}, 2500)
+function finish() {
+  if (!existsSync(path)) return
+  clearTimeout(timeout)
+  observer.close()
+}
+finish()
+`,
+  )
   write(
     adoptionFile,
     `${filesystemPm}
@@ -513,7 +533,7 @@ it('#696 AC-9: runs the standalone gate in the card worktree', () => {
 
 | Key | Command | Target |
 | --- | --- | --- |
-| fixture-gate | mkdir -p .pair/working && pwd > .pair/working/gate.cwd | pr |
+| fixture-gate | node fixture-gate.cjs '${join(main, ready)}' && mkdir -p .pair/working && pwd > .pair/working/gate.cwd | pr |
 `,
   )
   commitFixture()
@@ -522,7 +542,28 @@ it('#696 AC-9: runs the standalone gate in the card worktree', () => {
     with: { gates: ['target:pr'] }
 `)
 
-  expect(advance(lease)).toMatchObject({
+  const child = spawn(process.execPath, [join(main, script), 'next', runId, ...lease], {
+    cwd: main,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let output = ''
+  let progress = ''
+  const started = { event: { step: 'verify', kind: 'gate', state: 'running' } }
+  child.stdout.setEncoding('utf8').on('data', chunk => {
+    output += chunk
+  })
+  child.stderr.setEncoding('utf8').on('data', chunk => {
+    progress += chunk
+    if (progress.includes('"state":"running"')) write(ready, 'observed')
+  })
+  expect(await once(child, 'close')).toEqual([0, null])
+  expect(
+    progress
+      .split('\n')
+      .filter(Boolean)
+      .map(line => JSON.parse(line)),
+  ).toContainEqual(expect.objectContaining({ event: expect.objectContaining(started.event) }))
+  expect(JSON.parse(output)).toMatchObject({
     ready: [],
     events: [{ step: 'verify', state: 'ok', summary: expect.any(String) }],
   })
