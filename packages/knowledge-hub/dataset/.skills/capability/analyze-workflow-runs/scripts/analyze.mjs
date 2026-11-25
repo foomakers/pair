@@ -10,7 +10,7 @@
 // Prices: `{ "<model>": { "read": n, "cached": n, "written": n } }`, per million tokens, kept by hand.
 // Dependency-free.
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -24,15 +24,16 @@ const SCHEMAS = [1, 2]
 /** Use the same lock as pair run so migration cannot replace a writer's newer telemetry. */
 function persistMigration(file, original, migrated) {
   const lock = join(dirname(file), 'run.lock')
+  let ownerFd
   try {
-    writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }), { flag: 'wx' })
-  } catch (error) {
-    if (error.code !== 'EEXIST') console.error(`analyze: could not migrate ${file}: ${error.message}`)
-    return
-  }
-  const temp = `${file}.${randomUUID()}.tmp`
-  try {
+    ownerFd = openSync(lock, 'wx')
+    try {
+      writeFileSync(ownerFd, JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }))
+    } finally {
+      closeSync(ownerFd)
+    }
     if (readFileSync(file, 'utf8') !== original) return
+    const temp = `${file}.${randomUUID()}.tmp`
     try {
       writeFileSync(temp, migrated, { flag: 'wx', mode: statSync(file).mode & 0o777 })
       renameSync(temp, file)
@@ -40,9 +41,9 @@ function persistMigration(file, original, migrated) {
       rmSync(temp, { force: true })
     }
   } catch (error) {
-    console.error(`analyze: could not migrate ${file}: ${error.message}`)
+    if (ownerFd !== undefined || error.code !== 'EEXIST') console.error(`analyze: could not migrate ${file}: ${error.message}`)
   } finally {
-    rmSync(lock, { force: true })
+    if (ownerFd !== undefined) rmSync(lock, { force: true })
   }
 }
 
