@@ -413,6 +413,7 @@ async function advanceSession(
   const parked = lease.approval
   const events: StepEvent[] = []
   let target: ApprovalTarget | undefined
+  let runningOnHost = false
   const host = sessionHost(project, run, {
     onPark: approval => {
       target = approval
@@ -426,6 +427,7 @@ async function advanceSession(
   })
   host.report = event => {
     if (event.state !== 'running') events.push(event)
+    else if (runningOnHost) process.stderr.write(`${JSON.stringify({ event })}\n`)
   }
   const canStart = (step: StepLaunch) =>
     needsHost(step) || packet(step).settings.engine === lease.engine
@@ -435,6 +437,7 @@ async function advanceSession(
   const [step] = selected.ready
   if (step === undefined) return { result: selectedResponse(selected, events) }
   if (needsHost(step)) {
+    runningOnHost = true
     const result = await runStep(host, run, step, writer)
     const definition = steps.find(candidate => candidate.id === step.id)
     if (definition !== undefined && stepSettled(definition, result.state))
