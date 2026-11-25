@@ -4,6 +4,7 @@ import { parseWorkflow, type KindName, type Step, type When, type Workflow } fro
 import { parseFrozenConfiguration } from '../configuration'
 import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 import { matches, type CardFacts } from '../select'
+import { migrateTelemetryStatuses } from '../telemetry/legacy-status'
 
 /**
  * The disk, as the engine needs it: the run directory and nothing else. A structural subset of the
@@ -32,7 +33,7 @@ export const FROZEN_CONFIGURATION = 'configuration.yaml'
 export const TELEMETRY_FILE = 'telemetry.jsonl'
 
 /** `skipped`: the step's `when` did not match when it was about to start; it produces no outputs. */
-export type StepState = 'pending' | 'running' | 'skipped' | 'needs-human' | StepStatus
+export type StepState = 'pending' | 'running' | 'skipped' | StepStatus
 export type RunState = 'running' | 'done' | 'failed' | 'parked'
 
 export interface StepRecord {
@@ -105,6 +106,31 @@ function readState(run: RunDirectory): RunStateFile | undefined {
         `this version reads ${String(STATE_SCHEMA_VERSION)} — start over with --restart`,
     )
   return state
+}
+
+async function migrateStateStatuses(run: RunDirectory, state: RunStateFile): Promise<RunStateFile> {
+  const legacyStatus: string = 'needs-human'
+  const legacy = Object.entries(state.steps).filter(([, step]) => step.state === legacyStatus)
+  if (legacy.length === 0) return state
+  const steps = { ...state.steps }
+  for (const [id, step] of legacy) steps[id] = { ...step, state: 'needs-decision' }
+  const migrated = { ...state, steps }
+  await writeState(run, migrated)
+  return migrated
+}
+
+async function migrateRunTelemetry(run: RunDirectory): Promise<void> {
+  const path = join(run.dir, TELEMETRY_FILE)
+  if (!run.files.existsSync(path)) return
+  let text: string
+  try {
+    text = run.files.readFileSync(path)
+  } catch {
+    // Optional telemetry that cannot be read has no status we can migrate.
+    return
+  }
+  const migrated = migrateTelemetryStatuses(text)
+  if (migrated !== text) await writeAtomic(run.files, path, migrated)
 }
 
 function requireState(run: RunDirectory): RunStateFile {
@@ -241,7 +267,7 @@ function parkedLoop(
   exhausted: [string, LoopRecord] | undefined,
   moreRounds: number,
 ): [string, LoopRecord] {
-  if (exhausted === undefined || state.steps[exhausted[0]]?.state !== 'needs-human')
+  if (exhausted === undefined || state.steps[exhausted[0]]?.state !== 'needs-decision')
     throw new Error('more-rounds-invalid: no loop is parked at max')
   if (!Number.isInteger(moreRounds) || moreRounds < 1)
     throw new Error('more-rounds-invalid: pass a positive integer')
@@ -294,7 +320,7 @@ function withMoreRounds(
 const exhaustedLoop = (state: RunStateFile): [string, LoopRecord] | undefined =>
   Object.entries(state.loops ?? {}).find(
     ([id, loop]) =>
-      loop.exhausted && ['needs-human', 'failed'].includes(state.steps[id]?.state ?? ''),
+      loop.exhausted && ['needs-decision', 'failed'].includes(state.steps[id]?.state ?? ''),
   )
 
 /** The run must be of this card; a workflow edited since the start warns. */
@@ -330,13 +356,15 @@ function settledStatus(
 
 async function resume(
   run: RunDirectory,
-  saved: RunStateFile,
+  existing: RunStateFile,
   source: { readonly text: string; readonly file: string },
   options: StartOptions,
 ): Promise<Started> {
+  const warnings = workflowWarnings(run, existing, source, options.card)
+  const saved = await migrateStateStatuses(run, existing)
+  await migrateRunTelemetry(run)
   let state = saved
   const { configuration } = options
-  const warnings = workflowWarnings(run, state, source, options.card)
   if (options.moreRounds !== undefined) parkedLoop(state, exhaustedLoop(state), options.moreRounds)
   if (configuration !== undefined && options.reconfigure === true)
     state = await reconfigured(run, state, configuration)
@@ -466,7 +494,6 @@ const HALTED: Partial<Record<StepState, RunState>> = {
   failed: 'failed',
   blocked: 'parked',
   'needs-decision': 'parked',
-  'needs-human': 'parked',
 }
 
 /** A step the run is past: `ok`, or `failed` with `on-failed: continue`. */
@@ -715,7 +742,7 @@ function closeRound({ state, outer }: Advance, { steps, loops }: Progress): Prog
       steps: {
         ...steps,
         [outerId]: {
-          state: outer['on-max'] === 'escalate' ? 'needs-human' : 'failed',
+          state: outer['on-max'] === 'escalate' ? 'needs-decision' : 'failed',
           outputs: loop.untilResult ?? {},
           reason: 'loop-max',
           summary: `loop ${outerId} reached ${loop.max} rounds`,

@@ -491,7 +491,7 @@ steps:
     }
     expect(await run(['quick'], skills)).toBe(0)
     expect(states()).toMatchObject({
-      rounds: 'needs-human',
+      rounds: 'needs-decision',
       'rounds/review': 'failed',
       'rounds/fix': 'ok',
     })

@@ -100,6 +100,34 @@ describe('step record (US-697 AC-1, AC-3)', () => {
     expect(recordsOf(run)).toMatchObject([{ step: 'implement', attempt: 3 }])
   })
 
+  it('migrates a historical step status when reading telemetry to append a step (#728 AC-3)', async () => {
+    const run = await open()
+    const legacy = {
+      ...IDENTITY,
+      type: 'step',
+      schema: 2,
+      step: IMPLEMENT.step.id,
+      kind: IMPLEMENT.step.kind,
+      uses: IMPLEMENT.step.uses,
+      attempt: IMPLEMENT.step.attempt,
+      host: IMPLEMENT.host,
+      ...IMPLEMENT.settings,
+      startedAt: IMPLEMENT.startedAt.toISOString(),
+      durationMs: IMPLEMENT.durationMs,
+      tokens: IMPLEMENT.tokens,
+      status: 'needs-human',
+      reason: 'needs-human',
+    }
+    await run.files.writeFile(FILE, `${JSON.stringify(legacy)}\n`)
+
+    await recordStep(run, { ...IMPLEMENT, step: { ...IMPLEMENT.step, attempt: 2 } })
+
+    const records = recordsOf(run)
+    expect(records).toHaveLength(2)
+    expect(records[0]).toEqual({ ...legacy, status: 'needs-decision' })
+    expect(records[1]).toMatchObject({ step: 'implement', attempt: 2, status: 'ok' })
+  })
+
   it('leaves out the model and the effort a step launched without', async () => {
     const run = await open()
     await recordStep(run, { ...IMPLEMENT, settings: { engine: 'codex' } })
