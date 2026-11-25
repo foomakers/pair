@@ -208,7 +208,130 @@ These schemas come from the workflow validator.
                 "stop",
                 "continue"
               ],
-              "description": "What a `failed` step does to the run. `stop` (default) stops it; `continue` records the failure and runs the next step."
+              "description": "Shorthand for `escalate.failed`. `stop` (default) stops the run; `continue` records the failure and runs the next step."
+            },
+            "escalate": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "failed": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "stop",
+                        "continue"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "do",
+                        "comment"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "do": {
+                          "enum": [
+                            "stop",
+                            "continue"
+                          ]
+                        },
+                        "comment": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "blocked": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "stop",
+                        "continue"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "do",
+                        "comment"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "do": {
+                          "enum": [
+                            "stop",
+                            "continue"
+                          ]
+                        },
+                        "comment": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "needs-decision": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "stop",
+                        "continue"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "do",
+                        "comment"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "do": {
+                          "enum": [
+                            "stop",
+                            "continue"
+                          ]
+                        },
+                        "comment": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "exhausted": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "stop",
+                        "continue"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "do",
+                        "comment"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "do": {
+                          "enum": [
+                            "stop",
+                            "continue"
+                          ]
+                        },
+                        "comment": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "description": "Rules for non-success statuses. `failed` uses `on-failed` or stops by default; `blocked` and `needs-decision` stop by default. A loop accepts only `exhausted` and uses `on-max` when the rule is absent."
             },
             "on-resume": {
               "type": "object",
@@ -261,7 +384,8 @@ These schemas come from the workflow validator.
               "enum": [
                 "escalate",
                 "fail"
-              ]
+              ],
+              "description": "Legacy loop exhaustion rule. `escalate` parks the run, like `escalate.exhausted: stop`. `fail` fails the run and must stand alone. Supply this key or `escalate.exhausted`."
             },
             "steps": {
               "type": "object",

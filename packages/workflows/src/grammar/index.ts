@@ -1,5 +1,6 @@
 import { basename, extname } from 'node:path'
 import { isAlias, isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, visit } from 'yaml'
+import { STEP_STATUSES } from '../kinds/kind'
 import { ORDER_KEYS, type CardSelection } from '../select'
 import { violations, type JsonSchema, type Path } from '../schema'
 
@@ -127,6 +128,33 @@ export const whenSchema: JsonSchema = {
   },
 }
 
+const ESCALATION_STATUSES = [
+  ...STEP_STATUSES.filter(status => status !== 'ok'),
+  'exhausted',
+] as const
+const ESCALATION_ACTIONS = ['stop', 'continue'] as const
+export type EscalationStatus = (typeof ESCALATION_STATUSES)[number]
+export type EscalationAction = (typeof ESCALATION_ACTIONS)[number]
+export type EscalationRule =
+  | EscalationAction
+  | { readonly do: EscalationAction; readonly comment: string }
+
+export const escalationAction = (rule: EscalationRule | undefined): EscalationAction | undefined =>
+  typeof rule === 'string' ? rule : rule?.do
+
+const action = { enum: ESCALATION_ACTIONS }
+const escalationRule: JsonSchema = {
+  anyOf: [
+    action,
+    {
+      type: 'object',
+      required: ['do', 'comment'],
+      additionalProperties: false,
+      properties: { do: action, comment: text },
+    },
+  ],
+}
+
 export const stepSchema: JsonSchema = {
   type: 'object',
   required: ['kind'],
@@ -155,9 +183,16 @@ export const stepSchema: JsonSchema = {
         'Optional validation the host runs after the step ends `ok`: a registry key, `target:<name>` or `command:<shell line>`. A red one fails the step. Absent = none.',
     },
     'on-failed': {
-      enum: ['stop', 'continue'],
+      ...action,
       description:
-        'What a `failed` step does to the run. `stop` (default) stops it; `continue` records the failure and runs the next step.',
+        'Shorthand for `escalate.failed`. `stop` (default) stops the run; `continue` records the failure and runs the next step.',
+    },
+    escalate: {
+      type: 'object',
+      additionalProperties: false,
+      properties: Object.fromEntries(ESCALATION_STATUSES.map(status => [status, escalationRule])),
+      description:
+        'Rules for non-success statuses. `failed` uses `on-failed` or stops by default; `blocked` and `needs-decision` stop by default. A loop accepts only `exhausted` and uses `on-max` when the rule is absent.',
     },
     'on-resume': {
       type: 'object',
@@ -176,7 +211,11 @@ export const stepSchema: JsonSchema = {
     assign: assignmentSchema,
     until: { type: 'string', pattern: STEP_ID },
     max: { type: 'integer', minimum: 1 },
-    'on-max': { enum: ['escalate', 'fail'] },
+    'on-max': {
+      enum: ['escalate', 'fail'],
+      description:
+        'Legacy loop exhaustion rule. `escalate` parks the run, like `escalate.exhausted: stop`. `fail` fails the run and must stand alone. Supply this key or `escalate.exhausted`.',
+    },
     steps: {
       type: 'object',
       minProperties: 1,
@@ -275,7 +314,8 @@ export interface Step {
   /** Validation the host runs after the step ends `ok`. */
   readonly gates?: readonly string[]
   readonly when?: When
-  readonly 'on-failed'?: 'stop' | 'continue'
+  readonly 'on-failed'?: EscalationAction
+  readonly escalate?: Readonly<Partial<Record<EscalationStatus, EscalationRule>>>
   readonly 'on-resume'?: { readonly reason: string; readonly step: string }
   /** One of the workflow's `aliases`: what a configuration sets for the step. */
   readonly alias?: string

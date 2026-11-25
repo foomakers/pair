@@ -1,7 +1,9 @@
 import {
+  addressedSteps,
   errorAt,
-  parseWorkflow,
+  escalationAction,
   expandedStepSchema,
+  parseWorkflow,
   type KindName,
   type Step,
   type Workflow,
@@ -9,7 +11,6 @@ import {
 } from '../grammar'
 import { expand, type WorkflowSource } from '../expand'
 import { fieldsOf, kindByName } from '../kinds'
-import { addressedSteps } from '../grammar'
 import { textsOf, violations } from '../schema'
 
 /** What the validator asks of its caller: the package reads no skill directory and no adoption file itself. */
@@ -151,6 +152,19 @@ const gateNeedsWork: Check = (workflow, step, _deps, path) =>
       ]
     : []
 
+const failedEscalationErrors: Check = (workflow, step, _deps, path) => {
+  const rule = escalationAction(step.escalate?.failed)
+  const shorthand = step['on-failed']
+  return rule !== undefined && shorthand !== undefined && rule !== shorthand
+    ? [
+        errorAt(workflow, [...path, 'escalate', 'failed'], {
+          problem: 'escalate.failed conflicts with on-failed',
+          fix: 'remove on-failed or make both actions agree',
+        }),
+      ]
+    : []
+}
+
 const CHECKS: readonly Check[] = [
   skillErrors,
   withErrors,
@@ -158,13 +172,47 @@ const CHECKS: readonly Check[] = [
   gateErrors,
   gateNeedsWork,
   safetyErrors,
+  failedEscalationErrors,
 ]
 
-const LOOP_ONLY = ['until', 'max', 'on-max', 'steps'] as const
+const LOOP_REQUIRED = ['until', 'max', 'steps'] as const
+const LOOP_ONLY = [...LOOP_REQUIRED, 'on-max'] as const
+
+function loopEscalationErrors(workflow: Workflow, step: Step, path: readonly string[]) {
+  const errors = Object.keys(step.escalate ?? {})
+    .filter(status => status !== 'exhausted')
+    .map(status =>
+      errorAt(workflow, [...path, 'escalate', status], {
+        problem: 'a loop can only escalate on exhausted',
+        fix: `move the ${status} rule to a child step`,
+      }),
+    )
+  const action = escalationAction(step.escalate?.exhausted)
+  const shorthand = step['on-max']
+  if (action === undefined && shorthand === undefined)
+    errors.push(
+      errorAt(workflow, path, {
+        problem: "missing key 'on-max'",
+        fix: "add 'on-max' or 'escalate.exhausted'",
+      }),
+    )
+  if (
+    action !== undefined &&
+    shorthand !== undefined &&
+    (shorthand === 'fail' || action !== 'stop')
+  )
+    errors.push(
+      errorAt(workflow, [...path, 'escalate', 'exhausted'], {
+        problem: `escalate.exhausted conflicts with on-max: ${shorthand}`,
+        fix: 'keep only on-max or escalate.exhausted',
+      }),
+    )
+  return errors
+}
 
 function loopOwnErrors(workflow: Workflow, step: Step, path: readonly string[]): WorkflowError[] {
-  const errors: WorkflowError[] = []
-  for (const key of LOOP_ONLY)
+  const errors = loopEscalationErrors(workflow, step, path)
+  for (const key of LOOP_REQUIRED)
     if (step[key] === undefined)
       errors.push(errorAt(workflow, path, { problem: `missing key '${key}'`, fix: `add '${key}'` }))
   if (step.until !== undefined && !step.steps?.some(child => child.id === step.until))

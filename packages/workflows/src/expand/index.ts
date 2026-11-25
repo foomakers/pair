@@ -134,7 +134,7 @@ function expandStep(state: ExpansionState, context: StepContext, chain: readonly
     recordOrigins(state.origins, workflow, step, id)
     return [expandLoop(state, { ...context, step: rebaseStep(step, id) }, chain)]
   }
-  const unsupported = (['when', 'gates', 'state', 'on-resume'] as const).find(
+  const unsupported = (['when', 'gates', 'state', 'on-resume', 'escalate'] as const).find(
     key => step[key] !== undefined,
   )
   if (unsupported) {
