@@ -353,15 +353,6 @@ export async function readCardTitle(card: string, cwd: string): Promise<string |
   }
 }
 
-/** The card's facts a workflow step's `when` reads, live: its labels and board state. */
-export async function readCardFacts(
-  card: string,
-  cwd: string,
-): Promise<{ readonly labels: readonly string[]; readonly status?: string }> {
-  const view = await readCard(card, cwd)
-  return { labels: view.labels, ...(view.boardState !== null && { status: view.boardState }) }
-}
-
 /** US-652: the card a workflow run is about — its title, or why it cannot be run. An unreadable card is `missing`. */
 export async function readRunnableCard(
   card: string,

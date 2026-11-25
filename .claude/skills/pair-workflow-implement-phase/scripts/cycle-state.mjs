@@ -2929,17 +2929,22 @@ export function worktreeClean({ cwd, dir, story }) {
 // `parked` (open and labelled for a human), `open`. Anything that cannot be read is `unknown` and BLOCKS (fail closed).
 // US-572: the card as every PM-agnostic consumer reads it (pair-cli run, the batch engine) — through the BOUND
 // adapter, never a tracker CLI of the caller's own: { id, title, body, labels: [names], state: OPEN|CLOSED,
-// closed, stateReason, closedAt, boardState }. `boardState`: the board item's Status (`projectItems`, which a
-// token without `read:project` cannot read — retried without it), else null; the caller falls back to the body.
+// closed, stateReason, closedAt, boardState }. Workflow callers scope Status to the adopted board.
+// A token without `read:project` can still read the card without Status.
 const CARD_FIELDS = ['title', 'body', 'labels', 'state', 'stateReason', 'closedAt']
-export function cardView({ story, dir, host, selection }) {
+export function cardView({ story, dir, host, selection, scopedBoard = selection }) {
   const h = host ?? bindHosts(dir ? { dir } : { from: process.cwd() })
-  if (!h.pm.parseCardRef(story)) return { error: `not-a-card: ${JSON.stringify(story)} is not a ${h.pmTool} card` }
+  const ref = h.pm.parseCardRef(story)
+  if (!ref || (scopedBoard && ref.inScope === false)) return { error: `not-a-card: ${JSON.stringify(story)} is not a ${h.pmTool} card` }
   const fields = selection ? [...CARD_FIELDS, 'assignees', 'createdAt'] : CARD_FIELDS
   let c
+  let boardState = null
   try {
     try {
       c = h.pm.readCard(story, { fields: [...fields, 'projectItems'] })
+      boardState = scopedBoard
+        ? h.pm.cardState({ id: ref.id, card: c }).boardState
+        : (c?.projectItems ?? []).map(i => String(i?.status?.name ?? '').trim()).find(Boolean) ?? null
     } catch (error) {
       if (error?.kind === 'transient-exhausted') throw error
       c = h.pm.readCard(story, { fields })
@@ -2948,7 +2953,6 @@ export function cardView({ story, dir, host, selection }) {
     return { error: `card-unreadable: ${hostDetail(e)}` }
   }
   const closed = String(c?.state ?? '').toUpperCase() === 'CLOSED'
-  const boardState = (c?.projectItems ?? []).map(i => String(i?.status?.name ?? '').trim()).find(Boolean) ?? null
   return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState, ...(selection ? { assignees: (c?.assignees ?? []).map(one => String(one.login ?? one)), created: c?.createdAt ?? undefined } : {}) }
 }
 
@@ -4599,6 +4603,7 @@ if (isMain()) {
       'prereq-state': ['dir', 'story'],
       card: ['dir', 'story'],
       'workflow-cards': ['root', 'cards', 'filter', 'assignee'],
+      'workflow-card': ['story'],
       'workflow-pr-head': ['ref'],
       'pr-labels': ['dir', 'ref'],
       whoami: ['dir'],
@@ -4790,9 +4795,9 @@ if (isMain()) {
         ? workflowCards(h, opts)
         : { head: h.code.prHead({ pr: opts.ref }) }
       process.stdout.write(JSON.stringify(out) + '\n')
-    } else if (cmd === 'card') {
+    } else if (cmd === 'card' || cmd === 'workflow-card') {
       need('story')
-      out = cardView({ story: opts.story, dir: opts.dir })
+      out = cardView({ story: opts.story, dir: opts.dir, scopedBoard: cmd === 'workflow-card' })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.error ? 1 : 0)
     } else if (cmd === 'pr-labels') {

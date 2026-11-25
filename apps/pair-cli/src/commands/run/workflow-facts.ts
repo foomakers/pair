@@ -86,3 +86,11 @@ export async function readWorkflowCards(at: Platform, scope: WorkflowScope) {
 export async function readWorkflowPrHead(at: Platform, pr: number): Promise<string> {
   return (await readPlatform<{ head: string }>(at, ['workflow-pr-head', '--ref', String(pr)])).head
 }
+
+export function readWorkflowCard(at: Platform, card: string) {
+  return readPlatform<Pick<WorkflowCard, 'body' | 'labels' | 'boardState'>>(at, [
+    'workflow-card',
+    '--story',
+    card,
+  ])
+}

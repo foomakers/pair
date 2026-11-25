@@ -394,10 +394,9 @@ export function defineAdapter(spec) {
           const { body } = readCard(id, { ...opts, fields: undefined })
           return canonicalCardHash(body)
         },
-        cardState({ id, repo }) {
-          const card = readCard(id, { repo, fields: ['state', 'stateReason', 'projectItems'] })
+        cardState({ id, repo, card = readCard(id, { repo, fields: ['state', 'stateReason', 'projectItems'] }) }) {
           // An adapter whose card can sit on several boards scopes membership to the adopted one.
-          const scoped = typeof methods.boardItems === 'function' ? methods.boardItems({ items: card.projectItems ?? [], repo }) : card.projectItems ?? []
+          const scoped = typeof methods.boardItems === 'function' ? methods.boardItems({ id, repo }) : card.projectItems ?? []
           // An unresolved board is a reported gap, never "not a member" (that would reset the Status).
           if (!Array.isArray(scoped)) return { issueState: card.state ?? null, issueReason: card.stateReason ?? null, boardState: null, member: false, gap: scoped.gap }
           const items = scoped

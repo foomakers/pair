@@ -65,20 +65,18 @@ import { isSafePromptText } from './prompt-safety'
 import { acquireRunLock } from './run-lock'
 import { acquireCardLock } from './card-lock'
 import type { BatchOutcome } from './workflow-batch'
-import { readWorkflowPrHead, readWorkflowCards, type WorkflowCard } from './workflow-facts'
+import {
+  readWorkflowCard,
+  readWorkflowPrHead,
+  readWorkflowCards,
+  type WorkflowCard,
+} from './workflow-facts'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
 import { finalTextOf, type IterationResult } from './stream-reader'
 import { observeEngineEvent, type EngineObservation } from './telemetry'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
-import {
-  mainCheckoutOrCwd,
-  readCardFacts,
-  readCard,
-  readRunnableCard,
-  resolveBranch,
-  runSetupCommand,
-} from './cycle-wiring'
+import { mainCheckoutOrCwd, readRunnableCard, resolveBranch, runSetupCommand } from './cycle-wiring'
 import { performHostKind, runStepGates } from './workflow-kinds'
 import {
   createCycleScriptsBridge,
@@ -511,14 +509,18 @@ interface Opened {
 /** What the package asks of this host besides an agent: the card's facts, and the steps it runs itself. */
 function hostKindsOf({ resolved, request, worktree }: Opened, { fs, deps }: Services) {
   const way = join(resolved.main, WAY_OF_WORKING)
+  const readCard = () => readWorkflowCard({ fs, ...resolved }, request.card)
   return {
-    card: () => readCardFacts(request.card, resolved.cwd),
+    async card() {
+      const { labels, boardState } = await readCard()
+      return { labels, ...(boardState !== null && { status: boardState }) }
+    },
     readResultFacts:
       deps.workflow?.readResultFacts ??
       (async (step: StepLaunch, result: StepResult) => {
         if (step.kind === 'implement')
           return { head: await readWorkflowPrHead({ fs, ...resolved }, Number(result['pr'])) }
-        const card = await readCard(request.card, resolved.cwd)
+        const card = await readCard()
         return { card: { ...card, boardStatus: card.boardState } }
       }),
     perform: performHostKind(

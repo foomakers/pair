@@ -135,7 +135,7 @@ test('R744-03: selection and confirmation read the adopted project ID even when 
     }, GH_BOARD)
     const host = { pmTool: 'github', pm: github.instantiate({ ghBin: gh.bin, wayOfWorking: wow('1') }) }
     const expected = member ? 'Todo' : null
-    assert.equal(cardView({ story: '42', host }).boardState, expected)
+    assert.equal(cardView({ story: '42', host, scopedBoard: true }).boardState, expected)
     assert.equal(workflowCards(host, { cards: '42' }).cards[0].boardState, expected)
     assert.equal(host.pm.cardState({ id: '42' }).boardState, expected)
   }
