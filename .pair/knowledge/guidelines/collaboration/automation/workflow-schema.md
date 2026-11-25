@@ -203,6 +203,18 @@ These schemas come from the workflow validator.
               },
               "description": "Optional validation the host runs after the step ends `ok`: a registry key, `target:<name>` or `command:<shell line>`. A red one fails the step. Absent = none."
             },
+            "timeout-minutes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 35791,
+              "description": "Agent process timeout in minutes. Absent = the run timeout."
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Additional attempts after an agent process fault. Absent = 0."
+            },
             "on-failed": {
               "enum": [
                 "stop",

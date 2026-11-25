@@ -15,7 +15,9 @@ The agent ends its turn with one JSON object in a fenced `json` block. Whatever 
 An agent can return `ok` and the statuses listed for its kind below.
 The `returns` contract describes when each non-success outcome applies. The workflow decides what happens next through [`escalate`](workflow-grammar.md#outcomes-and-escalation). The engine produces `exhausted` and `skipped`.
 
-A result that is missing, is not JSON or breaks the contract of its kind makes the step `failed` with reason `invalid-result`.
+Agent steps can set top-level `timeout-minutes` (a positive integer that overrides the run timeout) and `retries` (a nonnegative integer, default 0). These keys are unavailable on host-run kinds.
+
+An invalid final result makes the step `failed` with reason `invalid-result` after retries are exhausted. Other process faults end a step that declares `retries` as `blocked` with reason `fault`. Without `retries`, those faults keep the existing `failed` / `no-result` route.
 
 An input is satisfied by a launch argument (`--card`) or by an output of an earlier step with the same name.
 
