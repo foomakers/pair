@@ -338,6 +338,33 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     },
   )
 
+  it.each(['pnpm lint:check --fix', 'pnpm checks --fix'])(
+    '#693 R2 rejects autofix forwarded by %s',
+    command => {
+      const result = checkRootGate(
+        pkg({
+          'quality-gate': `${command} && pnpm ${GUARD_SCRIPT}`,
+          checks: 'pnpm lint:check',
+          'lint:check': 'oxlint fixture.ts',
+        }),
+      )
+
+      expect(result.ok, result.message).toBe(false)
+      expect(result.message).toContain('oxlint --fix')
+    },
+  )
+
+  it('#693 R2 keeps delegated flags on the final command', () => {
+    const result = checkRootGate(
+      pkg({
+        'quality-gate': `pnpm lint:check --fix && pnpm ${GUARD_SCRIPT}`,
+        'lint:check': 'oxlint fixture.ts && other-tool',
+      }),
+    )
+
+    expect(result.ok, result.message).toBe(true)
+  })
+
   // Pattern level is not enough: checkRootGate EXPANDS a referenced root script by
   // inlining `{ body }` before the match, so the `--check` sparing has to survive
   // the braces AND the second bare `sync-version` the body brings with it. Asserted at
