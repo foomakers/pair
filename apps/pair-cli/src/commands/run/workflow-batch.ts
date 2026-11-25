@@ -351,7 +351,7 @@ export async function handleWorkflowBatch(
   request: RunWorkflowBatch,
   services: Services,
 ): Promise<number> {
-  const resolved = resolveWorkflowRun(config, { ...request, card: '' }, services, false)
+  const resolved = resolveWorkflowRun(config, { ...request, card: '' }, services, { resume: false })
   if (resolved === undefined) return 1
   const input = { config, request, services }
   const plan = await planBatch(input, resolved)
@@ -388,12 +388,12 @@ type Routing = Pick<BatchRequest, 'config' | 'services'> & { main: string; flags
 
 function configuredWorkflow(
   name: string,
-  card: string,
+  card: WorkflowCard,
   { config, services, flags }: Routing,
   resume = false,
 ) {
-  const request = { name, card, restart: false }
-  const resolved = resolveWorkflowRun(config, request, services, resume)
+  const request = { name, card: card.id, restart: false, routedCard: card }
+  const resolved = resolveWorkflowRun(config, request, services, { resume, card })
   if (resolved === undefined) throw new Error(`workflow-invalid: ${name}`)
   const workflow = resolved.workflow.select
   const configuration = resolved.configuration?.configuration.select
@@ -424,13 +424,13 @@ function mappedCard(found: WorkflowCard | undefined, names: string[], routing: R
       main,
     })
     if (pending === undefined) continue
-    const candidate = configuredWorkflow(name, id, routing, true)
+    const candidate = configuredWorkflow(name, pending, routing, true)
     if (candidate.selection.accepts(pending)) return { selected: candidate }
     trackExclusion(pending, candidate.unscoped)
   }
   function* candidates(card: WorkflowCard) {
     for (const name of names) {
-      const candidate = configuredWorkflow(name, id, routing)
+      const candidate = configuredWorkflow(name, card, routing)
       const error = selectionBoardError(card, candidate.selection)
       if (error !== undefined) throw new Error(error)
       trackExclusion(card, candidate.unscoped)

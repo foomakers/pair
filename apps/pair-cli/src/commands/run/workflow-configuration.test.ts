@@ -386,6 +386,118 @@ describe('#707 AC-5 workflow tier validation', () => {
   })
 })
 
+describe('#707 T-3 workflow tier selection (AC-1, AC-2)', () => {
+  const tierSource = 'pair.config.json workflows.quick.tiers.risk:red'
+  const fallbackSource = '(pair.config.json workflows.quick)'
+  const cardWithLabels = (labels: string[]) => ({
+    id: '627',
+    title: 'A card',
+    body: '',
+    labels,
+    boardState: null,
+    closed: false,
+    prerequisites: [],
+  })
+  const readCardFacts = (labels: string[]) =>
+    vi
+      .fn<NonNullable<WorkflowHostDependencies['readSelection']>>()
+      .mockResolvedValue({ cards: [cardWithLabels(labels)] })
+
+  function writeMapping(tiers?: Record<string, string>) {
+    write(
+      'pair.config.json',
+      JSON.stringify({ workflows: { quick: { configuration: 'mine', tiers } } }),
+    )
+    writeConfig()
+  }
+
+  beforeEach(() => {
+    writeMapping({ 'risk:red': 'tier' })
+    writeConfig(
+      'tier',
+      CONFIG.replace('claude-sonnet-5-5', 'tier-build').replace('claude-opus-5-5', 'tier-judge'),
+    )
+  })
+
+  it.each([
+    { entry: 'named', argv: ['quick'] },
+    { entry: 'mapped', argv: [] },
+  ])('launches the $entry run with its tier and prints the label source', async ({ argv }) => {
+    const readSelection = readCardFacts(['risk:red'])
+
+    expect(await run(argv, OK, {}, { readSelection }), lines.join('\n')).toBe(0)
+
+    expect(launched.map(one => one.model)).toEqual(['tier-build', 'tier-judge'])
+    expect(lines.join('\n')).toContain(tierSource)
+    expect(readSelection).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      expect.objectContaining({ cards: ['627'] }),
+    )
+  })
+
+  it('previews the selected tier and its source without launching', async () => {
+    const readSelection = readCardFacts(['risk:red'])
+
+    expect(await run(['quick'], OK, { dryRun: true }, { readSelection })).toBe(0)
+
+    expect(lines.join('\n')).toContain(tierSource)
+    expect(lines.join('\n')).toContain('model=tier-build')
+    expect(launched).toEqual([])
+  })
+
+  it.each(['tracker request', 'card lookup'])(
+    'warns and uses the fallback after a failed %s',
+    async failure => {
+      const readSelection = readCardFacts([])
+      const message = 'card facts unavailable'
+      if (failure === 'tracker request') readSelection.mockRejectedValue(new Error(message))
+      else readSelection.mockResolvedValue({ cards: [{ ...cardWithLabels([]), error: message }] })
+
+      expect(await run(['quick'], OK, {}, { readSelection }), lines.join('\n')).toBe(0)
+
+      expect(launched[0]?.model).toBe('claude-sonnet-5-5')
+      expect(lines.join('\n')).toContain(fallbackSource)
+      expect(lines.find(line => line.includes('Warning:') && line.includes(message))).toBeDefined()
+    },
+  )
+
+  it('records the start labels and retains the chosen tier when resuming', async () => {
+    const readSelection = readCardFacts(['risk:red', 'team:cli'])
+    const failedReview = () => fenced({ status: 'failed', summary: 'red', reason: 'quality-gate' })
+    expect(
+      await run(['quick'], { ...OK, 'pair-process-review': failedReview }, {}, { readSelection }),
+    ).toBe(1)
+    const state = fs.readFileSync(join(runDir(), 'state.json'))
+    readSelection.mockResolvedValue({ cards: [cardWithLabels(['risk:green'])] })
+    launched = []
+    lines.length = 0
+
+    expect(await run(['quick'], OK, {}, { readSelection }), lines.join('\n')).toBe(0)
+
+    expect(launched.map(one => one.model)).toEqual(['tier-judge'])
+    expect(lines.join('\n')).toContain(tierSource)
+    expect(readSelection).toHaveBeenCalledOnce()
+    expect(state).toContain('"risk:red"')
+    expect(state).toContain('"team:cli"')
+  })
+
+  it.each([
+    { context: 'no tiers', tiers: undefined, options: {} },
+    { context: '--config', tiers: { 'risk:red': 'tier' }, options: { config: 'mine' } },
+  ])(
+    'launches with the usual configuration and skips the label read with $context',
+    async ({ tiers, options }) => {
+      writeMapping(tiers)
+      const readSelection = readCardFacts(['risk:red'])
+
+      expect(await run(['quick'], OK, options, { readSelection }), lines.join('\n')).toBe(0)
+
+      expect(launched[0]?.model).toBe('claude-sonnet-5-5')
+      expect(readSelection).not.toHaveBeenCalled()
+    },
+  )
+})
+
 describe('override (AC-6)', () => {
   it('deep-merges over the file, runs with it and records it in state.json', async () => {
     writeConfig()

@@ -78,6 +78,7 @@ export interface ConfigurationInput {
   readonly main: string
   readonly project: Config
   readonly workflow: Workflow
+  readonly labels?: readonly string[] | undefined
   readonly flag?: string | undefined
   readonly override?: string | undefined
   readonly engineFlag?: EngineId | undefined
@@ -151,6 +152,7 @@ function choose(input: ConfigurationInput): Chosen | ConfigurationOutcome {
       engine: input.engine,
       workflows: input.project['workflows'] as WorkflowsConfig | undefined,
       workflow: input.workflow.name,
+      labels: input.labels,
     })
   } catch (error) {
     return refused((error as Error).message)
@@ -165,13 +167,17 @@ function choose(input: ConfigurationInput): Chosen | ConfigurationOutcome {
   return input.override === undefined ? chosen : overlay(chosen, input.override, input.engine)
 }
 
-/** Which configuration runs, validated and merged with the override — or why the run is refused. */
-export function resolveConfiguration(input: ConfigurationInput): ConfigurationOutcome {
-  const errors = checkWorkflowTiers(
+export function workflowTierErrors(
+  input: Pick<ConfigurationInput, 'fs' | 'cwd' | 'main' | 'project'>,
+) {
+  return checkWorkflowTiers(
     input.project['workflows'],
     name => locateConfiguration(input.fs, name, input) !== undefined,
   )
-  if (errors.length > 0) return refused(...errors)
+}
+
+/** Which configuration runs, validated and merged with the override — or why the run is refused. */
+export function resolveConfiguration(input: ConfigurationInput): ConfigurationOutcome {
   const chosen = choose(input)
   if ('errors' in chosen) return chosen
   const { configuration, file, source, override } = chosen

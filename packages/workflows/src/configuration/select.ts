@@ -30,10 +30,19 @@ export interface SelectionInput {
   readonly labels?: readonly string[] | undefined
 }
 
+function configurationTiers(workflows: WorkflowsConfig | undefined, workflow: string) {
+  const key = workflows && Object.hasOwn(workflows, workflow) ? workflow : 'default'
+  return { key, tiers: workflows?.[key]?.tiers ?? {} }
+}
+
+export function hasConfigurationTiers(workflows: WorkflowsConfig | undefined, workflow: string) {
+  return Object.keys(configurationTiers(workflows, workflow).tiers).length > 0
+}
+
 function matchingTier({ workflows, workflow, labels }: SelectionInput) {
-  if (!workflows || !labels?.length) return undefined
-  const key = Object.hasOwn(workflows, workflow) ? workflow : 'default'
-  const tier = Object.entries(workflows[key]?.tiers ?? {}).find(([label]) => labels.includes(label))
+  if (!labels?.length) return undefined
+  const { key, tiers } = configurationTiers(workflows, workflow)
+  const tier = Object.entries(tiers).find(([label]) => labels.includes(label))
   if (!tier) return undefined
   const [label, choice] = tier
   return { choice, via: `pair.config.json workflows.${key}.tiers.${label}` }
