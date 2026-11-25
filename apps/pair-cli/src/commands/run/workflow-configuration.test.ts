@@ -467,6 +467,38 @@ describe('#707 T-3 workflow tier selection (AC-1, AC-2)', () => {
     expect(readDependencies).toHaveBeenCalledExactlyOnceWith(['627', '629'])
   })
 
+  it.each([
+    { name: 'all tiered', labels: ['risk:red'], exit: 0, eligible: '627, 628' },
+    { name: 'one fallback', labels: [], exit: 1, eligible: '627' },
+  ])('707-F2: plans a batch with $name when the fallback lacks the engine', async row => {
+    write(
+      'pair.config.json',
+      JSON.stringify({
+        workflows: { quick: { configuration: { claude: 'mine' }, tiers: { 'risk:red': 'tier' } } },
+      }),
+    )
+    writeConfig('tier', CONFIG.replace('engine: claude', 'engine: codex'))
+    const readSelection = async () => ({
+      cards: [cardWithLabels(['risk:red']), { ...cardWithLabels(row.labels), id: '628' }],
+    })
+
+    const exit = await run(
+      ['quick'],
+      OK,
+      { card: '627,628', engine: 'codex', dryRun: true },
+      { readSelection },
+    )
+
+    const output = lines.join('\n')
+    expect(output).toContain(`Dry run: ${row.eligible};`)
+    expect(exit).toBe(row.exit)
+    const diagnostic =
+      "pair.config.json workflows.quick.configuration has no entry for engine 'codex'"
+    if (row.exit === 1)
+      expect(output).toContain(`#628: failed — configuration-not-found: ${diagnostic}`)
+    else expect(output).not.toContain(diagnostic)
+  })
+
   it.each(['tracker request', 'card lookup'])(
     'warns and uses the fallback after a failed %s',
     async failure => {
