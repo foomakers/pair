@@ -64,6 +64,7 @@ describe('engine: a linear run (AC-1)', () => {
           kind: 'implement',
           uses: 'pair-process-implement',
           with: { gates: ['quality-gate'] },
+          startState: 'In Progress',
           inputs: { card: '627' },
           attempt: 1,
         },

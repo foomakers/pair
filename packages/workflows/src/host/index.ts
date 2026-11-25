@@ -76,6 +76,7 @@ export interface WorkflowHost {
   confirmState?(target: CardState): Promise<void>
   /** Sees step starts, results and condition failures in order. */
   report?(event: StepEvent): void
+  /** Applies board transitions. Without assignCard, the implementation skill handles its start state. */
   transition?(event: StepEvent): Promise<void>
 }
 
@@ -226,9 +227,6 @@ const assignmentAtStart = (step: StepLaunch): Assignment | undefined =>
     ? (step.assignment?.value ?? (step.kind === 'implement' ? 'me' : undefined))
     : undefined
 
-const delegatesAssignment = (host: WorkflowHost, step: StepLaunch) =>
-  step.kind === 'implement' && step.pendingSuccess === undefined && host.assignCard === undefined
-
 const starting = (step: StepLaunch): StepEvent => ({
   step: step.id,
   kind: step.kind,
@@ -305,7 +303,6 @@ async function executeAgent(
   // Leave the step running on disk so the next invocation can retry it.
   if (step.kind === 'implement' && result.status === 'failed' && result.reason === 'card-held')
     return { ...result, status: 'skipped', reason: result.reason }
-  if (delegatesAssignment(host, step)) await host.transition?.(starting(step))
   const checked = await gated(host, step, result)
   return recordResult(host, run, step, {
     ...(await confirmed(host, run, step, checked)),
@@ -429,19 +426,22 @@ async function runStep(
   step: StepLaunch,
   writer: Writer,
 ): Promise<StepEvent> {
-  const launch =
-    step.kind === 'implement' && host.assignCard !== undefined && step.pendingSuccess === undefined
-      ? {
-          ...step,
-          with: {
-            ...step.with,
-            assignee: 'none',
-            ...(host.transition !== undefined && { 'board-state': 'managed' }),
-          },
-        }
-      : step
-  // A host without an assignment adapter lets the skill claim and activate the card itself.
-  if (delegatesAssignment(host, step)) host.report?.(starting(step))
+  const implementing = step.kind === 'implement' && step.pendingSuccess === undefined
+  const delegates = implementing && host.assignCard === undefined
+  const launch = implementing
+    ? {
+        ...step,
+        with: {
+          ...step.with,
+          ...(!delegates && { assignee: 'none' }),
+          ...(host.transition !== undefined && {
+            'board-state': delegates ? (step.startState ?? 'none') : 'managed',
+          }),
+        },
+      }
+    : step
+  // The skill that claims the card also applies its start state before doing work.
+  if (delegates) host.report?.(starting(step))
   else await emitStep(host, starting(step))
   const { status, summary, reason, detail } = await executeMetered(host, run, launch, writer)
   const result = {

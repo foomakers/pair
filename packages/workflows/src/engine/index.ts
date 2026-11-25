@@ -99,6 +99,7 @@ export interface StepLaunch {
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
   readonly round?: number
+  readonly startState?: CardState
   readonly confirmState?: CardState
   readonly pendingSuccess?: StepResult
   readonly retryBoardStatus?: string
@@ -650,9 +651,16 @@ const retryBoardStatusOf = (saved?: Pick<StepRecord, 'retryBoardStatus'>) =>
 const awaitingTransition = (saved?: StepRecord) =>
   saved?.pendingSuccess !== undefined || saved?.retryBoardStatus !== undefined
 
-const confirmationOf = (step: Step) => {
+const boardStatesOf = (step: Step) => {
   const confirmState = cardStateToConfirm(step)
-  return confirmState === undefined ? {} : { confirmState }
+  const transition = cardStateOf(step)
+  return {
+    ...(step.kind === 'implement' &&
+      transition?.when === 'start' && {
+        startState: transition.state,
+      }),
+    ...(confirmState !== undefined && { confirmState }),
+  }
 }
 
 const replayAttemptOf = (state: RunStateFile): number | undefined => {
@@ -727,7 +735,7 @@ async function nextInLoop(
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
     ...gatesOf(child),
-    ...confirmationOf(child),
+    ...boardStatesOf(child),
     ...pending,
     ...assignment,
     inputs: pick({ ...inputsBefore(step, workflow.steps, state), ...state.latest }, child.kind),
@@ -878,7 +886,7 @@ function plainLaunch(
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
     ...gatesOf(step),
-    ...confirmationOf(step),
+    ...boardStatesOf(step),
     ...pendingOf(saved),
     ...retryBoardStatusOf(saved),
     ...assignmentOf(workflow, step, run),

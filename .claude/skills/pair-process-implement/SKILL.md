@@ -40,7 +40,7 @@ Executable form of the **`implement`** step. A **direct** invocation while a ste
 | `$story` | No       | Story ID to implement, supplied by the invocation (e.g. `/pair-process-implement #256`). If omitted, detected from session context or the current branch (`feature/US-<id>-*`). This is the id the resume probe (Step 0.0) uses and the closing phase forwards to `/pair-capability-checkpoint` and `/pair-capability-publish-pr`. If it cannot be resolved when a checkpoint operation needs it → **HALT**. |
 | `$gates` | No       | `none` = run no quality gate of this skill's own (Step 2.7 and the closing `/pair-capability-publish-pr`): the caller runs them. Default: run them. |
 | `$assignee` | No | `<login>` or `@me` explicitly assigns that user at work start. `none` leaves assignment unchanged. Omit to claim the card as the authenticated runner. |
-| `$board-state` | No | `managed` leaves activation to the workflow host. |
+| `$board-state` | No | Start macrostate to apply after assignment. Omit for `In Progress`. `none` skips activation and `managed` leaves it to the workflow host. |
 | `$boundary` | No | `published-pr` (also supplied as `Handoff: published-pr.`) returns the published PR, branch and current head to the caller. Omitted for the standalone lifecycle. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
@@ -83,9 +83,9 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
    - `held`: warn with the returned `owners` and any `reason`. Halt before board, work, or git writes. For a structured or unattended handoff, return `{ status: "failed", reason: "card-held", summary }` with the owners named in `summary`.
    - `warning`: report the reason and continue without reporting a confirmed assignment. If the script is unavailable or gives no usable result, report that as an assignment warning and continue.
 
-   If `$board-state=managed`, the workflow host owns activation. Skip items 3 and 4.
-3. **Check the board**: If a read confirms membership and the `In Progress` macrostate, continue without a board write. Otherwise **set the board state to the `In Progress` macrostate**, in the order the item writer states once and this step applies unchanged — **membership, then a read that confirms it, then the state field** (`/pair-capability-write-issue` Step 7b): a state field cannot be written on an item the tracked view does not hold, and the add that puts it there can exit 0 having done nothing. Composing `/pair-capability-write-issue` is not the route for a state-only change — its write mode is a **full-body overwrite** and would replace the story's AC/DoD/task breakdown — so the invariant is applied here **by reference**, never re-derived.
-4. **Verify**: Read the item to confirm `In Progress` and report **what the read observed**. The assignment result comes from item 2. If the PM tool is inaccessible, warn and continue.
+   Skip items 3 and 4 when `$board-state` is `none` or `managed`.
+3. **Check the board**: Use the macrostate named by `$board-state`, or `In Progress` when omitted. If a read confirms membership and the target macrostate, continue without a board write. For a target supplied by the workflow, also leave a later macrostate in place. Otherwise **set the board state to the target macrostate**, in the order the item writer states once and this step applies unchanged — **membership, then a read that confirms it, then the state field** (`/pair-capability-write-issue` Step 7b): a state field cannot be written on an item the tracked view does not hold, and the add that puts it there can exit 0 having done nothing. Composing `/pair-capability-write-issue` is not the route for a state-only change — its write mode is a **full-body overwrite** and would replace the story's AC/DoD/task breakdown — so the invariant is applied here **by reference**, never re-derived.
+4. **Verify**: Read the item to confirm the board state and report **what the read observed**. The assignment result comes from item 2. If the PM tool is inaccessible, warn and continue.
 
 ### Step 0.2: Analyze Tasks
 
