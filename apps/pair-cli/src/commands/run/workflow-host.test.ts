@@ -706,20 +706,27 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
 })
 
 describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
-  it('confirms facts, prepares three cards, and skips completed cards when run again', async () => {
+  it.each([
+    ['successful transitions', false, false],
+    ['a retry after a Ready transition fails (R744-01)', true, false],
+    ['canonical board states (R744-01)', false, true],
+  ])('completes and skips cards with %s', async (_name, failReady, canonical) => {
     const source = '.pair/adoption/tech/workflows/refinement.yaml'
     write(
       source,
       fs.readFileSync(join(__dirname, '../../../../../packages/knowledge-hub/dataset', source)),
     )
-    write(
-      '.pair/adoption/tech/way-of-working.md',
-      '## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Todo | Draft |\n| Refined | Ready |\n',
-    )
+    if (!canonical)
+      write(
+        '.pair/adoption/tech/way-of-working.md',
+        '## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Todo | Draft |\n| Refined | Ready |\n',
+      )
     for (const skill of ['pair-process-refine-story', 'pair-process-plan-tasks'])
       write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
     const ids = ['9', '10', '12']
-    const status = new Map(ids.map(id => [id, 'Todo']))
+    const draft = canonical ? 'Draft' : 'Todo'
+    const ready = canonical ? 'Ready' : 'Refined'
+    const status = new Map(ids.map(id => [id, draft]))
     const bodies = new Map<string, string>()
     const readSelection = async () => ({
       cards: ids.map(id => ({
@@ -727,7 +734,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
         title: `Story ${id}`,
         body: bodies.get(id) ?? '',
         labels: ['risk:green'],
-        status: status.get(id) === 'Todo' ? 'Draft' : 'Ready',
+        status: status.get(id) === draft ? 'Draft' : 'Ready',
         boardState: status.get(id) ?? null,
         closed: false,
         prerequisites: id === '12' ? ['9'] : [],
@@ -739,6 +746,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
       board: {
         getState: async id => status.get(id) ?? null,
         async setState(id, value) {
+          if (id === '9' && failReady) throw new Error('board refused Ready')
           status.set(id, value)
         },
       },
@@ -756,7 +764,7 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
         const id = /- card: (\d+)/.exec(input.promptText)?.[1] ?? ''
         const current = status.get(id)
         launched.push(input)
-        expect(current).toBe('Todo')
+        expect(current).toBe(draft)
         const refine = skillOf(input.promptText) === 'pair-process-refine-story'
         bodies.set(
           id,
@@ -780,11 +788,21 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
     const command = parseRunCommand({ cwd: project, card: ids.join(','), parallel: '2' }, [
       'refinement',
     ])
-    expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
-    expect([...status.values()]).toEqual(['Refined', 'Refined', 'Refined'])
+    expect(await handleRunCommand(command, fs, { workflow })).toBe(failReady ? 1 : 0)
+    if (failReady) {
+      expect(status.get('9')).toBe(draft)
+      expect(states('refinement-9')).toEqual({ refine: 'ok', tasks: 'failed' })
+      expect(lines.some(line => line.includes('#12: waiting'))).toBe(true)
+      expect(lines.some(line => line.includes('board refused Ready'))).toBe(true)
+      failReady = false
+      expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
+      expect(launched).toHaveLength(7)
+    }
+    expect([...status.values()]).toEqual([ready, ready, ready])
     expect(new Set(launched.map(step => step.cwd)).size).toBe(3)
+    const executions = launched.length
     expect(await handleRunCommand(command, fs, { workflow })).toBe(0)
-    expect(launched).toHaveLength(6)
+    expect(launched).toHaveLength(executions)
     const summaries = fs
       .readdirSync(join(project, '.pair/working/runs'))
       .filter(entry => entry.name.startsWith('refinement-selection-'))
