@@ -1293,7 +1293,12 @@ keeps its trail up to the last event:
 ### Merge
 
 In a named workflow, an explicit `merge` step requires an authorized approval and checks that
-the current PR head matches the gated, reviewed and approved head.
+the current PR head matches the gated, reviewed and approved head. On a parked run, reply on the card
+with `/approve #<pr> <sha>` or `/reject #<pr> <sha> <reason>` using the full SHA in the notice.
+Eligible PR authors with solo approval enabled use `/approve <sha>`.
+
+In `delivery`, resume after a head change at the gate or merge to review the replacement head
+and request fresh approval. Local gates require a clean card worktree at the reviewed commit.
 
 Outside named workflows, `## Auto-Advance` governs the invoked skill. With its `(none)` default,
 publication and merge require a person. A declared tier allows the invoked skill to publish and

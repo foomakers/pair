@@ -1,3 +1,4 @@
+import { runChecks } from '@pair/workflows'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -325,6 +326,87 @@ it('rechecks the solo token at merge and requests the exact approved head (#726 
   github.solo = 'true'
   await expect(merge()).resolves.toMatchObject({ reason: 'merge-not-confirmed' })
   expect(mergeCall()).toEqual(['pr', 'merge', '735', '--squash', '--match-head-commit', sha])
+})
+
+const check = (name: string, conclusion = 'success') => ({ name, status: 'completed', conclusion })
+
+it.each([
+  {
+    name: 'missing required context',
+    required: { contexts: ['build', 'test'] },
+    checks: [check('build')],
+    expected: 'pending',
+  },
+  {
+    name: 'all required contexts passed',
+    required: {
+      contexts: ['build'],
+      checks: [
+        { context: 'test' },
+        { context: 'pair-review' },
+        { context: 'pair-explicit-approval' },
+      ],
+    },
+    checks: [
+      check('build'),
+      check('test'),
+      check('optional', 'failure'),
+      check('pair-review', 'failure'),
+    ],
+    expected: 'green',
+  },
+  {
+    name: 'required failure',
+    required: { contexts: ['build', 'test'] },
+    checks: [check('build', 'failure')],
+    expected: 'red',
+  },
+  {
+    name: 'required check skipped',
+    required: { contexts: ['build'] },
+    checks: [check('build', 'skipped')],
+    expected: 'red',
+  },
+  {
+    name: 'unreadable protection',
+    required: 403,
+    checks: [check('build'), check('pair-review', 'failure'), check('pair-custom', 'failure')],
+    expected: 'green',
+  },
+  {
+    name: 'no mechanical evidence',
+    required: 404,
+    checks: [check('pair-review')],
+    expected: 'pending',
+  },
+])('uses the target base inventory for $name (726-ac1-ci-required-contexts)', async row => {
+  github.required = row.required
+  github.checks = row.checks
+  await expect(facts(dir, ['head-unchanged', 'ci-green']).ci()).resolves.toBe(row.expected)
+})
+
+it('waits only to the deadline when a required CI context never reports (#726 AC-1)', async () => {
+  github.required = { contexts: ['build', 'test'] }
+  github.checks = [check('build')]
+  let now = 0
+  await expect(
+    runChecks(['ci-green'], facts(dir), {
+      timeoutMinutes: 1,
+      now: () => now,
+      sleep: async ms => {
+        now += ms
+      },
+    }),
+  ).resolves.toMatchObject({ status: 'failed', reason: 'ci-timeout' })
+
+  github.statuses = [{ context: 'test', state: 'success' }]
+  await expect(facts(dir).ci()).resolves.toBe('green')
+})
+
+it('surfaces an unexpected protection read failure (726-ac1-ci-required-contexts)', async () => {
+  github.required = 401
+  github.checks = [check('build')]
+  await expect(facts(dir, ['ci-green']).ci()).rejects.toThrow('HTTP 401')
 })
 
 it('ignores late comments without a matching target and accepts a matching approval (726-ac3-comment-head-binding)', async () => {

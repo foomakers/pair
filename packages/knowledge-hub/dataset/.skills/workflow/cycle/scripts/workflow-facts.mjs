@@ -92,15 +92,13 @@ try {
     const { code } = host
     if (typeof code.workflowPr !== 'function') throw new Error('code host cannot resolve workflow PRs')
     const pr = code.workflowPr({ id: card })
-    const sha = code.prHead({ pr })
+    const target = action === 'ci' ? code.workflowPrDetails({ pr }) : undefined
+    const sha = target?.head ?? code.prHead({ pr })
     if ((action === 'ci' || action === 'review') && raw !== undefined && JSON.parse(raw).expectedHead !== sha)
       throw new Error('PR head moved since review')
     if (action === 'head') result = sha
-    else if (action === 'ci') {
-      const checks = code.readCiChecks({ sha, pr }).filter(c => !['pair-review', 'pair-explicit-approval'].includes(c.name))
-      result = checks.some(c => c.conclusion === 'failure') ? 'red'
-        : checks.length === 0 || checks.some(c => c.conclusion !== 'success') ? 'pending' : 'green'
-    } else if (action === 'review') {
+    else if (action === 'ci') result = code.workflowCi({ sha, base: target.base })
+    else if (action === 'review') {
       result = (code.readCheckRun({ sha, context: 'pair-review' }) ?? code.readCheck({ sha, context: 'pair-review' })) === 'success'
     } else throw new Error('unknown workflow fact')
   }
