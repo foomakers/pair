@@ -223,9 +223,7 @@ const NO_AGENT_RESULT: StepResult = {
 }
 
 const assignmentAtStart = (step: StepLaunch): Assignment | undefined =>
-  step.pendingSuccess === undefined
-    ? (step.assignment?.value ?? (step.kind === 'implement' ? 'me' : undefined))
-    : undefined
+  step.pendingSuccess === undefined ? step.assignment?.value : undefined
 
 const starting = (step: StepLaunch): StepEvent => ({
   step: step.id,

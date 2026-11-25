@@ -324,6 +324,7 @@ export interface ResolvedAssignment {
     | WorkflowAssignmentSource
     | 'configuration.assign'
     | `configuration.steps.${string}.assign`
+    | 'default'
 }
 
 interface AssignmentOverrides {
@@ -366,7 +367,8 @@ export function assignmentFor(
     stepAssignment(loop) ??
     (workflow.assign === undefined
       ? undefined
-      : { value: workflow.assign, source: 'workflow.assign' })
+      : { value: workflow.assign, source: 'workflow.assign' }) ??
+    (step.kind === 'implement' ? { value: 'me', source: 'default' } : undefined)
   )
 }
 
