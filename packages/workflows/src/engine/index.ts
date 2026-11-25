@@ -367,18 +367,32 @@ function pendingReadyResult(
   return result.status === 'ok' ? result : undefined
 }
 
-/** The last confirmed board status before an unfinished Ready transition in this run. */
+/** The board status used to reselect an unfinished Ready transition or task plan. */
 export function pendingBoardStatus(
   run: RunDirectory,
   identity: { card: string; workflow: string },
+  draftBoardStatus?: string,
 ): string | undefined {
   const state = readState(run)
   if (state?.card !== identity.card || state.workflow.name !== identity.workflow) return undefined
-  for (const step of frozenWorkflow(run).steps) {
+  const { steps } = frozenWorkflow(run)
+  for (const step of steps) {
     const saved = state.steps[step.id]
     const status = saved?.retryBoardStatus ?? pendingReadyResult(run, step, saved)?.['boardStatus']
     if (typeof status === 'string') return status
   }
+  if (
+    steps.some(step => {
+      const saved = state.steps[step.id]
+      return (
+        step.kind === 'plan-tasks' &&
+        saved?.executions &&
+        saved.state !== 'ok' &&
+        saved.state !== 'skipped'
+      )
+    })
+  )
+    return draftBoardStatus
   return undefined
 }
 

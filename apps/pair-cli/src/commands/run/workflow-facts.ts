@@ -52,7 +52,7 @@ export function selectionBoardError(
     : undefined
 }
 
-/** Match current scope, preserving the board status of a confirmed step awaiting its Ready write. */
+/** Match current scope, allowing unfinished refinement to retain its original status. */
 export function matchesWorkflowCard(
   card: WorkflowCard,
   accepts: (facts: CardFacts) => boolean,
@@ -64,17 +64,23 @@ export function matchesWorkflowCard(
   return pending !== undefined && accepts(pending)
 }
 
-/** Selection facts from before the Ready write, with labels and assignees still current. */
+/** Selection facts from before the Ready transition, with labels and assignees still current. */
 export function pendingWorkflowCard(
   card: WorkflowCard,
   run: SelectionRun,
 ): WorkflowCard | undefined {
   const statusIndex = MACROSTATES.findIndex(state => state === card.status)
   if (card.closed || statusIndex < MACROSTATES.indexOf('Ready')) return undefined
-  const previous = pendingBoardStatus(run, { card: card.id, workflow: run.workflow })
-  if (previous === undefined) return undefined
   const mapping = readStateMapping(run.files, run.main)
-  // The current body can already meet the DoR while the saved transition is still pending.
+  // Task planning can complete the DoR before returning a result, while the board is still Draft.
+  const draft =
+    card.status === 'Ready' &&
+    card.boardState !== null &&
+    resolveMacrostate(card.boardState, mapping) === 'Draft'
+      ? card.boardState
+      : undefined
+  const previous = pendingBoardStatus(run, { card: card.id, workflow: run.workflow }, draft)
+  if (previous === undefined) return undefined
   const status = resolveMacrostate(previous, mapping)
   return status === undefined ? undefined : { ...card, status }
 }
