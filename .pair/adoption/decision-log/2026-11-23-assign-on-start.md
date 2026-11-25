@@ -6,7 +6,7 @@
 
 ## Status
 
-Active
+Amended by [2026-11-25 preserve assignment on card update](2026-11-25-preserve-assignment-on-card-update.md).
 
 ## Category
 

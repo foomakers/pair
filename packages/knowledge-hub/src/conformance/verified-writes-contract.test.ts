@@ -251,7 +251,7 @@ describe('/write-issue — $assignee is part of the parameter contract (#403 AC1
       // The adoption default must not overwrite a deliberate assignment on every
       // unrelated body update: that silently pulls the item out of the assignee-filtered
       // view of whoever owns it — this story's failure mode, inverted. Only an explicit
-      // `$assignee`, or an item with no assignee at all, may be written.
+      // `$assignee` may be written.
       const body = normalize(content)
       expect(body).toContain('leave the existing assignee untouched')
       expect(body).toContain('never clear one')
@@ -266,13 +266,20 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
   const cascadeSection = (content: string): string =>
     normalize(section(content, 'Step 6b: Resolve the Assignee'))
 
+  it.each(writeIssueCases)('$corpus: refinement preserves an omitted assignee', ({ content }) => {
+    const body = cascadeSection(content)
+    expect(body).toContain('on update without $assignee, leave the existing assignee unchanged')
+    expect(body).toContain('never apply the adoption default on create or update')
+    expect(body).toContain('without warning')
+  })
+
   it.each(writeIssueCases)('$corpus: has a dedicated assignee-resolution step', ({ content }) => {
     expect(content).toMatch(/^### Step 6b: Resolve the Assignee/m)
   })
 
   it.each(writeIssueCases)('$corpus: states the cascade in one order (AC2)', ({ content }) => {
     expect(cascadeSection(content)).toContain(
-      'the argument first, then (update only) the adoption default, then none',
+      '$assignee, when the caller passed one, on create and update',
     )
   })
 
@@ -280,10 +287,10 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
     '$corpus: a create never applies the adoption default (#738)',
     ({ content }) => {
       const body = cascadeSection(content)
-      expect(body).toContain('create mode never applies the adoption default')
-      expect(body).toContain('assigned when development starts')
-      expect(body).toContain('write the item unassigned, no warning')
-      expect(body).toContain('update with nothing resolved, or the tool rejects what was resolved')
+      expect(body).toContain('never apply the adoption default on create or update')
+      expect(body).toContain('assignment when development starts')
+      expect(body).toContain('write the item unassigned without warning')
+      expect(body).toContain('on update without $assignee, leave the existing assignee unchanged')
     },
   )
 
@@ -1123,15 +1130,15 @@ describe('/publish-pr — the PR carries an assignee and the story tags (#403 AC
   })
 
   it.each(publishPrCases)(
-    '$corpus: resolves the assignee through the SAME cascade as the item writer',
+    '$corpus: resolves the PR assignee through its adoption cascade',
     ({ content }) => {
       // One rule, two callers. The adoption rule names BOTH skills in one sentence;
       // applying it in one and not the other is exactly how this half went untracked
       // from 2026-07-31 until a review found it (PRs #404, #405, #406, #408 were all
       // born unassigned). A divergent second cascade here would re-create that state.
       const body = normalize(content)
-      expect(body).toContain('the same cascade')
-      expect(body).toContain('one rule, two callers')
+      expect(body).toContain('the pr cascade')
+      expect(body).toContain('item writes follow their own explicit-only rule')
     },
   )
 
