@@ -341,22 +341,29 @@ ${assign === undefined ? '' : `assign: ${assign}\n`}steps:
       expect(states()).toEqual({ implement: 'ok', review: 'ok', finish: 'ok' })
     })
 
-    it('leaves implement dispatch unchanged when the workflow omits assign', async () => {
-      write('.pair/adoption/tech/workflows/quick.yaml', implementOnly())
+    it('#723 F8: claims before applying a start-state override and launching implement', async () => {
+      write(
+        '.pair/adoption/tech/workflows/quick.yaml',
+        implementOnly().replace('kind: implement', 'kind: implement, state: Review'),
+      )
       const actions: string[] = []
       assignmentHost(actions)
+      const board = withBoard(
+        async (_card, state) => void actions.push(`board:${state}`),
+        'Planned',
+      )
+      const skills = {
+        'pair-process-implement': () => {
+          actions.push('agent:implement')
+          return IMPLEMENTED
+        },
+      }
 
-      expect(
-        await run(
-          ['quick'],
-          OK,
-          {},
-          withBoard(async () => {}),
-        ),
-      ).toBe(0)
+      expect(await run(['quick'], skills, {}, board)).toBe(0)
 
-      expect(actions).toEqual([])
-      expect(launched[0]?.promptText).not.toContain('- assignee:')
+      expect(actions).toEqual(['assign:me', 'board:Checking', 'agent:implement'])
+      expect(launched[0]?.promptText).toContain('- assignee: none')
+      expect(launched[0]?.promptText).toContain('- board-state: managed')
     })
 
     it('suppresses skill assignment for explicit none without asking the host to change ownership', async () => {
