@@ -810,3 +810,15 @@ it.each([
   )
   expect(existsSync(join(main, backlog, 'completed', `${card}.md`))).toBe(matches)
 })
+
+it('R754-01 / AC-4: holds the card across workflows until the session stops', () => {
+  write('.pair/adoption/tech/workflows/other.yaml', workflow.replace('name: quick', 'name: other'))
+  const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
+  const args = ['start', 'other', '--card', card, '--engine', 'codex']
+  const refused = invoke(args)
+  expect(refused.status).toBe(1)
+  expect(refused.stderr).toContain('card-locked')
+  expect(existsSync(join(main, '.pair/working/runs', `other-${card}`, 'state.json'))).toBe(false)
+  successful(['stop', runId, ...lease])
+  expect(JSON.parse(successful(args))).toMatchObject({ runId: `other-${card}`, worktree })
+})
