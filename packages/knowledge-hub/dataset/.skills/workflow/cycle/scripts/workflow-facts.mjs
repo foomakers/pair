@@ -120,8 +120,8 @@ try {
     const target = action === 'ci' ? code.workflowPrDetails({ pr }) : undefined
     const sha = target?.head ?? code.prHead({ pr })
     if ((action === 'ci' || action === 'review') && raw !== undefined && JSON.parse(raw).expectedHead !== sha)
-      throw new Error('PR head moved since review')
-    if (action === 'head') result = sha
+      result = { headChanged: true }
+    else if (action === 'head') result = sha
     else if (action === 'ci') result = code.workflowCi({ sha, base: target.base })
     else if (action === 'review') {
       result = (code.readCheckRun({ sha, context: 'pair-review' }) ?? code.readCheck({ sha, context: 'pair-review' })) === 'success'

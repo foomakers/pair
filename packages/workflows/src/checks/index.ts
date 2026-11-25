@@ -9,6 +9,13 @@ export const CHECK_NAMES = [
 ] as const
 export type CheckName = (typeof CHECK_NAMES)[number]
 
+/** The host confirmed that a fact belongs to a replacement PR head. */
+export class HeadChangedError extends Error {
+  constructor() {
+    super('PR head moved since review')
+  }
+}
+
 /** Facts the host reads from the platform; the package never reads them itself. */
 export interface FactReader {
   /** CI on the PR head: `pending` while it runs. */
@@ -46,7 +53,7 @@ async function ciGreen(facts: FactReader, options: CheckOptions): Promise<Verdic
     const budget = deadline - now()
     if (budget <= 0) return 'ci-timeout'
     const ci = await facts.ci(budget).catch(error => {
-      if (now() >= deadline) return 'pending'
+      if (!(error instanceof HeadChangedError) && now() >= deadline) return 'pending'
       throw error
     })
     const remaining = deadline - now()
@@ -83,6 +90,8 @@ export async function runChecks(
       const reason = await verdicts[name](facts, options)
       if (reason !== undefined) return { status: 'failed', reason, summary: `check ${name} failed` }
     } catch (error) {
+      if (error instanceof HeadChangedError)
+        return { status: 'failed', reason: 'head-changed', summary: error.message }
       return {
         status: 'blocked',
         reason: 'fact-unreadable',

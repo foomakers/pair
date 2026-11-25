@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
+import { HeadChangedError } from '@pair/workflows'
 import type { Assignment, FactReader, StepLaunch } from '@pair/workflows'
 import { runHostProcess } from './host-process'
 import { operationTimeout } from './workflow-facts-budget'
@@ -69,22 +70,28 @@ export async function assignWorkflowCard(
   }
 }
 
+const isHeadChanged = (value: unknown): boolean =>
+  typeof value === 'object' &&
+  value !== null &&
+  'headChanged' in value &&
+  value.headChanged === true
+
 export function workflowFacts(scriptDir: () => string, cwd: string, step: StepLaunch): FactReader {
   const checks = step.with['checks']
   const reviewedHead = step.inputs['reviewedHead']
   const pinHead = Array.isArray(checks) && checks.includes('head-unchanged')
-  const read = (action: string, timeout?: number): Promise<unknown> => {
+  const read = async (action: string, timeout?: number): Promise<unknown> => {
     const card = step.inputs['card']
     if (typeof card !== 'string' || card.length === 0) throw new Error('workflow card is missing')
-    return workflowOperation(scriptDir, cwd, {
+    const pinned = pinHead && (action === 'ci' || action === 'review')
+    const value = await workflowOperation(scriptDir, cwd, {
       action,
       card,
-      ...(pinHead &&
-        (action === 'ci' || action === 'review') && {
-          data: { expectedHead: reviewedHead },
-        }),
+      ...(pinned && { data: { expectedHead: reviewedHead } }),
       ...(timeout === undefined ? {} : { timeout }),
     })
+    if (pinned && isHeadChanged(value)) throw new HeadChangedError()
+    return value
   }
   return {
     head: async () => {
