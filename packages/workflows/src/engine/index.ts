@@ -146,6 +146,7 @@ export interface StepLaunch {
   readonly startState?: CardState
   readonly confirmState?: CardState
   readonly pendingSuccess?: StepResult
+  readonly exhaustedFault?: FaultAttempt
   readonly retryBoardStatus?: string
 
   /** Distinguishes a replay from earlier executions that used the same inputs. */
@@ -697,12 +698,22 @@ function legacyBudget(saved: StepRecord, retries: number | undefined): number | 
   return remaining
 }
 
+/** A finalized attempt has a fault at its launch number. A reserved retry has the next number. */
+function exhaustedFault(saved: StepRecord | undefined, retries: number | undefined) {
+  if (saved?.state !== 'running') return undefined
+  const fault = saved.attempts?.at(-1)
+  if (fault === undefined || fault.attempt !== saved.executions || fault.round !== saved.round)
+    return undefined
+  return (saved.remainingRetries ?? legacyBudget(saved, retries) ?? 0) === 0 ? fault : undefined
+}
+
 function reopenStep(
   run: RunDirectory,
   saved: StepRecord,
   step: Step | undefined,
   retries: number | undefined,
 ): StepRecord {
+  if (exhaustedFault(saved, retries)) return saved
   const pendingSuccess =
     step === undefined ? saved.pendingSuccess : pendingTransitionResult(run, step, saved)
   const remainingRetries = saved.remainingRetries ?? legacyBudget(saved, retries)
@@ -976,9 +987,12 @@ async function reserveLaunch(
   loop?: { id: string; round: number },
 ): Promise<NextLaunch> {
   const { id, kind, attempt, round } = launch
+  const saved = state.steps[id]
+  const fault = exhaustedFault(saved, launch.retries)
+  if (fault !== undefined)
+    return { ready: [{ ...launch, attempt: fault.attempt, exhaustedFault: fault }], run: 'running' }
   const summary = await check?.(launch)
   if (summary !== undefined) return { ready: [], run: 'running', held: { id, kind, summary } }
-  const saved = state.steps[id]
   const remainingRetries = saved?.remainingRetries ?? launch.retries
   await writeState(run, {
     ...state,
@@ -1131,7 +1145,8 @@ async function checkWhen(
   const child = inLoop ? loopChild(state, step).child : undefined
   const target = child ?? step
   const id = inLoop ? `${step.id}/${target.id}` : step.id
-  if (awaitingTransition(state.steps[id])) return undefined
+  const saved = state.steps[id]
+  if (awaitingTransition(saved) || exhaustedFault(saved, target.retries)) return undefined
   const failure = await whenFailure(target.when, state, card)
   if (failure === undefined) return undefined
   const checked = { id, kind: target.kind as KindName }

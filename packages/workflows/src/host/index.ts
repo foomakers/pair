@@ -260,6 +260,11 @@ async function execute(
   onRetry?: OnRetry,
 ): Promise<StepExecutionResult> {
   const { step } = exchange
+  const fault = step.exhaustedFault
+  if (fault !== undefined) {
+    exchange.diagnosis = fault
+    return record(run, step.id, faultResult(step, { fault }))
+  }
   if (step.pendingSuccess !== undefined)
     return recordResult(host, run, step, await confirmed(host, run, step, step.pendingSuccess))
   const kind = kindByName[step.kind]
@@ -581,12 +586,8 @@ function implementationLaunch(host: WorkflowHost, step: StepLaunch): StepLaunch 
   }
 }
 
-async function runStep(
-  host: WorkflowHost,
-  run: ObservedRun,
-  step: StepLaunch,
-  writer: Writer,
-): Promise<StepEvent> {
+async function prepareLaunch(host: WorkflowHost, step: StepLaunch): Promise<StepLaunch> {
+  if (step.exhaustedFault !== undefined) return step
   const implementing = step.kind === 'implement' && step.pendingSuccess === undefined
   const launch = implementing ? implementationLaunch(host, step) : step
   // The skill that claims the card also applies its start state before doing work.
@@ -599,6 +600,16 @@ async function runStep(
       }),
     })
   } else await emitStep(host, starting(step))
+  return launch
+}
+
+async function runStep(
+  host: WorkflowHost,
+  run: ObservedRun,
+  step: StepLaunch,
+  writer: Writer,
+): Promise<StepEvent> {
+  const launch = await prepareLaunch(host, step)
   const { status, summary, reason, detail } = await executeMetered(host, run, launch, writer)
   await flushOutcomes(host, run, writer)
   const result = {
