@@ -916,3 +916,30 @@ it('R754-04: refuses the same undeclared alias during validate and start', () =>
   expect(existsSync(worktree)).toBe(false)
   expect(existsSync(join(runDir, 'configuration.yaml'))).toBe(false)
 })
+
+it('R754-05: renews the lease without replacing an outstanding step attempt', () => {
+  const clock = '.pair/working/clock.cjs'
+  write(clock, 'Date.now = () => Number(process.env.PAIR_TEST_NOW)\n')
+  const now = Date.now()
+  const setMinutes = (minutes: number) =>
+    vi.stubEnv('PAIR_TEST_NOW', String(now + minutes * 60_000))
+  vi.stubEnv('NODE_OPTIONS', `--require="${join(main, clock)}"`)
+  try {
+    setMinutes(0)
+    const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
+    expect(advance(lease)).toMatchObject({ ready: [{ id: 'draft', attempt: 1 }] })
+    setMinutes(50)
+    expect(JSON.parse(successful(['renew', runId, ...lease]))).toMatchObject({ renewed: true })
+    setMinutes(61)
+    expect(
+      JSON.parse(
+        successful(['record', runId, 'draft', ...lease, '--result', '-'], fenced(drafted)),
+      ),
+    ).toMatchObject(drafted)
+    expect(JSON.parse(readRun('state.json'))).toMatchObject({
+      steps: { draft: { state: 'ok', executions: 1 } },
+    })
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
