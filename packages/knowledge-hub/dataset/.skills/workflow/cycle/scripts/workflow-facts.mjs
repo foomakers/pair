@@ -14,6 +14,13 @@ const soloAnswer = (code, target, comment) =>
   originalComment(comment) && sameLogin(comment.authorLogin, target.author)
   && code.workflowApprovalToken({ head: target.head, author: target.author, comment })
 
+function cardDecision(body, { pr, head }) {
+  const line = body.trimStart().split('\n')[0].trim()
+  const match = /^\/(approve|reject)[ \t]+#(\d+)[ \t]+([0-9a-f]{40})(?:[ \t]+(.*))?$/.exec(line)
+  if (!match || match[2] !== String(pr) || match[3] !== head) return undefined
+  return { verdict: match[1] === 'approve' ? 'approved' : 'rejected', note: match[4] }
+}
+
 const workflowMerge = (host, card, input) => {
   const { code, pm } = host
   const pr = code.workflowPr({ id: card })
@@ -64,11 +71,12 @@ try {
         && (!sameLogin(row.login, target.author) || row.solo)
       const comments = pm.listCardComments({ id: card }).flatMap(row => {
         if (!originalComment(row) || Date.parse(row.createdAt) < since) return []
-        const answer = { login: row.authorLogin, human: true, at: row.createdAt, body: row.body, channel: 'comment' }
+        const answer = { login: row.authorLogin, human: true, at: row.createdAt, channel: 'comment', pr, head: target.head }
         if (sameLogin(row.authorLogin, target.author))
           return humanLogin(row.authorLogin, bot) && soloAnswer(code, target, row)
-            ? [{ ...answer, solo: true, body: '/approve ' + target.head }] : []
-        return /^\s*\/(approve|reject)(?:\s|$)/.test(row.body) ? [answer] : []
+            ? [{ ...answer, solo: true, verdict: 'approved', note: target.head }] : []
+        const decision = cardDecision(row.body, park)
+        return decision ? [{ ...answer, ...decision }] : []
       })
       const reviews = code.workflowReviews({ pr }).filter(row =>
         row.head === target.head && ['APPROVED', 'CHANGES_REQUESTED'].includes(row.state)

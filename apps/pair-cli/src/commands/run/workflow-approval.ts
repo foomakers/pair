@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import {
   writeAtomic,
-  parseComment,
   fromReview,
   type Answer,
   type RunDirectory,
@@ -101,7 +100,14 @@ async function notifyParked(
       await platform.notice(
         card,
         `<!-- pair-workflow-approval:${key}:${park.since} -->`,
-        `${String(question)}\n\n${reason}. Reply with /approve or /reject followed by a reason, or submit a native review.`,
+        [
+          String(question),
+          '',
+          reason,
+          '',
+          `Reply with \`/approve #${park.pr} ${park.head}\` or \`/reject #${park.pr} ${park.head} <reason>\`, or submit a native review.`,
+          `PR authors with solo approval enabled use \`/approve ${park.head}\`.`,
+        ].join('\n'),
       )
       await writeAtomic(run.files, path, JSON.stringify({ ...park, notified: true }))
     } catch (error) {
@@ -129,22 +135,30 @@ export function approvalPlatform(call: Operation): ApprovalPlatform {
     answers: async (card, park, flag) => {
       const values = await call('approval-answers', card, { ...park, flag })
       if (!Array.isArray(values)) throw new Error('unreadable approval answers')
-      return values.map(parseAnswer).filter((answer): answer is Answer => answer !== undefined)
+      return values
+        .map(row => parseAnswer(row, park))
+        .filter((answer): answer is Answer => answer !== undefined)
     },
   }
 }
 
-function parseAnswer(row: Record<string, unknown>): Answer | undefined {
+function parseAnswer(row: Record<string, unknown>, target: ApprovalTarget): Answer | undefined {
   const { login, channel, verdict, note, body, state } = row
   if (typeof login !== 'string') return undefined
-  if (channel === 'flag') return readFlag(login, verdict, note)
+  if (channel === 'flag') return readDecision(channel, login, verdict, note)
+  if (channel === 'comment' && row['pr'] === target.pr && row['head'] === target.head)
+    return readDecision(channel, login, verdict, note)
   const message = typeof body === 'string' ? body : ''
-  if (channel === 'comment') return parseComment(login, message)
   if (channel === 'review' && typeof state === 'string') return fromReview(login, state, message)
   return undefined
 }
 
-function readFlag(login: string, verdict: unknown, note: unknown): Answer | undefined {
+function readDecision(
+  channel: 'flag' | 'comment',
+  login: string,
+  verdict: unknown,
+  note: unknown,
+): Answer | undefined {
   if (verdict !== 'approved' && verdict !== 'rejected') return undefined
-  return { channel: 'flag', login, verdict, ...(typeof note === 'string' && { note }) }
+  return { channel, login, verdict, ...(typeof note === 'string' && { note }) }
 }

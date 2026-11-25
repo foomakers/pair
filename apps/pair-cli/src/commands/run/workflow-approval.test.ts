@@ -25,7 +25,11 @@ it('parks once and continues only on a fresh authorized answer (#726 AC-2/3)', a
   const run = approvalRunner({ dir: '/run', files }, platform)
   expect(await run(step)).toMatchObject({ status: 'needs-human' })
   expect(await run(step)).toMatchObject({ status: 'needs-human' })
-  expect(notice).toHaveBeenCalledTimes(1)
+  expect(notice).toHaveBeenCalledExactlyOnceWith(
+    '726',
+    expect.stringContaining('pair-workflow-approval:'),
+    expect.stringContaining(`/approve #735 ${head}`),
+  )
   readAnswers.mockResolvedValue([{ channel: 'comment', login: 'maintainer', verdict: 'approved' }])
   expect(await run(step)).toMatchObject({
     status: 'ok',
