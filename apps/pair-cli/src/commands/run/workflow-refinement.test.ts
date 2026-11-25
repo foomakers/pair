@@ -475,6 +475,37 @@ it.each([
   },
 )
 
+it.each([
+  { changed: 'labels', refreshed: { labels: [] } },
+  { changed: 'status', refreshed: { status: 'Ready', boardState: 'Ready' } },
+  { changed: 'assignee', refreshed: { assignees: ['someone-else'] } },
+])(
+  'R744-28 (#678 AC-2/AC-3): rechecks mapped selection after $changed change',
+  async ({ refreshed }) => {
+    write('pair.config.json', JSON.stringify({ workflows: { quick: {} } }))
+    const card = {
+      id: '12',
+      title: 'Story 12',
+      body: '',
+      labels: ['docs'],
+      assignees: ['maintainer'],
+      status: 'Draft',
+      boardState: 'Draft',
+      closed: false,
+      prerequisites: [],
+    }
+    const readSelection = vi
+      .fn<NonNullable<WorkflowHostDependencies['readSelection']>>()
+      .mockResolvedValueOnce({ cards: [card], assignee: 'maintainer' })
+      .mockResolvedValue({ cards: [{ ...card, ...refreshed }] })
+    const options = { card: '12', filter: 'docs', status: 'Draft', assignee: '@me' }
+
+    expect(await run([], OK, options, { readSelection })).toBe(0)
+    expect(lines).toContain('  #12: not-applicable — selection filter')
+    expect(launched).toHaveLength(0)
+  },
+)
+
 it.each([false, true])(
   'R744-08/R744-28: bare-card retry honors narrowing (another match: %s)',
   async other => {
