@@ -111,7 +111,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 3,
         key: 'descripton',
         problem: "unknown key 'descripton'",
-        fix: 'use one of version, name, description, outputs, aliases, steps',
+        fix: 'use one of version, name, select, description, outputs, aliases, steps',
       },
     ],
     [

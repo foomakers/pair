@@ -210,8 +210,8 @@ function expandedSource(workflow: Workflow): string {
         { ...step, ...(children && { steps: entries(children) }) },
       ]),
     )
-  const { version, name, description, aliases, steps } = workflow
-  return `${JSON.stringify({ version, name, description, aliases, steps: entries(steps) }, null, 2)}\n`
+  const { version, name, description, aliases, select, steps } = workflow
+  return `${JSON.stringify({ version, name, description, aliases, select, steps: entries(steps) }, null, 2)}\n`
 }
 
 function checkWorkflow(

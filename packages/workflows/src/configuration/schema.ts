@@ -1,4 +1,5 @@
-import { entrySchema as entry, STEP_ID, type Entry } from '../grammar'
+import { entrySchema as entry, STEP_ID, selectSchema, type Entry } from '../grammar'
+import type { CardSelection } from '../select'
 import type { JsonSchema } from '../schema'
 
 export type { Entry } from '../grammar'
@@ -12,6 +13,8 @@ export interface Configuration {
   readonly steps?: Readonly<Record<string, Entry & { readonly max?: number }>>
   /** Switches the run's telemetry on or off; a flag overrides it. */
   readonly telemetry?: boolean
+  readonly select?: CardSelection
+  readonly parallel?: number
 }
 
 export const configurationSchemaV1: JsonSchema = {
@@ -31,5 +34,7 @@ export const configurationSchemaV1: JsonSchema = {
       },
     },
     telemetry: { type: 'boolean' },
+    select: selectSchema,
+    parallel: { type: 'integer', minimum: 1 },
   },
 }

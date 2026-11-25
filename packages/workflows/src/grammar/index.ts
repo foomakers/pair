@@ -1,5 +1,6 @@
 import { basename, extname } from 'node:path'
 import { isAlias, isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, visit } from 'yaml'
+import { ORDER_KEYS, type CardSelection } from '../select'
 import { violations, type JsonSchema, type Path } from '../schema'
 
 /** The step kinds of grammar v1. A kind's contract lives in `kinds/`. */
@@ -73,6 +74,24 @@ export interface When {
 /** `<step>.<name>` or `<loop>/<step>.<name>`. */
 const OUTPUT_REF = '^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)?\\.[A-Za-z][A-Za-z0-9]*$'
 const names = { type: 'array', items: text } as const
+export const selectSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    filter: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        has: names,
+        lacks: names,
+        status: { ...names, items: { enum: CARD_STATES } },
+        assignee: text,
+      },
+    },
+    order: { type: 'array', items: { enum: ORDER_KEYS } },
+  },
+}
+
 export const whenSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,
@@ -147,6 +166,7 @@ export const workflowSchemaV1: JsonSchema = {
   properties: {
     version: { const: 1, description: 'The grammar version.' },
     name: { type: 'string', description: 'Equals the file name without its extension.' },
+    select: selectSchema,
     description: { type: 'string' },
     outputs: {
       type: 'object',
@@ -233,6 +253,7 @@ export interface Step {
 export interface Workflow {
   readonly version: 1
   readonly name: string
+  readonly select?: CardSelection
   readonly description?: string
   readonly outputs?: { readonly from: string }
   /** The declared aliases, each with its defaults. */
