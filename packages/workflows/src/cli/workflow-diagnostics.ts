@@ -1,21 +1,11 @@
-import { checkAgainstEngines, type EngineFacts } from '../configuration'
-import { addressedSteps, formatError } from '../grammar'
 import { projectConfig } from './session-files'
 import {
+  checkWorkflowConfiguration,
   workflowConfiguration,
   workflowDefinition,
   workflowSummary,
   type Project,
 } from './session-project'
-
-// Only structural checks apply here. Engine availability and model catalogues belong to the runner.
-const offlineFacts: EngineFacts = {
-  known: () => true,
-  installed: () => true,
-  models: () => undefined,
-  recognizesModel: () => true,
-  supportsEffort: () => true,
-}
 
 function declaredEngine(config: Record<string, unknown>): string {
   const run = config['run'] as { defaults?: { engine?: unknown } } | undefined
@@ -37,20 +27,10 @@ export function validateWorkflow(
     { workflow: workflow.name, engine, flag, labels: [] },
     projectSettings,
   )
-  const checked =
-    selected &&
-    checkAgainstEngines(selected.configuration, {
-      file: selected.file,
-      steps: addressedSteps(workflow),
-      aliases: workflow.aliases,
-      facts: offlineFacts,
-      engineFlag,
-    })
-  if (checked?.errors.length)
-    throw new Error(`configuration-invalid: ${checked.errors.map(formatError).join('\n')}`)
+  const configWarnings = checkWorkflowConfiguration(workflow, selected, engineFlag)
   return {
     file: workflow.file,
     ...workflowSummary(workflow, selected?.configuration, engine),
-    warnings: [...warnings, ...(checked?.warnings.map(formatError) ?? [])],
+    warnings: [...warnings, ...configWarnings],
   }
 }

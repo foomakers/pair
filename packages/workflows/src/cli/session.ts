@@ -46,6 +46,7 @@ import { workflowMerge } from './workflow-merge'
 import { refreshReplayInputs } from './workflow-replay'
 import { readMessage, readText, sessionFiles } from './session-files'
 import {
+  checkWorkflowConfiguration,
   controlStateScript,
   cycleScripts,
   effectiveSettings,
@@ -134,6 +135,8 @@ async function startFresh(
     flag: input.config,
     labels: view.labels,
   })
+  // The session engine describes this host. Other engines are handled at the step boundary.
+  const configWarnings = checkWorkflowConfiguration(definition.workflow, selected)
   checkSelection(project, scripts, view, {
     workflow: definition.workflow,
     configuration: selected?.configuration,
@@ -151,7 +154,12 @@ async function startFresh(
     join(run.dir, 'sources.json'),
     JSON.stringify(definition.digests, null, 2),
   )
-  return { ...started, warnings: [...definition.warnings, ...started.warnings], card, worktree }
+  return {
+    ...started,
+    warnings: [...definition.warnings, ...configWarnings, ...started.warnings],
+    card,
+    worktree,
+  }
 }
 
 async function resumeSaved(

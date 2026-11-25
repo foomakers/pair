@@ -1,5 +1,6 @@
 import { basename, extname, join, resolve } from 'node:path'
 import {
+  checkAgainstEngines,
   checkWorkflowTiers,
   hasConfigurationTiers,
   isConfigurationPath,
@@ -7,6 +8,7 @@ import {
   selectConfiguration,
   settingsFor,
   type Configuration,
+  type EngineFacts,
   type ResolvedSettings,
   type WorkflowsConfig,
 } from '../configuration'
@@ -182,6 +184,33 @@ export function workflowConfiguration(
     file,
     ...(flag === undefined && hasConfigurationTiers(workflows, workflow) && { cardLabels: labels }),
   }
+}
+
+// Only structural checks apply here. Engine availability and model catalogues belong to the runner.
+const offlineFacts: EngineFacts = {
+  known: () => true,
+  installed: () => true,
+  models: () => undefined,
+  recognizesModel: () => true,
+  supportsEffort: () => true,
+}
+
+export function checkWorkflowConfiguration(
+  workflow: Workflow,
+  selected: ReturnType<typeof workflowConfiguration>,
+  engineFlag?: string,
+): string[] {
+  if (selected === undefined) return []
+  const checked = checkAgainstEngines(selected.configuration, {
+    file: selected.file,
+    steps: addressedSteps(workflow),
+    aliases: workflow.aliases,
+    facts: offlineFacts,
+    engineFlag,
+  })
+  if (checked.errors.length)
+    throw new Error(`configuration-invalid: ${checked.errors.map(formatError).join('\n')}`)
+  return checked.warnings.map(formatError)
 }
 
 export function effectiveSettings(
