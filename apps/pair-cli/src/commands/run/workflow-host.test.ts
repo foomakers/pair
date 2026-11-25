@@ -1071,45 +1071,59 @@ it('R744-12 (#678 AC-2): Draft selection excludes cards that meet the DoR on a m
   expect(lines).toContain('  #12: not-applicable — selection filter')
 })
 
-it('R744-13 (#678 AC-6): a timed-out task plan stays eligible on a minimal board', async () => {
-  const backlog = minimalRefinementBoard()
-  const card = `${backlog}/12.md`
-  const body = STORY_BEFORE_TASKS + '\n## Acceptance Criteria\n\n## Assumptions\n'
-  write(card, body)
-  const facts = { boardStatus: 'Todo', labels: ['risk:green'] }
-  const result = { status: 'ok', summary: 'Prepared', boardStatus: facts.boardStatus }
-  const plan = vi
-    .fn()
-    .mockImplementationOnce(() => write(card, body + STORY_TASKS))
-    .mockReturnValueOnce(fenced({ ...result, tasks: 1 }))
-  const workflow = deps(
-    {
-      'pair-process-refine-story': () =>
-        fenced({ ...result, riskTag: 'risk:green', openQuestions: [] }),
-      'pair-process-plan-tasks': plan,
-    },
-    {
-      readResultFacts: async () => ({
-        card: { ...facts, body: fs.readFileSync(join(project, card)) },
-      }),
-      board: { getState: async () => facts.boardStatus, setState: async () => {} },
-    },
-  )
-  const options = { cwd: project, card: '12,13' }
-  write(`${backlog}/13.md`, STORY_BEFORE_TASKS + STORY_TASKS)
-  const command = parseRunCommand(options, ['refinement'])
-  expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(1)
-  expect(states('refinement-12')).toEqual({ refine: 'ok', tasks: 'failed' })
+it.each(['refine', 'tasks'])(
+  'R744-13 (#678 AC-6): timed-out %s stays eligible on a minimal board',
+  async step => {
+    const backlog = minimalRefinementBoard()
+    const card = `${backlog}/12.md`
+    const body =
+      STORY_BEFORE_TASKS + '\n**Labels**: risk:green\n\n## Acceptance Criteria\n\n## Assumptions\n'
+    const ready = body + STORY_TASKS
+    write(card, step === 'refine' ? ready.replace('Design: not required', '') : body)
+    const facts = { boardStatus: 'Todo', labels: ['risk:green'] }
+    const result = { status: 'ok', summary: 'Prepared', boardStatus: facts.boardStatus }
+    const refine = vi.fn<FakeSkill>(() =>
+      fenced({ ...result, riskTag: 'risk:green', openQuestions: [] }),
+    )
+    const plan = vi.fn<FakeSkill>(() => fenced({ ...result, tasks: 1 }))
+    const interrupted = step === 'refine' ? refine : plan
+    interrupted.mockImplementationOnce(() => {
+      write(card, ready)
+      return undefined
+    })
+    const workflow = deps(
+      {
+        'pair-process-refine-story': refine,
+        'pair-process-plan-tasks': plan,
+      },
+      {
+        readResultFacts: async () => ({
+          card: { ...facts, body: fs.readFileSync(join(project, card)) },
+        }),
+        board: { getState: async () => facts.boardStatus, setState: async () => {} },
+      },
+    )
+    const options = { cwd: project, card: '12,13', filter: 'risk:green' }
+    write(`${backlog}/13.md`, STORY_BEFORE_TASKS + STORY_TASKS)
+    const command = parseRunCommand(options, ['refinement'])
+    expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(1)
+    expect(states('refinement-12')).toEqual(
+      step === 'refine'
+        ? { refine: 'failed', tasks: 'pending' }
+        : { refine: 'ok', tasks: 'failed' },
+    )
 
-  const narrowed = parseRunCommand({ ...options, filter: 'missing' }, ['refinement'])
-  expect(await handleRunCommand(narrowed, fs, workflow), lines.join('\n')).toBe(0)
-  expect(lines).toContain('  #12: not-applicable — selection filter')
-  expect(plan).toHaveBeenCalledTimes(1)
+    write(card, ready.replace('risk:green', 'risk:yellow'))
+    expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(0)
+    expect(lines).toContain('  #12: not-applicable — selection filter')
+    expect(interrupted).toHaveBeenCalledTimes(1)
 
-  expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(0)
-  expect(states('refinement-12')).toEqual({ refine: 'ok', tasks: 'ok' })
-  expect(plan).toHaveBeenCalledTimes(2)
-})
+    write(card, ready)
+    expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(0)
+    expect(states('refinement-12')).toEqual({ refine: 'ok', tasks: 'ok' })
+    expect(interrupted).toHaveBeenCalledTimes(2)
+  },
+)
 
 it.each<{
   failSelected?: boolean
