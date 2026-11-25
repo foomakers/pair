@@ -215,7 +215,17 @@ export default defineAdapter({
         if (batch.length < 100) return rows
       }
     }
-    const issueRelations = (id, relation, repo) => listPages(`${apiRepo(repo)}/issues/${id}/${relation}?sort=created`).map(issue => ({ id: String(issue.number), closed: issue.state === 'closed' }))
+    const issueRelations = (id, relation, repo) => {
+      const rows = listPages(`${apiRepo(repo)}/issues/${id}/${relation}?sort=created`)
+      if (rows.length === 0) return []
+      const bound = resolveRepo(repo).toLowerCase()
+      return rows.map(issue => {
+        const slug = /\/repos\/([^/]+\/[^/]+)$/.exec(issue?.repository_url ?? '')?.[1]
+        if (!slug || !Number.isInteger(issue.number))
+          throw new HostError('invalid-output', { message: `gh api ${relation}: missing issue number or repository` })
+        return { id: String(issue.number), closed: issue.state === 'closed', foreign: slug.toLowerCase() === bound ? null : `${slug}#${issue.number}` }
+      })
+    }
     const BOARD_QUERY = 'query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){issue(number:$n){id projectItems(first:20){nodes{id project{id title fields(first:30){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}}}}'
     const BOARD_MUTATION = 'mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}'
 
@@ -261,10 +271,13 @@ export default defineAdapter({
         return Array.isArray(rows) ? rows : []
       },
       childCards({ id, repo }) {
-        return issueRelations(id, 'sub_issues', repo)
+        return issueRelations(id, 'sub_issues', repo).map(({ id, closed, foreign }) => {
+          if (foreign) throw new HostError('invalid-input', { message: `card-out-of-scope: ${foreign}` })
+          return { id, closed }
+        })
       },
       blockedBy({ id, repo }) {
-        return issueRelations(id, 'dependencies/blocked_by', repo).map(card => card.id)
+        return issueRelations(id, 'dependencies/blocked_by', repo).map(card => card.foreign ?? card.id)
       },
       listCards({ repo, labels }) {
         if (labels) return labels.flatMap(label => listPages(`${apiRepo(repo)}/issues?state=open&labels=${encodeURIComponent(label)}`)).filter(issue => !issue.pull_request).map(issue => ({ id: String(issue.number) }))
