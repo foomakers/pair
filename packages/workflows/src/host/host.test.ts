@@ -267,7 +267,19 @@ function fakeHost(skills: Record<string, FakeSkill>) {
     isSafeText: text => !text.includes('`') && !text.includes('\n'),
     launch: async (step, message) => {
       launched.push({ step: step.id, message })
-      return (skills[step.uses] as FakeSkill)(step, message)
+      const final = await (skills[step.uses] as FakeSkill)(step, message)
+      return final === undefined
+        ? {
+            fault: {
+              kind: 'crash',
+              detail: 'engine exited',
+              exitCode: 1,
+              signal: null,
+              elapsedMs: 9,
+              stderrTail: [],
+            },
+          }
+        : { final }
     },
     report: event => void events.push(event),
   }

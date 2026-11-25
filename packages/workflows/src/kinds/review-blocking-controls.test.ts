@@ -110,7 +110,19 @@ describe('runSteps: the review step ends without a review (r0-1 controls)', () =
       isSafeText,
       launch: async step => {
         launched.push(step.id)
-        return step.kind === 'review' ? review : implemented
+        const final = step.kind === 'review' ? review : implemented
+        return final === undefined
+          ? {
+              fault: {
+                kind: 'no-result',
+                detail: 'no final message',
+                exitCode: 0,
+                signal: null,
+                elapsedMs: 5,
+                stderrTail: [],
+              },
+            }
+          : { final }
       },
     }
     await start({ files: host.files, dir }, source, { card: '627' })

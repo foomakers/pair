@@ -30,6 +30,7 @@ import {
   stepSettled,
   stoppedApproval,
   stoppedLoop,
+  type AgentLaunchResult,
   type Assignment,
   type CardState,
   type Configuration,
@@ -452,7 +453,7 @@ function launcher(run: Launch) {
     step: StepLaunch,
     message: string,
     meter: (usage: Usage) => void,
-  ): Promise<string | undefined> => {
+  ): Promise<AgentLaunchResult> => {
     const settings = stepSettings(resolved, run.effective, stepOf(resolved, step.id))
     const engine = engineOf(resolved, settings.engine)
     const { autonomyArgs, idle } = policyOf(engine)
@@ -478,9 +479,17 @@ function launcher(run: Launch) {
     })
     // An interrupted run records nothing: the step stays `running` on disk and runs again at the next launch.
     if (isInterrupted()) throw new Error('interrupted')
-    if (result.outcome === 'success' && text !== undefined) return text
-    console.log(`  ${step.id}: the agent ended with no result — ${result.detail}`)
-    return undefined
+    if (result.outcome === 'success' && text !== undefined) return { final: text }
+    return {
+      fault: {
+        kind: result.outcome === 'success' ? 'no-result' : 'crash',
+        detail: result.detail,
+        exitCode: null,
+        signal: null,
+        elapsedMs: 0,
+        stderrTail: [],
+      },
+    }
   }
 }
 

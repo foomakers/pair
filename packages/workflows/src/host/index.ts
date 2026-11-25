@@ -38,6 +38,22 @@ export interface StepEvent {
   readonly detail?: string
 }
 
+export interface ProcessDiagnostics {
+  readonly exitCode: number | null
+  readonly signal: string | null
+  readonly elapsedMs: number
+  readonly stderrTail: readonly string[]
+}
+
+export interface Diagnosis extends ProcessDiagnostics {
+  readonly kind: 'timeout' | 'idle' | 'crash' | 'no-result' | 'invalid-result'
+  readonly detail: string
+}
+
+export type AgentLaunchResult =
+  | { readonly final: string; readonly process?: ProcessDiagnostics }
+  | { readonly fault: Diagnosis }
+
 /**
  * What a host implements. The package decides what runs next and what its result means; the host
  * owns everything the package must not touch: processes, the worktree, the console.
@@ -52,8 +68,8 @@ export interface WorkflowHost {
   /** The host's prompt-safety check. */
   readonly isSafeText: (value: string) => boolean
   /**
-   * Launches the agent of one step in the run's worktree and resolves to its final message —
-   * `undefined` when the agent died or timed out. Rejects when the run is interrupted: nothing is
+   * Launches an agent in the run's worktree and resolves to its final message or a process fault.
+   * Rejects when the run is interrupted: nothing is
    * recorded, the step stays `running` on disk and runs again at the next launch. A host whose engine
    * reports usage hands it to `meter`; the last call is the step's usage.
    */
@@ -61,7 +77,7 @@ export interface WorkflowHost {
     step: StepLaunch,
     message: string,
     meter: (usage: Usage) => void,
-  ): Promise<string | undefined>
+  ): Promise<AgentLaunchResult>
   /** The card as it is now: what a step's `when` reads. Absent: a `when` on card facts matches. */
   card?(): Promise<CardFacts>
   /** Applies the step's directive before it starts. Returns a reason when the card is held. */
@@ -298,10 +314,11 @@ async function executeAgent(
     return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
   }
   exchange.sent = message
-  const final = await host.launch(step, message, usage => {
+  const launched = await host.launch(step, message, usage => {
     exchange.usage = usage
   })
-  if (final === undefined) return record(run, step.id, NO_AGENT_RESULT)
+  if ('fault' in launched) return record(run, step.id, NO_AGENT_RESULT)
+  const { final } = launched
   exchange.final = final
   const result = readResult(final, kind)
   // Leave the step running on disk so the next invocation can retry it.

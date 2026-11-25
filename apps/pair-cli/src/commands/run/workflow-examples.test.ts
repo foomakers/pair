@@ -70,7 +70,7 @@ async function simulate(
         const reply = agentResults[step.id]
         if (reply === undefined) throw new Error(`Unexpected agent step ${step.id}`)
         const result = typeof reply === 'function' ? reply(step) : reply
-        return `\`\`\`json\n${JSON.stringify(result)}\n\`\`\``
+        return { final: `\`\`\`json\n${JSON.stringify(result)}\n\`\`\`` }
       },
       ...(perform !== undefined && { perform }),
       report: event => events.push(event),
