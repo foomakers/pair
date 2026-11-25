@@ -52,7 +52,13 @@ const checkArgs = args.filter(arg => !fixFlags.has(arg))
 if (checkArgs.length === args.length) {
   process.exitCode = runLint(args, 'inherit').status ?? 2
 } else {
-  const fixed = runLint(args, ['inherit', 'pipe', 'inherit'])
+  const capture = ['inherit', 'pipe', 'pipe']
+  let fixed = runLint(args, capture)
+  // A no-var fix can leave prefer-const to be applied on a second pass.
+  if ((fixed.status === 0 || fixed.status === 1) && fixed.stderr.length === 0) {
+    fixed = runLint(args, capture)
+  }
+  process.stderr.write(fixed.stderr)
   if (fixed.status !== 0) {
     process.stdout.write(fixed.stdout)
     process.exitCode = fixed.status ?? 2

@@ -50,7 +50,7 @@
   {
     "profile": "base",
     "before": "no-compare-neg-zero",
-    "rule": "eslint(no-compare-neg-zero)",
+    "rule": "eslint-js(no-compare-neg-zero)",
     "clean": "Object.is(x, -0)",
     "violation": "x > -0",
     "severity": "error"
@@ -676,7 +676,7 @@
   {
     "profile": "base",
     "before": "no-var",
-    "rule": "eslint-js(no-var)",
+    "rule": "eslint(no-var)",
     "clean": "declare global { var bar: 'car' }",
     "violation": "var a = a",
     "severity": "error"
