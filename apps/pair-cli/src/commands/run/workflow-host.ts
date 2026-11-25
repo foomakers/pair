@@ -1,3 +1,5 @@
+import { savedWorkflow } from './workflow-saved-state'
+import { prepareReplayHead, recoverWorktree } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
@@ -9,8 +11,10 @@ import {
   kindByName,
   addressedSteps,
   frozenConfiguration,
-  parseFrozenConfiguration,
   parseWorkflow,
+  pendingMergeClosure,
+  record,
+  parseFrozenConfiguration,
   readGateRegistry,
   readGateTargets,
   runSteps,
@@ -22,6 +26,7 @@ import {
   type RunOutcome,
   type StepEvent,
   type StepLaunch,
+  type StepReplay,
   type StepSettings,
   type Usage,
   type Workflow,
@@ -71,6 +76,9 @@ import {
   runSetupCommand,
 } from './cycle-wiring'
 import { performHostKind, runStepGates } from './workflow-kinds'
+import { workflowFacts, workflowOperation } from './workflow-facts'
+import { approvalPlatform, approvalRunner } from './workflow-approval'
+import { workflowMerge } from './workflow-merge'
 import {
   createCycleScriptsBridge,
   locateCycleScripts,
@@ -150,13 +158,26 @@ export function locateWorkflow(
 /** The cycle's own worktree mechanism: `<worktree root>/<card>`, the card's branch, the setup command on a fresh one. */
 async function cycleWorktree(input: WorktreeInput): Promise<string> {
   const location = locateCycleScripts(input.fs, input.project, input.cwd)
-  const made = createCycleScriptsBridge(location, input.cwd).worktree({
-    main: input.main,
-    story: input.card,
-    branch: resolveBranch(input.card, input.title, undefined, input.cwd),
-    base: readCycleDefaults(location).baseBranch,
-    worktreeRoot: resolveCycleWorktreeRoot(location, input.main, undefined),
-  })
+  const bridge = createCycleScriptsBridge(location, input.cwd)
+  const resolve = (pr?: number) => resolveBranch(input.card, input.title, pr, input.cwd)
+  const made = await recoverWorktree(
+    resolve(),
+    branch =>
+      bridge.worktree({
+        main: input.main,
+        story: input.card,
+        branch,
+        base: readCycleDefaults(location).baseBranch,
+        worktreeRoot: resolveCycleWorktreeRoot(location, input.main, undefined),
+      }),
+    async () => {
+      const platform = approvalPlatform((action, card, data) =>
+        workflowOperation(() => location.scriptsDir, input.cwd, { action, card, data }),
+      )
+      return (await platform.target(input.card)).pr
+    },
+    resolve,
+  )
   const failed = made.created ? await runSetupCommand(input.main, made.path) : undefined
   if (failed !== undefined) throw new Error(`worktree-setup-failed: ${failed}`)
   return made.path
@@ -485,18 +506,50 @@ interface Opened {
   readonly effective?: Configuration | undefined
   /** The card's worktree, where gate commands run. */
   readonly worktree?: string
+  readonly flagStep?: string
+  readonly closureOnly?: true
 }
 
 /** What the package asks of this host besides an agent: the card's facts, and the steps it runs itself. */
-function hostKindsOf({ resolved, request, worktree }: Opened, fs: FileSystemService) {
+function hostKindsOf(
+  { resolved, request, runDir, worktree, flagStep }: Opened,
+  fs: FileSystemService,
+) {
   const way = join(resolved.main, WAY_OF_WORKING)
+  const scriptDir = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
+  const gate = performHostKind(
+    readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
+    worktree ?? resolved.cwd,
+    readGateTargets(fs.existsSync(way) ? fs.readFileSync(way) : ''),
+    step => workflowFacts(scriptDir, resolved.cwd, step),
+  )
+  const approval = approvalRunner(
+    { dir: runDir, files: fs },
+    approvalPlatform((action, card, data) =>
+      workflowOperation(scriptDir, resolved.cwd, { action, card, data }),
+    ),
+    flagStep !== undefined && request.flagAnswer !== undefined
+      ? { step: flagStep, answer: request.flagAnswer }
+      : undefined,
+  )
+  const merge = workflowMerge(
+    (action, card, data) => workflowOperation(scriptDir, resolved.cwd, { action, card, data }),
+    resolved.main,
+  )
   return {
     card: () => readCardFacts(request.card, resolved.cwd),
-    perform: performHostKind(
-      readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
-      worktree ?? resolved.cwd,
-      readGateTargets(fs.existsSync(way) ? fs.readFileSync(way) : ''),
-    ),
+    perform: async (step: StepLaunch) => {
+      if (step.kind !== 'approval' && step.kind !== 'merge') return gate(step)
+      try {
+        return await (step.kind === 'approval' ? approval(step) : merge(step))
+      } catch (error) {
+        return {
+          status: 'failed',
+          summary: `The host could not complete ${step.kind}`,
+          reason: error instanceof Error ? error.message : String(error),
+        }
+      }
+    },
     runGates: runStepGates(
       readGateRegistry(fs.existsSync(way) ? fs.readFileSync(way) : ''),
       worktree ?? resolved.cwd,
@@ -641,10 +694,11 @@ async function runOnConsole(
 }
 
 /** The options `start` opens the run with. */
-function startOptions({ resolved, request }: Opened) {
+function startOptions({ resolved, request }: Opened, replay?: StepReplay) {
   return {
     card: request.card,
     restart: request.restart,
+    ...(replay !== undefined && { replay }),
     reconfigure: request.reconfigure === true,
     ...(request.moreRounds !== undefined && {
       moreRounds: request.moreRounds,
@@ -680,6 +734,86 @@ function stopOf(status: string, request: Opened['request']): number | undefined 
   return undefined
 }
 
+function parkedApproval(opened: Opened, fs: FileSystemService): string | undefined {
+  if (opened.request.flagAnswer === undefined) return undefined
+  const path = join(opened.runDir, 'state.json')
+  if (!fs.existsSync(path)) throw new Error('No parked workflow for this card')
+  const state = JSON.parse(fs.readFileSync(path)) as { steps: Record<string, { state: string }> }
+  const parked = addressedSteps(opened.resolved.workflow).filter(
+    step => step.kind === 'approval' && state.steps[step.id]?.state === 'needs-human',
+  )
+  if (parked.length !== 1) throw new Error('The workflow must be parked at one approval step')
+  return parked[0]?.id
+}
+
+async function refreshReplayInputs(
+  opened: Opened,
+  fs: FileSystemService,
+): Promise<StepReplay | undefined> {
+  const saved = savedWorkflow(opened.request, opened.runDir, fs)
+  if (saved === undefined) return undefined
+  const { workflow, state } = saved
+  const { resolved, request } = opened
+  const stopped = workflow.steps.find(step => {
+    const status = state.steps[step.id]?.state
+    return (
+      status !== 'ok' &&
+      status !== 'skipped' &&
+      !(status === 'failed' && step['on-failed'] === 'continue')
+    )
+  })
+  const route = stopped?.['on-resume']
+  if (stopped === undefined || route === undefined) return undefined
+  const failure = state.steps[stopped.id]
+  if (failure?.state !== 'failed' || failure.reason !== route.reason) return undefined
+  const from = workflow.steps.findIndex(step => step.id === route.step)
+  const pr = workflow.steps
+    .slice(0, from)
+    .reverse()
+    .map(step => state.steps[step.id]?.outputs?.['pr'])
+    .find(value => typeof value === 'number')
+  if (pr === undefined) throw new Error('Cannot replay without the original workflow PR')
+  const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
+  const platform = approvalPlatform((action, card, data) =>
+    workflowOperation(locate, resolved.cwd, { action, card, data }),
+  )
+  const current = await platform.target(request.card)
+  if (current.pr !== pr) throw new Error('The workflow PR changed; start a new run for that PR')
+  return { from: route.step, inputs: { head: current.head } }
+}
+
+function recordIncludeSources(
+  fs: FileSystemService,
+  runDir: string,
+  sources: Readonly<Record<string, string>>,
+  status: string,
+): void {
+  const sourcesFile = join(runDir, 'sources.json')
+  if (status === 'started') {
+    fs.writeFileSync(sourcesFile, JSON.stringify(sources, null, 2))
+  } else if (fs.existsSync(sourcesFile)) {
+    const frozen = JSON.parse(fs.readFileSync(sourcesFile)) as Record<string, string>
+    if (JSON.stringify(frozen) !== JSON.stringify(sources)) {
+      console.log('  Warning: included workflow sources changed since this run started.')
+    }
+  }
+}
+
+async function finishClosure(opened: Opened, fs: FileSystemService): Promise<number> {
+  const { resolved, runDir } = opened
+  const step = await closureStep(opened, fs)
+  if (!step) throw new Error('The closed card no longer has a resumable merge')
+  const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
+  const finish = workflowMerge(
+    (action, card, data) => workflowOperation(locate, resolved.cwd, { action, card, data }),
+    resolved.main,
+    true,
+  )
+  const result = await record({ dir: runDir, files: fs }, step.id, await finish(step))
+  console.log(`  Run: ${result.summary}`)
+  return result.status === 'ok' ? 0 : 1
+}
+
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
 async function drive(
   config: RunCommandConfig,
@@ -688,16 +822,26 @@ async function drive(
 ): Promise<number> {
   const { resolved, request, runDir } = opened
   const { fs, deps } = services
-  const started = await start({ files: fs, dir: runDir }, resolved.source, startOptions(opened))
-  const sourcesFile = join(runDir, 'sources.json')
-  if (started.status === 'started') {
-    fs.writeFileSync(sourcesFile, JSON.stringify(resolved.sources, null, 2))
-  } else if (fs.existsSync(sourcesFile)) {
-    const frozen = JSON.parse(fs.readFileSync(sourcesFile)) as Record<string, string>
-    if (JSON.stringify(frozen) !== JSON.stringify(resolved.sources)) {
-      console.log('  Warning: included workflow sources changed since this run started.')
-    }
-  }
+  if (opened.closureOnly) return finishClosure(opened, fs)
+  const flagStep = parkedApproval(opened, fs)
+  const replay = await refreshReplayInputs(opened, fs)
+  const prepare = () =>
+    (deps.workflow?.prepareWorktree ?? cycleWorktree)({
+      fs,
+      project: resolved.project,
+      cwd: resolved.cwd,
+      main: resolved.main,
+      card: request.card,
+      title: opened.title,
+    })
+  const replayTree = replay && (await prepare())
+  if (replay && replayTree) await prepareReplayHead(replayTree, String(replay.inputs['head']))
+  const started = await start(
+    { files: fs, dir: runDir },
+    resolved.source,
+    startOptions(opened, replay),
+  )
+  recordIncludeSources(fs, runDir, resolved.sources, started.status)
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   console.log(`  Run dir: ${runDir} (${started.status})`)
   const effective = readEffective(fs, runDir)
@@ -710,18 +854,11 @@ async function drive(
   )
   const stopped = stopOf(started.status, request)
   if (stopped !== undefined) return stopped
-  const worktree = await (deps.workflow?.prepareWorktree ?? cycleWorktree)({
-    fs,
-    project: resolved.project,
-    cwd: resolved.cwd,
-    main: resolved.main,
-    card: request.card,
-    title: opened.title,
-  })
+  const worktree = replayTree ?? (await prepare())
   console.log(`  Worktree: ${worktree}`)
   return runOnConsole(
     config,
-    { ...opened, effective, worktree },
+    { ...opened, effective, worktree, ...(flagStep === undefined ? {} : { flagStep }) },
     launcher({ config, resolved, services, worktree, effective }),
     services,
   )
@@ -786,22 +923,45 @@ function printPlan(workflow: Workflow): void {
   )
 }
 
-/** The refusals that need the tracker and PATH: a card that cannot be run, an engine that is not installed. Returns the card's title. */
-async function preflight(resolved: Resolved, card: string, services: Services): Promise<string> {
+async function closureStep(
+  opened: Omit<Opened, 'title'>,
+  fs: FileSystemService,
+): Promise<StepLaunch | undefined> {
+  const saved = savedWorkflow(opened.request, opened.runDir, fs)
+  if (saved === undefined) return undefined
+  const step = pendingMergeClosure(saved.workflow, saved.state)
+  if (!step) return undefined
+  const { pr, head } = step.inputs
+  const { resolved, request } = opened
+  const scriptDir = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
+  const merged = await workflowOperation(scriptDir, resolved.cwd, {
+    action: 'merge-resume',
+    card: request.card,
+    data: { pr, head },
+  })
+  return merged === true ? step : undefined
+}
+
+/** Resolve the card and allow a closed-card resume only to finish a confirmed merge. */
+async function preflight(opened: Omit<Opened, 'title'>, services: Services): Promise<Opened> {
+  const { resolved, request } = opened
+  const { card } = request
   const read = await (services.deps.workflow?.readCard ?? readRunnableCard)(card, resolved.cwd)
   if (read === 'missing')
     throw new Error(
       `card-not-found: card ${card} cannot be read from the tracker; nothing was launched.`,
     )
-  if (read === 'closed')
+  if (read === 'closed') {
+    if (await closureStep(opened, services.fs))
+      return { ...opened, title: `Card ${card}: finish post-merge closure`, closureOnly: true }
     throw new Error(`card-closed: card ${card} is closed; nothing was launched.`)
-  // With a configuration, every engine it uses was already checked, before the card was read.
+  }
   if (resolved.configuration === undefined)
     assertEngineAvailable(
       resolved.engine,
       services.deps.workflow?.engineAvailable ?? createExecutableProbe(services.fs),
     )
-  return read.title
+  return { ...opened, title: read.title }
 }
 
 function approvalQuestion(step: ReturnType<typeof addressedSteps>[number]): string {
@@ -849,9 +1009,9 @@ export async function handleWorkflowRun(
     console.log('  Dry run: the workflow is valid; nothing was launched.')
     return 0
   }
-  const title = await preflight(resolved, request.card, services)
   const runId = request.runId ?? `${resolved.workflow.name}-${request.card}`
   const runDir = join(resolved.main, '.pair/working/runs', runId)
+  const opened = await preflight({ resolved, request, runDir }, services)
   fs.mkdirSync(runDir, { recursive: true })
   const lock = acquireRunLock(runDir)
   if (lock.kind === 'run-locked') {
@@ -864,7 +1024,7 @@ export async function handleWorkflowRun(
   try {
     return await whileInterruptible(
       () => lock.release(),
-      () => drive(config, { resolved, request, runDir, title }, services),
+      () => drive(config, opened, services),
     )
   } finally {
     lock.release()

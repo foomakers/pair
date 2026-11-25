@@ -1,7 +1,7 @@
 ---
 name: fix
 description: "Fixes the findings of a pull request review: for each finding in scope, a failing regression test first when it is a bug, then the minimal fix, committed per the commit template; then the named gates, then the push. Invoke to resolve review findings ('fix the findings of PR 42'); run by the `fix` step kind of a workflow. Never decides which gates run, never re-reviews, never merges."
-version: 0.1.0
+version: 0.1.1
 author: Foomakers
 ---
 
@@ -30,9 +30,11 @@ Executable form of the **`fix`** step. No how-to guide: the step exists only as 
 
 ## Algorithm
 
+`continue-on-gate-failure` is an optional boolean, default `false`. When enabled, run all supplied gates, record each failure as `{ gate, reason }` in the optional `gateFailures` result, and continue to a normal push with hooks enabled. Report all gate failures in the summary. A red gate alone then permits `ok` after a successful push. Unresolved findings retain their normal status. If the push fails, return `failed` and report the actual remote head.
+
 ### Step 1: Scope
 
-1. Check out the PR branch at `head`.
+1. Check the PR branch and review head. On resume, keep an existing descendant on the story branch, including local commits. Verify any fixes already there for this review before attempting the remaining findings.
 2. Scope = `ids` when given, else the findings whose severity is at or above `severity`. A finding outside the scope is left alone.
 3. **Empty scope** → return `ok`, `head` = the input head, `resolutions: []`. No commit, no push.
 
@@ -40,16 +42,18 @@ Executable form of the **`fix`** step. No how-to guide: the step exists only as 
 
 For each finding, in order:
 
-1. Read the finding on the PR review (body, file, line).
-2. **Escalate** when the fix needs a product decision or contradicts an acceptance criterion of the story → stop, return `needs-human`, name the finding id in `reason`. Nothing is pushed.
+1. When `reportPath` is supplied, read the finding from that local report, verifying that its PR and reviewed SHA match the inputs before editing. If it is missing or does not match, return `failed` with the mismatch. When absent, read the finding from the PR review (body, file, line).
+2. **Record and continue.** When resolving a finding would contradict an acceptance criterion, needs a product decision, or requires an action only a human can perform, record it as `not-resolved` with the required action. When it depends on another unresolved finding, record that prerequisite. Continue with every independent finding in scope. A technical failure also ends only the affected attempt if its partial edits can be kept separate. Never treat a manual finding as a reason to stop before attempting independent code fixes.
 3. **Bug** → write a failing regression test first and run it to see it fail; commit it (`test:`) before the fix. Then make the minimal fix and see the test pass. Not a bug (docs, naming, structure) → fix directly.
 4. Change nothing outside the finding. Commit per the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)), one commit per finding, naming the finding id.
 5. Record the resolution: `resolved`, or `not-resolved` with the technical `reason`.
 
-### Step 3: Gates, push
+### Step 3: Verify the scope, run gates, push
 
-1. Run each gate of `gates` in order. A red gate → stop, return `failed` with the command output as `reason`. **Nothing is pushed.**
-2. Push the branch. `head` = the sha after the push (`git rev-parse HEAD`, 40 hex).
+Verify there is a resolution for each finding in scope before returning. Attempt any outstanding independent finding before running the gates.
+
+1. Run each gate of `gates` in order. With continuation disabled, a red gate returns `failed` with the command output as `reason` and leaves the commits local.
+2. Push the committed fixes even when independent findings remain open. `head` is the SHA after the push (`git rev-parse HEAD`, 40 hex). If there are no new commits, report the current PR head.
 
 ## Result
 
@@ -63,7 +67,7 @@ End the turn with one JSON object in a fenced `json` block:
 
 `head` and `resolutions` are returned for `ok` and `failed` (on a red gate: the input head, nothing was pushed); `needs-human` may omit them.
 
-Status: `ok` when every finding in scope is `resolved`; `failed` when a gate is red or a finding is `not-resolved` for a technical reason; `needs-human` per Step 2.2.
+Status: `ok` when every finding in scope is `resolved` and the push succeeds or is unnecessary. Return `failed` for a red gate with continuation disabled, a failed push, or an unresolved technical finding. Return `needs-human` when only human actions and their dependents remain. For either stop, report the unresolved finding IDs and reasons.
 
 ## Never
 

@@ -6,6 +6,8 @@ export interface StepKind {
   readonly name: KindName
   /** The pair skill a step of this kind runs when it has no `skill`. */
   readonly defaultSkill?: string
+  /** The boundary the invoked skill returns at, when its direct invocation also handles later phases. */
+  readonly handoff?: string
   /** Run by the host, deterministically: no agent, no skill, no token. */
   readonly host?: true
   /** What the step receives: launch arguments, or outputs of earlier steps with the same name. */
@@ -14,8 +16,6 @@ export interface StepKind {
   readonly outputs: JsonSchema
   /** The options the step accepts under `with`. */
   readonly with: JsonSchema
-  /** What the agent is told to do in an unattended run, besides the result block. */
-  readonly guidance?: string
   /** The documented cases in which the step returns `needs-human`. */
   readonly escalations: readonly string[]
   /**

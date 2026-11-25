@@ -25,6 +25,19 @@ describe('include caller contract (AC-2, AC-3)', () => {
     expect(result.workflow?.steps[1]?.['on-failed']).toBe('stop')
   })
 
+  it('rebases the resume route of an included workflow (#726)', () => {
+    const result = run(
+      'kind: generic',
+      `  review: { kind: review }
+  gate: { kind: gate, on-resume: { reason: head-changed, step: review } }`,
+    )
+    expect(result.errors).toEqual([])
+    expect(result.workflow?.steps[1]).toMatchObject({
+      id: 'call/gate',
+      'on-resume': { reason: 'head-changed', step: 'call/review' },
+    })
+  })
+
   it('accepts the last step as the default output', () => {
     expect(run('kind: fix', '  work: { kind: fix }').errors).toEqual([])
   })
@@ -43,6 +56,7 @@ describe('include caller contract (AC-2, AC-3)', () => {
     'interactive: true',
     'gates: [quality-gate]',
     'state: none',
+    'on-resume: { reason: head-moved, step: prior }',
   ])('rejects caller %s', option => {
     expect(run(`kind: fix, ${option}`, '  work: { kind: fix }').errors.length).toBeGreaterThan(0)
   })

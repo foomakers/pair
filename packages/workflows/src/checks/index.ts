@@ -12,7 +12,7 @@ export type CheckName = (typeof CHECK_NAMES)[number]
 /** Facts the host reads from the platform; the package never reads them itself. */
 export interface FactReader {
   /** CI on the PR head: `pending` while it runs. */
-  ci(): Promise<'green' | 'pending' | 'red'>
+  ci(timeoutMs?: number): Promise<'green' | 'pending' | 'red'>
   /** The PR head now. */
   head(): Promise<string>
   /** The head verified by the last review step. */
@@ -43,11 +43,16 @@ async function ciGreen(facts: FactReader, options: CheckOptions): Promise<Verdic
   } = options
   const deadline = now() + timeoutMinutes * 60_000
   for (;;) {
-    const ci = await facts.ci()
-    if (ci === 'green') return undefined
-    if (ci === 'red') return 'ci-red'
+    const budget = deadline - now()
+    if (budget <= 0) return 'ci-timeout'
+    const ci = await facts.ci(budget).catch(error => {
+      if (now() >= deadline) return 'pending'
+      throw error
+    })
     const remaining = deadline - now()
     if (remaining <= 0) return 'ci-timeout'
+    if (ci === 'green') return undefined
+    if (ci === 'red') return 'ci-red'
     await sleep(Math.min(pollMs, remaining))
   }
 }
@@ -74,8 +79,17 @@ export async function runChecks(
   options: CheckOptions = {},
 ): Promise<StepResult> {
   for (const name of names) {
-    const reason = await verdicts[name](facts, options)
-    if (reason !== undefined) return { status: 'failed', reason, summary: `check ${name} failed` }
+    try {
+      const reason = await verdicts[name](facts, options)
+      if (reason !== undefined) return { status: 'failed', reason, summary: `check ${name} failed` }
+    } catch (error) {
+      return {
+        status: 'failed',
+        reason: 'fact-unreadable',
+        summary: `check ${name} failed`,
+        detail: error instanceof Error ? error.message : String(error),
+      }
+    }
   }
   return { status: 'ok', summary: `${names.length} check(s) passed` }
 }

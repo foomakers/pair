@@ -8,6 +8,7 @@ import {
   type StepLaunch,
 } from '../engine'
 import type { KindName } from '../grammar'
+import { violations } from '../schema'
 import type { CardFacts } from '../select'
 import { kindByName, type StepResult, type StepStatus } from '../kinds'
 import {
@@ -94,7 +95,6 @@ interface Exchange {
   sent: string
   final: string
   usage?: Usage
-  unmeasured?: boolean
 }
 
 /** The result of a step, unless it is `ok` and its `gates` are not all green. */
@@ -113,47 +113,11 @@ async function gated(
   return (await host.runGates(step.gates ?? [], step)) ?? result
 }
 
-/** Launches the agent; a red gate sends the step back to it with the gate output, up to `GATE_RETRIES`. */
-async function launchGated(
-  host: WorkflowHost,
-  run: RunDirectory,
-  step: StepLaunch,
-  sent: { message: string; exchange: Exchange },
-): Promise<StepResult> {
-  const { message, exchange } = sent
-  const kind = kindByName[step.kind]
-  let prompt = message
-  for (let retry = 0; ; retry++) {
-    exchange.sent += prompt
-    let attemptUsage: Usage | undefined
-    const final = await host.launch(step, prompt, usage => {
-      attemptUsage = usage
-    })
-    if (attemptUsage !== undefined) {
-      const prior = exchange.usage ?? { read: 0, cached: 0, written: 0 }
-      exchange.usage = {
-        read: prior.read + attemptUsage.read,
-        cached: prior.cached + attemptUsage.cached,
-        written: prior.written + attemptUsage.written,
-      }
-    } else exchange.unmeasured = true
-    if (final === undefined)
-      return record(run, step.id, {
-        status: 'failed',
-        reason: 'no-result',
-        summary: 'the agent ended without a final message',
-      })
-    exchange.final += final
-    const read = readResult(final, kind)
-    const result = await gated(host, step, read)
-    if (retry < GATE_RETRIES && read.status === 'ok' && result.reason?.startsWith('gate-failed'))
-      prompt = `${message}\n\nThe host ran the quality gates after your last result and one is red. Fix it, then end your turn with the result block again.\n${(result.detail ?? result.summary).slice(-4000)}`
-    else return record(run, step.id, result, final)
-  }
+const NO_AGENT_RESULT: StepResult = {
+  status: 'failed',
+  reason: 'no-result',
+  summary: 'the agent ended without a final message',
 }
-
-/** How many times a red gate sends the step back to its agent before the step fails. */
-const GATE_RETRIES = 2
 
 async function execute(
   host: WorkflowHost,
@@ -162,6 +126,14 @@ async function execute(
   exchange: Exchange = { sent: '', final: '' },
 ): Promise<StepResult> {
   const kind = kindByName[step.kind]
+  const missing = violations(kind.inputs, step.inputs)
+  if (missing.length > 0)
+    return record(run, step.id, {
+      status: 'failed',
+      reason: 'invalid-input',
+      summary: `The ${step.kind} step is missing valid inputs`,
+      detail: missing.map(issue => issue.path.join('.') + ': ' + issue.problem).join('; '),
+    })
   if (kind.host === true) {
     exchange.sent = JSON.stringify(step.with)
     return record(
@@ -186,7 +158,14 @@ async function execute(
     const summary = (error as Error).message
     return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
   }
-  return launchGated(host, run, step, { message, exchange })
+  exchange.sent = message
+  const final = await host.launch(step, message, usage => {
+    exchange.usage = usage
+  })
+  if (final === undefined) return record(run, step.id, NO_AGENT_RESULT)
+  exchange.final = final
+  const result = readResult(final, kind)
+  return record(run, step.id, await gated(host, step, result), final)
 }
 
 /**
@@ -233,13 +212,13 @@ async function executeMetered(
   const startedAt = writer.now()
   const exchange: Exchange = { sent: '', final: '' }
   const result = await execute(host, run, step, exchange)
-  const { sent, final, usage, unmeasured } = exchange
+  const { sent, final, usage } = exchange
   await writer.step({
     step,
     startedAt,
     durationMs: writer.now().getTime() - startedAt.getTime(),
     // A host that cannot measure: the estimate from the two texts.
-    tokens: usage === undefined || unmeasured ? estimated(sent, final) : measured(usage),
+    tokens: usage === undefined ? estimated(sent, final) : measured(usage),
     status: result.status,
     ...(result.reason !== undefined && { reason: result.reason }),
   })

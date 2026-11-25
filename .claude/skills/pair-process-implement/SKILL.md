@@ -1,7 +1,7 @@
 ---
 name: pair-process-implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /pair-capability-verify-quality, /pair-capability-record-decision, /pair-capability-checkpoint, /pair-capability-publish-pr."
-version: 0.7.4
+version: 0.7.5
 author: Foomakers
 ---
 
@@ -39,6 +39,7 @@ Executable form of the **`implement`** step. A **direct** invocation while a ste
 | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$story` | No       | Story ID to implement, supplied by the invocation (e.g. `/pair-process-implement #256`). If omitted, detected from session context or the current branch (`feature/US-<id>-*`). This is the id the resume probe (Step 0.0) uses and the closing phase forwards to `/pair-capability-checkpoint` and `/pair-capability-publish-pr`. If it cannot be resolved when a checkpoint operation needs it → **HALT**. |
 | `$gates` | No       | `none` = run no quality gate of this skill's own (Step 2.7 and the closing `/pair-capability-publish-pr`): the caller runs them. Default: run them. |
+| `$boundary` | No | `published-pr` (also supplied as `Handoff: published-pr.`) returns the published PR, branch and current head to the caller. Omitted for the standalone lifecycle. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
 
@@ -56,6 +57,8 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
    - **Stale checkpoint (story already Done)**: warn that the story is already Done and **require explicit developer confirmation** before reusing the checkpoint. Never silently resume a finished story.
    - **Corrupted/incomplete checkpoint**: `/pair-capability-checkpoint` reports what parsed and what is missing — confirm the gaps with the developer before proceeding (never guess).
 5. **Verify**: Either a fresh start is confirmed, or a valid checkpoint is resumed with the first pending task identified. If `/pair-capability-checkpoint` is not installed, fall back to the git+PM-tool resume (Idempotent Re-invocation) and continue.
+
+**Verified RED handoff.** If the checkpoint carries a valid TDD Handoff, resume its active task at Step 2.3 in GREEN. Confirm the story, current branch, task and test file match, then re-run the recorded command and confirm the recorded test ran. The expected failure authorizes GREEN on that task. A passing test means GREEN already landed in the worktree, so proceed to verification. If the evidence differs, stop and report the mismatch. Do not start another RED session for that task.
 
 ### Step 0.1: Load Story
 
@@ -179,13 +182,21 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 #### TDD Discipline Rules:
 
 1. **New features → add tests autonomously.** Write unit tests without asking.
-2. **Modifying existing tests → ask developer with evidence.** Show what changes and why, get approval before modifying any existing test.
+2. **Changing an existing test's behavior contract → ask with evidence** when the approved story and adopted policy do not authorize the change. Preserve existing controls, and keep diagnostic expectations in sync with explicitly approved contract changes.
 3. **No code+test changes in the same session.** When changing production code, do NOT modify tests until all existing tests pass. Separate RED, GREEN, and REFACTOR into distinct sessions:
-   - **RED session**: Write or modify ONLY test code. Tests MUST fail. No implementation code changes.
+   - **RED session**: Write or modify ONLY test code. Reproduce the expected failure for missing behavior and retain passing controls. If the behavior already works, verify it and continue without a GREEN phase for that behavior.
    - **GREEN session**: Write or modify ONLY implementation code. Write minimal code to make tests pass. No test code changes.
    - **REFACTOR session**: Improve structure without changing behavior. Both test and production code may be cleaned up. All tests must remain green.
 4. **Every module file must have a corresponding unit test file.** 1:1 mapping between source modules and test files.
 5. **Avoid mocks — prefer in-memory test doubles.** Use dependency injection with in-memory implementations (e.g., `InMemoryFileSystemService` instead of mocking `fs`).
+
+**Before ending RED:** Run the regression test and confirm that it fails for the expected reason. Compose `/pair-capability-checkpoint $mode=write $task-map=true` with `$tdd-handoff` containing the active task ID, next phase GREEN, test file, exact command and observed failure. Leave the task pending. Verify the checkpoint was persisted, then continue through a fresh session below. If persistence fails, report the failure and return the checkpoint text for recovery.
+
+**After GREEN:** Verify the recorded test passes. If more work needs a separate RED or REFACTOR session, clear the handoff with `/pair-capability-checkpoint $tdd-handoff=clear` and record the next phase, task and action in Remaining Todos. If the task is ready for verification and completion, continue at Step 2.4 and clear the handoff at Step 2.8.
+
+**Fresh TDD sessions:** The caller of this skill coordinates the task and keeps the invocation open across phase boundaries. When the next phase must run in a fresh session, use the harness's fresh-session or subagent tool from this caller, with no inherited conversation. Pass only the story, worktree, checkpoint path and the requested phase. Direct the worker to run this skill's rules for that phase only, record the outcome and next action in the checkpoint, and return to the caller without starting another session. Wait for the worker, verify the checkpoint and its test evidence, then continue verification or launch the next phase in a sibling session. Use the same split when moving from a completed GREEN task to RED for the next task.
+
+If the harness cannot launch a fresh session, preserve the checkpoint and report `fresh-session-unavailable` (structured `failed` where requested). Stop if the checkpoint and evidence fail to advance. Use `needs-human` only for a specific action or decision that the project requires a person to perform. A phase transition with a verified checkpoint is handled within this skill.
 
 #### For Non-Development Tasks (Direct Implementation):
 
@@ -234,7 +245,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 1. **Check**: Is the commit strategy `commit-per-task`?
 2. **Skip**: If `commit-per-story`, there is no inter-task confirmation and no commit here — but **still apply item 7 (tick and queue) and item 8** for the task just completed, then go to item 9. The tick-and-queue is not a property of the commit strategy: a 4-task `commit-per-story` story whose gate goes red on T3 (Step 2.7 → HALT) would otherwise queue only the failure, and the body would still show `- [ ] T1`, `- [ ] T2` over finished work — the state where "on task 3 of 4" and "failed on task 2" look identical, which is what this loop exists to end. Step 1.3 auto-selects this strategy for every single-task story, so it is the common path, not an exotic one. (The tick records the task's **work** as done, not a commit: on this strategy the single commit lands at Step 3.1. What the tick does **not** become is standalone completion evidence — Step 2.1 accepts a `commit-per-story` ✅ only while the commit or the working-tree change backs it, so a tick that survives a discarded worktree is re-attempted, not trusted.)
-3. **Act** (BLOCKING): Present task summary and **ask developer for confirmation BEFORE committing**:
+3. **Act**: Present the task summary. If the adopted commit policy or an explicit developer authorization permits this commit, go to item 5. Otherwise, ask the developer for confirmation:
 
    ```text
    TASK DONE:
@@ -244,8 +255,6 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
    ```
 
    Ask: _"Task T-N done. OK to commit or changes needed?"_
-
-   **This confirmation is required for EVERY task** — commit-per-task exists precisely to give the developer a checkpoint between tasks.
 
 4. **Verify**: Developer confirms. If changes needed → apply changes, re-run quality (Step 2.7), ask again.
 5. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
@@ -264,7 +273,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
    - Locate the task's checklist item in the **Task Breakdown** section by its **task ID**, and tick it (`- [ ]` → `- [x]`) with the tick-only, diff-checked patch the guideline defines. Mark any **Definition of Done** checkbox now factually satisfied by this task's work (e.g., "SKILL.md created", "template validated") by the same rule — **one write per checkbox**, each with its own read and its own one-line diff check, never two boxes in one body; leave the ones needing reviewer confirmation (e.g., "Code reviewed and merged").
    - **Queue** the task's outcome line for this invocation's batched comment — `ticked`, or the outcome the guideline's vocabulary gives when the tick did not land. The queue is flushed once, at Step 3.1b.
    - **Never blocking**: a locator mismatch, a rejected patch or a failed write is queued and the run continues. A missing tick is a reporting defect, never a reason to stop implementing. The transport is held to it: the tick composes `/pair-capability-write-issue` write mode with **`$on-failure: report`**, so an unresolvable id, a tracker error and an unconfirmed board membership come back as `not-found` / `write-failed` / `membership-unconfirmed` (its Step 8b) instead of a **HALT that would propagate here** and end the story on the task it only annotates. `membership-unconfirmed` says nothing about the tick — the body write landed — so it goes in the batch's `<details>`, not on the task's outcome line.
-8. **Act — persist progress**: If `/pair-capability-checkpoint` is installed, compose `/pair-capability-checkpoint $mode=write` to update `.pair/working/checkpoints/<story-id>.md` with the tasks now done. This keeps the checkpoint current so an interruption after this task resumes from the next pending one (Step 0.0). If `/pair-capability-checkpoint` is not installed, skip — git+PM state still supports the git-based resume.
+8. **Act — persist progress**: If `/pair-capability-checkpoint` is installed, compose `/pair-capability-checkpoint $mode=write` to update `.pair/working/checkpoints/<story-id>.md` with the tasks now done. Pass `$tdd-handoff=clear` once the task named in that handoff is verified and complete. This keeps the checkpoint current so an interruption after this task resumes from the next pending one (Step 0.0). If `/pair-capability-checkpoint` is not installed, skip — git+PM state still supports the git-based resume.
 9. **Check**: Is this the last task?
    - **Yes**: Move to Phase 3 (Closing: checkpoint + PR).
    - **No**: Return to Step 2.1.
@@ -277,7 +286,7 @@ The task cycle is done. The closing phase writes the checkpoint (handoff artifac
 
 1. **Check**: Is the commit strategy `commit-per-story`?
 2. **Skip**: If `commit-per-task`, all commits already exist. Move to **Step 3.1b** — the batch still has to be flushed; the recommended strategy is not the one that reports nothing.
-3. **Act** (BLOCKING): Present summary and **ask developer for confirmation BEFORE committing**:
+3. **Act**: Present the summary. If the adopted commit policy or an explicit developer authorization permits this commit, go to item 5. Otherwise, ask the developer for confirmation:
 
    ```text
    ALL TASKS DONE:
@@ -325,6 +334,8 @@ The checkpoint is the boundary artifact (R4.2) and the **input contract for `/pa
 
 The PR is produced on a **guaranteed-clean context**: a fresh subagent whose entire prompt is the handoff, nothing from this session. This is mechanical isolation (D23) — an **anonymous** subagent, **no named role**. A skill cannot `/clear` its own context (D7), so the reset is achieved by delegating to a subagent.
 
+For `published-pr`, pass `$boundary=published-pr` to the publisher on both paths, including every publication retry. After verified publication, return the PR, branch and pushed head before dispatching review. The workflow selects the subsequent step.
+
 1. **Check**: Is subagent spawning available in this tool/environment?
 2. **Act — primary path (subagent)**: Spawn an **anonymous subagent** whose prompt is the **handoff document only** — the checkpoint contents (or the path `.pair/working/checkpoints/<story-id>.md`) plus a single instruction: run `/pair-capability-publish-pr $story=<story-id> $handoff=.pair/working/checkpoints/<story-id>.md`. Pass **no other session context** — the subagent's context is the handoff and nothing else (clean context / fresh context reset within one execution, R4.1). The subagent runs `/pair-capability-publish-pr` (gate → PR → tags → ready-for-review → board) and returns the PR number/URL and board result.
 3. **Act — degraded inline path**: If subagent spawning is **unavailable** (tool/environment cannot spawn one — subagent spawning unavailable), do NOT skip the split: the checkpoint is already written (Step 3.2), then compose `/pair-capability-publish-pr` **inline** in the current session (`$story`, `$handoff` = the checkpoint). **Note the degradation in the output** (`Context: degraded — inline publish, no subagent reset`). Behavior is otherwise equivalent to the primary path.
@@ -337,12 +348,14 @@ The PR is produced on a **guaranteed-clean context**: a fresh subagent whose ent
    ```
 
    Pass no authoring context (D23 isolation: the reviewer must not inherit the author's assumptions). If `/pair-capability-publish-pr` returns `Review: dispatched` instead (it ran at top level), there is nothing to do here. If this session cannot spawn the reviewer either, record `Review: pending — dispatch unavailable, run /pair-process-review <pr> in a fresh session`: the merge stays blocked, so the review is deferred, never skipped.
-5. **Act — edge case (subagent fails mid-PR)**: The checkpoint remains valid. Re-invoking `/pair-process-implement` re-runs this closing phase; `/pair-capability-publish-pr` is **idempotent** — it detects an existing PR and updates it in place rather than opening a second one. Never open a second PR for the story.
-6. **Verify**: A single ready-for-review PR exists (created or updated), its number/URL is captured for the output, and the review is either dispatched or explicitly recorded as deferred. A red quality gate inside `/pair-capability-publish-pr` propagates here as a **HALT** (no PR side effects) — implement does not create the PR itself.
+5. **Act — recover a publication failure**: Collect the failed command and actionable diagnostics from `/pair-capability-publish-pr`. If the branch causes the failure and the repair is within the approved story, correct it using Steps 2.3–2.8 as applicable. Verify the failing check, commit the repair under the adopted commit policy, and refresh the checkpoint with the new evidence. Reinvoke the same publisher in this invocation to rerun the full gate. Continue while each repair resolves a reported failure. Stop with the failed command and evidence if the attempt makes no progress or the blocker is outside the story. Return `needs-human` only for an action or decision that requires a person. Keep the checkpoint usable for any later resume.
+6. **Verify**: A single ready-for-review PR exists (created or updated), its number/URL is captured for the output, and the review is either dispatched or explicitly recorded as deferred. The publisher owns all PR writes. Its gate must pass before publication, and a retry updates an existing PR in place.
 
 Note: the checkpoint is **not** removed here — it must survive the review/fix loop so a re-review or fix round can resume from it. Cleanup happens at merge (Phase 4).
 
 ## Phase 4: Post-Review Merge
+
+This phase belongs to standalone invocations. A `published-pr` invocation ends at the verified publication handoff.
 
 After code review approval (typically via `/pair-process-review`), re-invoke `/pair-process-implement` to merge and close — see [post-review-merge.md](./post-review-merge.md) for the merge-precondition, merge-commit, merge, parent-cascade, and checkpoint-cleanup steps (Steps 4.1–4.5) plus the completion output.
 
@@ -397,7 +410,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 4. **Tasks**: scans task checklist and git log to identify completed tasks, and does **not re-run them** — this is **not the `skipped` outcome** (Step 2.1): a task an earlier invocation completed is neither re-written nor queued, so a re-invocation that finds everything done reaches Step 3.1b with an empty queue and posts nothing.
 5. **PR**: the closing phase re-composes `/pair-capability-publish-pr`, which detects an existing PR and updates it in place — never a duplicate. A subagent that failed mid-PR is recovered this way (the checkpoint stays valid, the rerun is idempotent).
 6. **Quality gates**: re-runs all gates (fast if already passing).
-7. **Merge**: if a PR exists and its state synthesizes to `ready-to-merge`, proceeds directly to Phase 4 (merge); otherwise Phase 4's Step 4.1 HALTs with the unmet condition.
+7. **Merge**: With `published-pr` and a completed implementation, verify the existing PR and return its PR number, branch and current head even when it is `ready-to-merge`. With the standalone boundary, if a PR exists and its state synthesizes to `ready-to-merge`, proceed to Phase 4 (merge). If all implementation tasks are complete and the PR is published but review is pending or requests changes, implementation is complete: return the PR, branch and current head; do not enter Phase 4. Review and remediation remain separate work. For other unmet merge conditions, Phase 4's Step 4.1 HALTs with the unmet condition.
 
 The skill resumes from the first incomplete step — never re-does completed work.
 

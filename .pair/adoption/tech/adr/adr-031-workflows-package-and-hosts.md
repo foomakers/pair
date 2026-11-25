@@ -38,6 +38,13 @@ Choose option 2.
 - **Settings per step.** The host asks the package for the settings of a step through `settingsOf`, which returns the run's settings for every step until #672.
 - **Step ids.** A step id matches `^[a-z][a-z0-9-]*$`: it names a directory of the run, and the pattern keeps file order (no integer-like keys).
 
+### Workflow and skill responsibilities (2026-11-23)
+
+- **Workflow.** Resolve the declared step, dispatch it in an independent session, pass inputs and durable context, validate and record its result, and route according to the workflow definition. Run-level state, locks, timeouts and telemetry are execution infrastructure. Conditions, failure routing and bounded loops remain explicit in the workflow.
+- **Step.** The selected skill owns how the step works, which work items it must process, its local checks, and how it determines its outcome. Deterministic steps may execute through their own handlers with the same input and result boundary. The scheduler must not embed their policy or silently add retries based on step-specific results.
+- **Invocation parity.** The `implement` step executes `pair-process-implement` with the same behavior as a direct invocation given the same inputs, context and interaction mode. The invocation may declare unattended mode and the handoff boundary. Their meaning belongs to the skill. Dispatch prompts must not override the procedure, confirmations, or checks of the selected skill.
+- **Completion.** A step tracks and accounts for all in-scope work. It continues independent work after an item fails or requires a person, respects dependencies, and reports why any remaining item cannot run. The step decides its outcome after processing all available work. An interruption or a prerequisite that prevents the step from starting is reported separately from successful completion.
+
 ## Consequences
 
 ### Benefits

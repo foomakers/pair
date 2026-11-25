@@ -46,6 +46,7 @@ Each step:
 | `skill` | Only for `generic`          | The skill that runs. A typed kind has a default skill; `skill` replaces it.     |
 | `with` | No                           | Options of the step. The kind declares the keys it accepts.                     |
 | `on-failed` | No                      | `stop` (default) or `continue`: what a `failed` step does to the run.           |
+| `on-resume` | No | `{ reason, step }` refreshes the linked PR head and replays from an earlier top-level step when resuming a stopped failure with that reason. |
 | `alias` | No                          | One of `aliases`: the settings the step runs with. A step citing an undeclared alias is an error. |
 
 A step id starts with a lower-case letter and continues with lower-case letters, digits and hyphens: it names a directory of the run.
@@ -79,7 +80,7 @@ steps:
     on-failed: stop
 ```
 
-The expanded IDs are `fix/repair`, then `fix/check`. `outputs.from` selects `repair`; without it the last step supplies outputs. A typed caller requires the selected step to supply its kind's outputs; a generic caller skips that check. `with` applies to the selected step when it has the caller's kind; `on-failed` applies to the last step. `context`, `prompt`, `interactive`, `when`, `gates` and `state` are rejected on a caller; put them on included steps instead.
+The expanded IDs are `fix/repair`, then `fix/check`. `outputs.from` selects `repair`; without it the last step supplies outputs. A typed caller requires the selected step to supply its kind's outputs; a generic caller skips that check. `with` applies to the selected step when it has the caller's kind; `on-failed` applies to the last step. `context`, `prompt`, `interactive`, `when`, `gates`, `state` and `on-resume` are rejected on a caller; put them on included steps instead.
 
 Includes may nest up to three levels; cycles, unknown names and workflow/skill name clashes fail validation. An include may introduce a loop outside a loop, but loops cannot nest, including through an include. Configuration can target expanded IDs such as `fix/repair`. `--dry-run` shows the expanded order; a run freezes it and warns on resume if an included source changes.
 
@@ -117,9 +118,10 @@ An `ok` result from `until` exits immediately, skipping later steps. A failed `u
     with: { method: squash }
 ```
 
-- **`gate`**: `gates` are keys of the Custom Gate Registry, run in the card worktree in the given order (never a shell line). `checks` are `ci-green` (waits, 30 minutes by default, `with.timeout-minutes`), `head-unchanged`, `review-approved`, `prerequisites-done`. The first failure fails the step with the command output or the check's reason. At least one of `gates` or `checks`.
-- **`approval`**: parks the run and comments once on the card. Answers: `--approve` / `--reject "reason"`, a card comment starting `/approve` or `/reject reason`, a native PR review. An answer counts only when the platform authorizes its author; others are ignored and reported. The workflow holds no names.
-- **`merge`**: merges the PR (`squash` default, `merge`, `rebase`), closes the story, cascades, cleans up. Fails `head-moved` if the PR head is not the `head` it received, and with the platform's reason if the platform refuses. Sets the card to Done when `ok` (key `state` overrides).
+- **`gate`**: `gates` runs the selected Custom Gate Registry commands in the card worktree. With `head-unchanged`, local commands require a clean worktree at the reviewed commit before and after execution. `ci-green` waits up to `with.timeout-minutes` (30 minutes by default) for every required mechanical context on the PR head. The required contexts come from classic branch protection and active rulesets on the base branch. A pinned context requires a matching GitHub App. An access denial fails the check. When both inventories confirm that requirements are absent, the gate checks the reported non-`pair-*` contexts. Missing evidence stays pending. Other checks are `review-approved` and `prerequisites-done`.
+- **`approval`**: parks and posts the PR number and full head SHA on the card. Resume with `--approve <card>`, `--reject "reason"`, a native PR review on the parked head, or a fresh card comment of the form `/approve #<pr> <sha>` or `/reject #<pr> <sha> <reason>`. An eligible PR author with solo approval enabled uses `/approve <sha>`. The platform verifies the actor and target.
+- **`merge`**: requires matching review, gate and approval heads. After GitHub confirms the merge, the host closes the story, cascades, confirms Done and cleans up the branch. On a closed card, only unfinished closure on that same merged PR and head can resume.
+- **Head changes**: delivery declares an `on-resume` route for `head-changed` at the gate and `head-moved` at approval and merge. The next run fast-forwards a clean card worktree to the same PR's current head before repeating review, gates and approval. Dirty or diverged worktrees require reconciliation. A replayed review loop starts with a fresh configured round budget. Runs use their frozen definition, so a run started before the route was declared needs a restart to adopt it.
 
 ### `when` and `skipped`
 

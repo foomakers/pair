@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { join } from 'path'
 import { parse } from 'yaml'
 import { fileSystemService as fs } from '@pair/content-ops'
-import { readGateRegistry, readGateTargets, validate } from '@pair/workflows'
+import {
+  createMemoryFiles,
+  runSteps,
+  start,
+  readGateRegistry,
+  readGateTargets,
+  validate,
+} from '@pair/workflows'
 import { isSafePromptText } from './prompt-safety'
 
 /**
@@ -74,4 +81,41 @@ describe('the shipped quick workflow: what already holds (r0-2)', () => {
     expect(commandGates(parse("steps: {check: {gates: ['command:echo ok']}}"))).toBe(true)
     expect(commandGates(parse('steps: {check: {gates: [target:pr]}}'))).toBe(false)
   })
+})
+
+it('the shipped workflow fails at fix after review produces no verdict (#726 AC-6)', async () => {
+  const run = { files: createMemoryFiles(), dir: '/runs/726' }
+  const head = 'a'.repeat(40)
+  await start(run, { text: read(DATASET, QUICK), file: QUICK }, { card: '726' })
+  const launched: string[] = []
+  const result = (payload: object) =>
+    String.fromCharCode(96).repeat(3) +
+    'json\n' +
+    JSON.stringify(payload) +
+    '\n' +
+    String.fromCharCode(96).repeat(3)
+  const outcome = await runSteps(
+    {
+      files: run.files,
+      style: 'instruction',
+      isSafeText: () => true,
+      launch: async step => {
+        launched.push(step.id)
+        if (step.kind === 'implement')
+          return result({
+            status: 'ok',
+            summary: 'ready',
+            branch: 'feature/US-726-test',
+            pr: 735,
+            head,
+          })
+        if (step.kind === 'fix')
+          return result({ status: 'ok', summary: 'fixed', head, resolutions: [] })
+        return undefined
+      },
+    },
+    run.dir,
+  )
+  expect(outcome).toMatchObject({ run: 'failed', last: { step: 'fix', reason: 'invalid-input' } })
+  expect(launched).toEqual(['implement', 'review'])
 })

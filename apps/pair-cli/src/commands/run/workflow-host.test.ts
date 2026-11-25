@@ -1,16 +1,38 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { hostname, tmpdir } from 'os'
 import { join } from 'path'
-import { fileSystemService as fs } from '@pair/content-ops'
+import { start } from '@pair/workflows'
+import { readCardFacts } from './cycle-wiring'
+import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
+// @ts-expect-error Vite loads the adopted definition as fixture text.
+import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/delivery.yaml?raw'
+// @ts-expect-error Vite loads the shipped definition as fixture text.
+import quickDefinition from '../../../../../packages/knowledge-hub/dataset/.pair/adoption/tech/workflows/quick.yaml?raw'
+import baseConfig from '../../../config.json'
+import { acquireRunLock } from './run-lock'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 import type { SpawnIterationInput } from './spawn'
+import { runHostProcess } from './host-process'
 import type { WorkflowHostDependencies } from './workflow-host'
 
 /**
  * US-652 — `pair run <workflow> --card <id>`, through the command's own entry point, with a fake
- * launcher and fake skills: no real agent, tracker or git. The disk is real (a temp project).
+ * launcher, fake skills, and in-memory project files.
  */
+
+vi.mock('#config/kb-resolver', () => ({
+  getKnowledgeHubDatasetPath: () => '/kb/dataset',
+}))
+vi.mock('./run-lock', () => ({ acquireRunLock: vi.fn() }))
+vi.mock('./host-process', () => ({ runHostProcess: vi.fn() }))
+vi.mock('./cycle-wiring', async importOriginal => ({
+  ...(await importOriginal<typeof import('./cycle-wiring')>()),
+  mainCheckoutOrCwd: (cwd: string) => cwd,
+  readCardFacts: vi.fn(async () => ({ labels: [] })),
+}))
+
+const hostProcess = vi.mocked(runHostProcess)
+const success = (stdout = '') => ({ status: 0, stdout, stderr: '' })
 
 const HEAD = 'a'.repeat(40)
 const fenced = (value: unknown) => `Done.\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\``
@@ -45,10 +67,12 @@ const REGISTRY = `### Custom Gate Registry
 `
 
 /** A fake skill answers with the agent's final message, `undefined` when the agent dies, or throws on a crash. */
-type FakeSkill = () => string | undefined
+type FakeSkill = (input: SpawnIterationInput) => string | undefined
 type Launched = Pick<SpawnIterationInput, 'promptText' | 'cwd' | 'autonomyArgs'>
 
-let project: string
+const project = '/project'
+let fs: InMemoryFileSystemService
+const release = vi.fn()
 let lines: string[]
 let launched: Launched[]
 
@@ -79,7 +103,7 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
         cwd: input.cwd,
         autonomyArgs: input.autonomyArgs,
       })
-      const text = (skills[skillOf(input.promptText)] as FakeSkill)()
+      const text = (skills[skillOf(input.promptText)] as FakeSkill)(input)
       if (text !== undefined) input.onEvent?.({ type: 'result', subtype: 'success', result: text })
       return text === undefined
         ? { outcome: 'failed', detail: 'timed out (idle): no engine event for 1800s' }
@@ -112,9 +136,19 @@ const run = (
   )
 
 beforeEach(() => {
-  project = fs.mkdtempSync(join(tmpdir(), 'pair-workflow-'))
+  fs = new InMemoryFileSystemService(
+    {
+      '/project/config.json': JSON.stringify(baseConfig),
+      '/kb/dataset/.pair/adoption/tech/workflows/quick.yaml': quickDefinition as string,
+    },
+    project,
+    project,
+  )
+  release.mockReset()
+  vi.mocked(acquireRunLock).mockReset().mockReturnValue({ kind: 'acquired', release })
   lines = []
   launched = []
+  hostProcess.mockReset().mockResolvedValue(success())
   for (const skill of [
     'pair-process-implement',
     'pair-process-review',
@@ -132,7 +166,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-  fs.rmSync(project, { recursive: true, force: true })
 })
 
 describe('card state (AC-13)', () => {
@@ -406,6 +439,7 @@ describe('resume (AC-6)', () => {
   it('leaves a complete run as it is, and starts it over with --restart', async () => {
     await run(['quick'])
     launched = []
+    hostProcess.mockReset().mockResolvedValue(success())
     expect(await run(['quick'])).toBe(0)
     expect(launched).toEqual([])
     expect(lines).toContain(
@@ -462,6 +496,7 @@ steps:
       'rounds/fix': 'ok',
     })
     launched = []
+    hostProcess.mockReset().mockResolvedValue(success())
     expect(await run(['quick'], skills)).toBe(0)
     expect(launched).toHaveLength(0)
     expect(await run(['quick'], skills, { moreRounds: '1' })).toBe(0)
@@ -535,24 +570,16 @@ describe('the run directory (AC-7)', () => {
   })
 
   it('exits at once when another live process holds the run', async () => {
-    fs.mkdirSync(runDir(), { recursive: true })
-    fs.writeFileSync(
-      join(runDir(), 'run.lock'),
-      JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }),
-    )
+    vi.mocked(acquireRunLock).mockReturnValue({ kind: 'run-locked', pid: 42, host: 'worker' })
     expect(await run(['quick'])).toBe(1)
-    expect(
-      lines.some(line =>
-        line.startsWith(`  run-locked: pid ${String(process.pid)} on ${hostname()}`),
-      ),
-    ).toBe(true)
+    expect(lines.some(line => line.startsWith('  run-locked: pid 42 on worker'))).toBe(true)
     expect(launched).toEqual([])
     expect(fs.existsSync(join(runDir(), 'state.json'))).toBe(false)
   })
 
   it('releases the lock when the run ends', async () => {
     await run(['quick'])
-    expect(fs.existsSync(join(runDir(), 'run.lock'))).toBe(false)
+    expect(release).toHaveBeenCalled()
   })
 })
 
@@ -703,3 +730,261 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
     ])
   })
 })
+
+it.each([
+  'unchanged',
+  'moved',
+  'returned',
+  'gate',
+  'parked',
+  'answer-race',
+  'dirty',
+  'divergent',
+  'fix',
+  'no-route',
+] as const)(
+  'replays only a changed review boundary (%s, 726-ac4-head-move-resume)',
+  async scenario => {
+    const moved = scenario !== 'unchanged'
+    const newHead = scenario === 'returned' ? HEAD : 'b'.repeat(40)
+    const fixedHead = 'c'.repeat(40)
+    let currentHead = HEAD
+    let localHead = HEAD
+    let obstacle: string | undefined
+    let moveAt = scenario === 'gate' ? 'head' : undefined
+    let notices = 0
+    let gates = 0
+    const delivery = '.pair/adoption/tech/workflows/delivery.yaml'
+    const definition = deliveryDefinition as string
+    write(
+      delivery,
+      scenario === 'no-route' ? definition.replace(/^ {4}on-resume:.*\n/gm, '') : definition,
+    )
+    write(
+      '.pair/adoption/tech/way-of-working.md',
+      `### Custom Gate Registry
+
+| Order | Key | Gate | Command | Scope Key | Target | Required | Description |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | adopted | PR gate | \`check-pr\` | quality | pr | Yes | Project gate |
+`,
+    )
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Fixture host bridge\n')
+    write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+    const moveFailure = { status: 'failed', reason: 'head-moved', summary: 'PR head moved' }
+    const respond = (action: string | undefined, data: { flag?: object; head?: string }) => {
+      switch (action) {
+        case 'head':
+          return currentHead
+        case 'approval-target':
+          return { pr: 12, head: currentHead }
+        case 'approval-notice':
+          notices++
+          return {}
+        case 'approval-answers':
+          return data.flag ? [{ ...data.flag, login: 'maintainer', channel: 'flag' }] : []
+        case 'merge':
+          if (data.head !== currentHead) return moveFailure
+          expect(data).toMatchObject({ head: currentHead, approvedBy: 'maintainer', pr: 12 })
+          return { status: 'ok', summary: 'Merged and closed', merged: true, mergeCommit: HEAD }
+        default:
+          throw new Error('Unknown action ' + action)
+      }
+    }
+    const git = (args: readonly string[]) => {
+      if (args[0] === 'status') return success(obstacle === 'dirty' ? '?? local-work' : '')
+      if (args[0] === 'rev-parse')
+        return success(args.includes('FETCH_HEAD') ? currentHead : localHead)
+      if (args[0] === 'symbolic-ref') return success('refs/heads/feature/US-627-x')
+      if (args[0] === 'merge-base')
+        return { ...success(), status: obstacle === 'divergent' ? 1 : 0 }
+      if (args[0] === 'merge') {
+        expect(args).toEqual(['merge', '--ff-only', currentHead])
+        expect(obstacle).toBeUndefined()
+        localHead = currentHead
+      }
+      return success()
+    }
+    hostProcess.mockImplementation(async (bin, args, cwd) => {
+      if (bin === 'sh') {
+        expect(args).toEqual(['-c', 'check-pr'])
+        expect(cwd).toBe(join(project, 'worktrees/627'))
+        gates++
+        return success()
+      }
+      if (bin === 'git') return git(args)
+      expect(bin).toBe(process.execPath)
+      const [, action, card, raw] = args
+      expect(card).toBe('627')
+      if (action === moveAt) {
+        currentHead = newHead
+        moveAt = undefined
+        if (action === 'merge') return success(JSON.stringify(moveFailure))
+        if (action === 'approval-answers') return success(JSON.stringify({ reason: 'head-moved' }))
+      }
+      return success(JSON.stringify(respond(action, JSON.parse(raw ?? '{}'))))
+    })
+
+    const runUntilHeadChanges = async () => {
+      expect(await run(['delivery'])).toBe(scenario === 'gate' ? 1 : 0)
+      if (scenario === 'gate') {
+        expect(states('delivery-627')).toMatchObject({ gate: 'failed', approval: 'pending' })
+        expect(notices).toBe(0)
+      } else {
+        expect(gates).toBe(1)
+        expect(states('delivery-627')).toMatchObject({
+          gate: 'ok',
+          approval: 'needs-human',
+          merge: 'pending',
+        })
+        expect(await run(['delivery'])).toBe(0)
+        expect(notices).toBe(1)
+        if (moved) {
+          moveAt =
+            new Map([
+              ['parked', 'approval-target'],
+              ['answer-race', 'approval-answers'],
+            ]).get(scenario) ?? 'merge'
+          expect(await run(['delivery'], OK, { approve: '627' })).toBe(1)
+          expect(notices).toBe(1)
+          if (scenario === 'dirty' || scenario === 'divergent') obstacle = scenario
+        }
+      }
+    }
+    await runUntilHeadChanges()
+    if (scenario === 'no-route') {
+      expect(await run(['delivery'])).toBe(1)
+      expect(launched.map(one => skillOf(one.promptText))).toEqual([
+        'pair-process-implement',
+        'pair-process-review',
+      ])
+      return
+    }
+    const replayReview = async () => {
+      const reviewInputs: string[] = []
+      const fixInputs: string[] = []
+      const recheck = {
+        ...OK,
+        'pair-process-review': (input: SpawnIterationInput) => {
+          reviewInputs.push(input.promptText)
+          return scenario === 'fix' && currentHead === newHead
+            ? fenced({
+                status: 'failed',
+                summary: 'Replacement needs a fix',
+                reason: 'blocking-findings',
+                verdict: 'changes-requested',
+                reviewedHead: newHead,
+                reportPath: `.pair/working/reviews/12/${newHead}.md`,
+                findings: [{ id: 'F1', severity: 'Major', title: 'Regression', blocking: true }],
+              })
+            : REVIEWED.replaceAll(HEAD, currentHead)
+        },
+        'pair-process-fix': (input: SpawnIterationInput) => {
+          fixInputs.push(input.promptText)
+          localHead = fixedHead
+          currentHead = fixedHead
+          return fenced({ status: 'ok', summary: 'Fixed', head: fixedHead, resolutions: [] })
+        },
+      }
+      if (obstacle !== undefined) {
+        await expect(run(['delivery'], recheck)).rejects.toThrow('replay-worktree')
+        expect(reviewInputs).toHaveLength(0)
+        expect(localHead).toBe(HEAD)
+        obstacle = undefined
+      }
+      expect(await run(['delivery'], recheck), lines.join('\n')).toBe(0)
+      expect(reviewInputs).toHaveLength(scenario === 'fix' ? 2 : 1)
+      expect(reviewInputs[0]).toContain(newHead)
+      if (scenario === 'fix') {
+        expect(fixInputs).toHaveLength(1)
+        expect(fixInputs[0]).toContain(`- head: ${newHead}`)
+        expect(fixInputs[0]).toContain('F1')
+        expect(fixInputs[0]).toContain(`.pair/working/reviews/12/${newHead}.md`)
+        expect(reviewInputs[1]).toContain(fixedHead)
+      }
+      expect(states('delivery-627')).toMatchObject({
+        gate: 'ok',
+        approval: 'needs-human',
+        merge: 'pending',
+      })
+      expect(notices).toBe(scenario === 'gate' ? 1 : 2)
+    }
+    if (moved) await replayReview()
+    expect(await run(['delivery'], OK, { approve: '627' })).toBe(0)
+    expect(states('delivery-627')).toMatchObject({ gate: 'ok', approval: 'ok', merge: 'ok' })
+    for (const review of launched.filter(one => skillOf(one.promptText) === 'pair-process-review'))
+      expect(review.promptText).toContain('- publication: first-and-approved')
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([
+      'pair-process-implement',
+      'pair-process-review',
+      ...(moved ? ['pair-process-review'] : []),
+      ...(scenario === 'fix' ? ['pair-process-fix', 'pair-process-review'] : []),
+    ])
+  },
+)
+
+it.each([true, false])(
+  'resumes only unfinished closure on its already-merged PR (matching=%s, #726 AC-4)',
+  async matches => {
+    const file = '.pair/adoption/tech/workflows/closure.yaml'
+    const text = `version: 1
+name: closure
+steps:
+  implement: { kind: implement }
+  late: { kind: generic, skill: my-skill, when: { status: [Done] } }
+  review: { kind: review }
+  gate: { kind: gate, with: { checks: [head-unchanged] } }
+  approval: { kind: approval }
+  merge: { kind: merge, when: { status: [Review] } }
+`
+    write(file, text)
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Cycle')
+    write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+    const dir = runDir('closure-627')
+    await start({ files: fs, dir }, { file, text }, { card: '627' })
+    const path = join(dir, 'state.json')
+    const state = JSON.parse(fs.readFileSync(path))
+    state.steps = {
+      implement: { state: 'ok', outputs: { pr: 12, head: HEAD } },
+      late: { state: 'skipped' },
+      review: { state: 'ok', outputs: { reviewedHead: HEAD } },
+      gate: { state: 'ok', outputs: { gatedHead: HEAD } },
+      approval: {
+        state: 'ok',
+        outputs: { approvedPr: 12, approvedHead: HEAD, approvedBy: 'maintainer' },
+      },
+      merge: {
+        state: 'failed',
+        reason: 'cascade-incomplete',
+        outputs: { merged: true, mergeCommit: HEAD },
+      },
+    }
+    fs.writeFileSync(path, JSON.stringify(state))
+    vi.mocked(readCardFacts).mockResolvedValue({ status: 'Done', labels: [] })
+    const actions: string[] = []
+    hostProcess.mockImplementation(async (_, args) => {
+      const [, action, , raw] = args
+      actions.push(String(action))
+      const data = JSON.parse(raw ?? '{}')
+      if (action === 'merge-resume')
+        return success(
+          JSON.stringify(matches && (raw === undefined || (data.pr === 12 && data.head === HEAD))),
+        )
+      expect(action).toBe('merge')
+      expect(data).toMatchObject({ pr: 12, head: HEAD, closureOnly: true })
+      return success(
+        JSON.stringify({ status: 'ok', summary: 'Closed', merged: true, mergeCommit: HEAD }),
+      )
+    })
+    const resumed = run(['closure'], {}, {}, { readCard: async () => 'closed' })
+    if (matches) {
+      expect(await resumed).toBe(0)
+      expect(states('closure-627')).toMatchObject({ late: 'skipped', merge: 'ok' })
+      expect(actions.filter(action => action === 'merge')).toHaveLength(1)
+    } else {
+      await expect(resumed).rejects.toThrow('card-closed')
+      expect(actions).not.toContain('merge')
+    }
+    expect(launched).toEqual([])
+  },
+)

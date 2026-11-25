@@ -641,3 +641,72 @@ describe('engine: frozen configuration (#672 AC-7)', () => {
     expect(resumed.warnings.join()).toContain('started with no configuration')
   })
 })
+
+it('keeps the replacement head through a review/fix replay (#726)', async () => {
+  const source = {
+    file: 'delivery.yaml',
+    text: `version: 1
+name: delivery
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 2
+    on-max: escalate
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+  gate: { kind: gate, with: { checks: [head-unchanged] } }
+`,
+  }
+  const run = open()
+  await start(run, source, { card: '627' })
+  await next(run)
+  await record(run, 'implement', IMPLEMENTED)
+  await next(run)
+  await record(run, 'rounds/review', REVIEWED)
+  await next(run)
+  await record(run, 'gate', { status: 'failed', summary: 'Head moved', reason: 'head-changed' })
+
+  const replacement = 'b'.repeat(40)
+  const repaired = 'c'.repeat(40)
+  await start(run, source, {
+    card: '627',
+    replay: { from: 'rounds', inputs: { head: replacement } },
+  })
+  expect((await next(run)).ready[0]).toMatchObject({
+    id: 'rounds/review',
+    round: 1,
+    inputs: { head: replacement },
+  })
+  await record(run, 'rounds/review', {
+    ...REVIEWED,
+    status: 'failed',
+    verdict: 'changes-requested',
+    reviewedHead: replacement,
+    findings: [{ id: 'F1', severity: 'Major', title: 'Regression', blocking: true }],
+  })
+  await start(run, source, { card: '627' })
+  expect((await next(run)).ready[0]).toMatchObject({
+    id: 'rounds/fix',
+    round: 1,
+    inputs: { head: replacement, findings: [{ id: 'F1' }] },
+  })
+  await record(run, 'rounds/fix', {
+    status: 'ok',
+    summary: 'Fixed',
+    head: repaired,
+    resolutions: [],
+  })
+  expect((await next(run)).ready[0]).toMatchObject({
+    id: 'rounds/review',
+    round: 2,
+    inputs: { head: repaired },
+  })
+  await record(run, 'rounds/review', { ...REVIEWED, reviewedHead: repaired })
+  expect((await next(run)).ready[0]).toMatchObject({
+    id: 'gate',
+    inputs: { reviewedHead: repaired },
+  })
+})

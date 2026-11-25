@@ -56,6 +56,7 @@ export interface RunStateFile {
   readonly steps: Readonly<Record<string, StepRecord>>
   readonly loops?: Readonly<Record<string, LoopRecord>>
   readonly latest?: Readonly<Record<string, unknown>>
+  readonly replay?: StepReplay
 }
 
 export interface LoopRecord {
@@ -78,6 +79,8 @@ export interface StepLaunch {
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
   readonly round?: number
+  /** Distinguishes a replay from earlier executions that used the same inputs. */
+  readonly replayAttempt?: number
 }
 
 export const hashOf = (text: string): string =>
@@ -136,6 +139,12 @@ function frozenWorkflow(run: RunDirectory): Workflow {
   return workflow
 }
 
+/** Refresh inputs at a step boundary without rerunning the completed prefix. */
+export interface StepReplay {
+  readonly from: string
+  readonly inputs: Readonly<Record<string, unknown>>
+}
+
 export interface StartOptions {
   readonly card: string
   /** Archive what the run directory holds and start over. */
@@ -148,6 +157,7 @@ export interface StartOptions {
   readonly reconfigure?: boolean
   readonly moreRounds?: number
   readonly requestedBy?: string
+  readonly replay?: StepReplay
 }
 
 /** The frozen configuration of a run, when it has one. */
@@ -334,10 +344,11 @@ async function resume(
   const exhausted = exhaustedLoop(state)
   if (options.moreRounds !== undefined)
     state = withMoreRounds(run, state, exhausted, { ...options, moreRounds: options.moreRounds })
+  if (options.replay !== undefined) state = replayFrom(run, state, options.replay)
   const settled = settledStatus(
     run,
     state,
-    options.moreRounds === undefined ? exhausted : undefined,
+    options.moreRounds === undefined ? exhaustedLoop(state) : undefined,
   )
   if (settled === undefined) {
     await writeState(run, { ...state, steps: reopenedSteps(state, frozenWorkflow(run)) })
@@ -345,6 +356,27 @@ async function resume(
   }
   if (state !== saved) await writeState(run, state)
   return { status: settled, warnings }
+}
+
+function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay): RunStateFile {
+  const steps = frozenWorkflow(run).steps
+  const from = steps.findIndex(step => step.id === replay.from)
+  if (from < 0) throw new Error('run-replay-invalid: expected a top-level step')
+  const records = { ...state.steps }
+  const loops = { ...state.loops }
+  for (const step of steps.slice(from)) {
+    const executions = records[step.id]?.executions
+    records[step.id] = { state: 'pending', ...(executions !== undefined && { executions }) }
+    if (step.kind === 'loop') {
+      loops[step.id] = { round: 1, max: loopMax(frozenConfiguration(run), step) }
+      for (const child of step.steps ?? []) {
+        const id = `${step.id}/${child.id}`
+        const count = records[id]?.executions
+        records[id] = { state: 'pending', ...(count !== undefined && { executions: count }) }
+      }
+    }
+  }
+  return { ...state, steps: records, loops, latest: {}, replay }
 }
 
 // A failed or parked step runs again; a `running` one had no live process (the lock says so) and runs again too.
@@ -417,20 +449,17 @@ export async function start(
   return { status: 'started', warnings: [] }
 }
 
-/** What `step` receives: the launch input and the outputs of the steps before it. */
-function inputsOf(
+/** Earlier outputs, with fresh replay inputs at the boundary where they take effect. */
+function inputsBefore(
   step: Step,
   steps: readonly Step[],
   state: RunStateFile,
 ): Record<string, unknown> {
   const earlier = steps.slice(0, steps.indexOf(step)).map(one => state.steps[one.id]?.outputs ?? {})
-  const produced: Record<string, unknown> = Object.assign({ card: state.card }, ...earlier)
-  if (step.kind === 'loop') throw new Error('loop is not directly launchable')
-  const declared = fieldsOf(kindByName[step.kind].inputs)
-  // A typed kind receives the inputs it declares; `generic` receives every scalar produced so far.
-  const wanted = (name: string) =>
-    declared.length > 0 ? declared.includes(name) : typeof produced[name] !== 'object'
-  return Object.fromEntries(Object.entries(produced).filter(([name]) => wanted(name)))
+  const replayAt = steps.findIndex(one => one.id === state.replay?.from)
+  if (state.replay !== undefined && replayAt >= 0 && replayAt <= earlier.length)
+    earlier.splice(replayAt, 0, state.replay.inputs)
+  return Object.assign({ card: state.card }, ...earlier)
 }
 
 const HALTED: Partial<Record<StepState, RunState>> = { failed: 'failed', 'needs-human': 'parked' }
@@ -457,18 +486,6 @@ const pick = (produced: Record<string, unknown>, kind: KindName): Record<string,
 /** The number of this launch of `id`. */
 const launches = (state: RunStateFile, id: string): number => (state.steps[id]?.executions ?? 0) + 1
 
-/** What the steps before `step` produced, then the loop's latest outputs. */
-const producedBefore = (
-  state: RunStateFile,
-  steps: readonly Step[],
-  step: Step,
-): Record<string, unknown> =>
-  Object.assign(
-    { card: state.card },
-    ...steps.slice(0, steps.indexOf(step)).map(one => state.steps[one.id]?.outputs ?? {}),
-    state.latest ?? {},
-  ) as Record<string, unknown>
-
 /** The loop child that is next, with its id. */
 function loopChild(
   state: RunStateFile,
@@ -485,6 +502,20 @@ function loopChild(
 
 const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 
+const replayAttemptOf = (state: RunStateFile): number | undefined => {
+  if (!state.replay) return undefined
+  const from = state.replay.from
+  return (
+    state.steps[from]?.executions ??
+    Object.entries(state.steps).find(([id]) => id.startsWith(`${from}/`))?.[1].executions
+  )
+}
+
+const replayLaunch = (state: RunStateFile) => {
+  const replayAttempt = replayAttemptOf(state)
+  return replayAttempt === undefined ? {} : { replayAttempt }
+}
+
 /** The launch of the loop child that is next, or the halt that stops the run. */
 async function nextInLoop(
   run: RunDirectory,
@@ -497,6 +528,7 @@ async function nextInLoop(
   if (childHalt !== undefined) return { ready: [], run: childHalt }
   const attempt = launches(state, id)
   const round = state.loops?.[step.id]?.round ?? 1
+  const replay = replayLaunch(state)
   await writeState(run, {
     ...state,
     steps: {
@@ -511,9 +543,10 @@ async function nextInLoop(
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
     ...gatesOf(child),
-    inputs: pick(producedBefore(state, steps, step), child.kind),
+    inputs: pick({ ...inputsBefore(step, steps, state), ...state.latest }, child.kind),
     attempt,
     round,
+    ...replay,
   }
   return { ready: [launch], run: 'running' }
 }
@@ -615,22 +648,44 @@ async function nextPlain(
   steps: readonly Step[],
   step: Step,
 ): Promise<{ readonly ready: readonly StepLaunch[]; readonly run: RunState }> {
-  if (step.kind === 'loop') throw new Error('loop is not directly launchable')
-  const attempt = launches(state, step.id)
+  const launch = plainLaunch(state, steps, step)
   await writeState(run, {
     ...state,
-    steps: { ...state.steps, [step.id]: { state: 'running', executions: attempt } },
+    steps: { ...state.steps, [step.id]: { state: 'running', executions: launch.attempt } },
   })
-  const launch: StepLaunch = {
+  return { ready: [launch], run: 'running' }
+}
+
+function plainLaunch(state: RunStateFile, steps: readonly Step[], step: Step): StepLaunch {
+  if (step.kind === 'loop') throw new Error('loop is not directly launchable')
+  const attempt = launches(state, step.id)
+  const replayAttempt = replayAttemptOf(state)
+  return {
     id: step.id,
     kind: step.kind,
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
     ...gatesOf(step),
-    inputs: inputsOf(step, steps, state),
+    inputs: pick(inputsBefore(step, steps, state), step.kind),
     attempt,
+    ...(replayAttempt !== undefined && { replayAttempt }),
   }
-  return { ready: [launch], run: 'running' }
+}
+
+/** The previously started, final merge can finish closure without reopening prior steps or their conditions. */
+export function pendingMergeClosure(
+  workflow: Workflow,
+  state: RunStateFile,
+): StepLaunch | undefined {
+  const steps = workflow.steps
+  const merge = steps.at(-1)
+  if (
+    merge?.kind !== 'merge' ||
+    !['failed', 'running'].includes(state.steps[merge.id]?.state ?? '')
+  )
+    return undefined
+  if (!steps.slice(0, -1).every(step => settled(state, step))) return undefined
+  return plainLaunch(state, steps, merge)
 }
 
 interface Advance {

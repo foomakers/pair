@@ -55,17 +55,6 @@ function section(title: string, values: Readonly<Record<string, unknown>>): stri
   return lines.length === 0 ? [] : ['', `${title}:`, ...lines]
 }
 
-/** What a step in a workflow run is told: one session, no confirmations, stop only for the kind's escalations. */
-const unattendedBlock = (kind: StepKind, gated: boolean): string =>
-  [
-    'This is an unattended run in one session. Never ask for confirmation.',
-    ...(gated ? ['The host runs the quality gates after you finish: run none yourself.'] : []),
-    ...(kind.guidance === undefined ? [] : [kind.guidance]),
-    kind.escalations.length === 0
-      ? 'Never return status "needs-human".'
-      : `Return status "needs-human" only in these cases: ${kind.escalations.join(' ')}`,
-  ].join(' ')
-
 /**
  * The one message a step is launched with: the skill invocation in the engine's style, the step's
  * inputs and options, then the result block of its kind. Throws `unsafe-value` when a value to
@@ -84,7 +73,8 @@ export function buildMessage(step: StepLaunch, kind: StepKind, options: MessageO
     '',
     resultBlock(kind),
     '',
-    unattendedBlock(kind, (step.gates ?? []).length > 0),
+    'Execution mode: unattended.',
+    ...(kind.handoff === undefined ? [] : [`Handoff: ${kind.handoff}.`]),
   ].join('\n')
 }
 

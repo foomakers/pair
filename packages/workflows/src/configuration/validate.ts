@@ -8,6 +8,8 @@ export interface EngineFacts {
   installed(engine: string): boolean
   /** The models the engine declares; `undefined`: it declares no list. */
   models(engine: string): readonly string[] | undefined
+  /** Positive evidence from a non-exhaustive model cache. */
+  recognizesModel?(engine: string, model: string): boolean
   supportsEffort(engine: string): boolean
 }
 
@@ -46,6 +48,8 @@ interface Ctx {
 /** What is wrong with `model` on `engine`, as an error or a warning. */
 function modelIssue(model: string, engine: string, facts: EngineFacts) {
   const list = facts.models(engine)
+  if (list === undefined && MODEL_FORM.test(model) && facts.recognizesModel?.(engine, model))
+    return undefined
   if (list === undefined)
     return MODEL_FORM.test(model)
       ? {
