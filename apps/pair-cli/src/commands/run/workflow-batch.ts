@@ -17,6 +17,7 @@ import { runPool } from './parallel'
 import { inPooledCard } from './pooled-card'
 import {
   matchesWorkflowCard,
+  pendingWorkflowCard,
   readWorkflowCards,
   type WorkflowCard,
   type WorkflowSelection,
@@ -297,37 +298,49 @@ function legacyCycleRequested(config: RunCommandConfig): boolean {
   ].some(Boolean)
 }
 
-function* configuredWorkflows(
-  names: string[],
+type Routing = Pick<BatchRequest, 'config' | 'services'> & { main: string }
+
+function configuredWorkflow(
+  name: string,
   card: string,
-  config: RunCommandConfig,
-  services: Services,
+  { config, services }: Routing,
+  resume = false,
 ) {
-  for (const name of names) {
-    const request = { name, card, restart: false }
-    const resolved = resolveWorkflowRun(config, request, services, false)
-    if (resolved === undefined) throw new Error(`workflow-invalid: ${name}`)
-    yield {
-      request,
-      selection: effectiveSelection(
-        resolved.workflow.select,
-        resolved.configuration?.configuration.select,
-      ),
-    }
+  const request = { name, card, restart: false }
+  const resolved = resolveWorkflowRun(config, request, services, resume)
+  if (resolved === undefined) throw new Error(`workflow-invalid: ${name}`)
+  return {
+    request,
+    selection: effectiveSelection(
+      resolved.workflow.select,
+      resolved.configuration?.configuration.select,
+    ),
   }
 }
 
 const mappedNames = (config: WorkflowsConfig = {}) =>
   Object.keys(config).filter(name => name !== 'default')
 
-function mappedCard(
-  found: WorkflowCard | undefined,
-  candidates: (id: string) => ReturnType<typeof configuredWorkflows>,
-) {
+function mappedCard(found: WorkflowCard | undefined, names: string[], routing: Routing) {
   if (found?.error !== undefined) throw new Error(found.error)
-  return found === undefined || found.closed
-    ? undefined
-    : chooseWorkflow(candidates(found.id), found)
+  if (found === undefined || found.closed) return undefined
+  const { id } = found
+  const { main, services } = routing
+  for (const name of names) {
+    const pending = pendingWorkflowCard(found, {
+      files: services.fs,
+      dir: join(main, '.pair/working/runs', `${name}-${id}`),
+      workflow: name,
+      main,
+    })
+    if (pending === undefined) continue
+    const candidate = configuredWorkflow(name, id, routing, true)
+    if (candidate.selection.accepts(pending)) return candidate
+  }
+  function* candidates() {
+    for (const name of names) yield configuredWorkflow(name, id, routing)
+  }
+  return chooseWorkflow(candidates(), found)
 }
 
 /** Explicitly named workflow mappings opt a project into routing a bare card to YAML. */
@@ -347,7 +360,7 @@ export async function handleMappedWorkflow(
     { fs, project, cwd, main },
     { cards: [card] },
   )
-  const selected = mappedCard(cards[0], id => configuredWorkflows(names, id, config, services))
+  const selected = mappedCard(cards[0], names, { main, config, services })
   if (selected === undefined)
     throw new Error(
       `workflow-not-applicable: no mapped workflow accepts card ${card}; pass a workflow name explicitly`,

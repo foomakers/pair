@@ -35,21 +35,32 @@ export interface WorkflowSelection {
   readonly readDependencies?: (ids: readonly string[]) => Promise<readonly DependencyFacts[]>
 }
 
+type SelectionRun = { files: FileSystemService; dir: string; workflow: string; main: string }
+
 /** Match current scope, preserving the board status of a confirmed step awaiting its Ready write. */
 export function matchesWorkflowCard(
   card: WorkflowCard,
   accepts: (facts: CardFacts) => boolean,
-  run?: { files: FileSystemService; dir: string; workflow: string; main: string },
+  run?: SelectionRun,
 ): boolean {
   if (card.closed) return false
   if (accepts(card)) return true
+  const pending = run && pendingWorkflowCard(card, run)
+  return pending !== undefined && accepts(pending)
+}
+
+/** Selection facts from before the Ready write, with labels and assignees still current. */
+export function pendingWorkflowCard(
+  card: WorkflowCard,
+  run: SelectionRun,
+): WorkflowCard | undefined {
   const statusIndex = MACROSTATES.findIndex(state => state === card.status)
-  if (run === undefined || statusIndex < MACROSTATES.indexOf('Ready')) return false
+  if (card.closed || statusIndex < MACROSTATES.indexOf('Ready')) return undefined
   const previous = pendingBoardStatus(run, { card: card.id, workflow: run.workflow })
-  if (previous === undefined) return false
+  if (previous === undefined) return undefined
   const mapping = readStateMapping(run.files, run.main)
   const status = resolveMacrostate(previous, mapping)
-  return status !== undefined && accepts({ ...card, status })
+  return status === undefined ? undefined : { ...card, status }
 }
 
 const unreadableCard = {
