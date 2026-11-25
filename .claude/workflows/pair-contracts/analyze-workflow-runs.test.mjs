@@ -4,7 +4,7 @@
 // RUNS FROM `.claude/workflows` ONLY (see word-limits.test.mjs): execute via `pnpm workflows:test`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -164,6 +164,18 @@ test('#728 AC-3 F4: analysis preserves a live run holder’s lock', t => {
   assert.deepEqual(answer('passes', readRuns(dir)).runs[0].steps[0].statuses, ['needs-decision'])
   assert.equal(readFileSync(lock, 'utf8'), holder)
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).status, 'needs-human')
+})
+
+test('#728 AC-3 F5: migration preserves group read access under umask 077', t => {
+  const dir = runsDir({ 'quick-627': [step('quick-627', 'implement', { status: 'needs-human' })] })
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const file = join(dir, 'quick-627', 'telemetry.jsonl')
+  chmodSync(file, 0o640)
+
+  const result = spawnSync('/bin/sh', ['-c', 'umask 077 && exec "$@"', 'sh', process.execPath, CLI, 'passes', '--runs', dir], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).status, 'needs-decision')
+  assert.equal(statSync(file).mode & 0o777, 0o640)
 })
 
 test('compare: the runs of a card side by side; measured against estimated is refused, never compared silently', () => {
