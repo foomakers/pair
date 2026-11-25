@@ -6,12 +6,13 @@ import {
   createMemoryFiles,
   runGate,
   runSteps,
+  STATE_FILE,
   start,
   readGateRegistry,
   readGateTargets,
   validate,
 } from '@pair/workflows'
-import type { StepEvent, StepResult } from '@pair/workflows'
+import type { RunStateFile, StepResult } from '@pair/workflows'
 import { isSafePromptText } from './prompt-safety'
 
 /**
@@ -114,34 +115,65 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
     { policy: 'explicit', shorthand: false, explicit: true },
     { policy: 'both', shorthand: true, explicit: true },
   ]
-  const retries = [
+  const verdicts = ['approved', 'changes-requested'] as const
+  const checkpoints = [
+    { step: 'gate', saved: 'ok', ended: 'done', approved: ['review'], requested: ['review'] },
     {
-      after: 'green PR gate',
-      firstGate: 'ok',
-      retryVerdict: 'approved',
-      retrySteps: ['review'],
-      retryGateCount: 0,
+      step: 'gate',
+      saved: 'failed',
+      ended: 'failed',
+      approved: ['review', 'gate'],
+      requested: ['review', 'gate'],
     },
     {
-      after: 'red PR gate',
-      firstGate: 'failed',
-      retryVerdict: 'approved',
-      retrySteps: ['review', 'gate'],
-      retryGateCount: 1,
+      step: 'gate',
+      saved: 'pending',
+      ended: 'interrupted',
+      approved: ['review', 'gate'],
+      requested: ['review', 'gate'],
     },
     {
-      after: 'failed fix',
-      firstGate: undefined,
-      retryVerdict: 'approved',
-      retrySteps: ['review', 'gate'],
-      retryGateCount: 1,
+      step: 'gate',
+      saved: 'running',
+      ended: 'interrupted',
+      approved: ['review', 'gate'],
+      requested: ['review', 'gate'],
+    },
+    { step: 'gate', saved: 'blocked', ended: 'parked', approved: ['gate'], requested: ['gate'] },
+    {
+      step: 'fix',
+      saved: 'failed',
+      ended: 'failed',
+      approved: ['review', 'gate'],
+      requested: ['review', 'fix', 'gate'],
     },
     {
-      after: 'failed fix',
-      firstGate: undefined,
-      retryVerdict: 'changes-requested',
-      retrySteps: ['review', 'fix', 'gate'],
-      retryGateCount: 2,
+      step: 'fix',
+      saved: 'pending',
+      ended: 'interrupted',
+      approved: ['review', 'gate'],
+      requested: ['review', 'fix', 'gate'],
+    },
+    {
+      step: 'fix',
+      saved: 'running',
+      ended: 'interrupted',
+      approved: ['review', 'gate'],
+      requested: ['review', 'fix', 'gate'],
+    },
+    {
+      step: 'fix',
+      saved: 'blocked',
+      ended: 'parked',
+      approved: ['fix', 'gate'],
+      requested: ['fix', 'gate'],
+    },
+    {
+      step: 'fix',
+      saved: 'needs-decision',
+      ended: 'parked',
+      approved: ['fix', 'gate'],
+      requested: ['fix', 'gate'],
     },
   ] as const
 
@@ -161,23 +193,30 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
 
   it.each(
     sources.flatMap(source =>
-      policies.flatMap(policy => retries.map(retry => ({ ...source, ...policy, ...retry }))),
+      policies.flatMap(policy =>
+        checkpoints.flatMap(checkpoint =>
+          verdicts.map(verdict => ({ ...source, ...policy, ...checkpoint, verdict })),
+        ),
+      ),
     ),
   )(
-    '$name quick with $policy retries after $after and records $retryVerdict (R747-03, R747-08)',
+    '$name quick with $policy resumes from $step $saved with $verdict available (R747-03, R747-08)',
     async ({
       root,
       commands,
-      firstGate,
-      retryVerdict,
-      retrySteps,
-      retryGateCount,
+      step,
+      saved,
+      ended,
+      verdict,
+      approved,
+      requested: changes,
       shorthand,
       explicit,
     }) => {
       const run = { files: createMemoryFiles(), dir: '/runs/728' }
+      const readSteps = () =>
+        (JSON.parse(run.files.readFileSync(join(run.dir, STATE_FILE))) as RunStateFile).steps
       const head = 'a'.repeat(40)
-      const fixFailed = firstGate === undefined
       const firstFinding = { id: 'f1', severity: 'Major', title: 'Missing check', blocking: true }
       const freshFinding = { ...firstFinding, id: 'f2', title: 'Missing assertion' }
       const requested = {
@@ -187,24 +226,28 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
         reviewedHead: head,
         findings: [firstFinding],
       } satisfies StepResult
-      const fixed = {
+      const fixed = (finding: typeof firstFinding): StepResult => ({
         status: 'ok',
         summary: 'Finding fixed',
         head,
-        resolutions: [{ id: firstFinding.id, status: 'resolved', reason: 'Check added' }],
-      } satisfies StepResult
+        resolutions: [{ id: finding.id, status: 'resolved', reason: 'Check added' }],
+      })
       const replies: Record<string, StepResult> = {
         implement: { status: 'ok', summary: 'PR opened', branch: 'feature/quick', pr: 728, head },
         review: requested,
-        fix: fixFailed
-          ? {
-              status: 'failed',
-              summary: 'Push failed',
-              reason: 'push-failed',
-              head,
-              resolutions: [],
-            }
-          : fixed,
+        fix: fixed(firstFinding),
+      }
+      if (
+        step === 'fix' &&
+        (saved === 'failed' || saved === 'blocked' || saved === 'needs-decision')
+      ) {
+        replies['fix'] = {
+          status: saved,
+          summary: 'Fix stopped',
+          reason: 'fix-stopped',
+          head,
+          resolutions: [],
+        }
       }
       const registryText = read(root, WAY_OF_WORKING)
       const invoked: string[] = []
@@ -220,7 +263,7 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
             },
           },
         )
-      const events: StepEvent[] = []
+      const launched: string[] = []
       const fixFindings: unknown[] = []
       const legacy = read(root, QUICK)
       const text = legacy.replace(
@@ -228,7 +271,8 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
         `${shorthand ? '    on-failed: continue\n' : ''}    escalate: { ${explicit ? 'failed: continue, ' : ''}blocked: stop, needs-decision: stop }`,
       )
       const source = { text, file: QUICK }
-      let failPrGate = firstGate === 'failed'
+      const interruption = new Error('Workflow interrupted')
+      let resuming = false
       const execute = () =>
         runSteps(
           {
@@ -236,6 +280,7 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
             style: 'instruction',
             isSafeText: isSafePromptText,
             launch: async ({ id, inputs }) => {
+              if (!resuming && id === step && saved === 'running') throw interruption
               if (id === 'fix') fixFindings.push(inputs['findings'])
               const reply = replies[id]
               if (reply === undefined) throw new Error(`Unexpected agent step ${id}`)
@@ -245,35 +290,46 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
               const result = await gates(entries)
               return result.status === 'ok' ? undefined : result
             },
-            perform: async step => {
-              const result = await gates(step.with['gates'] as readonly string[], failPrGate)
-              failPrGate = false
-              return result
+            perform: async gate => {
+              if (!resuming && step === 'gate' && saved === 'running') throw interruption
+              if (!resuming && step === 'gate' && saved === 'blocked')
+                return { status: 'blocked', summary: 'Gate unavailable', reason: 'fact-unreadable' }
+              return gates(gate.with['gates'] as readonly string[], !resuming && saved === 'failed')
             },
-            report: event => events.push(event),
+            report: event => {
+              if (event.state === 'running') launched.push(event.step)
+              // Before the next launch, the previous result is saved and its successor is pending.
+              if (
+                !resuming &&
+                saved === 'pending' &&
+                (step === 'fix'
+                  ? event.step === 'review' && event.state === 'failed'
+                  : event.step === 'fix' && event.state === 'ok')
+              )
+                throw interruption
+            },
           },
           run.dir,
         )
 
       await start(run, source, { card: '728' })
-      expect((await execute()).run).toBe(firstGate === 'ok' ? 'done' : 'failed')
-      expect(invoked).toEqual(fixFailed ? commands.slice(0, 1) : commands)
-      expect(
-        events.filter(event => event.state !== 'running').map(event => [event.step, event.state]),
-      ).toEqual([
-        ['implement', 'ok'],
-        ['review', 'failed'],
-        ...(fixFailed
-          ? [['fix', 'failed']]
-          : [
-              ['fix', 'ok'],
-              ['gate', firstGate],
-            ]),
+      if (ended === 'interrupted') await expect(execute()).rejects.toThrow(interruption)
+      else expect((await execute()).run).toBe(ended)
+      const first = readSteps()
+      expect(first[step]?.state).toBe(saved)
+      expect(first['review']?.outputs).toMatchObject({
+        verdict: 'changes-requested',
+        findings: [firstFinding],
+      })
+      expect(fixFindings).toEqual(step === 'fix' && ended === 'interrupted' ? [] : [[firstFinding]])
+      expect(invoked).toEqual([
+        commands[0],
+        ...(step === 'gate' ? [commands[1]] : []),
+        ...(step === 'gate' && (saved === 'ok' || saved === 'failed') ? [commands[2]] : []),
       ])
-      expect(fixFindings).toEqual([[firstFinding]])
 
       replies['review'] =
-        retryVerdict === 'approved'
+        verdict === 'approved'
           ? {
               status: 'ok',
               summary: 'Approved',
@@ -282,22 +338,33 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
               findings: [],
             }
           : { ...requested, findings: [freshFinding] }
-      replies['fix'] = {
-        ...fixed,
-        resolutions: [{ id: freshFinding.id, status: 'resolved', reason: 'Assertion added' }],
-      }
-      events.length = 0
+      const retrySteps: readonly string[] = verdict === 'approved' ? approved : changes
+      const refreshesReview = retrySteps.includes('review')
+      const fixFinding = refreshesReview ? freshFinding : firstFinding
+      replies['fix'] = fixed(fixFinding)
+      resuming = true
+      launched.length = 0
       invoked.length = 0
       fixFindings.length = 0
       expect(await start(run, source, { card: '728' })).toMatchObject({ status: 'resumed' })
       expect((await execute()).run).toBe('done')
-      expect(events.filter(event => event.state === 'running').map(event => event.step)).toEqual(
-        retrySteps,
-      )
-      expect(fixFindings).toEqual(retryVerdict === 'changes-requested' ? [[freshFinding]] : [])
-      expect(invoked).toEqual(commands.slice(commands.length - retryGateCount))
+      expect(launched).toEqual(retrySteps)
+      expect(fixFindings).toEqual(retrySteps.includes('fix') ? [[fixFinding]] : [])
+      expect(invoked).toEqual([
+        ...(retrySteps.includes('fix') ? [commands[1]] : []),
+        ...(retrySteps.includes('gate') ? [commands[2]] : []),
+      ])
+      const second = readSteps()
+      const finalVerdict = refreshesReview ? verdict : 'changes-requested'
+      expect(second['review']?.outputs).toMatchObject({
+        verdict: finalVerdict,
+        findings: refreshesReview && verdict === 'approved' ? [] : [fixFinding],
+      })
+      expect(second['implement']).toEqual(first['implement'])
+      if (first['fix']?.state === 'ok') expect(second['fix']).toEqual(first['fix'])
+      if (first['gate']?.state === 'ok') expect(second['gate']).toEqual(first['gate'])
       expect(await start(run, source, { card: '728' })).toMatchObject({
-        status: retryVerdict === 'approved' ? 'complete' : 'resumed',
+        status: finalVerdict === 'approved' ? 'complete' : 'resumed',
       })
     },
   )
