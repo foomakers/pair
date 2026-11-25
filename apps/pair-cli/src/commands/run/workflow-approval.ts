@@ -15,6 +15,7 @@ export interface ApprovalTarget {
   readonly pr: number
   readonly head: string
 }
+type TargetMismatch = { readonly reason: 'head-moved' | 'pr-changed' }
 interface Park extends ApprovalTarget {
   readonly since: string
   readonly notified: boolean
@@ -23,7 +24,11 @@ interface Park extends ApprovalTarget {
 export interface ApprovalPlatform {
   target(card: string): Promise<ApprovalTarget>
   notice(card: string, marker: string, body: string): Promise<void>
-  answers(card: string, target: Park, flag?: WorkflowFlagAnswer): Promise<readonly Answer[]>
+  answers(
+    card: string,
+    target: Park,
+    flag?: WorkflowFlagAnswer,
+  ): Promise<readonly Answer[] | TargetMismatch>
 }
 
 function parkKey(run: RunDirectory, step: StepLaunch, target: ApprovalTarget): string {
@@ -72,13 +77,21 @@ export function approvalRunner(
       : undefined
     const park = previous ?? { ...live, since: new Date().toISOString(), notified: false }
     if (previous === undefined) await writeAtomic(run.files, path, JSON.stringify(park))
-    const answer =
-      previous === undefined
-        ? undefined
-        : (await platform.answers(card, park, flag?.step === step.id ? flag.answer : undefined))[0]
-    return answer === undefined
-      ? notifyParked(run, platform, { card, step, park, key, path })
-      : answerResult(answer, live)
+    if (previous !== undefined) {
+      const answers = await platform.answers(
+        card,
+        park,
+        flag?.step === step.id ? flag.answer : undefined,
+      )
+      if ('reason' in answers)
+        return {
+          status: 'failed',
+          reason: answers.reason,
+          summary: 'Approval target changed while reading answers',
+        }
+      if (answers[0]) return answerResult(answers[0], live)
+    }
+    return notifyParked(run, platform, { card, step, park, key, path })
   }
 }
 
@@ -150,7 +163,16 @@ export function approvalPlatform(call: Operation): ApprovalPlatform {
     },
     answers: async (card, park, flag) => {
       const values = await call('approval-answers', card, { ...park, flag })
-      if (!Array.isArray(values)) throw new Error('unreadable approval answers')
+      if (!Array.isArray(values)) {
+        if (
+          values &&
+          typeof values === 'object' &&
+          'reason' in values &&
+          (values.reason === 'head-moved' || values.reason === 'pr-changed')
+        )
+          return { reason: values.reason }
+        throw new Error('unreadable approval answers')
+      }
       return values
         .map(row => parseAnswer(row, park))
         .filter((answer): answer is Answer => answer !== undefined)

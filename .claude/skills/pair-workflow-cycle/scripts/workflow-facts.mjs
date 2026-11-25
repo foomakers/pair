@@ -66,26 +66,29 @@ try {
     if (action === 'approval-target') result = { pr, head: target.head }
     else {
       const park = JSON.parse(raw)
-      if (park.pr !== pr || park.head !== target.head) throw new Error('Approval target moved')
-      const since = Date.parse(park.since)
-      const bot = code.workflowReviewIdentity({})
-      const authorized = row => row.human && humanLogin(row.login, bot)
-        && Date.parse(row.at) >= since && permission(code, row.login)
-        && (!sameLogin(row.login, target.author) || row.solo)
-      const comments = pm.listCardComments({ id: card }).flatMap(row => {
-        if (!originalComment(row) || Date.parse(row.createdAt) < since) return []
-        const answer = { login: row.authorLogin, human: true, at: row.createdAt, channel: 'comment', pr, head: target.head }
-        if (sameLogin(row.authorLogin, target.author))
-          return humanLogin(row.authorLogin, bot) && soloAnswer(code, target, row)
-            ? [{ ...answer, solo: true, verdict: 'approved', note: target.head }] : []
-        const decision = cardDecision(row.body, park)
-        return decision ? [{ ...answer, ...decision }] : []
-      })
-      const reviews = code.workflowReviews({ pr }).filter(row =>
-        row.head === target.head && ['APPROVED', 'CHANGES_REQUESTED'].includes(row.state)
-      ).map(row => ({ ...row, channel: 'review' }))
-      const flagged = park.flag ? [{ ...park.flag, ...code.workflowActor(), channel: 'flag', at: new Date().toISOString() }] : []
-      result = [...flagged, ...comments, ...reviews].filter(authorized).sort((a,b) => Date.parse(b.at) - Date.parse(a.at))
+      if (park.pr !== pr) result = { reason: 'pr-changed' }
+      else if (park.head !== target.head) result = { reason: 'head-moved' }
+      else {
+        const since = Date.parse(park.since)
+        const bot = code.workflowReviewIdentity({})
+        const authorized = row => row.human && humanLogin(row.login, bot)
+          && Date.parse(row.at) >= since && permission(code, row.login)
+          && (!sameLogin(row.login, target.author) || row.solo)
+        const comments = pm.listCardComments({ id: card }).flatMap(row => {
+          if (!originalComment(row) || Date.parse(row.createdAt) < since) return []
+          const answer = { login: row.authorLogin, human: true, at: row.createdAt, channel: 'comment', pr, head: target.head }
+          if (sameLogin(row.authorLogin, target.author))
+            return humanLogin(row.authorLogin, bot) && soloAnswer(code, target, row)
+              ? [{ ...answer, solo: true, verdict: 'approved', note: target.head }] : []
+          const decision = cardDecision(row.body, park)
+          return decision ? [{ ...answer, ...decision }] : []
+        })
+        const reviews = code.workflowReviews({ pr }).filter(row =>
+          row.head === target.head && ['APPROVED', 'CHANGES_REQUESTED'].includes(row.state)
+        ).map(row => ({ ...row, channel: 'review' }))
+        const flagged = park.flag ? [{ ...park.flag, ...code.workflowActor(), channel: 'flag', at: new Date().toISOString() }] : []
+        result = [...flagged, ...comments, ...reviews].filter(authorized).sort((a,b) => Date.parse(b.at) - Date.parse(a.at))
+      }
     }
   } else if (action === 'prerequisites') {
     const data = prereqState({ story: card, host })
