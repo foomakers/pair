@@ -33,7 +33,7 @@ import {
   type StepEvent,
 } from '../host'
 import { kindByName } from '../kinds'
-import { effectiveSelection } from '../select'
+import { effectiveSelection, type CardFacts } from '../select'
 import { reopenRun, type Usage } from '../telemetry'
 import { prepareReplayHead } from '../worktree'
 import { runHostProcess } from '../worktree/host-process'
@@ -107,35 +107,52 @@ function checkSelection(
   project: Project,
   scripts: string,
   view: Card,
-  { workflow, configuration }: { workflow: Workflow; configuration: Configuration | undefined },
-  run?: RunDirectory,
+  {
+    workflow,
+    configuration,
+    run,
+  }: { workflow: Workflow; configuration: Configuration | undefined; run?: RunDirectory },
 ) {
   const filter = configuration?.select?.filter ?? workflow.select?.filter
   if (filter === undefined) return
   const facts =
     filter.assignee === undefined ? view : sessionCard(scripts, project.main, view.id, true)
   const selection = effectiveSelection(workflow.select, configuration?.select)
-  if (selection.needsStatus(facts)) {
-    if (facts.boardError !== undefined) throw new Error(facts.boardError)
-    const authority = controlStateScript(project)
-    const status = sessionCardStatus(authority, project.main, facts)
-    if (status !== null && selection.accepts({ ...facts, status })) return
-    const previous =
-      run && pendingSelectionStatus(project, authority, { ...facts, status }, run, workflow)
-    if (previous != null && selection.accepts({ ...facts, status: previous })) return
-  } else if (selection.accepts(facts)) return
-  throw new Error(`not-applicable: card ${view.id} does not match the selection filter`)
+  const accepts = selection.needsStatus(facts)
+    ? acceptsBoardStatus(project, facts, selection.accepts, { run, workflow: workflow.name })
+    : selection.accepts(facts)
+  if (!accepts)
+    throw new Error(`not-applicable: card ${view.id} does not match the selection filter`)
+}
+
+function acceptsBoardStatus(
+  project: Project,
+  facts: Card,
+  accepts: (facts: CardFacts) => boolean,
+  saved: { run: RunDirectory | undefined; workflow: string },
+): boolean {
+  if (facts.boardError !== undefined) throw new Error(facts.boardError)
+  const { main } = project
+  const authority = controlStateScript(project)
+  const status = sessionCardStatus(authority, main, facts)
+  if (status !== null && accepts({ ...facts, status })) return true
+  const previous = pendingSelectionStatus(authority, main, { ...facts, status }, saved)
+  return previous != null && accepts({ ...facts, status: previous })
 }
 
 function pendingSelectionStatus(
-  { main }: Project,
   authority: string,
+  main: string,
   view: Card & { status: CardState | null },
-  run: RunDirectory,
-  workflow: Workflow,
+  { run, workflow }: { run: RunDirectory | undefined; workflow: string },
 ) {
   const { status, boardState } = view
-  if (status === null || CARD_STATES.indexOf(status) < CARD_STATES.indexOf('Ready')) return
+  if (
+    run === undefined ||
+    status === null ||
+    CARD_STATES.indexOf(status) < CARD_STATES.indexOf('Ready')
+  )
+    return
   // As in the CLI, the DoR can resolve to Ready while the board still reads Draft.
   const draft =
     status === 'Ready' &&
@@ -143,7 +160,7 @@ function pendingSelectionStatus(
     sessionBoardMacrostate(authority, main, boardState) === 'Draft'
       ? boardState
       : undefined
-  const previous = pendingBoardStatus(run, { card: view.id, workflow: workflow.name }, draft)
+  const previous = pendingBoardStatus(run, { card: view.id, workflow }, draft)
   return previous === undefined ? undefined : sessionBoardMacrostate(authority, main, previous)
 }
 
@@ -219,7 +236,7 @@ async function resumeSaved(
     runWorkflowOperation(runHostProcess, () => scripts, project.main, { action, card, data })
   if (view.closed)
     return finishSessionClosure(project.main, run, { card, state, workflow: saved }, operation)
-  checkSelection(project, scripts, view, { workflow: saved, configuration }, run)
+  checkSelection(project, scripts, view, { workflow: saved, configuration, run })
   const replay = await refreshReplayInputs({ workflow: saved, state }, operation)
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
   if (replay) await prepareReplayHead(worktree, replay.inputs.head, runHostProcess)

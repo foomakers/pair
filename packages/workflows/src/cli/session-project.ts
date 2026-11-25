@@ -81,27 +81,39 @@ const DEFAULT_TARGETS = [
 
 type SkillsRegistry = { targets?: { path: string }[]; target_path?: string; prefix?: string }
 
-function installedSkillPaths(project: Project, name: string, root = project.main) {
+function skillsRegistry(project: Project, root: string): SkillsRegistry {
   const config = projectConfig(root) ?? projectConfig(project.main)
   const registries = (config?.['asset_registries'] ?? config?.['dataset_registries']) as
     | { skills?: SkillsRegistry }
     | undefined
-  const registry = registries?.skills
+  return registries?.skills ?? {}
+}
+
+// A local bundle identifies its install target and prefix, including source and CLI overrides.
+function bundleLayout(project: Project) {
   const bundle = dirname(project.scriptDir)
   const target = relative(project.main, dirname(bundle))
   const installed = /^(?:(.+)-)?capability-workflow$/.exec(basename(bundle))
-  const localBundle =
-    installed !== null && !isAbsolute(target) && target !== '..' && !target.startsWith(`..${sep}`)
-  // Partial registry overrides inherit installer targets. The bundle also identifies its own
-  // install target and prefix when the install used a source declaration or command-line config.
-  const targets = registry?.targets?.length
-    ? registry.targets.map(entry => entry.path)
-    : [
-        ...(localBundle ? [target] : []),
-        ...(registry?.target_path ? [registry.target_path] : []),
-        ...DEFAULT_TARGETS,
-      ]
-  const prefix = registry?.prefix ?? (localBundle ? (installed[1] ?? '') : 'pair')
+  if (installed === null || isAbsolute(target) || target === '..' || target.startsWith(`..${sep}`))
+    return undefined
+  return { target, prefix: installed[1] ?? '' }
+}
+
+function registryTargets(registry: SkillsRegistry, bundleTarget: string | undefined): string[] {
+  if (registry.targets?.length) return registry.targets.map(entry => entry.path)
+  // A partial registry override inherits the installer's default targets.
+  return [
+    ...(bundleTarget === undefined ? [] : [bundleTarget]),
+    ...(registry.target_path ? [registry.target_path] : []),
+    ...DEFAULT_TARGETS,
+  ]
+}
+
+function installedSkillPaths(project: Project, name: string, root = project.main) {
+  const registry = skillsRegistry(project, root)
+  const bundle = bundleLayout(project)
+  const targets = registryTargets(registry, bundle?.target)
+  const prefix = registry.prefix ?? bundle?.prefix ?? 'pair'
   const paths = skillPaths(root, targets, prefix, name)
   if (name.startsWith('pair-')) paths.push(...skillPaths(root, targets, prefix, name.slice(5)))
   return paths
