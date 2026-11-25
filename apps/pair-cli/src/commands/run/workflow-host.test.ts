@@ -403,6 +403,51 @@ describe('skill and options of a step (AC-4, AC-5)', () => {
   })
 })
 
+describe('headless interactive steps (#696 AC-2)', () => {
+  it.each([
+    {
+      scenario: 'after an ordinary step',
+      before: '  implement: { kind: implement }\n',
+      after: '  after: { kind: generic, skill: my-skill }\n',
+      available: true,
+      expectedLaunches: ['pair-process-implement'],
+      expectedStates: { implement: 'ok', decision: 'needs-human', after: 'pending' },
+    },
+    {
+      scenario: 'without an agent executable',
+      before: '',
+      after: '',
+      available: false,
+      expectedLaunches: [],
+      expectedStates: { decision: 'needs-human' },
+    },
+  ])('parks $scenario and prints how to resume in a session', async test => {
+    write(
+      '.pair/adoption/tech/workflows/interactive-check.yaml',
+      `version: 1
+name: interactive-check
+steps:
+${test.before}  decision: { kind: generic, skill: my-skill, interactive: true }
+${test.after}`,
+    )
+    const runId = 'session-check'
+    const skills = { ...OK, 'my-skill': () => fenced({ status: 'ok', summary: 'finished' }) }
+    const exit = await run(
+      ['interactive-check'],
+      skills,
+      { runId },
+      { engineAvailable: () => test.available },
+    )
+    const output = lines.join('\n')
+
+    expect(exit, output).toBe(0)
+    expect(launched.map(one => skillOf(one.promptText))).toEqual(test.expectedLaunches)
+    expect(states(runId)).toEqual(test.expectedStates)
+    expect(output).toMatch(/parked at step decision/)
+    expect(output).toMatch(/resume[^\n]*pair-workflow-run[^\n]*\bsession-check\b/i)
+  })
+})
+
 describe('resume (AC-6)', () => {
   it('resumes at a failed step and skips the ok ones', async () => {
     const answers = [fenced({ status: 'failed', summary: 'one blocking finding' }), REVIEWED]

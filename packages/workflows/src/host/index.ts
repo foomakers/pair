@@ -48,6 +48,8 @@ export interface WorkflowHost {
   readonly styleOf?: (stepId: string) => InvocationStyle
   /** The host's prompt-safety check. */
   readonly isSafeText: (value: string) => boolean
+  /** How a headless host parks a step that needs the session conversation. */
+  readonly parkInteractive?: StepResult & { readonly status: 'needs-human' }
   /**
    * Launches the agent of one step in the run's worktree and resolves to its final message —
    * `undefined` when the agent died or timed out. Rejects when the run is interrupted: nothing is
@@ -226,6 +228,8 @@ async function execute(
 ): Promise<StepResult> {
   if (step.pendingSuccess !== undefined)
     return recordResult(host, run, step, await confirmed(host, run, step, step.pendingSuccess))
+  if (step.interactive === true && host.parkInteractive !== undefined)
+    return record(run, step.id, host.parkInteractive)
   const kind = kindByName[step.kind]
   const missing = violations(kind.inputs, step.inputs)
   if (missing.length > 0)

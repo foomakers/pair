@@ -128,6 +128,11 @@ export const stepSchema: JsonSchema = {
       pattern: SKILL_NAME,
       description: 'The skill that runs. Optional for a typed kind, required for `generic`.',
     },
+    interactive: {
+      type: 'boolean',
+      description:
+        'Run this step in the session conversation. Headless runs park when they reach it. Defaults to the kind contract. Set it on loop children and included steps.',
+    },
     when: {
       ...whenSchema,
       description:
@@ -256,6 +261,7 @@ export interface Step {
   readonly id: string
   readonly kind: KindName | 'loop'
   readonly skill?: string
+  readonly interactive?: boolean
   /** Reserved for including a workflow (#699); the validator refuses it as a skill name. */
   readonly uses?: string
   readonly with?: Readonly<Record<string, unknown>>

@@ -13,7 +13,14 @@ import {
   type Workflow,
 } from '../grammar'
 import { parseFrozenConfiguration } from '../configuration'
-import { fieldsOf, kindByName, settle, type StepResult, type StepStatus } from '../kinds'
+import {
+  fieldsOf,
+  interactiveOf,
+  kindByName,
+  settle,
+  type StepResult,
+  type StepStatus,
+} from '../kinds'
 import { effectiveSelection, matches, type CardFacts } from '../select'
 
 /**
@@ -87,6 +94,8 @@ export interface StepLaunch {
   readonly id: string
   readonly kind: KindName
   readonly uses: string
+  /** Resolved by `next`; a caller constructing a launch can omit it for an ordinary step. */
+  readonly interactive?: boolean
   readonly with: Readonly<Record<string, unknown>>
   /** Validation the host runs after the step ends `ok`. */
   readonly gates?: readonly string[]
@@ -675,6 +684,7 @@ async function nextInLoop(
     id,
     kind: child.kind,
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
+    interactive: interactiveOf(child),
     with: child.with ?? {},
     ...gatesOf(child),
     ...confirmationOf(child),
@@ -831,6 +841,7 @@ function plainLaunch(state: RunStateFile, steps: readonly Step[], step: Step): S
     id: step.id,
     kind: step.kind,
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
+    interactive: interactiveOf(step),
     with: step.with ?? {},
     ...gatesOf(step),
     ...confirmationOf(step),

@@ -6,6 +6,8 @@ export interface StepKind {
   readonly name: KindName
   /** The pair skill a step of this kind runs when it has no `skill`. */
   readonly defaultSkill?: string
+  /** Whether a step runs in the session conversation unless its own `interactive` overrides it. */
+  readonly defaultInteractive: boolean
   /** The boundary the invoked skill returns at, when its direct invocation also handles later phases. */
   readonly handoff?: string
   /** Run by the host, deterministically: no agent, no skill, no token. */

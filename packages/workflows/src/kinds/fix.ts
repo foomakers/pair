@@ -3,6 +3,7 @@ import { SEVERITIES } from './review'
 
 export const fix: StepKind = {
   name: 'fix',
+  defaultInteractive: false,
   defaultSkill: 'pair-process-fix',
   inputs: {
     type: 'object',

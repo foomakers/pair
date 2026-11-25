@@ -11,6 +11,7 @@ import {
   checkAgainstEngines,
   describeSettings,
   formatError,
+  interactiveOf,
   kindByName,
   addressedSteps,
   frozenConfiguration,
@@ -487,6 +488,12 @@ function resumeCommand(request: RunWorkflowRequest): string {
   return `pair-cli run ${request.name} --card ${request.card}${runId}`
 }
 
+const INTERACTIVE_PARK = {
+  status: 'needs-human',
+  reason: 'interactive-step',
+  summary: 'This step needs the conversation in an agent session',
+} as const
+
 type Ending = (at: string, why: string, resume: string) => string
 
 /** `failed` exits 1 with its reason; `parked` exits 0 with what is needed and the command that resumes it. */
@@ -507,7 +514,7 @@ const ENDINGS: Readonly<Record<RunOutcome['run'], { status: string; exit: number
     },
   }
 
-function conclude(outcome: RunOutcome, request: RunWorkflowRequest, sink: ConsoleSink): number {
+function conclude(outcome: RunOutcome, { request, runDir }: Opened, sink: ConsoleSink): number {
   const ending = ENDINGS[outcome.run]
   const why = explain(outcome.last)
   sink.event({
@@ -516,7 +523,11 @@ function conclude(outcome: RunOutcome, request: RunWorkflowRequest, sink: Consol
     status: ending.status,
     ...(outcome.run !== 'done' && { reason: why }),
   })
-  console.log(`  Run: ${ending.line(outcome.last?.step ?? '?', why, resumeCommand(request))}`)
+  const resume =
+    outcome.run === 'parked' && outcome.last?.reason === INTERACTIVE_PARK.reason
+      ? `pair-workflow-run ${basename(runDir)}`
+      : resumeCommand(request)
+  console.log(`  Run: ${ending.line(outcome.last?.step ?? '?', why, resume)}`)
   return ending.exit
 }
 
@@ -736,6 +747,7 @@ function cardTransitions({ request, resolved }: Opened, services: Services) {
     },
     async transition(event: StepEvent) {
       const step = stepOf(resolved, event.step)
+      if (interactiveOf(step)) return
       const set = cardStateOf(step)
       if (set === undefined || set.when !== whenOf(event.state) || cardStateToConfirm(step)) return
       try {
@@ -805,6 +817,7 @@ async function runOnConsole(
         files: fs,
         style: resolved.engine.engine.skillInvocationStyle,
         isSafeText: isSafePromptText,
+        parkInteractive: INTERACTIVE_PARK,
         styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
         ...hostKindsOf(opened, services),
@@ -819,7 +832,7 @@ async function runOnConsole(
       telemetryOf(config, opened),
     )
     reportRunOutcome(opened, outcome)
-    return exhaustedEnding(opened, outcome, sink, fs) ?? conclude(outcome, request, sink)
+    return exhaustedEnding(opened, outcome, sink, fs) ?? conclude(outcome, opened, sink)
   } finally {
     sink.finish()
     restore()
@@ -1008,6 +1021,10 @@ async function drive(
   )
 }
 
+function usesCliEngine(workflow: Workflow): boolean {
+  return addressedSteps(workflow).some(step => step.kind !== 'loop' && !interactiveOf(step))
+}
+
 /** Engines preflight did not probe on a resume: the run's own when no configuration was frozen, the frozen copy's when none resolved now. */
 function probeUnchecked(
   resolved: Resolved,
@@ -1016,14 +1033,15 @@ function probeUnchecked(
   probe: ExecutableProbe,
 ): void {
   if (effective === undefined) {
-    if (resolved.configuration !== undefined) assertEngineAvailable(resolved.engine, probe)
+    if (resolved.configuration !== undefined && usesCliEngine(resolved.workflow))
+      assertEngineAvailable(resolved.engine, probe)
     return
   }
   if (resolved.configuration !== undefined) return
   const { errors } = checkAgainstEngines(effective, {
     file: join(runDir, 'configuration.yaml'),
     facts: engineFacts(resolved.project, probe),
-    steps: resolved.workflow.steps,
+    steps: addressedSteps(resolved.workflow),
     aliases: resolved.workflow.aliases,
   })
   if (errors.length > 0) throw new Error(errors.map(formatError).join('\n'))
@@ -1100,7 +1118,7 @@ async function preflight(opened: Omit<Opened, 'title'>, services: Services): Pro
       return { ...opened, title: `Card ${card}: finish post-merge closure`, closureOnly: true }
     throw new Error(`card-closed: card ${card} is closed; nothing was launched.`)
   }
-  if (resolved.configuration === undefined)
+  if (resolved.configuration === undefined && usesCliEngine(resolved.workflow))
     assertEngineAvailable(
       resolved.engine,
       services.deps.workflow?.engineAvailable ?? createExecutableProbe(services.fs),

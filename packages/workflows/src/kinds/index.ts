@@ -1,4 +1,4 @@
-import type { KindName } from '../grammar'
+import type { KindName, Step } from '../grammar'
 import { violations } from '../schema'
 import { approval } from './approval'
 import { fix } from './fix'
@@ -23,6 +23,17 @@ export const kindByName: Readonly<Record<KindName, StepKind>> = {
   merge,
   'refine-story': refineStory,
   'plan-tasks': planTasks,
+}
+
+/** Whether the workflow needs a session conversation for this step. */
+export function interactiveOf({
+  kind,
+  interactive,
+}: Pick<Step, 'interactive'> & { kind?: Step['kind'] }): boolean {
+  return (
+    kind !== 'loop' &&
+    (interactive ?? (kind === undefined ? false : kindByName[kind].defaultInteractive))
+  )
 }
 
 /** The names of the fields a kind declares in `inputs` or `outputs`. */

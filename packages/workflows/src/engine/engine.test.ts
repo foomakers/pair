@@ -63,6 +63,7 @@ describe('engine: a linear run (AC-1)', () => {
           id: 'implement',
           kind: 'implement',
           uses: 'pair-process-implement',
+          interactive: false,
           with: { gates: ['quality-gate'] },
           inputs: { card: '627' },
           attempt: 1,
@@ -79,6 +80,7 @@ describe('engine: a linear run (AC-1)', () => {
           id: 'review',
           kind: 'review',
           uses: 'pair-process-review',
+          interactive: false,
           with: {},
           inputs: { card: '627', pr: 12, head: HEAD },
           attempt: 1,
@@ -133,6 +135,7 @@ describe('engine: a linear run (AC-1)', () => {
         id: 'notes',
         kind: 'generic',
         uses: 'my-skill',
+        interactive: false,
         with: {},
         inputs: {
           card: '627',
@@ -167,6 +170,16 @@ describe('engine: a linear run (AC-1)', () => {
     expect(written).toContain(`${DIR}/state.json.tmp`)
     expect(written).not.toContain(`${DIR}/state.json`)
     expect(run.files.existsSync(`${DIR}/state.json.tmp`)).toBe(false)
+  })
+})
+
+describe('interactive launches (#696 AC-2)', () => {
+  it('hands the host an interactive step', async () => {
+    const run = open()
+    const text = QUICK.replace('kind: implement\n', 'kind: implement\n    interactive: true\n')
+    await start(run, { ...SOURCE, text }, { card: '627' })
+
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'implement', interactive: true })
   })
 })
 
@@ -209,6 +222,19 @@ steps:
     return run
   }
 
+  it('hands the host an interactive loop child (#696 AC-2)', async () => {
+    const run = open()
+    const interactive = text.replace(
+      'review: { kind: review }',
+      'review: { kind: review, interactive: true }',
+    )
+    await start(run, { ...source, text: interactive }, { card: '627' })
+    await next(run)
+    await record(run, 'implement', IMPLEMENTED)
+
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', interactive: true })
+  })
+
   it('exits on the until result before later steps', async () => {
     const run = await opened()
     expect((await next(run)).ready[0]).toMatchObject({
@@ -227,6 +253,7 @@ steps:
     await record(run, 'rounds/review', failedReview)
     expect((await next(run)).ready[0]).toMatchObject({
       id: 'rounds/fix',
+      interactive: false,
       round: 1,
       inputs: { findings },
     })

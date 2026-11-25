@@ -1,4 +1,5 @@
 import { errorAt, type Lines, type Step, type Workflow, type WorkflowError } from '../grammar'
+import { interactiveOf } from '../kinds'
 import type { Configuration, Entry } from './schema'
 import { settingsFor } from './settings'
 
@@ -23,7 +24,9 @@ export interface CheckContext {
   readonly lines?: Lines
   readonly facts: EngineFacts
   /** The steps of the running workflow; absent: only what the file says is checked. */
-  readonly steps?: readonly (Pick<Step, 'id' | 'alias'> & { readonly kind?: Step['kind'] })[]
+  readonly steps?: readonly (Pick<Step, 'id' | 'alias' | 'interactive'> & {
+    readonly kind?: Step['kind']
+  })[]
   /** The aliases the running workflow declares, with its defaults. */
   readonly aliases?: Workflow['aliases']
   /** `--engine`, when passed. */
@@ -163,7 +166,9 @@ function checkWorkflow(
       ),
     )
   const used = new Set(
-    steps.filter(s => s.kind !== 'loop').map(s => settingsFor(c, s, aliases).engine),
+    steps
+      .filter(s => s.kind !== 'loop' && !interactiveOf(s))
+      .map(s => settingsFor(c, s, aliases).engine),
   )
   const notInstalled = [...used]
     .filter(engine => facts.known(engine) && !facts.installed(engine))

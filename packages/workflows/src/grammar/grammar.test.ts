@@ -47,6 +47,31 @@ describe('card state of a step (#672 AC-13)', () => {
   })
 })
 
+describe('interactive steps (#696 AC-2)', () => {
+  it.each([true, false])('reads interactive: %s as a boolean', interactive => {
+    const { workflow, errors } = parseWorkflow(
+      seeded('kind: review', `kind: review\n    interactive: ${String(interactive)}`),
+      'workflows/quick.yaml',
+    )
+    expect(errors).toEqual([])
+    expect(workflow?.steps[1]).toMatchObject({ interactive })
+  })
+
+  it('rejects a quoted boolean', () => {
+    const { errors } = parseWorkflow(
+      seeded('kind: review', 'kind: review\n    interactive: "true"'),
+      'workflows/quick.yaml',
+    )
+    expect(errors).toEqual([
+      expect.objectContaining({
+        line: 11,
+        key: 'steps.review.interactive',
+        problem: 'expected boolean, found string "true"',
+      }),
+    ])
+  })
+})
+
 describe('workflow aliases (#672 AC-11)', () => {
   const ALIASED = QUICK.replace(
     'steps:\n',
@@ -121,7 +146,7 @@ describe('parseWorkflow (AC-2)', () => {
         line: 7,
         key: 'steps.implement.retry',
         problem: "unknown key 'retry'",
-        fix: 'use one of kind, skill, when, uses, with, gates, on-failed, on-resume, alias, state, until, max, on-max, steps',
+        fix: expect.stringMatching(/^use one of .*\bkind\b.*\bskill\b/),
       },
     ],
     [
