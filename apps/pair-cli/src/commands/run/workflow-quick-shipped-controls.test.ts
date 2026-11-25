@@ -232,22 +232,24 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
         head,
         resolutions: [{ id: finding.id, status: 'resolved', reason: 'Check added' }],
       })
+      function initialFix(): StepResult {
+        if (
+          step === 'fix' &&
+          (saved === 'failed' || saved === 'blocked' || saved === 'needs-decision')
+        )
+          return {
+            status: saved,
+            summary: 'Fix stopped',
+            reason: 'fix-stopped',
+            head,
+            resolutions: [],
+          }
+        return fixed(firstFinding)
+      }
       const replies: Record<string, StepResult> = {
         implement: { status: 'ok', summary: 'PR opened', branch: 'feature/quick', pr: 728, head },
         review: requested,
-        fix: fixed(firstFinding),
-      }
-      if (
-        step === 'fix' &&
-        (saved === 'failed' || saved === 'blocked' || saved === 'needs-decision')
-      ) {
-        replies['fix'] = {
-          status: saved,
-          summary: 'Fix stopped',
-          reason: 'fix-stopped',
-          head,
-          resolutions: [],
-        }
+        fix: initialFix(),
       }
       const registryText = read(root, WAY_OF_WORKING)
       const invoked: string[] = []
@@ -312,32 +314,50 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
           run.dir,
         )
 
-      await start(run, source, { card: '728' })
-      if (ended === 'interrupted') await expect(execute()).rejects.toThrow(interruption)
-      else expect((await execute()).run).toBe(ended)
-      const first = readSteps()
-      expect(first[step]?.state).toBe(saved)
-      expect(first['review']?.outputs).toMatchObject({
-        verdict: 'changes-requested',
-        findings: [firstFinding],
-      })
-      expect(fixFindings).toEqual(step === 'fix' && ended === 'interrupted' ? [] : [[firstFinding]])
-      expect(invoked).toEqual([
-        commands[0],
-        ...(step === 'gate' ? [commands[1]] : []),
-        ...(step === 'gate' && (saved === 'ok' || saved === 'failed') ? [commands[2]] : []),
-      ])
+      async function firstInvocation() {
+        await start(run, source, { card: '728' })
+        if (ended === 'interrupted') await expect(execute()).rejects.toThrow(interruption)
+        else expect((await execute()).run).toBe(ended)
+        const first = readSteps()
+        expect(first[step]).toMatchObject({ state: saved })
+        expect(first['review']).toMatchObject({
+          outputs: { verdict: 'changes-requested', findings: [firstFinding] },
+        })
+        expect(fixFindings).toEqual(
+          step === 'fix' && ended === 'interrupted' ? [] : [[firstFinding]],
+        )
+        expect(invoked).toEqual([
+          commands[0],
+          ...(step === 'gate' ? [commands[1]] : []),
+          ...(step === 'gate' && (saved === 'ok' || saved === 'failed') ? [commands[2]] : []),
+        ])
+        return first
+      }
 
-      replies['review'] =
-        verdict === 'approved'
-          ? {
-              status: 'ok',
-              summary: 'Approved',
-              verdict: 'approved',
-              reviewedHead: head,
-              findings: [],
-            }
-          : { ...requested, findings: [freshFinding] }
+      function expectPersistedOutcome(
+        first: RunStateFile['steps'],
+        expected: typeof requested | typeof approvedReview,
+      ) {
+        const second = readSteps()
+        expect(second['review']).toMatchObject({
+          outputs: { verdict: expected.verdict, findings: expected.findings },
+        })
+        for (const id of ['implement', 'fix', 'gate']) {
+          if (first[id]?.state === 'ok') expect(second[id]).toEqual(first[id])
+        }
+      }
+
+      const first = await firstInvocation()
+      const approvedReview = {
+        status: 'ok',
+        summary: 'Approved',
+        verdict: 'approved',
+        reviewedHead: head,
+        findings: [],
+      } satisfies StepResult
+      const followUp =
+        verdict === 'approved' ? approvedReview : { ...requested, findings: [freshFinding] }
+      replies['review'] = followUp
       const retrySteps: readonly string[] = verdict === 'approved' ? approved : changes
       const refreshesReview = retrySteps.includes('review')
       const fixFinding = refreshesReview ? freshFinding : firstFinding
@@ -350,21 +370,15 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
       expect((await execute()).run).toBe('done')
       expect(launched).toEqual(retrySteps)
       expect(fixFindings).toEqual(retrySteps.includes('fix') ? [[fixFinding]] : [])
-      expect(invoked).toEqual([
-        ...(retrySteps.includes('fix') ? [commands[1]] : []),
-        ...(retrySteps.includes('gate') ? [commands[2]] : []),
+      const gateCommands = new Map([
+        ['fix', commands[1]],
+        ['gate', commands[2]],
       ])
-      const second = readSteps()
-      const finalVerdict = refreshesReview ? verdict : 'changes-requested'
-      expect(second['review']?.outputs).toMatchObject({
-        verdict: finalVerdict,
-        findings: refreshesReview && verdict === 'approved' ? [] : [fixFinding],
-      })
-      expect(second['implement']).toEqual(first['implement'])
-      if (first['fix']?.state === 'ok') expect(second['fix']).toEqual(first['fix'])
-      if (first['gate']?.state === 'ok') expect(second['gate']).toEqual(first['gate'])
+      expect(invoked).toEqual(retrySteps.flatMap(id => gateCommands.get(id) ?? []))
+      const expectedReview = refreshesReview ? followUp : requested
+      expectPersistedOutcome(first, expectedReview)
       expect(await start(run, source, { card: '728' })).toMatchObject({
-        status: finalVerdict === 'approved' ? 'complete' : 'resumed',
+        status: expectedReview.verdict === 'approved' ? 'complete' : 'resumed',
       })
     },
   )
