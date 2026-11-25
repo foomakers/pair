@@ -322,8 +322,8 @@ export default defineAdapter({
         }
         return parseJson(gh([...base, '--json', fields.join(',')]), { command: 'gh issue view' })
       },
-      assignCard({ id, repo, assign = 'me' }) {
-        if (assign === 'none') return { status: 'unchanged' }
+      assignCard({ id, repo, assign = 'me', login: explicit }) {
+        if (explicit === undefined && assign === 'none') return { status: 'unchanged' }
         try {
           const number = /^#?(\d+)$/.exec(String(id))?.[1]
           if (!number) throw new Error('Assignment needs a GitHub issue number')
@@ -334,9 +334,9 @@ export default defineAdapter({
               throw new Error(`Could not read assignees on #${number}`)
             return assignees.map(owner => owner.login)
           }
-          const implicit = assign === 'me'
-          const clear = assign === 'unassign'
-          const login = clear ? null : implicit || assign === '@me' ? this.resolveUser() : assign
+          const implicit = explicit === undefined && assign === 'me'
+          const clear = explicit === undefined && assign === 'unassign'
+          const login = explicit !== undefined ? explicit : clear ? null : implicit || assign === '@me' ? this.resolveUser() : assign
           if (!clear && (typeof login !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]*(?:\[bot\])?$/.test(login)))
             throw new Error(`Invalid assignee login ${JSON.stringify(login)}`)
           const isTarget = owner => login !== null && owner.toLowerCase() === login.toLowerCase()

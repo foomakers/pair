@@ -50,10 +50,11 @@ function assignCard() {
   try {
     const input = raw === undefined ? {} : JSON.parse(raw)
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('assign-card expects a JSON object')
-    const { assign } = input
+    const { assign, login } = input
+    if (assign !== undefined && login !== undefined) throw new Error('assign-card accepts either assign or login')
     if (assign === 'none') return { status: 'unchanged' }
     const { pm } = bindHosts({ from: process.cwd() })
-    return pm.assignCard({ id: card, assign })
+    return pm.assignCard({ id: card, assign, login })
   } catch (error) {
     return { status: 'warning', reason: error.message }
   }

@@ -74,7 +74,7 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
 
 1. **Assign before board writes**, even when the story is already `In Progress`. Use the installed `pair-workflow-cycle` skill's script from the story repository: `node "<cycle-skill-dir>"/scripts/workflow-facts.mjs assign-card <card>`.
    - Omit the JSON argument when `$assignee` is omitted to claim an unassigned card for the authenticated runner.
-   - Pass the explicit `<login>` or `@me` as an override, for example `'{"assign":"@me"}'` as the last argument. The adapter posts a comment naming the previous owners when it takes over.
+   - Pass `'{"login":"<login>"}'` or `'{"assign":"@me"}'` as the last argument to override ownership. Replace `<login>` with the literal username, including `me` or `unassign` when that is the requested username. The adapter posts a comment naming the previous owners when it takes over.
    - Pass `'{"assign":"none"}'` to leave the current assignment untouched.
 2. **Read the assignment result**:
    - `assigned`: report the assignment confirmed by the adapter's read-back.
