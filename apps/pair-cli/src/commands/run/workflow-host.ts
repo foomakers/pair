@@ -53,6 +53,7 @@ import { ghBoard } from './card-board'
 import {
   MACROSTATES,
   readStateMapping,
+  readyBoardState,
   resolveMacrostate,
   type StateMapping,
 } from './card-readiness'
@@ -112,6 +113,7 @@ export interface WorkflowHostDependencies {
   readonly board?: {
     /** The card's current board literal; null when it has none. */
     getState(card: string): Promise<string | null>
+    /** Resolves once the new state is confirmed. */
     setState(card: string, boardState: string): Promise<void>
   }
 }
@@ -557,35 +559,52 @@ const whenOf = (state: StepEvent['state']) =>
   state === 'running' ? 'start' : state === 'ok' ? 'end' : undefined
 
 /** True when the card's current board literal is the macrostate or ahead of it. */
-const notAhead = (current: string | null, macrostate: CardState, mapping: StateMapping) => {
+const isAtLeast = (current: string | null, macrostate: CardState, mapping: StateMapping) => {
   const held = current === null ? undefined : resolveMacrostate(current, mapping)
   return held !== undefined && MACROSTATES.indexOf(held) >= MACROSTATES.indexOf(macrostate)
 }
 
-/** Sets the card's state through the board, by the adopted mapping; a failure is a warning, never a stop. */
+/** Sets the card's state through the board by the adopted mapping. */
 async function setCardState(
   card: string,
   macrostate: CardState,
   resolved: Resolved,
   { fs, deps }: Services,
 ): Promise<void> {
-  const literal = readStateMapping(fs, resolved.main)?.find(
-    row => row.macrostate === macrostate,
-  )?.boardState
+  const mapping = readStateMapping(fs, resolved.main)
+  const literal =
+    macrostate === 'Ready'
+      ? readyBoardState(mapping)
+      : mapping?.find(row => row.macrostate === macrostate)?.boardState
   try {
+    if (literal === undefined) throw new Error(`no board state maps to ${macrostate}`)
     const board =
       deps.workflow?.board ??
       ghBoard(fs, locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir, resolved.main)
-    if (literal === undefined) throw new Error(`no board state maps to ${macrostate}`)
     // The state only moves forward: a step whose state is behind (or equal) sets nothing.
-    if (notAhead(await board.getState(card), macrostate, readStateMapping(fs, resolved.main)))
-      return
+    if (isAtLeast(await board.getState(card), macrostate, mapping)) return
     await board.setState(card, literal)
     console.log(`  Card ${card}: state ${literal}`)
   } catch (error) {
-    console.log(
-      `  Warning: card state ${literal ?? macrostate} not set: ${(error as Error).message}`,
-    )
+    throw new Error(`card state ${literal ?? macrostate} not set: ${(error as Error).message}`)
+  }
+}
+
+function cardTransitions({ request, resolved }: Opened, services: Services) {
+  return {
+    async beforeSuccess(step: StepLaunch) {
+      if (cardStateOf(stepOf(resolved, step.id))?.state === 'Ready')
+        await setCardState(request.card, 'Ready', resolved, services)
+    },
+    async transition(event: StepEvent) {
+      const set = cardStateOf(stepOf(resolved, event.step))
+      if (set === undefined || set.state === 'Ready' || set.when !== whenOf(event.state)) return
+      try {
+        await setCardState(request.card, set.state, resolved, services)
+      } catch (error) {
+        console.log(`  Warning: ${(error as Error).message}`)
+      }
+    },
   }
 }
 
@@ -650,15 +669,11 @@ async function runOnConsole(
         styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
         ...hostKindsOf(opened, services),
+        ...cardTransitions(opened, services),
         report: event => {
           if (event.state === 'running')
             sink.event({ event: 'stage', card: request.card, stage: event.step })
           else console.log(stepLine(event))
-        },
-        async transition(event) {
-          const set = cardStateOf(stepOf(resolved, event.step))
-          if (set !== undefined && set.when === whenOf(event.state))
-            await setCardState(request.card, set.state, resolved, services)
         },
       },
       runDir,

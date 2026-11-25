@@ -10,7 +10,7 @@ import {
 import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
 import type { KindName } from '../grammar'
 import type { CardFacts } from '../select'
-import { kindByName, type StepResult, type StepStatus } from '../kinds'
+import { kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 import {
   closeRun,
   reopenRun,
@@ -64,6 +64,8 @@ export interface WorkflowHost {
   runGates?(entries: readonly string[], step: StepLaunch): Promise<StepResult | undefined>
   /** The result's observable platform facts. */
   readResultFacts?(step: StepLaunch, result: StepResult): Promise<ResultFacts>
+  /** Confirms required side effects before success becomes durable. */
+  beforeSuccess?(step: StepLaunch): Promise<void>
   /** Sees every step start and every recorded result, in order. */
   report?(event: StepEvent): void
   transition?(event: StepEvent): Promise<void>
@@ -131,6 +133,23 @@ async function confirmed(
   }
 }
 
+async function recordResult(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  { result, output }: { result: StepResult; output?: string },
+): Promise<StepResult> {
+  let final = result
+  if (host.beforeSuccess && settle(kindByName[step.kind], result).status === 'ok') {
+    try {
+      await host.beforeSuccess(step)
+    } catch (error) {
+      final = unconfirmed((error as Error).message)
+    }
+  }
+  return record(run, step.id, final, output)
+}
+
 /** Launches the agent; a red gate sends the step back to it with the gate output, up to `GATE_RETRIES`. */
 async function launchGated(
   host: WorkflowHost,
@@ -166,7 +185,11 @@ async function launchGated(
     const result = await gated(host, step, read)
     if (retry < GATE_RETRIES && read.status === 'ok' && result.reason?.startsWith('gate-failed'))
       prompt = `${message}\n\nThe host ran the quality gates after your last result and one is red. Fix it, then end your turn with the result block again.\n${(result.detail ?? result.summary).slice(-4000)}`
-    else return record(run, step.id, await confirmed(host, step, result), final)
+    else
+      return recordResult(host, run, step, {
+        result: await confirmed(host, step, result),
+        output: final,
+      })
   }
 }
 
@@ -182,17 +205,15 @@ async function execute(
   const kind = kindByName[step.kind]
   if (kind.host === true) {
     exchange.sent = JSON.stringify(step.with)
-    return record(
-      run,
-      step.id,
+    const result: StepResult =
       host.perform === undefined
         ? {
             status: 'failed',
             reason: 'no-executor',
             summary: `the host cannot run a ${step.kind} step`,
           }
-        : await gated(host, step, (await host.perform(step)) as StepResult),
-    )
+        : await gated(host, step, (await host.perform(step)) as StepResult)
+    return recordResult(host, run, step, { result })
   }
   if (step.kind === 'refine-story' && step.with['mode'] !== 'autonomous')
     return record(run, step.id, {
