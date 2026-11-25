@@ -358,11 +358,11 @@ export default defineAdapter({
         }))
       },
       workflowReviewIdentity({ repo }) {
-        const text = adoption()
-        if (!/Review identity[^\n]*:\s*`?(?:bot-user|user)\b/i.test(text)) return null
-        const login = gh(['variable', 'get', 'REVIEW_IDENTITY_LOGIN', '--repo', resolveRepo(repo)]).trim()
-        if (!login) throw new Error('REVIEW_IDENTITY_LOGIN unavailable')
-        return login
+        // Read only the exclusion value. A successful empty listing confirms the variable is absent.
+        const login = gh(['api', '--paginate', `${apiRepo(repo)}/actions/variables?per_page=100`, '--jq', '.variables[] | select(.name == "REVIEW_IDENTITY_LOGIN") | .value']).trim()
+        if (!login && /Review identity[^\n]*:\s*`?(?:bot-user|user)\b/i.test(adoption()))
+          throw new Error('REVIEW_IDENTITY_LOGIN unavailable')
+        return login || null
       },
       workflowApprovalToken({ repo, head, author, comment }) {
         let optIn

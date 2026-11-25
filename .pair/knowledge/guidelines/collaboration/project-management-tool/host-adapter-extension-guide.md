@@ -58,7 +58,7 @@ Board facts come from the adopted view only: GitHub's `pm-project` project, Line
 | `workflowActor` | code-host | `workflowActor()` → `{ login, human }` for the authenticated caller. |
 | `workflowPrDetails` | code-host | `workflowPrDetails({ pr, repo })` → `{ pr, head, author, branch, base, merged, mergeCommit, draft }` for the linked PR. |
 | `workflowReviews` | code-host | `workflowReviews({ pr, repo })` → native reviews as `{ login, human, at, state, head, body }` rows. |
-| `workflowReviewIdentity` | code-host | `workflowReviewIdentity({ repo })` → the configured review bot login or `null` when no review bot is adopted. |
+| `workflowReviewIdentity` | code-host | `workflowReviewIdentity({ repo })` → the review identity from the repository variable, or `null` after confirming its absence when no machine identity is declared locally. |
 | `workflowApprovalToken` | code-host | `workflowApprovalToken({ repo, head, author, comment })` → whether the adopted solo approval policy recognizes the author’s comment for this head. |
 | `readPermission`  | code-host      | `readPermission({ repo, user })` → the user's current repository role (`admin`, `maintain`, `write`, …) or `null` when unreadable; the board workflow authorizes only admin/maintain/write |
 | `syncEpic`        | pm-tool        | `syncEpic({ id, repo })` → `{ confirmed, parent?, changed?, gap?, error? }`; finds the existing parent and its children, then lists and ticks the epic's Sub-Issues checklist. It never sets a parent |
