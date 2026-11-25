@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hostname, tmpdir } from 'os'
 import { join } from 'path'
 import { fileSystemService as fs } from '@pair/content-ops'
+import { next, record, start } from '@pair/workflows'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
 import type { SpawnIterationInput } from './spawn'
+import { readWorkflowCards } from './workflow-facts'
 import type { WorkflowHostDependencies } from './workflow-host'
 
 /**
@@ -1122,6 +1124,90 @@ it.each(['refine', 'tasks'])(
     expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(0)
     expect(states('refinement-12')).toEqual({ refine: 'ok', tasks: 'ok' })
     expect(interrupted).toHaveBeenCalledTimes(2)
+  },
+)
+
+it.each(['batch', 'single card'])(
+  'R744-16 (#678 AC-6): %s resumes after successful refinement on a minimal board',
+  async route => {
+    const backlog = minimalRefinementBoard()
+    const card = `${backlog}/12.md`
+    const ready = STORY_BEFORE_TASKS + '\n**Labels**: risk:green\n\n## Assumptions\n' + STORY_TASKS
+    write(card, ready.replace('Design: not required', ''))
+    write(`${backlog}/13.md`, STORY_BEFORE_TASKS + STORY_TASKS)
+    const file = join(project, '.pair/adoption/tech/workflows/refinement.yaml')
+    const snapshot = { files: fs, dir: runDir('refinement-12') }
+    const withCheck = route === 'single card'
+    let text = fs.readFileSync(file)
+    if (withCheck) {
+      text = text.replace('  tasks:', '  check: { kind: generic, skill: my-skill }\n  tasks:')
+      fs.writeFileSync(file, text)
+    }
+    const result = { status: 'ok', summary: 'Prepared', boardStatus: 'Todo' }
+    await start(snapshot, { file, text }, { card: '12' })
+    await next(snapshot)
+    write(card, ready)
+    await record(snapshot, 'refine', { ...result, riskTag: 'risk:green', openQuestions: [] })
+    if (withCheck) {
+      await next(snapshot)
+      await record(snapshot, 'check', {
+        status: 'failed',
+        summary: 'No result',
+        reason: 'engine-error',
+      })
+    }
+    expect(states('refinement-12')).toEqual({
+      refine: 'ok',
+      ...(withCheck && { check: 'failed' }),
+      tasks: 'pending',
+    })
+
+    let assignees = ['maintainer']
+    const workflow = deps(
+      {
+        'my-skill': () => fenced({ status: 'ok', summary: 'Checked' }),
+        'pair-process-plan-tasks': () => fenced({ ...result, tasks: 1 }),
+      },
+      {
+        async readSelection(at, scope) {
+          const selection = await readWorkflowCards(at, scope)
+          return { ...selection, cards: selection.cards.map(card => ({ ...card, assignees })) }
+        },
+        readResultFacts: async () => ({
+          card: { boardStatus: 'Todo', labels: ['risk:green'], body: ready },
+        }),
+        board: { getState: async () => 'Todo', setState: async () => {} },
+      },
+    )
+    const command = parseRunCommand(
+      {
+        cwd: project,
+        card: withCheck ? '12' : '12,13',
+        ...(withCheck ? {} : { filter: 'risk:green', assignee: 'maintainer' }),
+      },
+      ['refinement'],
+    )
+    if (!withCheck) {
+      write(card, ready.replace('risk:green', 'risk:yellow'))
+      expect(await handleRunCommand(command, fs, workflow)).toBe(0)
+      expect(launched).toHaveLength(0)
+
+      write(card, ready)
+      assignees = ['other']
+      expect(await handleRunCommand(command, fs, workflow)).toBe(0)
+      expect(launched).toHaveLength(0)
+      assignees = ['maintainer']
+    }
+    expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(0)
+    expect(states('refinement-12'), lines.join('\n')).toEqual({
+      refine: 'ok',
+      ...(withCheck && { check: 'ok' }),
+      tasks: 'ok',
+    })
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([
+      ...(withCheck ? ['my-skill'] : []),
+      'pair-process-plan-tasks',
+    ])
   },
 )
 
