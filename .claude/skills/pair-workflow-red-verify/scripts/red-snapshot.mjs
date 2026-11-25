@@ -474,7 +474,7 @@ function oxlintErrorPaths({ status, stdout, stderr }, dir) {
   for (const message of diagnostics) {
     if (!message || typeof message.filename !== 'string' || !message.filename || typeof message.message !== 'string' || !['warning', 'error'].includes(message.severity)) return null
     if (message.code === 'typescript(tsconfig-error)') return null
-    const locatedSyntaxError = message.code === null && message.severity === 'error' && Array.isArray(message.labels) && message.labels.some(label => Number.isInteger(label?.span?.line) && Number.isInteger(label?.span?.column))
+    const locatedSyntaxError = (message.code === undefined || message.code === null) && message.severity === 'error' && Array.isArray(message.labels) && message.labels.some(label => Number.isInteger(label?.span?.line) && Number.isInteger(label?.span?.column))
     if (typeof message.code !== 'string' && !locatedSyntaxError) return null
     if (message.severity === 'error') errors.push(resolve(dir, message.filename))
   }
