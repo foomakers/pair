@@ -114,6 +114,36 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
     { policy: 'explicit', shorthand: false, explicit: true },
     { policy: 'both', shorthand: true, explicit: true },
   ]
+  const retries = [
+    {
+      after: 'green PR gate',
+      firstGate: 'ok',
+      retryVerdict: 'approved',
+      retrySteps: ['review'],
+      retryGateCount: 0,
+    },
+    {
+      after: 'red PR gate',
+      firstGate: 'failed',
+      retryVerdict: 'approved',
+      retrySteps: ['review', 'gate'],
+      retryGateCount: 1,
+    },
+    {
+      after: 'failed fix',
+      firstGate: undefined,
+      retryVerdict: 'approved',
+      retrySteps: ['review', 'gate'],
+      retryGateCount: 1,
+    },
+    {
+      after: 'failed fix',
+      firstGate: undefined,
+      retryVerdict: 'changes-requested',
+      retrySteps: ['review', 'fix', 'gate'],
+      retryGateCount: 2,
+    },
+  ] as const
 
   it.each(
     sources.flatMap(source =>
@@ -131,30 +161,50 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
 
   it.each(
     sources.flatMap(source =>
-      policies.flatMap(policy =>
-        (['ok', 'failed'] as const).map(firstGate => ({ ...source, ...policy, firstGate })),
-      ),
+      policies.flatMap(policy => retries.map(retry => ({ ...source, ...policy, ...retry }))),
     ),
   )(
-    '$name quick reviews again with $policy after a $firstGate PR gate (R747-03, R747-08)',
-    async ({ root, commands, firstGate, shorthand, explicit }) => {
+    '$name quick with $policy retries after $after and records $retryVerdict (R747-03, R747-08)',
+    async ({
+      root,
+      commands,
+      firstGate,
+      retryVerdict,
+      retrySteps,
+      retryGateCount,
+      shorthand,
+      explicit,
+    }) => {
       const run = { files: createMemoryFiles(), dir: '/runs/728' }
       const head = 'a'.repeat(40)
+      const fixFailed = firstGate === undefined
+      const firstFinding = { id: 'f1', severity: 'Major', title: 'Missing check', blocking: true }
+      const freshFinding = { ...firstFinding, id: 'f2', title: 'Missing assertion' }
+      const requested = {
+        status: 'failed',
+        summary: 'Changes requested',
+        verdict: 'changes-requested',
+        reviewedHead: head,
+        findings: [firstFinding],
+      } satisfies StepResult
+      const fixed = {
+        status: 'ok',
+        summary: 'Finding fixed',
+        head,
+        resolutions: [{ id: firstFinding.id, status: 'resolved', reason: 'Check added' }],
+      } satisfies StepResult
       const replies: Record<string, StepResult> = {
         implement: { status: 'ok', summary: 'PR opened', branch: 'feature/quick', pr: 728, head },
-        review: {
-          status: 'failed',
-          summary: 'Changes requested',
-          verdict: 'changes-requested',
-          reviewedHead: head,
-          findings: [{ id: 'f1', severity: 'Major', title: 'Missing check', blocking: true }],
-        },
-        fix: {
-          status: 'ok',
-          summary: 'Finding fixed',
-          head,
-          resolutions: [{ id: 'f1', status: 'resolved', reason: 'Check added' }],
-        },
+        review: requested,
+        fix: fixFailed
+          ? {
+              status: 'failed',
+              summary: 'Push failed',
+              reason: 'push-failed',
+              head,
+              resolutions: [],
+            }
+          : fixed,
       }
       const registryText = read(root, WAY_OF_WORKING)
       const invoked: string[] = []
@@ -171,6 +221,7 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
           },
         )
       const events: StepEvent[] = []
+      const fixFindings: unknown[] = []
       const legacy = read(root, QUICK)
       const text = legacy.replace(
         '    on-failed: continue\n    escalate: { blocked: stop, needs-decision: stop }',
@@ -184,7 +235,8 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
             files: run.files,
             style: 'instruction',
             isSafeText: isSafePromptText,
-            launch: async ({ id }) => {
+            launch: async ({ id, inputs }) => {
+              if (id === 'fix') fixFindings.push(inputs['findings'])
               const reply = replies[id]
               if (reply === undefined) throw new Error(`Unexpected agent step ${id}`)
               return agentResult(reply)
@@ -205,33 +257,48 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
 
       await start(run, source, { card: '728' })
       expect((await execute()).run).toBe(firstGate === 'ok' ? 'done' : 'failed')
-      expect(invoked).toEqual(commands)
+      expect(invoked).toEqual(fixFailed ? commands.slice(0, 1) : commands)
       expect(
         events.filter(event => event.state !== 'running').map(event => [event.step, event.state]),
       ).toEqual([
         ['implement', 'ok'],
         ['review', 'failed'],
-        ['fix', 'ok'],
-        ['gate', firstGate],
+        ...(fixFailed
+          ? [['fix', 'failed']]
+          : [
+              ['fix', 'ok'],
+              ['gate', firstGate],
+            ]),
       ])
+      expect(fixFindings).toEqual([[firstFinding]])
 
-      replies['review'] = {
-        status: 'ok',
-        summary: 'Approved',
-        verdict: 'approved',
-        reviewedHead: head,
-        findings: [],
+      replies['review'] =
+        retryVerdict === 'approved'
+          ? {
+              status: 'ok',
+              summary: 'Approved',
+              verdict: 'approved',
+              reviewedHead: head,
+              findings: [],
+            }
+          : { ...requested, findings: [freshFinding] }
+      replies['fix'] = {
+        ...fixed,
+        resolutions: [{ id: freshFinding.id, status: 'resolved', reason: 'Assertion added' }],
       }
       events.length = 0
       invoked.length = 0
+      fixFindings.length = 0
       expect(await start(run, source, { card: '728' })).toMatchObject({ status: 'resumed' })
       expect((await execute()).run).toBe('done')
-      expect(events.filter(event => event.state === 'running').map(event => event.step)).toEqual([
-        'review',
-        ...(firstGate === 'failed' ? ['gate'] : []),
-      ])
-      expect(invoked).toEqual(firstGate === 'failed' ? commands.slice(-1) : [])
-      expect(await start(run, source, { card: '728' })).toMatchObject({ status: 'complete' })
+      expect(events.filter(event => event.state === 'running').map(event => event.step)).toEqual(
+        retrySteps,
+      )
+      expect(fixFindings).toEqual(retryVerdict === 'changes-requested' ? [[freshFinding]] : [])
+      expect(invoked).toEqual(commands.slice(commands.length - retryGateCount))
+      expect(await start(run, source, { card: '728' })).toMatchObject({
+        status: retryVerdict === 'approved' ? 'complete' : 'resumed',
+      })
     },
   )
 })
