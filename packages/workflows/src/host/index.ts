@@ -418,6 +418,20 @@ async function emitStep(host: WorkflowHost, event: StepEvent): Promise<void> {
   host.report?.(event)
 }
 
+function implementationLaunch(host: WorkflowHost, step: StepLaunch): StepLaunch {
+  const delegates = host.assignCard === undefined
+  return {
+    ...step,
+    with: {
+      ...step.with,
+      ...(!delegates && { assignee: 'none' }),
+      ...(host.transition !== undefined && {
+        'board-state': delegates ? (step.startState ?? 'none') : 'managed',
+      }),
+    },
+  }
+}
+
 async function runStep(
   host: WorkflowHost,
   run: RunDirectory,
@@ -425,21 +439,9 @@ async function runStep(
   writer: Writer,
 ): Promise<StepEvent> {
   const implementing = step.kind === 'implement' && step.pendingSuccess === undefined
-  const delegates = implementing && host.assignCard === undefined
-  const launch = implementing
-    ? {
-        ...step,
-        with: {
-          ...step.with,
-          ...(!delegates && { assignee: 'none' }),
-          ...(host.transition !== undefined && {
-            'board-state': delegates ? (step.startState ?? 'none') : 'managed',
-          }),
-        },
-      }
-    : step
+  const launch = implementing ? implementationLaunch(host, step) : step
   // The skill that claims the card also applies its start state before doing work.
-  if (delegates) host.report?.(starting(step))
+  if (implementing && host.assignCard === undefined) host.report?.(starting(step))
   else await emitStep(host, starting(step))
   const { status, summary, reason, detail } = await executeMetered(host, run, launch, writer)
   const result = {
