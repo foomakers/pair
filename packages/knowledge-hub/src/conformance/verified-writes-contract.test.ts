@@ -274,6 +274,9 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
     expect(normalize(content)).toContain('preserve the existing assignee header')
     expect(body).toContain('retry the item write once without the assignee')
     expect(body).toContain('recover its identifier and continue board membership')
+    expect(normalize(content)).toContain(
+      'reconcile an unknown create outcome before another create',
+    )
   })
 
   it.each(writeIssueCases)('$corpus: has a dedicated assignee-resolution step', ({ content }) => {
@@ -1128,9 +1131,12 @@ describe('the ADL — the decision of record describes the contract that shipped
 })
 
 describe('/publish-pr — the PR carries an assignee and the story tags (#403 AC7)', () => {
-  it.each(publishPrCases)('$corpus: warns only after the PR fallback is exhausted', ({ content }) => {
-    expect(normalize(content)).toContain('after the full pr cascade yields no assignee')
-  })
+  it.each(publishPrCases)(
+    '$corpus: warns only after the PR fallback is exhausted',
+    ({ content }) => {
+      expect(normalize(content)).toContain('after the full pr cascade yields no assignee')
+    },
+  )
 
   it.each(publishPrCases)('$corpus: declares $$assignee in the Arguments table', ({ content }) => {
     expect(content).toMatch(/^\|\s*`\$assignee`\s*\|/m)

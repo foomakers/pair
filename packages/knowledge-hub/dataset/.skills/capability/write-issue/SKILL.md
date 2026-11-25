@@ -193,7 +193,7 @@ The **non-destructive** path: it appends a comment to the item and writes nothin
 
 1. **Check**: Did the PM tool return an error during Step 7? A specifically identified assignee rejection follows Step 6b first; a failed retry or any other error follows this step.
 2. **Skip**: If no error, proceed to output. **Comment mode is exempt** — its failures were already handled as warnings in Step 7c.2 and never reach here. **`$on-failure: report` is exempt too** — the error is returned as `write-failed` (Step 8b), not raised.
-3. **Act**: **HALT** with descriptive error:
+3. **Act**: For a create with an unknown outcome (for example a timeout or lost response), reconcile an unknown create outcome before another create: recover a uniquely confirmed item and continue membership, or report the outcome as unconfirmed without re-invoking creation. For any other error, **HALT** with descriptive error:
 
    > PM tool error: `[error description]`. No fallback to alternative tools — resolve the issue with the adopted PM tool and re-invoke.
 
