@@ -176,6 +176,13 @@ async function execute(
         : await gated(host, step, (await host.perform(step)) as StepResult),
     )
   }
+  if (step.kind === 'refine-story' && step.with['mode'] !== 'autonomous')
+    return record(run, step.id, {
+      status: 'needs-human',
+      reason: 'interactive-refinement',
+      summary:
+        'Run pair-process-refine-story in an interactive session or configure autonomous refinement.',
+    })
   let message: string
   try {
     message = buildMessage(step, kind, {

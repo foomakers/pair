@@ -83,6 +83,8 @@ These schemas come from the workflow validator.
                 "gate",
                 "approval",
                 "merge",
+                "refine-story",
+                "plan-tasks",
                 "loop"
               ],
               "description": "What the step does and what it returns."

@@ -11,6 +11,8 @@ export const KIND_NAMES = [
   'gate',
   'approval',
   'merge',
+  'refine-story',
+  'plan-tasks',
 ] as const
 export type KindName = (typeof KIND_NAMES)[number]
 /** The macrostates of a card, as the adopted state mapping names them. */
@@ -23,14 +25,19 @@ export function cardStateOf(step: {
   readonly state?: CardState | 'none'
 }): { readonly state: CardState; readonly when: 'start' | 'end' } | undefined {
   // A loop has no kind of its own: its inner steps set the state.
-  const state =
-    step.state ??
-    ({ implement: 'In Progress', fix: 'In Progress', review: 'Review', merge: 'Done' } as const)[
-      step.kind as 'implement'
-    ]
+  const defaults: Partial<Record<KindName | 'loop', CardState>> = {
+    implement: 'In Progress',
+    fix: 'In Progress',
+    review: 'Review',
+    merge: 'Done',
+    'refine-story': 'Ready',
+    'plan-tasks': 'Ready',
+  }
+  const refinement = step.kind === 'refine-story' || step.kind === 'plan-tasks'
+  const state = step.state ?? defaults[step.kind]
   return state === undefined || state === 'none'
     ? undefined
-    : { state, when: state === 'Ready' || state === 'Done' ? 'end' : 'start' }
+    : { state, when: refinement || state === 'Ready' || state === 'Done' ? 'end' : 'start' }
 }
 
 /** A step id names a directory of the run and a row of the output: lower-case, digits and hyphens. */
