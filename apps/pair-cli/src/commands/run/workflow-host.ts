@@ -504,7 +504,7 @@ function launcher(run: Launch) {
     })
     // An interrupted run records nothing: the step stays `running` on disk and runs again at the next launch.
     if (isInterrupted()) throw new Error('interrupted')
-    return agentOutcome(result, text, Math.round(performance.now() - started))
+    return agentOutcome(result, result.lastMessage ?? text, Math.round(performance.now() - started))
   }
 }
 

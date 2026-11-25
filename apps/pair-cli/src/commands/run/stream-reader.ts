@@ -46,6 +46,8 @@ export interface IterationResult {
   readonly stalled?: true
   /** The stage's final JSON result from the terminal event's text, when the engine exposes it and it carries one. */
   readonly final?: StageFinalResult
+  /** The final text when the result came from the engine's last-message file. */
+  readonly lastMessage?: string
   /** US-573: set when the iteration failed for one of the truthful-outcome causes. */
   readonly cause?: FailureCause
   /** US-573: unparseable stream lines + malformed `PAIR_EVENT` bodies, skipped (present when > 0). */
