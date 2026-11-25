@@ -5,6 +5,10 @@ describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
   it('fills slots in order and releases a dependent only after success', async () => {
     const launches: string[] = []
     const finish = new Map<string, () => void>()
+    let announceDependent!: () => void
+    const dependentStarted = new Promise<void>(resolve => {
+      announceDependent = resolve
+    })
     const cards = [
       { id: '12', prerequisites: ['9'] },
       { id: '9', prerequisites: [] },
@@ -13,6 +17,7 @@ describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
     ]
     const running = scheduleWorkflowCards(cards, 2, new Map(), async ({ id }) => {
       launches.push(id)
+      if (id === '12') announceDependent()
       await new Promise<void>(resolve => finish.set(id, resolve))
       return { id, outcome: id === '10' ? 'failed' : 'done' }
     })
@@ -20,7 +25,7 @@ describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
     expect(launches).toEqual(['9', '10'])
     finish.get('9')?.()
     finish.get('10')?.()
-    while (!finish.has('12')) await Promise.resolve()
+    await dependentStarted
     finish.get('12')?.()
     expect((await running).map(card => [card.id, card.outcome])).toEqual([
       ['12', 'done'],
