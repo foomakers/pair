@@ -496,6 +496,60 @@ describe('#707 T-3 workflow tier selection (AC-1, AC-2)', () => {
       expect(readSelection).not.toHaveBeenCalled()
     },
   )
+
+  it('regression #707: previews the tier on a fresh install with no State Mapping table', async () => {
+    write(
+      '.pair/adoption/tech/way-of-working.md',
+      `${REGISTRY}\n## State Mapping\n\nOptional. Add a table if the board uses different names.\n`,
+    )
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Host bridge fixture')
+    write(
+      'pair.config.json',
+      JSON.stringify({
+        run: { agents: { claude: { command: process.execPath } } },
+        workflows: { quick: { configuration: 'mine', tiers: { 'risk:red': 'tier' } } },
+      }),
+    )
+    const card = { ...cardWithLabels(['risk:red']), boardState: 'In Progress' }
+    vi.spyOn(hostProcess, 'runHostProcess').mockImplementation(async (bin, [script, ...args]) => {
+      const available: Record<string, unknown> = {
+        'workflow-cards --cards 627': { cards: [card] },
+        'workflow-card --story 627': card,
+      }
+      const command = args.join(' ')
+      const result =
+        bin === process.execPath && script?.endsWith('cycle-state.mjs')
+          ? available[command]
+          : undefined
+      return result === undefined
+        ? { status: 1, stdout: '', stderr: `Unexpected host process: ${bin} ${command}` }
+        : { status: 0, stdout: JSON.stringify(result), stderr: '' }
+    })
+
+    const exitCode = process.exitCode
+    try {
+      await runCli([
+        process.execPath,
+        'pair-cli',
+        'run',
+        'quick',
+        '--card',
+        '627',
+        '--engine',
+        'claude',
+        '--dry-run',
+        '--cwd',
+        project,
+      ])
+    } finally {
+      process.exitCode = exitCode
+    }
+
+    const output = lines.join('\n')
+    expect(output).toContain(tierSource)
+    expect(output).toContain('model=tier-build')
+    expect(output).toContain('Dry run:')
+  })
 })
 
 describe('override (AC-6)', () => {

@@ -1275,7 +1275,10 @@ function selectionCardReader(
     ).then(({ cards }) => cards[0]))
 }
 
-async function readTierLabels(card: string, read: ReadSelectionCard): Promise<readonly string[]> {
+async function readTierLabels(
+  card: string,
+  read: () => Promise<Pick<WorkflowCard, 'labels' | 'error'> | undefined>,
+): Promise<readonly string[]> {
   try {
     const found = await read()
     if (found === undefined) throw new Error('card facts unavailable')
@@ -1293,14 +1296,18 @@ async function readTierLabels(card: string, read: ReadSelectionCard): Promise<re
 async function runTierLabels(
   resolved: Resolved,
   request: WorkflowRunRequest,
-  fs: FileSystemService,
+  { fs, deps }: Services,
   { read, batch }: CardSource,
 ): Promise<readonly string[] | undefined> {
   if (!usesTierLabels(resolved, request)) return undefined
+  // An explicit card's labels are usable without resolving the board's status mapping.
+  const readLabels = deps.workflow?.readSelection
+    ? read
+    : () => readWorkflowCard({ fs, ...resolved }, request.card)
   return (
     frozenTierLabels(resolved, request, fs) ??
     (batch?.card ?? request.routedCard)?.labels ??
-    (await readTierLabels(request.card, read))
+    (await readTierLabels(request.card, readLabels))
   )
 }
 
@@ -1347,7 +1354,7 @@ export async function handleWorkflowRun(
   const definition = resolveWorkflowDefinition(config, request, services)
   if (definition === undefined) return 1
   const card = { read: selectionCardReader(definition, request.card, services), batch }
-  const cardLabels = await runTierLabels(definition, request, services.fs, card)
+  const cardLabels = await runTierLabels(definition, request, services, card)
   const resolved = configure(config, request, services, { ...definition, cardLabels })
   if (resolved === undefined) return 1
   printPlan(resolved.workflow)
