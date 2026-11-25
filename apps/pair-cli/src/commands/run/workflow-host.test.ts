@@ -738,14 +738,36 @@ it.each([
   },
 )
 
-function replayEngine(input: SpawnIterationInput, stream: string) {
-  const program = `require('node:fs').writeFileSync(1, ${JSON.stringify(stream)})`
+function replayEngine(input: SpawnIterationInput, stream: string, lastMessage?: string) {
+  const program = `const fs = require('node:fs')
+    const message = ${JSON.stringify(lastMessage)}
+    if (message !== undefined) {
+      const flag = process.argv.indexOf('--output-last-message')
+      fs.writeFileSync(process.argv[flag + 1], message)
+    }
+    fs.writeFileSync(1, ${JSON.stringify(stream)})`
   return spawnIteration({
     ...input,
     cwd: tmpdir(),
     engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', program, '--'] },
   })
 }
+
+it('#704 F9: records the Codex file result without a retry (AC-2)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
+  )
+  const result = fenced({ status: 'blocked', summary: 'Waiting', reason: 'approval-required' })
+  const runIteration = vi.fn((input: SpawnIterationInput) =>
+    replayEngine(input, '{"type":"turn.completed"}\n', result),
+  )
+
+  expect(await run(['quick'], OK, { engine: 'codex' }, { runIteration })).toBe(0)
+  const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+  expect(state.steps['implement']).toMatchObject({ state: 'blocked', reason: 'approval-required' })
+  expect(runIteration).toHaveBeenCalledTimes(1)
+})
 
 it.each([
   [
