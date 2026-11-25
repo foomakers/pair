@@ -148,50 +148,65 @@ export default defineAdapter({
       for (const r of [...runs].sort((a, b) => String(a.started_at ?? '').localeCompare(String(b.started_at ?? '')))) {
         const success = r.conclusion === 'success' || (!requireSuccess && ['neutral', 'skipped'].includes(r.conclusion))
         const conclusion = r.status !== 'completed' ? 'pending' : success ? 'success' : 'failure'
-        byName.set(String(r.name), { conclusion, url: r.html_url ?? r.details_url ?? null })
+        const name = String(r.name)
+        const appId = r.app?.id
+        const key = requireSuccess ? JSON.stringify(['run', name, appId]) : name
+        byName.set(key, { name, ...(requireSuccess && { appId }), conclusion, url: r.html_url ?? r.details_url ?? null })
       }
       const statuses = pagesOf(`${apiRepo(repo)}/commits/${sha}/status?per_page=100`).flatMap(page => page.statuses ?? [])
       for (const st of statuses) {
         const name = String(st.context)
         const conclusion = st.state === 'success' ? 'success' : st.state === 'pending' ? 'pending' : 'failure'
-        const run = byName.get(name)
-        if (!run || (requireSuccess && run.conclusion !== 'failure' && conclusion !== 'success'))
-          byName.set(name, { conclusion, url: st.target_url ?? null })
+        const key = requireSuccess ? JSON.stringify(['status', name]) : name
+        const run = byName.get(key)
+        if (!run)
+          byName.set(key, { name, conclusion, url: st.target_url ?? null })
       }
       // #691: the url travels with the conclusion, so a remote failure can be reported where it can be read.
-      return [...byName].map(([name, c]) => ({ name, ...c }))
+      return [...byName.values()]
     }
-    // Missing required jobs have no row on the commit yet. Only absent or inaccessible protection
-    // falls back to observed mechanical checks, following the review gate's CI policy.
-    const requiredContexts = ({ base, repo }) => {
-      if (typeof base !== 'string' || !base) throw new Error('PR base branch unreadable')
-      const endpoint = `${apiRepo(repo)}/branches/${encodeURIComponent(base)}/protection/required_status_checks`
+    const requirement = (context, publisher) => {
+      if (typeof context !== 'string' || !context.trim()
+        || (publisher != null && publisher !== -1 && !(Number.isSafeInteger(publisher) && publisher > 0)))
+        throw new Error('Required CI contexts unreadable')
+      return { name: context, appId: publisher > 0 ? publisher : undefined }
+    }
+    const classicRequirements = endpoint => {
       let raw
       try {
         raw = gh(['api', endpoint])
       } catch (error) {
-        if (/HTTP (403|404)\b/i.test(String(error.detail))) return undefined
+        if (/HTTP (403|404)\b/i.test(String(error.detail))) return []
         throw error
       }
-      const config = parseJson(raw, { command: 'gh api required_status_checks' })
-      const { contexts, checks } = config ?? {}
+      const { contexts, checks } = parseJson(raw, { command: 'gh api required_status_checks' }) ?? {}
       if ((contexts === undefined && checks === undefined)
         || (contexts !== undefined && !Array.isArray(contexts))
         || (checks !== undefined && !Array.isArray(checks)))
         throw new Error('Required CI contexts unreadable')
-      const names = [...(contexts ?? []), ...(checks ?? []).map(check => check?.context)]
-      if (names.some(name => typeof name !== 'string' || !name.trim()))
-        throw new Error('Required CI contexts unreadable')
-      return [...new Set(names)].filter(name => !REVIEW_CONTEXTS.has(name))
+      const sourced = (checks ?? []).map(check => requirement(check?.context, check?.app_id))
+      return sourced.concat((contexts ?? []).filter(name => !sourced.some(check => check.name === name)).map(name => requirement(name)))
     }
-
     const workflowCi = ({ sha, base, repo }) => {
-      const required = requiredContexts({ base, repo })
+      if (typeof base !== 'string' || !base) throw new Error('PR base branch unreadable')
+      const branch = encodeURIComponent(base)
+      const root = apiRepo(repo)
+      const classic = classicRequirements(`${root}/branches/${branch}/protection/required_status_checks`)
+      const rules = listPages(`${root}/rules/branches/${branch}`).filter(rule => rule.type === 'required_status_checks')
+      const requirements = classic.concat(rules.flatMap(rule => {
+        if (!Array.isArray(rule.parameters?.required_status_checks)) throw new Error('Required ruleset CI contexts unreadable')
+        return rule.parameters.required_status_checks.map(check => requirement(check?.context, check?.integration_id))
+      }))
       const reported = readCiChecks({ sha, repo, requireSuccess: true })
-      const byName = new Map(reported.map(({ name, conclusion }) => [name, conclusion]))
-      const names = required ?? [...byName.keys()].filter(name => !name.startsWith('pair-'))
-      if (names.some(name => byName.get(name) === 'failure')) return 'red'
-      return names.length > 0 && names.every(name => byName.get(name) === 'success') ? 'green' : 'pending'
+      const required = requirements.length
+        ? requirements.filter(row => !REVIEW_CONTEXTS.has(row.name))
+        : reported.filter(row => !row.name.startsWith('pair-'))
+      const results = required.map(({ name, appId }) => {
+        const matching = reported.filter(row => row.name === name && (appId === undefined || row.appId === appId))
+        if (matching.some(row => row.conclusion === 'failure')) return 'red'
+        return matching.length && matching.every(row => row.conclusion === 'success') ? 'green' : 'pending'
+      })
+      return results.includes('red') ? 'red' : results.length && results.every(result => result === 'green') ? 'green' : 'pending'
     }
 
     const readLabels = ({ pr, repo }) => {
