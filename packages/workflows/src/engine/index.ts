@@ -126,6 +126,8 @@ export interface StepLaunch {
   /** Validation the host runs after the step ends `ok`. */
   readonly gates?: readonly string[]
   readonly inputs: Readonly<Record<string, unknown>>
+  readonly timeoutMinutes?: number
+  readonly retries?: number
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
   readonly round?: number
@@ -851,6 +853,25 @@ function haltAt(state: RunStateFile, step: Step): Halt | undefined {
 
 const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 
+const agentOptionsOf = (step: Step) => ({
+  ...(step['timeout-minutes'] !== undefined && { timeoutMinutes: step['timeout-minutes'] }),
+  ...(step.retries !== undefined && { retries: step.retries }),
+})
+
+/** Reserve another launch of the running step without changing its workflow or loop position. */
+export async function reserveRetry(run: RunDirectory, step: StepLaunch): Promise<StepLaunch> {
+  const state = requireState(run)
+  const previous = state.steps[step.id]
+  if (previous?.state !== 'running' || previous.executions !== step.attempt)
+    throw new Error(`cannot retry inactive step ${step.id}`)
+  const attempt = step.attempt + 1
+  await writeState(run, {
+    ...state,
+    steps: { ...state.steps, [step.id]: { ...previous, executions: attempt } },
+  })
+  return { ...step, attempt }
+}
+
 const pendingOf = (saved?: Pick<StepRecord, 'pendingSuccess'>) =>
   saved?.pendingSuccess === undefined ? {} : { pendingSuccess: saved.pendingSuccess }
 
@@ -942,6 +963,7 @@ async function nextInLoop(
     uses: child.skill ?? kindByName[child.kind].defaultSkill ?? '',
     with: child.with ?? {},
     ...gatesOf(child),
+    ...agentOptionsOf(child),
     ...boardStatesOf(child),
     ...pending,
     ...assignment,
@@ -1098,6 +1120,7 @@ function plainLaunch(
     uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
     with: step.with ?? {},
     ...gatesOf(step),
+    ...agentOptionsOf(step),
     ...boardStatesOf(step),
     ...pendingOf(saved),
     ...retryBoardStatusOf(saved),

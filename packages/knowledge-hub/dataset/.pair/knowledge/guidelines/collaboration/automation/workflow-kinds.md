@@ -18,7 +18,7 @@ The `returns` contract describes when each non-success outcome applies. The work
 Agent steps can set top-level `timeout-minutes` (a positive integer that overrides the run timeout) and `retries` (a nonnegative integer, default 0). These keys are unavailable on host-run kinds.
 
 
-An invalid final result makes the step `failed` with reason `invalid-result` after retries are exhausted. Other process faults end the step as `blocked` with reason `fault`.
+An invalid final result makes the step `failed` with reason `invalid-result` after retries are exhausted. Other process faults end a step that declares `retries` as `blocked` with reason `fault`. Without `retries`, those faults keep the existing `failed` / `no-result` route.
 
 An input is satisfied by a launch argument (`--card`) or by an output of an earlier step with the same name.
 

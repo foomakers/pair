@@ -1,9 +1,10 @@
-import { buildMessage, readResult, type InvocationStyle } from '../dispatch'
+import { buildMessage, checkAgentResult, type InvocationStyle } from '../dispatch'
 import {
   escalationCommentTarget,
   next,
   priorRefinement,
   record,
+  reserveRetry,
   stageSuccess,
   type EngineOutcome,
   type RunDirectory,
@@ -314,13 +315,9 @@ async function executeAgent(
     return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
   }
   exchange.sent = message
-  const launched = await host.launch(step, message, usage => {
-    exchange.usage = usage
-  })
-  if ('fault' in launched) return record(run, step.id, NO_AGENT_RESULT)
-  const { final } = launched
-  exchange.final = final
-  const result = readResult(final, kind)
+  const reply = await launchWithRetries(host, run, step, exchange)
+  if ('fault' in reply) return record(run, step.id, faultResult(step, reply), reply.invalid?.final)
+  const { result, final } = reply
   // Leave the step running on disk so the next invocation can retry it.
   if (step.kind === 'implement' && result.status === 'failed' && result.reason === 'card-held')
     return { ...result, status: 'skipped', reason: result.reason }
@@ -329,6 +326,58 @@ async function executeAgent(
     ...(await confirmed(host, run, step, checked)),
     output: final,
   })
+}
+
+type AgentReply =
+  | { result: StepResult; final: string }
+  | { fault: Diagnosis; invalid?: { result: StepResult; final: string } }
+
+function faultResult(
+  step: StepLaunch,
+  reply: Extract<AgentReply, { fault: Diagnosis }>,
+): StepResult {
+  if (reply.invalid !== undefined) return reply.invalid.result
+  const { kind, detail } = reply.fault
+  if (kind === 'invalid-result') return { status: 'failed', reason: kind, summary: detail }
+  if (step.retries === undefined) return NO_AGENT_RESULT
+  return { status: 'blocked', reason: 'fault', summary: 'the agent process failed', detail }
+}
+
+function replyOf(launched: AgentLaunchResult, kind: KindName, elapsedMs: number): AgentReply {
+  if ('fault' in launched) return launched
+  const { final, process } = launched
+  const { valid, result } = checkAgentResult(final, kindByName[kind])
+  if (valid) return { result, final }
+  return {
+    fault: {
+      ...(process ?? { exitCode: null, signal: null, elapsedMs, stderrTail: [] }),
+      kind: 'invalid-result',
+      detail: result.detail ?? result.summary,
+    },
+    invalid: { result, final },
+  }
+}
+
+async function launchWithRetries(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  exchange: Exchange,
+): Promise<AgentReply> {
+  let launch = step
+  let remaining = step.retries ?? 0
+  for (;;) {
+    delete exchange.usage
+    const start = Date.now()
+    const launched = await host.launch(launch, exchange.sent, usage => {
+      exchange.usage = usage
+    })
+    exchange.final = 'final' in launched ? launched.final : ''
+    const reply = replyOf(launched, step.kind, Date.now() - start)
+    if (!('fault' in reply) || remaining === 0) return reply
+    remaining--
+    launch = await reserveRetry(run, launch)
+  }
 }
 
 /**

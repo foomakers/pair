@@ -1,5 +1,5 @@
 import type { StepLaunch } from '../engine'
-import { agentResultSchema, settle, type StepKind, type StepResult } from '../kinds'
+import { agentResultSchema, checkResult, type StepKind, type StepResult } from '../kinds'
 import { textsOf, type JsonSchema } from '../schema'
 
 /** How an engine is told to run a skill; the host passes its engine's own style, the package holds no engine table. */
@@ -82,18 +82,21 @@ export function buildMessage(step: StepLaunch, kind: StepKind, options: MessageO
 
 const FENCED_JSON = /```json[ \t]*\r?\n([\s\S]*?)```/g
 
-const invalid = (kind: StepKind, detail: string): StepResult => ({
-  status: 'failed',
-  reason: 'invalid-result',
-  summary: `the final message carries no ${kind.name} result`,
-  detail,
+const invalid = (kind: StepKind, detail: string) => ({
+  valid: false,
+  result: {
+    status: 'failed',
+    reason: 'invalid-result',
+    summary: `the final message carries no ${kind.name} result`,
+    detail,
+  } satisfies StepResult,
 })
 
 /**
  * The step's result, from the agent's final message: its last fenced `json` block, validated
  * against the kind's declared statuses and outputs. Missing or invalid: `failed`, `invalid-result`.
  */
-export function readResult(finalMessage: string, kind: StepKind): StepResult {
+export function checkAgentResult(finalMessage: string, kind: StepKind) {
   const block = [...finalMessage.matchAll(FENCED_JSON)].pop()?.[1]
   if (block === undefined) return invalid(kind, 'no fenced json block in the final message')
   let value: unknown
@@ -102,5 +105,9 @@ export function readResult(finalMessage: string, kind: StepKind): StepResult {
   } catch (error) {
     return invalid(kind, `the last fenced json block is not JSON: ${(error as Error).message}`)
   }
-  return settle(kind, value, 'agent')
+  return checkResult(kind, value, 'agent')
+}
+
+export function readResult(finalMessage: string, kind: StepKind): StepResult {
+  return checkAgentResult(finalMessage, kind).result
 }
