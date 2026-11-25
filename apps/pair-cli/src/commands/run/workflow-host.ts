@@ -523,6 +523,28 @@ const ENDINGS: Readonly<Record<RunOutcome['run'], { status: string; exit: number
     },
   }
 
+function reportProcessFaults(outcome: RunOutcome): void {
+  for (const { step, attempts } of outcome.faults ?? []) {
+    for (const {
+      attempt,
+      round,
+      kind,
+      detail,
+      exitCode,
+      signal,
+      elapsedMs,
+      stderrTail,
+    } of attempts) {
+      const location = round === undefined ? step : `${step} round ${round}`
+      const process = `exit=${exitCode ?? 'unknown'}, signal=${signal ?? 'none'}, elapsed=${elapsedMs}ms`
+      console.log(
+        `  Process fault — ${location} attempt ${attempt} (${kind}): ${detail} [${process}]`,
+      )
+      for (const line of stderrTail) console.log(`    stderr: ${line}`)
+    }
+  }
+}
+
 function conclude(outcome: RunOutcome, request: RunWorkflowRequest, sink: ConsoleSink): number {
   const ending = ENDINGS[outcome.run]
   const why = explain(outcome.last)
@@ -849,6 +871,7 @@ async function runOnConsole(
       telemetryOf(config, opened),
     )
     reportRunOutcome(opened, outcome)
+    reportProcessFaults(outcome)
     return exhaustedEnding(opened, outcome, sink, fs) ?? conclude(outcome, request, sink)
   } finally {
     sink.finish()

@@ -11,6 +11,7 @@ import {
 } from '../engine'
 import type { EscalationAction, KindName } from '../grammar'
 import type { StepStatus } from '../kinds'
+import type { Diagnosis } from '../diagnosis'
 import { migrateTelemetryStatuses } from './legacy-status'
 
 export { TELEMETRY_FILE }
@@ -83,6 +84,7 @@ export interface StepTelemetry extends RunIdentity {
   readonly estimate?: 'lower-bound-from-text'
   readonly status: StepStatus | 'exhausted' | 'skipped'
   readonly reason?: string
+  readonly diagnosis?: Diagnosis
   readonly escalate?: EscalationTelemetry
   /** The execution number of this step in the run. */
   readonly attempt: number
@@ -123,6 +125,7 @@ export interface StepExecution {
   readonly tokens: Tokens
   readonly status: StepTelemetry['status']
   readonly reason?: string
+  readonly diagnosis?: Diagnosis
   readonly escalate?: EscalationTelemetry
 }
 
@@ -151,7 +154,7 @@ const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetr
 /** Appends a step record to the run's `telemetry.jsonl`. */
 export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {
   const steps = stepsOf(run)
-  const { step, settings, tokens, reason, escalate } = execution
+  const { step, settings, tokens, reason, escalate, diagnosis } = execution
   const isEstimate = Object.values(tokens).some(entry => entry.source === 'estimated')
   const record: StepTelemetry = {
     type: 'step',
@@ -170,6 +173,7 @@ export async function recordStep(run: RunDirectory, execution: StepExecution): P
     ...(isEstimate && { estimate: 'lower-bound-from-text' as const }),
     status: execution.status,
     ...(reason !== undefined && { reason }),
+    ...(diagnosis !== undefined && { diagnosis }),
     ...(escalate !== undefined && { escalate }),
     attempt: step.attempt,
     ...(step.round !== undefined && { round: step.round }),

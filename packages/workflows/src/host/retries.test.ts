@@ -1,5 +1,6 @@
 import { createMemoryFiles } from '../engine/memory-files'
-import { start } from '../engine'
+import { start, type RunStateFile } from '../engine'
+import type { StepTelemetry } from '../telemetry'
 import { runSteps, type AgentLaunchResult, type WorkflowHost } from '.'
 
 const result = (status: string, reason?: string): AgentLaunchResult => ({
@@ -36,9 +37,16 @@ function startTest(steps: string, answers: readonly AgentLaunchResult[]) {
   const text = `version: 1\nname: quick\nsteps:\n${steps}\n`
   return {
     sent,
+    state: () => JSON.parse(files.readFileSync('/run/state.json')) as RunStateFile,
+    telemetry: () =>
+      files
+        .readFileSync('/run/telemetry.jsonl')
+        .trim()
+        .split('\n')
+        .map(line => JSON.parse(line) as StepTelemetry),
     run: async () => {
       await start(run, { text, file: 'quick.yaml' }, { card: '704' })
-      return runSteps(host, run.dir)
+      return runSteps(host, run.dir, { host: 'pair-run', settings: () => ({ engine: 'fake' }) })
     },
   }
 }
@@ -103,4 +111,25 @@ describe('#704: process retries', () => {
     expect((await test.run()).run).toBe('done')
     expect(test.sent.map(attempt => attempt.round)).toEqual([1, 1])
   })
+})
+
+it('#704 AC-4: records every fault even when a retry succeeds', async () => {
+  const test = startTest(work(', retries: 2'), [crash, crash, ok])
+  const outcome = await test.run()
+  const diagnosis = {
+    kind: 'crash',
+    detail: 'agent exited',
+    exitCode: 1,
+    signal: null,
+    elapsedMs: 83,
+    stderrTail: ['before exit'],
+  }
+  const attempts = [1, 2].map(attempt => ({ ...diagnosis, attempt }))
+  expect(test.state().steps['work']).toMatchObject({ state: 'ok', executions: 3, attempts })
+  expect(test.telemetry().filter(entry => entry.type === 'step')).toEqual([
+    expect.objectContaining({ attempt: 1, reason: 'fault', diagnosis }),
+    expect.objectContaining({ attempt: 2, reason: 'fault', diagnosis }),
+    expect.objectContaining({ attempt: 3, status: 'ok' }),
+  ])
+  expect(outcome.faults).toEqual([{ step: 'work', attempts }])
 })

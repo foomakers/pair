@@ -1,10 +1,11 @@
 import { buildMessage, checkAgentResult, type InvocationStyle } from '../dispatch'
 import {
   escalationCommentTarget,
+  faultsOf,
   next,
   priorRefinement,
   record,
-  reserveRetry,
+  recordFault,
   stageSuccess,
   type EngineOutcome,
   type RunDirectory,
@@ -16,6 +17,7 @@ import {
 import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
 import { escalationAction, type Assignment, type CardState, type KindName } from '../grammar'
 import { violations } from '../schema'
+import type { Diagnosis, ProcessDiagnostics, StepFaults } from '../diagnosis'
 import type { CardFacts } from '../select'
 import { kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 import {
@@ -37,18 +39,6 @@ export interface StepEvent {
   readonly summary?: string
   readonly reason?: string
   readonly detail?: string
-}
-
-export interface ProcessDiagnostics {
-  readonly exitCode: number | null
-  readonly signal: string | null
-  readonly elapsedMs: number
-  readonly stderrTail: readonly string[]
-}
-
-export interface Diagnosis extends ProcessDiagnostics {
-  readonly kind: 'timeout' | 'idle' | 'crash' | 'no-result' | 'invalid-result'
-  readonly detail: string
 }
 
 export type AgentLaunchResult =
@@ -125,14 +115,19 @@ export interface RunOutcome {
   readonly run: RunEndStatus
   /** The last step result or condition failure from this launch. */
   readonly last?: StepEvent
+  readonly faults?: readonly StepFaults[]
 }
 
 /** What a step exchanged with its agent: the two texts, and the usage when the host measured it. */
 interface Exchange {
+  step: StepLaunch
   sent: string
   final: string
   usage?: Usage
+  diagnosis?: Diagnosis
 }
+
+type OnRetry = (result: StepResult) => Promise<void>
 
 /** The result of a step, unless it is `ok` and its `gates` are not all green. */
 async function gated(
@@ -261,9 +256,10 @@ type StepExecutionResult =
 async function execute(
   host: WorkflowHost,
   run: RunDirectory,
-  step: StepLaunch,
-  exchange: Exchange = { sent: '', final: '' },
+  exchange: Exchange,
+  onRetry?: OnRetry,
 ): Promise<StepExecutionResult> {
+  const { step } = exchange
   if (step.pendingSuccess !== undefined)
     return recordResult(host, run, step, await confirmed(host, run, step, step.pendingSuccess))
   const kind = kindByName[step.kind]
@@ -294,15 +290,16 @@ async function execute(
       summary:
         'Run pair-process-refine-story in an interactive session or configure autonomous refinement.',
     })
-  return executeAgent(host, run, step, exchange)
+  return executeAgent(host, run, exchange, onRetry)
 }
 
 async function executeAgent(
   host: WorkflowHost,
   run: RunDirectory,
-  step: StepLaunch,
   exchange: Exchange,
+  onRetry?: OnRetry,
 ): Promise<StepExecutionResult> {
+  const { step } = exchange
   const kind = kindByName[step.kind]
   let message: string
   try {
@@ -315,7 +312,7 @@ async function executeAgent(
     return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
   }
   exchange.sent = message
-  const reply = await launchWithRetries(host, run, step, exchange)
+  const reply = await launchWithRetries(host, run, exchange, onRetry)
   if ('fault' in reply) return record(run, step.id, faultResult(step, reply), reply.invalid?.final)
   const { result, final } = reply
   // Leave the step running on disk so the next invocation can retry it.
@@ -361,22 +358,27 @@ function replyOf(launched: AgentLaunchResult, kind: KindName, elapsedMs: number)
 async function launchWithRetries(
   host: WorkflowHost,
   run: RunDirectory,
-  step: StepLaunch,
   exchange: Exchange,
+  onRetry: OnRetry | undefined,
 ): Promise<AgentReply> {
-  let launch = step
-  let remaining = step.retries ?? 0
+  let remaining = exchange.step.retries ?? 0
   for (;;) {
     delete exchange.usage
+    delete exchange.diagnosis
+    const { step } = exchange
     const start = Date.now()
-    const launched = await host.launch(launch, exchange.sent, usage => {
+    const launched = await host.launch(step, exchange.sent, usage => {
       exchange.usage = usage
     })
     exchange.final = 'final' in launched ? launched.final : ''
     const reply = replyOf(launched, step.kind, Date.now() - start)
-    if (!('fault' in reply) || remaining === 0) return reply
+    if (!('fault' in reply)) return reply
+    const next = await recordFault(run, step, reply.fault, remaining > 0)
+    exchange.diagnosis = reply.fault
+    if (remaining === 0) return reply
+    await onRetry?.(faultResult(step, reply))
     remaining--
-    launch = await reserveRetry(run, launch)
+    exchange.step = next
   }
 }
 
@@ -474,32 +476,46 @@ async function executeMetered(
   step: StepLaunch,
   writer: Writer,
 ): Promise<StepExecutionResult> {
-  if (writer === undefined) return execute(host, run, step)
-  const startedAt = writer.now()
-  const exchange: Exchange = { sent: '', final: '' }
-  const result = await execute(host, run, step, exchange)
-  const { sent, final, usage } = exchange
-  await writer.step({
-    step,
-    startedAt,
-    durationMs: writer.now().getTime() - startedAt.getTime(),
-    // A host that cannot measure: the estimate from the two texts.
-    tokens: usage === undefined ? estimated(sent, final) : measured(usage),
-    status: result.status,
-    ...(result.reason !== undefined && { reason: result.reason }),
-    ...escalationOf(run.outcomes.find(outcome => outcome.id === step.id)),
-  })
+  const exchange: Exchange = { step, sent: '', final: '' }
+  if (writer === undefined) return execute(host, run, exchange)
+  let startedAt = writer.now()
+  const report = async ({ status, reason }: StepExecutionResult, outcome?: EngineOutcome) => {
+    const { sent, final, usage, diagnosis } = exchange
+    const time = writer.now()
+    await writer.step({
+      step: exchange.step,
+      startedAt,
+      durationMs: time.getTime() - startedAt.getTime(),
+      tokens: usage === undefined ? estimated(sent, final) : measured(usage),
+      status,
+      ...(reason !== undefined && { reason }),
+      ...(diagnosis !== undefined && { diagnosis }),
+      ...escalationOf(outcome),
+    })
+    startedAt = time
+  }
+  const result = await execute(host, run, exchange, fault => report(fault))
+  await report(
+    result,
+    run.outcomes.find(outcome => outcome.id === step.id),
+  )
   return result
 }
 
 async function ended(
+  run: RunDirectory,
   state: RunState | RunEndStatus,
   last: StepEvent | undefined,
   writer: Writer,
 ): Promise<RunOutcome> {
   const outcome = state === 'running' ? 'failed' : state
   await writer?.close(outcome)
-  return { run: outcome, ...(last !== undefined && { last }) }
+  const faults = faultsOf(run)
+  return {
+    run: outcome,
+    ...(last !== undefined && { last }),
+    ...(faults.length > 0 && { faults }),
+  }
 }
 
 /** The next step, reporting every step passed over because its `when` did not match. */
@@ -613,8 +629,8 @@ export async function runSteps(
     const { ready, state, event } = await advance(host, run)
     await flushOutcomes(host, run, writer)
     const step = ready[0]
-    if (state !== 'running' || step === undefined) return ended(state, event ?? last, writer)
+    if (state !== 'running' || step === undefined) return ended(run, state, event ?? last, writer)
     last = await runStep(host, run, step, writer)
-    if (last.state === 'skipped') return ended('skipped', last, writer)
+    if (last.state === 'skipped') return ended(run, 'skipped', last, writer)
   }
 }
