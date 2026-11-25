@@ -6,11 +6,12 @@ import {
   type RunDirectory,
   type RunHost,
   type RunIdentity,
-  type RunState,
+  type RunEndStatus,
   type StepLaunch,
 } from '../engine'
 import type { KindName } from '../grammar'
 import type { StepStatus } from '../kinds'
+import { migrateTelemetryStatuses } from './legacy-status'
 
 export { TELEMETRY_FILE }
 
@@ -75,7 +76,7 @@ export interface StepTelemetry extends RunIdentity {
   readonly tokens: Tokens
   /** Present when a token entry is estimated: how, and what the estimate does not see. */
   readonly estimate?: 'lower-bound-from-text'
-  readonly status: StepStatus
+  readonly status: StepStatus | 'skipped'
   readonly reason?: string
   /** The execution number of this step in the run. */
   readonly attempt: number
@@ -92,7 +93,7 @@ export interface TokenSum extends TokenEntry {
 export interface RunTelemetry extends RunIdentity {
   readonly type: 'run'
   readonly schema: typeof TELEMETRY_SCHEMA
-  readonly status: Exclude<RunState, 'running'>
+  readonly status: RunEndStatus
   readonly durationMs: number
   readonly tokens: Readonly<Record<TokenName, TokenSum>>
   /** The number of step executions. */
@@ -112,7 +113,7 @@ export interface StepExecution {
   readonly startedAt: Date
   readonly durationMs: number
   readonly tokens: Tokens
-  readonly status: StepStatus
+  readonly status: StepStatus | 'skipped'
   readonly reason?: string
 }
 
@@ -121,8 +122,7 @@ const fileOf = (run: RunDirectory): string => join(run.dir, TELEMETRY_FILE)
 /** The step records of the run. A closing record is of a run that ended: it goes when the run moves again. */
 function stepsOf(run: RunDirectory): StepTelemetry[] {
   if (!run.files.existsSync(fileOf(run))) return []
-  return run.files
-    .readFileSync(fileOf(run))
+  return migrateTelemetryStatuses(run.files.readFileSync(fileOf(run)))
     .split('\n')
     .filter(line => line !== '')
     .map(line => JSON.parse(line) as StepTelemetry | RunTelemetry)
@@ -130,7 +130,14 @@ function stepsOf(run: RunDirectory): StepTelemetry[] {
 }
 
 const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetry)[]) =>
-  writeAtomic(run.files, fileOf(run), records.map(record => `${JSON.stringify(record)}\n`).join(''))
+  writeAtomic(
+    run.files,
+    fileOf(run),
+    records.map(record => `${JSON.stringify(record)}\n`).join(''),
+    {
+      preserveMode: true,
+    },
+  )
 
 /** Appends the record of one execution of a step to the run's `telemetry.jsonl`. */
 export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {

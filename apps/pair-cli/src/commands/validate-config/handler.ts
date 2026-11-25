@@ -1,13 +1,16 @@
 import type { ValidateConfigCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
+import { checkWorkflowTiers } from '@pair/workflows'
 import chalk from 'chalk'
 import { loadConfigWithOverrides, readEngineDeclaration, readRunDeclaration } from '#config'
+import { mainCheckoutOrCwd } from '../run/cycle-wiring'
 import { ENGINE_IDS } from '../run/engines'
+import { locateConfiguration } from '../run/workflow-configuration'
 import {
   extractRegistries,
   validateAllRegistries,
   resolveWorkingPathOverride,
-  type RegistryConfig,
+  type Config,
 } from '#registry'
 
 /**
@@ -30,33 +33,27 @@ export async function handleValidateConfigCommand(
     projectRoot,
   })
 
-  // Validate the config - if a custom config is provided, validate only that config
-  // without merging with base config (to catch errors in the user's config)
-  let registries: Record<string, RegistryConfig>
-  let workingPathSource: unknown
-  if (config.config) {
-    // For custom config, read and validate only that config file
-    const customConfigContent = fs.readFileSync(config.config)
-    const customConfig = JSON.parse(customConfigContent) as {
-      asset_registries?: Record<string, RegistryConfig>
-      working_path?: string
-    }
-    registries = customConfig.asset_registries || {}
-    workingPathSource = customConfig
-  } else {
-    registries = extractRegistries(result.config)
-    workingPathSource = result.config
-  }
-
-  const workingPath = resolveWorkingPathOverride(workingPathSource)
+  // A custom file is validated on its own so the base cannot mask its errors.
+  const declaration = config.config
+    ? (JSON.parse(fs.readFileSync(config.config)) as Config)
+    : result.config
+  const registries = config.config
+    ? declaration.asset_registries || {}
+    : extractRegistries(declaration)
+  const workingPath = resolveWorkingPathOverride(declaration)
   const validation = validateAllRegistries(registries, workingPath)
 
   // The optional `engine` block (US-451) is validated in the SAME pass as the registries, and
   // its errors are reported the same way: a malformed block must be a validation failure here
   // rather than a surprise at `pair-cli run` time. An ABSENT block adds nothing — delta-only.
-  const engineBlock = readEngineDeclaration(workingPathSource, ENGINE_IDS)
-  const runBlock = readRunDeclaration(workingPathSource, ENGINE_IDS)
-  const errors = [...validation.errors, ...engineBlock.errors, ...runBlock.errors]
+  const engineBlock = readEngineDeclaration(declaration, ENGINE_IDS)
+  const runBlock = readRunDeclaration(declaration, ENGINE_IDS)
+  let main: string | undefined
+  const tierErrors = checkWorkflowTiers(declaration['workflows'], name => {
+    main ??= mainCheckoutOrCwd(projectRoot)
+    return locateConfiguration(fs, name, { cwd: projectRoot, main }) !== undefined
+  })
+  const errors = [...validation.errors, ...engineBlock.errors, ...runBlock.errors, ...tierErrors]
 
   if (errors.length > 0) {
     const errorMessages = errors.join('\n  - ')

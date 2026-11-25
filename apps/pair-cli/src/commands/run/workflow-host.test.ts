@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { join } from 'path'
-import { start } from '@pair/workflows'
+import { tmpdir } from 'node:os'
+import { basename, join } from 'path'
+import {
+  hashOf,
+  start,
+  type RunStateFile,
+  type RunTelemetry,
+  type StepTelemetry,
+} from '@pair/workflows'
+import { fileSystemService as disk } from '@pair/content-ops'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 // @ts-expect-error Vite loads the adopted definition as fixture text.
 import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/delivery.yaml?raw'
@@ -173,8 +181,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('card state (AC-13)', () => {
-  const MAPPING = `## State Mapping
+const MAPPING = `## State Mapping
 
 | Board State | Macrostate |
 | --- | --- |
@@ -184,6 +191,8 @@ describe('card state (AC-13)', () => {
 | Checking | Review |
 | Finished | Done |
 `
+
+describe('card state (AC-13)', () => {
   // A fake board that remembers the state it was given; `current` is what the card holds at the start.
   const withBoard = (
     setState: (card: string, state: string) => Promise<void>,
@@ -274,6 +283,308 @@ describe('card state (AC-13)', () => {
     ).toBe(true)
     expect(states()).toEqual({ implement: 'ok', review: 'ok' })
   })
+
+  describe('#723 T-5 workflow assignment (AC-6, AC-8)', () => {
+    const implementOnly = (assign?: string) => `version: 1
+name: quick
+${assign === undefined ? '' : `assign: ${assign}\n`}steps:
+  implement: { kind: implement }
+`
+
+    const assignmentHost = (
+      actions: string[],
+      response = success(JSON.stringify({ status: 'assigned' })),
+    ) => {
+      write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Host bridge fixture')
+      hostProcess.mockImplementation(async (bin, args) => {
+        if (bin === 'sh') {
+          expect(args).toEqual(['-c', 'true'])
+          actions.push('host:gate')
+          return success()
+        }
+        const [, operation, card, raw] = args
+        expect(operation).toBe('assign-card')
+        expect(card).toBe('627')
+        const { assign } = JSON.parse(raw ?? '{}')
+        actions.push(`assign:${assign}`)
+        return assign === 'none' ? success(JSON.stringify({ status: 'unchanged' })) : response
+      })
+    }
+
+    it('applies the workflow default and step overrides before board writes and execution', async () => {
+      write(
+        '.pair/adoption/tech/workflows/quick.yaml',
+        `${implementOnly('me')}  review: { kind: review, assign: alice }
+  finish: { kind: gate, gates: [quality-gate], assign: unassign }
+`,
+      )
+      const actions: string[] = []
+      assignmentHost(actions)
+      const board = withBoard(async (_card, state) => void actions.push(`board:${state}`))
+      const skills = {
+        'pair-process-implement': () => {
+          actions.push('agent:implement')
+          return IMPLEMENTED
+        },
+        'pair-process-review': () => {
+          actions.push('agent:review')
+          return REVIEWED
+        },
+      }
+
+      expect(await run(['quick'], skills, {}, board)).toBe(0)
+
+      expect(actions).toEqual([
+        'assign:me',
+        'board:Building',
+        'agent:implement',
+        'assign:alice',
+        'board:Checking',
+        'agent:review',
+        'assign:unassign',
+        'host:gate',
+      ])
+      expect(launched[0]?.promptText).toContain('- assignee: none')
+      expect(launched[1]?.promptText).not.toContain('- assignee:')
+      expect(states()).toEqual({ implement: 'ok', review: 'ok', finish: 'ok' })
+    })
+
+    it('#723 F8: claims before applying a start-state override and launching implement', async () => {
+      write(
+        '.pair/adoption/tech/workflows/quick.yaml',
+        implementOnly().replace('kind: implement', 'kind: implement, state: Review'),
+      )
+      const actions: string[] = []
+      assignmentHost(actions)
+      const board = withBoard(
+        async (_card, state) => void actions.push(`board:${state}`),
+        'Planned',
+      )
+      const skills = {
+        'pair-process-implement': () => {
+          actions.push('agent:implement')
+          return IMPLEMENTED
+        },
+      }
+
+      expect(await run(['quick'], skills, {}, board)).toBe(0)
+
+      expect(actions).toEqual(['assign:me', 'board:Checking', 'agent:implement'])
+      expect(launched[0]?.promptText).toContain('- assignee: none')
+      expect(launched[0]?.promptText).toContain('- board-state: managed')
+    })
+
+    it('suppresses skill assignment for explicit none without asking the host to change ownership', async () => {
+      write('.pair/adoption/tech/workflows/quick.yaml', implementOnly('none'))
+      const actions: string[] = []
+      assignmentHost(actions)
+
+      expect(
+        await run(
+          ['quick'],
+          OK,
+          {},
+          withBoard(async () => {}),
+        ),
+      ).toBe(0)
+
+      expect(actions.every(action => action === 'assign:none')).toBe(true)
+      expect(launched[0]?.promptText).toContain('- assignee: none')
+    })
+
+    it('reuses the frozen workflow assignment when the authored default changes before resume', async () => {
+      const path = '.pair/adoption/tech/workflows/quick.yaml'
+      write(path, implementOnly('me'))
+      const actions: string[] = []
+      assignmentHost(actions)
+      const board = withBoard(async () => {})
+      const failed = () => fenced({ status: 'failed', summary: 'gate red' })
+      expect(await run(['quick'], { 'pair-process-implement': failed }, {}, board)).toBe(1)
+      actions.length = 0
+      write(path, implementOnly('none'))
+
+      expect(await run(['quick'], OK, {}, board)).toBe(0)
+
+      expect(actions).toEqual(['assign:me'])
+      expect(states()).toEqual({ implement: 'ok' })
+    })
+
+    it.each([
+      ['write denied', success(JSON.stringify({ status: 'warning', reason: 'write denied' }))],
+      ['read-back unavailable', { ...success(), status: 1, stderr: 'read-back unavailable' }],
+    ])(
+      'warns on %s and still runs implement with assignment disabled',
+      async (reason, response) => {
+        write('.pair/adoption/tech/workflows/quick.yaml', implementOnly('me'))
+        const actions: string[] = []
+        assignmentHost(actions, response)
+
+        expect(
+          await run(
+            ['quick'],
+            OK,
+            {},
+            withBoard(async () => {}),
+          ),
+        ).toBe(0)
+
+        expect(actions).toEqual(['assign:me'])
+        expect(lines.some(line => line.includes('Warning:') && line.includes(reason))).toBe(true)
+        expect(launched[0]?.promptText).toContain('- assignee: none')
+        expect(states()).toEqual({ implement: 'ok' })
+      },
+    )
+
+    it('skips a held card before the first board write or launch and names its owners', async () => {
+      write('.pair/adoption/tech/workflows/quick.yaml', implementOnly('me'))
+      const actions: string[] = []
+      assignmentHost(actions, success(JSON.stringify({ status: 'held', owners: ['alice', 'bob'] })))
+      const board = withBoard(async (_card, state) => void actions.push(`board:${state}`))
+
+      expect(await run(['quick'], OK, {}, board)).toBe(0)
+
+      expect(actions).toEqual(['assign:me'])
+      expect(launched).toEqual([])
+      expect(
+        lines.some(line => /skipp/i.test(line) && line.includes('alice') && line.includes('bob')),
+      ).toBe(true)
+    })
+
+    it.each(['implement', 'rounds/review'])(
+      '#723 F6: a held %s resumes at execution one',
+      async step => {
+        const inLoop = step === 'rounds/review'
+        const definition = inLoop
+          ? `${implementOnly('none')}  rounds:
+    kind: loop
+    until: review
+    max: 1
+    on-max: escalate
+    steps:
+      review: { kind: review, assign: me }
+`
+          : implementOnly('me')
+        write('.pair/adoption/tech/workflows/quick.yaml', definition)
+        const board = withBoard(async () => {})
+        const telemetry = () =>
+          fs
+            .readFileSync(join(runDir(), 'telemetry.jsonl'))
+            .trimEnd()
+            .split('\n')
+            .map(line => JSON.parse(line) as RunTelemetry | StepTelemetry)
+        const executions = () =>
+          (JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile).steps[step]
+            ?.executions ?? 0
+
+        assignmentHost([], success(JSON.stringify({ status: 'held', owners: ['alice'] })))
+        expect(await run(['quick'], OK, { telemetry: true }, board)).toBe(0)
+        expect.soft(executions()).toBe(0)
+        expect(launched).toHaveLength(inLoop ? 1 : 0)
+        expect(telemetry().at(-1)).toMatchObject({
+          type: 'run',
+          status: 'skipped',
+          steps: inLoop ? 1 : 0,
+        })
+
+        assignmentHost([])
+        expect(await run(['quick'], OK, { telemetry: true }, board)).toBe(0)
+        expect.soft(executions()).toBe(1)
+        expect(launched).toHaveLength(inLoop ? 2 : 1)
+        const executionsOfStep = telemetry().flatMap(row =>
+          row.type === 'step' && row.step === step ? [row.attempt] : [],
+        )
+        expect(executionsOfStep).toEqual([1])
+        expect(telemetry().at(-1)).toMatchObject({ type: 'run', status: 'done' })
+      },
+    )
+  })
+})
+
+describe('#723 T-7 held cards in a batch (AC-4)', () => {
+  it.each([
+    { source: 'explicit assignment', declaresAssign: true, routing: '' },
+    { source: 'implicit assignment', declaresAssign: false, routing: '' },
+    {
+      source: 'implicit assignment with on-failed: continue',
+      declaresAssign: false,
+      routing: ', on-failed: continue',
+    },
+  ])(
+    'skips for $source, runs independent work, and retries after release',
+    async ({ declaresAssign, routing }) => {
+      const definition = `version: 1
+name: quick
+${declaresAssign ? 'assign: me\n' : ''}steps:
+  implement: { kind: implement${routing} }
+  finish: { kind: generic, skill: my-skill }
+`
+      write('.pair/adoption/tech/workflows/quick.yaml', definition)
+      write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Host bridge fixture')
+      write('.pair/adoption/tech/way-of-working.md', REGISTRY + MAPPING)
+
+      let held = true
+      const boardWrites: string[] = []
+      const assignmentChecks: string[] = []
+      hostProcess.mockImplementation(async (_bin, args) => {
+        const [, operation, card] = args
+        expect(operation).toBe('assign-card')
+        assignmentChecks.push(card!)
+        return success(
+          JSON.stringify(
+            card === '627' && held ? { status: 'held', owners: ['alice'] } : { status: 'assigned' },
+          ),
+        )
+      })
+      const workflow: Partial<WorkflowHostDependencies> = {
+        board: {
+          getState: async () => null,
+          setState: async id => void boardWrites.push(id),
+        },
+        readSelection: async () => ({
+          cards: ['627', '628', '629'].map(id => ({
+            id,
+            title: `Story ${id}`,
+            body: '',
+            labels: [],
+            boardState: null,
+            closed: false,
+            prerequisites: id === '629' ? ['627'] : [],
+          })),
+        }),
+      }
+      const skills = {
+        'my-skill': () => fenced({ status: 'ok', summary: 'Finished' }),
+        'pair-process-implement': () => IMPLEMENTED,
+      }
+      const batch = () => run(['quick'], skills, { card: '627,628,629' }, workflow)
+      const launches = () =>
+        launched.map(({ cwd, promptText }) => `${basename(cwd)}:${skillOf(promptText)}`)
+      const summary = (id: string) => lines.find(line => line.trimStart().startsWith(`#${id}:`))
+
+      expect.soft(await batch()).toBe(0)
+      expect.soft(launches()).toEqual(['628:pair-process-implement', '628:my-skill'])
+      expect.soft(assignmentChecks).toEqual(declaresAssign ? ['627', '628', '628'] : ['627', '628'])
+      expect.soft(summary('627')).toMatch(/#627: skipped.*alice.*card-held/)
+      expect.soft(boardWrites).not.toContain('627') // #723 AC-4, F1
+      expect.soft(boardWrites).toContain('628')
+      expect.soft(summary('628')).toContain('#628: done')
+      expect.soft(summary('629')).toContain('#629: waiting — waiting for #627')
+
+      held = false
+      launched.length = 0
+      lines.length = 0
+      expect.soft(await batch()).toBe(0)
+      expect
+        .soft(launches())
+        .toEqual([
+          '627:pair-process-implement',
+          '627:my-skill',
+          '629:pair-process-implement',
+          '629:my-skill',
+        ])
+      expect.soft(summary('628')).toContain('#628: skipped — workflow already complete')
+    },
+  )
 })
 
 describe('always autonomous (AC-12)', () => {
@@ -411,7 +722,7 @@ describe('headless interactive steps (#696 AC-2)', () => {
       after: '  after: { kind: generic, skill: my-skill }\n',
       available: true,
       expectedLaunches: ['pair-process-implement'],
-      expectedStates: { implement: 'ok', decision: 'needs-human', after: 'pending' },
+      expectedStates: { implement: 'ok', decision: 'needs-decision', after: 'pending' },
     },
     {
       scenario: 'without an agent executable',
@@ -419,7 +730,7 @@ describe('headless interactive steps (#696 AC-2)', () => {
       after: '',
       available: false,
       expectedLaunches: [],
-      expectedStates: { decision: 'needs-human' },
+      expectedStates: { decision: 'needs-decision' },
     },
   ])('parks $scenario and prints how to resume in a session', async test => {
     write(
@@ -462,15 +773,15 @@ describe('resume (AC-6)', () => {
     expect(states()).toEqual({ implement: 'ok', review: 'ok' })
   })
 
-  it('parks on needs-human: exit 0, what is needed and the command that resumes', async () => {
-    const parked = () => fenced({ status: 'needs-human', summary: 'pick the migration order' })
+  it('parks on needs-decision: exit 0, what is needed and the command that resumes', async () => {
+    const parked = () => fenced({ status: 'needs-decision', summary: 'pick the migration order' })
     expect(await run(['quick'], { ...OK, 'pair-process-review': parked }, { runId: 'mine' })).toBe(
       0,
     )
     expect(lines).toContain(
       '  Run: parked at step review — it needs a person: pick the migration order. Resume with: pair-cli run quick --card 627 --run-id mine',
     )
-    expect(states('mine')).toEqual({ implement: 'ok', review: 'needs-human' })
+    expect(states('mine')).toEqual({ implement: 'ok', review: 'needs-decision' })
   })
 
   it('runs again a step an interrupted launch left running', async () => {
@@ -541,7 +852,7 @@ steps:
     }
     expect(await run(['quick'], skills)).toBe(0)
     expect(states()).toMatchObject({
-      rounds: 'needs-human',
+      rounds: 'needs-decision',
       'rounds/review': 'failed',
       'rounds/fix': 'ok',
     })
@@ -706,6 +1017,116 @@ describe('telemetry, switched by flag (US-697 AC-5)', () => {
     expect(await run(['quick'], OK, { telemetry: true })).toBe(0)
     expect(states()).toEqual({ implement: 'ok', review: 'ok' })
     expect(lines.filter(line => line.includes('telemetry was not written'))).toHaveLength(1)
+  })
+
+  it('#728 AC-3 F8: migrates a completed closed card only when its run lock is available', async () => {
+    const parked = () => fenced({ status: 'needs-decision', summary: 'waiting for a decision' })
+    await run(['quick'], { ...OK, 'pair-process-review': parked }, { telemetry: true })
+    await run(['quick'], OK, { telemetry: true })
+    const file = telemetryFile()
+    const current = fs.readFileSync(file)
+    const legacy = current.replace('"status":"needs-decision"', '"status":"needs-human"')
+    expect(legacy).not.toBe(current)
+    fs.writeFileSync(file, legacy)
+    const stateFile = join(runDir(), 'state.json')
+    const state = fs.readFileSync(stateFile)
+    const readCard = vi.fn(async () => 'closed' as const)
+    launched.length = 0
+
+    vi.mocked(acquireRunLock).mockReturnValueOnce({ kind: 'run-locked' })
+    expect(await run(['quick'], OK, {}, { readCard })).toBe(0)
+    expect(fs.readFileSync(file)).toBe(legacy)
+
+    release.mockClear()
+    vi.mocked(acquireRunLock).mockClear()
+    const rename = vi.spyOn(fs, 'rename')
+    expect(await run(['quick'], OK, {}, { readCard })).toBe(0)
+    expect(rename).toHaveBeenCalledExactlyOnceWith(`${file}.tmp`, file)
+    expect(vi.mocked(acquireRunLock)).toHaveBeenCalledExactlyOnceWith(runDir())
+    expect(vi.mocked(acquireRunLock)).toHaveBeenCalledBefore(rename)
+    expect(rename).toHaveBeenCalledBefore(release)
+    expect(fs.readFileSync(file)).toBe(current)
+    expect(fs.readFileSync(stateFile)).toBe(state)
+    expect(readCard).not.toHaveBeenCalled()
+    expect(launched).toHaveLength(0)
+  })
+
+  it('#728 AC-3 F3: resumes with unwritable legacy telemetry and warns once', async () => {
+    const parked = () => fenced({ status: 'needs-decision', summary: 'waiting for a decision' })
+    const options = { telemetry: true }
+    expect(await run(['quick'], { ...OK, 'pair-process-review': parked }, options)).toBe(0)
+    const file = telemetryFile()
+    const current = fs.readFileSync(file)
+    const legacy = current.replace('"status":"needs-decision"', '"status":"needs-human"')
+    fs.writeFileSync(file, legacy)
+    const writeFile = fs.writeFile.bind(fs)
+    const deny = vi.spyOn(fs, 'writeFile').mockImplementation(async (path, content) => {
+      if (path === `${file}.tmp`) throw new Error('EACCES: telemetry replacement')
+      await writeFile(path, content)
+    })
+
+    expect(await run(['quick'], OK, options)).toBe(0)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+    expect(lines.filter(line => line.includes('EACCES: telemetry replacement'))).toHaveLength(1)
+    expect(fs.readFileSync(file)).toBe(legacy)
+
+    deny.mockRestore()
+    expect(await run(['quick'], OK, options, { readCard: async () => 'closed' })).toBe(0)
+    expect(fs.readFileSync(file)).toBe(current)
+  })
+
+  it('#728 AC-3 F5: preserves state and telemetry modes under umask 077', async () => {
+    const dir = disk.mkdtempSync(join(tmpdir(), 'pair-legacy-run-'))
+    const text = `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 2
+    on-max: escalate
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+`
+    const statePath = join(dir, 'state.json')
+    const telemetryPath = join(dir, 'telemetry.jsonl')
+    const state = {
+      schemaVersion: 1,
+      workflow: { name: 'quick', hash: hashOf(text) },
+      card: '627',
+      steps: { implement: { state: 'ok' }, rounds: { state: 'needs-human' } },
+      loops: { rounds: { round: 2, max: 2, exhausted: true } },
+    }
+    const telemetry = { schema: 2, type: 'step', step: 'review', status: 'needs-human' }
+    const previousUmask = process.umask(0o077)
+    try {
+      disk.writeFileSync(join(dir, 'workflow.yaml'), text)
+      disk.writeFileSync(statePath, JSON.stringify(state))
+      disk.writeFileSync(telemetryPath, `${JSON.stringify(telemetry)}\n`)
+      for (const path of [statePath, telemetryPath]) disk.chmodSync(path, 0o640)
+
+      const started = await start(
+        { dir, files: disk },
+        { text, file: 'quick.yaml' },
+        { card: '627' },
+      )
+      expect(started).toEqual({ status: 'parked', warnings: [] })
+      expect(JSON.parse(disk.readFileSync(statePath))).toMatchObject({
+        steps: { rounds: { state: 'needs-decision' } },
+      })
+      expect(JSON.parse(disk.readFileSync(telemetryPath))).toEqual({
+        ...telemetry,
+        status: 'needs-decision',
+      })
+      expect([statePath, telemetryPath].map(path => disk.statSync(path).mode & 0o777)).toEqual([
+        0o640, 0o640,
+      ])
+    } finally {
+      process.umask(previousUmask)
+      disk.rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
@@ -884,7 +1305,7 @@ it.each([
         expect(gates).toBe(1)
         expect(states('delivery-627')).toMatchObject({
           gate: 'ok',
-          approval: 'needs-human',
+          approval: 'needs-decision',
           merge: 'pending',
         })
         expect(await run(['delivery'])).toBe(0)
@@ -954,7 +1375,7 @@ it.each([
       }
       expect(states('delivery-627')).toMatchObject({
         gate: 'ok',
-        approval: 'needs-human',
+        approval: 'needs-decision',
         merge: 'pending',
       })
       expect(notices).toBe(scenario === 'gate' ? 1 : 2)

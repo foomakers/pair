@@ -125,7 +125,7 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
 1. **Check**: Use `$assignee`, when the caller passed one, on create and update. An empty value is absent, not an empty-string assignee. Never apply the adoption default on create or update; assignment when development starts is a separate operation. The fallback is never the authenticated user, including a bot token.
 2. **Act**: Write an explicit assignee as part of the create and of the update, never as a follow-up step. On create without `$assignee`, write the item unassigned without warning. On update without `$assignee`, leave the existing assignee unchanged, including an unassigned item, without warning: omit the assignee field rather than clearing it.
 3. **Act (rejected explicit assignee)**: report what the tool answered and never drop it silently; on create, write the item without an assignee and warn that it is invisible in an assignee-filtered view. On update, preserve the current assignment. This bookkeeping field never sinks the item and is never a HALT.
-4. **Verify**: re-read the item and report the observed assignment; if an explicit assignee was rejected, report the rejection. The `default-assignee` in `## Assignment` remains available for development activation and PR assignment, not this write.
+4. **Verify**: re-read the item and report the observed assignment; if an explicit assignee was rejected, report the rejection. This write does not use `default-assignee` from `## Assignment`. PR publication and maintainer decision comments still use that declaration.
 
 ### Step 7: Create or Update Issue
 

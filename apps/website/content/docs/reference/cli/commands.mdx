@@ -826,7 +826,7 @@ pair-cli run [workflow] [options]
 | `--restart`                     | With a workflow name: archive the run directory and start the run over                              |
 | `--approve <card>`              | Resume a workflow parked for approval on the matching `--card`, as the authenticated platform user |
 | `--reject <reason>`             | Reject the approval requested by a parked workflow for `--card`                                    |
-| `--config <name\|file>`         | With a workflow name: the configuration (engine, model, effort per step). Else `pair.config.json` `workflows.<workflow>.configuration`, then `workflows.default.configuration`, then the engine default |
+| `--config <name\|file>`         | Select a configuration for a YAML workflow. Overrides [card label tiers and configured defaults](/docs/reference/configuration#workflow-configurations-workflows). |
 | `--config-override <json>`      | With a workflow name: a JSON object deep-merged over the configuration, validated and recorded in the run |
 | `--reconfigure`                 | With a workflow name and `--config` and/or `--config-override`: replace the run's frozen configuration; steps already `ok` are not run again |
 | `--more-rounds <n>`             | With a workflow name: grant n further rounds to a loop parked at `max`; the run resumes in that loop |
@@ -982,9 +982,8 @@ pair-cli run quick --card 627
   skills, inputs, options, gate keys) are checked before anything is launched. An error names the
   file, the line and the fix, and the command exits `1`. `--dry-run` validates, prints the steps
   and launches nothing.
-- **One agent per step**, in the card's worktree (`../pair-worktrees/<card>`), on one engine and
-  its default model for the whole run. The engine is printed with the level that chose it
-  (`--engine` > `pair.config.json` > default).
+- **One agent per step**, in the card's worktree (`../pair-worktrees/<card>`). The run prints the
+  selected configuration and each step's engine, model and effort. See [workflow configurations](/docs/reference/configuration#workflow-configurations-workflows) for label-based selection.
 - **Each step returns a result.** The agent ends its turn with one JSON object in a fenced `json`
   block: `status` (`ok`, `failed` or `needs-human`), `summary`, and the fields of the step's kind.
   A missing or invalid result fails the step with `invalid-result`; an agent that died or timed

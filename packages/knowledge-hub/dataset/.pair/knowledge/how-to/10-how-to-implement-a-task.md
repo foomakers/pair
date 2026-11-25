@@ -94,7 +94,7 @@ Follow [TDD guidelines](../guidelines/testing/test-strategy/tdd-test-driven-deve
 
 1. **Read complete user story** from PM tool — understand business value and acceptance criteria
 2. **Analyze ALL tasks** in the story — validate each follows the task template
-3. **Validate story state** — must be "In Progress" and assigned to developer
+3. **Activate the story** — apply [assignee resolution](../guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution) and verify the `In Progress` state. Stop if an implicit claim finds the card held by another owner.
 4. **Confirm task specifications** — all implementation details present
 
 Present analysis to developer and get explicit confirmation before proceeding.

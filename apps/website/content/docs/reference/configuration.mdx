@@ -337,6 +337,31 @@ it executes anything.
   from a repository the engine does not trust.
 </Callout>
 
+## Workflow Configurations (`workflows`)
+
+For YAML workflows, `pair.config.json` selects a configuration by card label. Put the map under `workflows.<workflow>.tiers`, or under `workflows.default.tiers` for workflows without a named entry. Each value is a configuration name or a map from engine to configuration name.
+
+```json
+{
+  "workflows": {
+    "default": {
+      "configuration": { "claude": "claude-medium", "codex": "codex-medium" },
+      "tiers": {
+        "risk:red": { "claude": "claude-high", "codex": "codex-high" },
+        "risk:yellow": { "claude": "claude-medium", "codex": "codex-medium" },
+        "risk:green": { "claude": "claude-cheap", "codex": "codex-cheap" }
+      }
+    }
+  }
+}
+```
+
+`--config` takes precedence. Otherwise the first matching label in file order wins. A card with no match uses `workflows.<workflow>.configuration`, then `workflows.default.configuration`. If label lookup fails, the run warns and uses the same fallback. A selected engine map missing the run's engine fails with `configuration-not-found`. Invalid tier keys and unresolved configuration names fail validation before launch.
+
+Run `pair-cli run delivery --card <id> --engine codex --dry-run` to see the selection. A red card using the shipped defaults prints `pair.config.json workflows.default.tiers.risk:red` as the source. A resumed run keeps the labels recorded at its start.
+
+This setting replaces the legacy workflow profile resolver's `byTier` mechanism for YAML workflows. It selects a whole configuration for the card. The selected file supplies per-step model and effort through aliases and step settings.
+
 ## Workflow Profiles (`workflowProfiles`)
 
 An optional top-level `workflowProfiles` field declares which engine, model, effort level and

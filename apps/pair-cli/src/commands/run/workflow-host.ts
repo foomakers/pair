@@ -1,4 +1,4 @@
-import { savedWorkflow } from './workflow-saved-state'
+import { savedRunState, savedWorkflow } from './workflow-saved-state'
 import { prepareReplayHead } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
@@ -12,31 +12,38 @@ import {
   describeSettings,
   formatError,
   interactiveOf,
+  hasConfigurationTiers,
+  hasLegacyRunTelemetry,
   kindByName,
   addressedSteps,
-  frozenConfiguration,
+  assignmentFor,
+  effectiveConfiguration,
+  migrateRunTelemetry,
   parseWorkflow,
   pendingMergeClosure,
   record,
-  parseFrozenConfiguration,
   readGateRegistry,
   readGateTargets,
   runSteps,
   settingsFor,
   start,
   validate,
+  type Assignment,
   type CardState,
   type Configuration,
   type Filter,
+  type RunDirectory,
   type RunOutcome,
   type StepResult,
   type ResultFacts,
+  type ResolvedAssignment,
   type StepEvent,
   type StepLaunch,
   type StepReplay,
   type StepSettings,
   type Usage,
   type Workflow,
+  type WorkflowsConfig,
 } from '@pair/workflows'
 import { prepareCardWorktree } from '@pair/workflows/worktree'
 import { loadConfigWithOverrides } from '#config'
@@ -70,7 +77,12 @@ import {
 import { createExecutableProbe } from './path-probe'
 import { createSkillProbe } from './skill-probe'
 import { ENGINES, isEngineId, type EngineDefinition } from './engines'
-import { engineFacts, resolveConfiguration, type ConfigurationPlan } from './workflow-configuration'
+import {
+  engineFacts,
+  resolveConfiguration,
+  workflowTierErrors,
+  type ConfigurationPlan,
+} from './workflow-configuration'
 import { isSafePromptText } from './prompt-safety'
 import { acquireRunLock } from './run-lock'
 import { acquireCardLock } from './card-lock'
@@ -83,7 +95,7 @@ import {
   readWorkflowCards,
   type WorkflowCard,
 } from './workflow-selection'
-import { workflowFacts, workflowOperation } from './workflow-facts'
+import { assignWorkflowCard, workflowFacts, workflowOperation } from './workflow-facts'
 import { sectionBodies } from './policy-sections'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
@@ -206,36 +218,56 @@ interface Resolved {
   readonly engine: ResolvedEngine
   /** The configuration this run launches with, when one applies. */
   readonly configuration?: ConfigurationPlan
+  readonly cardLabels?: readonly string[] | undefined
   readonly main: string
   readonly cwd: string
   readonly sources: Record<string, string>
 }
 
-/** The configuration of the run, its warnings and refusals printed; `undefined`: refused. */
-function configure(
+function reportConfigurationErrors(errors: readonly string[]): void {
+  errors.forEach(error => console.error(`  ${error}`))
+  console.error(`  Refused: ${String(errors.length)} error(s); nothing was launched.`)
+}
+
+export function workflowConfiguration(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
   services: Services,
-  at: Pick<Resolved, 'cwd' | 'main' | 'project' | 'engine'> & { workflow: Workflow },
-): { plan?: ConfigurationPlan } | undefined {
+  at: Resolved,
+) {
   const { fs } = services
-  const outcome = resolveConfiguration({
+  return resolveConfiguration({
     fs,
     cwd: at.cwd,
     main: at.main,
     project: at.project,
     workflow: at.workflow,
+    labels: at.cardLabels,
     flag: request.config,
     override: request.configOverride,
     engineFlag: config.engine,
     engine: at.engine.engine.id,
     probe: services.deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   })
+}
+
+/** The configuration of the run, its warnings and refusals printed; `undefined`: refused. */
+export function configureWorkflowRun(
+  config: RunCommandConfig,
+  request: RunWorkflowRequest,
+  services: Services,
+  at: Resolved,
+): Resolved | undefined {
+  const outcome = workflowConfiguration(config, request, services, at)
   outcome.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
-  if (outcome.errors.length === 0) return outcome.plan ? { plan: outcome.plan } : {}
-  outcome.errors.forEach(error => console.error(`  ${error}`))
-  console.error(`  Refused: ${String(outcome.errors.length)} error(s); nothing was launched.`)
-  return undefined
+  if (outcome.errors.length > 0) {
+    reportConfigurationErrors(outcome.errors)
+    return undefined
+  }
+  return {
+    ...at,
+    ...(outcome.plan && { configuration: outcome.plan }),
+  }
 }
 
 /** Serialize the expanded workflow for the engine's frozen source. */
@@ -247,8 +279,8 @@ function expandedSource(workflow: Workflow): string {
         { ...step, ...(children && { steps: entries(children) }) },
       ]),
     )
-  const { version, name, description, aliases, select, steps } = workflow
-  return `${JSON.stringify({ version, name, description, aliases, select, steps: entries(steps) }, null, 2)}\n`
+  const { version, name, description, aliases, select, assign, steps } = workflow
+  return `${JSON.stringify({ version, name, description, aliases, select, assign, steps: entries(steps) }, null, 2)}\n`
 }
 
 function checkWorkflow(
@@ -330,8 +362,8 @@ function reportValidation(
   console.error(`  Refused: ${String(checked.errors.length)} error(s); nothing was launched.`)
 }
 
-/** Workflow, validation and engine: everything decided before the card is read or anything is launched. */
-export function resolveWorkflowRun(
+/** Validate the workflow and tier declarations before looking up card labels. */
+export function resolveWorkflowDefinition(
   config: RunCommandConfig,
   request: RunWorkflowRequest,
   services: Services,
@@ -358,14 +390,11 @@ export function resolveWorkflowRun(
     project,
   )
   console.log(`  ${describeEngineResolution(engine)}`)
-  const configured = configure(config, request, services, {
-    cwd,
-    main,
-    project,
-    workflow: checked.workflow,
-    engine,
-  })
-  if (configured === undefined) return undefined
+  const errors = workflowTierErrors({ fs, cwd, main, project })
+  if (errors.length > 0) {
+    reportConfigurationErrors(errors)
+    return undefined
+  }
   return {
     workflow: checked.workflow,
     source: hasExpansion(checked.workflow)
@@ -373,11 +402,54 @@ export function resolveWorkflowRun(
       : source,
     project,
     engine,
-    ...(configured.plan && { configuration: configured.plan }),
     main,
     cwd,
     sources,
   }
+}
+
+export function usesTierLabels(
+  resolved: Resolved,
+  request: Pick<RunWorkflowRequest, 'config'>,
+): boolean {
+  return (
+    request.config === undefined &&
+    hasConfigurationTiers(
+      resolved.project['workflows'] as WorkflowsConfig | undefined,
+      resolved.workflow.name,
+    )
+  )
+}
+
+const workflowRunDir = (resolved: Resolved, request: RunWorkflowRequest) =>
+  join(
+    resolved.main,
+    '.pair/working/runs',
+    request.runId ?? `${resolved.workflow.name}-${request.card}`,
+  )
+
+export function frozenTierLabels(
+  resolved: Resolved,
+  request: RunWorkflowRequest,
+  fs: FileSystemService,
+) {
+  const saved = savedRunState(request, workflowRunDir(resolved, request), fs)
+  return saved?.workflow.name === resolved.workflow.name ? (saved.cardLabels ?? []) : undefined
+}
+
+/** Mapped routing resolves synchronously with the facts already read. */
+export function resolveWorkflowRun(
+  config: RunCommandConfig,
+  request: RunWorkflowRequest,
+  services: Services,
+  { resume = true, card }: { resume?: boolean; card?: WorkflowCard } = {},
+): Resolved | undefined {
+  const resolved = resolveWorkflowDefinition(config, request, services, resume)
+  if (resolved === undefined) return undefined
+  const labels = usesTierLabels(resolved, request)
+    ? (frozenTierLabels(resolved, request, services.fs) ?? card?.labels)
+    : undefined
+  return configureWorkflowRun(config, request, services, { ...resolved, cardLabels: labels })
 }
 
 /** What a recorded step says: its summary, then its reason and detail when it has them. */
@@ -488,7 +560,7 @@ function resumeCommand(request: RunWorkflowRequest): string {
 }
 
 const INTERACTIVE_PARK = {
-  status: 'needs-human',
+  status: 'needs-decision',
   reason: 'interactive-step',
   summary: 'This step needs the conversation in an agent session',
 } as const
@@ -499,6 +571,11 @@ type Ending = (at: string, why: string, resume: string) => string
 const ENDINGS: Readonly<Record<RunOutcome['run'], { status: string; exit: number; line: Ending }>> =
   {
     done: { status: 'completed', exit: 0, line: () => 'done — every step is ok.' },
+    skipped: {
+      status: 'skipped',
+      exit: 0,
+      line: (at, why, resume) => `skipped at step ${at} — ${why}. Resume with: ${resume}`,
+    },
     failed: {
       status: 'failed',
       exit: 1,
@@ -542,6 +619,7 @@ interface Opened {
   readonly report?: (outcome: BatchOutcome) => void
   readonly flagStep?: string
   readonly closureOnly?: true
+  readonly telemetryWarned?: boolean
 }
 
 const NON_RISK_PROJECTIONS = new Set([
@@ -637,6 +715,8 @@ function hostKindsOf(
   )
   return {
     ...hostCardFacts(resolved, request.card, services),
+    assignCard: (assign: Assignment) =>
+      assignWorkflowCard(scriptDir, resolved.cwd, request.card, assign),
     perform: async (step: StepLaunch) => {
       if (step.kind !== 'approval' && step.kind !== 'merge') return gate(step)
       try {
@@ -664,12 +744,14 @@ const engineIdOf = (opened: Opened, id: string): keyof typeof ENGINES => {
 }
 
 /** The run's telemetry: the flag over the configuration's `telemetry` key; off when neither says. */
-const telemetryOf = (config: RunCommandConfig, { resolved, effective }: Opened) =>
+const telemetryOf = (config: RunCommandConfig, { resolved, effective, telemetryWarned }: Opened) =>
   (config.telemetry ?? effective?.telemetry) === true
     ? {
         host: 'pair-run' as const,
         settings: (id: string) => stepSettings(resolved, effective, stepOf(resolved, id)),
-        warn: (message: string) => console.log(`  Warning: ${message}`),
+        ...(!telemetryWarned && {
+          warn: (message: string) => console.log(`  Warning: ${message}`),
+        }),
       }
     : undefined
 
@@ -770,7 +852,8 @@ function exhaustedEnding(
     steps: Record<string, { summary?: string; state: string }>
   }
   const exhausted = resolved.workflow.steps.find(step => state.loops?.[step.id]?.exhausted)
-  if (exhausted === undefined || outcome.run === 'done') return undefined
+  if (exhausted === undefined || outcome.run === 'done' || outcome.run === 'skipped')
+    return undefined
   const last = state.steps[`${exhausted.id}/${exhausted.until}`]
   const why = `${state.steps[exhausted.id]?.summary}; last until: ${last?.state} — ${last?.summary}`
   sink.event({
@@ -788,6 +871,10 @@ function reportRunOutcome(opened: Opened, outcome: RunOutcome): void {
   opened.report?.({
     id: opened.request.card,
     outcome: outcome.run,
+    ...(outcome.run === 'skipped' &&
+      outcome.last?.reason === 'card-held' && {
+        skipReason: outcome.last.reason,
+      }),
     ...(outcome.last && { lastStep: outcome.last.step, reason: explain(outcome.last) }),
   })
 }
@@ -843,6 +930,7 @@ async function runOnConsole(
 function startOptions({ resolved, request }: Opened, replay?: StepReplay) {
   return {
     card: request.card,
+    ...(resolved.cardLabels !== undefined && { cardLabels: resolved.cardLabels }),
     restart: request.restart,
     ...(replay !== undefined && { replay }),
     reconfigure: request.reconfigure === true,
@@ -886,7 +974,9 @@ function parkedApproval(opened: Opened, fs: FileSystemService): string | undefin
   if (!fs.existsSync(path)) throw new Error('No parked workflow for this card')
   const state = JSON.parse(fs.readFileSync(path)) as { steps: Record<string, { state: string }> }
   const parked = addressedSteps(opened.resolved.workflow).filter(
-    step => step.kind === 'approval' && state.steps[step.id]?.state === 'needs-human',
+    step =>
+      step.kind === 'approval' &&
+      ['needs-decision', 'needs-human'].includes(state.steps[step.id]?.state ?? ''),
   )
   if (parked.length !== 1) throw new Error('The workflow must be parked at one approval step')
   return parked[0]?.id
@@ -973,6 +1063,20 @@ async function finishClosure(opened: Opened, fs: FileSystemService): Promise<num
   return result.status === 'ok' ? 0 : 1
 }
 
+async function startOnConsole(opened: Opened, fs: FileSystemService, replay?: StepReplay) {
+  const { resolved, runDir } = opened
+  const started = await start(
+    { files: fs, dir: runDir },
+    resolved.source,
+    startOptions(opened, replay),
+  )
+  recordIncludeSources(fs, runDir, resolved.sources, started.status)
+  started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
+  if (started.telemetryWarning !== undefined) console.log(`  Warning: ${started.telemetryWarning}`)
+  console.log(`  Run dir: ${runDir} (${started.status})`)
+  return started
+}
+
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
 async function drive(
   config: RunCommandConfig,
@@ -995,15 +1099,8 @@ async function drive(
     })
   const replayTree = replay && (await prepare())
   if (replay && replayTree) await prepareReplayHead(replayTree, String(replay.inputs['head']))
-  const started = await start(
-    { files: fs, dir: runDir },
-    resolved.source,
-    startOptions(opened, replay),
-  )
-  recordIncludeSources(fs, runDir, resolved.sources, started.status)
-  started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
-  console.log(`  Run dir: ${runDir} (${started.status})`)
-  const effective = readEffective(fs, runDir)
+  const started = await startOnConsole(opened, fs, replay)
+  const effective = effectiveConfiguration({ files: fs, dir: runDir })
   printSettings(resolved, effective)
   probeUnchecked(
     resolved,
@@ -1017,7 +1114,13 @@ async function drive(
   console.log(`  Worktree: ${worktree}`)
   return runOnConsole(
     config,
-    { ...opened, effective, worktree, ...(flagStep === undefined ? {} : { flagStep }) },
+    {
+      ...opened,
+      effective,
+      worktree,
+      telemetryWarned: started.telemetryWarning !== undefined,
+      ...(flagStep === undefined ? {} : { flagStep }),
+    },
     launcher({ config, resolved, services, worktree, effective }),
     services,
   )
@@ -1049,34 +1152,28 @@ function probeUnchecked(
   if (errors.length > 0) throw new Error(errors.map(formatError).join('\n'))
 }
 
-/** The run's frozen configuration, read back from its copy: the copy wins over the source file (design §6). */
-function readEffective(fs: FileSystemService, runDir: string): Configuration | undefined {
-  const text = frozenConfiguration({ files: fs, dir: runDir })
-  if (text === undefined) return undefined
-  const path = join(runDir, 'configuration.yaml')
-  const { configuration, errors } = parseFrozenConfiguration(text, path)
-  if (configuration === undefined)
-    throw new Error(`run-state-unreadable: ${path}: ${errors[0]?.problem ?? 'invalid'}`)
-  return configuration
-}
+const describeAssignment = (assignment?: ResolvedAssignment): string =>
+  assignment === undefined ? '' : ` assign=${assignment.value} (${assignment.source})`
 
 /** What every step launches with and where each value came from; or that no configuration applies. */
 function printSettings(resolved: Resolved, effective: Configuration | undefined): void {
   if (effective === undefined) {
     const { id } = resolved.engine.engine
     console.log(`  Configuration: none applies — engine ${id}, its default model`)
-    return
+  } else {
+    console.log(
+      `  Configuration: ${effective.name}${resolved.configuration ? ` — ${resolved.configuration.source}` : ' — frozen copy'}`,
+    )
   }
-  console.log(
-    `  Configuration: ${effective.name}${resolved.configuration ? ` — ${resolved.configuration.source}` : ' — frozen copy'}`,
-  )
   addressedSteps(resolved.workflow)
     .filter(step => step.kind !== 'loop')
-    .forEach(step =>
-      console.log(
-        `    ${describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))}`,
-      ),
-    )
+    .forEach(step => {
+      const assignment = describeAssignment(assignmentFor(resolved.workflow, step, effective))
+      const settings =
+        effective &&
+        describeSettings(step.id, settingsFor(effective, step, resolved.workflow.aliases))
+      if (settings || assignment) console.log(`    ${settings ?? `${step.id}:`}${assignment}`)
+    })
 }
 
 function printPlan(workflow: Workflow): void {
@@ -1159,14 +1256,27 @@ type BatchCard = {
   releases: Set<() => void>
 }
 
-type WorkflowRunRequest = RunWorkflowRequest & { readonly selectionFlags?: Filter }
+type WorkflowRunRequest = RunWorkflowRequest & {
+  readonly selectionFlags?: Filter
+  readonly routedCard?: WorkflowCard
+}
 
 function printWorkflowPreview(resolved: Resolved): number {
+  if (resolved.cardLabels !== undefined && resolved.configuration !== undefined) {
+    const { configuration, source } = resolved.configuration
+    console.log(`  Configuration: ${configuration.name} — ${source}`)
+  }
   addressedSteps(resolved.workflow).forEach(step => {
     const host = step.kind === 'loop' || kindByName[step.kind].host === true
     const skill = host ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
+    const assignment =
+      step.kind === 'loop'
+        ? ''
+        : describeAssignment(
+            assignmentFor(resolved.workflow, step, resolved.configuration?.configuration),
+          )
     console.log(
-      `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''}${dryRunExecution(resolved, step)}${dryRunExhaustion(step)}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${approvalQuestion(step)}`,
+      `  ${step.id}: ${step.kind}${skill ? ` skill=${skill}` : ''}${dryRunExecution(resolved, step)}${assignment}${dryRunExhaustion(step)}${step.when ? ` when=${JSON.stringify(step.when)}` : ''}${approvalQuestion(step)}`,
     )
   })
   console.log('  Dry run: the workflow is valid; nothing was launched.')
@@ -1182,19 +1292,66 @@ function configuredSelection(resolved: Resolved, selectionFlags: Filter = {}) {
     : effectiveSelection(workflow, configuration, selectionFlags)
 }
 
+type ReadSelectionCard = () => Promise<WorkflowCard | undefined>
+type CardSource = { read: ReadSelectionCard; batch: BatchCard | undefined }
+
+function selectionCardReader(
+  resolved: Resolved,
+  card: string,
+  { fs, deps }: Services,
+): ReadSelectionCard {
+  let reading: ReturnType<ReadSelectionCard> | undefined
+  return () =>
+    (reading ??= (deps.workflow?.readSelection ?? readWorkflowCards)(
+      { fs, ...resolved },
+      { cards: [card] },
+    ).then(({ cards }) => cards[0]))
+}
+
+async function readTierLabels(
+  card: string,
+  read: () => Promise<Pick<WorkflowCard, 'labels' | 'error'> | undefined>,
+): Promise<readonly string[]> {
+  try {
+    const found = await read()
+    if (found === undefined) throw new Error('card facts unavailable')
+    if (found.error !== undefined) throw new Error(found.error)
+    return found.labels
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    console.log(
+      `  Warning: could not read labels for card ${card}: ${reason}. Using the fallback configuration.`,
+    )
+    return []
+  }
+}
+
+async function runTierLabels(
+  resolved: Resolved,
+  request: WorkflowRunRequest,
+  { fs, deps }: Services,
+  { read, batch }: CardSource,
+): Promise<readonly string[] | undefined> {
+  if (!usesTierLabels(resolved, request)) return undefined
+  // An explicit card's labels are usable without resolving the board's status mapping.
+  const readLabels = deps.workflow?.readSelection
+    ? read
+    : () => readWorkflowCard({ fs, ...resolved }, request.card)
+  return (
+    frozenTierLabels(resolved, request, fs) ??
+    (batch?.card ?? request.routedCard)?.labels ??
+    (await readTierLabels(request.card, readLabels))
+  )
+}
+
 async function acceptsCard(
   resolved: Resolved,
   request: WorkflowRunRequest,
-  runDir: string,
-  { fs, deps }: Services,
+  { runDir, fs, read }: { runDir: string; fs: FileSystemService; read: ReadSelectionCard },
 ): Promise<boolean> {
   const selection = configuredSelection(resolved, request.selectionFlags)
   if (selection === undefined) return true
-  const { cards } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
-    { fs, ...resolved },
-    { cards: [request.card] },
-  )
-  const found = cards[0]
+  const found = await read()
   if (found === undefined) return false
   const error = found.error ?? selectionBoardError(found, selection)
   if (error !== undefined) throw new Error(error)
@@ -1204,15 +1361,21 @@ async function acceptsCard(
   return matchesWorkflowCard(found, selection.accepts, run)
 }
 
-function completedWorkflow(
-  fs: FileSystemService,
-  runDir: string,
-  request: RunWorkflowRequest,
-  workflow: string,
-): boolean {
-  return (
-    !request.restart && completedRun({ files: fs, dir: runDir }, { workflow, card: request.card })
-  )
+/** Completed runs keep their outcome if optional telemetry needs a later retry. */
+export async function migrateCompletedRunTelemetry(run: RunDirectory): Promise<void> {
+  if (!hasLegacyRunTelemetry(run)) return
+  try {
+    const lock = acquireRunLock(run.dir)
+    if (lock.kind !== 'acquired') return
+    try {
+      const warning = await migrateRunTelemetry(run)
+      if (warning !== undefined) console.log(`  Warning: ${warning}`)
+    } finally {
+      lock.release()
+    }
+  } catch (error) {
+    console.log(`  Warning: telemetry migration could not acquire the run lock: ${String(error)}`)
+  }
 }
 
 export async function handleWorkflowRun(
@@ -1221,11 +1384,15 @@ export async function handleWorkflowRun(
   services: Services,
   batch?: BatchCard,
 ): Promise<number> {
-  const resolved = resolveWorkflowRun(config, request, services)
+  const definition = resolveWorkflowDefinition(config, request, services)
+  if (definition === undefined) return 1
+  const card = { read: selectionCardReader(definition, request.card, services), batch }
+  const cardLabels = await runTierLabels(definition, request, services, card)
+  const resolved = configureWorkflowRun(config, request, services, { ...definition, cardLabels })
   if (resolved === undefined) return 1
   printPlan(resolved.workflow)
   if (config.dryRun) return printWorkflowPreview(resolved)
-  const opened = await openCard(resolved, request, services, batch)
+  const opened = await openCard(resolved, request, services, card)
   return opened === undefined ? 0 : runWithCardLock(config, opened, services, batch?.releases)
 }
 
@@ -1233,19 +1400,24 @@ async function openCard(
   resolved: Resolved,
   request: WorkflowRunRequest,
   services: Services,
-  batch?: BatchCard,
+  { read, batch }: CardSource,
 ): Promise<Opened | undefined> {
-  const runId = request.runId ?? `${resolved.workflow.name}-${request.card}`
-  const runDir = join(resolved.main, '.pair/working/runs', runId)
+  const runDir = workflowRunDir(resolved, request)
+  const run = { files: services.fs, dir: runDir }
   if (
     batch === undefined &&
+    !request.restart &&
     request.flagAnswer === undefined &&
-    completedWorkflow(services.fs, runDir, request, resolved.workflow.name)
+    completedRun(run, { workflow: resolved.workflow.name, card: request.card })
   ) {
+    await migrateCompletedRunTelemetry(run)
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
     return undefined
   }
-  if (batch === undefined && !(await acceptsCard(resolved, request, runDir, services))) {
+  if (
+    batch === undefined &&
+    !(await acceptsCard(resolved, request, { runDir, fs: services.fs, read }))
+  ) {
     console.log(`  #${request.card}: not-applicable — selection filter`)
     return undefined
   }

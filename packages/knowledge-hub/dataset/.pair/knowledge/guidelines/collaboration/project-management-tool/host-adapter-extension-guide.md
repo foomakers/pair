@@ -40,7 +40,7 @@ Every `.mjs` file in `scripts/host/` is loaded by `loadAdapters` as a candidate 
 
 On a **local** host (no repository at all, `hostsCode: false`), `repo` is simply ignored by every method — there is nothing to scope to, so adapters accept and drop it (see the `filesystem` worked example below, whose methods never read `repo`).
 
-Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-decision, maintainer-decision and `pr-state find` paths:
+Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-decision, maintainer-decision, card assignment and `pr-state find` paths:
 
 `defineAdapter` also derives `cardState({ id, repo })` from `readCard` fields (`state`, `stateReason`, `projectItems`): `{ issueState, issueReason, boardState, member }`. Every PM adapter must return those fields in its card view. The board audit uses this one shape, so a new PM tool needs no audit changes.
 
@@ -51,6 +51,7 @@ Board facts come from the adopted view only: GitHub's `pm-project` project, Line
 | Method            | Side (ADR-018) | Contract                                                                                                       |
 | ----------------- | -------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `createCard`      | pm-tool        | `createCard({ repo, title, body })` → returns the created card (adapter-shaped, at least a `url`)               |
+| `assignCard`      | pm-tool        | `assignCard({ id, repo, assign })` → `assigned` after read-back, `unchanged` for a no-op, `held` with `owners` when an implicit claim meets another owner, or `warning` with `reason` when a write cannot be confirmed. Omitted `assign` and `me` claim as the authenticated login. `@me` and a login explicitly replace owners and record the displaced owners on the card. `none` skips all host access and `unassign` clears owners. |
 | `findCards`       | pm-tool        | `findCards({ repo, search })` → an array of matching cards                                                       |
 | `listCards`       | pm-tool        | `listCards({ repo })` → all user-story cards as `{ id }` rows for the board audit; paginate instead of silently truncating |
 | `childCards` | pm-tool | `childCards({ id, repo })` → direct children as `{ id, closed? }[]` |

@@ -31,5 +31,8 @@ export const approval: StepKind = {
     additionalProperties: false,
     properties: { question: { type: 'string', description: 'What is asked of the approver.' } },
   },
-  escalations: ['Always, until an authorized login approves or rejects.'],
+  returns: {
+    failed: 'An authorized login rejects the request.',
+    'needs-decision': 'An authorized login has yet to approve or reject.',
+  },
 }

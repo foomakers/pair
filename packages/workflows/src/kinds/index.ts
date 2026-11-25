@@ -5,12 +5,18 @@ import { fix } from './fix'
 import { gate } from './gate'
 import { generic } from './generic'
 import { implement } from './implement'
-import { COMMON_RESULT, type StepKind, type StepStatus } from './kind'
+import { agentResultSchema, COMMON_RESULT, type StepKind, type StepStatus } from './kind'
 import { merge } from './merge'
 import { refineStory, planTasks } from './refinement'
 import { review } from './review'
 
-export { COMMON_RESULT, STEP_STATUSES, type StepKind, type StepStatus } from './kind'
+export {
+  agentResultSchema,
+  COMMON_RESULT,
+  STEP_STATUSES,
+  type StepKind,
+  type StepStatus,
+} from './kind'
 
 /** Every kind of grammar v1, by name. */
 export const kindByName: Readonly<Record<KindName, StepKind>> = {
@@ -67,10 +73,15 @@ const outputsOf = (kind: StepKind, { status, reason }: StepResult): StepKind['ou
 /**
  * `value` as the result of a step of `kind`, or — when it breaks the contract — a `failed` result with
  * reason `invalid-result` naming each field and its violation. An `ok` result that breaks the rule of
- * its kind is `invalid-result` too, and keeps its outputs.
+ * its kind is `invalid-result` too, and keeps its outputs. The host and engine can record outcomes
+ * outside the kind's agent contract, such as host gate failures or invalid agent results.
  */
-export function settle(kind: StepKind, value: unknown): StepResult {
-  const common = violations(COMMON_RESULT, value)
+export function settle(
+  kind: StepKind,
+  value: unknown,
+  source: 'agent' | 'engine' = 'engine',
+): StepResult {
+  const common = violations(source === 'agent' ? agentResultSchema(kind) : COMMON_RESULT, value)
   const result = value as StepResult
   const found = common.length > 0 ? common : violations(outputsOf(kind, result), value)
   const invalid = {

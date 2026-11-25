@@ -59,10 +59,13 @@ export const review: StepKind = {
       },
     },
   },
-  escalations: [
-    'The verdict needs a decision only a person can take.',
-    'The pull request head moved while it was under review.',
-  ],
+  returns: {
+    failed:
+      'A finding is blocking, the verdict is changes-requested, or a required review check fails.',
+    blocked:
+      'The pull request head moved during review or required review evidence is unavailable.',
+    'needs-decision': 'The verdict needs a decision only a person can take.',
+  },
   rule: {
     text: 'The status is "failed", never "ok", when at least one finding is blocking or the verdict is "changes-requested".',
     broken: ({ verdict, findings }) => {

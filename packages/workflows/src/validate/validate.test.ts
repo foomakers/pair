@@ -1,4 +1,5 @@
 import { validate, type ValidationDeps } from '.'
+import { kindByName } from '../kinds'
 
 const deps: ValidationDeps = {
   skillExists: name =>
@@ -22,6 +23,36 @@ steps:
 
 const check = (text: string, over: Partial<ValidationDeps> = {}) =>
   validate(text, 'quick.yaml', { ...deps, ...over })
+
+describe('#728 T-1: kind outputs', () => {
+  it.each([
+    [
+      'status',
+      [
+        expect.objectContaining({
+          problem: expect.stringMatching(/status.*reserved|reserved.*status/i),
+        }),
+      ],
+    ],
+    ['outcome', []],
+  ] as const)('validates the kind output name %s', (output, expected) => {
+    const { generic } = kindByName
+    Object.assign(kindByName, {
+      generic: {
+        ...generic,
+        outputs: { type: 'object', properties: { [output]: { type: 'string' } } },
+      },
+    })
+    try {
+      const { errors } = check(
+        'version: 1\nname: quick\nsteps:\n  work: { kind: generic, skill: my-skill }\n',
+      )
+      expect(errors).toEqual(expected)
+    } finally {
+      Object.assign(kindByName, { generic })
+    }
+  })
+})
 
 describe('loop validation (#670 AC-7)', () => {
   const loop = `version: 1

@@ -31,7 +31,7 @@ export const refineStory: StepKind = {
     additionalProperties: false,
     properties: { mode: { enum: ['interactive', 'autonomous'] } },
   },
-  escalations: ['A question requires a product decision.'],
+  returns: { 'needs-decision': 'A question requires a product decision.' },
 }
 
 export const planTasks: StepKind = {
@@ -45,5 +45,5 @@ export const planTasks: StepKind = {
     properties: { boardStatus, tasks: { type: 'integer', minimum: 1 } },
   },
   with: { type: 'object', additionalProperties: false, properties: {} },
-  escalations: ['The task breakdown needs a product decision.'],
+  returns: { 'needs-decision': 'The task breakdown needs a product decision.' },
 }

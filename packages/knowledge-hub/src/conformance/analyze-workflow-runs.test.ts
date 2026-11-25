@@ -28,10 +28,10 @@ describe('analyze-workflow-runs — skill contract (#697)', () => {
     const content = read(join(dir, 'SKILL.md'))
     const lower = norm(content)
 
-    it(`${label} is read-only: it reads the runs and writes nothing but a report on request`, () => {
-      expect(lower).toContain('read-only')
+    it(`${label} documents the status migration and optional report`, () => {
+      expect(lower).toContain('read-only after migration')
       expect(content).toContain('telemetry.jsonl')
-      expect(lower).toContain('writes nothing')
+      expect(lower).toContain('rewrites legacy step statuses from needs-human to needs-decision')
       expect(content).toContain('.pair/working/reports/workflow-runs/')
     })
 

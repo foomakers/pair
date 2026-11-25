@@ -11,7 +11,9 @@ import assert from 'node:assert/strict'
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { execFile, spawnSync } from 'node:child_process'
+import { createServer } from 'node:http'
+import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
 import {
@@ -181,8 +183,7 @@ process.stderr.write('unexpected az call: ' + a.join(' ')); process.exit(3)
   }
 }
 
-// A minimal stateful `gh` recorder for the three methods GitHub gained (prHead, merge, closeAndCascade)
-// and the card read the shared hash consumes.
+// A stateful `gh` recorder for PR, card and assignment operations.
 function fakeGh(seed = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'gh-fake-'))
   const state = join(dir, 'state.json')
@@ -197,11 +198,73 @@ const a = process.argv.slice(2)
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
 const S = JSON.parse(fs.readFileSync(${JSON.stringify(state)}, 'utf8'))
 const save = () => fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(S))
+const out = data => { process.stdout.write(JSON.stringify(data)); process.exit(0) }
+const fail = message => { process.stderr.write(message); process.exit(1) }
+const assigneesOf = issue => ({ assignees: issue.assignees.map(login => ({ login })) })
+if (a[0] === 'repo' && a[1] === 'view' && S.repo) { process.stdout.write(S.repo); process.exit(0) }
+if (a[0] === 'issue' && a[1] === 'view' && a[a.indexOf('--json') + 1] === 'assignees') {
+  const issue = S.issues[a[2]]
+  if (issue.assignmentWritten && issue.rejectReadBack) fail('gh: Forbidden (HTTP 403)')
+  out(assigneesOf(issue))
+}
 if (a[0] === 'issue' && a[1] === 'view') { const i = S.issues[a[2]]; if (!i) { process.stderr.write('Could not resolve to an issue'); process.exit(1) } process.stdout.write(i.body); process.exit(0) }
 if (a[0] === 'issue' && a[1] === 'close') { S.issues[a[2]].state = 'closed'; save(); process.exit(0) }
 if (a[0] === 'pr' && a[1] === 'view') { process.stdout.write(S.prs[a[2]].head + '\\n'); process.exit(0) }
 if (a[0] === 'pr' && a[1] === 'merge') { S.prs[a[2]].merged = a.slice(3); save(); process.exit(0) }
 if (a[0] === 'api') {
+  const methodFlag = a.findIndex(arg => ['-X', '--method'].includes(arg))
+  const method = methodFlag === -1 ? 'GET' : a[methodFlag + 1]
+  const endpoint = a.find(arg => arg.startsWith('repos/')) || ''
+  if (a[1] === 'user') {
+    if (S.installation) fail('gh: Resource not accessible by integration (HTTP 403)')
+    process.stdout.write(S.login); process.exit(0)
+  }
+  if (a[1] === 'graphql' && S.installation && a.includes('query=query { viewer { login } }')) {
+    out({ data: { viewer: { login: S.installation } } })
+  }
+  const assignable = /^repos\\/[^/]+\\/[^/]+\\/assignees\\/([^/]+)$/.exec(endpoint)
+  if (assignable) {
+    if (!S.assignable?.includes(decodeURIComponent(assignable[1]))) fail('gh: Not Found (HTTP 404)')
+    process.exit(0)
+  }
+  const issueAssignee = /^repos\\/[^/]+\\/[^/]+\\/issues\\/(\\d+)\\/assignees\\/([^/]+)$/.exec(endpoint)
+  if (issueAssignee) {
+    const allowed = S.issues[issueAssignee[1]]?.assignable ?? S.assignable
+    if (!allowed?.includes(decodeURIComponent(issueAssignee[2]))) fail('gh: Not Found (HTTP 404)')
+    process.exit(0)
+  }
+  const issueRoute = /^repos\\/[^/]+\\/[^/]+\\/issues\\/(\\d+)(?:\\/(assignees|comments|events))?$/.exec(endpoint.split('?')[0])
+  if (issueRoute && S.issues[issueRoute[1]]?.assignees) {
+    const issue = S.issues[issueRoute[1]]
+    const resource = issueRoute[2]
+    if (resource === 'events') out(issue.events || [])
+    if (resource === 'comments') {
+      if (method !== 'POST') out(issue.assignmentComments || [])
+      const body = JSON.parse(fs.readFileSync(0, 'utf8')).body
+      const comment = { id: 555, body, html_url: 'https://github.com/acme/app/issues/7#issuecomment-555' }
+      issue.assignmentComments = [...(issue.assignmentComments || []), comment]
+      save()
+      out(comment)
+    }
+    if (method === 'GET') {
+      if (issue.assignmentWritten && issue.rejectReadBack) fail('gh: Forbidden (HTTP 403)')
+      out(assigneesOf(issue))
+    }
+    if (issue.rejectWrite) fail('gh: Forbidden (HTTP 403)')
+    const { assignees } = JSON.parse(fs.readFileSync(0, 'utf8'))
+    issue.assignmentWritten = true
+    if (!issue.ignoreWrite) {
+      if (method === 'PATCH') issue.assignees = assignees
+      if (method === 'POST') {
+        const added = [...(issue.raceWith || []), ...assignees].filter(login => !issue.assignees.includes(login))
+        issue.events = added.map((login, index) => ({ id: index + 1, event: 'assigned', assignee: { login }, assigner: { login } }))
+        issue.assignees = [...issue.assignees, ...added]
+      }
+      if (method === 'DELETE') issue.assignees = issue.assignees.filter(login => !assignees.includes(login))
+    }
+    save()
+    out(assigneesOf(issue))
+  }
   const relation = S.relations?.[a[1].split('?')[0]]
   if (relation) { process.stdout.write(JSON.stringify(relation)); process.exit(0) }
   const cm = /^repos\\/[^/]+\\/[^/]+\\/issues\\/comments\\/(\\d+)$/.exec(a[1])
@@ -215,6 +278,244 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(3)
   )
   chmodSync(join(dir, 'gh'), 0o755)
   return { dir, ghBin: join(dir, 'gh'), state: () => JSON.parse(readFileSync(state, 'utf8')), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+}
+
+const assignment = ({ login = 'runner', assignable = ['alice', login], issueAssignable, assignees = [], installation, ...options } = {}) => {
+  const id = 7
+  const repo = 'acme/app'
+  const gh = fakeGh({ login, assignable, installation, issues: { [id]: { assignees, assignable: issueAssignable, ...options } } })
+  const pm = github.instantiate({ ghBin: gh.ghBin })
+  const issue = () => gh.state().issues[id]
+  const writes = () => gh.calls().filter(args => args.some(arg => ['PATCH', 'POST', 'DELETE'].includes(arg)))
+  const assign = value => pm.assignCard({ id, repo, ...(value === undefined ? {} : { assign: value }) })
+  return { assign, issue, writes, calls: gh.calls }
+}
+
+// #723 T-3: AC-2, AC-3, AC-4, AC-5, AC-6, AC-10 and the story's assignment edge cases.
+for (const [intent, login] of [[undefined, 'runner'], ['me', 'bot-pair']]) {
+  test(`#723 assignment: claim an empty card as the authenticated ${login} and read it back`, () => {
+    const { assign, issue, calls } = assignment({ login })
+    assert.equal(assign(intent).status, 'assigned')
+    assert.deepEqual(issue().assignees, [login])
+    const last = calls().at(-1)
+    assert.equal(last[1], 'view')
+    assert.equal(last[last.indexOf('--json') + 1], 'assignees')
+  })
+}
+
+for (const [intent, assignees, expected] of [
+  [undefined, [], 'assigned'],
+  ['me', ['owner'], 'held'],
+  ['@me', ['owner'], 'assigned'],
+]) {
+  test(`#723 F4: installation identity resolves for ${intent ?? 'implicit claim'} on ${assignees.length ? 'a held' : 'an empty'} card`, () => {
+    const installation = 'pair-delivery[bot]'
+    const { assign, issue, writes } = assignment({ installation, issueAssignable: [installation], assignees })
+    const result = assign(intent)
+    assert.equal(result.status, expected)
+    assert.deepEqual(issue().assignees, expected === 'held' ? assignees : [installation])
+    if (expected === 'held') {
+      assert.deepEqual(result.owners, assignees)
+      assert.deepEqual(writes(), [])
+    }
+  })
+}
+
+for (const [owners, status] of [
+  [['RUNNER'], 'unchanged'],
+  [['owner', 'runner'], 'unchanged'],
+  [['retired-user'], 'held'],
+  [['owner', 'reviewer'], 'held'],
+]) {
+  test(`#723 assignment: preserve existing assignees ${owners.join(', ')}`, () => {
+    const { assign, issue, writes } = assignment({ assignees: owners })
+    const result = assign()
+    assert.equal(result.status, status)
+    if (status === 'held') assert.deepEqual(result.owners, owners)
+    assert.deepEqual(writes(), [])
+    assert.deepEqual(issue().assignees, owners)
+  })
+}
+
+test('#723 assignment: none leaves the card untouched without consulting GitHub', () => {
+  const { assign, issue, calls } = assignment({ assignees: ['owner'] })
+  assert.equal(assign('none').status, 'unchanged')
+  assert.deepEqual(calls(), [])
+  assert.deepEqual(issue().assignees, ['owner'])
+})
+
+for (const [intent, login] of [['alice', 'alice'], ['@me', 'runner']]) {
+  test(`#723 assignment: explicit ${intent} replaces the owners and names them in the card comment`, () => {
+    // #723 F3: an issue participant can be eligible without being a repository assignee.
+    const { assign, issue } = assignment({ assignable: [], assignees: ['owner', 'reviewer'], issueAssignable: [login] })
+    assert.equal(assign(intent).status, 'assigned')
+    assert.deepEqual(issue().assignees, [login])
+    assert.equal(issue().assignmentComments.length, 1)
+    assert.match(issue().assignmentComments[0].body, /\bowner\b/)
+    assert.match(issue().assignmentComments[0].body, /\breviewer\b/)
+  })
+}
+
+test('#723 assignment: unassign clears every owner', () => {
+  const { assign, issue } = assignment({ assignees: ['owner', 'reviewer'] })
+  assert.equal(assign('unassign').status, 'assigned')
+  assert.deepEqual(issue().assignees, [])
+})
+
+for (const login of ['me', 'unassign']) {
+  test(`#723 F5: skill assigns the literal login ${login} and records the takeover`, () => {
+    const gh = fakeGh({ repo: 'acme/app', login: 'runner', assignable: [login], issues: { 7: { assignees: ['alice'] } } })
+    const script = join(REPO, '.claude', 'skills', 'pair-workflow-cycle', 'scripts', 'workflow-facts.mjs')
+    const skill = readFileSync(join(REPO, '.claude', 'skills', 'pair-process-implement', 'SKILL.md'), 'utf8')
+    const recipe = /'(\{"(login|assign)":"<login>"\})'/.exec(skill)?.[1]
+    // The old wording passed explicit logins as workflow directives.
+    const payload = (recipe ?? '{"assign":"<login>"}').replace('<login>', login)
+    const result = spawnSync(process.execPath, [script, 'assign-card', '7', payload], {
+      cwd: gh.dir, env: { ...process.env, PAIR_GH_BIN: gh.ghBin }, encoding: 'utf8',
+    })
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(JSON.parse(result.stdout).status, 'assigned')
+    assert.deepEqual(gh.state().issues[7].assignees, [login])
+    assert.equal(gh.state().issues[7].assignmentComments[0].body, `Reassigned to ${login} from alice.`)
+  })
+}
+
+test('#723 assignment: an unassignable login warns and preserves owners without a write', () => {
+  const { assign, issue, writes } = assignment({ assignable: ['missing-user'], issueAssignable: [], assignees: ['owner'] })
+  const result = assign('missing-user')
+  assert.equal(result.status, 'warning')
+  assert.match(result.reason, /missing-user/i)
+  assert.deepEqual(writes(), [])
+  assert.deepEqual(issue().assignees, ['owner'])
+})
+
+for (const [fault, owners] of [
+  ['rejectWrite', ['owner']],
+  ['rejectReadBack', ['alice']],
+  ['ignoreWrite', ['owner']],
+]) {
+  test(`#723 assignment: ${fault} reports a warning and does not publish a takeover comment`, () => {
+    const { assign, issue } = assignment({ assignees: ['owner'], [fault]: true })
+    const result = assign('alice')
+    assert.equal(result.status, 'warning')
+    assert.match(result.reason, /\S/)
+    assert.deepEqual(issue().assignees, owners)
+    assert.equal(issue().assignmentComments, undefined)
+  })
+}
+
+test('#723 assignment: release only the runner when the read-back discovers a racing owner', () => {
+  const { assign, issue } = assignment({ raceWith: ['other-runner'] })
+  const result = assign()
+  assert.equal(result.status, 'held')
+  assert.deepEqual(result.owners, ['other-runner'])
+  assert.deepEqual(issue().assignees, ['other-runner'])
+})
+
+for (const schedule of ['simultaneous', 'after confirmation', 'during cleanup']) {
+  test(`#723 F2: concurrent claims keep the first owner (${schedule})`, async t => {
+    const lateWrite = schedule === 'after confirmation'
+    const thirdClaim = schedule === 'during cleanup'
+    const owners = []
+    const events = []
+    const firstReads = []
+    const readBacks = []
+    const reads = new Map()
+    const posts = new Map()
+    let firstConfirmed = false
+    let thirdPost
+    const thirdPosted = new Promise(resolve => { thirdPost = resolve })
+    const respond = (response, data) => response.end(JSON.stringify(data))
+    const issue = () => ({ assignees: owners.slice().sort().map(login => ({ login })) })
+    const claim = login => {
+      owners.push(login)
+      events.push({ id: events.length + 1, event: 'assigned', assignee: { login }, assigner: { login } })
+    }
+    const server = createServer(async (request, response) => {
+      const [, login, action] = request.url.split('/')
+      if (action === 'user') return response.end(login)
+      if (action === 'events') return respond(response, events)
+      if (action === 'DELETE') {
+        const chunks = []
+        for await (const chunk of request) chunks.push(chunk)
+        if (thirdClaim && login === 'zulu' && !events.some(event => event.assignee.login === 'bravo')) {
+          const post = await thirdPosted
+          claim('bravo')
+          respond(post, issue())
+        }
+        for (const owner of JSON.parse(Buffer.concat(chunks)).assignees) {
+          const index = owners.indexOf(owner)
+          if (index !== -1) owners.splice(index, 1)
+        }
+        return respond(response, issue())
+      }
+      if (action === 'POST') {
+        if (login === 'bravo') {
+          thirdPost(response)
+          return
+        }
+        if (lateWrite && login === 'zulu') {
+          claim(login)
+          return respond(response, issue())
+        }
+        posts.set(login, response)
+        if (lateWrite ? firstConfirmed : posts.size === 2) {
+          if (!lateWrite) claim('zulu')
+          claim('alice')
+          for (const post of posts.values()) respond(post, issue())
+        }
+        return
+      }
+      assert.equal(action, 'read')
+      const count = (reads.get(login) ?? 0) + 1
+      reads.set(login, count)
+      if (count === 1 || (count === 2 && !lateWrite && login !== 'bravo')) {
+        const pending = count === 1 ? firstReads : readBacks
+        pending.push(response)
+        const expected = count === 1 && thirdClaim ? 3 : 2
+        if (pending.length === expected) for (const read of pending) respond(read, issue())
+        return
+      }
+      respond(response, issue())
+      if (lateWrite && login === 'zulu' && count === 2) {
+        firstConfirmed = true
+        if (posts.has('alice')) {
+          claim('alice')
+          respond(posts.get('alice'), issue())
+        }
+      }
+    })
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+    t.after(() => { server.closeAllConnections(); server.close() })
+    const gh = join(mkdtempSync(join(tmpdir(), 'gh-claim-')), 'gh')
+    writeFileSync(gh, `#!/usr/bin/env node
+const fs = require('node:fs')
+const [command, path, method] = process.argv.slice(2)
+const action = path === 'user' ? 'user' : command === 'issue' ? 'read' : path.includes('/events') ? 'events' : method
+const body = action === 'DELETE' ? fs.readFileSync(0, 'utf8') : undefined
+fetch('http://127.0.0.1:${server.address().port}/' + process.env.PAIR_TEST_CLAIM_LOGIN + '/' + action, {
+  method: body ? 'POST' : 'GET', body,
+}).then(response => response.text()).then(data => process.stdout.write(data))
+`)
+    chmodSync(gh, 0o755)
+    const run = promisify(execFile)
+    const adapter = new URL('../../skills/pair-workflow-review-phase/scripts/host/github.mjs', import.meta.url).href
+    const assign = async login => {
+      const { stdout } = await run(process.execPath, ['--input-type=module', '-e', `
+        import github from ${JSON.stringify(adapter)}
+        const pm = github.instantiate({ ghBin: process.argv[1] })
+        process.stdout.write(JSON.stringify(pm.assignCard({ id: 7, repo: 'acme/app' })))
+      `, gh], { env: { ...process.env, PAIR_TEST_CLAIM_LOGIN: login }, timeout: 5000 })
+      return JSON.parse(stdout)
+    }
+    // All callers read an empty card before any claim is posted.
+    const claimants = thirdClaim ? ['zulu', 'alice', 'bravo'] : ['zulu', 'alice']
+    const [winner, ...losers] = await Promise.all(claimants.map(assign))
+    assert.equal(winner.status, 'assigned')
+    if (thirdClaim) assert.deepEqual(losers.map(result => result.status), ['held', 'held'])
+    else assert.deepEqual(losers, [{ status: 'held', owners: ['zulu'] }])
+    assert.deepEqual(owners, ['zulu'])
+  })
 }
 
 test('github readComment returns the comment`s CANONICAL identity (numeric id, repo from html_url) and its created/updated times — whatever spelling the ref used', () => {

@@ -46,10 +46,26 @@ const workflowMerge = (host, card, input) => {
     : { ...failed('cascade-incomplete', 'Merged, closure incomplete'), detail: closure.reason, ...outputs }
 }
 
+function assignCard() {
+  try {
+    const input = raw === undefined ? {} : JSON.parse(raw)
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('assign-card expects a JSON object')
+    const { assign, login } = input
+    if (assign !== undefined && login !== undefined) throw new Error('assign-card accepts either assign or login')
+    if (assign === 'none') return { status: 'unchanged' }
+    const { pm } = bindHosts({ from: process.cwd() })
+    return pm.assignCard({ id: card, assign, login })
+  } catch (error) {
+    return { status: 'warning', reason: error.message }
+  }
+}
+
 try {
-  const host = bindHosts({ from: process.cwd() })
+  const host = action === 'assign-card' ? undefined : bindHosts({ from: process.cwd() })
   let result
-  if (action === 'merge') {
+  if (action === 'assign-card') {
+    result = assignCard()
+  } else if (action === 'merge') {
     result = workflowMerge(host, card, JSON.parse(raw))
   } else if (action === 'merge-resume') {
     const pr = host.code.workflowPr({ id: card })

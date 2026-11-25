@@ -2,7 +2,7 @@ import { basename, extname } from 'node:path'
 import { stringify } from 'yaml'
 import { errorAt, nameError, parseStrict, type Lines, type WorkflowError } from '../grammar'
 import { violations } from '../schema'
-import { configurationSchemaV1, type Configuration } from './schema'
+import { configurationSchemaV1, frozenConfigurationSchema, type Configuration } from './schema'
 
 export type ParsedConfiguration =
   | { readonly configuration: Configuration; readonly errors: readonly [] }
@@ -16,7 +16,7 @@ export function checkConfiguration(
   checkName = true,
 ): ParsedConfiguration {
   const errors = [
-    ...violations(configurationSchemaV1, value).map(found =>
+    ...violations(checkName ? configurationSchemaV1 : frozenConfigurationSchema, value).map(found =>
       errorAt({ file, lines }, found.path, found),
     ),
     ...(checkName ? nameError(value as { name?: unknown } | null, file, lines) : []),

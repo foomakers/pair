@@ -83,6 +83,16 @@ const withErrors: Check = (workflow, step, _deps, path) =>
     errorAt(workflow, [...path, 'with', ...found.path], found),
   )
 
+const reservedOutputs: Check = (workflow, step, _deps, path) =>
+  step.kind !== 'loop' && fieldsOf(kindByName[step.kind].outputs).includes('status')
+    ? [
+        errorAt(workflow, path, {
+          problem: `kind '${step.kind}' declares the reserved output 'status'`,
+          fix: 'rename the kind output',
+        }),
+      ]
+    : []
+
 const gateErrors: Check = (workflow, step, deps, path) => {
   if (step.kind === 'loop') return []
   const own = step.gates
@@ -141,7 +151,14 @@ const gateNeedsWork: Check = (workflow, step, _deps, path) =>
       ]
     : []
 
-const CHECKS: readonly Check[] = [skillErrors, withErrors, gateErrors, gateNeedsWork, safetyErrors]
+const CHECKS: readonly Check[] = [
+  skillErrors,
+  withErrors,
+  reservedOutputs,
+  gateErrors,
+  gateNeedsWork,
+  safetyErrors,
+]
 
 const LOOP_ONLY = ['until', 'max', 'on-max', 'steps'] as const
 
@@ -233,13 +250,14 @@ function outputErrors(
   ]
   if (!earlier.has(id) || target === undefined || target.kind === 'loop')
     return at(`'${id}' is not a step before this one`, 'name an earlier step')
+  if (name === 'status') return []
   const declared = fieldsOf(kindByName[target.kind].outputs)
   return declared.includes(name)
     ? []
     : at(`step '${id}' has no output '${name}'`, `use one of ${declared.join(', ')}`)
 }
 
-/** Where `when.output` points: an earlier step (`id` or `loop/id`) and an output it declares. */
+/** `when.output` reads the status or a declared output of an earlier step (`id` or `loop/id`). */
 function whenErrors(
   { workflow }: Scope,
   step: Step,

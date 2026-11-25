@@ -85,6 +85,10 @@ An AI coding tool configured to execute pair's process: skill paths, auth, model
 
 A process `pair-cli run` can drive one iteration at a time without a human: `claude -p`, `codex`, `pi`, `opencode`. A harness is usually also an engine; the roles are independent.
 
+### Workflow configuration tier
+
+A `pair.config.json` entry that selects a YAML workflow configuration by card label. It replaces legacy profile `byTier` selection for YAML workflows. See [Workflow configurations](/docs/reference/configuration#workflow-configurations-workflows).
+
 ### Bridge file
 
 The file a tool reads to discover `.pair/`: `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, `.github/agents/`. All of them point at the same Knowledge Base. See [Agent integration](/docs/concepts/agent-integration).

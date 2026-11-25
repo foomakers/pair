@@ -14,7 +14,7 @@ const approved = { status: 'ok', summary: 'approved', verdict: 'approved', revie
 const changes = { ...approved, summary: 'reviewed', verdict: 'changes-requested' }
 const PARKED = {
   ...changes,
-  status: 'needs-human',
+  status: 'needs-decision',
   summary: 'a person decides',
   findings: [BLOCKING],
 }
@@ -34,8 +34,8 @@ describe('review result: what stays as returned (r0-1 controls, design §3)', ()
         findings: [NOTE, BLOCKING],
       },
     ],
-    ['needs-human, with no output', { status: 'needs-human', summary: 'the head moved' }],
-    ['needs-human, with its verdict and a blocking finding', PARKED],
+    ['needs-decision, with no output', { status: 'needs-decision', summary: 'the head moved' }],
+    ['needs-decision, with its verdict and a blocking finding', PARKED],
     [
       'failed, approved, no blocking finding, complete (A-4)',
       { ...approved, status: 'failed', summary: 'could not finish', findings: [NOTE] },
@@ -150,7 +150,7 @@ describe('runSteps: the review step ends without a review (r0-1 controls)', () =
     const { outcome, recorded } = await run(fenced(PARKED))
 
     expect(outcome.run).toBe('parked')
-    expect(recorded).toMatchObject({ state: 'needs-human' })
+    expect(recorded).toMatchObject({ state: 'needs-decision' })
   })
 })
 

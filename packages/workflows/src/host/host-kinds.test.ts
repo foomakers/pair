@@ -49,10 +49,10 @@ describe('host kinds (#680 AC-1, AC-3, AC-6)', () => {
       'after:ok',
     ])
   })
-  it('parks the run on an approval that returns needs-human', async () => {
+  it('parks the run on an approval that returns needs-decision', async () => {
     const { outcome } = await run(['risk:red'], async step =>
       step.kind === 'approval'
-        ? { status: 'needs-human', reason: 'approval-pending', summary: 'waiting' }
+        ? { status: 'needs-decision', reason: 'approval-pending', summary: 'waiting' }
         : { status: 'ok', summary: 'passed' },
     )
     expect(outcome.run).toBe('parked')

@@ -14,7 +14,7 @@ One file per run, in the run directory: `.pair/working/runs/<run-id>/telemetry.j
 
 ### One record per execution of a step
 
-A step that runs again (a resume after a failure) has one record per execution.
+A step that runs again (a resume after a failure) has one record per execution. A card held before the step starts produces no step record or attempt increment.
 
 | Field                        | Content                                              |
 | ---------------------------- | ---------------------------------------------------- |
@@ -33,14 +33,14 @@ A step that runs again (a resume after a failure) has one record per execution.
 
 ### One closing record per run
 
-Written when the run ends (`done`, `failed` or `parked`), as the last line. A run that is resumed loses it and gets a new one when it ends again; a run resumed without telemetry loses it and gets none.
+Written when the run ends (`done`, `failed`, `parked` or `skipped`), as the last line. A held card closes the current invocation as `skipped` and can resume after release. A run that is resumed loses the closing record and gets a new one when it ends again. A run resumed without telemetry loses it and gets none.
 
 | Field                     | Content                                                   |
 | ------------------------- | --------------------------------------------------------- |
 | `type`                    | `run`                                                     |
 | `schema`                  | `2`. The version of the record format (ADR-033).          |
 | `run`, `workflow`, `card` | The same identity as the step records.                    |
-| `status`                  | `done`, `failed` or `parked`.                             |
+| `status`                  | `done`, `failed`, `parked` or `skipped`.                  |
 | `durationMs`, `tokens`    | The sums of the step records, never a separate measurement. |
 | `steps`                   | The number of step executions.                            |
 
@@ -70,7 +70,7 @@ No cost in currency is stored in a record.
 
 ## Reading the runs
 
-The skill `/pair-capability-analyze-workflow-runs` answers what a card or a run cost, where the time goes, how many passes each step took, how two configurations compare and the trend over a set of runs. It is read-only. A script inside the skill computes every number, so the same files give the same numbers; each number is shown with its origin, and measured values are never compared with estimated ones.
+The skill `/pair-capability-analyze-workflow-runs` answers what a card or a run cost, where the time goes, how many passes each step took, how two configurations compare and the trend over a set of runs. Analysis is read-only after the first read migrates legacy step statuses from `needs-human` to `needs-decision`. A script inside the skill computes every number, so the same files give the same numbers; each number is shown with its origin, and measured values are never compared with estimated ones.
 
 Cost needs a price table, kept by hand: per million tokens, per model.
 

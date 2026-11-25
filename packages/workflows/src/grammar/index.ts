@@ -64,6 +64,16 @@ export interface Entry {
 }
 
 const text = { type: 'string' } as const
+
+/** A card assignment directive or an explicit login. */
+export type Assignment = string
+export const assignmentSchema: JsonSchema = {
+  type: 'string',
+  pattern: '^[A-Za-z0-9][A-Za-z0-9_-]*(?:\\[bot\\])?$',
+  description:
+    'Use `me` for the runner, a login, `none` to keep the assignee, or `unassign` to clear it.',
+}
+
 export const entrySchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,
@@ -168,6 +178,7 @@ export const stepSchema: JsonSchema = {
       description:
         "The card's board state the host sets for the step (a macrostate), or `none`; overrides the kind's default.",
     },
+    assign: assignmentSchema,
     until: { type: 'string', pattern: STEP_ID },
     max: { type: 'integer', minimum: 1 },
     'on-max': { enum: ['escalate', 'fail'] },
@@ -204,6 +215,7 @@ export const workflowSchemaV1: JsonSchema = {
       additionalProperties: entrySchema,
       description: 'The aliases the steps cite, each with its default engine, model and effort.',
     },
+    assign: assignmentSchema,
     steps: {
       type: 'object',
       minProperties: 1,
@@ -219,6 +231,7 @@ export const expandedStepSchema: JsonSchema = {
   ...stepSchema,
   properties: {
     ...stepSchema.properties,
+    'assign-source': text,
     when: {
       ...whenSchema,
       properties: {
@@ -274,6 +287,9 @@ export interface Step {
   readonly alias?: string
   /** The card's board state the host sets for the step; `none` sets nothing. */
   readonly state?: CardState | 'none'
+  readonly assign?: Assignment
+  /** The original declaration of an assignment inherited through an include. */
+  readonly 'assign-source'?: WorkflowAssignmentSource
   readonly until?: string
   readonly max?: number
   readonly 'on-max'?: 'escalate' | 'fail'
@@ -288,6 +304,7 @@ export interface Workflow {
   readonly outputs?: { readonly from: string }
   /** The declared aliases, each with its defaults. */
   readonly aliases?: Readonly<Record<string, Entry>>
+  readonly assign?: Assignment
   /** In file order: the execution order. */
   readonly steps: readonly Step[]
   readonly file: string
@@ -301,6 +318,65 @@ export const addressedSteps = (workflow: Workflow): readonly Step[] =>
     step,
     ...(step.steps ?? []).map(child => ({ ...child, id: `${step.id}/${child.id}` })),
   ])
+
+type WorkflowAssignmentSource =
+  | 'workflow.assign'
+  | `steps.${string}.assign`
+  | `workflows.${string}.assign`
+
+export interface ResolvedAssignment {
+  readonly value: Assignment
+  readonly source:
+    | WorkflowAssignmentSource
+    | 'configuration.assign'
+    | `configuration.steps.${string}.assign`
+    | 'default'
+}
+
+interface AssignmentOverrides {
+  readonly assign?: Assignment
+  readonly steps?: Readonly<Record<string, Pick<Step, 'assign'>>>
+}
+
+function configuredAssignment(
+  configuration: AssignmentOverrides | undefined,
+  ids: readonly string[],
+): ResolvedAssignment | undefined {
+  if (configuration === undefined) return undefined
+  for (const id of ids) {
+    const value = configuration.steps?.[id]?.assign
+    if (value !== undefined) return { value, source: `configuration.steps.${id}.assign` }
+  }
+  return configuration.assign === undefined
+    ? undefined
+    : { value: configuration.assign, source: 'configuration.assign' }
+}
+
+function stepAssignment(step?: Step): ResolvedAssignment | undefined {
+  return step?.assign === undefined
+    ? undefined
+    : { value: step.assign, source: step['assign-source'] ?? `steps.${step.id}.assign` }
+}
+
+/** Assignment for a runnable step, using its run-wide id for loop children. */
+export function assignmentFor(
+  workflow: Workflow,
+  step: Step,
+  configuration?: AssignmentOverrides,
+): ResolvedAssignment | undefined {
+  const loop = workflow.steps.find(
+    candidate => candidate.kind === 'loop' && step.id.startsWith(`${candidate.id}/`),
+  )
+  return (
+    configuredAssignment(configuration, loop === undefined ? [step.id] : [step.id, loop.id]) ??
+    stepAssignment(step) ??
+    stepAssignment(loop) ??
+    (workflow.assign === undefined
+      ? undefined
+      : { value: workflow.assign, source: 'workflow.assign' }) ??
+    (step.kind === 'implement' ? { value: 'me', source: 'default' } : undefined)
+  )
+}
 
 export type ParsedWorkflow =
   | { readonly workflow: Workflow; readonly errors: readonly [] }
