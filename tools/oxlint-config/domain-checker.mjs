@@ -112,7 +112,17 @@ function isParameterProperty(node) {
 }
 
 function isDomainProperty(node) {
-  return ts.isPropertySignature(node) || ts.isPropertyDeclaration(node) || isParameterProperty(node)
+  return (
+    ts.isPropertySignature(node) ||
+    ts.isPropertyDeclaration(node) ||
+    isParameterProperty(node) ||
+    (ts.isGetAccessorDeclaration(node) && ts.isClassLike(node.parent))
+  )
+}
+
+function hasNullishSyntaxFinding(node) {
+  // The syntax rule leaves getter annotations to the semantic checker.
+  return !ts.isGetAccessorDeclaration(node) && hasDirectNullishType(node.type)
 }
 
 export function domainPropertySites(filename, text) {
@@ -142,7 +152,7 @@ export function domainPropertySites(filename, text) {
         property: owner ? `${owner}.${name}` : name,
         path: path.reverse(),
         optional: Boolean(node.questionToken),
-        explicit: hasDirectNullishType(node.type),
+        explicit: hasNullishSyntaxFinding(node),
       })
     }
     ts.forEachChild(node, visit)
@@ -271,7 +281,7 @@ function findNullableProperties(source, checker, symbols) {
     if (ts.isTypeAliasDeclaration(node)) checkAlias(node)
     if (isDomainProperty(node)) {
       const owner = domainOwner(node)
-      if (inScope(owner) && !node.questionToken && !hasDirectNullishType(node.type)) {
+      if (inScope(owner) && !node.questionToken && !hasNullishSyntaxFinding(node)) {
         report(checker.getTypeAtLocation(node.name), owner, node.name.getText(source), node.name)
       }
     }
