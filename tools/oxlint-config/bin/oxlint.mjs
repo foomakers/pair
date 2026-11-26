@@ -48,7 +48,12 @@ const selectionArgs = tokens.filter(token => token.kind === 'option' && selectio
 const options = frameworkExtensions.flatMap(extension => ['--ignore-pattern', `*${extension}`])
 const jsonByDefault = process.env.PAIR_LINT_REPORT === 'json' && !('format' in values)
 const lintsFiles = !nonLintOptions.some(name => name in values)
-let isExcluded
+let byConfig
+let byCli
+
+function isExcluded(path, directory = true) {
+  return byConfig(path, directory) || byCli(path, directory)
+}
 
 function runLint(args, stdio) {
   const format = jsonByDefault ? ['--format=json'] : []
@@ -117,9 +122,8 @@ function configExclusions() {
   return () => false
 }
 
-function selectionExclusions() {
-  const byConfig = configExclusions()
-  if (values['no-ignore']) return byConfig
+function cliExclusions() {
+  if (values['no-ignore']) return () => false
   const cliPatterns = tokens.filter(token => token.kind === 'option' && token.name === 'ignore-pattern')
     .map(token => token.value)
   const cliRules = ignore({ ignorecase: false }).add(cliPatterns)
@@ -134,7 +138,6 @@ function selectionExclusions() {
     }
   }
   return (path, directory = true) => {
-    if (byConfig(path, directory)) return true
     if (path === workspaceRoot || !isWithin(workspaceRoot, path)) return false
     const logicalName = root => relative(root, path).split(sep).join('/') + (directory ? '/' : '')
     const cliMatch = cliRules.test(logicalName(workspaceRoot))
@@ -180,6 +183,7 @@ function validateGlobRoot(pattern) {
   const [task] = glob.generateTasks(pattern, { braceExpansion: false })
   if (!task) return
   const base = resolve(task.base)
+  if (byCli(base)) return
   if (isWalkDirectory(base, workspaceRoot) && statSync(base, { throwIfNoEntry: false })?.isDirectory()) {
     accessSync(base, constants.R_OK)
   }
@@ -256,7 +260,7 @@ function prepareExplicitLint() {
     const pattern = !target && glob.isDynamicPattern(path)
     const collection = directory || pattern
     let paths = []
-    if (directory) {
+    if (directory && !byCli(resolve(file))) {
       accessSync(target, constants.R_OK)
       paths = matchingFiles(sourcePattern, file, target)
     } else if (pattern) {
@@ -370,7 +374,8 @@ function main() {
       const parsed = runLint(['--print-config', ...args], capture)
       if (parsed.status !== 0) return finishLint(parsed)
     }
-    isExcluded = selectionExclusions()
+    byConfig = configExclusions()
+    byCli = cliExclusions()
   }
   const explicit = lintsFiles && positionals.length > 0
   if (lintsFiles && (workspace || explicit) && !values['no-error-on-unmatched-pattern']) {

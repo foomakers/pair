@@ -24,6 +24,8 @@ Keep the `no-var` error and leave the source unchanged for catch-shadowed declar
 
 On 2026-11-26 the maintainer accepted Oxlint writing `const {} = foo` for `var {} = foo`. ESLint writes `let {} = foo`. The pattern binds no names. Both fixes preserve the `no-empty-pattern` error and exit 1.
 
+On 2026-11-26 the maintainer retained the existing Pair direct `--ignore-path` selection when a nested ignore file contains an anchored rule. With `sub/ignore.txt` containing `/match.ts`, Pair expands `.` to explicit relative operands. Both the previous Pair adapter and Oxlint on those operands skip `match.ts` and `sub/match.ts`, and select `sibling.ts`. Native Oxlint on the directory operand selects all three. The ESLint flat CLI rejects this option. This disposition applies to that optional direct invocation.
+
 ## Alternatives Considered
 
 - **Cloudflare's standalone preset.** Its rule set, test policy, globals and parser requirements would change the migration scope.

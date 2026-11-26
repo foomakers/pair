@@ -819,3 +819,46 @@ test('#693 deny-warnings counts a synthesized ignored-file warning', t => {
     assert.equal(lint(cwd, ...flags, 'clean.ts').status, 0)
   }
 })
+
+if (process.getuid?.() !== 0) {
+  test('#693 explicit CLI ignores prune unreadable collection roots before access', t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const sibling = join(cwd, 'sibling.ts')
+    const hidden = join(cwd, 'hidden')
+    const source = 'export let value = 1\n'
+    mkdirSync(join(hidden, 'deep'), { recursive: true })
+    writeFileSync(join(hidden, 'deep/a.ts'), source)
+    writeFileSync(join(cwd, 'rules'), 'hidden/\n')
+    chmodSync(hidden, 0)
+    try {
+      for (const flags of [['--ignore-pattern=hidden/'], ['--ignore-path=rules']]) {
+        for (const operand of ['hidden', 'hidden/**/*.ts', 'hidden/deep/**/*.ts']) {
+          writeFileSync(sibling, source)
+          const result = runLint(cwd, runner, '--fix', '--no-error-on-unmatched-pattern', ...flags, operand, 'sibling.ts')
+          assert.equal(result.status, 0, result.stderr)
+          assert.equal(readFileSync(sibling, 'utf8'), 'export const value = 1\n')
+        }
+      }
+      writeFileSync(sibling, source)
+      const included = runLint(cwd, runner, '--fix', '--no-error-on-unmatched-pattern', 'hidden/**/*.ts', 'sibling.ts')
+      assert.equal(included.status, 2)
+      assert.match(included.stderr, /EACCES/)
+      assert.equal(readFileSync(sibling, 'utf8'), source)
+    } finally {
+      chmodSync(hidden, 0o700)
+    }
+  })
+}
+
+
+test('#693 direct nested ignore files retain Pair explicit-operand selection', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  mkdirSync(join(cwd, 'sub'))
+  writeFileSync(join(cwd, 'sub/rules'), '/match.ts\n')
+  const source = 'export let value = 1\n'
+  for (const name of ['match.ts', 'sub/match.ts', 'sibling.ts']) writeFileSync(join(cwd, name), source)
+  assert.equal(lint(cwd, '--fix', '--ignore-path=sub/rules', '.').status, 0)
+  assert.equal(readFileSync(join(cwd, 'match.ts'), 'utf8'), source)
+  assert.equal(readFileSync(join(cwd, 'sub/match.ts'), 'utf8'), source)
+  assert.equal(readFileSync(join(cwd, 'sibling.ts'), 'utf8'), 'export const value = 1\n')
+})
