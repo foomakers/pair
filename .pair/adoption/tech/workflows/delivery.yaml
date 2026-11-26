@@ -11,9 +11,22 @@ steps:
     escalate: { failed: stop, blocked: stop, needs-decision: stop }
   review-rounds:
     kind: loop
-    until: review
-    max: 3
-    on-max: escalate
+    until:
+      step: review
+      condition:
+        - when: { output: verdict, equals: approved }
+          do: complete
+        - prompt: |
+            Use the structured findings of this review and previous reviews in this loop.
+            Count only findings whose blocking field is true.
+            The first review is the baseline. Return false until there are at least
+            three follow-up reviews with comparable finding counts.
+            Then return true if the count increased since the preceding review,
+            or if the last four reviews all have the same blocking count.
+            Otherwise return false.
+          do: escalate
+      max: 9
+      on-max: escalate
     steps:
       review:
         kind: review

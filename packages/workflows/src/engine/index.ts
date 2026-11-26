@@ -9,6 +9,9 @@ import {
   cardStateToConfirm,
   escalationAction,
   parseWorkflow,
+  untilMax,
+  untilOnMax,
+  untilStep,
   type CardState,
   type EscalationRule,
   type KindName,
@@ -50,6 +53,7 @@ export interface RunDirectory {
   readonly dir: string
   /** Observes explicit escalation and loop exhaustion after the engine saves the outcome. */
   readonly observeOutcome?: (outcome: EngineOutcome) => void
+  readonly evaluateUntil?: UntilEvaluator
 }
 
 export const STATE_SCHEMA_VERSION = 1
@@ -81,7 +85,7 @@ export type EngineOutcome = {
       readonly status: 'exhausted'
       readonly round: number
       readonly rule?: EscalationRule
-      readonly reason: 'loop-max'
+      readonly reason: 'loop-max' | 'loop-condition'
     }
 )
 
@@ -144,6 +148,7 @@ export interface LoopRecord {
   readonly exhausted?: boolean
   readonly grants?: readonly { readonly rounds: number; readonly by: string; readonly at: string }[]
   readonly untilResult?: Readonly<Record<string, unknown>>
+  readonly untilHistory?: readonly LoopObservation[]
 }
 
 /** A step ready to launch: the skill, its options and the inputs it receives. */
@@ -352,11 +357,11 @@ const configurationRecord = (c: NonNullable<StartOptions['configuration']>) => (
 })
 
 function loopMax(text: string | undefined, step: Step): number {
-  if (text === undefined) return step.max ?? 1
+  if (text === undefined) return untilMax(step) ?? 1
   const parsed = parseFrozenConfiguration(text, 'configuration.yaml')
   if (parsed.configuration === undefined)
     throw new Error('run-state-unreadable: frozen configuration is invalid')
-  return parsed.configuration.steps?.[step.id]?.max ?? step.max ?? 1
+  return parsed.configuration.steps?.[step.id]?.max ?? untilMax(step) ?? 1
 }
 
 export interface Started {
@@ -478,7 +483,7 @@ export function stoppedLoop(workflow: Workflow, state: RunStateFile) {
   if (step?.kind !== 'loop') return undefined
   const loop = state.loops?.[step.id]
   if (!loop?.exhausted) return undefined
-  const run = haltFor(step, state.steps[step.id]?.state)
+  const run = haltFor(step, state.steps[step.id]?.state, state.steps[step.id]?.reason)
   return run === undefined ? undefined : { step, loop, run }
 }
 
@@ -860,8 +865,8 @@ export function stepSettled(step: Step, status: StepState | undefined): boolean 
 const retryContinuedFailure = (step: Step, status: StepState | undefined): boolean =>
   status === 'failed' && stepSettled(step, status)
 
-function haltFor(step: Step, status: StepState | undefined): Halt | undefined {
-  return status === 'exhausted' && step['on-max'] === 'fail'
+function haltFor(step: Step, status: StepState | undefined, reason?: string): Halt | undefined {
+  return status === 'exhausted' && reason !== 'loop-condition' && untilOnMax(step) === 'fail'
     ? 'failed'
     : HALTED[status ?? 'pending']
 }
@@ -912,7 +917,10 @@ export function stoppedApproval(workflow: Workflow, state: RunStateFile): string
 }
 
 function haltAt(state: RunStateFile, step: Step, approval?: string): Halt | undefined {
-  const halted = step.id === approval ? undefined : haltFor(step, state.steps[step.id]?.state)
+  const halted =
+    step.id === approval
+      ? undefined
+      : haltFor(step, state.steps[step.id]?.state, state.steps[step.id]?.reason)
   if (halted !== undefined || step.kind !== 'loop') return halted
   const { child, id } = loopChild(state, step)
   return id === approval ? undefined : haltFor(child, state.steps[id]?.state)
@@ -1200,7 +1208,11 @@ async function checkWhen(
   }
   const recorded = { ...state.steps, [id]: entry }
   const progress: Progress = inLoop
-    ? advanceLoop({ state, outer: step, child: target, status: 'ok', outputs: {} }, recorded)
+    ? await advanceLoop(
+        { state, outer: step, child: target, status: 'ok', outputs: {} },
+        recorded,
+        run.evaluateUntil,
+      )
     : { steps: recorded, loops: state.loops }
   await writeState(run, {
     ...state,
@@ -1281,13 +1293,19 @@ function observeExhaustion(run: RunDirectory, { exhaustion }: Progress): void {
 }
 
 /** The round is over and the loop goes on: max stops it, otherwise the children run again. */
-function closeRound({ state, outer, outputs }: Advance, { steps, loops }: Progress): Progress {
+function closeRound(
+  { state, outer, outputs }: Advance,
+  { steps, loops }: Progress,
+  condition = false,
+): Progress {
   const outerId = outer.id
   const loop = loops?.[outerId]
   if (loop === undefined) throw new Error(`run-state-unreadable: loop ${outerId} has no round`)
-  if (loop.round >= loop.max) {
-    const reason = 'loop-max'
-    const summary = `loop ${outerId} reached ${loop.max} rounds`
+  if (condition || loop.round >= loop.max) {
+    const reason = condition ? 'loop-condition' : 'loop-max'
+    const summary = condition
+      ? `loop ${outerId} matched an escalation condition`
+      : `loop ${outerId} reached ${loop.max} rounds`
     const rule = explicitEscalation(outer, 'exhausted')
     return {
       steps: {
@@ -1299,7 +1317,7 @@ function closeRound({ state, outer, outputs }: Advance, { steps, loops }: Progre
           summary,
         },
       },
-      loops: { ...state.loops, [outerId]: { ...loop, exhausted: true } },
+      loops: { ...loops, [outerId]: { ...loop, exhausted: true } },
       exhaustion: {
         id: outerId,
         status: 'exhausted',
@@ -1324,35 +1342,90 @@ function closeRound({ state, outer, outputs }: Advance, { steps, loops }: Progre
         ]),
       ),
     },
-    loops: { ...state.loops, [outerId]: { ...loop, round: loop.round + 1 } },
+    loops: { ...loops, [outerId]: { ...loop, round: loop.round + 1 } },
   }
 }
 
-const withUntilResult = (
-  state: RunStateFile,
-  id: string,
-  untilResult: Record<string, unknown>,
-): RunStateFile['loops'] => {
-  const loop = state.loops?.[id]
-  return loop === undefined ? state.loops : { ...state.loops, [id]: { ...loop, untilResult } }
+export interface LoopObservation {
+  readonly round: number
+  readonly status: StepStatus
+  readonly outputs: Readonly<Record<string, unknown>>
 }
 
-/** A loop child finished: the loop is done, loops back to the next round, or stops at max. */
-function advanceLoop(a: Advance, recorded: Record<string, StepRecord>): Progress {
+export interface LoopPromptContext {
+  readonly prompt: string
+  readonly current: LoopObservation
+  readonly history: readonly LoopObservation[]
+  readonly inputs: Readonly<Record<string, unknown>>
+}
+
+type UntilEvaluator = (context: LoopPromptContext) => Promise<boolean>
+
+async function evaluateConditions(
+  until: Exclude<Step['until'], string | undefined>,
+  context: Omit<LoopPromptContext, 'prompt'>,
+  evaluate: UntilEvaluator | undefined,
+) {
+  for (const clause of until.condition) {
+    if ('when' in clause) {
+      const { output, equals } = clause.when
+      const value = output === 'status' ? context.current.status : context.current.outputs[output]
+      if (value !== undefined && Object.is(value, equals)) return clause.do
+    } else {
+      if (evaluate === undefined)
+        throw new Error('loop-condition: this host cannot evaluate prompts')
+      const answer = await evaluate({ ...context, prompt: clause.prompt })
+      if (typeof answer !== 'boolean')
+        throw new Error('loop-condition: expected a boolean decision')
+      if (answer) return clause.do
+    }
+  }
+  return undefined
+}
+
+/** A loop child finished: the loop is done, loops back to the next round, or stops. */
+async function advanceLoop(
+  a: Advance,
+  recorded: Record<string, StepRecord>,
+  evaluate: UntilEvaluator | undefined,
+): Promise<Progress> {
   const { state, outer, child, status, outputs } = a
-  const isUntil = child.id === outer.until
-  const loops = isUntil ? withUntilResult(state, outer.id, outputs) : state.loops
-  const progress = { steps: recorded, loops }
+  const isUntil = child.id === untilStep(outer)
+  const progress: Progress = { steps: recorded, loops: state.loops }
   if (!childSettled(child, status)) return progress
   if (isUntil) {
-    if (status === 'ok')
+    const loop = state.loops?.[outer.id]
+    if (loop === undefined) throw new Error(`run-state-unreadable: loop ${outer.id} has no round`)
+    const current = { round: loop.round, status, outputs }
+    const history = loop.untilHistory ?? []
+    const extended = typeof outer.until === 'object' ? outer.until : undefined
+    const decision = extended
+      ? await evaluateConditions(
+          extended,
+          { current, history, inputs: state.latest ?? {} },
+          evaluate,
+        )
+      : status === 'ok'
+        ? 'complete'
+        : undefined
+    progress.loops = {
+      ...state.loops,
+      [outer.id]: {
+        ...loop,
+        untilResult: outputs,
+        ...(extended && { untilHistory: [...history, current] }),
+      },
+    }
+    if (decision === 'escalate') return closeRound(a, progress, true)
+    if (decision === 'complete')
       return {
+        ...progress,
         steps: {
           ...recorded,
           [outer.id]: { state: 'ok', outputs: mergeOutputs(state.latest, outputs) },
         },
-        loops,
       }
+    if (extended && loop.round >= loop.max) return closeRound(a, progress)
   } else if (status === 'failed' && explicitEscalation(child, status) === undefined)
     return closeRound(a, progress)
   return outer.steps?.at(-1)?.id === child.id ? closeRound(a, progress) : progress
@@ -1432,6 +1505,7 @@ function recordOf(
 type RecordOptions = StepExecutionIdentity & {
   readonly output?: string | undefined
   readonly invalidatePendingSuccess?: boolean | undefined
+  readonly evaluateUntil?: UntilEvaluator
   readonly attempt?: number | undefined
 }
 
@@ -1508,9 +1582,10 @@ export async function record(
   }
   const progress: Progress =
     childId !== undefined && outer?.kind === 'loop'
-      ? advanceLoop(
+      ? await advanceLoop(
           { state, outer, child: step, status, outputs },
           { ...state.steps, [stepId]: entry },
+          options.evaluateUntil ?? run.evaluateUntil,
         )
       : { steps: { ...state.steps, [stepId]: entry }, loops: state.loops }
   const { steps, loops } = progress

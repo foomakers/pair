@@ -389,8 +389,111 @@ These schemas come from the workflow validator.
               "description": "Use `me` for the runner, a login, `none` to keep the assignee, or `unassign` to clear it."
             },
             "until": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9-]*$"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "step",
+                    "condition",
+                    "max",
+                    "on-max"
+                  ],
+                  "properties": {
+                    "step": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]*$"
+                    },
+                    "max": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "on-max": {
+                      "enum": [
+                        "escalate",
+                        "fail"
+                      ]
+                    },
+                    "condition": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "when",
+                              "do"
+                            ],
+                            "properties": {
+                              "do": {
+                                "enum": [
+                                  "complete",
+                                  "escalate"
+                                ]
+                              },
+                              "when": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "output",
+                                  "equals"
+                                ],
+                                "properties": {
+                                  "output": {
+                                    "type": "string",
+                                    "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+                                  },
+                                  "equals": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "integer"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      },
+                                      {
+                                        "const": null
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "prompt",
+                              "do"
+                            ],
+                            "properties": {
+                              "do": {
+                                "enum": [
+                                  "complete",
+                                  "escalate"
+                                ]
+                              },
+                              "prompt": {
+                                "type": "string",
+                                "pattern": "\\S"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
             },
             "max": {
               "type": "integer",

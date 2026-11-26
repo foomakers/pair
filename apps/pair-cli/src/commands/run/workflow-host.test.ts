@@ -115,6 +115,14 @@ const skillOf = (prompt: string) => /^(?:\/|Run the )(\S+)/.exec(prompt)?.[1] ??
 function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDependencies> = {}) {
   const workflow: WorkflowHostDependencies = {
     runIteration: async input => {
+      if (input.promptText.startsWith('Evaluate the workflow condition from the supplied data.')) {
+        input.onEvent?.({
+          type: 'result',
+          subtype: 'success',
+          result: fenced({ status: 'ok', summary: 'false' }),
+        })
+        return { outcome: 'success', detail: 'condition did not match' }
+      }
       launched.push({
         promptText: input.promptText,
         cwd: input.cwd,

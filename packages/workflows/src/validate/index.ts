@@ -4,6 +4,9 @@ import {
   escalationAction,
   expandedStepSchema,
   parseWorkflow,
+  untilMax,
+  untilOnMax,
+  untilStep,
   type KindName,
   type Step,
   type Workflow,
@@ -211,7 +214,7 @@ function loopEscalationErrors(workflow: Workflow, step: Step, path: readonly str
       }),
     )
   const action = escalationAction(step.escalate?.exhausted)
-  const shorthand = step['on-max']
+  const shorthand = untilOnMax(step)
   if (action === undefined && shorthand === undefined)
     errors.push(
       errorAt(workflow, path, {
@@ -236,12 +239,27 @@ function loopEscalationErrors(workflow: Workflow, step: Step, path: readonly str
 function loopOwnErrors(workflow: Workflow, step: Step, path: readonly string[]): WorkflowError[] {
   const errors = loopEscalationErrors(workflow, step, path)
   for (const key of LOOP_REQUIRED)
-    if (step[key] === undefined)
+    if ((key === 'max' ? untilMax(step) : step[key]) === undefined)
       errors.push(errorAt(workflow, path, { problem: `missing key '${key}'`, fix: `add '${key}'` }))
-  if (step.until !== undefined && !step.steps?.some(child => child.id === step.until))
+  const target = untilStep(step)
+  if (typeof step.until === 'object' && step.until.condition.length === 0)
+    errors.push(
+      errorAt(workflow, [...path, 'until', 'condition'], {
+        problem: 'at least one condition is required',
+        fix: 'add a when or prompt clause',
+      }),
+    )
+  if (typeof step.until === 'object' && (step.max !== undefined || step['on-max'] !== undefined))
+    errors.push(
+      errorAt(workflow, path, {
+        problem: 'loop limits are declared both beside and inside until',
+        fix: 'keep max and on-max inside until',
+      }),
+    )
+  if (target !== undefined && !step.steps?.some(child => child.id === target))
     errors.push(
       errorAt(workflow, [...path, 'until'], {
-        problem: `unknown until step '${step.until}'`,
+        problem: `unknown until step '${untilStep(step)}'`,
         fix: 'name a step of this loop',
       }),
     )
@@ -413,7 +431,7 @@ function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowErro
             }),
           ]),
       ...(step.steps ?? [])
-        .filter(child => child.id === step.until && child.when !== undefined)
+        .filter(child => child.id === untilStep(step) && child.when !== undefined)
         .map(child =>
           errorAt(workflow, [...path, 'steps', child.id, 'when'], {
             problem: `when is not allowed on the until step '${child.id}'`,
@@ -422,7 +440,7 @@ function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowErro
         ),
       ...(step.steps ?? []).flatMap(child => {
         const found = loopChildErrors(workflow, child, [...path, 'steps', child.id], checkStep)
-        if (child.id === step.until) exitInputs = new Set(available)
+        if (child.id === untilStep(step)) exitInputs = new Set(available)
         return found
       }),
     ]
@@ -465,13 +483,15 @@ function warnings(workflow: Workflow): WorkflowError[] {
 function reviewExit(step: Step): boolean {
   return (
     step.kind === 'loop' &&
-    step.steps?.some(child => child.id === step.until && child.kind === 'review') === true &&
+    step.steps?.some(child => child.id === untilStep(step) && child.kind === 'review') === true &&
     escalationAction(step.escalate?.exhausted) !== 'continue'
   )
 }
 
 function reviewOrder(workflow: Workflow): readonly Step[] {
-  const reviews = new Set(workflow.steps.filter(reviewExit).map(step => `${step.id}/${step.until}`))
+  const reviews = new Set(
+    workflow.steps.filter(reviewExit).map(step => `${step.id}/${untilStep(step)}`),
+  )
   const flat = addressedSteps(workflow)
   return workflow.steps.flatMap(step => {
     if (step.kind !== 'loop') return [step]

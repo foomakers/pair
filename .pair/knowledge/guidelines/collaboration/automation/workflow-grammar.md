@@ -110,6 +110,40 @@ steps:
 
 `until`, `max`, a non-empty child map and an exhaustion policy are required. Child IDs use `rounds/review` and `rounds/fix`.
 
+The short form `until: review` completes the loop when the named step returns `ok`.
+Its `max` and `on-max` are siblings of `until`. Use the object form to declare
+ordered conditions and place the limit inside `until`:
+
+```yaml
+until:
+  step: review
+  condition:
+    - when: { output: verdict, equals: approved }
+      do: complete
+    - prompt: |
+        Has the blocking finding count grown after at least three follow-up
+        reviews, or stayed unchanged for three consecutive comparisons?
+      do: escalate
+  max: 9
+  on-max: escalate
+```
+
+`step` names a child of the loop, including a custom step. Each clause has one
+`when` or `prompt` and one action. `when` compares a structured output of the named
+child (or its `status`) with a scalar `equals` value. An absent output does not match. With `prompt`, `pair-cli run` passes
+the current result and previous observations to the child's configured engine
+and requires a boolean decision. An invalid decision fails the invocation.
+The first matching clause wins. `complete` exits successfully and `escalate`
+parks the loop for `--more-rounds`. If no clause matches, the workflow continues
+the round unless it has reached `max`. At the limit it evaluates the observed
+child first, then applies `on-max` before launching any remaining children.
+
+In delivery, the first review provides the baseline. Each following review
+verifies the preceding fix. A maximum of nine reviews allows up to eight fixes.
+Existing run checkpoints retain their frozen workflow.
+
+
+
 An `ok` result from `until` exits the loop immediately. By default, a failed `until` makes its outputs available to following children. Another failed child spends the round. A blocked child or one that needs a decision parks at the same step and round unless its rule continues. When the loop exhausts its budget, `rounds.status` is `exhausted` and the last `until` outputs are retained. Extend a parked exhausted loop with `--more-rounds <n>`. Each child result lives under `steps/<loop>/<child>/round-<n>/result.json`.
 
 ### Steps the host runs

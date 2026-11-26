@@ -1022,3 +1022,62 @@ steps:
     inputs: { reviewedHead: repaired },
   })
 })
+
+describe('declarative loop exit', () => {
+  it.each([
+    { matched: true, approved: true },
+    { matched: false, approved: true },
+    { matched: false, approved: false },
+  ])(
+    'evaluates the last round before the limit and can park early (%s)',
+    async ({ matched, approved }) => {
+      const calls: unknown[] = []
+      const run = {
+        ...open(),
+        evaluateUntil: async (context: unknown) => {
+          calls.push(context)
+          return matched
+        },
+      }
+      const source = {
+        file: 'workflows/quick.yaml',
+        text: `version: 1
+name: quick
+steps:
+  rounds:
+    kind: loop
+    until:
+      step: check
+      condition:
+        - when: { output: verdict, equals: approved }
+          do: complete
+        - prompt: Should the loop pause?
+          do: escalate
+      max: 2
+      on-max: fail
+    steps:
+      check: { kind: review }
+`,
+      }
+      const rejected = {
+        status: 'failed',
+        summary: 'not approved',
+        verdict: 'changes-requested',
+        reviewedHead: HEAD,
+        findings: [{ id: 'F1', severity: 'Major', title: 'gap', blocking: true }],
+      }
+      await start(run, source, { card: '627' })
+      expect((await next(run)).ready[0]?.id).toBe('rounds/check')
+      await record(run, 'rounds/check', rejected)
+      expect(calls).toHaveLength(1)
+      if (matched) {
+        expect(await next(run)).toEqual({ ready: [], run: 'parked' })
+        await start(run, source, { card: '627', moreRounds: 1 })
+      }
+      expect((await next(run)).ready[0]?.id).toBe('rounds/check')
+      await record(run, 'rounds/check', REVIEWED)
+      expect(await next(run)).toEqual({ ready: [], run: 'done' })
+      expect(calls).toHaveLength(1)
+    },
+  )
+})

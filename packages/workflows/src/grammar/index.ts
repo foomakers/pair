@@ -155,6 +155,64 @@ const escalationRule: JsonSchema = {
   ],
 }
 
+const loopLimit = { type: 'integer', minimum: 1 } as const
+const loopLimitAction = { enum: ['escalate', 'fail'] } as const
+const untilSchema = (pattern: string): JsonSchema => ({
+  anyOf: [
+    { type: 'string', pattern },
+    {
+      type: 'object',
+      additionalProperties: false,
+      required: ['step', 'condition', 'max', 'on-max'],
+      properties: {
+        step: { type: 'string', pattern },
+        max: loopLimit,
+        'on-max': loopLimitAction,
+        condition: {
+          type: 'array',
+          items: {
+            anyOf: [
+              {
+                type: 'object',
+                additionalProperties: false,
+                required: ['when', 'do'],
+                properties: {
+                  do: { enum: ['complete', 'escalate'] },
+                  when: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['output', 'equals'],
+                    properties: {
+                      output: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9]*$' },
+                      equals: {
+                        anyOf: [
+                          { type: 'string' },
+                          { type: 'integer' },
+                          { type: 'boolean' },
+                          { const: null },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                type: 'object',
+                additionalProperties: false,
+                required: ['prompt', 'do'],
+                properties: {
+                  do: { enum: ['complete', 'escalate'] },
+                  prompt: { type: 'string', pattern: '\\S' },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+  ],
+})
+
 export const stepSchema: JsonSchema = {
   type: 'object',
   required: ['kind'],
@@ -227,7 +285,7 @@ export const stepSchema: JsonSchema = {
         "The card's board state the host sets for the step (a macrostate), or `none`; overrides the kind's default.",
     },
     assign: assignmentSchema,
-    until: { type: 'string', pattern: STEP_ID },
+    until: untilSchema(STEP_ID),
     max: { type: 'integer', minimum: 1 },
     'on-max': {
       enum: ['escalate', 'fail'],
@@ -295,7 +353,7 @@ export const expandedStepSchema: JsonSchema = {
       ...stepSchema.properties?.['on-resume'],
       properties: { reason, step: { type: 'string', pattern: expandedId } },
     },
-    until: { type: 'string', pattern: expandedId },
+    until: untilSchema(expandedId),
     steps: { ...stepSchema.properties?.['steps'], propertyNames: { pattern: expandedId } },
   },
 }
@@ -345,11 +403,35 @@ export interface Step {
   readonly assign?: Assignment
   /** The original declaration of an assignment inherited through an include. */
   readonly 'assign-source'?: WorkflowAssignmentSource
-  readonly until?: string
+  readonly until?: string | LoopUntil
   readonly max?: number
   readonly 'on-max'?: 'escalate' | 'fail'
   readonly steps?: readonly Step[]
 }
+
+export type LoopCondition = {
+  readonly do: 'complete' | 'escalate'
+} & (
+  | {
+      readonly when: { readonly output: string; readonly equals: string | number | boolean | null }
+    }
+  | { readonly prompt: string }
+)
+
+export interface LoopUntil {
+  readonly step: string
+  readonly condition: readonly LoopCondition[]
+  readonly max: number
+  readonly 'on-max': 'escalate' | 'fail'
+}
+
+export const untilStep = (step: Step) =>
+  typeof step.until === 'string' ? step.until : step.until?.step
+
+export const untilMax = (step: Step) => (typeof step.until === 'object' ? step.until.max : step.max)
+
+export const untilOnMax = (step: Step) =>
+  typeof step.until === 'object' ? step.until['on-max'] : step['on-max']
 
 export interface Workflow {
   readonly version: 1

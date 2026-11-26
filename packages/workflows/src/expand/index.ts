@@ -1,4 +1,11 @@
-import { errorAt, parseWorkflow, type Step, type Workflow, type WorkflowError } from '../grammar'
+import {
+  errorAt,
+  parseWorkflow,
+  untilStep,
+  type Step,
+  type Workflow,
+  type WorkflowError,
+} from '../grammar'
 import { kindByName } from '../kinds'
 
 export interface WorkflowSource {
@@ -132,10 +139,18 @@ function expandLoop(state: ExpansionState, context: StepContext, chain: readonly
     }
     return expanded.map(result => ({ ...result, id: result.id.slice(id.length + 1) }))
   })
+  const target = untilStep(step)
   const until = [...children]
     .reverse()
-    .find(child => child.id === step.until || child.id.startsWith(`${step.until}/`))
-  return { ...step, id, steps: children, ...(until && { until: until.id }) }
+    .find(child => child.id === target || child.id.startsWith(`${target}/`))
+  return {
+    ...step,
+    id,
+    steps: children,
+    ...(until && {
+      until: typeof step.until === 'object' ? { ...step.until, step: until.id } : until.id,
+    }),
+  }
 }
 
 function rebaseStep(step: Step, id: string): Step {

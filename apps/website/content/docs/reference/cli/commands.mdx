@@ -842,7 +842,7 @@ pair-cli run [workflow] [options]
 | `--config <name\|file>`         | Select a configuration for a YAML workflow. Overrides [card label tiers and configured defaults](/docs/reference/configuration#workflow-configurations-workflows). |
 | `--config-override <json>`      | With a workflow name: a JSON object deep-merged over the configuration, validated and recorded in the run |
 | `--reconfigure`                 | With a workflow name and `--config` and/or `--config-override`: replace the run's frozen configuration; steps already `ok` are not run again |
-| `--more-rounds <n>`             | With a workflow name: grant n further rounds to a loop parked at `max`; the run resumes in that loop |
+| `--more-rounds <n>`             | With a workflow name: grant n further rounds to a loop parked at `max`. An active batch resumes the card in the same process |
 | `--engine <id>`                 | Engine to drive: `pi`, `opencode`, `claude` or `codex`. Precedence: flag > `pair.config.json` > schema default |
 | `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back: a missing skill is an error                     |
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
@@ -1024,7 +1024,7 @@ pair-cli run quick --card 627
 | The run completes               | Exits `0`. |
 | A failure stops the run         | Exits `1` and prints the reason. |
 | `blocked` or `needs-decision` stops the run | Parks with exit `0` and prints the reason and resume command. |
-| A loop exhausts its rounds      | The loop's policy continues, parks or fails the run. Use `--more-rounds` to extend a parked loop. |
+| A loop exhausts its rounds      | The loop's policy continues, parks or fails the run. Use `--more-rounds` to extend a parked loop. A waiting card releases its slot. The active batch checks checkpoint metadata every 30 seconds by default and requeues the card when its checkpoint allows it. Set `PAIR_CHECKPOINT_POLL_SECONDS` to change the interval. |
 | Launched again after a stop     | Resumes at the stopped step and preserves earlier completed and continued outcomes. |
 | Interrupted, launched again     | The step that was running runs again from the start                               |
 | Launched again when complete    | Nothing runs: "already complete". `--restart` archives the directory and starts over |
@@ -1036,6 +1036,40 @@ With a workflow name the command takes `--card`, `--engine`, `--config`, `--conf
 `--cwd`, `--autonomous`, `--approve-project-trust`, `--telemetry` / `--no-telemetry`, the timeouts
 and the output flags. Use `--config` for a workflow configuration and `--root`, `--filter` or
 `--parallel` for workflow batch selection as described above.
+
+### Loop exit conditions
+
+The short form `until: review` completes the loop when the named step returns `ok`.
+Its `max` and `on-max` are siblings of `until`. Use the object form to declare
+ordered conditions and place the limit inside `until`:
+
+```yaml
+until:
+  step: review
+  condition:
+    - when: { output: verdict, equals: approved }
+      do: complete
+    - prompt: |
+        Has the blocking finding count grown after at least three follow-up
+        reviews, or stayed unchanged for three consecutive comparisons?
+      do: escalate
+  max: 9
+  on-max: escalate
+```
+
+`step` names a child of the loop, including a custom step. Each clause has one
+`when` or `prompt` and one action. `when` compares a structured output of the named
+child (or its `status`) with a scalar `equals` value. An absent output does not match. With `prompt`, `pair-cli run` passes
+the current result and previous observations to the child's configured engine
+and requires a boolean decision. An invalid decision fails the invocation.
+The first matching clause wins. `complete` exits successfully and `escalate`
+parks the loop for `--more-rounds`. If no clause matches, the workflow continues
+the round unless it has reached `max`. At the limit it evaluates the observed
+child first, then applies `on-max` before launching any remaining children.
+
+In delivery, the first review provides the baseline. Each following review
+verifies the preceding fix. A maximum of nine reviews allows up to eight fixes.
+Existing run checkpoints retain their frozen workflow.
 
 ### Fan-out: `--parallel <n>` (`--root <id>` and/or `--filter <label>`)
 

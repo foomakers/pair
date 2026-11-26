@@ -41,6 +41,8 @@ import {
   start,
   stoppedApproval,
   stoppedLoop,
+  untilOnMax,
+  untilStep,
   type AgentLaunchResult,
   type Assignment,
   type CardState,
@@ -822,8 +824,8 @@ function exhaustedEnding(
   if (saved === undefined) return undefined
   const stopped = stoppedLoop(saved.workflow, saved.state)
   if (stopped?.run !== outcome.run) return undefined
-  const { id, until } = stopped.step
-  const last = saved.state.steps[`${id}/${until}`]
+  const { id } = stopped.step
+  const last = saved.state.steps[`${id}/${untilStep(stopped.step)}`]
   const summary = saved.state.steps[id]?.summary ?? 'loop exhausted'
   const why = `${summary}; last until: ${last?.state} — ${last?.summary}`
   const { status, exit } = ENDINGS[stopped.run]
@@ -1231,7 +1233,8 @@ function dryRunExhaustion(step: ReturnType<typeof addressedSteps>[number]): stri
   if (step.kind !== 'loop') return ''
   const action = escalationAction(step.escalate?.exhausted)
   if (action !== undefined) return ` exhausted=${action}`
-  return ` on-max=${step['on-max']}${step['on-max'] === 'escalate' ? ' (human escalation)' : ' (fails)'}`
+  const onMax = untilOnMax(step)
+  return ` on-max=${onMax}${onMax === 'escalate' ? ' (human escalation)' : ' (fails)'}`
 }
 
 type BatchCard = {

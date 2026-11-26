@@ -868,3 +868,47 @@ describe('runSteps: settings per step (#672 AC-1)', () => {
     ])
   })
 })
+
+it('judges a custom loop condition with the observed step engine and resumes after a grant', async () => {
+  const files = createMemoryFiles()
+  const run = { dir: DIR, files }
+  const source = {
+    file: 'quick.yaml',
+    text: `version: 1
+name: quick
+steps:
+  rounds:
+    kind: loop
+    until:
+      step: scan
+      condition:
+        - prompt: Is the work stalled?
+          do: escalate
+      max: 4
+      on-max: fail
+    steps:
+      scan: { kind: generic, skill: scan }
+`,
+  }
+  const launches: string[] = []
+  const host: WorkflowHost = {
+    files,
+    style: 'instruction',
+    isSafeText: () => true,
+    launch: async (step, message) => {
+      expect(step.id).toBe('rounds/scan')
+      if (message.includes('Is the work stalled?')) {
+        expect(message).toContain('"round":1')
+        launches.push('condition')
+        return { final: fenced({ status: 'ok', summary: 'true' }) }
+      }
+      launches.push('scan')
+      return { final: fenced({ status: 'ok', summary: 'scanned' }) }
+    },
+  }
+  await start(run, source, { card: '627' })
+  expect((await runSteps(host, DIR)).run).toBe('parked')
+  expect(launches).toEqual(['scan', 'condition'])
+  await start(run, source, { card: '627', moreRounds: 1 })
+  expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/scan', round: 2 })
+})
