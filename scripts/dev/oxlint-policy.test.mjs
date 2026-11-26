@@ -712,3 +712,68 @@ for (const [profile, configPath, extension] of [
     }
   })
 }
+
+test('#693 invalid native options precede discovery and cannot consume a discovered source', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const native = join(root, 'tools/oxlint-config/node_modules/.bin/oxlint')
+  const file = join(cwd, 'sibling.ts')
+  const source = 'export let value = 1\n'
+  for (const populated of [false, true]) {
+    if (populated) writeFileSync(file, source)
+    for (const option of ['--ignore-path', '--format', '--config', '--format=bad', '--debug=bad']) {
+      const args = ['--fix', option]
+      const reference = runLint(cwd, native, ...args)
+      const actual = runLint(cwd, runner, ...args)
+      assert.deepEqual([actual.status, actual.stderr], [reference.status, reference.stderr], option)
+      if (populated) assert.equal(readFileSync(file, 'utf8'), source)
+    }
+  }
+})
+
+if (process.getuid?.() !== 0) {
+  test('#693 supported ignores prune invalid links and unreadable directories before validation', t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const file = join(cwd, 'sibling.ts')
+    const source = 'export let value = 1\n'
+    mkdirSync(join(cwd, 'hidden'))
+    writeFileSync(join(cwd, 'hidden/input.ts'), source)
+    mkdirSync(join(cwd, 'target'))
+    symlinkSync('target', join(cwd, 'dir.ts'))
+    symlinkSync('missing', join(cwd, 'missing.ts'))
+    writeFileSync(join(cwd, 'ignores.txt'), 'hidden/\ndir.ts\nmissing.ts\n')
+    chmodSync(join(cwd, 'hidden'), 0)
+    try {
+      for (const args of [['--ignore-path', 'ignores.txt'], ...[[ 'hidden/', 'dir.ts', 'missing.ts' ].map(value => '--ignore-pattern=' + value)]]) {
+        writeFileSync(file, source)
+        assert.equal(lint(cwd, '--fix', ...args, '.').status, 0)
+        assert.equal(readFileSync(file, 'utf8'), 'export const value = 1\n')
+      }
+    } finally {
+      chmodSync(join(cwd, 'hidden'), 0o700)
+    }
+    assert.equal(readFileSync(join(cwd, 'hidden/input.ts'), 'utf8'), source)
+  })
+
+  test('#693 file-list debug does not read or rewrite selected source', t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const blocked = join(cwd, 'blocked.ts')
+    const sibling = join(cwd, 'sibling.ts')
+    writeFileSync(blocked, 'debugger\n')
+    writeFileSync(sibling, 'export let value = 1\n')
+    chmodSync(blocked, 0)
+    const args = ['--debug=files', '--fix', 'blocked.ts', 'sibling.ts']
+    const expected = runLint(cwd, join(root, 'tools/oxlint-config/node_modules/.bin/oxlint'), ...args)
+    const actual = runLint(cwd, runner, ...args)
+    assert.equal(actual.status, expected.status, actual.stderr)
+    assert.deepEqual(actual.stdout.trim().split('\n').sort(), expected.stdout.trim().split('\n').sort())
+    assert.equal(readFileSync(sibling, 'utf8'), 'export let value = 1\n')
+  })
+}
+
+test('#693 unix output keeps a marker-like sourced diagnostic at exit one', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  writeFileSync(join(cwd, ':0:0:real.ts'), 'debugger\n')
+  const result = runLint(cwd, runner, '--fix', '--format=unix', ':0:0:real.ts')
+  assert.equal(result.status, 1, result.stdout)
+  assert.match(result.stdout, /real\.ts/)
+})
