@@ -1,6 +1,12 @@
 import type { ProcessDiagnostics } from '@pair/workflows'
 import type { EngineDefinition, TerminalEventRule } from './engines'
-import { eventBodyRuns, parseRunEvent, progressRunEvents, type RunEvent } from './run-events'
+import {
+  eventBodyRuns,
+  parseRunEvent,
+  progressRunEvents,
+  withoutRunEventLines,
+  type RunEvent,
+} from './run-events'
 
 /**
  * The JSONL terminal-event reader (US-451 T-7) — the ONLY thing that decides an iteration's
@@ -132,7 +138,7 @@ const isResultShaped = (raw: Record<string, unknown>): boolean =>
 export function parseFinalResult(text: string): StageFinalResult | undefined {
   let shaped: StageFinalResult | undefined
   let any: StageFinalResult | undefined
-  for (const span of topLevelObjects(text)) {
+  for (const span of topLevelObjects(withoutRunEventLines(text))) {
     let raw: unknown
     try {
       raw = JSON.parse(span)
