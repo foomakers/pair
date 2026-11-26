@@ -2,8 +2,9 @@ import { fileSystemService as fs } from '@pair/content-ops'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import ts from 'typescript'
 import { expect, it } from 'vitest'
+
+import { checkStylesheets } from './css-guard'
 
 const root = resolve(__dirname, '../../../..')
 const compiler = join(root, 'packages/dev-tools/node_modules/@typescript/native/bin/tsc')
@@ -150,61 +151,10 @@ const reviewedDeclarations = [
   'packages/brand/dev/styles.d.css.ts',
 ]
 
-function localStylesheet(cwd: string, importer: string, specifier: string) {
-  const stylesheet = specifier.split(/[?#]/, 1)[0]
-  if (!stylesheet?.endsWith('.css')) return
-  if (/^\.\.?\//.test(stylesheet)) return resolve(cwd, dirname(importer), stylesheet)
-  if (importer.startsWith('apps/website/') && stylesheet.startsWith('@/')) {
-    return join(cwd, 'apps/website', stylesheet.slice(2))
-  }
-  if (importer.startsWith('packages/brand/') && /^\$(?:components|tokens)\//.test(stylesheet)) {
-    return join(cwd, 'packages/brand/src', stylesheet.slice(1))
-  }
-}
-
-function isFile(path: string) {
-  return fs.existsSync(path) && fs.statSync(path).isFile()
-}
-
-function cssProblems(cwd: string, sources: string[]) {
-  const problems = sources
-    .filter(
-      path => /(?:\.d\.css\.ts|\.css\.d\.ts)$/.test(path) && !reviewedDeclarations.includes(path),
-    )
-    .map(path => `Unreviewed CSS declaration: ${path}`)
-  for (const declaration of reviewedDeclarations) {
-    if (
-      !sources.includes(declaration) ||
-      !isFile(join(cwd, declaration.replace(/\.d\.css\.ts$/, '.css')))
-    ) {
-      problems.push(`Missing reviewed CSS declaration or stylesheet: ${declaration}`)
-    }
-  }
-  for (const path of sources) {
-    const source = fs.readFileSync(join(cwd, path))
-    if (/declare\s+module\s+['"](?:[^'"]*\.css|\*|\*\.\*)['"]/.test(source)) {
-      problems.push(`Ambient CSS declaration: ${path}`)
-    }
-    for (const { fileName } of ts.preProcessFile(source, true, true).importedFiles) {
-      const stylesheet = localStylesheet(cwd, path, fileName)
-      if (stylesheet && !isFile(stylesheet)) {
-        problems.push(`Missing stylesheet: ${path} imports ${fileName}`)
-      }
-    }
-  }
-  return problems
-}
-
-it('#757 AC-4: accepts only reviewed declarations backed by their CSS files', () => {
-  const sources = trackedPaths('apps', 'packages').filter(path =>
-    /\.(?:[cm]?[jt]s|[jt]sx)$/.test(path),
-  )
-  expect(cssProblems(root, sources)).toEqual([])
-})
-
 function withCssFixture(run: (cwd: string) => void) {
   const cwd = fs.mkdtempSync(join(tmpdir(), 'pair-css-'))
   try {
+    execFileSync('git', ['init', '-q'], { cwd })
     for (const declaration of reviewedDeclarations) {
       fs.mkdirSync(dirname(join(cwd, declaration)), { recursive: true })
       fs.writeFileSync(join(cwd, declaration), 'export {}\n')
@@ -220,9 +170,15 @@ it('#757 AC-4 R758-01: rejects an unreviewed legacy CSS declaration', () => {
   withCssFixture(cwd => {
     const legacy = 'packages/brand/dev/missing-review.css.d.ts'
     fs.writeFileSync(join(cwd, legacy), 'export {}\n')
-    expect(cssProblems(cwd, [...reviewedDeclarations, legacy])).toEqual([
-      `Unreviewed CSS declaration: ${legacy}`,
-    ])
+    expect(checkStylesheets(cwd)).toEqual([`Unreviewed CSS declaration: ${legacy}`])
+  })
+})
+
+it('#757 AC-4 R758-03: rejects a wildcard declaration in a new Brand file', () => {
+  withCssFixture(cwd => {
+    const ambient = 'packages/brand/dev/ambient.d.ts'
+    fs.writeFileSync(join(cwd, ambient), "declare module '*.css' {}\n")
+    expect(checkStylesheets(cwd)).toEqual([`Ambient CSS declaration: ${ambient}`])
   })
 })
 
@@ -241,9 +197,8 @@ it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types',
       }),
     )
 
-    const sources = [...reviewedDeclarations, importer]
     fs.writeFileSync(stylesheet, '')
-    expect(cssProblems(cwd, sources)).toEqual([])
+    expect(checkStylesheets(cwd)).toEqual([])
     fs.rmSync(stylesheet)
 
     const checked = spawnSync(process.execPath, [compiler, '--pretty', 'false'], {
@@ -252,8 +207,6 @@ it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types',
     })
     expect(checked.error).toBeUndefined()
     expect(checked.status, checked.stdout + checked.stderr).toBe(0)
-    expect(cssProblems(cwd, sources)).toEqual([
-      `Missing stylesheet: ${importer} imports ${specifier}`,
-    ])
+    expect(checkStylesheets(cwd)).toEqual([`Missing stylesheet: ${importer} imports ${specifier}`])
   })
 })

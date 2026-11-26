@@ -176,10 +176,13 @@ adding a wildcard declaration each failed the guard in a disposable checkout.
 The native compiler rejects unresolved side-effect imports. Next's ambient
 CSS module types can still resolve a missing `.module.css` import, so the guard
 also checks that local stylesheet imports point to files.
+The root review, push and PR gates and the CI build job run the guard
+independently of Turbo's changed-package selection and cache.
 
 ```sh
 pnpm --filter @pair/dev-tools test src/quality-gates/typescript-declarations.test.ts
 pnpm --filter @pair/dev-tools test src/quality-gates/typescript-enforcement.test.ts
+pnpm css:check
 pnpm --filter @pair/brand exec vite build --outDir /tmp/pair-brand-757-vite
 pnpm --filter @pair/pair-cli dev --version
 node apps/pair-cli/dist/cli.js --version
@@ -201,7 +204,7 @@ The Oxlint replay uses [#693](https://github.com/foomakers/pair/issues/693)
 as merged in PR [#751](https://github.com/foomakers/pair/pull/751).
 The dev-scripts portion of the PR gate executes the same rule-policy
 witnesses. The test additions cover nine downstream declaration entry
-points, twelve compiler and CSS cases, and one declaration-only control
+points, fourteen compiler and CSS cases, and one declaration-only control
 for the platform smoke gate. Mutation testing was not measured.
 
 ## Rollback

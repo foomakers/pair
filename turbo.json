@@ -155,8 +155,8 @@
     // `turbo run test --filter @pair/dev-tools` replayed `1 cached, 125ms >>> FULL TURBO`.
     // A task dependency enters the hash, so this invalidates on the WHOLE CLI closure and,
     // unlike a hand-listed set of trees, cannot go stale when that closure grows.
-    // #757: Compiler enforcement tests read the workspace configs and scan workspace TypeScript
-    // sources for CSS declarations. Hash those inputs and the two required stylesheets in both variants.
+    // #757: Compiler fixtures read workspace configs and the website's effective inputs.
+    // The repository-wide CSS scan runs through the uncached root css:check step.
     "@pair/dev-tools#test": {
       "dependsOn": ["build", "@pair/pair-cli#build"],
       "outputs": [],
@@ -170,8 +170,7 @@
         "$TURBO_ROOT$/tools/ts-config/*.json",
         "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
         "$TURBO_ROOT$/{apps,packages}/**/*.{ts,tsx,cts,mts}",
-        "$TURBO_ROOT$/apps/website/app/global.css",
-        "$TURBO_ROOT$/packages/brand/dev/styles.css"
+        "$TURBO_ROOT$/apps/website/**/*.{js,jsx,cjs,mjs}"
       ]
     },
     "@pair/dev-tools#test:coverage": {
@@ -187,8 +186,7 @@
         "$TURBO_ROOT$/tools/ts-config/*.json",
         "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
         "$TURBO_ROOT$/{apps,packages}/**/*.{ts,tsx,cts,mts}",
-        "$TURBO_ROOT$/apps/website/app/global.css",
-        "$TURBO_ROOT$/packages/brand/dev/styles.css"
+        "$TURBO_ROOT$/apps/website/**/*.{js,jsx,cjs,mjs}"
       ]
     },
     // #568: `next build` regenerates apps/website/.source/index.ts (fumadocs-mdx); a parallel tsc read it

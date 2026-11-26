@@ -26,6 +26,7 @@
     "code-hygiene:check": "ts-node src/quality-gates/code-hygiene-check.ts",
     "direct-fs:check": "ts-node src/quality-gates/direct-fs-guard.ts",
     "smoke-modes:check": "ts-node src/quality-gates/smoke-scenario-modes.ts",
+    "css:check": "ts-node src/quality-gates/css-guard.ts",
     "sync-version": "ts-node src/quality-gates/sync-version-in-docs.ts",
     "benchmark-update-link": "ts-node src/quality-gates/benchmark-update-link.ts",
     "determine-version": "ts-node src/release/determine-version.ts",
