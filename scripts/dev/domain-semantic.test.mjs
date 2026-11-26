@@ -543,6 +543,9 @@ for (const [bridge, code, broken, dependencies] of [
     { 'types/fallback.ts': 'export type Cause = number\n' },
   ],
   ['types/bridge.d.ts', 'TS2307', "export type { Cause } from './missing.js'\n", {}],
+  ['types/bridge.ts', 'TS2304', 'export type { Inner as Cause }\n', {}],
+  ['types/bridge.ts', 'TS2503', 'export type Cause = Registry.Inner\n', {}],
+  ['types/bridge.ts', 'TS2456', 'type Inner = Cause\nexport type Cause = Inner\n', {}],
 ]) {
   for (const detail of [false, true]) {
     const context = detail ? 'with a nullable field' : 'without a nullable field'
@@ -569,6 +572,48 @@ for (const [bridge, code, broken, dependencies] of [
       assert.equal(stdout, '')
     })
   }
+}
+
+for (const detail of [false, true]) {
+  const context = detail ? 'with a nullable field' : 'without a nullable field'
+  test(`#750 750-R22 AC-3/4 validates an imported package type (${context})`, t => {
+    const dependency = '../../node_modules/retry-cause'
+    const bridge = `${dependency}/bridge.d.ts`
+    const retry = cause =>
+      model(
+        detail ? 'cause: Cause\n  detail: Detail' : 'cause: Cause',
+        `import type { ${cause} } from 'retry-cause'\n${detail ? 'type Detail = string | null\n' : ''}`,
+      )
+    const cwd = workspace(t, {
+      [pilot]: retry('Cause'),
+      [`${dependency}/index.d.ts`]: "export type { Cause, OtherCause } from './bridge.js'\n",
+      [bridge]: 'export type Cause = string\nexport type OtherCause = string\n',
+    })
+    const detailLocations = detail ? [[pilot, semantic, 5, 3]] : []
+    const resolved = { status: Number(detail), locations: detailLocations }
+    assert.deepEqual(findings(lint(cwd)), resolved)
+
+    writeFileSync(
+      join(cwd, bridge),
+      'export type Cause = string | null\nexport type OtherCause = string\n',
+    )
+    assert.deepEqual(findings(lint(cwd)), {
+      status: 1,
+      locations: [[pilot, semantic, detail ? 4 : 3, 3], ...detailLocations],
+    })
+
+    writeFileSync(
+      join(cwd, bridge),
+      "export type { Cause } from './missing.js'\nexport type OtherCause = string\n",
+    )
+    const { status, stdout, stderr } = lint(cwd)
+    assert.equal(status, 2, stdout + stderr)
+    assert.ok(stderr.includes('node_modules/retry-cause/bridge.d.ts: TS2307'), stderr)
+    assert.equal(stdout, '')
+
+    writeFileSync(join(cwd, pilot), retry('OtherCause as Cause'))
+    assert.deepEqual(findings(lint(cwd)), resolved)
+  })
 }
 
 test('#750 AC-4 package lint distinguishes project-load errors from findings', t => {
