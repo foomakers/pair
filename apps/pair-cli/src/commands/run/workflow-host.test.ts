@@ -1174,6 +1174,36 @@ it.each(['saved origin', 'legacy origin', 'telemetry originally off', 'existing 
   },
 )
 
+it.each([
+  ['opencode', undefined],
+  ['pi', undefined],
+  ['claude', 'high'],
+  ['codex', 'high'],
+] as const)(
+  '#704 F19: %s records only the effort its launcher can send',
+  async (engine, effort) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      'version: 1\nname: quick\nsteps:\n  draft: { kind: generic, skill: pair-process-implement, retries: 0, escalate: { blocked: continue } }\n',
+    )
+    write(
+      '.pair/adoption/tech/configurations/quick.yaml',
+      `version: 1\nname: quick\ndefaults: { engine: ${engine}, effort: high }\n`,
+    )
+    const options = { telemetry: true, config: 'quick', approveProjectTrust: true }
+    const skills = { 'pair-process-implement': () => undefined }
+    const ledger = join(runDir(), 'telemetry.jsonl')
+    const read = () => JSON.parse(fs.readFileSync(ledger).split('\n')[0]!)
+    expect(await run(['quick'], skills, options)).toBe(0)
+    const live = read()
+    await fs.unlink(ledger)
+    const launches = launched.length
+    expect(await run(['quick'], skills, options)).toBe(0)
+    expect(launched).toHaveLength(launches)
+    expect([live.effort, read().effort]).toEqual([effort, effort])
+  },
+)
+
 it('#704 F17: rechecks a completed run under lock before repairing its final telemetry', async () => {
   write(
     '.pair/adoption/tech/workflows/quick.yaml',

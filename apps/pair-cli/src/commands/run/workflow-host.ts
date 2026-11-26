@@ -409,7 +409,11 @@ function stepSettings(
   if (effective === undefined)
     return { engine: id, model: declaredEngineModel(resolved.project, id) }
   const { engine, model, effort } = settingsFor(effective, step, resolved.workflow.aliases)
-  return { engine, model: model ?? declaredEngineModel(resolved.project, engine), effort }
+  return {
+    engine,
+    model: model ?? declaredEngineModel(resolved.project, engine),
+    effort: engineOf(resolved, engine).effortArgs ? effort : undefined,
+  }
 }
 
 /** The engine of a step: the run's own, or the one the configuration names for it. */
