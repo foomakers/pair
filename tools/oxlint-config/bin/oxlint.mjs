@@ -11,7 +11,8 @@ const glob = require('fast-glob')
 const ignore = require('ignore')
 const { parse: parseJsonc } = require('jsonc-parser')
 const workspaceRoot = realpathSync.native('.')
-const sourcePattern = '**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}'
+const sourceExtensions = ['js', 'mjs', 'cjs', 'jsx', 'ts', 'mts', 'cts', 'tsx']
+const sourcePattern = `**/*.{${sourceExtensions.join(',')}}`
 const frameworkExtensions = ['.vue', '.svelte', '.astro']
 // An impossible operand keeps an empty selection from starting Oxlint's default walk.
 const emptySelection = join(cli, 'no-files')
@@ -42,13 +43,16 @@ if (workspace) args.shift()
 const { positionals, tokens, values } = parseArgs({
   args, options: argumentOptions, strict: false, allowPositionals: true, tokens: true,
 })
+const selectionArgs = tokens.filter(token => token.kind === 'option' && selectionOptions.includes(token.name))
+  .flatMap(tokenArgs)
 const options = frameworkExtensions.flatMap(extension => ['--ignore-pattern', `*${extension}`])
-if (process.env.PAIR_LINT_REPORT === 'json' && !('format' in values)) options.push('--format', 'json')
+const jsonByDefault = process.env.PAIR_LINT_REPORT === 'json' && !('format' in values)
 const lintsFiles = !nonLintOptions.some(name => name in values)
 const isExcluded = lintsFiles ? configExclusions() : () => false
 
-function runLint(args, stdio) {
-  const result = spawnSync(process.execPath, [cli, ...options, ...args], {
+function runLint(args, stdio, json = jsonByDefault) {
+  const format = json ? ['--format=json'] : []
+  const result = spawnSync(process.execPath, [cli, ...options, ...format, ...args], {
     stdio,
     maxBuffer: 64 * 1024 * 1024,
   })
@@ -154,6 +158,16 @@ function validateGlobRoot(pattern) {
   }
 }
 
+function checkReadable(file) {
+  try {
+    accessSync(file, constants.R_OK)
+  } catch (error) {
+    // An explicit ignored source still gets its usual ignored-file warning.
+    const selected = runLint(['--debug=files', ...selectionArgs, asOperand(file)], capture)
+    if (selected.status !== 0 || selected.stdout.length) throw error
+  }
+}
+
 function matchingFiles(pattern, directory = '.', root = workspaceRoot) {
   // Select files explicitly to retain Git-ignored sources and keep Oxlint from walking directories.
   return glob.sync(pattern, {
@@ -175,7 +189,15 @@ function matchingFiles(pattern, directory = '.', root = workspaceRoot) {
     // Broken included links abort discovery before Oxlint can modify any selected source.
     const target = realpathSync.native(file)
     if (!isWithin(workspaceRoot, target) || !isWalkDirectory(dirname(resolve(root, path)), root)) return []
-    return dirent.isFile() || statSync(target, { throwIfNoEntry: false })?.isFile() ? [file] : []
+    if (dirent.isSymbolicLink()) {
+      const stat = statSync(target)
+      if (stat.isDirectory() && sourceExtensions.includes(extname(file).slice(1))) {
+        throw Object.assign(new Error(`EISDIR: expected a source file at ${file}`), { code: 'EISDIR' })
+      }
+      if (!stat.isFile()) return []
+    }
+    checkReadable(file)
+    return [file]
   })
 }
 
@@ -186,8 +208,6 @@ function asOperand(file) {
 
 function prepareExplicitLint() {
   const strictSelection = !workspace && !values['no-error-on-unmatched-pattern']
-  const selectionArgs = tokens.filter(token => token.kind === 'option' && selectionOptions.includes(token.name))
-    .flatMap(tokenArgs)
   const maxArg = values['max-warnings']
   const max = Number(maxArg)
   const maxTokens = tokens.filter(token => token.kind === 'option' && token.name === 'max-warnings')
@@ -212,7 +232,10 @@ function prepareExplicitLint() {
     } else if (pattern) {
       validateGlobRoot(path)
       paths = matchingFiles(path)
-    } else if (stat?.isFile()) paths = [file]
+    } else if (stat?.isFile()) {
+      checkReadable(file)
+      paths = [file]
+    }
     const operands = paths.map(asOperand)
     replacements.set(token.index, operands)
     if (!operands.length && strictSelection) return selectionError(path)
@@ -263,15 +286,23 @@ function finishLint(result, warnings = [], overLimit = false) {
   for (const { filename, message } of warnings) process.stderr.write(`${JSON.stringify(filename)}: warning: ${message}\n`)
 }
 
-function runFix(args, checkArgs, stdio) {
-  let fixed = runLint(args, capture)
-  // A no-var fix can leave prefer-const to be applied on a second pass.
-  if ((fixed.status === 0 || fixed.status === 1) && fixed.stderr.length === 0) {
-    fixed = runLint(args, capture)
-  }
-  if (fixed.status !== 0) return fixed
-  process.stderr.write(fixed.stderr)
-  // Oxlint can report success before evaluating errors introduced by a fix.
+function runFix(args, checkArgs, reportArgs, stdio) {
+  const first = runLint(args, capture)
+  if (![0, 1].includes(first.status) || first.stderr.length) return first
+  // A no-var fix can leave prefer-const for a second pass. Read the native structured
+  // report so write failures remain operational errors in every user-facing format.
+  const fixed = runLint(reportArgs, capture, true)
+  if (fixed.status === 1 && !fixed.stderr.length) {
+    let report
+    try {
+      report = JSON.parse(fixed.stdout)
+    } catch {
+      return fixed
+    }
+    if (report?.diagnostics?.some(d => !d.filename && !d.code && d.message.startsWith('Failed to write file '))) {
+      return { ...first, status: 2 }
+    }
+  } else if (fixed.status !== 0 || fixed.stderr.length) return fixed
   return runLint(checkArgs, stdio)
 }
 
@@ -289,7 +320,7 @@ function main() {
       if (!paths.length && !values['no-error-on-unmatched-pattern']) return selectionError('.')
     }
   } catch (error) {
-    if (!['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR', 'ELOOP'].includes(error.code)) throw error
+    if (!['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR', 'ELOOP', 'EISDIR'].includes(error.code)) throw error
     process.stderr.write(`${error.message}\n`)
     process.exitCode = 2
     return
@@ -301,12 +332,16 @@ function main() {
     : paths.length > 0
   if (lintsFiles && !selected) paths.push(emptySelection)
   const fixIndices = new Set(tokens.filter(token => token.kind === 'option' && fixFlags.includes(token.name)).map(token => token.index))
-  const lintArgs = (check = false) => [
-    ...args.flatMap((arg, index) => check && fixIndices.has(index) ? [] : replacements?.get(index) ?? [arg]),
+  const presentation = tokens.filter(token => token.kind === 'option' && ['format', 'quiet', 'silent'].includes(token.name))
+  const presentationIndices = new Set(presentation.flatMap(token => tokenArgs(token).map((_, offset) => token.index + offset)))
+  const lintArgs = omit => [
+    ...args.flatMap((arg, index) => omit?.has(index) ? [] : replacements?.get(index) ?? [arg]),
     ...paths,
   ]
   const stdio = warnings?.length ? capture : 'inherit'
-  const result = fixIndices.size ? runFix(lintArgs(), lintArgs(true), stdio) : runLint(lintArgs(), stdio)
+  const result = fixIndices.size
+    ? runFix(lintArgs(), lintArgs(fixIndices), lintArgs(presentationIndices), stdio)
+    : runLint(lintArgs(), stdio)
   finishLint(result, warnings, overLimit)
 }
 
