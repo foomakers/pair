@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { fileSystemService } from '@pair/content-ops'
 import { handleInstallCommand } from './handler'
 import { handleRunCommand } from '../run/handler'
@@ -13,6 +13,26 @@ import { handleUpdateCommand } from '../update/handler'
 const CLI = join(__dirname, '../../..')
 const DATASET = join(CLI, '../../packages/knowledge-hub/dataset')
 const roots: string[] = []
+let skillDataset: string
+
+beforeAll(() => {
+  skillDataset = fileSystemService.mkdtempSync(join(tmpdir(), 'pair-workflow-skills-'))
+  for (const asset of [
+    '.pair/defaults',
+    '.skills/capability/workflow',
+    '.skills/capability/estimate',
+    '.skills/process/refine-story',
+    '.skills/workflow/cycle',
+    '.skills/workflow/run',
+    '.skills/next',
+  ]) {
+    const destination = join(skillDataset, asset)
+    fileSystemService.mkdirSync(dirname(destination), { recursive: true })
+    fileSystemService.cpSync(join(DATASET, asset), destination, { recursive: true })
+  }
+})
+
+afterAll(() => fileSystemService.rmSync(skillDataset, { recursive: true, force: true }))
 
 const registry = (prefix: string, target: string) => ({
   prefix,
@@ -106,7 +126,12 @@ function runner(cwd: string, file: string) {
   }
 }
 
-function install(cwd: string, config?: string, command: 'install' | 'update' = 'install') {
+function install(
+  cwd: string,
+  config?: string,
+  command: 'install' | 'update' = 'install',
+  dataset = skillDataset,
+) {
   const fs = {
     ...fileSystemService,
     currentWorkingDirectory: () => cwd,
@@ -114,7 +139,7 @@ function install(cwd: string, config?: string, command: 'install' | 'update' = '
   }
   const source = {
     resolution: 'local',
-    path: DATASET,
+    path: dataset,
     offline: true,
     kb: false,
     target: cwd,
@@ -245,7 +270,7 @@ it('R754-06: native preflight uses a redirected install and both hosts explain a
   roots.push(root)
   vi.spyOn(console, 'log').mockImplementation(() => {})
   writeProjectConfigs(root, undefined, undefined, undefined)
-  expect(await install(root, installConfig(root, teamRegistry))).toBe(0)
+  expect(await install(root, installConfig(root, teamRegistry), 'install', DATASET)).toBe(0)
   write(root, '.pair/adoption/tech/way-of-working.md', '- `pm-tool`: `filesystem`\n')
   write(
     root,
@@ -594,6 +619,6 @@ steps:
       confirmed: true,
     })
   },
-  // This matrix installs the full dataset in both the main and linked worktrees.
+  // The matrix uses the shipped skills exercised by these workflows.
   45_000,
 )
