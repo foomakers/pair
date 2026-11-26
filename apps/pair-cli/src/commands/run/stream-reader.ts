@@ -93,30 +93,17 @@ function topLevelObjects(text: string, skipProgress = false): string[] {
     if (match[0] !== '{') {
       const start = starts.lastIndex
       const end = progressEnd(text, start, match[1])
-      if (claimsMarker(text, start, end, match[1])) starts.lastIndex = end ?? lineEnd(text, start)
+      // An underscored identifier is markup only with a bounded payload and a matching close.
+      const emphasis = match[1]
+      if (!emphasis || (end !== undefined && closesEmphasis(text, end, emphasis))) {
+        starts.lastIndex = end ?? lineEnd(text, start)
+      }
       continue
     }
     starts.lastIndex = containerEnd(text, match.index, false) ?? text.length
     spans.push(text.slice(match.index, starts.lastIndex))
   }
   return spans
-}
-
-/** An underscored identifier is a marker only when it is enclosed by matching emphasis. */
-function claimsMarker(
-  text: string,
-  start: number,
-  end: number | undefined,
-  emphasis?: string,
-): boolean {
-  if (!emphasis) return true
-  if (end !== undefined) return closesEmphasis(text, end, emphasis)
-  const body = text.slice(start, lineEnd(text, start))
-  // Search punctuation outside complete quoted data, including strings in an adjacent handoff.
-  const tokens = /"(?:\\[^\r\n]|[^"\\\r\n])*"(?![\p{ID_Continue}\u200C\u200D])|_+/gu
-  return Array.from(body.matchAll(tokens)).some(
-    match => match[0] === emphasis && closesEmphasis(body, match.index, emphasis),
-  )
 }
 
 function closesEmphasis(text: string, at: number, emphasis?: string): boolean {
