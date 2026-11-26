@@ -222,8 +222,8 @@ if (process.getuid?.() !== 0) {
     chmodSync(ignored, 0)
     try {
       assert.throws(() => readFileSync(blocked), { code: 'EACCES' })
-      for (const args of [['--workspace'], ['sibling.ts', blocked], ['blocked.ts', 'sibling.ts']]) {
-        const result = runLint(cwd, runner, '--fix', ...args)
+      for (const args of [['--workspace', '--fix'], ['--fix', 'sibling.ts', blocked], ['--fix', 'blocked.ts', 'sibling.ts']]) {
+        const result = runLint(cwd, runner, ...args)
         assert.equal(result.status, 2)
         assert.match(result.stderr, /EACCES.*blocked\.ts/)
         assert.equal(readFileSync(sibling, 'utf8'), source)
@@ -720,7 +720,7 @@ test('#693 invalid native options precede discovery and cannot consume a discove
   const source = 'export let value = 1\n'
   for (const populated of [false, true]) {
     if (populated) writeFileSync(file, source)
-    for (const option of ['--ignore-path', '--format', '--config', '--format=bad', '--debug=bad']) {
+    for (const option of ['--ignore-path', '--format', '--config', '--format=bad', '--debug=bad', '--fix', '--fix=true']) {
       const args = ['--fix', option]
       const reference = runLint(cwd, native, ...args)
       const actual = runLint(cwd, runner, ...args)
@@ -788,4 +788,34 @@ test('#693 anchored exclusions from a nested ignore file apply to selected logic
   const result = runLint(cwd, runner, '--fix', '--ignore-path', 'config/ignore', '.')
   assert.equal(result.status, 0, result.stderr)
   assert.equal(readFileSync(join(cwd, 'sibling.ts'), 'utf8'), 'export const value = 1\n')
+})
+
+test('#693 broad globs select source links before resolving their targets', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const sibling = join(cwd, 'sibling.ts')
+  const source = 'export let value = 1\n'
+  writeFileSync(sibling, source)
+  symlinkSync('missing', join(cwd, 'linked.txt'))
+  const args = ['--fix', '**/*', 'sibling.ts']
+  assert.equal(lint(cwd, ...args).status, 0)
+  assert.equal(readFileSync(sibling, 'utf8'), 'export const value = 1\n')
+  writeFileSync(sibling, source)
+  symlinkSync('missing', join(cwd, 'linked.ts'))
+  const result = runLint(cwd, runner, ...args)
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /ENOENT.*linked\.ts/)
+  assert.equal(readFileSync(sibling, 'utf8'), source)
+})
+
+test('#693 deny-warnings counts a synthesized ignored-file warning', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  writeFileSync(join(cwd, 'ignored.config.ts'), 'debugger\n')
+  writeFileSync(join(cwd, 'clean.ts'), 'export const clean = 1\n')
+  for (const quiet of [[], ['--quiet']]) {
+    const flags = ['--deny-warnings', ...quiet]
+    const ignored = lint(cwd, ...flags, 'ignored.config.ts', 'clean.ts')
+    assert.equal(ignored.status, 1)
+    assert.equal(ignored.diagnostics.length, quiet.length ? 0 : 1)
+    assert.equal(lint(cwd, ...flags, 'clean.ts').status, 0)
+  }
 })

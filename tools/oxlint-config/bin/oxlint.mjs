@@ -214,12 +214,13 @@ function matchingFiles(pattern, directory = '.', root = workspaceRoot) {
     if (!dirent.isFile() && !dirent.isSymbolicLink()) return []
     const file = isAbsolute(path) ? normalize(path) : join(directory, path)
     if (isExcluded(resolve(file), false) || frameworkExtensions.includes(extname(file))) return []
+    if (dirent.isSymbolicLink() && !sourceExtensions.includes(extname(file).slice(1))) return []
     // Broken included links abort discovery before Oxlint can modify any selected source.
     const target = realpathSync.native(file)
     if (!isWalkDirectory(dirname(resolve(root, path)), root)) return []
     if (dirent.isSymbolicLink()) {
       const stat = statSync(target)
-      if (stat.isDirectory() && sourceExtensions.includes(extname(file).slice(1))) {
+      if (stat.isDirectory()) {
         throw Object.assign(new Error(`EISDIR: expected a source file at ${file}`), { code: 'EISDIR' })
       }
       if (!stat.isFile()) return []
@@ -290,7 +291,7 @@ function prepareExplicitLint() {
     warnings: [...ignored.values()].map(filename => ({
       filename, severity: 'warning', message: 'File ignored by lint configuration or unsupported file type.', labels: [],
     })),
-    overLimit: remainingWarnings < 0,
+    overLimit: remainingWarnings < 0 || (values['deny-warnings'] && ignored.size > 0),
   }
 }
 
@@ -363,7 +364,9 @@ function runFix(fixArgs, checkArgs, stdio) {
 function main() {
   if (lintsFiles) {
     // Validate the original argv before discovery can append a missing option value or mask an error.
-    if (tokens.some(token => token.kind === 'option' && !fixFlags.includes(token.name))) {
+    const nativeOptions = tokens.filter(token => token.kind === 'option')
+    const [first] = nativeOptions
+    if (nativeOptions.length > 1 || (first && (!fixFlags.includes(first.name) || first.value !== undefined))) {
       const parsed = runLint(['--print-config', ...args], capture)
       if (parsed.status !== 0) return finishLint(parsed)
     }
