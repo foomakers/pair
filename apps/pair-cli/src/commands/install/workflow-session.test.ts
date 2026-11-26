@@ -75,6 +75,25 @@ function git(cwd: string, ...args: string[]) {
   expect(result.status, result.stderr).toBe(0)
 }
 
+function commitFixture(root: string, target?: string, update?: boolean) {
+  git(root, 'init', '-b', 'main')
+  // Check out the real updated installation with its retained aliases.
+  if (update && target) git(root, 'add', '-f', '--', target, '.pair/.skill-name-map.json')
+  git(
+    root,
+    '-c',
+    'user.name=Fixture',
+    '-c',
+    'user.email=fixture@example.test',
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '--allow-empty',
+    '-m',
+    'Fixture',
+  )
+}
+
 function runner(cwd: string, file: string) {
   return (...args: string[]) => {
     const result = spawnSync(process.execPath, [file, ...args], {
@@ -103,7 +122,18 @@ function install(cwd: string, config?: string, command: 'install' | 'update' = '
   const options = config === undefined ? undefined : { config }
   return command === 'install'
     ? handleInstallCommand({ command, ...source }, fs, options)
-    : handleUpdateCommand({ command, ...source }, fs, options)
+    : handleUpdateCommand({ command, ...source }, fs, { ...options, autoRollback: false })
+}
+
+async function installFixture(
+  root: string,
+  config: string | undefined,
+  update: boolean | undefined,
+  legacySkill: string,
+) {
+  if (update) expect(await install(root)).toBe(0)
+  expect(await install(root, config, update ? 'update' : 'install')).toBe(0)
+  if (update) expect(fileSystemService.existsSync(legacySkill)).toBe(true)
 }
 
 async function verifyCardExclusion(
@@ -222,20 +252,7 @@ it('R754-06: native preflight uses a redirected install and both hosts explain a
     '.pair/adoption/product/backlog/03-user-stories/not-started/42.md',
     '# Prepare release notes\n\n**Status**: Todo\n',
   )
-  git(root, 'init', '-b', 'main')
-  git(
-    root,
-    '-c',
-    'user.name=Fixture',
-    '-c',
-    'user.email=fixture@example.test',
-    '-c',
-    'commit.gpgsign=false',
-    'commit',
-    '--allow-empty',
-    '-m',
-    'Fixture',
-  )
+  commitFixture(root)
   write(
     root,
     'native.yaml',
@@ -430,19 +447,22 @@ it.each([
     writeProjectConfigs(root, skills, legacySkills, workingArea)
     const config = installConfig(root, override)
     const skillFile = (directory: string, name: string) => join(directory, target, name, 'SKILL.md')
-    if (update) expect(await install(root)).toBe(0)
-    expect(await install(root, config, update ? 'update' : 'install')).toBe(0)
-    if (update) expect(fs.existsSync(skillFile(root, 'pair-process-refine-story'))).toBe(true)
+    await installFixture(root, config, update, skillFile(root, 'pair-process-refine-story'))
     expect(fs.existsSync(skillFile(root, `${prefix}-process-refine-story`))).toBe(true)
 
     const configuredTarget = vendorTarget(skills ?? legacySkills)
-    const vendor = `${configuredTarget}/vendor-notes/SKILL.md`
     const estimate = `${prefix}-capability-estimate`
-    const configuredEstimate = `${configuredTarget}/${estimate}/SKILL.md`
-    // A one-off installer override can move the bundle without configuring workflow lookup.
-    if (target !== configuredTarget)
-      write(root, configuredEstimate, fs.readFileSync(skillFile(root, estimate)))
-    write(root, vendor, vendorSkill)
+    const installExplicit = (cwd: string) => {
+      // An installer override can move the bundle without moving the configured vendor target.
+      if (target !== configuredTarget)
+        write(
+          cwd,
+          `${configuredTarget}/${estimate}/SKILL.md`,
+          fs.readFileSync(skillFile(cwd, estimate)),
+        )
+      write(cwd, `${configuredTarget}/vendor-notes/SKILL.md`, vendorSkill)
+    }
+    installExplicit(root)
     const adoption =
       '- `pm-tool`: `filesystem`\n\n## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Todo | Draft |\n| Ready | Ready |\n'
     write(root, '.pair/adoption/tech/way-of-working.md', adoption)
@@ -515,22 +535,7 @@ steps:
       expect.stringContaining(`refine: refine-story skill=${prefix}-process-refine-story`),
     )
     const invoke = runner(root, script(root))
-    git(root, 'init', '-b', 'main')
-    // A linked checkout of the updated installation must resolve the same retained aliases.
-    if (update) git(root, 'add', '-f', '--', target, '.pair/.skill-name-map.json')
-    git(
-      root,
-      '-c',
-      'user.name=Fixture',
-      '-c',
-      'user.email=fixture@example.test',
-      '-c',
-      'commit.gpgsign=false',
-      'commit',
-      '--allow-empty',
-      '-m',
-      'Fixture',
-    )
+    commitFixture(root, target, update)
     if (legacySkills !== undefined)
       await verifyConfiguredSkill(root, script(root), legacySkills, skills)
     expect(invoke('validate', 'installed')).toMatchObject(preview)
@@ -574,9 +579,7 @@ steps:
       write(linked, 'config.json', fs.readFileSync(join(root, 'config.json')))
     if (update) expect(fs.existsSync(skillFile(linked, 'pair-process-refine-story'))).toBe(true)
     else expect(await install(linked, config)).toBe(0)
-    if (target !== configuredTarget)
-      write(linked, configuredEstimate, fs.readFileSync(skillFile(linked, estimate)))
-    write(linked, vendor, vendorSkill)
+    installExplicit(linked)
     const invokeLinked = runner(linked, script(linked))
     expect(invokeLinked('validate', 'installed')).toMatchObject(preview)
     const resumed = invokeLinked('resume', runId, '--engine', 'codex')
