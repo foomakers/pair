@@ -173,8 +173,9 @@ The CSS guard allows the exact stylesheet module declarations listed in
 the [compiler adoption decision](../../.pair/adoption/decision-log/2026-11-26-native-typescript-compiler.md).
 Deleting a backed stylesheet, adding an unreviewed declaration, and
 adding a wildcard declaration each failed the guard in a disposable checkout.
-An arbitrary missing import in new or existing code remains a compiler
-error.
+The native compiler rejects unresolved side-effect imports. Next's ambient
+CSS module types can still resolve a missing `.module.css` import, so the guard
+also checks that local stylesheet imports point to files.
 
 ```sh
 pnpm --filter @pair/dev-tools test src/quality-gates/typescript-declarations.test.ts

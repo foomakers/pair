@@ -2,6 +2,7 @@ import { fileSystemService as fs } from '@pair/content-ops'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import ts from 'typescript'
 import { expect, it } from 'vitest'
 
 const root = resolve(__dirname, '../../../..')
@@ -149,6 +150,22 @@ const reviewedDeclarations = [
   'packages/brand/dev/styles.d.css.ts',
 ]
 
+function localStylesheet(cwd: string, importer: string, specifier: string) {
+  const stylesheet = specifier.split(/[?#]/, 1)[0]
+  if (!stylesheet?.endsWith('.css')) return
+  if (/^\.\.?\//.test(stylesheet)) return resolve(cwd, dirname(importer), stylesheet)
+  if (importer.startsWith('apps/website/') && stylesheet.startsWith('@/')) {
+    return join(cwd, 'apps/website', stylesheet.slice(2))
+  }
+  if (importer.startsWith('packages/brand/') && /^\$(?:components|tokens)\//.test(stylesheet)) {
+    return join(cwd, 'packages/brand/src', stylesheet.slice(1))
+  }
+}
+
+function isFile(path: string) {
+  return fs.existsSync(path) && fs.statSync(path).isFile()
+}
+
 function cssProblems(cwd: string, sources: string[]) {
   const problems = sources
     .filter(
@@ -158,23 +175,30 @@ function cssProblems(cwd: string, sources: string[]) {
   for (const declaration of reviewedDeclarations) {
     if (
       !sources.includes(declaration) ||
-      !fs.existsSync(join(cwd, declaration.replace(/\.d\.css\.ts$/, '.css')))
+      !isFile(join(cwd, declaration.replace(/\.d\.css\.ts$/, '.css')))
     ) {
       problems.push(`Missing reviewed CSS declaration or stylesheet: ${declaration}`)
     }
   }
   for (const path of sources) {
-    if (
-      /declare\s+module\s+['"](?:[^'"]*\.css|\*|\*\.\*)['"]/.test(fs.readFileSync(join(cwd, path)))
-    ) {
+    const source = fs.readFileSync(join(cwd, path))
+    if (/declare\s+module\s+['"](?:[^'"]*\.css|\*|\*\.\*)['"]/.test(source)) {
       problems.push(`Ambient CSS declaration: ${path}`)
+    }
+    for (const { fileName } of ts.preProcessFile(source, true, true).importedFiles) {
+      const stylesheet = localStylesheet(cwd, path, fileName)
+      if (stylesheet && !isFile(stylesheet)) {
+        problems.push(`Missing stylesheet: ${path} imports ${fileName}`)
+      }
     }
   }
   return problems
 }
 
 it('#757 AC-4: accepts only reviewed declarations backed by their CSS files', () => {
-  const sources = trackedPaths('apps', 'packages').filter(path => /\.(?:[cm]?ts|tsx)$/.test(path))
+  const sources = trackedPaths('apps', 'packages').filter(path =>
+    /\.(?:[cm]?[jt]s|[jt]sx)$/.test(path),
+  )
   expect(cssProblems(root, sources)).toEqual([])
 })
 
