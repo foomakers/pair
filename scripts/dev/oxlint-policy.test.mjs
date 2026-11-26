@@ -777,3 +777,15 @@ test('#693 unix output keeps a marker-like sourced diagnostic at exit one', t =>
   assert.equal(result.status, 1, result.stdout)
   assert.match(result.stdout, /real\.ts/)
 })
+
+test('#693 anchored exclusions from a nested ignore file apply to selected logical names', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  mkdirSync(join(cwd, 'config'))
+  mkdirSync(join(cwd, 'target'))
+  symlinkSync('../target', join(cwd, 'config/inside.ts'))
+  writeFileSync(join(cwd, 'config/ignore'), '/inside.ts\n')
+  writeFileSync(join(cwd, 'sibling.ts'), 'export let value = 1\n')
+  const result = runLint(cwd, runner, '--fix', '--ignore-path', 'config/ignore', '.')
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(readFileSync(join(cwd, 'sibling.ts'), 'utf8'), 'export const value = 1\n')
+})

@@ -120,21 +120,27 @@ function configExclusions() {
 function selectionExclusions() {
   const byConfig = configExclusions()
   if (values['no-ignore']) return byConfig
-  const patterns = tokens.filter(token => token.kind === 'option' && token.name === 'ignore-pattern')
+  const cliPatterns = tokens.filter(token => token.kind === 'option' && token.name === 'ignore-pattern')
     .map(token => token.value)
-  if (values['ignore-path']) {
+  const cliRules = ignore({ ignorecase: false }).add(cliPatterns)
+  const fileRules = ignore({ ignorecase: false })
+  const ignorePath = values['ignore-path']
+  const ignoreRoot = ignorePath ? dirname(resolve(ignorePath)) : workspaceRoot
+  if (ignorePath) {
     try {
-      patterns.unshift(...readFileSync(values['ignore-path'], 'utf8').split(/\r?\n/))
+      fileRules.add(readFileSync(ignorePath, 'utf8'))
     } catch {
       // A missing or inaccessible ignore file is handled by the native command.
     }
   }
-  const matcher = ignore({ ignorecase: false }).add(patterns)
   return (path, directory = true) => {
     if (byConfig(path, directory)) return true
     if (path === workspaceRoot || !isWithin(workspaceRoot, path)) return false
-    const name = relative(workspaceRoot, path).split(sep).join('/')
-    return matcher.ignores(directory ? `${name}/` : name)
+    const logicalName = root => relative(root, path).split(sep).join('/') + (directory ? '/' : '')
+    const cliMatch = cliRules.test(logicalName(workspaceRoot))
+    if (cliMatch.ignored || cliMatch.unignored) return cliMatch.ignored
+    if (path === ignoreRoot) return false
+    return fileRules.ignores(logicalName(isWithin(ignoreRoot, path) ? ignoreRoot : workspaceRoot))
   }
 }
 
