@@ -475,6 +475,41 @@ it.each([
     alternatives: ['fallback.css'],
     needsAlternative: true,
   },
+  ...[
+    { slot: 'default', page: 'page', needsAlternative: false },
+    { slot: 'default', page: 'nested/page', needsAlternative: false },
+    { slot: 'page', page: 'page', needsAlternative: true },
+    { slot: '[...slug]/page', page: 'nested/page', needsAlternative: true },
+  ].map(({ slot, page, needsAlternative }) => ({
+    target: `a Next parallel slot ${slot} consumed by Edge ${page}`,
+    importer: `apps/website/app/edge/@panel/${slot}.jsx`,
+    files: {
+      'app/layout.jsx': 'export default ({ children }) => <html><body>{children}</body></html>\n',
+      'app/edge/layout.jsx': 'export default ({ children, panel }) => <>{children}{panel}</>\n',
+      [`app/edge/${page}.jsx`]: "export const runtime = 'edge'\nexport default () => null\n",
+    },
+    afterImport: 'export default () => null\n',
+    manifest: {
+      exports: { './theme.css': { 'edge-light': './theme.css', default: './fallback.css' } },
+    },
+    alternatives: ['fallback.css'],
+    needsAlternative,
+  })),
+  {
+    target: 'a Next parallel slot default shadowed by a matching page',
+    importer: 'apps/website/app/edge/@panel/default.jsx',
+    files: {
+      'app/layout.jsx': 'export default ({ children }) => <html><body>{children}</body></html>\n',
+      'app/edge/layout.jsx': 'export default ({ children, panel }) => <>{children}{panel}</>\n',
+      'app/edge/page.jsx': "export const runtime = 'edge'\nexport default () => null\n",
+      'app/edge/@panel/page.jsx': 'export default () => null\n',
+    },
+    afterImport: 'export default () => null\n',
+    manifest: {
+      exports: { './theme.css': { 'edge-light': './fallback.css', default: './theme.css' } },
+    },
+    alternatives: ['fallback.css'],
+  },
   {
     target: 'Next development server',
     importer: 'apps/website/app/page.tsx',
@@ -525,7 +560,9 @@ it.each([
         fs.mkdirSync(dirname(path), { recursive: true })
         fs.writeFileSync(path, source)
       }
-      fs.writeFileSync(join(cwd, importer), `${beforeImport}import '${specifier}'\n${afterImport}`)
+      const source = join(cwd, importer)
+      fs.mkdirSync(dirname(source), { recursive: true })
+      fs.writeFileSync(source, `${beforeImport}import '${specifier}'\n${afterImport}`)
       for (const alternative of alternatives) fs.writeFileSync(join(styles, alternative), '')
       fs.writeFileSync(join(styles, selected), '')
       expect(await checkStylesheets(cwd)).toEqual([])
