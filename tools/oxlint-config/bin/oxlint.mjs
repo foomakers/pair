@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
-import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
+import { accessSync, constants, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -108,7 +108,7 @@ function operandTarget(path) {
   try {
     return realPath(path)
   } catch (error) {
-    // A static prefix inside an excluded directory may be unreadable before globbing starts.
+    // Let glob roots be validated separately from an inaccessible excluded file operand.
     if (error.code !== 'EACCES' || !excludeDirectory(dirname(resolve(path)))) throw error
   }
 }
@@ -133,6 +133,16 @@ function isWalkDirectory(path, root) {
     if (isWithin(root, realPath(directory))) return false
   }
   return true
+}
+
+function validateGlobRoot(pattern) {
+  // Brace expansion can choose directories without explicitly naming a walk root.
+  const [task] = glob.generateTasks(pattern, { braceExpansion: false })
+  if (!task) return
+  const base = resolve(task.base)
+  if (isWalkDirectory(base, workspaceRoot) && statSync(base, { throwIfNoEntry: false })?.isDirectory()) {
+    accessSync(base, constants.R_OK)
+  }
 }
 
 function matchingFiles(pattern, directory = '.', root = workspaceRoot) {
@@ -185,9 +195,13 @@ function prepareExplicitLint() {
     const pattern = !target && glob.isDynamicPattern(path)
     const collection = directory || pattern
     let paths = []
-    if (directory) paths = matchingFiles(sourcePattern, file, target)
-    else if (pattern) paths = matchingFiles(path)
-    else if (stat?.isFile()) paths = [file]
+    if (directory) {
+      accessSync(target, constants.R_OK)
+      paths = matchingFiles(sourcePattern, file, target)
+    } else if (pattern) {
+      validateGlobRoot(path)
+      paths = matchingFiles(path)
+    } else if (stat?.isFile()) paths = [file]
     const operands = paths.map(asOperand)
     replacements.set(token.index, operands)
     if (!operands.length && strictSelection) return selectionError(path)
@@ -255,7 +269,15 @@ function main() {
   if (lintsFiles && (workspace || explicit) && !values['no-error-on-unmatched-pattern']) {
     options.push('--no-error-on-unmatched-pattern')
   }
-  const prepared = explicit ? prepareExplicitLint() : {}
+  let prepared
+  try {
+    prepared = explicit ? prepareExplicitLint() : {}
+  } catch (error) {
+    if (!['EACCES', 'EPERM'].includes(error.code)) throw error
+    process.stderr.write(`${error.message}\n`)
+    process.exitCode = 2
+    return
+  }
   if (!prepared) return
   const { replacements, warnings, overLimit } = prepared
   const paths = lintsFiles && !explicit ? matchingFiles(sourcePattern).map(asOperand) : []
