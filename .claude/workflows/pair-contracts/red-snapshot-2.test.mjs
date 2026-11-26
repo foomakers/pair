@@ -229,6 +229,51 @@ test('defect AQ: a clean package lint seals; a lint run that crashed without any
   assert.deepEqual([crash.json.sealed, crash.json.reason, crash.json.gate], [false, 'static-gate-failed', 'package:lint'], JSON.stringify(crash.json))
 })
 
+function oxlintPackage(diagnostics, { status = 1, stderr = '' } = {}) {
+  const report = typeof diagnostics === 'string' ? diagnostics : JSON.stringify({ diagnostics, number_of_files: 2 })
+  const lintJs = `console.log(${JSON.stringify(report)}); if (${JSON.stringify(stderr)}) console.error(${JSON.stringify(stderr)}); process.exit(${status})`
+  return sealEmpty(pkgWitnessRepo({ lintJs })).json
+}
+
+const oxlintError = filename => ({ filename, severity: 'error', code: 'eslint(complexity)', message: 'too complex' })
+
+test('#693 AC-3: Oxlint package diagnostics scope to the exact listed path', () => {
+  assert.equal(oxlintPackage([], { status: 0 }).sealed, true)
+  const unrelated = oxlintPackage([oxlintError('other/src/a.test.js')])
+  assert.equal(unrelated.sealed, true, JSON.stringify(unrelated))
+  assert.equal(unrelated.preSeal.staticGates.at(-1).scoped, true)
+  for (const code of [undefined, null]) {
+    const diagnostic = {
+      filename: 'src/other.ts', severity: 'error', code, message: 'Unexpected token',
+      labels: [{ span: { line: 1, column: 1 } }],
+    }
+    const syntax = oxlintPackage([diagnostic])
+    assert.equal(syntax.sealed, true, JSON.stringify(syntax))
+    const syntaxInWitness = oxlintPackage([{ ...diagnostic, filename: 'src/a.test.js' }])
+    assert.equal(syntaxInWitness.sealed, false)
+    assert.match(syntaxInWitness.path, /src\/a\.test\.js$/)
+  }
+
+  const listed = oxlintPackage([oxlintError('src/other.ts'), oxlintError('src/a.test.js')])
+  assert.equal(listed.sealed, false)
+  assert.equal(listed.gate, 'package:lint')
+  assert.match(listed.path, /src\/a\.test\.js$/)
+})
+
+test('#693 AC-3: an incomplete Oxlint report or a mixed operational failure refuses the seal', () => {
+  for (const report of [
+    oxlintPackage('{ "diagnostics":['),
+    oxlintPackage([{ ...oxlintError('src/other.ts'), filename: undefined }]),
+    oxlintPackage([{ ...oxlintError('src/other.ts'), code: undefined }]),
+    oxlintPackage([{ ...oxlintError('src/other.ts'), severity: 'warning' }]),
+    oxlintPackage([oxlintError('src/other.ts')], { stderr: 'Failed to load configuration' }),
+    oxlintPackage([oxlintError('src/other.ts'), { ...oxlintError('tsconfig.json'), code: 'typescript(tsconfig-error)' }]),
+    oxlintPackage([oxlintError('src/other.ts')], { status: 2 }),
+  ]) {
+    assert.deepEqual([report.sealed, report.reason, report.gate], [false, 'static-gate-failed', 'package:lint'])
+  }
+})
+
 test('US-506 T-6 w3 (AC9): a `predecessorContractHash` that matches no sealed predecessor is refused; the real one seals', () => {
   const { cwd, head1 } = chainRepo()
   const sealedManifest = JSON.parse(git(cwd, 'show', `HEAD~1:${manifestPathFor(PR, 'r1-g1')}`))

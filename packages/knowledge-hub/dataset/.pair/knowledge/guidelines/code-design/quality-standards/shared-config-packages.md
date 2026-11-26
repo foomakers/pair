@@ -9,7 +9,7 @@ This guideline documents the pattern generically and then walks through pair's o
 ## The Pattern
 
 1. **One package per concern** — do not bundle lint + format + types into a single "tooling" package. Each tool gets its own package (`*-config`) so it can version and release independently.
-2. **Consume via the tool's own mechanism** — don't invent a custom loader. Use `extends` for `tsconfig.json`, `require`/`extends` for ESLint flat config, a `"prettier"` field in `package.json`, and a config-discovery bin wrapper for tools that don't support a field (markdownlint).
+2. **Consume via the tool's own mechanism** — don't invent a custom loader. Use `extends` for `tsconfig.json` and Oxlint JSON config, `require`/`extends` for ESLint flat config, a `"prettier"` field in `package.json`, and a config-discovery bin wrapper for tools that don't support a field (markdownlint).
 3. **Package the enforcement, not just the rules** — ship bin wrappers (`lint`, `lint-fix`, `prettier-check`, `markdownlint-check`, …) alongside the config so workspace `package.json` scripts stay one-liners instead of re-declaring flags/paths everywhere. (`mdlint:check` is the root script alias that calls the `markdownlint-check` bin — not a bin name itself.)
 4. **Workspace configs carry only local overrides** — `paths`, `references`, `outDir`, package-specific `ignores`. Everything shared lives in the config package.
 5. **Version like a dependency** — `@scope/*-config` is a `workspace:*` devDependency; bumping it (e.g. tightening a rule) is a normal dependency update, reviewed like one.
@@ -36,11 +36,11 @@ pair's own monorepo is the canonical example. Four config packages, each consume
 | Package | Presets / exports | Consumption | Bin wrappers |
 | --- | --- | --- | --- |
 | `tools/ts-config` (`@pair/ts-config`) | `base.json` → `node.json` / `ui.json` | `tsconfig.json`: `"extends": "@pair/ts-config/node.json"` | — (`tsc` runs directly) |
-| `tools/eslint-config` (`@pair/eslint-config`) | `eslint.config.cjs` (base) → `eslint.config.react.cjs` (React overlay) | Base: bin wrappers apply it with no local file needed. Override: local `eslint.config.cjs` does `module.exports = require('@pair/eslint-config/eslint.config.react.cjs')` | `lint`, `lint-fix`, `eslint` |
+| `tools/oxlint-config` (`@pair/oxlint-config`) | `base.json` → `react.json` | Workspace `.oxlintrc.json` extends the shared preset and declares local ignores | `lint`, `lint-fix`, `oxlint` |
 | `tools/prettier-config` (`@pair/prettier-config`) | single `.prettierrc.json` (no per-type split — formatting doesn't diverge by type) | `package.json`: `"prettier": "@pair/prettier-config"` | `prettier-check`, `prettier-fix` |
 | `tools/markdownlint-config` (`@pair/markdownlint-config`) | single `.markdownlint.jsonc` (+ ignore file) | discovered by the bin wrappers, no per-package config file | `markdownlint-check`, `markdownlint-fix` |
 
-Per-type mapping in practice — Node/service/lib workspaces (`apps/pair-cli`, `packages/knowledge-hub`, `packages/content-ops`) extend `@pair/ts-config/node.json` and take the ESLint base config as-is. Frontend and UI-lib workspaces (`apps/website`, `packages/brand`) extend `@pair/ts-config/ui.json` and override `eslint.config.cjs` to layer the React overlay:
+Node and library workspaces such as `apps/pair-cli` and `packages/content-ops` extend `@pair/ts-config/node.json` and Oxlint's shared `base.json`. The website extends `@pair/ts-config/ui.json` and Oxlint's React preset. Brand uses the React preset for direct Oxlint invocations and selects its local `oxlint.base.json` for the package lint scripts.
 
 ```jsonc
 // apps/api/tsconfig.json (backend/CLI — node preset)
@@ -52,9 +52,9 @@ Per-type mapping in practice — Node/service/lib workspaces (`apps/pair-cli`, `
 { "extends": "@pair/ts-config/ui.json", "compilerOptions": { "jsx": "preserve" /* local overrides only */ } }
 ```
 
-```js
-// packages/ui-lib/eslint.config.cjs (shared UI lib — same override as frontend, because it ships JSX)
-module.exports = require('@pair/eslint-config/eslint.config.react.cjs')
+```jsonc
+// apps/website/.oxlintrc.json (React preset)
+{ "extends": ["../../tools/oxlint-config/react.json"] }
 ```
 
 Every consuming workspace declares the config packages as ordinary `workspace:*` devDependencies (see any `apps/*/package.json` or `packages/*/package.json`) — they are dependencies, not magic.

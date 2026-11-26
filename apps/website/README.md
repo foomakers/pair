@@ -34,7 +34,7 @@ pnpm --filter @pair/website build        # production build
 pnpm --filter @pair/website test         # vitest + playwright CT
 pnpm --filter @pair/website e2e          # playwright E2E (builds first)
 pnpm --filter @pair/website a11y:report  # accessibility audit
-pnpm --filter @pair/website lint         # eslint
+pnpm --filter @pair/website lint         # Oxlint
 ```
 
 ### Key Files

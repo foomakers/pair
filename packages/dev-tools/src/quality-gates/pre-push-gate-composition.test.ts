@@ -108,6 +108,17 @@ describe('the pre-push gate never runs a write-mode step (#394)', () => {
     expect(findWriteModeFormatters('eslint . && other-tool --fix')).toEqual([])
   })
 
+  it.each(['--fix', '--fix-suggestions', '--fix-dangerously'])('flags Oxlint %s', flag => {
+    expect(findWriteModeFormatters(`pnpm exec oxlint . ${flag}`)).toEqual([`oxlint ${flag}`])
+    expect(findWriteModeFormatters(`node tools/oxlint-config/bin/oxlint.mjs . ${flag}`)).toEqual([
+      `oxlint ${flag}`,
+    ])
+    expect(findWriteModeFormatters(`./tools/oxlint-config/bin/lint.sh ${flag}`)).toEqual([
+      `oxlint ${flag}`,
+    ])
+    expect(findWriteModeFormatters(`oxlint . && other-tool ${flag}`)).toEqual([])
+  })
+
   // The invariant is "no step reachable from the gate WRITES", and formatters are not
   // the only writers this repo already has. `pnpm sync-version` → sync-version-in-docs.ts
   // writeFileSync's every .md/.mdx it walks, i.e. it rewrites version strings in docs the
@@ -309,8 +320,53 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     expect(r.ok, r.message).toBe(true)
   })
 
+  it.each(['--fix', '--fix-suggestions', '--fix-dangerously'])(
+    '#693 R2 rejects Oxlint %s on a nested script invocation',
+    flag => {
+      const scripts = {
+        'quality-gate': `pnpm checks && pnpm ${GUARD_SCRIPT}`,
+        checks: `pnpm lint -- ${flag}`,
+        lint: 'turbo lint',
+      }
+
+      const result = checkRootGate(pkg(scripts))
+      expect(result.ok).toBe(false)
+      expect(result.message).toContain(`oxlint ${flag}`)
+      expect(checkRootGate(pkg({ ...scripts, checks: `pnpm lint && other-tool ${flag}` })).ok).toBe(
+        true,
+      )
+    },
+  )
+
+  it.each(['pnpm lint:check --fix', 'pnpm checks --fix'])(
+    '#693 R2 rejects autofix forwarded by %s',
+    command => {
+      const result = checkRootGate(
+        pkg({
+          'quality-gate': `${command} && pnpm ${GUARD_SCRIPT}`,
+          checks: 'pnpm lint:check',
+          'lint:check': 'oxlint fixture.ts',
+        }),
+      )
+
+      expect(result.ok, result.message).toBe(false)
+      expect(result.message).toContain('oxlint --fix')
+    },
+  )
+
+  it('#693 R2 keeps delegated flags on the final command', () => {
+    const result = checkRootGate(
+      pkg({
+        'quality-gate': `pnpm lint:check --fix && pnpm ${GUARD_SCRIPT}`,
+        'lint:check': 'oxlint fixture.ts && other-tool',
+      }),
+    )
+
+    expect(result.ok, result.message).toBe(true)
+  })
+
   // Pattern level is not enough: checkRootGate EXPANDS a referenced root script by
-  // inlining `{ body }` right after the match, so the `--check` sparing has to survive
+  // inlining `{ body }` before the match, so the `--check` sparing has to survive
   // the braces AND the second bare `sync-version` the body brings with it. Asserted at
   // integration level because the form a real gate would use — `pnpm sync-version
   // --check` delegating to a root script — is exactly the one the lookahead broke on.

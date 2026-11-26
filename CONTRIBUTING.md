@@ -6,10 +6,10 @@ Thank you for your interest in contributing to Pair!
 
 ## Code Style
 
-- All code must follow the ESLint and Prettier rules defined in the monorepo.
+- All code must follow the Oxlint and Prettier rules defined in the monorepo.
 - Run `pnpm lint` to check for lint errors before committing.
 - Run `pnpm prettier:check` to ensure code formatting is correct.
-- Use the provided configs in `tools/eslint-config` and `tools/prettier-config` for reference.
+- Use the provided configs in `tools/oxlint-config` and `tools/prettier-config` for reference.
 
 ## Git Hooks (Husky)
 

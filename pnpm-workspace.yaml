@@ -7,7 +7,6 @@ catalog:
   '@axe-core/playwright': 4.11.1
   '@changesets/cli': 2.29.7
   '@earendil-works/pi-coding-agent': ^0.84.3
-  '@eslint/js': 9.34.0
   '@inquirer/prompts': 7.5.0
   '@mdx-js/mdx': 3.1.1
   '@playwright/experimental-ct-react': ^1.50.0
@@ -24,7 +23,6 @@ catalog:
   '@types/react': 19.0.6
   '@types/react-dom': 19.0.6
   '@typescript-eslint/eslint-plugin': 8.41.0
-  '@typescript-eslint/parser': 8.41.0
   '@vitejs/plugin-react': 4.3.4
   '@vitest/coverage-v8': 3.2.4
   adm-zip: 0.5.16
@@ -32,7 +30,6 @@ catalog:
   chalk: 4.1.2
   commander: 11.0.0
   dotenv: 17.2.1
-  eslint: 9.34.0
   eslint-plugin-jsx-a11y: 6.10.2
   eslint-plugin-react: 7.37.2
   eslint-plugin-react-hooks: 5.1.0
@@ -40,7 +37,6 @@ catalog:
   fumadocs-mdx: 11.10.1
   fumadocs-ui: 14.7.7
   github-slugger: 2.0.0
-  globals: 15.0.0
   husky: 8.0.0
   jscpd: ^5.0.16
   jsdom: 25.0.1
@@ -50,6 +46,8 @@ catalog:
   mdast-util-to-string: 4.0.0
   next: ^15.3.3
   next-themes: 0.4.6
+  oxlint: 1.95.0
+  oxlint-plugin-eslint: 1.95.0
   postcss: 8.4.49
   posthog-js: ^1.350.0
   prettier: 3.6.2

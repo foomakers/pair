@@ -1,0 +1,1100 @@
+[
+  {
+    "profile": "base",
+    "before": "constructor-super",
+    "rule": "eslint(constructor-super)",
+    "clean": "class A { }",
+    "violation": "class A extends B { constructor() { } }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "for-direction",
+    "rule": "eslint-js(for-direction)",
+    "clean": "for(var i = 10; i >= 0; i += 0);",
+    "violation": "for(var i = 0; i < MAX; i += (2 - 3));",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "getter-return",
+    "rule": "eslint-js(getter-return)",
+    "clean": "foo.defineProperty(null, { get() {} });",
+    "violation": "Object.create(foo, { bar: { get() {} } })",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-async-promise-executor",
+    "rule": "eslint(no-async-promise-executor)",
+    "clean": "new Promise((resolve, reject) => {})",
+    "violation": "new Promise(((((async () => {})))))",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-case-declarations",
+    "rule": "eslint(no-case-declarations)",
+    "clean": "\n            switch (a) {\n                case 1:\n                case 2: {}\n            }\n        ",
+    "violation": "\n                switch (\"foo\") {\n                    case \"bar\":\n                        function baz() { }\n                        break;\n                    default:\n                        baz();\n                }\n            ",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-class-assign",
+    "rule": "eslint(no-class-assign)",
+    "clean": "class A { } foo(A);",
+    "violation": "class A { } A = 0;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-compare-neg-zero",
+    "rule": "eslint-js(no-compare-neg-zero)",
+    "clean": "Object.is(x, -0)",
+    "violation": "x > -0",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-cond-assign",
+    "rule": "eslint(no-cond-assign)",
+    "clean": "x = 0;",
+    "violation": "for(; x = y; ) { }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-const-assign",
+    "rule": "eslint(no-const-assign)",
+    "clean": "const x = 0; foo(x);",
+    "violation": "await using x = foo(); x ||= bar();",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-constant-binary-expression",
+    "rule": "eslint-js(no-constant-binary-expression)",
+    "clean": "bar && foo",
+    "violation": "1 ?? foo",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-constant-condition",
+    "rule": "eslint(no-constant-condition)",
+    "clean": "if(a);",
+    "violation": "if(1);",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-control-regex",
+    "rule": "eslint(no-control-regex)",
+    "clean": "new RegExp(\"\\\\u{1F}\")",
+    "violation": "new RegExp(\"\\\\u{1F}\", \"u\")",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-debugger",
+    "rule": "eslint(no-debugger)",
+    "clean": "var test = { debugger: 1 }; test.debugger;",
+    "violation": "if (foo) debugger",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-delete-var",
+    "rule": "eslint(no-delete-var)",
+    "clean": "delete x.prop;",
+    "violation": "delete x",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-dupe-args",
+    "rule": "eslint-js(no-dupe-args)",
+    "clean": "export function run(a, b) { return a+b }",
+    "violation": "function a(a, b, b) {}",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-dupe-class-members",
+    "rule": "eslint(no-dupe-class-members)",
+    "clean": "class A { 1() {} 2() {} }",
+    "violation": "class A { foo; foo; }",
+    "severity": "error",
+    "parser": "Identifier `foo` has already been declared"
+  },
+  {
+    "profile": "base",
+    "before": "no-dupe-else-if",
+    "rule": "eslint(no-dupe-else-if)",
+    "clean": "if (a);",
+    "violation": "if (a); else if (a);",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-dupe-keys",
+    "rule": "eslint(no-dupe-keys)",
+    "clean": "var x = { a: b, ...c }",
+    "violation": "var x = { y: 1, y: 2 };",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-duplicate-case",
+    "rule": "eslint(no-duplicate-case)",
+    "clean": "switch(a) { case toString: break; }",
+    "violation": "switch (a) { case a: case a: }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-empty",
+    "rule": "eslint(no-empty)",
+    "clean": "if (foo) { bar() }",
+    "violation": "if (foo) {}",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-empty-character-class",
+    "rule": "eslint(no-empty-character-class)",
+    "clean": "var foo = /\\[]/",
+    "violation": "if (/^abc[]/.test(foo)) {}",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-empty-pattern",
+    "rule": "eslint(no-empty-pattern)",
+    "clean": "var [a] = foo",
+    "violation": "var {} = foo",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-empty-static-block",
+    "rule": "eslint-js(no-empty-static-block)",
+    "clean": "class Foo { static { bar(); } }",
+    "violation": "class Foo { static {} }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-ex-assign",
+    "rule": "eslint(no-ex-assign)",
+    "clean": "try { } catch (e) { three = 2 + 1; }",
+    "violation": "try { } catch (e) { e = 10; }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-extra-boolean-cast",
+    "rule": "eslint-js(no-extra-boolean-cast)",
+    "clean": "x=!!a || d ? b : c ",
+    "violation": "if (!!a);",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-fallthrough",
+    "rule": "eslint(no-fallthrough)",
+    "clean": "switch(foo) { case 0: case 1: a(); }",
+    "violation": "switch (a) { case 1: \n ; case 2:  }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-func-assign",
+    "rule": "eslint(no-func-assign)",
+    "clean": "var foo = () => {}; foo = bar;",
+    "violation": "function foo() {}; foo = bar;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-global-assign",
+    "rule": "eslint-js(no-global-assign)",
+    "clean": "a = 1",
+    "violation": "String++;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-import-assign",
+    "rule": "eslint(no-import-assign)",
+    "clean": "import 'mod'",
+    "violation": "import * as mod3 from 'mod'; mod3.named++",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-invalid-regexp",
+    "rule": "eslint(no-invalid-regexp)",
+    "clean": "RegExp()",
+    "violation": "RegExp('[');",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-irregular-whitespace",
+    "rule": "eslint-js(no-irregular-whitespace)",
+    "clean": "'\u000b';",
+    "violation": "\u000b",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-loss-of-precision",
+    "rule": "eslint(no-loss-of-precision)",
+    "clean": "const x = 12345;",
+    "violation": "const x = 9007199254740993;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-misleading-character-class",
+    "rule": "eslint-js(no-misleading-character-class)",
+    "clean": "new RegExp()",
+    "violation": "RegExp(/[👍]/)",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-new-native-nonconstructor",
+    "rule": "eslint(no-new-native-nonconstructor)",
+    "clean": "new foo(Symbol);",
+    "violation": "export const d=new Symbol()",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-nonoctal-decimal-escape",
+    "rule": "eslint-js(no-nonoctal-decimal-escape)",
+    "clean": "''",
+    "violation": "'\\8'",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-obj-calls",
+    "rule": "eslint-js(no-obj-calls)",
+    "clean": "Intl.foo()",
+    "violation": "Intl()",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-octal",
+    "rule": "eslint-js(no-octal)",
+    "clean": "a = 0;",
+    "violation": "a = 1 + 01234;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-prototype-builtins",
+    "rule": "eslint(no-prototype-builtins)",
+    "clean": "foo[1]('bar')",
+    "violation": "foo.isPrototypeOf('bar')",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-redeclare",
+    "rule": "eslint-js(no-redeclare)",
+    "clean": "/*globals a:off */",
+    "violation": "function a() {} function a() {}",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-regex-spaces",
+    "rule": "eslint-js(no-regex-spaces)",
+    "clean": "new RegExp('  ', flags)",
+    "violation": "var foo = /\\[  /;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-self-assign",
+    "rule": "eslint(no-self-assign)",
+    "clean": "a = b",
+    "violation": "a = a",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-setter-return",
+    "rule": "eslint(no-setter-return)",
+    "clean": "return 1;",
+    "violation": "x = () => {}; A = class { set a(val) { return 1; } };",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-shadow-restricted-names",
+    "rule": "eslint-js(no-shadow-restricted-names)",
+    "clean": "export default function() {}",
+    "violation": "import undefined from 'foo';",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-sparse-arrays",
+    "rule": "eslint(no-sparse-arrays)",
+    "clean": "var a = [ 1, 2, ]",
+    "violation": "[(( [a,] )),,,];",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-this-before-super",
+    "rule": "eslint(no-this-before-super)",
+    "clean": "class A { }",
+    "violation": "class A extends B { constructor() { super(this.c); } }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-unexpected-multiline",
+    "rule": "eslint(no-unexpected-multiline)",
+    "clean": "f(\n(x)\n)",
+    "violation": "var a = (a || b)\n(x).doSomething()",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-unreachable",
+    "rule": "eslint-js(no-unreachable)",
+    "clean": "A: { break A; } foo()",
+    "violation": "while (true) { break; x = 1; }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-unsafe-finally",
+    "rule": "eslint(no-unsafe-finally)",
+    "clean": "var foo = function() { try {} finally { while (true) break; } }",
+    "violation": "var foo = function() { label: try { return 0; } finally { break label; } return 1; }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-unsafe-negation",
+    "rule": "eslint(no-unsafe-negation)",
+    "clean": "foo = a > b;",
+    "violation": "!a in b",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-unsafe-optional-chaining",
+    "rule": "eslint-js(no-unsafe-optional-chaining)",
+    "clean": "new bar();",
+    "violation": "(obj?.foo)();",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-unused-labels",
+    "rule": "eslint(no-unused-labels)",
+    "clean": "A: break A;",
+    "violation": "A: { foo(); bar(); }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-unused-private-class-members",
+    "rule": "eslint(no-unused-private-class-members)",
+    "clean": "class Foo {}",
+    "violation": "class Foo {\n    #unusedMember = 5;\n}",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-useless-backreference",
+    "rule": "eslint-js(no-useless-backreference)",
+    "clean": "RegExp(p)",
+    "violation": "RegExp('\\\\1(a)');",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-useless-catch",
+    "rule": "eslint(no-useless-catch)",
+    "clean": "\n            try {\n                foo();\n            } catch (err) {\n                throw err.msg;\n            }\n        ",
+    "violation": "\n                try {\n                    foo();\n                } catch (err) {\n                    throw err;\n                }\n            ",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-useless-escape",
+    "rule": "eslint(no-useless-escape)",
+    "clean": "/]/",
+    "violation": "\"use\\ strict\";",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-with",
+    "rule": "eslint-js(no-with)",
+    "clean": "foo.bar()",
+    "violation": "with(foo) { bar() }",
+    "severity": "error",
+    "parser": "'with' statements are not allowed"
+  },
+  {
+    "profile": "base",
+    "before": "require-yield",
+    "rule": "eslint(require-yield)",
+    "clean": "(function* foo() { })();",
+    "violation": "(function* foo() { return 0; })();",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "use-isnan",
+    "rule": "eslint-js(use-isnan)",
+    "clean": "foo(NaN - 1)",
+    "violation": "switch(foo) { case NaN: }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "valid-typeof",
+    "rule": "eslint(valid-typeof)",
+    "clean": "typeof foo === baz",
+    "violation": "typeof foo != 'strnig'",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/ban-ts-comment",
+    "rule": "legacy-typescript(ban-ts-comment)",
+    "clean": "// @ts-check",
+    "violation": "// @ts-ignore",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-array-constructor",
+    "rule": "legacy-typescript(no-array-constructor)",
+    "clean": "Array(x);",
+    "violation": "Array();",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-duplicate-enum-values",
+    "rule": "legacy-typescript(no-duplicate-enum-values)",
+    "clean": "\nenum E {\n  A,\n  B,\n}\n    ",
+    "violation": "\nenum E {\n  A = 1,\n  B = 1,\n}\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-empty-object-type",
+    "rule": "typescript(no-empty-object-type)",
+    "clean": "let value: object;",
+    "violation": "let value: {};",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-explicit-any",
+    "rule": "typescript(no-explicit-any)",
+    "clean": "const number: number = 1;",
+    "violation": "Foo<any>();",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-extra-non-null-assertion",
+    "rule": "legacy-typescript(no-extra-non-null-assertion)",
+    "clean": "\nchecksCounter?.textContent!.trim();\n      ",
+    "violation": "\nfunction foo(bar?: { n: number }) {\n  return bar!?.n;\n}\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-misused-new",
+    "rule": "legacy-typescript(no-misused-new)",
+    "clean": "type T = { new (): T };",
+    "violation": "\ninterface G {\n  new <T>(): G<T>;\n}\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-namespace",
+    "rule": "legacy-typescript(no-namespace)",
+    "clean": "declare global {}",
+    "violation": "namespace Foo.Bar {}",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-non-null-asserted-optional-chain",
+    "rule": "legacy-typescript(no-non-null-asserted-optional-chain)",
+    "clean": "foo.bar()!;",
+    "violation": "foo?.bar()!;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-require-imports",
+    "rule": "typescript(no-require-imports)",
+    "clean": "\nimport { createRequire } from 'module';\nconst require = createRequire();\nrequire('remark-preset-prettier');\n    ",
+    "violation": "require(foo);",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-this-alias",
+    "rule": "typescript(no-this-alias)",
+    "clean": "const self = foo(this);",
+    "violation": "const self = this;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-unnecessary-type-constraint",
+    "rule": "legacy-typescript(no-unnecessary-type-constraint)",
+    "clean": "function data() {}",
+    "violation": "class Data<T extends unknown> {}",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-unsafe-declaration-merging",
+    "rule": "legacy-typescript(no-unsafe-declaration-merging)",
+    "clean": "export interface C { field:string }; export class D {}",
+    "violation": "\ndeclare global {\n  interface Foo {}\n  class Foo {}\n}\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-unsafe-function-type",
+    "rule": "typescript(no-unsafe-function-type)",
+    "clean": "let value: () => void;",
+    "violation": "let value: Function;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-unused-expressions",
+    "rule": "eslint(no-unused-expressions)",
+    "clean": "\n      a?.['b']?.c();\n    ",
+    "violation": "a?.b;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-unused-vars",
+    "rule": "legacy-typescript(no-unused-vars)",
+    "clean": "export function f(_unused) { return 2 }",
+    "violation": "export function f() { const unused = 0; return 2 }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/no-wrapper-object-types",
+    "rule": "typescript(no-wrapper-object-types)",
+    "clean": "let Null;",
+    "violation": "0 as Number;",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/prefer-as-const",
+    "rule": "typescript(prefer-as-const)",
+    "clean": "let foo: 'bar';",
+    "violation": "let []: 'bar' = 'bar';",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/prefer-namespace-keyword",
+    "rule": "legacy-typescript(prefer-namespace-keyword)",
+    "clean": "declare global {}",
+    "violation": "module foo {}",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "@typescript-eslint/triple-slash-reference",
+    "rule": "typescript(triple-slash-reference)",
+    "clean": "/// <reference lib=\"foo\" />",
+    "violation": "/// <reference path=\"foo\" />",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "complexity",
+    "rule": "eslint(complexity)",
+    "clean": "if (foo) { bar(); }",
+    "violation": "function test (a) { if (a === 1) {} else if (a === 2) {} else if (a === 3) {} else if (a === 4) {} else if (a === 5) {} else if (a === 6) {} else if (a === 7) {} else if (a === 8) {} else if (a === 9) {} else if (a === 10) {} else if (a === 11) {} else if (a === 12) {} else if (a === 13) {} else if (a === 14) {} else if (a === 15) {} else if (a === 16) {} else if (a === 17) {} else if (a === 18) {} else if (a === 19) {} else if (a === 20) {} };",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "max-depth",
+    "rule": "eslint(max-depth)",
+    "clean": "export function run(x) {if(x){if(x){if(x){if(x){return 1}}}}}",
+    "violation": "export function run(x) {if(x){if(x){if(x){if(x){if(x){return 1}}}}}}",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "max-lines-per-function",
+    "rule": "eslint(max-lines-per-function)",
+    "clean": "export function run() {\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  return 1\n}\n",
+    "violation": "export function run() {\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  return 1\n}\n",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "max-params",
+    "rule": "eslint-js(max-params)",
+    "clean": "export function max(_a, _b, _c, _d) { return 1 }",
+    "violation": "export function max(_a, _b, _c, _d, _e) { return 1 }",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "prefer-const",
+    "rule": "eslint-js(prefer-const)",
+    "clean": "let a; for (;; ++a);",
+    "violation": "let x = 1; foo(x);",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-var",
+    "rule": "eslint(no-var)",
+    "clean": "declare global { var bar: 'car' }",
+    "violation": "var a = a",
+    "severity": "error"
+  },
+  {
+    "profile": "base",
+    "before": "no-throw-literal",
+    "rule": "eslint(no-throw-literal)",
+    "clean": "throw a;",
+    "violation": "throw 0;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/display-name",
+    "rule": "legacy-react(display-name)",
+    "clean": "\n        demo = () => () => null;\n      ",
+    "violation": "\n        module.exports = () => {\n          return <div>Hello {props.name}</div>;\n        }\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/jsx-key",
+    "rule": "legacy-react(jsx-key)",
+    "clean": "fn()",
+    "violation": "[1, 2 ,3].map(x => x && <App x={x} />);",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/jsx-no-comment-textnodes",
+    "rule": "legacy-react(jsx-no-comment-textnodes)",
+    "clean": "\n        </* valid */></>\n      ",
+    "violation": "\n        const Component2 = () => {\n          return <span>/*</span>;\n        };\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/jsx-no-duplicate-props",
+    "rule": "legacy-react(jsx-no-duplicate-props)",
+    "clean": "<App />;",
+    "violation": "<App a a />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/jsx-no-target-blank",
+    "rule": "legacy-react(jsx-no-target-blank)",
+    "clean": "<p target=\"_blank\"></p>",
+    "violation": "<a target=\"_blank\" href={ dynamicLink }></a>",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/jsx-no-undef",
+    "rule": "legacy-react(jsx-no-undef)",
+    "clean": "/*eslint no-undef:1*/ var React; React.render(<x-gif />);",
+    "violation": "\n        const TextWrapper = function (props) {\n          return (\n            <Text />\n          );\n        };\n        export default TextWrapper;\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/no-children-prop",
+    "rule": "legacy-react(no-children-prop)",
+    "clean": "<div />;",
+    "violation": "<div children />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/no-danger-with-children",
+    "rule": "legacy-react(no-danger-with-children)",
+    "clean": "<div {...props} />",
+    "violation": "\n        <div dangerouslySetInnerHTML={{ __html: \"HTML\" }}>\n          Children\n        </div>\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/no-deprecated",
+    "rule": "legacy-react(no-deprecated)",
+    "clean": "Foo.createClass({});",
+    "violation": "React.createClass()",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/no-direct-mutation-state",
+    "rule": "legacy-react(no-direct-mutation-state)",
+    "clean": "\n        class Hello {\n          getFoo() {\n            this.state.foo = 'bar'\n            return this.state.foo;\n          }\n        }\n      ",
+    "violation": "\n        class Hello extends React.Component {\n          componentDidMount() {\n            this.state.foo = \"bar\"\n          }\n        }\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/no-find-dom-node",
+    "rule": "legacy-react(no-find-dom-node)",
+    "clean": "\n        var Hello = function() {};\n      ",
+    "violation": "\n        class Hello extends Component {\n          componentDidMount() {\n            this.node = findDOMNode(this);\n          }\n          render() {\n            return <div>Hello</div>;\n          }\n        };\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/no-is-mounted",
+    "rule": "legacy-react(no-is-mounted)",
+    "clean": "\n        class Hello extends React.Component {\n          notIsMounted() {}\n          render() {\n            this.notIsMounted();\n            return <div>Hello</div>;\n          }\n        };\n      ",
+    "violation": "\n        var Hello = createReactClass({\n          componentDidUpdate: function() {\n            if (!this.isMounted()) {\n              return;\n            }\n          },\n          render: function() {\n            return <div>Hello</div>;\n          }\n        });\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/no-render-return-value",
+    "rule": "legacy-react(no-render-return-value)",
+    "clean": "ReactDOM.render(<div />, document.body);",
+    "violation": "this.o = ReactDOM.render(<div />, document.body);",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/no-string-refs",
+    "rule": "legacy-react(no-string-refs)",
+    "clean": "\n        var Hello = createReactClass({\n          render: function() {\n            return <div ref={`hello`}>Hello {this.props.name}</div>;\n          }\n        });\n      ",
+    "violation": "\n        var Hello = createReactClass({\n          render: function() {\n            return <div ref=\"hello\">Hello {this.props.name}</div>;\n          }\n        });\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/no-unescaped-entities",
+    "rule": "legacy-react(no-unescaped-entities)",
+    "clean": "\n        var Hello = createReactClass({\n          render: function() {\n            return <>foo & bar</>;\n          }\n        });\n      ",
+    "violation": "\n        <script>window.foo = \"bar\"</script>\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/no-unknown-property",
+    "rule": "legacy-react(no-unknown-property)",
+    "clean": "<th abbr=\"abbr\" />",
+    "violation": "<div as=\"audio\" />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react/require-render-return",
+    "rule": "legacy-react(require-render-return)",
+    "clean": "class Hello extends React.Component {}",
+    "violation": "\n        class Hello extends React.Component {\n          render() {}\n        }\n      ",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react-hooks/rules-of-hooks",
+    "rule": "legacy-react-hooks(rules-of-hooks)",
+    "clean": "import {useEffect} from \"react\"; export function App() { useEffect(() => {}, []); return null }",
+    "violation": "import {useEffect} from \"react\"; export function App({value}) { if(value) useEffect(() => {}, []); return null }",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "react-hooks/exhaustive-deps",
+    "rule": "legacy-react-hooks(exhaustive-deps)",
+    "clean": "import {useEffect} from \"react\"; export function App({value}) { useEffect(() => { console.log(value) }, [value]); return null }",
+    "violation": "import {useEffect} from \"react\"; export function App({value}) { useEffect(() => { console.log(value) }, []); return null }",
+    "severity": "warning"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/alt-text",
+    "rule": "legacy-jsx-a11y(alt-text)",
+    "clean": "<div />",
+    "violation": "<img />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/anchor-has-content",
+    "rule": "legacy-jsx-a11y(anchor-has-content)",
+    "clean": "<div />;",
+    "violation": "<a />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/anchor-is-valid",
+    "rule": "legacy-jsx-a11y(anchor-is-valid)",
+    "clean": "<div href=\"foo\" />",
+    "violation": "<a />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/aria-activedescendant-has-tabindex",
+    "rule": "legacy-jsx-a11y(aria-activedescendant-has-tabindex)",
+    "clean": "<div />;",
+    "violation": "<div aria-activedescendant={someID} />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/aria-props",
+    "rule": "legacy-jsx-a11y(aria-props)",
+    "clean": "export const good = <div aria-hidden=\"true\" />",
+    "violation": "export const bad = <div aria-foo=\"true\" />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/aria-proptypes",
+    "rule": "legacy-jsx-a11y(aria-proptypes)",
+    "clean": "<div aria-hidden />",
+    "violation": "<div aria-sort />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/aria-role",
+    "rule": "legacy-jsx-a11y(aria-role)",
+    "clean": "<div />",
+    "violation": "<div role />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/aria-unsupported-elements",
+    "rule": "legacy-jsx-a11y(aria-unsupported-elements)",
+    "clean": "<col  />",
+    "violation": "<col role {...props} />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/autocomplete-valid",
+    "rule": "legacy-jsx-a11y(autocomplete-valid)",
+    "clean": "<input type=\"text\" />;",
+    "violation": "<input type=\"text\" autocomplete=\"foo\" />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/click-events-have-key-events",
+    "rule": "legacy-jsx-a11y(click-events-have-key-events)",
+    "clean": "<div className=\"foo\" />;",
+    "violation": "<div onClick={() => void 0} />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/heading-has-content",
+    "rule": "legacy-jsx-a11y(heading-has-content)",
+    "clean": "<div />;",
+    "violation": "<h1 />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/html-has-lang",
+    "rule": "legacy-jsx-a11y(html-has-lang)",
+    "clean": "<div />;",
+    "violation": "<html />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/iframe-has-title",
+    "rule": "legacy-jsx-a11y(iframe-has-title)",
+    "clean": "<div />;",
+    "violation": "<iframe />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/img-redundant-alt",
+    "rule": "legacy-jsx-a11y(img-redundant-alt)",
+    "clean": "<img alt=\"画像\" />",
+    "violation": "<img alt={\"photo\"} />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/interactive-supports-focus",
+    "rule": "legacy-jsx-a11y(interactive-supports-focus)",
+    "clean": "<div />",
+    "violation": "<div role=\"tab\" onDrag={() => void 0} />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/label-has-associated-control",
+    "rule": "legacy-jsx-a11y(label-has-associated-control)",
+    "clean": "<div />",
+    "violation": "<label></label>",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/media-has-caption",
+    "rule": "legacy-jsx-a11y(media-has-caption)",
+    "clean": "<div />;",
+    "violation": "<audio />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/mouse-events-have-key-events",
+    "rule": "legacy-jsx-a11y(mouse-events-have-key-events)",
+    "clean": "<div />;",
+    "violation": "<div onMouseOut={() => {}} />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/no-access-key",
+    "rule": "legacy-jsx-a11y(no-access-key)",
+    "clean": "<div />;",
+    "violation": "<div accessKey=\"h\" />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/no-autofocus",
+    "rule": "legacy-jsx-a11y(no-autofocus)",
+    "clean": "<div />;",
+    "violation": "<div autoFocus />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/no-distracting-elements",
+    "rule": "legacy-jsx-a11y(no-distracting-elements)",
+    "clean": "<div />;",
+    "violation": "<blink />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/no-interactive-element-to-noninteractive-role",
+    "rule": "legacy-jsx-a11y(no-interactive-element-to-noninteractive-role)",
+    "clean": "<div role=\"row\" />;",
+    "violation": "<tr role=\"img\" />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/no-noninteractive-element-interactions",
+    "rule": "legacy-jsx-a11y(no-noninteractive-element-interactions)",
+    "clean": "<div />;",
+    "violation": "<div role=\"article\" onKeyUp={() => {}} />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/no-noninteractive-element-to-interactive-role",
+    "rule": "legacy-jsx-a11y(no-noninteractive-element-to-interactive-role)",
+    "clean": "<li role=\"tab\" />;",
+    "violation": "<p role=\"button\" />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/no-noninteractive-tabindex",
+    "rule": "legacy-jsx-a11y(no-noninteractive-tabindex)",
+    "clean": "<div />",
+    "violation": "<div tabIndex=\"0\" />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/no-redundant-roles",
+    "rule": "legacy-jsx-a11y(no-redundant-roles)",
+    "clean": "<div />;",
+    "violation": "<ul role=\"list\" />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/no-static-element-interactions",
+    "rule": "legacy-jsx-a11y(no-static-element-interactions)",
+    "clean": "<div />;",
+    "violation": "<div onKeyUp={() => {}} />;",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/role-has-required-aria-props",
+    "rule": "legacy-jsx-a11y(role-has-required-aria-props)",
+    "clean": "<div />",
+    "violation": "<div role=\"slider\" />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/role-supports-aria-props",
+    "rule": "legacy-jsx-a11y(role-supports-aria-props)",
+    "clean": "<div />",
+    "violation": "<ul aria-expanded />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/scope",
+    "rule": "legacy-jsx-a11y(scope)",
+    "clean": "<div />;",
+    "violation": "<div scope />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "jsx-a11y/tabindex-no-positive",
+    "rule": "legacy-jsx-a11y(tabindex-no-positive)",
+    "clean": "<div />;",
+    "violation": "<div tabIndex={1.589} />",
+    "severity": "error"
+  },
+  {
+    "profile": "react",
+    "before": "max-lines-per-function",
+    "rule": "eslint(max-lines-per-function)",
+    "clean": "export function run() {\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  return 1\n}\n",
+    "violation": "export function run() {\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  return 1\n}\n",
+    "severity": "error"
+  }
+]

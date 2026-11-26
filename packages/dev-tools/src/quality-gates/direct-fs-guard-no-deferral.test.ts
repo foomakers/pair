@@ -202,6 +202,7 @@ const EXCEPTION_OUT_OF_SCOPE = new Set([
   'packages/knowledge-hub/src/conformance/workflows-test-cache-inputs.test.ts',
   'packages/knowledge-hub/src/conformance/working-area.test.ts',
   'scripts/dev/hook-git-env.test.mjs',
+  'scripts/dev/oxlint-policy.test.mjs',
   'scripts/dev/rtk-review-hook.mjs',
   'scripts/dev/rtk-review-hook.test.mjs',
   'scripts/dev/rtk-session-path.mjs',

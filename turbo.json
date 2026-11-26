@@ -158,12 +158,26 @@
     "@pair/dev-tools#test": {
       "dependsOn": ["build", "@pair/pair-cli#build"],
       "outputs": [],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**", "$TURBO_ROOT$/package.json"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/tools/oxlint-config/**",
+        "$TURBO_ROOT$/apps/*/.oxlintrc.json",
+        "$TURBO_ROOT$/docs/engineering/lint-migration-693-cases.json"
+      ]
     },
     "@pair/dev-tools#test:coverage": {
       "dependsOn": ["build", "@pair/pair-cli#build"],
       "outputs": ["coverage/**"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**", "$TURBO_ROOT$/package.json"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/tools/oxlint-config/**",
+        "$TURBO_ROOT$/apps/*/.oxlintrc.json",
+        "$TURBO_ROOT$/docs/engineering/lint-migration-693-cases.json"
+      ]
     },
     // #568: `next build` regenerates apps/website/.source/index.ts (fumadocs-mdx); a parallel tsc read it
     // half-written (TS2306). MEASURED: the file's mtime changes across `pnpm build`. Ordered after build.
@@ -181,9 +195,11 @@
       "outputs": []
     },
     "lint": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tools/oxlint-config/**"],
       "outputs": []
     },
     "lint:fix": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tools/oxlint-config/**"],
       "outputs": []
     },
     "prettier:check": {

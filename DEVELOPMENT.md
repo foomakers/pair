@@ -31,7 +31,7 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 │   ├── content-ops/           # File ops + link processing (@pair/content-ops)
 │   └── brand/                 # Brand assets (@pair/brand)
 ├── tools/
-│   ├── eslint-config/         # Shared ESLint config
+│   ├── oxlint-config/         # Shared Oxlint config
 │   ├── prettier-config/       # Shared Prettier config
 │   ├── markdownlint-config/   # Shared markdownlint config
 │   └── ts-config/             # Shared TypeScript config
@@ -51,7 +51,7 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 | `@pair/knowledge-hub` | Knowledge Base dataset (guidelines, how-to, templates) ([README](packages/knowledge-hub/README.md)) |
 | `@pair/content-ops` | File operations, markdown link processing ([README](packages/content-ops/README.md)) |
 | `@pair/brand` | Brand identity — design tokens, React components, Tailwind preset ([README](packages/brand/README.md), [BRAND.md](packages/brand/BRAND.md)) |
-| `@pair/eslint-config` | Shared ESLint configuration ([README](tools/eslint-config/README.md)) |
+| `@pair/oxlint-config` | Shared Oxlint configuration ([README](tools/oxlint-config/README.md)) |
 | `@pair/prettier-config` | Shared Prettier configuration ([README](tools/prettier-config/README.md)) |
 | `@pair/ts-config` | Shared TypeScript presets ([README](tools/ts-config/README.md)) |
 | `@pair/markdownlint-config` | Shared markdownlint configuration ([README](tools/markdownlint-config/README.md)) |
@@ -135,7 +135,7 @@ later in the same gate — the dataset copy is inside format scope, its generate
 (`.claude/` and root `.pair/` are not workspace members), and the mirror guards assert each twin
 equals the OUTPUT of the real `pair update` transform — never the dataset source itself, which the
 corpus is transformed away from. `gate:composition` guards the gate against a write-mode step
-(formatter or eslint autofix) creeping back in. `pnpm mirrors:regenerate` regenerates from the
+(formatter or Oxlint autofix) creeping back in. `pnpm mirrors:regenerate` regenerates from the
 working tree's own dataset, offline; `pair update` installs the latest PUBLISHED knowledge base and
 is not the remedy for local drift. See ADL
 [2026-07-31-pre-push-gate-is-check-only.md](.pair/adoption/decision-log/2026-07-31-pre-push-gate-is-check-only.md).

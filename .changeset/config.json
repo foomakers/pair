@@ -9,7 +9,7 @@
       "@pair/content-ops",
       "@pair/knowledge-hub",
       "@pair/workflows",
-      "@pair/eslint-config",
+      "@pair/oxlint-config",
       "@pair/prettier-config",
       "@pair/website",
       "@pair/ts-config"

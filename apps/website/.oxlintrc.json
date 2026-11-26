@@ -1,0 +1,27 @@
+{
+  "extends": ["../../tools/oxlint-config/react.json"],
+  "ignorePatterns": [
+    "/dist/",
+    "/build/",
+    "node_modules/",
+    "/*.config.js",
+    "/*.config.ts",
+    "/playwright/",
+    "/test-results/",
+    "/dataset/.workflows/",
+    "/dataset/.skills/**/scripts/**/*.mjs",
+    "*.mts",
+    "!*.mts/",
+    "*.cts",
+    "!*.cts/",
+    "/.next/",
+    "/.source/",
+    "/next-env.d.ts",
+    "/postcss.config.js"
+  ],
+  "settings": {
+    "react": {
+      "version": "19.0.0"
+    }
+  }
+}

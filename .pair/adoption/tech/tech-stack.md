@@ -83,14 +83,11 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 
 ## Linting & formatting
 
-- ESLint and related tooling are adopted for linting and style enforcement:
-  - @typescript-eslint/eslint-plugin v8.41.0
-  - @typescript-eslint/parser v8.41.0
-  - eslint v9.34.0 and @eslint/js v9.34.0
-  - eslint-plugin-react v7.37.2 (for React/JSX linting)
-  - eslint-plugin-react-hooks v5.1.0 (for React Hooks rules)
-  - eslint-plugin-jsx-a11y v6.10.2 (for accessibility linting)
-  - globals v15.0.0
+- Oxlint v1.95.0 runs JavaScript and TypeScript linting through the shared base and React profiles.
+  - oxlint-plugin-eslint v1.95.0 supplies core rule implementations where native behavior differs.
+  - @typescript-eslint/eslint-plugin v8.41.0 supplies selected TypeScript compatibility rules.
+  - eslint-plugin-react v7.37.2, eslint-plugin-react-hooks v5.1.0 and eslint-plugin-jsx-a11y v6.10.2 supply the React profile.
+- Formatting and duplication checks:
   - prettier v3.6.2 (configured via workspace `tools/prettier-config`)
   - markdownlint-cli v0.47.0 (configured via workspace `tools/markdownlint-config`, wired into `pnpm quality-gate` via `mdlint:check` only — the write-mode `mdlint:fix` is reachable through `pnpm format`, never from the gate)
   - jscpd v5.0.12 (copy/paste duplication scanner, configured via `.jscpd.json`, wired into `pnpm quality-gate` via `dup:check`; current threshold 5% — baseline ~1.4%)
@@ -114,7 +111,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 
 ---
 
-- Prettier and ESLint must be used via the respective workspace packages in [tools/prettier-config](../../tools/prettier-config) and [tools/eslint-config](../../tools/eslint-config).
-- Do **not** install Prettier o ESLint direttamente nei workspace applicativi: la configurazione e gli script devono seguire le istruzioni nei README dei workspace tools.
+- Prettier and Oxlint must be used via the respective workspace packages in [tools/prettier-config](../../tools/prettier-config) and [tools/oxlint-config](../../tools/oxlint-config).
+- Application workspaces use the shared tool packages and the commands documented in their READMEs.
 
 All technology choices must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).

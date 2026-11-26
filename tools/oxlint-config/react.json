@@ -1,0 +1,198 @@
+{
+  "extends": ["./base.json"],
+  "jsPlugins": [
+    {
+      "name": "legacy-react",
+      "specifier": "eslint-plugin-react"
+    },
+    {
+      "name": "legacy-react-hooks",
+      "specifier": "eslint-plugin-react-hooks"
+    },
+    {
+      "name": "legacy-jsx-a11y",
+      "specifier": "eslint-plugin-jsx-a11y"
+    }
+  ],
+  "overrides": [
+    {
+      "files": ["**/*.{jsx,tsx}"],
+      "globals": {
+        "window": "readonly",
+        "document": "readonly",
+        "navigator": "readonly",
+        "location": "readonly",
+        "history": "readonly",
+        "localStorage": "readonly",
+        "sessionStorage": "readonly",
+        "fetch": "readonly",
+        "Request": "readonly",
+        "Response": "readonly",
+        "Headers": "readonly",
+        "FormData": "readonly",
+        "URLSearchParams": "readonly",
+        "Element": "readonly",
+        "HTMLElement": "readonly",
+        "HTMLButtonElement": "readonly",
+        "HTMLDivElement": "readonly",
+        "HTMLInputElement": "readonly",
+        "HTMLFormElement": "readonly",
+        "HTMLAnchorElement": "readonly"
+      },
+      "rules": {
+        "legacy-react/display-name": 2,
+        "legacy-react/jsx-key": 2,
+        "legacy-react/jsx-no-comment-textnodes": 2,
+        "legacy-react/jsx-no-duplicate-props": 2,
+        "legacy-react/jsx-no-target-blank": 2,
+        "legacy-react/jsx-no-undef": 2,
+        "legacy-react/jsx-uses-react": 0,
+        "legacy-react/no-children-prop": 2,
+        "legacy-react/no-danger-with-children": 2,
+        "legacy-react/no-deprecated": 2,
+        "legacy-react/no-direct-mutation-state": 2,
+        "legacy-react/no-find-dom-node": 2,
+        "legacy-react/no-is-mounted": 2,
+        "legacy-react/no-render-return-value": 2,
+        "legacy-react/no-string-refs": 2,
+        "legacy-react/no-unescaped-entities": 2,
+        "legacy-react/no-unknown-property": 2,
+        "legacy-react/no-unsafe": 0,
+        "legacy-react/prop-types": "off",
+        "legacy-react/react-in-jsx-scope": "off",
+        "legacy-react/require-render-return": 2,
+        "legacy-react-hooks/rules-of-hooks": "error",
+        "legacy-react-hooks/exhaustive-deps": "warn",
+        "legacy-jsx-a11y/alt-text": "error",
+        "legacy-jsx-a11y/anchor-ambiguous-text": "off",
+        "legacy-jsx-a11y/anchor-has-content": "error",
+        "legacy-jsx-a11y/anchor-is-valid": "error",
+        "legacy-jsx-a11y/aria-activedescendant-has-tabindex": "error",
+        "legacy-jsx-a11y/aria-props": "error",
+        "legacy-jsx-a11y/aria-proptypes": "error",
+        "legacy-jsx-a11y/aria-role": "error",
+        "legacy-jsx-a11y/aria-unsupported-elements": "error",
+        "legacy-jsx-a11y/autocomplete-valid": "error",
+        "legacy-jsx-a11y/click-events-have-key-events": "error",
+        "legacy-jsx-a11y/control-has-associated-label": [
+          "off",
+          {
+            "ignoreElements": ["audio", "canvas", "embed", "input", "textarea", "tr", "video"],
+            "ignoreRoles": [
+              "grid",
+              "listbox",
+              "menu",
+              "menubar",
+              "radiogroup",
+              "row",
+              "tablist",
+              "toolbar",
+              "tree",
+              "treegrid"
+            ],
+            "includeRoles": ["alert", "dialog"]
+          }
+        ],
+        "legacy-jsx-a11y/heading-has-content": "error",
+        "legacy-jsx-a11y/html-has-lang": "error",
+        "legacy-jsx-a11y/iframe-has-title": "error",
+        "legacy-jsx-a11y/img-redundant-alt": "error",
+        "legacy-jsx-a11y/interactive-supports-focus": [
+          "error",
+          {
+            "tabbable": [
+              "button",
+              "checkbox",
+              "link",
+              "searchbox",
+              "spinbutton",
+              "switch",
+              "textbox"
+            ]
+          }
+        ],
+        "legacy-jsx-a11y/label-has-associated-control": "error",
+        "legacy-jsx-a11y/label-has-for": "off",
+        "legacy-jsx-a11y/media-has-caption": "error",
+        "legacy-jsx-a11y/mouse-events-have-key-events": "error",
+        "legacy-jsx-a11y/no-access-key": "error",
+        "legacy-jsx-a11y/no-autofocus": "error",
+        "legacy-jsx-a11y/no-distracting-elements": "error",
+        "legacy-jsx-a11y/no-interactive-element-to-noninteractive-role": [
+          "error",
+          {
+            "tr": ["none", "presentation"],
+            "canvas": ["img"]
+          }
+        ],
+        "legacy-jsx-a11y/no-noninteractive-element-interactions": [
+          "error",
+          {
+            "handlers": [
+              "onClick",
+              "onError",
+              "onLoad",
+              "onMouseDown",
+              "onMouseUp",
+              "onKeyPress",
+              "onKeyDown",
+              "onKeyUp"
+            ],
+            "alert": ["onKeyUp", "onKeyDown", "onKeyPress"],
+            "body": ["onError", "onLoad"],
+            "dialog": ["onKeyUp", "onKeyDown", "onKeyPress"],
+            "iframe": ["onError", "onLoad"],
+            "img": ["onError", "onLoad"]
+          }
+        ],
+        "legacy-jsx-a11y/no-noninteractive-element-to-interactive-role": [
+          "error",
+          {
+            "ul": ["listbox", "menu", "menubar", "radiogroup", "tablist", "tree", "treegrid"],
+            "ol": ["listbox", "menu", "menubar", "radiogroup", "tablist", "tree", "treegrid"],
+            "li": [
+              "menuitem",
+              "menuitemradio",
+              "menuitemcheckbox",
+              "option",
+              "row",
+              "tab",
+              "treeitem"
+            ],
+            "table": ["grid"],
+            "td": ["gridcell"],
+            "fieldset": ["radiogroup", "presentation"]
+          }
+        ],
+        "legacy-jsx-a11y/no-noninteractive-tabindex": [
+          "error",
+          {
+            "tags": [],
+            "roles": ["tabpanel"],
+            "allowExpressionValues": true
+          }
+        ],
+        "legacy-jsx-a11y/no-redundant-roles": "error",
+        "legacy-jsx-a11y/no-static-element-interactions": [
+          "error",
+          {
+            "allowExpressionValues": true,
+            "handlers": [
+              "onClick",
+              "onMouseDown",
+              "onMouseUp",
+              "onKeyPress",
+              "onKeyDown",
+              "onKeyUp"
+            ]
+          }
+        ],
+        "legacy-jsx-a11y/role-has-required-aria-props": "error",
+        "legacy-jsx-a11y/role-supports-aria-props": "error",
+        "legacy-jsx-a11y/scope": "error",
+        "legacy-jsx-a11y/tabindex-no-positive": "error",
+        "eslint/max-lines-per-function": ["error", 100]
+      }
+    }
+  ]
+}
