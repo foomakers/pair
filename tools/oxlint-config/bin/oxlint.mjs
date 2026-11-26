@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
-import { lstatSync, readdirSync, realpathSync, statSync } from 'node:fs'
+import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
 
 const require = createRequire(import.meta.url)
 const cli = join(dirname(require.resolve('oxlint/package.json')), 'bin/oxlint')
 const glob = require('fast-glob')
+const ignore = require('ignore')
+const { parse: parseJsonc } = require('jsonc-parser')
 const workspaceRoot = realpathSync.native('.')
 const sourcePattern = '**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,vue,svelte,astro}'
 // An impossible operand keeps an empty selection from starting Oxlint's default walk.
@@ -42,6 +44,7 @@ const { positionals, tokens, values } = parseArgs({
 const options = ['*.vue', '*.svelte', '*.astro'].flatMap(pattern => ['--ignore-pattern', pattern])
 if (process.env.PAIR_LINT_REPORT === 'json' && !('format' in values)) options.push('--format', 'json')
 const lintsFiles = !nonLintOptions.some(name => name in values)
+const excludeDirectory = lintsFiles ? directoryExclusions() : () => false
 
 function runLint(args, stdio) {
   const result = spawnSync(process.execPath, [cli, ...options, ...args], {
@@ -75,6 +78,41 @@ function isWithin(root, path) {
   return fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot)
 }
 
+function directoryExclusions() {
+  const candidates = values.config ? [values.config] : ['.oxlintrc.json', '.oxlintrc.jsonc']
+  for (const candidate of candidates) {
+    if (!['.json', '.jsonc'].includes(extname(candidate))) break
+    const file = resolve(candidate)
+    let config
+    try {
+      const errors = []
+      config = parseJsonc(readFileSync(file, 'utf8'), errors, { allowTrailingComma: true })
+      if (errors.length) break
+    } catch (error) {
+      if (error.code === 'ENOENT') continue
+      break
+    }
+
+    const patterns = config?.ignorePatterns
+    // Leave negated patterns to Oxlint: a descendant can be explicitly re-included.
+    if (!Array.isArray(patterns) || patterns.some(pattern => typeof pattern !== 'string' || pattern.startsWith('!'))) break
+    const matcher = ignore({ ignorecase: false }).add(patterns)
+    const root = dirname(file)
+    return path => path !== root && isWithin(root, path) && matcher.ignores(`${relative(root, path).split(sep).join('/')}/`)
+  }
+  // Oxlint reports configuration errors and handles any other config formats.
+  return () => false
+}
+
+function operandTarget(path) {
+  try {
+    return realPath(path)
+  } catch (error) {
+    // A static prefix inside an excluded directory may be unreadable before globbing starts.
+    if (error.code !== 'EACCES' || !excludeDirectory(dirname(resolve(path)))) throw error
+  }
+}
+
 function isWalkDirectory(path, root) {
   const target = realPath(path)
   if (!isWithin(root, target)) return false
@@ -103,7 +141,14 @@ function matchingFiles(pattern, directory = '.', root = workspaceRoot) {
     cwd: root, dot: true, followSymbolicLinks: false, onlyFiles: false, objectMode: true,
     ignore: ['**/.git/**', '**/node_modules/**'],
     // fast-glob can start directly at a pattern's static directory prefix.
-    fs: { readdirSync: (dir, options) => isWalkDirectory(dir, root) ? readdirSync(dir, options) : [] },
+    fs: {
+      readdirSync(dir, options) {
+        const selectedDir = resolve(directory, relative(root, dir))
+        if (excludeDirectory(selectedDir) || !isWalkDirectory(dir, root)) return []
+        if (!isWithin(workspaceRoot, selectedDir) && excludeDirectory(realPath(selectedDir))) return []
+        return readdirSync(dir, options)
+      },
+    },
   }).flatMap(({ dirent, path }) => {
     if (!dirent.isFile() && !dirent.isSymbolicLink()) return []
     const file = isAbsolute(path) ? normalize(path) : join(directory, path)
@@ -133,7 +178,7 @@ function prepareExplicitLint() {
   for (const token of tokens.filter(token => token.kind === 'positional')) {
     const path = token.value
     const file = normalize(path)
-    const target = realPath(path)
+    const target = operandTarget(path)
     const inWorkspace = isWithin(workspaceRoot, target) && (path === file || realPath(file) === target)
     const stat = inWorkspace ? statSync(target, { throwIfNoEntry: false }) : undefined
     const directory = stat?.isDirectory()

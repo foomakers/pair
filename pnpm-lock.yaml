@@ -678,6 +678,12 @@ importers:
       fast-glob:
         specifier: 3.3.3
         version: 3.3.3
+      ignore:
+        specifier: 7.0.5
+        version: 7.0.5
+      jsonc-parser:
+        specifier: 3.3.1
+        version: 3.3.1
       oxlint:
         specifier: 'catalog:'
         version: 1.95.0
