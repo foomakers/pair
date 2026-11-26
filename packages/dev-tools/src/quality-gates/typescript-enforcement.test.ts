@@ -377,6 +377,74 @@ it.each([
   })
 })
 
+it.each([
+  {
+    target: 'Next server',
+    importer: 'apps/website/app/page.tsx',
+    manifest: { exports: { './theme.css': { browser: './browser.css', node: './theme.css' } } },
+    alternatives: ['browser.css'],
+  },
+  {
+    target: 'Next React Server Components',
+    importer: 'apps/website/app/page.tsx',
+    manifest: {
+      exports: { './theme.css': { 'react-server': './theme.css', default: './browser.css' } },
+    },
+    alternatives: ['browser.css'],
+  },
+  {
+    target: 'Next development server',
+    importer: 'apps/website/app/page.tsx',
+    manifest: { exports: { './theme.css': { development: './theme.css', default: './prod.css' } } },
+    alternatives: ['prod.css'],
+  },
+  {
+    target: 'Vite browser file mapping',
+    importer: 'packages/brand/dev/demo.ts',
+    manifest: { browser: { './theme.css': './mapped.css' } },
+    alternatives: ['theme.css'],
+    selected: 'mapped.css',
+  },
+  {
+    target: 'Vite development server',
+    importer: 'packages/brand/dev/demo.ts',
+    manifest: { exports: { './theme.css': { development: './theme.css', default: './prod.css' } } },
+    alternatives: ['prod.css'],
+  },
+])(
+  '#757 AC-4 R758-02: checks the target selected by $target',
+  ({ importer, manifest, alternatives, selected = 'theme.css' }) => {
+    withCssFixture(cwd => {
+      const workspace = importer.split('/').slice(0, 2).join('/')
+      const scope = join(cwd, workspace, 'node_modules/@pair')
+      const styles = join(cwd, 'packages/styles')
+      fs.mkdirSync(scope, { recursive: true })
+      fs.mkdirSync(styles)
+      fs.symlinkSync(styles, join(scope, 'styles'))
+      fs.writeFileSync(
+        join(styles, 'package.json'),
+        JSON.stringify({ name: '@pair/styles', ...manifest }),
+      )
+      const specifier = '@pair/styles/theme.css'
+      fs.writeFileSync(join(cwd, importer), `import '${specifier}'\n`)
+      for (const alternative of alternatives) fs.writeFileSync(join(styles, alternative), '')
+      fs.writeFileSync(join(styles, selected), '')
+      expect(checkStylesheets(cwd)).toEqual([])
+
+      fs.rmSync(join(styles, selected))
+      expect(checkStylesheets(cwd)).toEqual([
+        `Missing stylesheet: ${importer} imports ${specifier}`,
+      ])
+
+      if (!('development' in (manifest.exports?.['./theme.css'] ?? {}))) {
+        fs.writeFileSync(join(styles, selected), '')
+        for (const alternative of alternatives) fs.rmSync(join(styles, alternative))
+        expect(checkStylesheets(cwd)).toEqual([])
+      }
+    })
+  },
+)
+
 it('#757 AC-4 R758-04: distinguishes JSX text from stylesheet imports', () => {
   withCssFixture(cwd => {
     const importer = 'apps/website/app/style-example.tsx'
