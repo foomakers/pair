@@ -130,9 +130,35 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
 
   const formatError = 'missing-field:inputHead'
   const handoff = (reason: string) => JSON.stringify({ status: 'failed', reason })
+  const progress = 'PAIR_EVENT {"event":"loop-end","status":"halted","reason":"handoff rejected"}'
+  const handoffThenProgress = [handoff(formatError), progress].join('\n')
+  const progressThenHandoff = [progress, handoff(formatError)].join('\n')
   const keepAlive = 'setInterval(() => {}, 1000)'
 
   it.each([
+    {
+      label: 'echoed progress and a file-only handoff',
+      streamResult: progress,
+      file: handoff(formatError),
+      retry: true,
+    },
+    {
+      label: 'a handoff before echoed progress',
+      streamResult: handoffThenProgress,
+      file: handoffThenProgress,
+      retry: true,
+    },
+    {
+      label: 'a handoff after echoed progress',
+      streamResult: progressThenHandoff,
+      file: progressThenHandoff,
+      retry: true,
+    },
+    {
+      label: 'a file-only handoff before echoed progress',
+      file: handoffThenProgress,
+      retry: true,
+    },
     { label: 'file-only format error', file: handoff(formatError), retry: true },
     {
       label: 'stream format error',
@@ -177,6 +203,14 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
             ? ['pair-loop: HALT — handoff rejected', streamResult].join('\n')
             : 'done'
           const events = [
+            ...(first
+              ? [
+                  {
+                    type: 'item.completed',
+                    item: { type: 'command_execution', aggregated_output: progress, exit_code: 0 },
+                  },
+                ]
+              : []),
             { type: 'item.completed', item: { type: 'agent_message', text } },
             { type: 'turn.completed' },
           ]
