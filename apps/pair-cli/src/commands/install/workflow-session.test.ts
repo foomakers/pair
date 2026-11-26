@@ -171,7 +171,14 @@ it.each([
     prefix: 'team',
     target: customTarget,
     skills: teamRegistry,
+    legacySkills: registry('legacy', 'legacy/skills'),
     workingArea: { legacy: '.pair/legacy', expected: '.pair/working' },
+  },
+  {
+    name: 'registry inherited from config.json',
+    prefix: 'pair',
+    target: defaultTarget,
+    legacySkills: teamRegistry,
   },
   {
     name: 'overridden target',
@@ -203,7 +210,7 @@ it.each([
   },
 ])(
   'R754-06 / AC-1, AC-4, AC-8: resolves skills with $name',
-  async ({ prefix, target, skills, override, update, workingArea }) => {
+  async ({ prefix, target, skills, legacySkills, override, update, workingArea }) => {
     const fixture = fileSystemService.mkdtempSync(join(tmpdir(), 'pair-install-session-'))
     roots.push(fixture)
     const root = join(fixture, 'primary')
@@ -219,14 +226,21 @@ it.each([
         ...(skills !== undefined && { asset_registries: { skills } }),
       }),
     )
-    if (workingArea?.legacy !== undefined)
-      write(root, 'config.json', JSON.stringify({ working_path: workingArea.legacy }))
+    if (workingArea?.legacy !== undefined || legacySkills !== undefined)
+      write(
+        root,
+        'config.json',
+        JSON.stringify({
+          working_path: workingArea?.legacy,
+          ...(legacySkills !== undefined && { asset_registries: { skills: legacySkills } }),
+        }),
+      )
     const config = installConfig(root, override)
     const skillFile = (directory: string, name: string) => join(directory, target, name, 'SKILL.md')
     await installFixture(root, config, update, skillFile(root, 'pair-process-refine-story'))
     expect(fs.existsSync(skillFile(root, `${prefix}-process-refine-story`))).toBe(true)
 
-    const vendor = `${vendorTarget(skills)}/vendor-notes/SKILL.md`
+    const vendor = `${vendorTarget(skills ?? legacySkills)}/vendor-notes/SKILL.md`
     const vendorSkill = '---\nname: vendor-notes\n---\n'
     write(root, vendor, vendorSkill)
     const adoption =
@@ -292,7 +306,6 @@ steps:
       ],
     }
     const invoke = runner(root, script(root))
-    expect(invoke('validate', 'installed')).toMatchObject(preview)
     git(root, 'init', '-b', 'main')
     git(
       root,
@@ -307,6 +320,47 @@ steps:
       '-m',
       'Fixture',
     )
+    if (legacySkills !== undefined) {
+      const skill = 'vendor-notes'
+      const effective = skills ?? legacySkills
+      write(root, `${vendorTarget(effective)}/${effective.prefix}-${skill}/SKILL.md`, vendorSkill)
+      write(
+        root,
+        '.pair/adoption/tech/workflows/explicit.yaml',
+        `version: 1\nname: explicit\nsteps:\n  notes: { kind: generic, skill: ${skill} }\n`,
+      )
+      const cliPreview = () =>
+        handleRunCommand(
+          parseRunCommand({ card: '42', cwd: root, dryRun: true }, ['explicit']),
+          fs,
+          {
+            workflow: { readCard: async () => ({ title: 'Prepare release notes' }) },
+          },
+        )
+      expect(await cliPreview()).toBe(0)
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`skill=${skill}`))
+      const explicit = { steps: [{ id: 'notes', skill }] }
+      expect(invoke('validate', 'explicit')).toMatchObject(explicit)
+      const opened = invoke('start', 'explicit', '--card', '42', '--engine', 'codex')
+      expect(opened).toMatchObject(explicit)
+      expect(invoke('next', opened.runId, '--lease', opened.lease)).toMatchObject({
+        ready: [{ uses: skill, message: expect.stringContaining(`Run the ${skill} skill.`) }],
+      })
+      invoke('stop', opened.runId, '--lease', opened.lease)
+
+      fs.rmSync(join(root, vendor))
+      if (skills !== undefined)
+        write(root, `${vendorTarget(legacySkills)}/${skill}/SKILL.md`, vendorSkill)
+      const absent = spawnSync(process.execPath, [script(root), 'validate', 'explicit'], {
+        cwd: root,
+        encoding: 'utf8',
+        timeout: 5_000,
+      })
+      expect(absent.stderr).toContain(`skill '${skill}' is not installed`)
+      expect(absent.status).toBe(1)
+      write(root, vendor, vendorSkill)
+    }
+    expect(invoke('validate', 'installed')).toMatchObject(preview)
     const { runId, lease } = invoke('start', 'installed', '--card', '42', '--engine', 'codex')
     invoke('stop', runId, '--lease', lease)
 
@@ -343,6 +397,8 @@ steps:
     const linked = join(fixture, 'linked')
     git(root, 'worktree', 'add', '--detach', linked)
     write(linked, 'pair.config.json', fs.readFileSync(join(root, 'pair.config.json')))
+    if (legacySkills !== undefined)
+      write(linked, 'config.json', fs.readFileSync(join(root, 'config.json')))
     await installFixture(linked, config, update, skillFile(linked, 'pair-process-refine-story'))
     write(linked, vendor, vendorSkill)
     const invokeLinked = runner(linked, script(linked))
