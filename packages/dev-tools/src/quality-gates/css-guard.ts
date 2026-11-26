@@ -1,7 +1,8 @@
 import { fileSystemService as fs } from '@pair/content-ops'
-import { create } from 'enhanced-resolve'
+import { create, type FileSystem, type ResolveFunctionPromise } from 'enhanced-resolve'
 import { execFileSync } from 'node:child_process'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { callbackify } from 'node:util'
 import ts from 'typescript'
 
 import { REPO_ROOT } from './repo-root'
@@ -13,40 +14,77 @@ const reviewedDeclarations = new Map([
 const nextCssModules = new Set(['*.module.css', '*.module.sass', '*.module.scss'])
 
 type ImportMode = 'import' | 'require'
+type BuildMode = 'development' | 'production'
+type NextLayer = 'rsc' | 'ssr' | 'browser'
+type ModuleReference = { specifier: string; mode: ImportMode; typeOnly: boolean }
+type Source = { references: ModuleReference[]; client: boolean }
+type WorkspaceImport = { path: string; reference: ModuleReference }
+type ViteResolver = (specifier: string, importer: string) => Promise<string | undefined>
+type ViteConfigLoader = (
+  options: { root: string; configFile: false; envFile: false },
+  command: 'build' | 'serve',
+  mode: BuildMode,
+) => Promise<{
+  createResolver(options: { isProduction: boolean; isRequire?: boolean }): ViteResolver
+}>
 
-function resolveWorkspaceStylesheet(
-  root: string,
+const buildModes = ['development', 'production'] as const
+const website = 'apps/website/'
+const brand = 'packages/brand/'
+const nextAppEntry =
+  /^apps\/website\/app\/(?:.*\/)?(?:page|layout|route|template|loading|error|global-error|not-found|default|icon|apple-icon|opengraph-image|twitter-image|robots|sitemap)\.[jt]sx?$/
+
+// Enhanced-resolve uses the path-and-callback forms for its package and symlink lookups.
+const resolverFileSystem = {
+  readFile: callbackify(fs.readFileBytes),
+  readdir: callbackify(async (path: string) => (await fs.readdir(path)).map(entry => entry.name)),
+  readlink: callbackify(fs.readlink),
+  stat: callbackify(fs.stat),
+} as FileSystem
+
+function nextResolver(root: string, layer: NextLayer, build: BuildMode, mode: ImportMode) {
+  const browser = layer === 'browser'
+  return create.promise({
+    fileSystem: resolverFileSystem,
+    conditionNames: [
+      ...(layer === 'rsc' ? ['react-server'] : []),
+      mode,
+      'module',
+      'webpack',
+      build,
+      browser ? 'browser' : 'node',
+    ],
+    aliasFields: browser ? ['browser'] : [],
+    mainFields: browser ? ['browser', 'module', 'main'] : ['module', 'main'],
+    alias: { '@': join(root, website) },
+    extensions: ['.js', '.mjs', '.tsx', '.ts', '.jsx', '.json', '.wasm'],
+  })
+}
+
+async function resolveModule(
+  resolver: ResolveFunctionPromise,
   importer: string,
-  stylesheet: string,
-  mode: ImportMode,
+  specifier: string,
 ) {
-  // Match the production client conditions for the Vite and Next workspaces.
-  let conditions = ['node', 'node-addons']
-  if (importer.startsWith('packages/brand/')) {
-    conditions = ['module', 'browser', 'production']
-  } else if (importer.startsWith('apps/website/')) {
-    conditions = ['webpack', 'module', 'browser', 'production']
-  }
-  const resolveExport = create.sync({ conditionNames: [mode, ...conditions], fullySpecified: true })
   try {
-    return resolveExport(join(root, dirname(importer)), stylesheet) || null
+    return await resolver(dirname(importer), specifier)
   } catch {
-    return null
+    return undefined
   }
 }
 
-function localStylesheet(root: string, importer: string, specifier: string, mode: ImportMode) {
-  const stylesheet = specifier.split(/[?#]/, 1)[0]
-  if (!stylesheet || !/\.(?:css|sass|scss)$/.test(stylesheet)) return undefined
+function stylesheetPath(specifier: string) {
+  const [path] = specifier.split(/[?#]/, 1)
+  return path && /\.(?:css|sass|scss)$/.test(path) ? path : undefined
+}
+
+function localStylesheet(root: string, importer: string, stylesheet: string) {
   if (/^\.\.?\//.test(stylesheet)) return resolve(root, dirname(importer), stylesheet)
-  if (importer.startsWith('apps/website/') && stylesheet.startsWith('@/')) {
-    return join(root, 'apps/website', stylesheet.slice(2))
+  if (importer.startsWith(website) && stylesheet.startsWith('@/')) {
+    return join(root, website, stylesheet.slice(2))
   }
-  if (importer.startsWith('packages/brand/') && /^\$(?:components|tokens)\//.test(stylesheet)) {
-    return join(root, 'packages/brand/src', stylesheet.slice(1))
-  }
-  if (stylesheet.startsWith('@pair/')) {
-    return resolveWorkspaceStylesheet(root, importer, stylesheet, mode)
+  if (importer.startsWith(brand) && /^\$(?:components|tokens)\//.test(stylesheet)) {
+    return join(root, brand, 'src', stylesheet.slice(1))
   }
   return undefined
 }
@@ -112,28 +150,35 @@ function effectiveTypeProblems(root: string, paths: string[], sources: Set<strin
 
 function moduleSpecifier(
   node: ts.Node,
-): { specifier: ts.Node | undefined; mode: ImportMode } | undefined {
-  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-    return { specifier: node.moduleSpecifier, mode: 'import' }
+): { specifier: ts.Node | undefined; mode: ImportMode; typeOnly?: boolean } | undefined {
+  if (ts.isImportDeclaration(node)) {
+    return {
+      specifier: node.moduleSpecifier,
+      mode: 'import',
+      typeOnly: node.importClause?.isTypeOnly ?? false,
+    }
   }
+  if (ts.isExportDeclaration(node))
+    return { specifier: node.moduleSpecifier, mode: 'import', typeOnly: node.isTypeOnly }
   if (ts.isExternalModuleReference(node)) return { specifier: node.expression, mode: 'require' }
   if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
-    return { specifier: node.argument.literal, mode: 'import' }
+    return { specifier: node.argument.literal, mode: 'import', typeOnly: true }
   }
-  if (ts.isCallExpression(node)) {
-    const { expression } = node
-    if (expression.kind === ts.SyntaxKind.ImportKeyword) {
-      return { specifier: node.arguments[0], mode: 'import' }
-    }
-    if (ts.isIdentifier(expression) && expression.text === 'require') {
-      return { specifier: node.arguments[0], mode: 'require' }
-    }
+  if (ts.isCallExpression(node)) return calledModule(node)
+  return undefined
+}
+
+function calledModule({ expression, arguments: args }: ts.CallExpression) {
+  if (expression.kind === ts.SyntaxKind.ImportKeyword) {
+    return { specifier: args[0], mode: 'import' as const }
+  }
+  if (ts.isIdentifier(expression) && expression.text === 'require') {
+    return { specifier: args[0], mode: 'require' as const }
   }
   return undefined
 }
 
-function sourceProblems(root: string, path: string): string[] {
-  const problems: string[] = []
+function inspectSource(root: string, path: string, problems: string[]): Source {
   if (/(?:\.d\.css\.ts|\.css\.d\.ts)$/.test(path) && !reviewedDeclarations.has(path)) {
     problems.push(`Unreviewed CSS declaration: ${path}`)
   }
@@ -143,22 +188,176 @@ function sourceProblems(root: string, path: string): string[] {
     ts.ScriptTarget.Latest,
   )
   if (hasAmbientStylesheets(source)) problems.push(`Ambient CSS declaration: ${path}`)
+  const references: ModuleReference[] = []
   const visit = (node: ts.Node) => {
     const reference = moduleSpecifier(node)
     if (reference?.specifier && ts.isStringLiteralLike(reference.specifier)) {
-      const specifier = reference.specifier.text
-      const stylesheet = localStylesheet(root, path, specifier, reference.mode)
-      if (stylesheet === null || (stylesheet && !isFile(stylesheet))) {
-        problems.push(`Missing stylesheet: ${path} imports ${specifier}`)
-      }
+      references.push({
+        specifier: reference.specifier.text,
+        mode: reference.mode,
+        typeOnly: reference.typeOnly ?? false,
+      })
     }
     ts.forEachChild(node, visit)
   }
   visit(source)
+  let client = false
+  for (const statement of source.statements) {
+    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) break
+    if (statement.expression.text === 'use client') client = true
+  }
+  return { references, client }
+}
+
+async function nextCompilation(root: string, build: BuildMode, sources: Map<string, Source>) {
+  const resolvers = new Map<string, ResolveFunctionPromise>()
+  const resolveNext = (layer: NextLayer, path: string, { specifier, mode }: ModuleReference) => {
+    const key = `${layer}/${mode}`
+    let resolver = resolvers.get(key)
+    if (!resolver) {
+      resolver = nextResolver(root, layer, build, mode)
+      resolvers.set(key, resolver)
+    }
+    return resolveModule(resolver, join(root, path), specifier)
+  }
+  const layers = new Map<string, Set<NextLayer>>()
+  const visit = async (path: string, layer: NextLayer): Promise<void> => {
+    const source = sources.get(path)
+    if (!source) return
+    if (source.client && layer === 'rsc') {
+      await visit(path, 'ssr')
+      await visit(path, 'browser')
+      return
+    }
+    const seen = layers.get(path) ?? new Set<NextLayer>()
+    if (seen.has(layer)) return
+    seen.add(layer)
+    layers.set(path, seen)
+    for (const reference of source.references) {
+      if (!isRuntimeWorkspaceImport(reference)) continue
+      const resolved = await resolveNext(layer, path, reference)
+      if (resolved) await visit(relative(root, resolved), layer)
+    }
+  }
+  // Next compiles a client boundary and its dependencies for SSR and the browser.
+  for (const path of sources.keys()) if (nextAppEntry.test(path)) await visit(path, 'rsc')
+  return { layers, resolveNext }
+}
+
+function isRuntimeWorkspaceImport({ typeOnly, specifier }: ModuleReference) {
+  return !typeOnly && /^(?:\.{1,2}\/|@\/|@pair\/)/.test(specifier) && !stylesheetPath(specifier)
+}
+
+async function viteResolver(root: string, build: BuildMode) {
+  // Vite's declarations include browser globals, so use its Node resolver API at runtime.
+  const packageName = 'vite'
+  const { resolveConfig }: { resolveConfig: ViteConfigLoader } = await import(packageName)
+  const config = await resolveConfig(
+    { root: join(root, brand, 'dev'), configFile: false, envFile: false },
+    build === 'production' ? 'build' : 'serve',
+    build,
+  )
+  const options = { isProduction: build === 'production' }
+  return {
+    import: config.createResolver(options),
+    require: config.createResolver({ ...options, isRequire: true }),
+  }
+}
+
+function standaloneNextLayers(path: string, source: Source | undefined): NextLayer[] {
+  if (!path.startsWith(website)) return []
+  return source?.client ? ['ssr', 'browser'] : ['rsc']
+}
+
+function inspectStylesheetImports(
+  root: string,
+  sources: Map<string, Source>,
+  problems: Set<string>,
+) {
+  const workspaceImports: WorkspaceImport[] = []
+  for (const [path, source] of sources) {
+    for (const reference of source.references) {
+      const { specifier } = reference
+      const stylesheet = stylesheetPath(specifier)
+      if (!stylesheet) continue
+      const local = localStylesheet(root, path, stylesheet)
+      if (local && !isFile(local)) problems.add(`Missing stylesheet: ${path} imports ${specifier}`)
+      if (stylesheet.startsWith('@pair/')) workspaceImports.push({ path, reference })
+    }
+  }
+  return workspaceImports
+}
+
+async function viteStylesheetExists(resolver: ViteResolver, specifier: string, importer: string) {
+  try {
+    return resolvedStylesheet(await resolver(specifier, importer))
+  } catch {
+    return false
+  }
+}
+
+function nodeStylesheetResolver(mode: ImportMode) {
+  return create.promise({
+    fileSystem: resolverFileSystem,
+    conditionNames: [mode, 'node', 'node-addons'],
+    fullySpecified: true,
+  })
+}
+
+async function workspaceImportResolves(
+  root: string,
+  { path, reference }: WorkspaceImport,
+  fallbackLayers: NextLayer[],
+  resolvers: {
+    next: Awaited<ReturnType<typeof nextCompilation>>
+    vite: Record<ImportMode, ViteResolver> | undefined
+    node: Record<ImportMode, ResolveFunctionPromise>
+  },
+) {
+  const { next, vite, node } = resolvers
+  const { specifier, mode } = reference
+  const issuer = join(root, path)
+  const layers = [...(next.layers.get(path) ?? fallbackLayers)]
+  for (const layer of layers) {
+    if (!resolvedStylesheet(await next.resolveNext(layer, path, reference))) return false
+  }
+  if (path.startsWith(brand) && vite) return viteStylesheetExists(vite[mode], specifier, issuer)
+  return layers.length > 0 || resolvedStylesheet(await resolveModule(node[mode], issuer, specifier))
+}
+
+async function stylesheetImportProblems(root: string, sources: Map<string, Source>) {
+  const problems = new Set<string>()
+  const workspaceImports = inspectStylesheetImports(root, sources, problems)
+  if (!workspaceImports.length) return problems
+
+  const hasBrandImports = workspaceImports.some(({ path }) => path.startsWith(brand))
+  const node = {
+    import: nodeStylesheetResolver('import'),
+    require: nodeStylesheetResolver('require'),
+  }
+  for (const build of buildModes) {
+    const next = await nextCompilation(root, build, sources)
+    const vite = hasBrandImports ? await viteResolver(root, build) : undefined
+    for (const entry of workspaceImports) {
+      const { path, reference } = entry
+      const fallbackLayers = standaloneNextLayers(path, sources.get(path))
+      if (!(await workspaceImportResolves(root, entry, fallbackLayers, { next, vite, node }))) {
+        problems.add(`Missing stylesheet: ${path} imports ${reference.specifier}`)
+      }
+    }
+  }
   return problems
 }
 
-export function checkStylesheets(root = REPO_ROOT): string[] {
+function resolvedStylesheet(result: string | false | undefined) {
+  // Both bundlers support browser mappings that explicitly replace an import with an empty module.
+  if (result === false || result === '__vite-browser-external') return true
+  const [file] = result?.split(/[?#]/, 1) ?? []
+  return !!file && isAbsolute(file) && isFile(file)
+}
+
+export async function checkStylesheets(directory = REPO_ROOT): Promise<string[]> {
+  const root = fs.realpathSync(directory)
   const paths = execFileSync(
     'git',
     ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'apps', 'packages'],
@@ -176,19 +375,27 @@ export function checkStylesheets(root = REPO_ROOT): string[] {
       )
     }
   }
-  for (const path of [...sources].sort()) {
-    problems.push(...sourceProblems(root, path))
-  }
+  const inspected = new Map(
+    [...sources].sort().map(path => [path, inspectSource(root, path, problems)]),
+  )
+  problems.push(...(await stylesheetImportProblems(root, inspected)))
   problems.push(...effectiveTypeProblems(root, paths, sources))
   return problems
 }
 
-if (require.main === module) {
-  const problems = checkStylesheets()
+async function main() {
+  const problems = await checkStylesheets()
   if (problems.length) {
     console.error(problems.join('\n'))
     process.exitCode = 1
   } else {
     console.log('CSS guard: PASS')
   }
+}
+
+if (require.main === module) {
+  main().catch((error: unknown) => {
+    console.error(error)
+    process.exitCode = 1
+  })
 }

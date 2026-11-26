@@ -151,7 +151,7 @@ const reviewedDeclarations = [
   'packages/brand/dev/styles.d.css.ts',
 ]
 
-function withCssFixture(run: (cwd: string) => void) {
+async function withCssFixture(run: (cwd: string) => Promise<void>) {
   const cwd = fs.mkdtempSync(join(tmpdir(), 'pair-css-'))
   try {
     execFileSync('git', ['init', '-q'], { cwd })
@@ -160,25 +160,25 @@ function withCssFixture(run: (cwd: string) => void) {
       fs.writeFileSync(join(cwd, declaration), 'export {}\n')
       fs.writeFileSync(join(cwd, declaration.replace(/\.d\.css\.ts$/, '.css')), '')
     }
-    run(cwd)
+    await run(cwd)
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true })
   }
 }
 
-it('#757 AC-4 R758-01: rejects an unreviewed legacy CSS declaration', () => {
-  withCssFixture(cwd => {
+it('#757 AC-4 R758-01: rejects an unreviewed legacy CSS declaration', async () => {
+  await withCssFixture(async cwd => {
     const legacy = 'packages/brand/dev/missing-review.css.d.ts'
     fs.writeFileSync(join(cwd, legacy), 'export {}\n')
-    expect(checkStylesheets(cwd)).toEqual([`Unreviewed CSS declaration: ${legacy}`])
+    expect(await checkStylesheets(cwd)).toEqual([`Unreviewed CSS declaration: ${legacy}`])
   })
 })
 
-it('#757 AC-4 R758-03: rejects a wildcard declaration in a new Brand file', () => {
-  withCssFixture(cwd => {
+it('#757 AC-4 R758-03: rejects a wildcard declaration in a new Brand file', async () => {
+  await withCssFixture(async cwd => {
     const ambient = 'packages/brand/dev/ambient.d.ts'
     fs.writeFileSync(join(cwd, ambient), "declare module '*.css' {}\n")
-    expect(checkStylesheets(cwd)).toEqual([`Ambient CSS declaration: ${ambient}`])
+    expect(await checkStylesheets(cwd)).toEqual([`Ambient CSS declaration: ${ambient}`])
   })
 })
 
@@ -186,21 +186,21 @@ it.each([
   "type Style = import('react').CSSProperties\ndeclare module '*.css' {}",
   "module '*.css' {}",
   "declare module '*.css?inline' {}",
-])('#757 AC-4 R758-01: rejects the unreviewed declaration %j', declaration => {
-  withCssFixture(cwd => {
+])('#757 AC-4 R758-01: rejects the unreviewed declaration %j', async declaration => {
+  await withCssFixture(async cwd => {
     const ambient = 'packages/brand/dev/ambient.d.ts'
     fs.writeFileSync(join(cwd, ambient), "declare module '*.svg?inline' {}\n")
-    expect(checkStylesheets(cwd)).toEqual([])
+    expect(await checkStylesheets(cwd)).toEqual([])
 
     fs.writeFileSync(join(cwd, ambient), declaration)
-    expect(checkStylesheets(cwd)).toEqual([`Ambient CSS declaration: ${ambient}`])
+    expect(await checkStylesheets(cwd)).toEqual([`Ambient CSS declaration: ${ambient}`])
   })
 })
 
 it.each(['reference', 'compilerOptions.types'])(
   '#757 AC-4 R758-01: rejects CSS declarations enabled by %s',
-  channel => {
-    withCssFixture(cwd => {
+  async channel => {
+    await withCssFixture(async cwd => {
       const brand = join(cwd, 'packages/brand')
       const config = join(brand, 'tsconfig.json')
       const source = join(brand, 'dev/style-fixture.ts')
@@ -218,22 +218,22 @@ it.each(['reference', 'compilerOptions.types'])(
 
       writeConfig([])
       fs.writeFileSync(source, "import './styles.css'\n")
-      expect(checkStylesheets(cwd)).toEqual([])
+      expect(await checkStylesheets(cwd)).toEqual([])
 
       if (channel === 'reference') {
         fs.writeFileSync(source, '/// <reference types="vite/client" />\nimport \'missing.css\'\n')
       } else {
         writeConfig(['vite/client'])
       }
-      expect(checkStylesheets(cwd)).toEqual([
+      expect(await checkStylesheets(cwd)).toEqual([
         expect.stringMatching(/^Ambient CSS declaration: .*vite\/client\.d\.ts$/),
       ])
     })
   },
 )
 
-it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types', () => {
-  withCssFixture(cwd => {
+it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types', async () => {
+  await withCssFixture(async cwd => {
     const importer = 'apps/website/app/style-fixture.ts'
     const stylesheet = join(cwd, 'apps/website/app/fixture.module.css')
     const specifier = './fixture.module.css'
@@ -253,7 +253,7 @@ it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types',
     )
 
     fs.writeFileSync(stylesheet, '')
-    expect(checkStylesheets(cwd)).toEqual([])
+    expect(await checkStylesheets(cwd)).toEqual([])
     fs.rmSync(stylesheet)
 
     const checked = spawnSync(process.execPath, [compiler, '-p', config, '--pretty', 'false'], {
@@ -262,7 +262,9 @@ it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types',
     })
     expect(checked.error).toBeUndefined()
     expect(checked.status, checked.stdout + checked.stderr).toBe(0)
-    expect(checkStylesheets(cwd)).toEqual([`Missing stylesheet: ${importer} imports ${specifier}`])
+    expect(await checkStylesheets(cwd)).toEqual([
+      `Missing stylesheet: ${importer} imports ${specifier}`,
+    ])
 
     // The same Next file is inspected first for the website, then for Brand.
     fs.writeFileSync(stylesheet, '')
@@ -282,29 +284,31 @@ it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types',
         include: [],
       }),
     )
-    expect(checkStylesheets(cwd)).toEqual([
+    expect(await checkStylesheets(cwd)).toEqual([
       expect.stringMatching(/^Ambient CSS declaration: .*next\/types\/global\.d\.ts$/),
     ])
   })
 })
 
-it.each(['scss', 'sass'])('#757 AC-4 R758-02: checks local %s modules', extension => {
-  withCssFixture(cwd => {
+it.each(['scss', 'sass'])('#757 AC-4 R758-02: checks local %s modules', async extension => {
+  await withCssFixture(async cwd => {
     const importer = 'apps/website/app/style-fixture.ts'
     const specifier = `./fixture.module.${extension}`
     const stylesheet = join(cwd, dirname(importer), specifier)
     fs.writeFileSync(join(cwd, importer), `import styles from '${specifier}'\nexport { styles }\n`)
 
     fs.writeFileSync(stylesheet, '')
-    expect(checkStylesheets(cwd)).toEqual([])
+    expect(await checkStylesheets(cwd)).toEqual([])
 
     fs.rmSync(stylesheet)
-    expect(checkStylesheets(cwd)).toEqual([`Missing stylesheet: ${importer} imports ${specifier}`])
+    expect(await checkStylesheets(cwd)).toEqual([
+      `Missing stylesheet: ${importer} imports ${specifier}`,
+    ])
   })
 })
 
-it('#757 AC-4 R758-02: checks workspace stylesheet exports', () => {
-  withCssFixture(cwd => {
+it('#757 AC-4 R758-02: checks workspace stylesheet exports', async () => {
+  await withCssFixture(async cwd => {
     const importer = 'apps/website/app/style-fixture.ts'
     const brand = join(cwd, 'packages/brand')
     const scope = join(cwd, 'apps/website/node_modules/@pair')
@@ -321,11 +325,11 @@ it('#757 AC-4 R758-02: checks workspace stylesheet exports', () => {
       fs.writeFileSync(join(cwd, importer), `import '${specifier}'\n`)
 
     writeImport('@pair/brand/tokens.css')
-    expect(checkStylesheets(cwd)).toEqual([])
+    expect(await checkStylesheets(cwd)).toEqual([])
 
     for (const specifier of ['@pair/brand/dev/styles.css', '@pair/brand/missing.module.css']) {
       writeImport(specifier)
-      expect(checkStylesheets(cwd)).toEqual([
+      expect(await checkStylesheets(cwd)).toEqual([
         `Missing stylesheet: ${importer} imports ${specifier}`,
       ])
     }
@@ -357,25 +361,28 @@ it.each([
     targets: { browser: './theme.css', import: './missing.css', require: './missing.css' },
     missing: false,
   },
-])('#757 AC-4 R758-02: selects the package export for $form', ({ statement, targets, missing }) => {
-  withCssFixture(cwd => {
-    const importer = 'packages/brand/dev/style-fixture.ts'
-    const scope = join(cwd, 'packages/brand/node_modules/@pair')
-    const styles = join(cwd, 'packages/styles')
-    fs.mkdirSync(scope, { recursive: true })
-    fs.mkdirSync(styles)
-    fs.symlinkSync(styles, join(scope, 'styles'))
-    fs.writeFileSync(join(styles, 'theme.css'), '')
-    fs.writeFileSync(
-      join(styles, 'package.json'),
-      JSON.stringify({ name: '@pair/styles', exports: { './theme.css': targets } }),
-    )
-    fs.writeFileSync(join(cwd, importer), statement)
-    expect(checkStylesheets(cwd)).toEqual(
-      missing ? [`Missing stylesheet: ${importer} imports @pair/styles/theme.css`] : [],
-    )
-  })
-})
+])(
+  '#757 AC-4 R758-02: selects the package export for $form',
+  async ({ statement, targets, missing }) => {
+    await withCssFixture(async cwd => {
+      const importer = 'packages/brand/dev/style-fixture.ts'
+      const scope = join(cwd, 'packages/brand/node_modules/@pair')
+      const styles = join(cwd, 'packages/styles')
+      fs.mkdirSync(scope, { recursive: true })
+      fs.mkdirSync(styles)
+      fs.symlinkSync(styles, join(scope, 'styles'))
+      fs.writeFileSync(join(styles, 'theme.css'), '')
+      fs.writeFileSync(
+        join(styles, 'package.json'),
+        JSON.stringify({ name: '@pair/styles', exports: { './theme.css': targets } }),
+      )
+      fs.writeFileSync(join(cwd, importer), statement)
+      expect(await checkStylesheets(cwd)).toEqual(
+        missing ? [`Missing stylesheet: ${importer} imports @pair/styles/theme.css`] : [],
+      )
+    })
+  },
+)
 
 it.each([
   {
@@ -397,6 +404,7 @@ it.each([
     importer: 'apps/website/app/page.tsx',
     manifest: { exports: { './theme.css': { development: './theme.css', default: './prod.css' } } },
     alternatives: ['prod.css'],
+    needsAlternative: true,
   },
   {
     target: 'Vite browser file mapping',
@@ -410,11 +418,18 @@ it.each([
     importer: 'packages/brand/dev/demo.ts',
     manifest: { exports: { './theme.css': { development: './theme.css', default: './prod.css' } } },
     alternatives: ['prod.css'],
+    needsAlternative: true,
   },
 ])(
   '#757 AC-4 R758-02: checks the target selected by $target',
-  ({ importer, manifest, alternatives, selected = 'theme.css' }) => {
-    withCssFixture(cwd => {
+  async ({
+    importer,
+    manifest,
+    alternatives,
+    selected = 'theme.css',
+    needsAlternative = false,
+  }) => {
+    await withCssFixture(async cwd => {
       const workspace = importer.split('/').slice(0, 2).join('/')
       const scope = join(cwd, workspace, 'node_modules/@pair')
       const styles = join(cwd, 'packages/styles')
@@ -429,29 +444,62 @@ it.each([
       fs.writeFileSync(join(cwd, importer), `import '${specifier}'\n`)
       for (const alternative of alternatives) fs.writeFileSync(join(styles, alternative), '')
       fs.writeFileSync(join(styles, selected), '')
-      expect(checkStylesheets(cwd)).toEqual([])
+      expect(await checkStylesheets(cwd)).toEqual([])
 
       fs.rmSync(join(styles, selected))
-      expect(checkStylesheets(cwd)).toEqual([
+      expect(await checkStylesheets(cwd)).toEqual([
         `Missing stylesheet: ${importer} imports ${specifier}`,
       ])
 
-      if (!('development' in (manifest.exports?.['./theme.css'] ?? {}))) {
-        fs.writeFileSync(join(styles, selected), '')
-        for (const alternative of alternatives) fs.rmSync(join(styles, alternative))
-        expect(checkStylesheets(cwd)).toEqual([])
-      }
+      fs.writeFileSync(join(styles, selected), '')
+      for (const alternative of alternatives) fs.rmSync(join(styles, alternative))
+      expect(await checkStylesheets(cwd)).toEqual(
+        needsAlternative ? [`Missing stylesheet: ${importer} imports ${specifier}`] : [],
+      )
     })
   },
 )
 
-it('#757 AC-4 R758-04: distinguishes JSX text from stylesheet imports', () => {
-  withCssFixture(cwd => {
+it('#757 AC-4 R758-02: checks both Next client layers through imports', async () => {
+  await withCssFixture(async cwd => {
+    const app = join(cwd, 'apps/website/app')
+    fs.writeFileSync(join(app, 'page.tsx'), "export { default } from './client'\n")
+    fs.writeFileSync(join(app, 'client.tsx'), "'use client'\nexport { default } from './child'\n")
+    const importer = 'apps/website/app/child.tsx'
+    const specifier = '@pair/styles/theme.css'
+    fs.writeFileSync(join(cwd, importer), `import '${specifier}'\nexport default () => null\n`)
+    const styles = join(cwd, 'apps/website/node_modules/@pair/styles')
+    fs.mkdirSync(styles, { recursive: true })
+    fs.writeFileSync(
+      join(styles, 'package.json'),
+      JSON.stringify({
+        name: '@pair/styles',
+        exports: {
+          './theme.css': {
+            'react-server': './unselected.css',
+            browser: './browser.css',
+            node: './ssr.css',
+          },
+        },
+      }),
+    )
+    const missing = [`Missing stylesheet: ${importer} imports ${specifier}`]
+    fs.writeFileSync(join(styles, 'browser.css'), '')
+    expect(await checkStylesheets(cwd)).toEqual(missing)
+    fs.writeFileSync(join(styles, 'ssr.css'), '')
+    expect(await checkStylesheets(cwd)).toEqual([])
+    fs.rmSync(join(styles, 'browser.css'))
+    expect(await checkStylesheets(cwd)).toEqual(missing)
+  })
+})
+
+it('#757 AC-4 R758-04: distinguishes JSX text from stylesheet imports', async () => {
+  await withCssFixture(async cwd => {
     const importer = 'apps/website/app/style-example.tsx'
     const path = join(cwd, importer)
     const example = "export const Example = () => <code>import './example.css'</code>\n"
     fs.writeFileSync(path, example)
-    expect(checkStylesheets(cwd)).toEqual([])
+    expect(await checkStylesheets(cwd)).toEqual([])
 
     fs.writeFileSync(
       path,
@@ -459,7 +507,7 @@ it('#757 AC-4 R758-04: distinguishes JSX text from stylesheet imports', () => {
         example +
         "export const Button = () => <button onClick={() => void import('./lazy.css')} />\n",
     )
-    expect(checkStylesheets(cwd)).toEqual([
+    expect(await checkStylesheets(cwd)).toEqual([
       `Missing stylesheet: ${importer} imports ./actual.css`,
       `Missing stylesheet: ${importer} imports ./lazy.css`,
     ])

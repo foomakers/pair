@@ -52,6 +52,7 @@
     "ts-node": "catalog:",
     "@typescript/native": "catalog:",
     "typescript": "catalog:typescript-api",
+    "vite": "catalog:",
     "vite-tsconfig-paths": "catalog:",
     "vitest": "catalog:",
     "yaml": "catalog:"
