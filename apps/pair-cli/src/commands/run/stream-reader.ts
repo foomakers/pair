@@ -85,7 +85,7 @@ function asFinal(value: unknown): StageFinalResult | undefined {
 
 /** Every TOP-LEVEL `{…}` span of a text (string-aware, so braces in strings and nested objects never count). */
 function topLevelObjects(text: string, skipProgress = false): string[] {
-  const starts = skipProgress ? /\bPAIR_EVENT[ \t]+|\{/g : /\{/g
+  const starts = skipProgress ? /(?:\b|(?<!\w)_+)PAIR_EVENT[ \t]+|\{/g : /\{/g
   const spans: string[] = []
   for (let match = starts.exec(text); match; match = starts.exec(text)) {
     if (match[0] !== '{') {
@@ -102,9 +102,16 @@ function topLevelObjects(text: string, skipProgress = false): string[] {
 function progressEnd(text: string, start: number): number {
   if (text[start] === '{' || text[start] === '[') return containerEnd(text, start, true)
   const scalar =
-    /(?:"(?:\\[^\r\n]|[^"\\\r\n])*"|true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=[\s{]|$)/y
+    /(?:"(?:\\[^\r\n]|[^"\\\r\n])*"|[a-zA-Z0-9.+-]+)(?=[`*_~'">\p{Pe}\p{Pf}]*(?:[\s{]|$))/uy
   scalar.lastIndex = start
-  return scalar.test(text) ? scalar.lastIndex : lineEnd(text, start)
+  const match = scalar.exec(text)
+  if (!match) return lineEnd(text, start)
+  try {
+    JSON.parse(match[0])
+    return scalar.lastIndex
+  } catch {
+    return lineEnd(text, start)
+  }
 }
 
 /** Progress records fit on one line, even when truncated. A handoff may span several. */
