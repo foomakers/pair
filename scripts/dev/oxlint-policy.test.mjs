@@ -19,7 +19,11 @@ function workspace(t, configPath) {
 }
 
 function lint(cwd, ...args) {
-  const result = spawnSync(process.execPath, [runner, ...args], {
+  return lintCommand(cwd, runner, ...args)
+}
+
+function lintCommand(cwd, command, ...args) {
+  const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
     env: {
@@ -195,6 +199,95 @@ test('#693 R5 quoted patterns select file symlinks without walking directory sym
       ['src/link.cjs', 'eslint(no-debugger)'],
     ], input)
   }
+})
+
+for (const [name, selection] of [
+  ['directory', ['src']],
+  ['quoted glob', ['src/**/*.ts']],
+  ['default', []],
+  ['package', []],
+]) {
+  test(`#693 R5 ${name} selection skips nested directory links in check and fix mode`, t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const source = 'export let value = 1\n'
+    mkdirSync(join(cwd, 'src'))
+    mkdirSync(join(cwd, 'dist'))
+    const target = join(cwd, 'dist/target.ts')
+    writeFileSync(target, source)
+    writeFileSync(join(cwd, 'src/selected.ts'), source)
+    symlinkSync('../dist', join(cwd, 'src/linked-dir'), 'dir')
+
+    const check = name === 'package'
+      ? lintCommand(cwd, join(dirname(runner), 'lint.sh'))
+      : lint(cwd, ...selection)
+    const fixed = name === 'package'
+      ? lintCommand(cwd, join(dirname(runner), 'lint-fix.sh'))
+      : lint(cwd, '--fix', ...selection)
+    assert.equal(readFileSync(target, 'utf8'), source)
+    assert.equal(check.status, 1)
+    assert.deepEqual(check.diagnostics.map(({ filename }) => filename), ['src/selected.ts'])
+    assert.equal(fixed.status, 0)
+    assert.equal(readFileSync(join(cwd, 'src/selected.ts'), 'utf8'), 'export const value = 1\n')
+  })
+}
+
+test('#693 R5 an explicitly selected in-workspace directory link remains lintable', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const source = 'export let value = 1\n'
+  mkdirSync(join(cwd, 'real/nested-target'), { recursive: true })
+  writeFileSync(join(cwd, 'real/target.ts'), source)
+  writeFileSync(join(cwd, 'real/nested-target/other.ts'), source)
+  symlinkSync('real', join(cwd, 'alias'), 'dir')
+  symlinkSync('../real/nested-target', join(cwd, 'real/nested-alias'), 'dir')
+
+  assert.deepEqual(lint(cwd, '--no-error-on-unmatched-pattern', 'alias/**/*.ts'), {
+    status: 0, diagnostics: [],
+  })
+  assert.deepEqual(lint(cwd, 'alias').diagnostics.map(({ filename }) => filename).sort(), [
+    'alias/nested-target/other.ts', 'alias/target.ts',
+  ])
+  assert.equal(lint(cwd, '--fix', 'alias').status, 0)
+  assert.equal(readFileSync(join(cwd, 'real/target.ts'), 'utf8'), 'export const value = 1\n')
+})
+
+test('#693 R5 fix keeps workspace sibling fixtures outside every selection', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const sibling = mkdtempSync(`${cwd}-sibling-`)
+  t.after(() => rmSync(sibling, { recursive: true, force: true }))
+  const target = join(sibling, 'target.ts')
+  const source = 'export let value = 1\n'
+  writeFileSync(join(cwd, 'clean.ts'), 'export const value = 1\n')
+  symlinkSync(target, join(cwd, 'linked-file.ts'))
+  symlinkSync(sibling, join(cwd, 'linked-dir'), 'dir')
+
+  for (const selection of [
+    ['linked-file.ts'], ['linked-dir'], ['linked-dir/target.ts'], ['linked-dir/**/*.ts'],
+    [target], [sibling], [`${sibling}/*.ts`],
+    ['*.ts'], ['.'], [],
+  ]) {
+    const args = ['--no-error-on-unmatched-pattern', ...selection]
+    writeFileSync(target, source)
+    const check = lint(cwd, ...args)
+    const fixed = lint(cwd, '--fix', ...args)
+    assert.equal(readFileSync(target, 'utf8'), source, args.join(' '))
+    assert.deepEqual(check, { status: 0, diagnostics: [] }, args.join(' '))
+    assert.deepEqual(fixed, { status: 0, diagnostics: [] }, args.join(' '))
+  }
+  assert.deepEqual(lintCommand(cwd, join(dirname(runner), 'lint-fix.sh')), { status: 0, diagnostics: [] })
+  assert.equal(readFileSync(target, 'utf8'), source)
+})
+
+test('#693 R5 an allowed empty selection leaves other workspace files alone', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  mkdirSync(join(cwd, 'empty'))
+  const file = join(cwd, 'other.ts')
+  const source = 'export let value = 1\n'
+  writeFileSync(file, source)
+
+  assert.deepEqual(lint(cwd, '--fix', '--no-error-on-unmatched-pattern', 'empty/*.ts'), {
+    status: 0, diagnostics: [],
+  })
+  assert.equal(readFileSync(file, 'utf8'), source)
 })
 
 for (const [name, input] of [
