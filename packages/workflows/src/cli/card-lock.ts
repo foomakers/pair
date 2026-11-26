@@ -1,3 +1,5 @@
+/// <reference types="node" preserve="true" />
+
 import {
   mkdirSync,
   readFileSync,

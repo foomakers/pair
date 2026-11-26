@@ -1,3 +1,5 @@
+/// <reference types="node" preserve="true" />
+
 /**
  * HTTP client service abstraction
  * Provides injectable interface for HTTP operations, parallel to FileSystemService
