@@ -371,7 +371,9 @@ function main() {
     const nativeOptions = tokens.filter(token => token.kind === 'option')
     const [first] = nativeOptions
     if (nativeOptions.length > 1 || (first && (!fixFlags.includes(first.name) || first.value !== undefined))) {
-      const parsed = runLint(['--print-config', ...args], capture)
+      const operandIndices = new Set(tokens.filter(token => token.kind !== 'option').map(token => token.index))
+      const optionsOnly = args.filter((_, index) => !operandIndices.has(index))
+      const parsed = runLint(['--print-config', ...optionsOnly], capture)
       if (parsed.status !== 0) return finishLint(parsed)
     }
     byConfig = configExclusions()

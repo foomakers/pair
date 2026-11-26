@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, dirname, join, resolve } from 'node:path'
+import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
@@ -861,4 +861,25 @@ test('#693 direct nested ignore files retain Pair explicit-operand selection', t
   assert.equal(readFileSync(join(cwd, 'match.ts'), 'utf8'), source)
   assert.equal(readFileSync(join(cwd, 'sub/match.ts'), 'utf8'), source)
   assert.equal(readFileSync(join(cwd, 'sibling.ts'), 'utf8'), 'export const value = 1\n')
+})
+
+test('#693 native option validation leaves ignored sources and parent paths to Pair selection', t => {
+  const cwd = workspace(t, 'apps/website/.oxlintrc.json')
+  writeFileSync(join(cwd, 'Widget.vue'), '<template />\n')
+  const outside = mkdtempSync(join(dirname(cwd), 'pair-outside-'))
+  t.after(() => rmSync(outside, { recursive: true, force: true }))
+  writeFileSync(join(outside, 'target.ts'), 'export let value = 1\n')
+  mkdirSync(join(cwd, 'src'))
+  writeFileSync(join(cwd, 'target.ts'), 'export let value = 1\n')
+  for (const args of [[], ['--max-warnings=0']]) {
+    const ignored = lint(cwd, '--format=json', ...args, 'Widget.vue')
+    assert.equal(ignored.status, args.length ? 1 : 0)
+    assert.deepEqual(ignored.diagnostics.map(d => [d.filename, d.severity]), [['Widget.vue', 'warning']])
+  }
+  const valid = runLint(cwd, runner, '--format=json', '--fix', 'src/../target.ts')
+  assert.equal(valid.status, 0, valid.stderr)
+  assert.equal(readFileSync(join(cwd, 'target.ts'), 'utf8'), 'export const value = 1\n')
+  const escaped = runLint(cwd, runner, '--format=json', '--fix', cwd + '/../' + basename(outside) + '/target.ts')
+  assert.equal(escaped.status, 2, escaped.stderr)
+  assert.equal(readFileSync(join(outside, 'target.ts'), 'utf8'), 'export let value = 1\n')
 })
