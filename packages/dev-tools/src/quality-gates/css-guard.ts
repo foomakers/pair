@@ -28,12 +28,20 @@ function isFile(path: string) {
 }
 
 function declaresStylesheets(name: string) {
-  const wildcard = name.indexOf('*')
+  const [pattern = ''] = name.split(/[?#]/, 1)
+  const wildcard = pattern.indexOf('*')
   return (
-    name.endsWith('.css') ||
-    name === '*.*' ||
-    (wildcard !== -1 && '.css'.endsWith(name.slice(wildcard + 1)))
+    pattern.endsWith('.css') ||
+    pattern === '*.*' ||
+    (wildcard !== -1 && '.css'.endsWith(pattern.slice(wildcard + 1)))
   )
+}
+
+function hasStylesheetDeclaration(node: ts.Node): boolean {
+  if (ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name)) {
+    if (declaresStylesheets(node.name.text)) return true
+  }
+  return ts.forEachChild(node, hasStylesheetDeclaration) === true
 }
 
 function sourceProblems(root: string, path: string): string[] {
@@ -42,8 +50,8 @@ function sourceProblems(root: string, path: string): string[] {
     problems.push(`Unreviewed CSS declaration: ${path}`)
   }
   const source = fs.readFileSync(join(root, path))
-  const { ambientExternalModules, importedFiles } = ts.preProcessFile(source, true, true)
-  if (ambientExternalModules?.some(declaresStylesheets)) {
+  const { importedFiles } = ts.preProcessFile(source, true, true)
+  if (hasStylesheetDeclaration(ts.createSourceFile(path, source, ts.ScriptTarget.Latest))) {
     problems.push(`Ambient CSS declaration: ${path}`)
   }
   for (const { fileName } of importedFiles) {
