@@ -182,7 +182,7 @@ test('#693 R5 checks sources inside directories with excluded file extensions', 
   assert.equal(readFileSync(join(cwd, 'folder.mts/ignored.mts'), 'utf8'), source)
 })
 
-const discoveryErrors = [['dangling', 'ENOENT'], ['loop', 'ELOOP']]
+const discoveryErrors = [['dangling', 'ENOENT'], ['loop', 'ELOOP'], ['directory link', 'EISDIR']]
 if (process.getuid?.() !== 0) discoveryErrors.push(['unreadable', 'EACCES'])
 for (const [name, code] of discoveryErrors) {
   test(`#693 R5 package fix fails before writing when discovery encounters a ${name} source`, t => {
@@ -194,6 +194,9 @@ for (const [name, code] of discoveryErrors) {
       const dir = join(cwd, 'included')
       mkdirSync(dir)
       chmodSync(dir, 0)
+    } else if (code === 'EISDIR') {
+      mkdirSync(join(cwd, 'target'))
+      symlinkSync('target', join(cwd, 'broken.ts'), 'dir')
     } else {
       symlinkSync(name === 'loop' ? 'broken.ts' : 'missing', join(cwd, 'broken.ts'))
     }
@@ -202,6 +205,59 @@ for (const [name, code] of discoveryErrors) {
     assert.equal(result.status, 2)
     assert.ok(result.stderr.includes(code))
     assert.equal(readFileSync(ordinary, 'utf8'), source)
+  })
+}
+
+if (process.getuid?.() !== 0) {
+  test('#693 R5 validates selected source readability before fixing any sibling', t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const source = 'export let value = 1\n'
+    const sibling = join(cwd, 'sibling.ts')
+    const blocked = join(cwd, 'blocked.ts')
+    const ignored = join(cwd, 'ignored.config.ts')
+    for (const file of [blocked, sibling, ignored]) writeFileSync(file, source)
+    chmodSync(blocked, 0)
+    chmodSync(ignored, 0)
+    try {
+      assert.throws(() => readFileSync(blocked), { code: 'EACCES' })
+      for (const args of [['--workspace'], ['sibling.ts', blocked], ['blocked.ts', 'sibling.ts']]) {
+        const result = runLint(cwd, runner, '--fix', ...args)
+        assert.equal(result.status, 2)
+        assert.match(result.stderr, /EACCES.*blocked\.ts/)
+        assert.equal(readFileSync(sibling, 'utf8'), source)
+      }
+      chmodSync(blocked, 0o600)
+      assert.equal(lint(cwd, '--workspace', '--fix').status, 0)
+      assert.equal(readFileSync(sibling, 'utf8'), 'export const value = 1\n')
+    } finally {
+      chmodSync(blocked, 0o600)
+      chmodSync(ignored, 0o600)
+    }
+    assert.equal(readFileSync(ignored, 'utf8'), source)
+  })
+
+  test('#693 R5 reports fix write failures as operational errors', t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const file = join(cwd, 'readonly.ts')
+    const sibling = join(cwd, 'sibling.ts')
+    const source = 'export let value = 1\n'
+    writeFileSync(file, source)
+    chmodSync(file, 0o444)
+    try {
+      for (const flags of [[], ['--format', 'json'], ['--silent']]) {
+        writeFileSync(sibling, source)
+        const result = runLint(cwd, runner, '--workspace', '--fix', ...flags)
+        assert.equal(result.status, 2)
+        if (!flags.includes('--silent')) assert.match(result.stdout, /Failed to write file .*readonly\.ts/)
+        assert.equal(readFileSync(sibling, 'utf8'), 'export const value = 1\n')
+        assert.equal(readFileSync(file, 'utf8'), source)
+      }
+    } finally {
+      chmodSync(file, 0o600)
+    }
+    writeFileSync(file, 'export const value = 1\n')
+    chmodSync(file, 0o444)
+    assert.equal(lint(cwd, '--workspace', '--fix').status, 0)
   })
 }
 
