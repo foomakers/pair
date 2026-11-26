@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { once } from 'node:events'
+import { createServer, type AddressInfo, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
 import { basename, join } from 'path'
@@ -738,19 +740,59 @@ it.each([
   },
 )
 
-function replayEngine(input: SpawnIterationInput, stream: string, lastMessage?: string) {
-  const program = `const fs = require('node:fs')
-    const message = ${JSON.stringify(lastMessage)}
-    if (message !== undefined) {
-      const flag = process.argv.indexOf('--output-last-message')
-      fs.writeFileSync(process.argv[flag + 1], message)
-    }
-    fs.writeFileSync(1, ${JSON.stringify(stream)})`
+function replayEngine(input: SpawnIterationInput, stream: string) {
+  const program = `require('node:fs').writeFileSync(1, ${JSON.stringify(stream)})`
   return spawnIteration({
     ...input,
     cwd: tmpdir(),
     engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', program, '--'] },
   })
+}
+
+async function finalizeCodex(
+  input: SpawnIterationInput,
+  message: string,
+  { initialText = '', exitCode = 0 }: { initialText?: string; exitCode?: number | null } = {},
+) {
+  const server = createServer(socket => socket.on('error', () => socket.destroy())).listen(
+    0,
+    '127.0.0.1',
+  )
+  try {
+    await once(server, 'listening')
+    const { port } = server.address() as AddressInfo
+    const connected = once(server, 'connection') as Promise<[Socket]>
+    const program = `const fs = require('node:fs')
+      const flag = process.argv.indexOf('--output-last-message')
+      const output = fs.openSync(process.argv[flag + 1], 'w')
+      fs.writeFileSync(output, ${JSON.stringify(initialText)})
+      const exitCode = ${exitCode}
+      const shutdown = require('node:net').connect(${port}, '127.0.0.1')
+      shutdown.once('connect', () => fs.writeFileSync(1, '{"type":"turn.completed"}\\n'))
+      shutdown.once('end', () => {
+        fs.ftruncateSync(output, 0)
+        fs.writeSync(output, ${JSON.stringify(message)}, 0, 'utf8')
+        fs.closeSync(output)
+        if (exitCode === null) setInterval(() => {}, 1000)
+        else process.exitCode = exitCode
+      })`
+    let sawTerminal = false
+    const result = await spawnIteration({
+      ...input,
+      cwd: tmpdir(),
+      engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', program, '--'] },
+      onEvent: event => {
+        sawTerminal = true
+        input.onEvent?.(event)
+        // Release shutdown after the terminal event has been consumed.
+        setImmediate(() => void connected.then(([socket]) => socket.end()))
+      },
+    })
+    expect(sawTerminal).toBe(true)
+    return result
+  } finally {
+    server.close()
+  }
 }
 
 it.each([
@@ -763,9 +805,7 @@ it.each([
   )
   const result =
     prose + fenced({ status: 'blocked', summary: 'Waiting', reason: 'approval-required' })
-  const runIteration = vi.fn((input: SpawnIterationInput) =>
-    replayEngine(input, '{"type":"turn.completed"}\n', result),
-  )
+  const runIteration = vi.fn((input: SpawnIterationInput) => finalizeCodex(input, result))
 
   expect(await run(['quick'], OK, { engine: 'codex' }, { runIteration })).toBe(0)
   const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
@@ -776,14 +816,16 @@ it.each([
   expect(runIteration).toHaveBeenCalledTimes(1)
 })
 
-it('#704 F9: fails on a Codex file result without status (AC-3)', async () => {
+it('#704 F9: rejects a finalized result without status even if the earlier file was valid (AC-3)', async () => {
   write(
     '.pair/adoption/tech/workflows/quick.yaml',
     QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
   )
   const result = fenced({ summary: 'Missing status' })
   const runIteration = (input: SpawnIterationInput) =>
-    replayEngine(input, '{"type":"turn.completed"}\n', result)
+    finalizeCodex(input, result, {
+      initialText: fenced({ status: 'blocked', summary: 'Stale', reason: 'stale-result' }),
+    })
 
   const exit = await run(['quick'], OK, { engine: 'codex' }, { runIteration })
   const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
@@ -794,6 +836,35 @@ it('#704 F9: fails on a Codex file result without status (AC-3)', async () => {
   })
   expect(exit).toBe(1)
 })
+
+it.each([
+  { exitCode: 1, kind: 'crash' },
+  { exitCode: null, kind: 'timeout' },
+])(
+  '#704 F9: records a $kind when Codex writes valid-looking text without a clean exit (AC-2)',
+  async ({ exitCode, kind }) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
+    )
+    const result = fenced({
+      status: 'blocked',
+      summary: 'Not finalized',
+      reason: 'approval-required',
+    })
+    const runIteration = (input: SpawnIterationInput) =>
+      finalizeCodex(input, result, { initialText: result, exitCode })
+
+    const limits = kind === 'timeout' ? { iterationTimeout: '1' } : {}
+    expect(await run(['quick'], OK, { engine: 'codex', ...limits }, { runIteration })).toBe(0)
+    const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+    expect(state.steps['implement']).toMatchObject({
+      state: 'blocked',
+      reason: 'fault',
+      attempts: [{ kind, exitCode }],
+    })
+  },
+)
 
 it.each([
   [
