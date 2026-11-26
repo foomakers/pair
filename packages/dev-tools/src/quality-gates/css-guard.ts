@@ -38,8 +38,13 @@ type ViteConfigLoader = (
 const buildModes = ['development', 'production'] as const
 const website = 'apps/website/'
 const brand = 'packages/brand/'
-const nextAppEntry =
-  /^apps\/website\/app\/(?:.*\/)?(?:page|layout|route|template|loading|error|global-error|not-found|default|icon|apple-icon|opengraph-image|twitter-image|robots|sitemap)\.[jt]sx?$/
+const nextApp = `${website}app`
+const nextPage = /\/page\.[jt]sx?$/
+const nextLayout = /\/layout\.[jt]sx?$/
+const nextSegmentComponent =
+  /\/(?:layout|template|loading|error|global-error|not-found|forbidden|unauthorized)\.[jt]sx?$/
+const nextRouteEntry =
+  /\/(?:page|route|default|icon|apple-icon|opengraph-image|twitter-image|robots|sitemap)\.[jt]sx?$/
 
 // Enhanced-resolve uses the path-and-callback forms for its package and symlink lookups.
 const resolverFileSystem = {
@@ -233,22 +238,49 @@ function inspectSource(root: string, path: string, problems: string[]): Source {
     if (statement.expression.text === 'use client') client = true
     if (statement.expression.text === 'use server') server = true
   }
-  const runtime = nextAppEntry.test(path) ? exportedRuntime(source) : undefined
+  const runtime = path.startsWith(`${nextApp}/`) ? exportedRuntime(source) : undefined
   return { references, client, server, runtime }
 }
 
-function ancestorLayouts(path: string, layouts: Map<string, string>) {
+function ancestorComponents(path: string, segments: Map<string, string[]>) {
   const ancestors: string[] = []
   for (let dir = dirname(path); dir.startsWith(website); dir = dirname(dir)) {
-    const layout = layouts.get(dir)
-    if (layout) ancestors.push(layout)
+    ancestors.push(...(segments.get(dir) ?? []))
   }
   return ancestors
 }
 
-function nextEntryRuntime(path: string, layouts: string[], sources: Map<string, Source>) {
-  const inherited = layouts.map(layout => sources.get(layout)?.runtime).find(Boolean)
+function nextEntryRuntime(path: string, components: string[], sources: Map<string, Source>) {
+  const inherited = components
+    .filter(component => nextLayout.test(component))
+    .map(layout => sources.get(layout)?.runtime)
+    .find(Boolean)
   return sources.get(path)?.runtime ?? inherited ?? 'nodejs'
+}
+
+function* nextRouteEntries(
+  sources: Map<string, Source>,
+  appPaths: string[],
+  segmentFiles: string[],
+) {
+  const segments = new Map<string, string[]>()
+  for (const path of segmentFiles) {
+    const dir = dirname(path)
+    const components = segments.get(dir) ?? []
+    components.push(path)
+    segments.set(dir, components)
+  }
+  for (const path of appPaths.filter(path => nextRouteEntry.test(path))) {
+    const components = nextPage.test(path) ? ancestorComponents(path, segments) : []
+    yield { paths: [path, ...components], runtime: nextEntryRuntime(path, components, sources) }
+  }
+
+  // The root segment also renders the 404 route, with the built-in page on Node.
+  const paths = segments.get(nextApp) ?? []
+  const notFound = paths.find(path => /\/not-found\.[jt]sx?$/.test(path))
+  if (notFound || appPaths.some(path => nextPage.test(path))) {
+    yield { paths, runtime: notFound ? nextEntryRuntime(notFound, paths, sources) : 'nodejs' }
+  }
 }
 
 async function nextCompilation(root: string, build: BuildMode, sources: Map<string, Source>) {
@@ -284,18 +316,12 @@ async function nextCompilation(root: string, build: BuildMode, sources: Map<stri
       if (resolved) await visit(relative(root, resolved), runtime, layer)
     }
   }
-  const entries = [...sources.keys()].filter(path => nextAppEntry.test(path))
-  const layouts = new Map(
-    entries.filter(path => /\/layout\.[jt]sx?$/.test(path)).map(path => [dirname(path), path]),
-  )
-  for (const path of entries) {
-    if (layouts.get(dirname(path)) === path) continue
-    const ancestors = /\/page\.[jt]sx?$/.test(path) ? ancestorLayouts(path, layouts) : []
-    const runtime = nextEntryRuntime(path, ancestors, sources)
-    await visit(path, runtime, 'rsc')
-    for (const layout of ancestors) await visit(layout, runtime, 'rsc')
+  const appPaths = [...sources.keys()].filter(path => path.startsWith(`${nextApp}/`))
+  const segmentFiles = appPaths.filter(path => nextSegmentComponent.test(path))
+  for (const { paths, runtime } of nextRouteEntries(sources, appPaths, segmentFiles)) {
+    for (const path of paths) await visit(path, runtime, 'rsc')
   }
-  for (const path of layouts.values()) {
+  for (const path of segmentFiles) {
     if (!targets.has(path)) await visit(path, sources.get(path)?.runtime ?? 'nodejs', 'rsc')
   }
   return { targets, resolveNext }
