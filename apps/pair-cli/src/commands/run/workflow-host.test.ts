@@ -753,20 +753,46 @@ function replayEngine(input: SpawnIterationInput, stream: string, lastMessage?: 
   })
 }
 
-it('#704 F9: records the Codex file result without a retry (AC-2)', async () => {
+it.each([
+  ['a fenced result', ''],
+  ['a fenced result after an unmatched brace', 'Config contains an unmatched { brace.\n'],
+])('#704 F9: records %s from the Codex file without a retry (AC-2)', async (_label, prose) => {
   write(
     '.pair/adoption/tech/workflows/quick.yaml',
     QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
   )
-  const result = fenced({ status: 'blocked', summary: 'Waiting', reason: 'approval-required' })
+  const result =
+    prose + fenced({ status: 'blocked', summary: 'Waiting', reason: 'approval-required' })
   const runIteration = vi.fn((input: SpawnIterationInput) =>
     replayEngine(input, '{"type":"turn.completed"}\n', result),
   )
 
   expect(await run(['quick'], OK, { engine: 'codex' }, { runIteration })).toBe(0)
   const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
-  expect(state.steps['implement']).toMatchObject({ state: 'blocked', reason: 'approval-required' })
+  expect.soft(state.steps['implement']).toMatchObject({
+    state: 'blocked',
+    reason: 'approval-required',
+  })
   expect(runIteration).toHaveBeenCalledTimes(1)
+})
+
+it('#704 F9: fails on a Codex file result without status (AC-3)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
+  )
+  const result = fenced({ summary: 'Missing status' })
+  const runIteration = (input: SpawnIterationInput) =>
+    replayEngine(input, '{"type":"turn.completed"}\n', result)
+
+  const exit = await run(['quick'], OK, { engine: 'codex' }, { runIteration })
+  const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+  expect.soft(state.steps['implement']).toMatchObject({
+    state: 'failed',
+    reason: 'invalid-result',
+    attempts: [{ kind: 'invalid-result' }],
+  })
+  expect(exit).toBe(1)
 })
 
 it.each([
