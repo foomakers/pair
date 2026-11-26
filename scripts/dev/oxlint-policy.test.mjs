@@ -743,7 +743,7 @@ if (process.getuid?.() !== 0) {
     writeFileSync(join(cwd, 'ignores.txt'), 'hidden/\ndir.ts\nmissing.ts\n')
     chmodSync(join(cwd, 'hidden'), 0)
     try {
-      for (const args of [['--ignore-path', 'ignores.txt'], ...[[ 'hidden/', 'dir.ts', 'missing.ts' ].map(value => '--ignore-pattern=' + value)]]) {
+      for (const args of [['--ignore-path', 'ignores.txt'], ['--ignore-pattern=hidden/', '--ignore-pattern=dir.ts', '--ignore-pattern=missing.ts']]) {
         writeFileSync(file, source)
         assert.equal(lint(cwd, '--fix', ...args, '.').status, 0)
         assert.equal(readFileSync(file, 'utf8'), 'export const value = 1\n')

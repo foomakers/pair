@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { accessSync, constants, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
-import { parseArgs } from 'node:util'
+import { parseArgs, stripVTControlCharacters } from 'node:util'
 
 const require = createRequire(import.meta.url)
 const cli = join(dirname(require.resolve('oxlint/package.json')), 'bin/oxlint')
@@ -48,10 +48,10 @@ const selectionArgs = tokens.filter(token => token.kind === 'option' && selectio
 const options = frameworkExtensions.flatMap(extension => ['--ignore-pattern', `*${extension}`])
 const jsonByDefault = process.env.PAIR_LINT_REPORT === 'json' && !('format' in values)
 const lintsFiles = !nonLintOptions.some(name => name in values)
-const isExcluded = lintsFiles ? configExclusions() : () => false
+let isExcluded
 
-function runLint(args, stdio, json = jsonByDefault) {
-  const format = json ? ['--format=json'] : []
+function runLint(args, stdio) {
+  const format = jsonByDefault ? ['--format=json'] : []
   const result = spawnSync(process.execPath, [cli, ...options, ...format, ...args], {
     stdio,
     maxBuffer: 64 * 1024 * 1024,
@@ -117,6 +117,27 @@ function configExclusions() {
   return () => false
 }
 
+function selectionExclusions() {
+  const byConfig = configExclusions()
+  if (values['no-ignore']) return byConfig
+  const patterns = tokens.filter(token => token.kind === 'option' && token.name === 'ignore-pattern')
+    .map(token => token.value)
+  if (values['ignore-path']) {
+    try {
+      patterns.unshift(...readFileSync(values['ignore-path'], 'utf8').split(/\r?\n/))
+    } catch {
+      // A missing or inaccessible ignore file is handled by the native command.
+    }
+  }
+  const matcher = ignore({ ignorecase: false }).add(patterns)
+  return (path, directory = true) => {
+    if (byConfig(path, directory)) return true
+    if (path === workspaceRoot || !isWithin(workspaceRoot, path)) return false
+    const name = relative(workspaceRoot, path).split(sep).join('/')
+    return matcher.ignores(directory ? `${name}/` : name)
+  }
+}
+
 function operandTarget(path) {
   try {
     return realPath(path)
@@ -159,6 +180,7 @@ function validateGlobRoot(pattern) {
 }
 
 function checkReadable(file) {
+  if (values.debug === 'files') return
   try {
     accessSync(file, constants.R_OK)
   } catch (error) {
@@ -287,33 +309,45 @@ function finishLint(result, warnings = [], overLimit = false) {
   for (const { filename, message } of warnings) process.stderr.write(`${JSON.stringify(filename)}: warning: ${message}\n`)
 }
 
-function runFix(checkArgs, reportArgs, validatePresentation, stdio) {
-  if (validatePresentation) {
-    // Validate user-supplied reporter options before a machine-formatted pass can write.
-    const valid = runLint(['--debug=files', ...checkArgs], capture)
-    if (valid.status !== 0) return valid
+// The pinned native reporters represent filesystem errors without a source location.
+// Classify that record in the caller's actual output, retaining its original bytes.
+function hasOperationalError(stdout) {
+  const format = values.format ?? (jsonByDefault ? 'json' : 'default')
+  const output = stripVTControlCharacters(stdout.toString())
+  if (['json', 'sarif', 'gitlab'].includes(format)) {
+    try {
+      const report = JSON.parse(output)
+      if (format === 'json') return report.diagnostics.some(d => d.severity === 'error' && !d.filename && !d.code)
+      if (format === 'gitlab') return report.some(d => !d.location.path && !d.check_name)
+      return report.runs.some(run => run.invocations?.some(invocation =>
+        invocation.toolConfigurationNotifications?.some(notification => notification.level === 'error')))
+    } catch {
+      return true
+    }
   }
-  // A no-var fix can leave prefer-const for a second pass. Inspect each writing pass
-  // before retrying: a later success must never hide an earlier filesystem failure.
+  const locationless = {
+    agent: /^<unknown>: error:/m,
+    github: /^::error title=oxlint::/m,
+    stylish: /^\s*0:0\s+error\s/m,
+    unix: /^:0:0:  \[Warning\]$/m,
+    junit: /<testsuite name=""/,
+    checkstyle: /<file name="">/,
+    // The default format can select agent output in a non-interactive shell.
+    default: /^(?:<unknown>: error:|\s*[x×] Failed to (?:open|write) file )/m,
+  }
+  return locationless[format]?.test(output) ?? false
+}
+
+function runFix(fixArgs, checkArgs, stdio) {
+  // A no-var fix can leave prefer-const for a second pass. Observe each writing pass
+  // before retrying. An operational failure ends the command in its original reporter.
   for (let pass = 0; pass < 2; pass++) {
-    const fixed = runLint(reportArgs, capture, true)
+    const fixed = runLint(fixArgs, capture)
     if (fixed.status === 0 && !fixed.stderr.length) continue
     if (fixed.status !== 1 || fixed.stderr.length) return fixed
-    let report
-    try {
-      report = JSON.parse(fixed.stdout)
-    } catch {
-      return fixed
-    }
-    if (!Array.isArray(report?.diagnostics)) return fixed
-    const errors = report.diagnostics.filter(d => d.severity === 'error' && !d.filename && !d.code)
-    if (errors.length) {
+    if (hasOperationalError(fixed.stdout)) {
       fixed.status = 2
       if (values.silent) fixed.stdout = Buffer.alloc(0)
-      else if ((values.format ?? process.env.PAIR_LINT_REPORT) !== 'json') {
-        fixed.stdout = Buffer.alloc(0)
-        fixed.stderr = Buffer.from(errors.map(d => `${d.message}\n`).join(''))
-      }
       return fixed
     }
   }
@@ -321,6 +355,14 @@ function runFix(checkArgs, reportArgs, validatePresentation, stdio) {
 }
 
 function main() {
+  if (lintsFiles) {
+    // Validate the original argv before discovery can append a missing option value or mask an error.
+    if (tokens.some(token => token.kind === 'option' && !fixFlags.includes(token.name))) {
+      const parsed = runLint(['--print-config', ...args], capture)
+      if (parsed.status !== 0) return finishLint(parsed)
+    }
+    isExcluded = selectionExclusions()
+  }
   const explicit = lintsFiles && positionals.length > 0
   if (lintsFiles && (workspace || explicit) && !values['no-error-on-unmatched-pattern']) {
     options.push('--no-error-on-unmatched-pattern')
@@ -346,15 +388,16 @@ function main() {
     : paths.length > 0
   if (lintsFiles && !selected) paths.push(emptySelection)
   const fixIndices = new Set(tokens.filter(token => token.kind === 'option' && fixFlags.includes(token.name)).map(token => token.index))
-  const presentation = tokens.filter(token => token.kind === 'option' && ['format', 'quiet', 'silent'].includes(token.name))
-  const presentationIndices = new Set(presentation.flatMap(token => tokenArgs(token).map((_, offset) => token.index + offset)))
+  // Capture even a silent fix internally so its real operational status survives.
+  const silent = new Set(tokens.filter(token => token.kind === 'option' && token.name === 'silent' && token.value === undefined)
+    .map(token => token.index))
   const lintArgs = omit => [
     ...args.flatMap((arg, index) => omit?.has(index) ? [] : replacements?.get(index) ?? [arg]),
     ...paths,
   ]
   const stdio = warnings?.length ? capture : 'inherit'
-  const result = fixIndices.size
-    ? runFix(lintArgs(fixIndices), lintArgs(presentationIndices), presentation.length > 0, stdio)
+  const result = fixIndices.size && values.debug !== 'files'
+    ? runFix(lintArgs(silent), lintArgs(fixIndices), stdio)
     : runLint(lintArgs(), stdio)
   finishLint(result, warnings, overLimit)
 }
