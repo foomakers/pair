@@ -23,6 +23,12 @@ function forbiddenImports(path: string, source: string): string[] {
     .filter(specifier => {
       // A test may read a published page as text, to prove it is not stale.
       if (isTest && specifier.endsWith('.md?raw')) return false
+      // The standalone host embeds the installer's data. The core remains independent.
+      if (
+        path === 'cli/session-project.ts' &&
+        specifier === '../../../../apps/pair-cli/config.json'
+      )
+        return false
       if (specifier.startsWith('.')) {
         const target = posix.normalize(posix.join(posix.dirname(path), specifier))
         return target.startsWith('..') || (!isHost && HOST_ADAPTER.test(target))

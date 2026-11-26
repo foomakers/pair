@@ -59,7 +59,8 @@ export function checkWorkflow(
   const registry = join(main, WAY_OF_WORKING)
   const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
   return validate(source.text, source.file, {
-    skillExists: createSkillProbe(fs, project, cwd),
+    skillExists: createSkillProbe(fs, project, cwd, true),
+    defaultSkillExists: createSkillProbe(fs, project, cwd),
     gateKeys: Object.keys(readGateRegistry(registryText)),
     gateTargets: Object.keys(readGateTargets(registryText)),
     launchInputs: ['card'],

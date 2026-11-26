@@ -1,11 +1,10 @@
-import { join } from 'path'
-import { skillPaths } from '@pair/workflows/cli'
+import { findSkillFile, skillsLayout } from '@pair/workflows/cli'
 import type { FileSystemService } from '@pair/content-ops'
-import { extractRegistries, type Config } from '#registry'
+import type { Config } from '#registry'
 import type { SkillProbe } from './resolve-skill'
 
-/** The registry whose entries ARE the installed skills. */
-const SKILLS_REGISTRY = 'skills'
+const isFile = (fs: FileSystemService) => (path: string) =>
+  fs.existsSync(path) && fs.statSync(path).isFile()
 
 /**
  * Builds the "is this skill installed" probe from the SAME layout knowledge `pair-cli install`
@@ -13,22 +12,19 @@ const SKILLS_REGISTRY = 'skills'
  * re-derives an installation path — a project that redirected its skills targets in
  * `pair.config.json` is probed where its skills actually are.
  *
- * A skill is installed when `<target>/<prefix>-<name>/SKILL.md` exists under any of the
- * registry's targets. The prefixed and unprefixed names are both accepted: the registry
- * prefixes installed directories (`pair-loop`), while a hand-installed or symlinked skill may
- * carry the bare dataset name.
+ * Workflow `skill:` names are literal. Default and CLI-selected skills also support
+ * the registry prefix aliases used by the resolver.
  */
 export function createSkillProbe(
   fs: FileSystemService,
   config: Config,
   projectRoot: string,
+  exact = false,
 ): SkillProbe {
-  const registry = extractRegistries(config)[SKILLS_REGISTRY]
-  const targets = registry?.targets?.map(target => target.path) ?? ['.claude/skills']
-  const prefix = registry?.prefix
-
-  return name =>
-    skillPaths(projectRoot, targets, prefix, name).some(dir => fs.existsSync(join(dir, 'SKILL.md')))
+  const { targets, prefix } = skillsLayout(config)
+  const check = isFile(fs)
+  const layout = { targets, prefix: exact ? undefined : prefix }
+  return name => findSkillFile(check, projectRoot, layout, name) !== undefined
 }
 
 /** Read the installed skill through the same registry targets as the existence probe. */
@@ -38,12 +34,6 @@ export function readInstalledSkill(
   projectRoot: string,
   name: string,
 ): string | undefined {
-  const registry = extractRegistries(config)[SKILLS_REGISTRY]
-  const targets = registry?.targets?.map(target => target.path) ?? ['.claude/skills']
-  const prefix = registry?.prefix
-  for (const dir of skillPaths(projectRoot, targets, prefix, name)) {
-    const path = join(dir, 'SKILL.md')
-    if (fs.existsSync(path)) return fs.readFileSync(path)
-  }
-  return undefined
+  const path = findSkillFile(isFile(fs), projectRoot, skillsLayout(config), name)
+  return path === undefined ? undefined : fs.readFileSync(path)
 }

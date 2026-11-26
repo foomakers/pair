@@ -355,7 +355,13 @@ it.each([
     await installFixture(root, config, update, skillFile(root, 'pair-process-refine-story'))
     expect(fs.existsSync(skillFile(root, `${prefix}-process-refine-story`))).toBe(true)
 
-    const vendor = `${vendorTarget(skills ?? legacySkills)}/vendor-notes/SKILL.md`
+    const configuredTarget = vendorTarget(skills ?? legacySkills)
+    const vendor = `${configuredTarget}/vendor-notes/SKILL.md`
+    const estimate = `${prefix}-capability-estimate`
+    const configuredEstimate = `${configuredTarget}/${estimate}/SKILL.md`
+    // A one-off installer override can move the bundle without configuring workflow lookup.
+    if (target !== configuredTarget)
+      write(root, configuredEstimate, fs.readFileSync(skillFile(root, estimate)))
     write(root, vendor, vendorSkill)
     const adoption =
       '- `pm-tool`: `filesystem`\n\n## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Todo | Draft |\n| Ready | Ready |\n'
@@ -476,6 +482,8 @@ steps:
     if (legacySkills !== undefined)
       write(linked, 'config.json', fs.readFileSync(join(root, 'config.json')))
     await installFixture(linked, config, update, skillFile(linked, 'pair-process-refine-story'))
+    if (target !== configuredTarget)
+      write(linked, configuredEstimate, fs.readFileSync(skillFile(linked, estimate)))
     write(linked, vendor, vendorSkill)
     const invokeLinked = runner(linked, script(linked))
     expect(invokeLinked('validate', 'installed')).toMatchObject(preview)
@@ -491,5 +499,6 @@ steps:
       confirmed: true,
     })
   },
-  20_000,
+  // This matrix installs the full dataset in both the main and linked worktrees.
+  45_000,
 )

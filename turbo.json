@@ -73,6 +73,7 @@
       "outputs": [],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/pair-cli/config.json",
         "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md",
         "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-schema.md",
         "$TURBO_ROOT$/packages/knowledge-hub/dataset/.skills/capability/workflow/scripts/workflow.mjs"
@@ -99,6 +100,7 @@
       "outputs": ["coverage/**"],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/pair-cli/config.json",
         "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-kinds.md",
         "$TURBO_ROOT$/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-schema.md",
         "$TURBO_ROOT$/packages/knowledge-hub/dataset/.skills/capability/workflow/scripts/workflow.mjs"

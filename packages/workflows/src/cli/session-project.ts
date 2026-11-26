@@ -19,14 +19,20 @@ import { addressedSteps, formatError, type Step, type Workflow } from '../gramma
 import { interactiveOf, kindByName, readGateRegistry, readGateTargets } from '../kinds'
 import { validate } from '../validate'
 import { canCommentOnCard } from '../worktree/session'
+import { applyProjectConfig } from './project-config'
 import {
   isFile,
   loadSessionProjectConfig,
   readOptional,
   readText,
+  sessionFiles,
   yamlFiles,
 } from './session-files'
-import { skillPaths } from './skill-paths'
+import { findSkillFile, skillPaths, skillsLayout } from './skill-paths'
+
+// The standalone bundle embeds the same base configuration the installer reads.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const installerConfig = require('../../../../apps/pair-cli/config.json') as Record<string, unknown>
 
 const TECH = '.pair/adoption/tech'
 const PORTABLE_QUICK =
@@ -75,30 +81,20 @@ function namedCandidates(project: Project, category: (typeof CATEGORIES)[number]
   ])
 }
 
-const DEFAULT_TARGETS = [
-  '.claude',
-  '.agents',
-  '.opencode',
-  '.github',
-  '.cursor',
-  '.agent',
-  '.windsurf',
-].map(host => `${host}/skills`)
-
-type SkillsRegistry = { targets?: { path: string }[]; target_path?: string; prefix?: string }
-
 const BUILT_IN_SKILLS = new Set([
   ...Object.values(kindByName).map(kind => kind.defaultSkill),
   'pair-workflow-cycle',
   'pair-next',
 ])
 
-function skillsRegistry(project: Project, root: string): SkillsRegistry {
-  const config = loadSessionProjectConfig(root) ?? loadSessionProjectConfig(project.main)
-  const registries = (config?.['asset_registries'] ?? config?.['dataset_registries']) as
-    | { skills?: SkillsRegistry }
-    | undefined
-  return registries?.skills ?? {}
+function sessionSkillsLayout(root: string, fallback = root) {
+  return skillsLayout(
+    applyProjectConfig(sessionFiles, installerConfig, root) ??
+      (fallback === root
+        ? undefined
+        : applyProjectConfig(sessionFiles, installerConfig, fallback)) ??
+      installerConfig,
+  )
 }
 
 // The executing bundle identifies its own installation, including in a linked worktree.
@@ -108,22 +104,16 @@ function bundleLayout(project: Project) {
   return installed === null ? undefined : { target: dirname(bundle), prefix: installed[1] ?? '' }
 }
 
-function registryTargets(registry: SkillsRegistry): string[] {
-  if (registry.targets?.length) return registry.targets.map(entry => entry.path)
-  // A partial registry override inherits the installer's default targets.
-  return [...(registry.target_path ? [registry.target_path] : []), ...DEFAULT_TARGETS]
-}
-
 function skillCandidates(root: string, targets: string[], prefix: string, name: string) {
   const names = name.startsWith('pair-') ? [name, name.slice(5)] : [name]
   return names.flatMap(candidate => skillPaths(root, targets, prefix, candidate))
 }
 
 function installedSkillPaths(project: Project, name: string, root = project.main) {
-  const registry = skillsRegistry(project, root)
+  const registry = sessionSkillsLayout(root, project.main)
   const bundle = bundleLayout(project)
   const prefix = registry.prefix ?? bundle?.prefix ?? 'pair'
-  const configured = skillCandidates(root, registryTargets(registry), prefix, name)
+  const configured = skillCandidates(root, registry.targets, prefix, name)
   if (bundle === undefined) return configured
 
   // Prefer the matching built-in even if the original name still exists after an update.
@@ -167,19 +157,8 @@ export function controlStateScript(project: Project): string {
   return script
 }
 
-function skillExists(project: Project, skill: string, implicit = false): boolean {
-  const bundle = bundleLayout(project)
-  const candidates = implicit
-    ? installedSkillPaths(project, skill, project.cwd)
-    : [
-        ...(bundle === undefined ? [] : skillPaths(bundle.target, ['.'], undefined, skill)),
-        ...skillPaths(
-          project.cwd,
-          registryTargets(skillsRegistry(project, project.cwd)),
-          undefined,
-          skill,
-        ),
-      ]
+function defaultSkillExists(project: Project, skill: string): boolean {
+  const candidates = installedSkillPaths(project, skill, project.cwd)
   const [, category, name] = /^pair-(capability|process|workflow)-(.+)$/.exec(skill) ?? []
   return (
     candidates.some(dir => isFile(join(dir, 'SKILL.md'))) ||
@@ -216,9 +195,10 @@ export function workflowDefinition(project: Project, name: string) {
   const source = locate(name)
   if (source === undefined) throw new Error(`workflow-not-found: ${name}`)
   const adoption = readAdoption(project)
+  const { targets } = sessionSkillsLayout(project.cwd)
   const checked = validate(source.text, source.file, {
-    skillExists: skill => skillExists(project, skill),
-    defaultSkillExists: skill => skillExists(project, skill, true),
+    skillExists: skill => findSkillFile(isFile, project.cwd, { targets }, skill) !== undefined,
+    defaultSkillExists: skill => defaultSkillExists(project, skill),
     gateKeys: Object.keys(readGateRegistry(adoption)),
     gateTargets: Object.keys(readGateTargets(adoption)),
     launchInputs: ['card'],
