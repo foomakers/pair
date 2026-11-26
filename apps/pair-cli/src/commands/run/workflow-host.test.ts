@@ -677,6 +677,22 @@ describe('a linear run (AC-1)', () => {
     ).toMatchObject({ status: 'failed', reason: 'quality-gate' })
   })
 
+  it.each([false, true])(
+    'keeps multiline failure details for verbose output (%s)',
+    async verbose => {
+      const detail = 'test output one\ntest output two'
+      const failure = () =>
+        fenced({ status: 'failed', summary: 'gate red', reason: 'quality-gate', detail })
+      expect(await run(['quick'], { ...OK, 'pair-process-implement': failure }, { verbose })).toBe(
+        1,
+      )
+      expect(lines.join('\n').includes(detail)).toBe(verbose)
+      expect(
+        JSON.parse(fs.readFileSync(join(runDir(), 'steps/implement/result.json'))),
+      ).toMatchObject({ detail })
+    },
+  )
+
   it('prints the engine with the level of the cascade that chose it', async () => {
     await run(['quick'], OK, { engine: 'codex', verbose: true })
     expect(lines.find(line => line.startsWith('  Engine: '))).toMatch(

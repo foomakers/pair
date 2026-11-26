@@ -391,11 +391,19 @@ export function resolveWorkflowRun(
 }
 
 /** What a recorded step says: its summary, then its reason and detail when it has them. */
-function explain(event: StepEvent | undefined): string {
+function explain(event: StepEvent | undefined, verbose = true): string {
   if (event === undefined) return 'no step was recorded'
-  const detail = event.detail === undefined ? '' : `: ${event.detail}`
+  const detail = consoleDetail(event.detail, verbose)
   const reason = event.reason === undefined ? '' : ` (${event.reason}${detail})`
-  return `${event.summary ?? ''}${reason}`
+  const summary = event.summary ?? ''
+  return verbose ? `${summary}${reason}` : `${summary}${reason}`.replace(/\s+/g, ' ')
+}
+
+function consoleDetail(detail: string | undefined, verbose: boolean): string {
+  if (detail === undefined) return ''
+  if (!verbose && /[\r\n]/.test(detail))
+    return /host command timed out after [0-9]+ms/.exec(detail)?.[0].replace(/^/, ': ') ?? ''
+  return `: ${detail}`
 }
 
 const stepLine = (event: StepEvent): string => `  ${event.step}: ${event.state} — ${explain(event)}`
@@ -600,9 +608,14 @@ function reportProcessFaults(faults: readonly StepFaults[] = []): void {
   }
 }
 
-function conclude(outcome: RunOutcome, { request, runDir }: Opened, sink: ConsoleSink): number {
+function conclude(
+  outcome: RunOutcome,
+  { request, runDir }: Opened,
+  sink: ConsoleSink,
+  verbose: boolean,
+): number {
   const ending = ENDINGS[outcome.run]
-  const why = explain(outcome.last)
+  const why = explain(outcome.last, verbose)
   sink.event({
     event: 'card-end',
     card: request.card,
@@ -613,7 +626,8 @@ function conclude(outcome: RunOutcome, { request, runDir }: Opened, sink: Consol
     outcome.run === 'parked' && outcome.last?.reason === INTERACTIVE_PARK.reason
       ? `pair-workflow-run ${basename(runDir)}`
       : resumeCommand(request)
-  console.log(`  Run: ${ending.line(outcome.last?.step ?? '?', why, resume)}`)
+  if (verbose || !sink.inPlace)
+    console.log(`  Run: ${ending.line(outcome.last?.step ?? '?', why, resume)}`)
   return ending.exit
 }
 
@@ -941,7 +955,9 @@ async function runOnConsole(
     reportRunOutcome(opened, outcome, services.fs)
     reportProcessFaults(outcome.faults)
     const ending = { sink, fs: services.fs, verbose: config.verbose === true }
-    return exhaustedEnding(opened, outcome, ending) ?? conclude(outcome, opened, sink)
+    return (
+      exhaustedEnding(opened, outcome, ending) ?? conclude(outcome, opened, sink, ending.verbose)
+    )
   } finally {
     sink.finish()
     restore()
