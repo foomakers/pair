@@ -1,6 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { chmod, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import type { RunFiles } from '../engine'
 import { applyProjectConfig } from './project-config'
 
@@ -37,14 +36,6 @@ export const yamlFiles = (dir: string): string[] =>
         .filter(entry => entry.isFile() && /\.ya?ml$/.test(entry.name))
         .map(entry => entry.name)
     : []
-
-export function projectConfig(
-  root: string,
-  file = 'pair.config.json',
-): Record<string, unknown> | undefined {
-  const text = readOptional(join(root, file))
-  return text === undefined ? undefined : (JSON.parse(text) as Record<string, unknown>)
-}
 
 export const loadSessionProjectConfig = (root: string): Record<string, unknown> | undefined =>
   applyProjectConfig(sessionFiles, {}, root)

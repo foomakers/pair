@@ -23,6 +23,10 @@ const defaultTarget = '.claude/skills'
 const customTarget = 'team/skills'
 const pairRegistry = registry('pair', defaultTarget)
 const teamRegistry = registry('team', customTarget)
+const vendorSkill = '---\nname: vendor-notes\n---\n'
+
+type FixtureSkills = { prefix: string; targets?: { path: string }[] }
+type FixtureWorkingArea = { project?: string; legacy?: string; expected: string }
 
 function write(root: string, path: string, value: string) {
   const file = join(root, path)
@@ -36,8 +40,34 @@ function installConfig(root: string, override: ReturnType<typeof registry> | und
   return join(root, 'install.config.json')
 }
 
-function vendorTarget(skills: { prefix: string; targets?: { path: string }[] } | undefined) {
+function vendorTarget(skills: FixtureSkills | undefined) {
   return skills?.targets?.[0]?.path ?? defaultTarget
+}
+
+function writeProjectConfigs(
+  root: string,
+  skills: FixtureSkills | undefined,
+  legacySkills: FixtureSkills | undefined,
+  workingArea: FixtureWorkingArea | undefined,
+) {
+  write(
+    root,
+    'pair.config.json',
+    JSON.stringify({
+      worktreeRoot: 'worktrees',
+      working_path: workingArea?.project,
+      ...(skills !== undefined && { asset_registries: { skills } }),
+    }),
+  )
+  if (workingArea?.legacy !== undefined || legacySkills !== undefined)
+    write(
+      root,
+      'config.json',
+      JSON.stringify({
+        working_path: workingArea?.legacy,
+        ...(legacySkills !== undefined && { asset_registries: { skills: legacySkills } }),
+      }),
+    )
 }
 
 function git(cwd: string, ...args: string[]) {
@@ -140,6 +170,53 @@ async function verifyCardExclusion(
   expect(runIteration).toHaveBeenCalledTimes(1)
 }
 
+async function verifyConfiguredSkill(
+  root: string,
+  script: string,
+  legacySkills: FixtureSkills,
+  projectSkills: FixtureSkills | undefined,
+) {
+  const fs = fileSystemService
+  const invoke = runner(root, script)
+  const skill = 'vendor-notes'
+  const effective = projectSkills ?? legacySkills
+  const target = vendorTarget(effective)
+  const exact = `${target}/${skill}/SKILL.md`
+  write(root, `${target}/${effective.prefix}-${skill}/SKILL.md`, vendorSkill)
+  write(
+    root,
+    '.pair/adoption/tech/workflows/explicit.yaml',
+    `version: 1\nname: explicit\nsteps:\n  notes: { kind: generic, skill: ${skill} }\n`,
+  )
+  const cli = parseRunCommand({ card: '42', cwd: root, dryRun: true }, ['explicit'])
+  expect(
+    await handleRunCommand(cli, fs, {
+      workflow: { readCard: async () => ({ title: 'Prepare release notes' }) },
+    }),
+  ).toBe(0)
+  expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`skill=${skill}`))
+  const explicit = { steps: [{ id: 'notes', skill }] }
+  expect(invoke('validate', 'explicit')).toMatchObject(explicit)
+  const opened = invoke('start', 'explicit', '--card', '42', '--engine', 'codex')
+  expect(opened).toMatchObject(explicit)
+  expect(invoke('next', opened.runId, '--lease', opened.lease)).toMatchObject({
+    ready: [{ uses: skill, message: expect.stringContaining(`Run the ${skill} skill.`) }],
+  })
+  invoke('stop', opened.runId, '--lease', opened.lease)
+
+  fs.rmSync(join(root, exact))
+  if (projectSkills !== undefined)
+    write(root, `${vendorTarget(legacySkills)}/${skill}/SKILL.md`, vendorSkill)
+  const absent = spawnSync(process.execPath, [script, 'validate', 'explicit'], {
+    cwd: root,
+    encoding: 'utf8',
+    timeout: 5_000,
+  })
+  expect(absent.stderr).toContain(`skill '${skill}' is not installed`)
+  expect(absent.status).toBe(1)
+  write(root, exact, vendorSkill)
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   for (const root of roots.splice(0))
@@ -217,31 +294,13 @@ it.each([
     const fs = fileSystemService
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    write(
-      root,
-      'pair.config.json',
-      JSON.stringify({
-        worktreeRoot: 'worktrees',
-        working_path: workingArea?.project,
-        ...(skills !== undefined && { asset_registries: { skills } }),
-      }),
-    )
-    if (workingArea?.legacy !== undefined || legacySkills !== undefined)
-      write(
-        root,
-        'config.json',
-        JSON.stringify({
-          working_path: workingArea?.legacy,
-          ...(legacySkills !== undefined && { asset_registries: { skills: legacySkills } }),
-        }),
-      )
+    writeProjectConfigs(root, skills, legacySkills, workingArea)
     const config = installConfig(root, override)
     const skillFile = (directory: string, name: string) => join(directory, target, name, 'SKILL.md')
     await installFixture(root, config, update, skillFile(root, 'pair-process-refine-story'))
     expect(fs.existsSync(skillFile(root, `${prefix}-process-refine-story`))).toBe(true)
 
     const vendor = `${vendorTarget(skills ?? legacySkills)}/vendor-notes/SKILL.md`
-    const vendorSkill = '---\nname: vendor-notes\n---\n'
     write(root, vendor, vendorSkill)
     const adoption =
       '- `pm-tool`: `filesystem`\n\n## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Todo | Draft |\n| Ready | Ready |\n'
@@ -320,46 +379,8 @@ steps:
       '-m',
       'Fixture',
     )
-    if (legacySkills !== undefined) {
-      const skill = 'vendor-notes'
-      const effective = skills ?? legacySkills
-      write(root, `${vendorTarget(effective)}/${effective.prefix}-${skill}/SKILL.md`, vendorSkill)
-      write(
-        root,
-        '.pair/adoption/tech/workflows/explicit.yaml',
-        `version: 1\nname: explicit\nsteps:\n  notes: { kind: generic, skill: ${skill} }\n`,
-      )
-      const cliPreview = () =>
-        handleRunCommand(
-          parseRunCommand({ card: '42', cwd: root, dryRun: true }, ['explicit']),
-          fs,
-          {
-            workflow: { readCard: async () => ({ title: 'Prepare release notes' }) },
-          },
-        )
-      expect(await cliPreview()).toBe(0)
-      expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`skill=${skill}`))
-      const explicit = { steps: [{ id: 'notes', skill }] }
-      expect(invoke('validate', 'explicit')).toMatchObject(explicit)
-      const opened = invoke('start', 'explicit', '--card', '42', '--engine', 'codex')
-      expect(opened).toMatchObject(explicit)
-      expect(invoke('next', opened.runId, '--lease', opened.lease)).toMatchObject({
-        ready: [{ uses: skill, message: expect.stringContaining(`Run the ${skill} skill.`) }],
-      })
-      invoke('stop', opened.runId, '--lease', opened.lease)
-
-      fs.rmSync(join(root, vendor))
-      if (skills !== undefined)
-        write(root, `${vendorTarget(legacySkills)}/${skill}/SKILL.md`, vendorSkill)
-      const absent = spawnSync(process.execPath, [script(root), 'validate', 'explicit'], {
-        cwd: root,
-        encoding: 'utf8',
-        timeout: 5_000,
-      })
-      expect(absent.stderr).toContain(`skill '${skill}' is not installed`)
-      expect(absent.status).toBe(1)
-      write(root, vendor, vendorSkill)
-    }
+    if (legacySkills !== undefined)
+      await verifyConfiguredSkill(root, script(root), legacySkills, skills)
     expect(invoke('validate', 'installed')).toMatchObject(preview)
     const { runId, lease } = invoke('start', 'installed', '--card', '42', '--engine', 'codex')
     invoke('stop', runId, '--lease', lease)

@@ -1,4 +1,4 @@
-import { projectConfig } from './session-files'
+import { loadSessionProjectConfig } from './session-files'
 import {
   checkWorkflowConfiguration,
   workflowConfiguration,
@@ -20,7 +20,7 @@ export function validateWorkflow(
   { engine: engineFlag, config: flag }: { engine?: string; config?: string },
 ) {
   const { workflow, warnings } = workflowDefinition(project, name)
-  const projectSettings = projectConfig(project.cwd) ?? {}
+  const projectSettings = loadSessionProjectConfig(project.cwd) ?? {}
   const engine = engineFlag ?? declaredEngine(projectSettings)
   const selected = workflowConfiguration(
     project,

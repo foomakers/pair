@@ -3,6 +3,7 @@ import type { RunFiles } from '../engine'
 
 type Config = Record<string, unknown>
 type ConfigFiles = Pick<RunFiles, 'existsSync' | 'readFileSync'>
+type LoadOptions = { alreadyLoaded?: string; pairConfigOnly?: boolean }
 
 export function isPlainObject(value: unknown): value is Config {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -42,30 +43,36 @@ function readConfig(fs: ConfigFiles, path: string, objectOnly?: boolean): Config
   return parsed as Config
 }
 
+function projectConfigPaths(fs: ConfigFiles, root: string, options: LoadOptions) {
+  const primary = join(root, 'pair.config.json')
+  const legacy = join(root, 'config.json')
+  const fallback =
+    !options.pairConfigOnly && fs.existsSync(legacy) && legacy !== options.alreadyLoaded
+      ? legacy
+      : undefined
+  return fs.existsSync(primary) ? { path: primary, legacy: fallback } : { path: fallback }
+}
+
 /** A runtime-only pair.config.json layers over config.json. A registry declaration owns the project layer. */
 export function applyProjectConfig<T extends Config>(
   fs: ConfigFiles,
   base: T,
   root: string,
-  { alreadyLoaded, pairConfigOnly }: { alreadyLoaded?: string; pairConfigOnly?: boolean } = {},
+  options: LoadOptions = {},
 ): T | undefined {
-  const primary = join(root, 'pair.config.json')
-  const legacy = join(root, 'config.json')
-  const allowLegacy = !pairConfigOnly && fs.existsSync(legacy) && legacy !== alreadyLoaded
-  const path = fs.existsSync(primary) ? primary : allowLegacy ? legacy : undefined
+  const { path, legacy } = projectConfigPaths(fs, root, options)
   if (path === undefined) return undefined
 
   try {
-    const project = readConfig(fs, path, pairConfigOnly)
+    const project = readConfig(fs, path, options.pairConfigOnly)
     const inheritLegacy =
-      path === primary &&
-      allowLegacy &&
+      legacy !== undefined &&
       isPlainObject(project) &&
       !['asset_registries', 'dataset_registries'].some(key => Object.hasOwn(project, key))
     return mergeConfigs(inheritLegacy ? mergeConfigs(base, readConfig(fs, legacy)) : base, project)
   } catch (err) {
     // Install/update must not silently drop skipRegistries from an unreadable project config.
-    if (pairConfigOnly)
+    if (options.pairConfigOnly)
       throw new Error(`Failed to load ${path}: ${err instanceof Error ? err.message : String(err)}`)
     console.warn(`Warning: Failed to load ${path}, continuing with base config`)
     return undefined

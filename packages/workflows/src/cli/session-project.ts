@@ -19,7 +19,13 @@ import { addressedSteps, formatError, type Step, type Workflow } from '../gramma
 import { interactiveOf, kindByName, readGateRegistry, readGateTargets } from '../kinds'
 import { validate } from '../validate'
 import { canCommentOnCard } from '../worktree/session'
-import { isFile, projectConfig, readOptional, readText, yamlFiles } from './session-files'
+import {
+  isFile,
+  loadSessionProjectConfig,
+  readOptional,
+  readText,
+  yamlFiles,
+} from './session-files'
 import { skillPaths } from './skill-paths'
 
 const TECH = '.pair/adoption/tech'
@@ -88,7 +94,7 @@ const BUILT_IN_SKILLS = new Set([
 ])
 
 function skillsRegistry(project: Project, root: string): SkillsRegistry {
-  const config = projectConfig(root) ?? projectConfig(project.main)
+  const config = loadSessionProjectConfig(root) ?? loadSessionProjectConfig(project.main)
   const registries = (config?.['asset_registries'] ?? config?.['dataset_registries']) as
     | { skills?: SkillsRegistry }
     | undefined
@@ -237,7 +243,7 @@ export function workflowDefinition(project: Project, name: string) {
 export function workflowConfiguration(
   project: Project,
   input: { workflow: string; engine: string; flag?: string | undefined; labels: readonly string[] },
-  config = projectConfig(project.cwd) ?? projectConfig(project.main),
+  config = loadSessionProjectConfig(project.cwd) ?? loadSessionProjectConfig(project.main),
 ) {
   const { flag, workflow, labels } = input
   const workflows = config?.['workflows'] as WorkflowsConfig | undefined
