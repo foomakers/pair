@@ -40,6 +40,8 @@ const capture = ['inherit', 'pipe', 'pipe']
 const args = process.argv.slice(2)
 const workspace = args[0] === '--workspace'
 if (workspace) args.shift()
+const domainLint = workspace && args[0] === '--pair-domain'
+if (domainLint) args.shift()
 const { positionals, tokens, values } = parseArgs({
   args, options: argumentOptions, strict: false, allowPositionals: true, tokens: true,
 })
@@ -48,6 +50,14 @@ const selectionArgs = tokens.filter(token => token.kind === 'option' && selectio
 const options = frameworkExtensions.flatMap(extension => ['--ignore-pattern', `*${extension}`])
 const jsonByDefault = process.env.PAIR_LINT_REPORT === 'json' && !('format' in values)
 const lintsFiles = !nonLintOptions.some(name => name in values)
+const maxWarningTokens = tokens.filter(
+  token => token.kind === 'option' && token.name === 'max-warnings',
+)
+const maxWarnings = Number(values['max-warnings'])
+const hasWarningBudget =
+  maxWarningTokens.length === 1 &&
+  /^\+?\d+$/.test(values['max-warnings']) &&
+  Number.isSafeInteger(maxWarnings)
 let byConfig
 let byCli
 
@@ -242,11 +252,7 @@ function asOperand(file) {
 
 function prepareExplicitLint() {
   const strictSelection = !workspace && !values['no-error-on-unmatched-pattern']
-  const maxArg = values['max-warnings']
-  const max = Number(maxArg)
-  const maxTokens = tokens.filter(token => token.kind === 'option' && token.name === 'max-warnings')
-  const countIgnored = maxTokens.length === 1 && /^\+?\d+$/.test(maxArg) && Number.isSafeInteger(max)
-  const reportIgnored = !('debug' in values) && (maxTokens.length === 0 || countIgnored)
+  const reportIgnored = !('debug' in values) && (maxWarningTokens.length === 0 || hasWarningBudget)
   const replacements = new Map()
   const ignored = new Map()
 
@@ -284,26 +290,20 @@ function prepareExplicitLint() {
     if (!ignored.has(absolute)) ignored.set(absolute, path)
   }
 
-  const remainingWarnings = countIgnored ? max - ignored.size : Infinity
-  if (countIgnored && ignored.size) {
-    const [token] = maxTokens
-    replacements.set(token.index, [`--max-warnings=${Math.max(0, remainingWarnings)}`])
-    if (token.inlineValue === false) replacements.set(token.index + 1, [])
-  }
   return {
     replacements,
     warnings: [...ignored.values()].map(filename => ({
       filename, severity: 'warning', message: 'File ignored by lint configuration or unsupported file type.', labels: [],
     })),
-    overLimit: remainingWarnings < 0 || (values['deny-warnings'] && ignored.size > 0),
   }
 }
 
-function finishLint(result, warnings = [], overLimit = false) {
-  process.exitCode = result.status === 0 && overLimit ? 1 : result.status ?? 2
+function finishLint(result, diagnostics = [], extraFailure = false) {
+  process.exitCode = result.status === 0 && extraFailure ? 1 : result.status ?? 2
   if (result.stderr) process.stderr.write(result.stderr)
-  if (result.stderr?.length || values.quiet || values.silent) warnings = []
-  if (warnings.length && (values.format ?? process.env.PAIR_LINT_REPORT) === 'json') {
+  if (result.stderr?.length || values.silent) diagnostics = []
+  if (values.quiet) diagnostics = diagnostics.filter(diagnostic => diagnostic.severity === 'error')
+  if (diagnostics.length && (values.format ?? process.env.PAIR_LINT_REPORT) === 'json') {
     let report
     try {
       report = JSON.parse(result.stdout)
@@ -311,13 +311,48 @@ function finishLint(result, warnings = [], overLimit = false) {
       // Preserve native output if Oxlint could not produce a JSON report.
     }
     if (Array.isArray(report?.diagnostics)) {
-      report.diagnostics.push(...warnings)
+      report.diagnostics.push(...diagnostics)
       process.stdout.write(JSON.stringify(report) + '\n')
       return
     }
   }
   if (result.stdout) process.stdout.write(result.stdout)
-  for (const { filename, message } of warnings) process.stderr.write(`${JSON.stringify(filename)}: warning: ${message}\n`)
+  for (const { filename, code, severity, message, labels } of diagnostics) {
+    const span = labels[0]?.span
+    const location = span ? `${filename}:${span.line}:${span.column}` : JSON.stringify(filename)
+    process.stderr.write(`${location}: ${severity}: ${code ? `${code}: ` : ''}${message}\n`)
+  }
+}
+
+async function checkDomain(paths) {
+  const configPath = values.config ?? '.oxlintrc.json'
+  const errors = []
+  const config = parseJsonc(readFileSync(configPath, 'utf8'), errors, { allowTrailingComma: true })
+  if (errors.length) throw new Error(`${configPath}: invalid lint configuration`)
+  const rule = 'pair-domain/no-explicit-nullish-domain-types'
+  const pilot = config.overrides?.find(override => Object.hasOwn(override.rules ?? {}, rule))
+  if (!pilot) return []
+  const setting = pilot.rules[rule]
+  const severity = Array.isArray(setting) ? setting[0] : setting
+  if (severity === 'off' || severity === 'allow') return []
+  const configDir = dirname(resolve(configPath))
+  const allowlist = new Set(
+    glob.sync(pilot.files, { cwd: configDir, absolute: true, followSymbolicLinks: false }),
+  )
+  const files = [...new Set(paths.map(path => resolve(path)))]
+    .filter(path => allowlist.has(path) && !isExcluded(path, false))
+    .map(path => relative(workspaceRoot, path))
+  if (!files.length) return []
+  const { checkNullableDomainProperties } = await import('../domain-checker.mjs')
+  return checkNullableDomainProperties(values.tsconfig ?? 'tsconfig.json', files).map(
+    ({ filename, code, property, span }) => ({
+      filename,
+      code,
+      severity: severity === 'error' || severity === 'deny' ? 'error' : 'warning',
+      message: `Remove the resolved null or undefined from ${property} and model absence as a separate variant.`,
+      labels: [{ span }],
+    }),
+  )
 }
 
 // The pinned native reporters represent filesystem errors without a source location.
@@ -365,7 +400,7 @@ function runFix(fixArgs, checkArgs, stdio) {
   return runLint(checkArgs, stdio)
 }
 
-function main() {
+async function main() {
   if (lintsFiles) {
     // Validate the original argv before discovery can append a missing option value or mask an error.
     const nativeOptions = tokens.filter(token => token.kind === 'option')
@@ -398,11 +433,30 @@ function main() {
     return
   }
   if (!prepared) return
-  const { replacements, warnings, overLimit } = prepared
-  const selected = explicit
-    ? tokens.some(token => token.kind === 'positional' && replacements.get(token.index).length)
-    : paths.length > 0
-  if (lintsFiles && !selected) paths.push(emptySelection)
+  const { replacements = new Map(), warnings = [] } = prepared
+  const selected = explicit ? [...replacements.values()].flat() : paths
+  let diagnostics = warnings
+  if (domainLint && lintsFiles && selected.length && !('debug' in values)) {
+    try {
+      diagnostics = [...warnings, ...(await checkDomain(selected))]
+    } catch (error) {
+      process.stderr.write(`Domain lint could not load the project: ${error.message}\n`)
+      process.exitCode = 2
+      return
+    }
+  }
+  if (lintsFiles && !selected.length) paths.push(emptySelection)
+  const warningCount = diagnostics.filter(diagnostic => diagnostic.severity === 'warning').length
+  const remainingWarnings = hasWarningBudget ? maxWarnings - warningCount : Infinity
+  if (hasWarningBudget && warningCount) {
+    const [token] = maxWarningTokens
+    replacements.set(token.index, [`--max-warnings=${Math.max(0, remainingWarnings)}`])
+    if (token.inlineValue === false) replacements.set(token.index + 1, [])
+  }
+  const extraFailure =
+    diagnostics.some(diagnostic => diagnostic.severity === 'error') ||
+    remainingWarnings < 0 ||
+    (values['deny-warnings'] && warningCount > 0)
   const fixIndices = new Set(tokens.filter(token => token.kind === 'option' && fixFlags.includes(token.name)).map(token => token.index))
   // Capture even a silent fix internally so its real operational status survives.
   const silent = new Set(tokens.filter(token => token.kind === 'option' && token.name === 'silent' && token.value === undefined)
@@ -411,11 +465,11 @@ function main() {
     ...args.flatMap((arg, index) => omit?.has(index) ? [] : replacements?.get(index) ?? [arg]),
     ...paths,
   ]
-  const stdio = warnings?.length ? capture : 'inherit'
+  const stdio = diagnostics.length ? capture : 'inherit'
   const result = fixIndices.size && values.debug !== 'files'
     ? runFix(lintArgs(silent), lintArgs(fixIndices), stdio)
     : runLint(lintArgs(), stdio)
-  finishLint(result, warnings, overLimit)
+  finishLint(result, diagnostics, extraFailure)
 }
 
-main()
+await main()

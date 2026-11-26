@@ -696,6 +696,9 @@ importers:
       oxlint-plugin-eslint:
         specifier: 'catalog:'
         version: 1.95.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.4.5
 
   tools/prettier-config:
     devDependencies:

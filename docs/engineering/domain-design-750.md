@@ -37,3 +37,11 @@ Node 20.20.2, Oxlint 1.95.0 and oxlint-tsgolint 7.0.2008 were exercised together
 A separate custom JS plugin probe ran against a working NodeNext project without `baseUrl`. The nullable alias and the non-null control both ran the plugin and exited 1 at `1:1` with the probe's own missing-checker finding. `context.sourceCode.parserServices` supplied no TypeScript program. This pins the semantic fallback to the workspace TypeScript compiler API.
 
 The scoped syntax and independent suppression suite passed 18/18 on Node 20. Failed syntax fixtures matched their specific rule and source position. The existing base and React controls and twelve hygiene unit tests also passed. Legacy TypeScript suppressions are frozen by exact Git grep record. A moved or changed directive requires removal of the suppression.
+
+## Compiler API fallback
+
+The content-ops lint route runs the workspace TypeScript 5.4.5 checker on the same pilot paths as the syntax override. `pair-domain/nullable-domain-property` locates checker-resolved null or undefined at the model property. The syntax visitors own optional properties and directly written nullish types. TypeScript declarations outside the scan can still be resolved as imports.
+
+Eight Node 20 fixtures passed through the package's `pnpm lint` command. Local, imported, transitive and inferred nullish fields each produced one semantic finding at their property, including with duplicate file operands. The clean control accepted non-null aliases, opaque causes and nested nullable element types, and left an ingress DTO outside the model check. Broken config and an unresolved transitive import returned exit 2 with project diagnostics.
+
+A cold clean run of `turbo lint --filter=@pair/content-ops` warmed the cache. The same command hit that result on the second run. Changing only the imported alias from `string` to `string | null` missed the cache and reported one semantic finding at `src/http/retry.domain.ts:3:3`. The CI `pnpm lint` command reported the same single finding. This was recorded while the pilot was in warning mode.
