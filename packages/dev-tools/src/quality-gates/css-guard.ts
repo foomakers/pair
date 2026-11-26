@@ -51,11 +51,20 @@ function declaresStylesheets(name: string) {
   )
 }
 
-function hasStylesheetDeclaration(node: ts.Node): boolean {
-  if (ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name)) {
-    if (declaresStylesheets(node.name.text)) return true
+function moduleSpecifier(node: ts.Node) {
+  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier
+  if (ts.isExternalModuleReference(node)) return node.expression
+  if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) return node.argument.literal
+  if (ts.isCallExpression(node)) {
+    const { expression } = node
+    if (
+      expression.kind === ts.SyntaxKind.ImportKeyword ||
+      (ts.isIdentifier(expression) && expression.text === 'require')
+    ) {
+      return node.arguments[0]
+    }
   }
-  return ts.forEachChild(node, hasStylesheetDeclaration) === true
+  return undefined
 }
 
 function sourceProblems(root: string, path: string): string[] {
@@ -63,15 +72,28 @@ function sourceProblems(root: string, path: string): string[] {
   if (/(?:\.d\.css\.ts|\.css\.d\.ts)$/.test(path) && !reviewedDeclarations.has(path)) {
     problems.push(`Unreviewed CSS declaration: ${path}`)
   }
-  const source = fs.readFileSync(join(root, path))
-  const { importedFiles } = ts.preProcessFile(source, true, true)
-  if (hasStylesheetDeclaration(ts.createSourceFile(path, source, ts.ScriptTarget.Latest))) {
-    problems.push(`Ambient CSS declaration: ${path}`)
+  const source = ts.createSourceFile(
+    path,
+    fs.readFileSync(join(root, path)),
+    ts.ScriptTarget.Latest,
+  )
+  let declaresCss = false
+  const specifiers: string[] = []
+  const visit = (node: ts.Node) => {
+    if (ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name)) {
+      declaresCss ||= declaresStylesheets(node.name.text)
+    }
+    const specifier = moduleSpecifier(node)
+    if (specifier && ts.isStringLiteralLike(specifier)) specifiers.push(specifier.text)
+    ts.forEachChild(node, visit)
   }
-  for (const { fileName } of importedFiles) {
-    const stylesheet = localStylesheet(root, path, fileName)
+  visit(source)
+
+  if (declaresCss) problems.push(`Ambient CSS declaration: ${path}`)
+  for (const specifier of specifiers) {
+    const stylesheet = localStylesheet(root, path, specifier)
     if (stylesheet === null || (stylesheet && !isFile(stylesheet))) {
-      problems.push(`Missing stylesheet: ${path} imports ${fileName}`)
+      problems.push(`Missing stylesheet: ${path} imports ${specifier}`)
     }
   }
   return problems
