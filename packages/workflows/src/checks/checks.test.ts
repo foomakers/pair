@@ -164,3 +164,26 @@ it('does not accept a green read that finishes after the CI deadline (#726 T-5)'
   )
   expect(result).toMatchObject({ status: 'failed', reason: 'ci-timeout' })
 })
+
+it.each([false, true])(
+  'retries a timed-out head read only once (persistent=%s)',
+  async persistent => {
+    let reads = 0
+    const result = await runGate(
+      { checks: ['head-unchanged'] },
+      {
+        registry,
+        run: run(),
+        facts: facts({
+          head: async () => {
+            reads++
+            if (reads === 1 || persistent) throw new Error('host command timed out after 30000ms')
+            return 'h1'
+          },
+        }),
+      },
+    )
+    expect(reads).toBe(2)
+    expect(result.status).toBe(persistent ? 'blocked' : 'ok')
+  },
+)

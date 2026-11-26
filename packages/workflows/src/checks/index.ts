@@ -64,11 +64,21 @@ async function ciGreen(facts: FactReader, options: CheckOptions): Promise<Verdic
   }
 }
 
+async function readHead(facts: FactReader): Promise<string> {
+  try {
+    return await facts.head()
+  } catch (error) {
+    if (!(error instanceof Error) || !/^host command timed out after [0-9]+ms$/.test(error.message))
+      throw error
+    return facts.head()
+  }
+}
+
 const verdicts: Record<CheckName, (facts: FactReader, options: CheckOptions) => Promise<Verdict>> =
   {
     'ci-green': ciGreen,
     'head-unchanged': async facts => {
-      const [head, reviewed] = [await facts.head(), await facts.reviewedHead()]
+      const [head, reviewed] = [await readHead(facts), await facts.reviewedHead()]
       return reviewed !== undefined && head === reviewed ? undefined : 'head-changed'
     },
     'review-approved': async facts =>
