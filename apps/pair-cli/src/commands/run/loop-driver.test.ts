@@ -264,6 +264,17 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
       file: handoff('gate-red'),
       retry: true,
     },
+    {
+      label: 'a literal identifier before quoted data with a fused suffix',
+      streamResult: `_PAIR_EVENT unknown "_"suffix ${handoff(formatError)}`,
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'a file handoff after a quoted underscore and fused suffix',
+      file: `_PAIR_EVENT unknown "_"suffix ${handoff(formatError)}`,
+      retry: true,
+    },
     { label: 'file-only format error', file: handoff(formatError), retry: true },
     {
       label: 'stream format error',
@@ -294,7 +305,7 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
       shutdown: keepAlive,
       failure: 'stalled: no terminal event within 1s',
     },
-  ])('#704 F12/F13/F14: handles a Codex loop HALT with $label', async row => {
+  ])('#704 F12/F13/F14/F15: handles a Codex loop HALT with $label', async row => {
     const { file, streamResult, shutdown, failure, retry, iterationTimeout = '5' } = row
     const prompts: string[] = []
     const { out } = capture()
