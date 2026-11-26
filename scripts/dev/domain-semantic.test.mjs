@@ -303,6 +303,64 @@ for (const [type, locations] of [
   })
 }
 
+for (const [shape, declaration, line, column] of [
+  [
+    'class expression',
+    `export const Retry = class {
+  get cause(): Cause { return readCause() }
+}`,
+    4,
+    7,
+  ],
+  [
+    'tagged union member',
+    `export type Retry =
+  | { tag: 'success' }
+  | { tag: 'failure'; get cause(): Cause }`,
+    5,
+    27,
+  ],
+  [
+    'nested tagged payload',
+    `export type Retry =
+  | { tag: 'success' }
+  | { tag: 'failure'; failure: { get cause(): Cause } }`,
+    5,
+    38,
+  ],
+  [
+    'exported object literal',
+    `export const retry = {
+  get cause(): Cause { return readCause() },
+}`,
+    4,
+    7,
+  ],
+  [
+    'factory object literal',
+    `export function createRetry() {
+  return { get 'cause'() { return readCause() } }
+}`,
+    4,
+    16,
+  ],
+]) {
+  test(`#750 750-R19 AC-3/4 checks the getter name exactly once (${shape})`, t => {
+    const input = 'src/http/inputs.ts'
+    const cwd = workspace(t, {
+      [pilot]: `import type { Cause } from './inputs.js'
+export declare function readCause(): Cause
+${declaration}
+`,
+      [input]: 'export type Cause = string\n',
+    })
+    assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+    writeFileSync(join(cwd, input), 'export type Cause = string | null\n')
+    assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, line, column]] })
+  })
+}
+
 function constructorModel(parameters, before = '', subclass = false) {
   const declaration = subclass
     ? 'class Base {}\nexport class Retry extends Base'
