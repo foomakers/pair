@@ -225,3 +225,47 @@ it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types',
     expect(checkStylesheets(cwd)).toEqual([`Missing stylesheet: ${importer} imports ${specifier}`])
   })
 })
+
+it.each(['scss', 'sass'])('#757 AC-4 R758-02: checks local %s modules', extension => {
+  withCssFixture(cwd => {
+    const importer = 'apps/website/app/style-fixture.ts'
+    const specifier = `./fixture.module.${extension}`
+    const stylesheet = join(cwd, dirname(importer), specifier)
+    fs.writeFileSync(join(cwd, importer), `import styles from '${specifier}'\nexport { styles }\n`)
+
+    fs.writeFileSync(stylesheet, '')
+    expect(checkStylesheets(cwd)).toEqual([])
+
+    fs.rmSync(stylesheet)
+    expect(checkStylesheets(cwd)).toEqual([`Missing stylesheet: ${importer} imports ${specifier}`])
+  })
+})
+
+it('#757 AC-4 R758-02: checks workspace stylesheet exports', () => {
+  withCssFixture(cwd => {
+    const importer = 'apps/website/app/style-fixture.ts'
+    const brand = join(cwd, 'packages/brand')
+    const scope = join(cwd, 'apps/website/node_modules/@pair')
+    fs.mkdirSync(scope, { recursive: true })
+    fs.symlinkSync(brand, join(scope, 'brand'))
+    fs.writeFileSync(
+      join(brand, 'package.json'),
+      JSON.stringify({
+        name: '@pair/brand',
+        exports: { './tokens.css': './dev/styles.css', './missing.module.css': './missing.css' },
+      }),
+    )
+    const writeImport = (specifier: string) =>
+      fs.writeFileSync(join(cwd, importer), `import '${specifier}'\n`)
+
+    writeImport('@pair/brand/tokens.css')
+    expect(checkStylesheets(cwd)).toEqual([])
+
+    for (const specifier of ['@pair/brand/dev/styles.css', '@pair/brand/missing.module.css']) {
+      writeImport(specifier)
+      expect(checkStylesheets(cwd)).toEqual([
+        `Missing stylesheet: ${importer} imports ${specifier}`,
+      ])
+    }
+  })
+})
