@@ -4,8 +4,10 @@ import ts from 'typescript'
 export const nullableDomainRule = 'pair-domain/nullable-domain-property'
 
 const nullish = ts.TypeFlags.Null | ts.TypeFlags.Undefined
-// Without a resolved module or declaration output, an alias may look like `any`.
-const importFailures = new Set([2307, 2688, 2732, 2792, 6305, 7016])
+// A missing module, declaration output or exported member can make an alias look like `any`.
+const importFailures = new Set([
+  1192, 2305, 2306, 2307, 2459, 2613, 2614, 2688, 2694, 2724, 2732, 2792, 6305, 7016,
+])
 
 function loadProject(project) {
   const fail = diagnostic => {
