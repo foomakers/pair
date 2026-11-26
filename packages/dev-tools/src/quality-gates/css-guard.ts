@@ -1,5 +1,6 @@
 import { fileSystemService as fs } from '@pair/content-ops'
 import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import ts from 'typescript'
 
@@ -10,15 +11,28 @@ const reviewedDeclarations = new Map([
   ['packages/brand/dev/styles.d.css.ts', 'packages/brand/dev/styles.css'],
 ])
 
+function resolveWorkspaceStylesheet(importer: string, stylesheet: string) {
+  try {
+    return createRequire(importer).resolve(stylesheet)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'MODULE_NOT_FOUND' || code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') return null
+    throw error
+  }
+}
+
 function localStylesheet(root: string, importer: string, specifier: string) {
   const stylesheet = specifier.split(/[?#]/, 1)[0]
-  if (!stylesheet?.endsWith('.css')) return undefined
+  if (!stylesheet || !/\.(?:css|sass|scss)$/.test(stylesheet)) return undefined
   if (/^\.\.?\//.test(stylesheet)) return resolve(root, dirname(importer), stylesheet)
   if (importer.startsWith('apps/website/') && stylesheet.startsWith('@/')) {
     return join(root, 'apps/website', stylesheet.slice(2))
   }
   if (importer.startsWith('packages/brand/') && /^\$(?:components|tokens)\//.test(stylesheet)) {
     return join(root, 'packages/brand/src', stylesheet.slice(1))
+  }
+  if (stylesheet.startsWith('@pair/')) {
+    return resolveWorkspaceStylesheet(resolve(root, importer), stylesheet)
   }
   return undefined
 }
@@ -56,7 +70,7 @@ function sourceProblems(root: string, path: string): string[] {
   }
   for (const { fileName } of importedFiles) {
     const stylesheet = localStylesheet(root, path, fileName)
-    if (stylesheet && !isFile(stylesheet)) {
+    if (stylesheet === null || (stylesheet && !isFile(stylesheet))) {
       problems.push(`Missing stylesheet: ${path} imports ${fileName}`)
     }
   }
