@@ -3,7 +3,7 @@ const domainDeclarations = new Set([
   'TSTypeAliasDeclaration',
   'ClassDeclaration',
 ])
-const propertyVisitors = ['TSPropertySignature', 'PropertyDefinition']
+const propertyVisitors = ['TSPropertySignature', 'PropertyDefinition', 'TSParameterProperty']
 const assertionVisitors = ['TSAsExpression', 'TSTypeAssertion', 'TSNonNullExpression']
 
 function domainOwner(node) {
@@ -26,9 +26,16 @@ function directNullish(type) {
   }
 }
 
+function propertyTarget(node) {
+  if (node.type !== 'TSParameterProperty') return node
+  const { parameter } = node
+  return parameter.type === 'AssignmentPattern' ? parameter.left : parameter
+}
+
 function propertyReport(context, node, owner) {
-  const property = context.sourceCode.getText(node.key)
-  return { node: node.key, data: { property: owner ? `${owner}.${property}` : property } }
+  const key = node.key ?? context.sourceCode.getFirstToken(node)
+  const property = context.sourceCode.getText(key)
+  return { loc: key.loc, data: { property: owner ? `${owner}.${property}` : property } }
 }
 
 function domainRule(visitors, message, matches, report = (_context, node) => ({ node })) {
@@ -46,9 +53,10 @@ function domainRule(visitors, message, matches, report = (_context, node) => ({ 
     },
     create(context) {
       const symbols = context.options[0]?.domainSymbols
-      function visit(node) {
+      function visit(declaration) {
+        const node = propertyTarget(declaration)
         if (!matches(node)) return
-        const owner = domainOwner(node)
+        const owner = domainOwner(declaration)
         if (symbols && !symbols.includes(owner)) return
         context.report({ messageId: 'violation', ...report(context, node, owner) })
       }

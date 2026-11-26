@@ -107,11 +107,19 @@ function unionArm(arm, variants, property, source) {
   return tokens
 }
 
+function isParameterProperty(node) {
+  return ts.isParameter(node) && ts.isParameterPropertyDeclaration(node, node.parent)
+}
+
+function isDomainProperty(node) {
+  return ts.isPropertySignature(node) || ts.isPropertyDeclaration(node) || isParameterProperty(node)
+}
+
 export function domainPropertySites(filename, text) {
   const source = ts.createSourceFile(filename, text, ts.ScriptTarget.Latest, true)
   const sites = new Map()
   function visit(node) {
-    if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) {
+    if (isDomainProperty(node)) {
       const owner = domainOwner(node)
       const name = node.name.getText(source)
       const path = []
@@ -122,7 +130,7 @@ export function domainPropertySites(filename, text) {
           ts.isClassDeclaration(parent)
         )
           break
-        if (ts.isPropertySignature(parent) || ts.isPropertyDeclaration(parent)) {
+        if (isDomainProperty(parent)) {
           path.push(['property', parent.name.getText(source)])
         }
         if (ts.isUnionTypeNode(parent)) {
@@ -206,9 +214,12 @@ function findNullableProperties(source, checker, symbols) {
     if (!name || !inScope(name.text)) return
     if (!node.heritageClauses?.some(clause => clause.token === ts.SyntaxKind.ExtendsKeyword)) return
     const declarations = checker.getSymbolAtLocation(name)?.declarations ?? []
+    const declaredHere = declaration =>
+      declarations.includes(
+        isParameterProperty(declaration) ? declaration.parent.parent : declaration.parent,
+      )
     for (const property of checker.getPropertiesOfType(checker.getTypeAtLocation(node))) {
-      if (property.declarations?.some(declaration => declarations.includes(declaration.parent)))
-        continue
+      if (property.declarations?.some(declaredHere)) continue
       report(
         checker.getTypeOfSymbolAtLocation(property, node),
         name.text,
@@ -248,7 +259,7 @@ function findNullableProperties(source, checker, symbols) {
   function visit(node) {
     if (ts.isInterfaceDeclaration(node) || ts.isClassDeclaration(node)) checkInherited(node)
     if (ts.isTypeAliasDeclaration(node)) checkAlias(node)
-    if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) {
+    if (isDomainProperty(node)) {
       const owner = domainOwner(node)
       if (inScope(owner) && !node.questionToken && !hasDirectNullishType(node.type)) {
         report(checker.getTypeAtLocation(node.name), owner, node.name.getText(source), node.name)
