@@ -14,11 +14,9 @@ import {
 // file is itself scanned by *.ts globs, so it must not contain the literal markers.
 
 describe('buildGitGrepCommand', () => {
-  it('builds a git grep invocation with quoted globs and a self-exclude pathspec', () => {
-    // Globs are joined with ' -- ' (matches the original script verbatim); git
-    // tolerates the repeated separator — verified against a real git grep.
-    const cmd = buildGitGrepCommand('marker-one', ['*.ts', '*.tsx'], 'scripts/self.ts')
-    expect(cmd).toBe('git grep -n "marker-one" -- "*.ts" -- "*.tsx" \':!scripts/self.ts\'')
+  it('scans all tracked files matching the supplied globs', () => {
+    const cmd = buildGitGrepCommand('marker-one', ['*.ts', '*.tsx'])
+    expect(cmd).toBe('git grep -n "marker-one" -- "*.ts" "*.tsx"')
   })
 })
 
@@ -38,23 +36,23 @@ describe('scanPattern', () => {
 
   it('returns formatted matches from the injected exec function', () => {
     const exec = vi.fn(() => 'src/a.ts:5:// marker-one\n')
-    const matches = scanPattern(pattern, FILE_GLOBS, 'self.ts', exec)
+    const matches = scanPattern(pattern, FILE_GLOBS, exec)
     expect(matches).toEqual(['  src/a.ts:5'])
-    expect(exec).toHaveBeenCalledWith(buildGitGrepCommand(pattern.regex, FILE_GLOBS, 'self.ts'))
+    expect(exec).toHaveBeenCalledWith(buildGitGrepCommand(pattern.regex, FILE_GLOBS))
   })
 
   it('treats a thrown error (git grep exit 1, no matches) as the happy path — empty result', () => {
     const exec = vi.fn(() => {
       throw new Error('exit 1')
     })
-    expect(scanPattern(pattern, FILE_GLOBS, 'self.ts', exec)).toEqual([])
+    expect(scanPattern(pattern, FILE_GLOBS, exec)).toEqual([])
   })
 })
 
 describe('runHygieneCheck', () => {
   it.each(['eslint-', 'oxlint-'])('checks %s suppression markers', tool => {
     const marker = tool + 'disable'
-    const { violations } = runHygieneCheck(PATTERNS, FILE_GLOBS, 'self.ts', command => {
+    const { violations } = runHygieneCheck(PATTERNS, FILE_GLOBS, command => {
       return command.includes(marker) ? 'src/a.ts:5:// ' + marker : ''
     })
     expect(violations.get(marker)).toEqual(['  src/a.ts:5'])
@@ -71,7 +69,7 @@ describe('runHygieneCheck', () => {
       if (cmd.includes('marker-two')) return 'src/c.ts:3:x\n'
       throw new Error('exit 1') // marker-three: no matches
     }
-    const { violations, total } = runHygieneCheck(patterns, FILE_GLOBS, 'self.ts', exec)
+    const { violations, total } = runHygieneCheck(patterns, FILE_GLOBS, exec)
     expect(total).toBe(3)
     expect(violations.get('marker-one')).toEqual(['  src/a.ts:1', '  src/b.ts:2'])
     expect(violations.get('marker-two')).toEqual(['  src/c.ts:3'])
@@ -79,7 +77,7 @@ describe('runHygieneCheck', () => {
   })
 
   it('reports zero total when nothing matches', () => {
-    const { violations, total } = runHygieneCheck(PATTERNS, FILE_GLOBS, 'self.ts', () => {
+    const { violations, total } = runHygieneCheck(PATTERNS, FILE_GLOBS, () => {
       throw new Error('exit 1')
     })
     expect(total).toBe(0)
