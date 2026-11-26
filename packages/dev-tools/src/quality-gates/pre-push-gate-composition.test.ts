@@ -569,12 +569,14 @@ it('review and push gates select their respective bases after push', () => {
     git('init', '-b', 'main')
     git('config', 'user.email', 'test@example.com')
     git('config', 'user.name', 'Test')
-    writeFileSync(join(dir, 'file'), 'base')
+    const brandPath = 'packages/brand/dev/styles.d.css.ts'
+    mkdirSync(join(dir, 'packages/brand/dev'), { recursive: true })
+    writeFileSync(join(dir, brandPath), 'export {}\n')
     git('add', '.')
     git('commit', '-m', 'base')
     git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'))
     git('checkout', '-b', 'feature')
-    writeFileSync(join(dir, 'file'), 'change')
+    writeFileSync(join(dir, brandPath), "declare module '*.css' {}\n")
     git('commit', '-am', 'change')
     git('update-ref', 'refs/remotes/origin/feature', git('rev-parse', 'HEAD'))
     git('config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*')
@@ -589,7 +591,7 @@ it('review and push gates select their respective bases after push', () => {
     )
     writeFileSync(
       join(bin, 'pnpm'),
-      '#!/bin/sh\nif [ "$1" = gate:push ]; then exec sh -c "$PUSH_SCRIPT"; fi\n',
+      '#!/bin/sh\nif [ "$1" = css:check ]; then exit "${CSS_CHECK_STATUS:-0}"; fi\n',
       { mode: 0o755 },
     )
     const scripts = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).scripts
@@ -598,7 +600,6 @@ it('review and push gates select their respective bases after push', () => {
       ...process.env,
       PATH: `${bin}:${process.env.PATH}`,
       GATE_CAPTURE: capture,
-      PUSH_SCRIPT: scripts['gate:push'],
     }
     const run = (script: string) => {
       const result = spawnSync('sh', ['-c', script], { cwd: dir, env, encoding: 'utf8' })
@@ -608,7 +609,15 @@ it('review and push gates select their respective bases after push', () => {
     assert.equal(run(scripts['gate:push']), git('rev-parse', 'HEAD'))
     const reviewBase = run(scripts['gate:review'])
     assert.equal(reviewBase, git('rev-parse', 'origin/main'))
-    assert.equal(git('diff', '--name-only', reviewBase, 'HEAD'), 'file')
+    assert.equal(git('diff', '--name-only', reviewBase, 'HEAD'), brandPath)
+
+    // R758-03: Turbo can succeed without selecting dev-tools for a Brand-only change.
+    const rejected = spawnSync('sh', ['-c', scripts['gate:review']], {
+      cwd: dir,
+      env: { ...env, CSS_CHECK_STATUS: '23' },
+      encoding: 'utf8',
+    })
+    assert.equal(rejected.status, 23, rejected.stderr)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

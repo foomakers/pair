@@ -1,3 +1,5 @@
+/// <reference types="node" preserve="true" />
+
 import type { Dirent, Stats } from 'fs'
 import type { FileSystemService } from '../../file-system'
 import { InMemoryFsState } from './in-memory-fs-state'

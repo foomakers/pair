@@ -1,20 +1,21 @@
 {
   "extends": "@pair/ts-config/node.json",
   "compilerOptions": {
+    "rootDir": ".",
     "noEmit": true,
     "skipLibCheck": true,
     "paths": {
-      "#config": ["src/config/index.ts"],
-      "#config/*": ["src/config/*"],
-      "#registry": ["src/registry/index.ts"],
-      "#registry/*": ["src/registry/*"],
-      "#kb-manager": ["src/kb-manager/index.ts"],
-      "#kb-manager/*": ["src/kb-manager/*"],
-      "#diagnostics": ["src/diagnostics.ts"],
-      "#test-utils": ["src/test-utils/index.ts"],
-      "#test-utils/*": ["src/test-utils/*"],
-      "#ui": ["src/ui/index.ts"],
-      "#ui/*": ["src/ui/*"]
+      "#config": ["./src/config/index.ts"],
+      "#config/*": ["./src/config/*"],
+      "#registry": ["./src/registry/index.ts"],
+      "#registry/*": ["./src/registry/*"],
+      "#kb-manager": ["./src/kb-manager/index.ts"],
+      "#kb-manager/*": ["./src/kb-manager/*"],
+      "#diagnostics": ["./src/diagnostics.ts"],
+      "#test-utils": ["./src/test-utils/index.ts"],
+      "#test-utils/*": ["./src/test-utils/*"],
+      "#ui": ["./src/ui/index.ts"],
+      "#ui/*": ["./src/ui/*"]
     }
   },
   "references": [
@@ -22,6 +23,6 @@
     { "path": "../../packages/knowledge-hub" },
     { "path": "../../packages/workflows" }
   ],
-  "include": ["src/**/*.ts"],
+  "include": ["./src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

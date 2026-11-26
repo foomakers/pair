@@ -1,7 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    "baseUrl": ".",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
@@ -22,6 +21,7 @@
     "noPropertyAccessFromIndexSignature": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
+    "noUncheckedSideEffectImports": true,
     "noImplicitOverride": true,
     "composite": true,
     "declarationMap": false

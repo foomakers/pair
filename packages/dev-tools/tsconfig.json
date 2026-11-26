@@ -15,6 +15,7 @@
     // 2026-09-01-a-gate-imports-its-generator-by-source-and-gets-a-read-only-slice.md.
     "composite": false
   },
+  "ts-node": { "compilerOptions": { "rootDir": "." } },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "**/*.test.ts"]
 }

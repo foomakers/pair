@@ -107,7 +107,8 @@ describe('main CLI (pnpm direct-fs:check)', () => {
         encoding: 'utf8',
         env: {
           ...process.env,
-          TS_NODE_COMPILER_OPTIONS: '{"module":"commonjs","esModuleInterop":true}',
+          TS_NODE_COMPILER_OPTIONS:
+            '{"module":"NodeNext","moduleResolution":"NodeNext","rootDir":".","esModuleInterop":true}',
         },
       },
     )

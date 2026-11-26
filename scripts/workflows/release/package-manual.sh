@@ -193,10 +193,11 @@ echo "Creating ncc bundle inside artifact..."
 # Use the CLI package's pinned workspace dependency.
 if [ -f "$PKG_DIR/dist/cli.js" ]; then
   # Run ncc from the package directory so dependency resolution (pnpm workspace) works
+  # The CLI in dist has already been type-checked by the workspace build.
   if [ "$DRY_RUN" = true ]; then
-    echo "[dry-run] would run: (cd $PKG_DIR && pnpm exec ncc build dist/cli.js -o $RELEASE_DIR/bundle-cli)"
+    echo "[dry-run] would run: (cd $PKG_DIR && pnpm exec ncc build dist/cli.js --transpile-only -o $RELEASE_DIR/bundle-cli)"
   else
-    (cd "$PKG_DIR" && pnpm exec ncc build "dist/cli.js" -o "$RELEASE_DIR/bundle-cli") || { echo "ncc bundling failed"; exit 1; }
+    (cd "$PKG_DIR" && pnpm exec ncc build "dist/cli.js" --transpile-only -o "$RELEASE_DIR/bundle-cli") || { echo "ncc bundling failed"; exit 1; }
   fi
 
   # ncc leaves the dynamically loaded pair-next authority outside index.js.
