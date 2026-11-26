@@ -174,16 +174,32 @@ describe('built KB retry adapter', () => {
       delays,
       attempts,
       outcome,
+      destination: '/a',
     }),
   )
-  it.each(retryCases)('$name', async ({ items, policy, delays, attempts, outcome }) => {
+  const platformDestinations = [
+    { platform: 'darwin', destination: '/Users/test/Library/Caches/pair/kb.zip' },
+    { platform: 'linux', destination: '/home/test/.cache/pair/kb.zip' },
+  ]
+  for (const { platform, destination } of platformDestinations) {
+    retryCases.push({
+      name: `${platform} destination survives a retry`,
+      items: ['ECONNRESET'],
+      policy: {},
+      delays: [1000],
+      attempts: 2,
+      outcome: 'ok',
+      destination,
+    })
+  }
+  it.each(retryCases)('$name', async fixture => {
+    const { items, policy, delays, attempts, outcome, destination } = fixture
     // Native resolution exercises the emitted wrapper and the installed content-ops package.
     const require = createRequire(__filename)
     const built: {
       downloadWithRetry: typeof downloadWithRetry
     } = require('../../dist/kb-manager/download-manager.js')
     const url = 'https://local/v1.2.3/kb.zip'
-    const destination = '/a'
     const options = {
       httpClient: new MockHttpClientService(),
       fs: new InMemoryFileSystemService({}, '/', '/'),

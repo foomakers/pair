@@ -21,9 +21,9 @@
     {
       "files": ["src/http/retry.domain.ts"],
       "rules": {
-        "pair-domain/no-optional-domain-properties": "warn",
-        "pair-domain/no-explicit-nullish-domain-types": "warn",
-        "pair-domain/no-unsafe-domain-assertions": "warn"
+        "pair-domain/no-optional-domain-properties": "error",
+        "pair-domain/no-explicit-nullish-domain-types": "error",
+        "pair-domain/no-unsafe-domain-assertions": "error"
       }
     },
     {

@@ -1,11 +1,11 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1086,
-  "files": 408,
-  "distinctContents": 373,
+  "files": 411,
+  "distinctContents": 376,
   "dispositionCounts": {
     "standalone-script": 17,
-    "os-guarantee": 32,
+    "os-guarantee": 35,
     "type-contract": 13,
     "in-flight-churn": 241,
     "repo-contract": 104,
@@ -2950,6 +2950,16 @@
       "reason": "Real symlink resolution and containment",
       "decision": "Keep isolated OS integration test",
       "testCategory": "real-os-containment"
+    },
+    {
+      "path": "packages/content-ops/src/http/retry.domain.test.ts",
+      "hash": "12f671c3ffc6db59a07819e0c0c02cb5ea53aac91a655e28cd828383932a3d4c",
+      "dependencies": [{ "form": "import", "specifier": "node:fs", "line": 2 }],
+      "disposition": "os-guarantee",
+      "producer": "packages/content-ops/src/http/retry.domain.test.ts",
+      "reason": "The real tsc subprocess resolves inherited config, dependencies and a mutated copy of the production retry model from disk.",
+      "decision": "Keep the isolated real-project compiler fixture for #750.",
+      "testCategory": "real-process"
     },
     {
       "path": "packages/content-ops/src/ops/copy/copy-symlink-containment.test.ts",
@@ -6907,6 +6917,26 @@
       "reason": "Proves OS permission bits, real process execution or installed-artifact layout; the double cannot.",
       "decision": "Exact-path exception; keep isolated temp dir with cleanup.",
       "testCategory": "real-os-integration"
+    },
+    {
+      "path": "scripts/dev/domain-ratchet.test.mjs",
+      "hash": "e3616327665184d45a0b4e3bc46a394ce0035bd1a873a5c08488c72b05573463",
+      "dependencies": [{ "form": "import", "specifier": "node:fs", "line": 3 }],
+      "disposition": "os-guarantee",
+      "producer": "scripts/dev/domain-ratchet.test.mjs",
+      "reason": "Real Git, Oxlint and TypeScript resolve and inspect paths in disposable tracked repositories.",
+      "decision": "Keep the exact-path subprocess fixture for #750.",
+      "testCategory": "real-process"
+    },
+    {
+      "path": "scripts/dev/domain-semantic.test.mjs",
+      "hash": "0c5529c73ef0f5ee9f20733fb1474a949e76697d51c62303acc60ff547b71dbb",
+      "dependencies": [{ "form": "import", "specifier": "node:fs", "line": 11 }],
+      "disposition": "os-guarantee",
+      "producer": "scripts/dev/domain-semantic.test.mjs",
+      "reason": "The real pnpm lint entry point and compiler resolve the temporary workspace and its linked dependencies from disk.",
+      "decision": "Keep the exact-path package-lint fixture for #750.",
+      "testCategory": "real-process"
     },
     {
       "path": "scripts/dev/oxlint-policy.test.mjs",

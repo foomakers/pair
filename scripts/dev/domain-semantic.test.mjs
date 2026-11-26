@@ -38,7 +38,7 @@ function workspace(t, sources) {
 }
 
 function lint(cwd, ...operands) {
-  const result = spawnSync('pnpm', ['--silent', 'run', 'lint', '--deny-warnings', ...operands], {
+  const result = spawnSync('pnpm', ['--silent', 'run', 'lint', ...operands], {
     cwd,
     encoding: 'utf8',
     env: { ...process.env, PAIR_LINT_REPORT: 'json' },

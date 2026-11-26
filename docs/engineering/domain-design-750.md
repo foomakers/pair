@@ -53,3 +53,22 @@ The private `retry.domain.ts` uses `success`, `transient` and `permanent` varian
 The real strict TypeScript project passed the fresh success, exhaustive consumer, normalized ingress and bidirectional Promise signature controls. The isolated negatives reported TS2353 for extra success data, TS2532 for unchecked indexing, TS2741 for a raw option shape and TS2322 for raw rejection input and for an additional variant at the live `never` assignment. The compile runner checked exit status, diagnostic code and source location.
 
 Node 20 passed the 11 original retry tests, the 16 frozen CLI rows and the fractional-budget witness through the rebuilt CLI. Checked fields include arguments, supplied options and reporter identity, handler messages, timer requests and rejection identity. An extra field on a structurally typed alias can still pass TypeScript, and a caller can still discard a result. The pilot constructs each variant in place and consumes each outcome at the exhaustive dispatch.
+
+Separate macOS and Linux destination controls verify that the CLI passes the exact argument through both attempts. The compiler, semantic and baseline tests use disposable real files because the subprocesses resolve their projects and Git trees from disk. Their three exact filesystem entries are recorded in the [inventory](direct-fs-inventory.json).
+
+## Enforcement and rollout
+
+The pilot produced zero findings after promotion to errors. The separate, uncached `pnpm domain:check` reports fourteen reviewed findings across two legacy files. It verifies the baseline against the merge base, uses Git-verified renames and counts each occurrence. Temporary repositories proved unchanged debt, line movement, rename, a new finding in an existing model, a new model file, the DTO and generated exclusions, retirement, and rejection of growth in either snapshot. Negative fixtures report the expected rule and location. Tool and project loading errors have exit status 2.
+
+| Run | Cold wall time (s) | Warm wall time (s) | Uncached domain ratchet (s) |
+| --- | ---: | ---: | ---: |
+| 1 | 4.23 | 1.57 | 1.82 |
+| 2 | 4.41 | 1.83 | 1.72 |
+| 3 | 4.26 | 1.71 | 1.71 |
+| Median | 4.26 | 1.71 | 1.72 |
+
+The lint samples use the same workspace package selection, Node and Turbo cache procedure as the baseline. The warm median changed from 1.69 s to 1.71 s. The pilot adds a separate read of repository-wide policy that took a median of 1.72 s. The [post-#693 CI baseline](https://github.com/foomakers/pair/actions/runs/45832282802) recorded 10 s for lint and 2 s for hygiene. The PR's CI run records the new baseline step separately from lint and hygiene.
+
+The rollback rehearsal applied and reversed the story diff in a detached worktree. Git confirmed the exact baseline tree. With Node 20, the original retry suite passed 11/11, CLI smoke reported `0.5.2`, and CLI and content-ops each reported zero #693 lint findings. Roll back the private retry model, scope, compiler checker, baseline, suppression policy and CI wiring together.
+
+`resume-manager.ts` and `download-manager.ts` remain candidates for individual domain and boundary inventories. For each candidate, baseline warnings, migrate one private slice, replay behavior, then widen the strict allowlist. Pause expansion on parity loss, false positives or unexplained gate-cost increases.

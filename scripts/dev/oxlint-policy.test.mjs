@@ -84,6 +84,7 @@ test('#693 AC-2 preserves package lint scope and check/fix behavior', t => {
 test('#693 R5 checks selection before autofix with readable and unreadable excludes', async t => {
   const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json', {
     extends: [],
+    overrides: [],
     rules: { 'eslint/prefer-const': 'error' },
   })
   const excluded = join(cwd, 'dist')
