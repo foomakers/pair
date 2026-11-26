@@ -69,6 +69,80 @@ function domainOwner(node) {
   }
 }
 
+function literalFields(type) {
+  while (ts.isParenthesizedTypeNode(type)) type = type.type
+  if (!ts.isTypeLiteralNode(type)) return new Map()
+  return new Map(
+    type.members.flatMap(member => {
+      if (
+        !ts.isPropertySignature(member) ||
+        member.questionToken ||
+        !member.type ||
+        !ts.isLiteralTypeNode(member.type)
+      )
+        return []
+      const { literal } = member.type
+      const value = ts.isStringLiteral(literal) ? JSON.stringify(literal.text) : literal.getText()
+      return [[member.name.getText(), value]]
+    }),
+  )
+}
+
+function unionArm(arm, variants, property, source) {
+  const fields = literalFields(arm)
+  const siblings = variants.filter(variant => variant !== arm).map(literalFields)
+  for (const [name, value] of [...fields].sort()) {
+    if (siblings.every(sibling => sibling.has(name) && sibling.get(name) !== value)) {
+      return [name, value]
+    }
+  }
+
+  // For an untagged arm, compare its other content independently of layout or comments.
+  const text = `${source.text.slice(arm.getStart(source), property.getStart(source))} ${source.text.slice(property.end, arm.end)}`
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, text)
+  const tokens = []
+  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
+    tokens.push(scanner.getTokenText())
+  }
+  return tokens
+}
+
+export function domainPropertySites(filename, text) {
+  const source = ts.createSourceFile(filename, text, ts.ScriptTarget.Latest, true)
+  const sites = new Map()
+  function visit(node) {
+    if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) {
+      const owner = domainOwner(node)
+      const name = node.name.getText(source)
+      const path = []
+      for (let child = node, parent = node.parent; parent; child = parent, parent = parent.parent) {
+        if (
+          ts.isTypeAliasDeclaration(parent) ||
+          ts.isInterfaceDeclaration(parent) ||
+          ts.isClassDeclaration(parent)
+        )
+          break
+        if (ts.isPropertySignature(parent) || ts.isPropertyDeclaration(parent)) {
+          path.push(['property', parent.name.getText(source)])
+        }
+        if (ts.isUnionTypeNode(parent)) {
+          path.push(['union', unionArm(child, parent.types, node, source)])
+        }
+      }
+      const offset = Buffer.byteLength(text.slice(0, node.name.getStart(source)))
+      sites.set(offset, {
+        property: owner ? `${owner}.${name}` : name,
+        path: path.reverse(),
+        optional: Boolean(node.questionToken),
+        explicit: hasDirectNullishType(node.type),
+      })
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return sites
+}
+
 function constituents(type) {
   return type.isUnion() ? type.types : [type]
 }

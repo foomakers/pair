@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import glob from 'fast-glob'
-import { checkNullableDomainProperties } from './domain-checker.mjs'
+import {
+  checkNullableDomainProperties,
+  domainPropertySites,
+  nullableDomainRule,
+} from './domain-checker.mjs'
 import plugin from './domain-plugin.mjs'
 
 const baselinePath = 'tools/oxlint-config/domain-baseline.json'
@@ -53,10 +57,10 @@ function renames(ref) {
 
 function readPrevious(base, path, current) {
   const prior = spawnSync('git', ['show', `${base}:${path}`], { encoding: 'utf8' })
-  if (prior.status === 0) return JSON.parse(prior.stdout)
+  if (prior.status === 0) return [JSON.parse(prior.stdout), base]
   if (prior.error) throw prior.error
   const initial = git('hash-object', '--', path).trim()
-  if (initial === bootstrap.get(path)) return current
+  if (initial === bootstrap.get(path)) return [current, reviewedBase]
   throw new Error(`${path}: the reviewed baseline is required when the base has no snapshot`)
 }
 
@@ -80,6 +84,28 @@ function entries(snapshot, currentPath) {
       names.map(name => key(currentPath(file), rule, name)),
     ),
   )
+}
+
+function previousSites(snapshot, revision, currentPath) {
+  const identities = []
+  for (const [file, rules] of Object.entries(snapshot)) {
+    // Bind the frozen property names to their locations in the reviewed source.
+    const sites = [...domainPropertySites(file, git('show', `${revision}:${file}`)).values()]
+    for (const [rule, properties] of Object.entries(rules)) {
+      for (const [property, quantity] of counts(properties)) {
+        const matches = sites.filter(site => {
+          if (site.property !== property) return false
+          if (rule === 'pair-domain/no-optional-domain-properties') return site.optional
+          if (rule === 'pair-domain/no-explicit-nullish-domain-types') return site.explicit
+          return rule === nullableDomainRule && !site.optional && !site.explicit
+        })
+        if (matches.length !== quantity) continue // An ambiguous name cannot authorize a site.
+        for (const { path } of matches)
+          identities.push(key(currentPath(file), rule, [property, path]))
+      }
+    }
+  }
+  return counts(identities)
 }
 
 function authoredModel(file) {
@@ -169,13 +195,16 @@ export function checkDomainRatchet() {
   }
   const currentPath = file => (files.has(file) ? file : (moves.get(file) ?? file))
   const snapshot = read(baselinePath)
-  const priorEntries = counts(entries(readPrevious(base, baselinePath, snapshot), currentPath))
+  const [previous, revision] = readPrevious(base, baselinePath, snapshot)
+  const priorKeys = entries(previous, currentPath)
+  const priorEntries = counts(priorKeys)
   const currentEntries = entries(snapshot, currentPath)
   const errors = currentEntries
     .filter(entry => !consume(priorEntries, entry))
     .map(entry => `domain baseline cannot grow: ${JSON.parse(entry).join(' ')}`)
   const suppressions = read(suppressionPath)
-  const priorSuppressions = counts(readPrevious(base, suppressionPath, suppressions))
+  const [previousSuppressions] = readPrevious(base, suppressionPath, suppressions)
+  const priorSuppressions = counts(previousSuppressions)
   for (const entry of suppressions) {
     if (!consume(priorSuppressions, entry))
       errors.push(`legacy suppression baseline cannot grow: ${entry}`)
@@ -214,12 +243,27 @@ export function checkDomainRatchet() {
     findings.push(...checkNullableDomainProperties(project, group, scopes))
   }
   const remaining = counts(currentEntries)
+  const knownEntries = new Set(priorKeys)
+  const baselinedSites = previousSites(previous, revision, currentPath)
+  const bySource = new Map()
+  function matchesSite(file, rule, property, offset) {
+    if (!bySource.has(file))
+      bySource.set(file, domainPropertySites(file, readFileSync(file, 'utf8')))
+    const site = bySource.get(file).get(offset)
+    return site && consume(baselinedSites, key(file, rule, [property, site.path]))
+  }
   for (const { filename, code, property, span, message } of findings) {
-    if (!consume(remaining, key(filename, code, property))) {
-      errors.push(
-        `${filename}:${span.line}:${span.column}: ${code}: ${message ?? `Resolved nullish property ${property}.`}`,
-      )
+    const entry = key(filename, code, property)
+    if (
+      remaining.has(entry) &&
+      (!knownEntries.has(entry) || matchesSite(filename, code, property, span.offset))
+    ) {
+      consume(remaining, entry)
+      continue
     }
+    errors.push(
+      `${filename}:${span.line}:${span.column}: ${code}: ${message ?? `Resolved nullish property ${property}.`}`,
+    )
   }
   for (const entry of remaining.keys())
     errors.push(`retire fixed domain baseline entry: ${JSON.parse(entry).join(' ')}`)

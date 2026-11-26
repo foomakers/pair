@@ -132,12 +132,15 @@ for (const [description, model] of [
     write(legacy, [header, stream, file, ...rest].join('\n'))
     assert.equal(check().status, 0)
 
-    write(legacy, [
-      header,
-      file.replace('progress?', 'progress'),
-      stream.replace('progress:', 'progress?:'),
-      ...rest,
-    ].join('\n'))
+    write(
+      legacy,
+      [
+        header,
+        file.replace('progress?', 'progress'),
+        stream.replace('progress:', 'progress?:'),
+        ...rest,
+      ].join('\n'),
+    )
     const moved = check()
     assert.equal(moved.status, 1, moved.out)
     assert.match(moved.out, /:3:\d+: pair-domain\/no-optional-domain-properties:/)
