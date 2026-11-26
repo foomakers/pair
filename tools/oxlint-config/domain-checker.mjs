@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import ts from 'typescript'
+import ts from '@typescript/typescript6'
 
 export const nullableDomainRule = 'pair-domain/nullable-domain-property'
 
