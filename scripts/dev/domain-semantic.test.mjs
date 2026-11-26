@@ -468,6 +468,43 @@ for (const { route, source, imports, causeType, location, importer } of [
   })
 }
 
+for (const [code, dependency, source, broken] of [
+  ['TS2835', 'src/http/types.mts', "export type { Cause } from './types.mjs'", './types'],
+  ['TS2834', 'src/http/types.mts', "export type { Cause } from './types.mjs'", './missing'],
+  [
+    'TS6053',
+    'types/cause.d.ts',
+    '/// <reference path="../../types/cause.d.ts" />\nexport type Cause = ReferencedCause',
+    '../../types/missing.d.ts',
+  ],
+]) {
+  test(`#750 750-R22 AC-4 rejects an unresolved transitive dependency (${code})`, t => {
+    const bridge = 'src/http/bridge.mts'
+    const importCause = "import type { Cause } from './bridge.mjs'\n"
+    const cwd = workspace(t, {
+      [pilot]: model('cause: Cause', importCause),
+      [bridge]: source + '\n',
+      [dependency]: dependency.endsWith('.mts')
+        ? 'export type Cause = string\n'
+        : 'type ReferencedCause = string\n',
+    })
+    assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+    writeFileSync(
+      join(cwd, bridge),
+      source.replace(/\.\/types\.mjs|\.\.\/\.\.\/types\/cause\.d\.ts/, broken) + '\n',
+    )
+    writeFileSync(
+      join(cwd, pilot),
+      model('cause: Cause\n  detail: Detail', `${importCause}type Detail = string | null\n`),
+    )
+    const { status, stdout, stderr } = lint(cwd)
+    assert.equal(status, 2, stdout + stderr)
+    assert.ok(stderr.includes(`${bridge}: ${code}`), stderr)
+    assert.equal(stdout, '')
+  })
+}
+
 test('#750 AC-4 package lint distinguishes project-load errors from findings', t => {
   const cwd = workspace(t, { [pilot]: model('cause: unknown') })
   const project = join(cwd, 'tsconfig.json')
