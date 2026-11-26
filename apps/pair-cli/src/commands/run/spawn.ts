@@ -200,8 +200,9 @@ function openLastMessageChannel(engine: EngineDefinition) {
     merge: (result: IterationResult): IterationResult | undefined => {
       if (result.final !== undefined || !existsSync(path)) return undefined
       const lastMessage = readFileSync(path, 'utf-8')
+      if (lastMessage.trim() === '') return undefined
       const final = parseFinalResult(lastMessage)
-      return final && { ...result, final, lastMessage }
+      return { ...result, lastMessage, ...(final !== undefined && { final }) }
     },
     close: () => rmSync(dir, { recursive: true, force: true }),
   }
