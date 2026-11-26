@@ -169,6 +169,11 @@
       "dependsOn": ["^build", "build"],
       "outputs": []
     },
+    // Dev-tools type-checks CLI source that imports the emitted workflows declarations.
+    "@pair/dev-tools#ts:check": {
+      "dependsOn": ["^build", "@pair/workflows#build"],
+      "outputs": []
+    },
     "ts:check": {
       "dependsOn": ["^build"],
       "outputs": []
