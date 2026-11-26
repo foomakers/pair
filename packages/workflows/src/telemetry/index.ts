@@ -248,6 +248,15 @@ export async function recordStep(run: RunDirectory, execution: StepExecution): P
 
 type RecoveredFault = Omit<StepExecution, 'durationMs' | 'tokens'> & { diagnosis: Diagnosis }
 
+/** An interrupted process has measured elapsed time and no recoverable token measurement. */
+export function recoveredExecution(fault: RecoveredFault): StepExecution {
+  return {
+    ...fault,
+    durationMs: fault.diagnosis.elapsedMs,
+    tokens: { read: UNKNOWN, cached: UNKNOWN, written: UNKNOWN },
+  }
+}
+
 /** Backfills diagnoses saved before a telemetry write, keeping existing metered rows. */
 export async function recordMissingFaultSteps(
   run: RunDirectory,
@@ -266,16 +275,7 @@ export async function recordMissingFaultSteps(
     ({ step }) => !recorded.has(attemptKey(step.id, step.attempt, step.round)),
   )
   if (missing.length === 0 && terminal === undefined) return
-  const repaired = [
-    ...steps,
-    ...missing.map(fault =>
-      stepRecord(run, {
-        ...fault,
-        durationMs: fault.diagnosis.elapsedMs,
-        tokens: { read: UNKNOWN, cached: UNKNOWN, written: UNKNOWN },
-      }),
-    ),
-  ]
+  const repaired = [...steps, ...missing.map(fault => stepRecord(run, recoveredExecution(fault)))]
   await write(
     run,
     terminal === undefined ? repaired : [...repaired, closingRecord(run, repaired, terminal)],

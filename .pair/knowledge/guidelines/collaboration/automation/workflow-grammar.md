@@ -163,6 +163,8 @@ Process faults include a wall-clock timeout, idle timeout, crash, missing final 
 
 With `retries` declared, including `retries: 0`, exhaustion records `blocked` with reason `fault`. An invalid final result records `failed` with reason `invalid-result`. The step's escalation rules apply to that outcome. If `retries` is omitted, a missing final result keeps the existing `failed` / `no-result` route.
 
+Recovered fault telemetry uses the engine, model and effort saved with the original attempt. Older fault records without an engine use `unknown`. Unrecorded model and effort fields are omitted.
+
 The session host displays a warning when a delegated or interactive step declares either key. It executes the session attempt once and settles the final message it receives. To enforce a process time cap or retry budget, run the agent step with `pair-cli run`. On takeover, the session honors faults already persisted by the terminal and settles exhausted attempts without relaunching them.
 
 The top-level keys apply to agent steps only. A host-run `gate` can still set `with.timeout-minutes` for its CI wait.

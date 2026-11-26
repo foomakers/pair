@@ -19,6 +19,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { acquireCardLock, acquireRunLock } from '../src/cli'
 import { next, record, start } from '../src/engine'
 import { runSteps } from '../src/host'
+import { openSession as openWorkflowSession, stopSession } from '../src/cli/session'
 
 const repo = join(__dirname, '../../..')
 const script = '.claude/skills/pair-capability-workflow/scripts/workflow.mjs'
@@ -420,7 +421,10 @@ it.each([0, 1])(
     ).rejects.toThrow('interrupted after fault')
     git('worktree', 'add', '-b', branch, worktree, 'main')
 
+    const ledger = join(runDir, 'telemetry.jsonl')
+    if (retries === 0) mkdirSync(ledger)
     const lease = openSession(['resume', runId, '--engine', 'codex'])
+    if (retries === 0) rmSync(ledger, { recursive: true })
     const selected = JSON.parse(successful(['next', runId, ...lease]))
     if (retries === 0) {
       expect(selected).toMatchObject({
@@ -442,6 +446,7 @@ it.each([0, 1])(
         engine: 'headless-engine',
         model: 'observed-model',
         attempt: 1,
+        tokens: expect.objectContaining({ read: { value: null, source: 'unknown' } }),
         diagnosis: expect.objectContaining({ kind: 'crash', elapsedMs: 12 }),
       }),
     ])
@@ -515,10 +520,16 @@ it.each([
         { host: 'pair-run', settings: () => ({ engine: 'headless-engine' }) },
       ),
     ).rejects.toThrow('interrupted after terminal settlement')
-    git('worktree', 'add', '-b', branch, worktree, 'main')
+    if (disposition !== 'complete') git('worktree', 'add', '-b', branch, worktree, 'main')
     let log: string | undefined
     for (let n = 0; n < 2; n++) {
-      const opened = JSON.parse(successful(['resume', runId, '--engine', 'codex']))
+      const opened =
+        n === 0
+          ? JSON.parse(successful(['resume', runId, '--engine', 'codex']))
+          : await openWorkflowSession(
+              { main, cwd: main, scriptDir: dirname(join(main, script)) },
+              { runId, engine: 'codex' },
+            )
       expect(opened.status).toBe(disposition)
       const rows = readTelemetry()
       expect(rows).toEqual([
@@ -531,11 +542,13 @@ it.each([
         }),
         expect.objectContaining({ type: 'run', status, steps: 1, durationMs: 12 }),
       ])
+      expect(rows[0]).not.toHaveProperty('effort')
       if (log !== undefined) expect(readRun('telemetry.jsonl')).toBe(log)
       log = readRun('telemetry.jsonl')
-      successful(['stop', runId, '--lease', opened.lease])
+      await stopSession(main, run, opened.lease)
     }
   },
+  15_000,
 )
 
 it('#696 AC-1/AC-4: resumes a completed headless run without recreating its worktree', async () => {

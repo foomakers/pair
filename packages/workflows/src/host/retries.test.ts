@@ -22,12 +22,13 @@ const malformed = { final: 'no JSON' }
 function startTest(steps: string, answers: readonly (AgentLaunchResult | Error)[]) {
   const files = createMemoryFiles()
   const rename = files.rename
-  let interruptedResult: string | undefined
+  const refused = new Map<string, { count: number; message: string }>()
   let interruptedRetry: string | undefined
   files.rename = async (from, to) => {
-    if (to === interruptedResult) {
-      interruptedResult = undefined
-      throw new Error('result write interrupted')
+    const failure = refused.get(to)
+    if (failure) {
+      if (--failure.count === 0) refused.delete(to)
+      throw new Error(failure.message)
     }
     await rename(from, to)
     if (to === statePath && interruptedRetry !== undefined) {
@@ -58,8 +59,11 @@ function startTest(steps: string, answers: readonly (AgentLaunchResult | Error)[
   return {
     sent,
     state,
+    refuseNextTelemetryWrites: (count: number) => {
+      refused.set('/run/telemetry.jsonl', { count, message: 'write refused' })
+    },
     interruptResultWrite: (id: string) => {
-      interruptedResult = `/run/steps/${id}/result.json`
+      refused.set(`/run/steps/${id}/result.json`, { count: 1, message: 'result write interrupted' })
     },
     interruptRetryReservation: (id: string) => {
       interruptedRetry = id
@@ -75,9 +79,9 @@ function startTest(steps: string, answers: readonly (AgentLaunchResult | Error)[
         .trim()
         .split('\n')
         .map(line => JSON.parse(line) as StepTelemetry),
-    run: async () => {
+    run: async (engine = 'fake') => {
       await start(run, { text, file: 'quick.yaml' }, { card: '704' })
-      return runSteps(host, run.dir, { host: 'pair-run', settings: () => ({ engine: 'fake' }) })
+      return runSteps(host, run.dir, { host: 'pair-run', settings: () => ({ engine }) })
     },
   }
 }
@@ -85,6 +89,24 @@ function startTest(steps: string, answers: readonly (AgentLaunchResult | Error)[
 const work = (options = '') => `  work: { kind: generic, skill: work${options} }`
 
 describe('#704: process retries', () => {
+  it.each([1, 2])(
+    '#704 F18: settles a persisted exhausted attempt from its original execution after %i refused writes',
+    async count => {
+      const test = startTest(work(', retries: 0'), [crash])
+      test.interruptResultWrite('work')
+      await expect(test.run('first-engine')).rejects.toThrow('result write interrupted')
+      test.refuseNextTelemetryWrites(count)
+      expect((await test.run('later-engine')).run).toBe('parked')
+      expect(test.sent).toHaveLength(1)
+      expect(test.telemetry()[0]).toMatchObject({
+        engine: 'first-engine',
+        durationMs: 83,
+        tokens: { read: { value: null, source: 'unknown' } },
+        diagnosis: { kind: 'crash' },
+      })
+    },
+  )
+
   it.each([crash, malformed])(
     'relaunches with the identical message and next attempt (AC-2)',
     async fault => {
@@ -144,6 +166,8 @@ describe('#704: process retries', () => {
     expect(entries).toEqual([
       expect.objectContaining({
         step: row.id,
+        host: 'pair-run',
+        engine: 'fake',
         attempt: 1,
         ...(row.round !== undefined && { round: row.round }),
         reason: 'fault',
@@ -236,7 +260,11 @@ it('#704 AC-4: records every fault even when a retry succeeds', async () => {
     elapsedMs: 83,
     stderrTail: ['before exit'],
   }
-  const attempts = [1, 2].map(attempt => ({ ...diagnosis, attempt }))
+  const attempts = [1, 2].map(attempt => ({
+    ...diagnosis,
+    attempt,
+    origin: { host: 'pair-run', engine: 'fake' },
+  }))
   expect(test.state().steps['work']).toMatchObject({ state: 'ok', executions: 3, attempts })
   const safeDiagnosis = { ...diagnosis, detail: '[redacted]', stderrTail: ['[redacted]'] }
   expect(test.telemetry().filter(entry => entry.type === 'step')).toEqual([

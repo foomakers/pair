@@ -509,7 +509,7 @@ function launcher(run: Launch) {
     )
     const model =
       actualModel ?? ('final' in outcome && engine.modelFlag ? settings.model : undefined)
-    return { ...outcome, model }
+    return { ...outcome, model, settings }
   }
 }
 

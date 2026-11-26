@@ -35,6 +35,7 @@ import {
   estimated,
   measured,
   recordMissingFaultSteps,
+  recoveredExecution,
   recordStep,
   type StepExecution,
   type TelemetryHost,
@@ -54,7 +55,7 @@ export interface StepEvent {
 export type AgentLaunchResult = (
   | { readonly final: string; readonly process?: ProcessDiagnostics }
   | { readonly fault: Diagnosis }
-) & { readonly model?: string | undefined }
+) & { readonly model?: string | undefined; readonly settings?: StepSettings }
 
 /**
  * What a host implements. The package decides what runs next and what its result means; the host
@@ -460,7 +461,8 @@ async function launchWithRetries(
     const reply = replyOf(launched, step.kind, Date.now() - start)
     if (!('fault' in reply)) return reply
     const origin = exchange.origin && {
-      ...exchange.origin,
+      ...(launched.settings ?? exchange.origin),
+      host: exchange.origin.host,
       ...(launched.model !== undefined && { model: launched.model }),
     }
     const next = await recordFault(run, step, reply.fault, origin)
@@ -471,12 +473,12 @@ async function launchWithRetries(
   }
 }
 
-function recoveredOrigin(origin: FaultAttempt['origin'], fallback: StepSettings) {
-  const { host = 'pair-run', ...settings } = origin ?? {}
-  return { host, settings: { ...fallback, ...settings, engine: origin?.engine ?? fallback.engine } }
+function recoveredOrigin(origin: FaultAttempt['origin']) {
+  const { host = 'pair-run', engine = 'unknown', model, effort } = origin ?? {}
+  return { host, settings: { engine, model, effort } }
 }
 
-function* recoverableFaults(run: RunDirectory, telemetry: TelemetryOptions, now: () => Date) {
+function* recoverableFaults(run: RunDirectory, now: () => Date) {
   const faults = faultsOf(run)
   if (faults.length === 0) return
   const steps = new Map(addressedSteps(frozenWorkflow(run)).map(step => [step.id, step]))
@@ -495,7 +497,7 @@ function* recoverableFaults(run: RunDirectory, telemetry: TelemetryOptions, now:
           attempt,
           ...(round !== undefined && { round }),
         },
-        ...recoveredOrigin(origin, telemetry.settings(id)),
+        ...recoveredOrigin(origin),
         // The exact start time was not persisted alongside the diagnosis.
         startedAt: recoveredAt,
         status,
@@ -521,6 +523,31 @@ function telemetryGuard(telemetry: TelemetryOptions) {
   }
 }
 
+function recordExhaustedTelemetry(
+  run: ObservedRun,
+  { launch, fault }: { launch: StepLaunch; fault: FaultAttempt },
+  result: StepExecutionResult,
+  startedAt: Date,
+) {
+  return recordStep(
+    run,
+    recoveredExecution({
+      step: launch,
+      startedAt,
+      status: result.status,
+      diagnosis: fault,
+      ...recoveredOrigin(fault.origin),
+      ...(result.reason !== undefined && { reason: result.reason }),
+      ...escalationOf(run.outcomes.find(outcome => outcome.id === launch.id)),
+    }),
+  )
+}
+
+function closeWithFaults(run: RunDirectory, status: RunEndStatus, now: () => Date) {
+  const faults = [...recoverableFaults(run, now)]
+  return faults.length === 0 ? closeRun(run, status) : recordMissingFaultSteps(run, faults, status)
+}
+
 /**
  * The run's telemetry, when it is on. It never fails a run: the first write error is reported, and
  * the run goes on without it.
@@ -541,10 +568,13 @@ export function telemetryWriter(run: ObservedRun, telemetry: TelemetryOptions) {
     )
   return {
     now,
+    host: telemetry.host,
     settings: telemetry.settings,
     reconcile: (terminal?: RunEndStatus) =>
-      safe(() => recordMissingFaultSteps(run, recoverableFaults(run, telemetry, now), terminal)),
+      safe(() => recordMissingFaultSteps(run, recoverableFaults(run, now), terminal)),
     step,
+    exhausted: (launch: StepLaunch, fault: FaultAttempt, result: StepExecutionResult) =>
+      safe(() => recordExhaustedTelemetry(run, { launch, fault }, result, now())),
     execution: (
       launch: StepLaunch,
       result: StepExecutionResult,
@@ -568,7 +598,7 @@ export function telemetryWriter(run: ObservedRun, telemetry: TelemetryOptions) {
         exchange.model,
       ),
     reopen: () => safe(() => reopenRun(run)),
-    close: (status: RunOutcome['run']) => safe(() => closeRun(run, status)),
+    close: (status: RunOutcome['run']) => safe(() => closeWithFaults(run, status, now)),
   }
 }
 
@@ -642,9 +672,15 @@ async function executeMetered(
   step: StepLaunch,
   writer: Writer,
 ): Promise<StepExecutionResult> {
-  const origin = host.id && { host: host.id, ...writer?.settings(step.id) }
+  const source = host.id ?? writer?.host
+  const origin = source && { host: source, ...writer?.settings(step.id) }
   const exchange: Exchange = { step, origin, sent: '', final: '' }
   if (writer === undefined) return execute(host, run, exchange)
+  if (step.exhaustedFault !== undefined) {
+    const result = await execute(host, run, exchange)
+    await writer.exhausted(step, step.exhaustedFault, result)
+    return result
+  }
   let startedAt = writer.now()
   const report = async (result: StepExecutionResult) => {
     const endedAt = writer.now()

@@ -1138,6 +1138,42 @@ it.each(['complete', 'parked', 'failed'])(
   },
 )
 
+it.each(['saved origin', 'legacy origin', 'telemetry originally off', 'existing row'])(
+  '#704 F18: recovers original settings for %s after project defaults change',
+  async variant => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      'version: 1\nname: quick\nsteps:\n  draft: { kind: generic, skill: pair-process-implement, retries: 0, escalate: { blocked: continue } }\n',
+    )
+    const skills = { 'pair-process-implement': () => undefined }
+    const ledger = join(runDir(), 'telemetry.jsonl')
+    const path = join(runDir(), 'state.json')
+    const read = () => JSON.parse(fs.readFileSync(ledger).split('\n')[0]!)
+    expect(
+      await run(['quick'], skills, {
+        telemetry: variant !== 'telemetry originally off',
+        engine: 'codex',
+      }),
+    ).toBe(0)
+    if (variant !== 'telemetry originally off') {
+      expect(read()).not.toHaveProperty('model')
+      if (variant !== 'existing row') await fs.unlink(ledger)
+    }
+    if (variant === 'legacy origin') {
+      const state = JSON.parse(fs.readFileSync(path))
+      delete state.steps.draft.attempts[0].origin
+      fs.writeFileSync(path, JSON.stringify(state))
+    }
+    write('pair.config.json', JSON.stringify({ run: { defaults: { model: 'later-model' } } }))
+    const count = launched.length
+    expect(await run(['quick'], skills, { telemetry: true, engine: 'pi' })).toBe(0)
+    expect(launched).toHaveLength(count)
+    expect(read().engine).toBe(variant === 'legacy origin' ? 'unknown' : 'codex')
+    expect(read()).not.toHaveProperty('model')
+    expect(read()).not.toHaveProperty('effort')
+  },
+)
+
 it('#704 F17: rechecks a completed run under lock before repairing its final telemetry', async () => {
   write(
     '.pair/adoption/tech/workflows/quick.yaml',
