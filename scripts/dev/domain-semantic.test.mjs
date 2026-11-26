@@ -148,15 +148,31 @@ export function createRetry(dto: RetryDto) {
   assert.match(JSON.parse(result.stdout).diagnostics[0].message, /createRetry\.cause/)
 })
 
-for (const [finding, property] of [
-  ['R6', 'message: string | null'],
-  ['R9', 'message?: string'],
+for (const { finding, property, declaration, column } of [
+  {
+    finding: 'R6',
+    property: 'message: string | null',
+    declaration: "interface Retry extends RetryDto { tag: 'retry' }",
+    column: 18,
+  },
+  {
+    finding: 'R9',
+    property: 'message?: string',
+    declaration: "interface Retry extends RetryDto { tag: 'retry' }",
+    column: 18,
+  },
+  {
+    finding: 'R10',
+    property: 'message: string | null',
+    declaration: "type Retry = { tag: 'retry' } & RetryDto",
+    column: 13,
+  },
 ]) {
-  test(`#750 ${finding} checks ${property} inherited from a DTO at the pilot declaration`, t => {
+  test(`#750 ${finding} reports DTO ${property} on the pilot declaration`, t => {
     const dto = 'src/http/retry.dto.ts'
     const cwd = workspace(t, {
       [pilot]: `import type { RetryDto } from './retry.dto.js'
-export interface Retry extends RetryDto { tag: 'retry' }
+export ${declaration}
 `,
       [dto]: 'export interface RetryDto { message: string }\n',
     })
@@ -164,10 +180,24 @@ export interface Retry extends RetryDto { tag: 'retry' }
 
     writeFileSync(join(cwd, dto), `export interface RetryDto { ${property} }\n`)
     const result = lint(cwd)
-    assert.deepEqual(findings(result), { status: 1, locations: [[pilot, semantic, 2, 18]] })
+    assert.deepEqual(findings(result), { status: 1, locations: [[pilot, semantic, 2, column]] })
     assert.match(JSON.parse(result.stdout).diagnostics[0].message, /Retry\.message/)
   })
 }
+
+test('#750 R10 checks the resolved intersection and reports direct syntax once', t => {
+  const cwd = workspace(t, {
+    [pilot]: `import type { RetryDto } from './retry.dto.js'
+export type Narrowed = RetryDto & { message: string }
+export type Direct = RetryDto & { message: string | null }
+`,
+    'src/http/retry.dto.ts': 'export interface RetryDto { message: string | null }\n',
+  })
+  assert.deepEqual(findings(lint(cwd)), {
+    status: 1,
+    locations: [[pilot, 'pair-domain(no-explicit-nullish-domain-types)', 3, 35]],
+  })
+})
 
 test('#750 R7 rejects optional DTO fields copied into a pilot factory result', t => {
   const source = `import type { RetryDto } from './retry.dto.js'
