@@ -1,6 +1,6 @@
 import { fileSystemService as fs } from '@pair/content-ops'
+import { create } from 'enhanced-resolve'
 import { execFileSync } from 'node:child_process'
-import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
@@ -12,17 +12,30 @@ const reviewedDeclarations = new Map([
 ])
 const nextCssModules = new Set(['*.module.css', '*.module.sass', '*.module.scss'])
 
-function resolveWorkspaceStylesheet(importer: string, stylesheet: string) {
+type ImportMode = 'import' | 'require'
+
+function resolveWorkspaceStylesheet(
+  root: string,
+  importer: string,
+  stylesheet: string,
+  mode: ImportMode,
+) {
+  // Match the production client conditions for the Vite and Next workspaces.
+  let conditions = ['node', 'node-addons']
+  if (importer.startsWith('packages/brand/')) {
+    conditions = ['module', 'browser', 'production']
+  } else if (importer.startsWith('apps/website/')) {
+    conditions = ['webpack', 'module', 'browser', 'production']
+  }
+  const resolveExport = create.sync({ conditionNames: [mode, ...conditions], fullySpecified: true })
   try {
-    return createRequire(importer).resolve(stylesheet)
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'MODULE_NOT_FOUND' || code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') return null
-    throw error
+    return resolveExport(join(root, dirname(importer)), stylesheet) || null
+  } catch {
+    return null
   }
 }
 
-function localStylesheet(root: string, importer: string, specifier: string) {
+function localStylesheet(root: string, importer: string, specifier: string, mode: ImportMode) {
   const stylesheet = specifier.split(/[?#]/, 1)[0]
   if (!stylesheet || !/\.(?:css|sass|scss)$/.test(stylesheet)) return undefined
   if (/^\.\.?\//.test(stylesheet)) return resolve(root, dirname(importer), stylesheet)
@@ -33,7 +46,7 @@ function localStylesheet(root: string, importer: string, specifier: string) {
     return join(root, 'packages/brand/src', stylesheet.slice(1))
   }
   if (stylesheet.startsWith('@pair/')) {
-    return resolveWorkspaceStylesheet(resolve(root, importer), stylesheet)
+    return resolveWorkspaceStylesheet(root, importer, stylesheet, mode)
   }
   return undefined
 }
@@ -97,17 +110,23 @@ function effectiveTypeProblems(root: string, paths: string[], sources: Set<strin
   return problems
 }
 
-function moduleSpecifier(node: ts.Node) {
-  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier
-  if (ts.isExternalModuleReference(node)) return node.expression
-  if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) return node.argument.literal
+function moduleSpecifier(
+  node: ts.Node,
+): { specifier: ts.Node | undefined; mode: ImportMode } | undefined {
+  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+    return { specifier: node.moduleSpecifier, mode: 'import' }
+  }
+  if (ts.isExternalModuleReference(node)) return { specifier: node.expression, mode: 'require' }
+  if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+    return { specifier: node.argument.literal, mode: 'import' }
+  }
   if (ts.isCallExpression(node)) {
     const { expression } = node
-    if (
-      expression.kind === ts.SyntaxKind.ImportKeyword ||
-      (ts.isIdentifier(expression) && expression.text === 'require')
-    ) {
-      return node.arguments[0]
+    if (expression.kind === ts.SyntaxKind.ImportKeyword) {
+      return { specifier: node.arguments[0], mode: 'import' }
+    }
+    if (ts.isIdentifier(expression) && expression.text === 'require') {
+      return { specifier: node.arguments[0], mode: 'require' }
     }
   }
   return undefined
@@ -123,21 +142,19 @@ function sourceProblems(root: string, path: string): string[] {
     fs.readFileSync(join(root, path)),
     ts.ScriptTarget.Latest,
   )
-  const specifiers: string[] = []
+  if (hasAmbientStylesheets(source)) problems.push(`Ambient CSS declaration: ${path}`)
   const visit = (node: ts.Node) => {
-    const specifier = moduleSpecifier(node)
-    if (specifier && ts.isStringLiteralLike(specifier)) specifiers.push(specifier.text)
+    const reference = moduleSpecifier(node)
+    if (reference?.specifier && ts.isStringLiteralLike(reference.specifier)) {
+      const specifier = reference.specifier.text
+      const stylesheet = localStylesheet(root, path, specifier, reference.mode)
+      if (stylesheet === null || (stylesheet && !isFile(stylesheet))) {
+        problems.push(`Missing stylesheet: ${path} imports ${specifier}`)
+      }
+    }
     ts.forEachChild(node, visit)
   }
   visit(source)
-
-  if (hasAmbientStylesheets(source)) problems.push(`Ambient CSS declaration: ${path}`)
-  for (const specifier of specifiers) {
-    const stylesheet = localStylesheet(root, path, specifier)
-    if (stylesheet === null || (stylesheet && !isFile(stylesheet))) {
-      problems.push(`Missing stylesheet: ${path} imports ${specifier}`)
-    }
-  }
   return problems
 }
 

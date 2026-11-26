@@ -48,6 +48,7 @@
     "@stryker-mutator/vitest-runner": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
+    "enhanced-resolve": "catalog:",
     "ts-node": "catalog:",
     "@typescript/native": "catalog:",
     "typescript": "catalog:typescript-api",
