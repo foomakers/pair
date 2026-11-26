@@ -98,3 +98,85 @@ describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
     expect(result.map(card => card.outcome)).toEqual(['done', 'skipped'])
   })
 })
+
+it('reconciles an externally completed failure and starts its dependent without relaunching it', async () => {
+  vi.useFakeTimers()
+  try {
+    const cards = [
+      { id: '750', prerequisites: [] },
+      { id: '757', prerequisites: [] },
+      { id: '758', prerequisites: ['757'] },
+    ]
+    let externallyCompleted = false
+    let finish!: () => void
+    const peer = new Promise<void>(resolve => {
+      finish = resolve
+    })
+    const launched: string[] = []
+    const running = scheduleWorkflowCards(
+      cards,
+      {
+        limit: 2,
+        polling: {
+          intervalMs: 30_000,
+          watches: result => result.id === '757' && result.outcome === 'failed',
+          keepsAlive: () => false,
+          ready: () => false,
+          refresh: result =>
+            externallyCompleted && result.id === '757'
+              ? { id: result.id, outcome: 'done' }
+              : undefined,
+        },
+      },
+      new Map(),
+      async ({ id }) => {
+        launched.push(id)
+        if (id === '750') await peer
+        return { id, outcome: id === '757' ? 'failed' : 'done' }
+      },
+    )
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(launched).toEqual(['750', '757'])
+    externallyCompleted = true
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(launched).toEqual(['750', '757', '758'])
+    finish()
+    expect((await running).map(result => result.outcome)).toEqual(['done', 'done', 'done'])
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('keeps a recoverable gate waiting without using a slot and retries it when ready', async () => {
+  vi.useFakeTimers()
+  try {
+    let ready = false
+    const launches: string[] = []
+    const cards = ['757', '750'].map(id => ({ id, prerequisites: [] }))
+    const running = scheduleWorkflowCards(
+      cards,
+      {
+        limit: 1,
+        polling: {
+          intervalMs: 30_000,
+          watches: result => result.outcome === 'failed',
+          keepsAlive: result => result.id === '757',
+          ready: async () => ready,
+        },
+      },
+      new Map(),
+      async ({ id }) => {
+        launches.push(id)
+        return { id, outcome: id === '757' && !ready ? 'failed' : 'done' }
+      },
+    )
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(launches).toEqual(['757', '750'])
+    ready = true
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(launches).toEqual(['757', '750', '757'])
+    expect((await running).map(result => result.outcome)).toEqual(['done', 'done'])
+  } finally {
+    vi.useRealTimers()
+  }
+})

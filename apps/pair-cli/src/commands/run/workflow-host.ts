@@ -69,6 +69,7 @@ import {
   hostSteps,
   refreshReplayInputs,
   riskTagFamily,
+  worktreeMismatch,
 } from '@pair/workflows/cli'
 import { prepareCardWorktree } from '@pair/workflows/worktree'
 import { loadConfigWithOverrides } from '#config'
@@ -862,10 +863,33 @@ function exhaustedEnding(
   return exit
 }
 
-function reportRunOutcome(opened: Opened, outcome: RunOutcome): void {
-  opened.report?.({
+function verifyGateRecovery(
+  opened: Opened,
+  outcome: RunOutcome,
+  fs: Services['fs'],
+): (() => Promise<boolean>) | undefined {
+  const { worktree, request, runDir } = opened
+  if (outcome.last?.reason !== 'gate-worktree-mismatch' || worktree === undefined) return undefined
+  const state = savedRunState({ card: request.card, restart: false }, runDir, fs)
+  const head = state?.latest?.['reviewedHead']
+  if (typeof head !== 'string') return undefined
+  return async () => (await worktreeMismatch(runHostProcess, worktree, head)) === undefined
+}
+
+function reportRunOutcome(opened: Opened, outcome: RunOutcome, fs: Services['fs']): void {
+  if (opened.report === undefined) return
+  const retryWhen = verifyGateRecovery(opened, outcome, fs)
+  opened.report({
     id: opened.request.card,
     outcome: outcome.run,
+    ...(retryWhen && { retryWhen }),
+    ...(outcome.run === 'failed' && {
+      failedCheckpoint: {
+        runDir: opened.runDir,
+        version: checkpointVersion(fs, opened.runDir),
+        workflow: opened.resolved.workflow.name,
+      },
+    }),
     ...(outcome.run === 'skipped' &&
       outcome.last?.reason === 'card-held' && {
         skipReason: outcome.last.reason,
@@ -914,7 +938,7 @@ async function runOnConsole(
       runDir,
       telemetryOf(config, opened),
     )
-    reportRunOutcome(opened, outcome)
+    reportRunOutcome(opened, outcome, services.fs)
     reportProcessFaults(outcome.faults)
     const ending = { sink, fs: services.fs, verbose: config.verbose === true }
     return exhaustedEnding(opened, outcome, ending) ?? conclude(outcome, opened, sink)

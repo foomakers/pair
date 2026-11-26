@@ -51,6 +51,12 @@ export interface BatchOutcome {
   readonly reason?: string
   readonly skipReason?: 'card-held'
   readonly checkpoint?: { readonly runDir: string; version: string }
+  readonly retryWhen?: () => Promise<boolean>
+  readonly failedCheckpoint?: {
+    readonly runDir: string
+    version: string
+    readonly workflow: string
+  }
 }
 
 const isCompleted = (result: BatchOutcome | undefined) =>
@@ -76,7 +82,7 @@ export async function scheduleWorkflowCards<T extends Schedulable>(
     limit,
     ready: card => blocked(card.id).length === 0,
     mayStart: () => !isInterrupted(),
-    ...(polling && { polling }),
+    ...(polling && { polling: withRefresh(polling, prior) }),
     worker: async card => {
       const result = await launch(card)
       prior.set(card.id, result)
@@ -99,6 +105,20 @@ export async function scheduleWorkflowCards<T extends Schedulable>(
     },
   })
   return cards.map(({ id }) => withOutsideDependencies(prior.get(id)!, graph.get(id)?.outside))
+}
+
+function withRefresh(
+  polling: NonNullable<PoolInput<never, BatchOutcome>['polling']>,
+  prior: Map<string, BatchOutcome>,
+) {
+  return {
+    ...polling,
+    refresh: (result: BatchOutcome) => {
+      const update = polling.refresh?.(result)
+      if (update !== undefined) prior.set(update.id, update)
+      return update
+    },
+  }
 }
 
 function withOutsideDependencies(
@@ -461,10 +481,55 @@ function batchLauncher(
   return { launch, displayed }
 }
 
+function refreshCompletedCard(
+  fs: Services['fs'],
+  sink: ConsoleSink,
+  result: BatchOutcome,
+): BatchOutcome | undefined {
+  const checkpoint = result.failedCheckpoint
+  if (checkpoint === undefined) return undefined
+  const version = checkpointVersion(fs, checkpoint.runDir)
+  if (version === checkpoint.version) return undefined
+  const lock = acquireRunLock(checkpoint.runDir)
+  if (lock.kind !== 'acquired') return undefined
+  try {
+    checkpoint.version = version
+    if (
+      !completedRun(
+        { files: fs, dir: checkpoint.runDir },
+        { card: result.id, workflow: checkpoint.workflow },
+      )
+    )
+      return undefined
+    sink.event({ event: 'card-end', card: result.id, status: 'completed' })
+    return { id: result.id, outcome: 'done' }
+  } finally {
+    lock.release()
+  }
+}
+
+async function mayRetryCheckpoint(fs: Services['fs'], result: BatchOutcome): Promise<boolean> {
+  if (result.retryWhen !== undefined) return result.retryWhen()
+  const checkpoint = result.checkpoint
+  if (checkpoint === undefined) return false
+  const version = checkpointVersion(fs, checkpoint.runDir)
+  if (version === checkpoint.version) return false
+  const lock = acquireRunLock(checkpoint.runDir)
+  if (lock.kind !== 'acquired') return false
+  try {
+    const saved = savedWorkflow({ card: result.id, restart: false }, checkpoint.runDir, fs)
+    checkpoint.version = version
+    return saved !== undefined && checkpointCanResume(saved.workflow, saved.state)
+  } finally {
+    lock.release()
+  }
+}
+
 function watchBatchCheckpoints(
   fs: Services['fs'],
   prior: Map<string, BatchOutcome>,
   intervalMs: number,
+  sink: ConsoleSink,
 ) {
   const resumed = new Set<string>()
   const watches = new Map<string, () => void>()
@@ -479,23 +544,15 @@ function watchBatchCheckpoints(
   }
   const polling: NonNullable<PoolInput<never, BatchOutcome>['polling']> = {
     intervalMs,
-    watches: result => result.checkpoint !== undefined,
-    ready: result => {
-      const checkpoint = result.checkpoint!
-      const version = checkpointVersion(fs, checkpoint.runDir)
-      if (version === checkpoint.version) return false
-      const lock = acquireRunLock(checkpoint.runDir)
-      if (lock.kind !== 'acquired') return false
-      try {
-        const saved = savedWorkflow({ card: result.id, restart: false }, checkpoint.runDir, fs)
-        checkpoint.version = version
-        if (!saved || !checkpointCanResume(saved.workflow, saved.state)) return false
-        prior.delete(result.id)
-        resumed.add(result.id)
-        return true
-      } finally {
-        lock.release()
-      }
+    watches: ({ checkpoint, failedCheckpoint }) =>
+      checkpoint !== undefined || failedCheckpoint !== undefined,
+    keepsAlive: result => result.checkpoint !== undefined || result.retryWhen !== undefined,
+    refresh: result => refreshCompletedCard(fs, sink, result),
+    ready: async result => {
+      if (!(await mayRetryCheckpoint(fs, result))) return false
+      prior.delete(result.id)
+      resumed.add(result.id)
+      return true
     },
   }
   return { watch, polling, resumed, release: () => watches.forEach(release => release()) }
@@ -512,7 +569,6 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
       services.fs.mkdirSync(member, { recursive: true })
   }
   const releases = new Set<() => void>()
-  const checkpoint = watchBatchCheckpoints(services.fs, prior, intervalMs)
   const sink = createConsoleSink({
     out: process.stdout,
     err: process.stderr,
@@ -520,6 +576,7 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
     color: config.noColor !== true && process.env['NO_COLOR'] === undefined,
     plain: config.verbose !== true,
   })
+  const checkpoint = watchBatchCheckpoints(services.fs, prior, intervalMs, sink)
   const restore = routeConsoleTo(sink)
   const { launch, displayed } = batchLauncher(input, plan, sink, { releases, checkpoint })
   try {

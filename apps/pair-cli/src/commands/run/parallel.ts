@@ -103,7 +103,9 @@ export interface PoolInput<T, Outcome = CardOutcome> {
   readonly polling?: {
     readonly intervalMs: number
     readonly watches: (result: Outcome) => boolean
-    readonly ready: (result: Outcome) => boolean
+    readonly ready: (result: Outcome) => boolean | Promise<boolean>
+    readonly keepsAlive?: (result: Outcome) => boolean
+    readonly refresh?: (result: Outcome) => Outcome | undefined
   }
 }
 
@@ -161,7 +163,12 @@ async function waitForPool<T, Outcome>(
   if (!elapsed || !mayStart()) return
   for (const index of suspended) {
     try {
-      if (!polling.ready(results[index]!)) continue
+      const refreshed = polling.refresh?.(results[index]!)
+      if (refreshed !== undefined) {
+        results[index] = refreshed
+        continue
+      }
+      if (!(await polling.ready(results[index]!))) continue
     } catch (error) {
       results[index] = input.onWorkerError(input.items[index]!, error)
       continue
@@ -200,6 +207,22 @@ function fillPool<T, Outcome>(
   }
 }
 
+function watchedResults<T, Outcome>(input: PoolInput<T, Outcome>, results: Outcome[]) {
+  const { polling } = input
+  return polling && (input.mayStart?.() ?? true)
+    ? results.flatMap((result, index) => (polling.watches(result) ? [index] : []))
+    : []
+}
+
+function poolMayWait<T, Outcome>(
+  input: PoolInput<T, Outcome>,
+  results: Outcome[],
+  watched: readonly number[],
+): boolean {
+  const keepsAlive = input.polling?.keepsAlive
+  return watched.some(index => keepsAlive?.(results[index]!) ?? true)
+}
+
 export async function runPool<T, Outcome = CardOutcome>(
   input: PoolInput<T, Outcome>,
 ): Promise<Outcome[]> {
@@ -215,12 +238,8 @@ export async function runPool<T, Outcome = CardOutcome>(
       for (const index of pending.splice(0)) results[index] = input.notStarted(input.items[index]!)
     }
     fillPool(input, { ...state, pending }, ready)
-    const polling = input.polling
-    const suspended =
-      polling && mayStart()
-        ? results.flatMap((result, index) => (polling.watches(result) ? [index] : []))
-        : []
-    if (active.size === 0 && suspended.length === 0) {
+    const suspended = watchedResults(input, results)
+    if (active.size === 0 && !poolMayWait(input, results, suspended)) {
       for (const index of pending) results[index] = input.notStarted(input.items[index]!)
       break
     }

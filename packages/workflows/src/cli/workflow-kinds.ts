@@ -48,7 +48,7 @@ function runStepGates(
   }
 }
 
-async function worktreeMismatch(
+export async function worktreeMismatch(
   runHostProcess: HostProcess,
   worktree: string,
   reviewedHead: string,

@@ -4,7 +4,7 @@ export { runHostProcess, type HostProcess, type HostProcessResult } from '../wor
 export { approvalPlatform, approvalRunner, type ApprovalPlatform } from './workflow-approval'
 export { assignCard, runWorkflowOperation, stepFacts, type HostOperation } from './workflow-facts'
 export { operationTimeout } from './workflow-facts-budget'
-export { hostGateRunners } from './workflow-kinds'
+export { hostGateRunners, worktreeMismatch } from './workflow-kinds'
 export { workflowMerge } from './workflow-merge'
 export { refreshReplayInputs } from './workflow-replay'
 export { hostSteps } from './host-steps'
