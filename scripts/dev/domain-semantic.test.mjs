@@ -429,6 +429,45 @@ test('#750 R3 fails package lint when an imported type is no longer exported', t
   }
 })
 
+for (const { route, source, imports, causeType, location, importer } of [
+  {
+    route: 'direct',
+    source: model('cause: Cause', "import './causes.js'\n"),
+    causeType: 'string | null',
+    location: [pilot, semantic, 3, 3],
+    importer: pilot,
+  },
+  {
+    route: 'transitive with an independent domain finding',
+    source: model(
+      'cause: Cause\n  detail: Detail',
+      "import './inputs.js'\ntype Detail = string | null\n",
+    ),
+    imports: { 'src/http/inputs.ts': "import './causes.js'\n" },
+    causeType: 'string',
+    location: [pilot, semantic, 5, 3],
+    importer: 'src/http/inputs.ts',
+  },
+]) {
+  test(`#750 750-R20 AC-4 rejects a missing side-effect import (${route})`, t => {
+    const causes = 'src/http/causes.ts'
+    const cwd = workspace(t, {
+      [pilot]: source,
+      ...imports,
+      [causes]: `export {}\ndeclare global { type Cause = ${causeType} }\n`,
+    })
+    assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [location] })
+
+    rmSync(join(cwd, causes))
+    const { status, stderr, stdout } = lint(cwd)
+    const output = stdout + stderr
+    assert.equal(status, 2, output)
+    assert.ok(stderr.includes(`${importer}: TS2882`), output)
+    assert.ok(stderr.includes('./causes.js'), output)
+    assert.ok(!output.includes(semantic), output)
+  })
+}
+
 test('#750 AC-4 package lint distinguishes project-load errors from findings', t => {
   const cwd = workspace(t, { [pilot]: model('cause: unknown') })
   const project = join(cwd, 'tsconfig.json')
