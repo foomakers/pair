@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { hostname } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, isAbsolute, join } from 'node:path'
 import { pidIsAlive } from './lock-support'
 import { sessionOwnerAlive } from './run-lock'
 
@@ -13,6 +13,8 @@ import { sessionOwnerAlive } from './run-lock'
 export interface SessionOwner {
   readonly runId: string
   readonly token: string
+  /** The run lease can live outside the configured card-lock area. */
+  readonly runDirectory?: string
 }
 
 function sessionOwner(value: unknown): SessionOwner | undefined {
@@ -22,8 +24,16 @@ function sessionOwner(value: unknown): SessionOwner | undefined {
     /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(owner.runId) &&
     !owner.runId.includes('..') &&
     typeof owner.token === 'string'
-  )
-    return { runId: owner.runId, token: owner.token }
+  ) {
+    const dir = owner.runDirectory
+    return {
+      runId: owner.runId,
+      token: owner.token,
+      ...(typeof dir === 'string' &&
+        isAbsolute(dir) &&
+        basename(dir) === owner.runId && { runDirectory: dir }),
+    }
+  }
   return undefined
 }
 
@@ -65,6 +75,10 @@ export function livenessOf(path: string, isAlive: (pid: number) => boolean = pid
   const alive =
     session === undefined
       ? isAlive(pid)
-      : sessionOwnerAlive(join(dirname(path), '../../runs', session.runId), session.token, isAlive)
+      : sessionOwnerAlive(
+          session.runDirectory ?? join(dirname(path), '../../runs', session.runId),
+          session.token,
+          isAlive,
+        )
   return { state: alive ? 'alive' : 'dead', pid }
 }

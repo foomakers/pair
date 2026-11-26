@@ -1,4 +1,4 @@
-import { basename, join } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { configurationText, type Configuration } from '../configuration'
 import { buildMessage } from '../dispatch'
 import {
@@ -50,7 +50,8 @@ import { approvalQuestion, type ApprovalTarget } from './workflow-approval'
 import { runWorkflowOperation, type Operation } from './workflow-facts'
 import { workflowMerge } from './workflow-merge'
 import { refreshReplayInputs } from './workflow-replay'
-import { readMessage, readText, sessionFiles } from './session-files'
+import { projectConfig, readMessage, readText, sessionFiles } from './session-files'
+import { resolveWorkingPathOverride } from './working-area'
 import {
   checkWorkflowConfiguration,
   controlStateScript,
@@ -271,16 +272,19 @@ async function finishSessionClosure(
 }
 
 function withCardSessionLease<T>(
+  main: string,
   run: RunDirectory,
   input: { engine: string; card?: string } | { token: string },
   command: Parameters<typeof withSessionLease<T>>[2],
 ): Promise<T> {
+  const config = projectConfig(main) ?? projectConfig(main, 'config.json')
+  const workingArea = resolve(main, resolveWorkingPathOverride(config))
   return withSessionLease(run.dir, input, async lease => {
     const card = ('card' in input && input.card) || requireState(run).card
     const outcome = acquireCardLock({
-      workingArea: join(run.dir, '../..'),
+      workingArea,
       card,
-      session: { runId: basename(run.dir), token: lease.token },
+      session: { runId: basename(run.dir), token: lease.token, runDirectory: run.dir },
     })
     if (outcome.kind === 'held') throw new Error(`card-locked: ${outcome.path}`)
     try {
@@ -305,6 +309,7 @@ export async function openSession(project: Project, input: OpenInput) {
   else if (!hasState()) throw new Error(`run-not-found: ${runId}`)
 
   return withCardSessionLease(
+    project.main,
     run,
     { engine: input.engine, ...('card' in input && { card: input.card }) },
     async lease => {
@@ -511,7 +516,7 @@ export async function nextSession(
   token: string,
   answer?: string,
 ) {
-  return withCardSessionLease<SessionNext>(run, { token }, async lease => {
+  return withCardSessionLease<SessionNext>(project.main, run, { token }, async lease => {
     if (answer !== undefined && lease.approval === undefined)
       throw new Error('The workflow must be parked at an approval shown in this session')
     if (lease.approval !== undefined && answer === undefined)
@@ -556,7 +561,7 @@ export async function recordSession(
     usage?: Usage | undefined
   },
 ) {
-  return withCardSessionLease(run, { token }, async lease => {
+  return withCardSessionLease(project.main, run, { token }, async lease => {
     const { launch } = lease
     const { step, file, model, attempt, usage } = input
     if (launch?.id !== step || launch.attempt !== (attempt ?? 1))
@@ -588,8 +593,8 @@ export async function recordSession(
   })
 }
 
-export async function renewSession(run: RunDirectory, token: string) {
-  return withCardSessionLease(run, { token }, async lease => ({
+export async function renewSession(main: string, run: RunDirectory, token: string) {
+  return withCardSessionLease(main, run, { token }, async lease => ({
     result: { renewed: true },
     ...(lease.launch !== undefined && { launch: lease.launch }),
     launchStartedAt: lease.launchStartedAt,
@@ -597,8 +602,8 @@ export async function renewSession(run: RunDirectory, token: string) {
   }))
 }
 
-export async function stopSession(run: RunDirectory, token: string) {
-  return withCardSessionLease(run, { token }, async () => ({
+export async function stopSession(main: string, run: RunDirectory, token: string) {
+  return withCardSessionLease(main, run, { token }, async () => ({
     result: { stopped: true },
     stop: true,
   }))

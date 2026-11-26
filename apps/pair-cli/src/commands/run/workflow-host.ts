@@ -62,6 +62,7 @@ import {
   declaredEngine,
   declaredEngineModel,
   declaredRunIdleTimeout,
+  projectWorkingArea,
   resolveAutonomyFor,
   withRunAgentRunner,
 } from './run-context'
@@ -1271,7 +1272,7 @@ async function runWithCardLock(
 ): Promise<number> {
   const { resolved, request } = opened
   const cardLock = (services.deps.acquireLock ?? acquireCardLock)({
-    workingArea: join(resolved.main, '.pair/working'),
+    workingArea: projectWorkingArea(services.fs, resolved.cwd, resolved.main, resolved.project),
     card: request.card,
   })
   if (cardLock.kind !== 'acquired') {

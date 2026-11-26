@@ -92,8 +92,8 @@ function operate(
   const run = sessionRun(project.main, target)
   const lease = required('lease', values.lease)
   if (command === 'next') return nextSession(project, run, lease, values.answer)
-  if (command === 'renew') return renewSession(run, lease)
-  if (command === 'stop') return stopSession(run, lease)
+  if (command === 'renew') return renewSession(project.main, run, lease)
+  if (command === 'stop') return stopSession(project.main, run, lease)
   return recordSession(project, run, lease, {
     step,
     file: required('result', values.result),

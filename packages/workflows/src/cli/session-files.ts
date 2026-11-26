@@ -37,8 +37,11 @@ export const yamlFiles = (dir: string): string[] =>
         .map(entry => entry.name)
     : []
 
-export function projectConfig(root: string): Record<string, unknown> | undefined {
-  const text = readOptional(join(root, 'pair.config.json'))
+export function projectConfig(
+  root: string,
+  file = 'pair.config.json',
+): Record<string, unknown> | undefined {
+  const text = readOptional(join(root, file))
   return text === undefined ? undefined : (JSON.parse(text) as Record<string, unknown>)
 }
 
