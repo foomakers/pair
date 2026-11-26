@@ -214,6 +214,11 @@ async function verifyConfiguredSkill(
   })
   expect(absent.stderr).toContain(`skill '${skill}' is not installed`)
   expect(absent.status).toBe(1)
+  expect(
+    await handleRunCommand(cli, fs, {
+      workflow: { readCard: async () => ({ title: 'Prepare release notes' }) },
+    }),
+  ).toBe(1)
   write(root, exact, vendorSkill)
 }
 
@@ -222,6 +227,56 @@ afterEach(() => {
   for (const root of roots.splice(0))
     fileSystemService.rmSync(root, { recursive: true, force: true })
 })
+
+it.each([
+  ['legacy dataset_registries', { dataset_registries: { skills: teamRegistry } }, customTarget, 0],
+  [
+    'legacy target_path',
+    { asset_registries: { skills: { target_path: customTarget } } },
+    customTarget,
+    0,
+  ],
+  ['old bundle target', { asset_registries: { skills: teamRegistry } }, defaultTarget, 1],
+  ['unconfigured OpenCode target', {}, '.opencode/skills', 1],
+] as const)(
+  'R754-06: both hosts probe the effective registry with %s',
+  async (_, legacy, target, status) => {
+    const fs = fileSystemService
+    const root = fs.mkdtempSync(join(tmpdir(), 'pair-skill-registry-'))
+    roots.push(root)
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    write(root, 'pair.config.json', JSON.stringify({ worktreeRoot: 'worktrees' }))
+    write(root, 'config.json', JSON.stringify(legacy))
+    write(root, `${target}/vendor-notes/SKILL.md`, vendorSkill)
+    write(
+      root,
+      'explicit.yaml',
+      'version: 1\nname: explicit\nsteps:\n  notes: { kind: generic, skill: vendor-notes }\n',
+    )
+    const script = `${defaultTarget}/pair-capability-workflow/scripts/workflow.mjs`
+    write(
+      root,
+      script,
+      fs.readFileSync(join(DATASET, '.skills/capability/workflow/scripts/workflow.mjs')),
+    )
+
+    const cli = parseRunCommand({ card: '42', cwd: root, dryRun: true }, ['explicit.yaml'])
+    expect
+      .soft(
+        await handleRunCommand(cli, fs, {
+          workflow: { readCard: async () => ({ title: 'Prepare release notes' }) },
+        }),
+      )
+      .toBe(status)
+    const session = spawnSync(process.execPath, [script, 'validate', 'explicit.yaml'], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 5_000,
+    })
+    expect(session.status, session.error?.message ?? session.stderr).toBe(status)
+  },
+)
 
 it.each([
   {
