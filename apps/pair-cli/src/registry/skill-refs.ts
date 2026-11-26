@@ -204,5 +204,6 @@ export async function reconcileSkillNameRegistry(
   // manifest is left un-updated for a run that partially applied its rewrites.
   // Low impact by design — rewriting is idempotent, so the next successful run
   // re-diffs against the still-valid (if stale) previous map and self-corrects.
-  await writeSkillNameManifest(fs, manifestPath, skillNameMap)
+  const targets = registries['skills']?.targets.map(target => target.path)
+  await writeSkillNameManifest(fs, manifestPath, skillNameMap, targets)
 }

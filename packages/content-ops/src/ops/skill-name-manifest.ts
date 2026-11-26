@@ -19,6 +19,7 @@ import type { SkillNameMap } from './skill-reference-rewriter'
 
 export type SkillNameManifest = {
   version: 1
+  targets?: readonly string[]
   skills: Record<string, string>
 }
 
@@ -51,9 +52,11 @@ export async function writeSkillNameManifest(
   fileService: FileSystemService,
   manifestPath: string,
   skillNameMap: SkillNameMap,
+  targets?: readonly string[],
 ): Promise<void> {
   const manifest: SkillNameManifest = {
     version: 1,
+    ...(targets && { targets }),
     skills: Object.fromEntries(skillNameMap),
   }
   // Owns its own directory. `.pair/` used to exist only as a side effect of another

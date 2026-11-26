@@ -98,12 +98,9 @@ function bundleLayout(project: Project) {
 function installedSkillPaths(project: Project, name: string, root = project.main) {
   const registry = sessionSkillsLayout(root, project.main)
   const bundle = bundleLayout(project)
-  return [
-    ...(bundle === undefined
-      ? []
-      : defaultSkillPaths(root, { targets: [bundle.target], prefix: bundle.prefix }, name)),
-    ...defaultSkillPaths(root, registry, name),
-  ]
+  const layouts = [registry]
+  if (bundle) layouts.push({ targets: [bundle.target], prefix: bundle.prefix })
+  return defaultSkillPaths(sessionFiles, root, layouts, name)
 }
 
 export function sessionDefaultSkill(project: Project, name: string): string | undefined {

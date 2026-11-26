@@ -54,8 +54,8 @@ export function locateCycleScripts(
   config: Config,
   projectRoot: string,
 ): CycleScriptsLocation {
-  const found = defaultSkillPaths(projectRoot, skillsLayout(config), CYCLE_SKILL_NAME).find(dir =>
-    fs.existsSync(join(dir, 'SKILL.md')),
+  const found = defaultSkillPaths(fs, projectRoot, [skillsLayout(config)], CYCLE_SKILL_NAME).find(
+    dir => fs.existsSync(join(dir, 'SKILL.md')),
   )
   if (found !== undefined) return { scriptsDir: join(found, 'scripts') }
   throw new Error(

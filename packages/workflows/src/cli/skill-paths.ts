@@ -1,4 +1,5 @@
-import { basename, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import type { RunFiles } from '../engine'
 import { isPlainObject, registryEntries, registryTargets } from './project-config'
 
 export function skillsLayout(config: unknown) {
@@ -8,6 +9,11 @@ export function skillsLayout(config: unknown) {
     targets: registryTargets('skills', skills).map(target => target.path),
     prefix: skills['prefix'] == null ? undefined : String(skills['prefix']),
   }
+}
+
+function withinDirectory(root: string, path: string): boolean {
+  const child = relative(root, path)
+  return child !== '..' && !child.startsWith(`..${sep}`) && !isAbsolute(child)
 }
 
 /** Candidate directories in install order for a skill named in a workflow. */
@@ -26,10 +32,7 @@ export function skillPaths(
     const directory = resolve(root, target)
     return names
       .map(candidate => resolve(directory, candidate))
-      .filter(path => {
-        const inside = relative(directory, path)
-        return inside !== '' && !inside.startsWith('..') && !isAbsolute(inside)
-      })
+      .filter(path => path !== directory && withinDirectory(directory, path))
   })
 }
 
@@ -44,12 +47,23 @@ export function findSkillFile(
     .find(isFile)
 }
 
-/** A built-in name in the installed layout, followed by its legacy aliases in each target. */
-export function defaultSkillPaths(
-  root: string,
-  layout: ReturnType<typeof skillsLayout>,
-  name: string,
-) {
+type Layout = ReturnType<typeof skillsLayout>
+type Files = Pick<RunFiles, 'existsSync' | 'readFileSync'>
+
+function installedNames(fs: Files, root: string) {
+  const file = join(root, '.pair', '.skill-name-map.json')
+  if (!fs.existsSync(file)) return undefined
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(file))
+    return isPlainObject(parsed) && parsed['version'] === 1 && isPlainObject(parsed['skills'])
+      ? { skills: parsed['skills'], targets: parsed['targets'] }
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function layoutCandidates(root: string, layout: Layout, name: string) {
   const bare = name.replace(/^pair-/, '')
   const installed = [layout.prefix, bare].filter(Boolean).join('-')
   return layout.targets.flatMap(target => [
@@ -57,6 +71,35 @@ export function defaultSkillPaths(
     ...skillPaths(root, [target], layout.prefix, name),
     ...skillPaths(root, [target], undefined, bare),
   ])
+}
+
+/** Installer identity wins after a one-off configuration or an update retaining old aliases. */
+export function defaultSkillPaths(
+  fs: Files,
+  root: string,
+  layouts: readonly Layout[],
+  name: string,
+): string[] {
+  const manifest = installedNames(fs, root)
+  const short = name.replace(/^pair-(?:(?:process|capability|workflow)-)?/, '')
+  const installed = manifest?.skills[short]
+  if (typeof installed === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(installed)) {
+    const targets = Array.isArray(manifest?.targets)
+      ? manifest.targets.filter(
+          (target): target is string =>
+            typeof target === 'string' &&
+            !isAbsolute(target) &&
+            withinDirectory(root, resolve(root, target)),
+        )
+      : []
+    return skillPaths(
+      root,
+      [...targets, ...layouts.flatMap(layout => layout.targets)],
+      undefined,
+      installed,
+    )
+  }
+  return layouts.flatMap(layout => layoutCandidates(root, layout, name))
 }
 
 export function findDefaultSkill(

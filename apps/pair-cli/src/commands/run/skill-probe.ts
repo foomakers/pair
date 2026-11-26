@@ -47,5 +47,5 @@ export function readInstalledSkill(
 export function workflowDefaultSkill(fs: FileSystemService, config: Config, root: string) {
   const layout = skillsLayout(config)
   return (name: string) =>
-    findDefaultSkill(isFile(fs), root, defaultSkillPaths(root, layout, name), name)
+    findDefaultSkill(isFile(fs), root, defaultSkillPaths(fs, root, [layout], name), name)
 }
