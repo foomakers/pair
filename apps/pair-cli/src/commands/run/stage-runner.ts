@@ -73,6 +73,7 @@ export async function runStage(input: RunStageInput): Promise<CycleStageResult> 
     ...(input.effort !== undefined && { effort: input.effort }),
     timeoutSeconds: input.timeoutSeconds,
     idleTimeoutSeconds: input.idleTimeoutSeconds,
+    shouldFinalizeLastMessage: result => result.final === undefined,
     onEvent: payload => {
       sawEvent = true
       telemetry = observeEngineEvent(telemetry, input.engine.id, payload)

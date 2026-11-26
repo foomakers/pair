@@ -253,6 +253,8 @@ function driveIteration(
     autonomyArgs: resolved.autonomy.args,
     timeoutSeconds: config.iterationTimeoutSeconds,
     idleTimeoutSeconds: wiring.idleTimeoutSeconds,
+    // A HALT can need its structured handoff to decide whether to retry this iteration.
+    shouldFinalizeLastMessage: result => result.cause === 'halted' && result.final === undefined,
     onRunEvent: wiring.onRunEvent,
     maxFixRounds: LOOP_MAX_FIX_ROUNDS,
   })

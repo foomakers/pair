@@ -47,7 +47,7 @@ async function run(
     isSafeText: () => true,
     launch: async (_step, message) => {
       sent.push(message)
-      return final
+      return { final }
     },
     ...(runGates && { runGates }),
     report: event => events.push(event),

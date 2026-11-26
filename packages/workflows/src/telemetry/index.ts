@@ -12,6 +12,7 @@ import {
 } from '../engine'
 import type { EscalationAction, KindName } from '../grammar'
 import type { StepStatus } from '../kinds'
+import type { Diagnosis } from '../diagnosis'
 import { migrateTelemetryStatuses } from './legacy-status'
 
 export { TELEMETRY_FILE }
@@ -84,6 +85,7 @@ export interface StepTelemetry extends RunIdentity {
   readonly estimate?: 'lower-bound-from-text'
   readonly status: StepStatus | 'exhausted' | 'skipped'
   readonly reason?: string
+  readonly diagnosis?: Diagnosis
   readonly escalate?: EscalationTelemetry
   /** The execution number of this step in the run. */
   readonly attempt: number
@@ -124,6 +126,7 @@ export interface StepExecution {
   readonly tokens: Tokens
   readonly status: StepTelemetry['status']
   readonly reason?: string
+  readonly diagnosis?: Diagnosis
   readonly escalate?: EscalationTelemetry
 }
 
@@ -139,22 +142,62 @@ function stepsOf(run: RunDirectory): StepTelemetry[] {
     .filter((record): record is StepTelemetry => record.type === 'step')
 }
 
+// An arbitrary line can be a prompt or an unlabelled credential. Keep only complete, known-safe
+// messages in telemetry. The local run diagnosis still carries the original text for debugging.
+const SAFE_DIAGNOSTICS = new Set([
+  'Connection refused',
+  'Connection reset by peer',
+  'Permission denied',
+  'No space left on device',
+  'no terminal event in the engine stream (fail-closed: the exit code is never consulted)',
+])
+
+const safeDiagnostic = (text: string): string => (SAFE_DIAGNOSTICS.has(text) ? text : '[redacted]')
+
+/** Render watchdog facts without forwarding detail that may contain engine text. */
+function safeTimeout({ kind, timeoutSeconds }: Diagnosis) {
+  if (timeoutSeconds === undefined || !Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0)
+    return undefined
+  if (kind === 'timeout')
+    return {
+      timeoutSeconds,
+      detail: `stalled: no terminal event within ${timeoutSeconds}s — the engine was stopped`,
+    }
+  if (kind === 'idle')
+    return { timeoutSeconds, detail: `timed out (idle): no engine event for ${timeoutSeconds}s` }
+  return undefined
+}
+
+function telemetryLine(record: StepTelemetry | RunTelemetry): string {
+  if (record.type === 'run' || record.diagnosis === undefined) return JSON.stringify(record)
+  const { kind, detail, exitCode, signal, elapsedMs, stderrTail } = record.diagnosis
+  return JSON.stringify({
+    ...record,
+    diagnosis: {
+      kind,
+      ...(safeTimeout(record.diagnosis) ?? { detail: safeDiagnostic(detail) }),
+      exitCode,
+      signal,
+      elapsedMs,
+      stderrTail: stderrTail.map(safeDiagnostic),
+    },
+  })
+}
+
 const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetry)[]) =>
   writeAtomic(
     run.files,
     fileOf(run),
-    records.map(record => `${JSON.stringify(record)}\n`).join(''),
+    records.map(record => `${telemetryLine(record)}\n`).join(''),
     {
       preserveMode: true,
     },
   )
 
-/** Appends a step record to the run's `telemetry.jsonl`. */
-export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {
-  const steps = stepsOf(run)
-  const { step, settings, tokens, reason, escalate } = execution
+function stepRecord(run: RunDirectory, execution: StepExecution): StepTelemetry {
+  const { step, settings, tokens, reason, escalate, diagnosis } = execution
   const isEstimate = Object.values(tokens).some(entry => entry.source === 'estimated')
-  const record: StepTelemetry = {
+  return {
     type: 'step',
     schema: TELEMETRY_SCHEMA,
     ...identityOf(run),
@@ -171,11 +214,72 @@ export async function recordStep(run: RunDirectory, execution: StepExecution): P
     ...(isEstimate && { estimate: 'lower-bound-from-text' as const }),
     status: execution.status,
     ...(reason !== undefined && { reason }),
+    ...(diagnosis !== undefined && { diagnosis }),
     ...(escalate !== undefined && { escalate }),
     attempt: step.attempt,
     ...(step.round !== undefined && { round: step.round }),
   }
+}
+
+const attemptKey = (id: string, attempt: number, round?: number) =>
+  JSON.stringify([id, attempt, round])
+
+/** Appends a step record, or adds its escalation to a fault recovered before settlement. */
+export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {
+  const steps = stepsOf(run)
+  const record = stepRecord(run, execution)
+  if (record.diagnosis !== undefined) {
+    const key = attemptKey(record.step, record.attempt, record.round)
+    const existing = steps.find(
+      row => row.diagnosis !== undefined && attemptKey(row.step, row.attempt, row.round) === key,
+    )
+    if (existing !== undefined) {
+      const { escalate } = record
+      if (escalate !== undefined && existing.escalate === undefined)
+        await write(
+          run,
+          steps.map(row => (row === existing ? { ...row, escalate } : row)),
+        )
+      return
+    }
+  }
   await write(run, [...steps, record])
+}
+
+type RecoveredFault = Omit<StepExecution, 'durationMs' | 'tokens'> & { diagnosis: Diagnosis }
+
+/** An interrupted process has measured elapsed time and no recoverable token measurement. */
+export function recoveredExecution(fault: RecoveredFault): StepExecution {
+  return {
+    ...fault,
+    durationMs: fault.diagnosis.elapsedMs,
+    tokens: { read: UNKNOWN, cached: UNKNOWN, written: UNKNOWN },
+  }
+}
+
+/** Backfills diagnoses saved before a telemetry write, keeping existing metered rows. */
+export async function recordMissingFaultSteps(
+  run: RunDirectory,
+  faults: Iterable<RecoveredFault>,
+  terminal?: RunEndStatus,
+): Promise<void> {
+  const recovered = [...faults]
+  if (recovered.length === 0) return
+  const steps = stepsOf(run)
+  const recorded = new Set(
+    steps
+      .filter(row => row.diagnosis !== undefined)
+      .map(row => attemptKey(row.step, row.attempt, row.round)),
+  )
+  const missing = recovered.filter(
+    ({ step }) => !recorded.has(attemptKey(step.id, step.attempt, step.round)),
+  )
+  if (missing.length === 0 && terminal === undefined) return
+  const repaired = [...steps, ...missing.map(fault => stepRecord(run, recoveredExecution(fault)))]
+  await write(
+    run,
+    terminal === undefined ? repaired : [...repaired, closingRecord(run, repaired, terminal)],
+  )
 }
 
 function sumOf(name: TokenName, steps: readonly StepTelemetry[]): TokenSum {
@@ -195,8 +299,16 @@ function sumOf(name: TokenName, steps: readonly StepTelemetry[]): TokenSum {
 /** Writes a completed run's outcome and the totals of its step executions. */
 export async function closeRun(run: RunDirectory, status: RunTelemetry['status']): Promise<void> {
   const steps = stepsOf(run)
+  await write(run, [...steps, closingRecord(run, steps, status)])
+}
+
+function closingRecord(
+  run: RunDirectory,
+  steps: readonly StepTelemetry[],
+  status: RunTelemetry['status'],
+): RunTelemetry {
   const executions = steps.filter(step => step.kind !== 'loop')
-  const record: RunTelemetry = {
+  return {
     type: 'run',
     schema: TELEMETRY_SCHEMA,
     ...identityOf(run),
@@ -209,7 +321,6 @@ export async function closeRun(run: RunDirectory, status: RunTelemetry['status']
     },
     steps: executions.length,
   }
-  await write(run, [...steps, record])
 }
 
 /**

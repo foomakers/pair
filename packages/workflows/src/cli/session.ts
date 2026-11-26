@@ -25,6 +25,7 @@ import {
   endStep,
   flushOutcomes,
   observeRun,
+  recoverTerminalFaults,
   runStep,
   settleAgentStep,
   startStep,
@@ -320,11 +321,14 @@ export async function openSession(project: Project, input: OpenInput) {
       const workflow = frozenWorkflow(run)
       const config = effectiveConfiguration(run)
       if (opened.telemetryWarning !== undefined) lease.telemetryWarned = true
+      const writer = sessionTelemetry(observeRun(run), workflow, config, lease)
       if (opened.status === 'resumed') {
-        const writer = sessionTelemetry(observeRun(run), workflow, config, lease)
         if (writer === undefined) await reopenRun(run).catch(() => undefined)
-        else await writer.reopen()
-      }
+        else {
+          await writer.reopen()
+          await writer.reconcile()
+        }
+      } else await recoverTerminalFaults(opened.status, writer)
       return {
         ...(opened.worktree !== undefined && { worktree: opened.worktree }),
         result: {
@@ -413,6 +417,7 @@ const approvalPrompt = ({ step, question, pr, head }: SessionApproval) => ({
 })
 
 const needsHost = (step: StepLaunch) =>
+  step.exhaustedFault !== undefined ||
   kindByName[step.kind].host === true ||
   step.pendingSuccess !== undefined ||
   stepInputFailure(step) !== undefined
@@ -516,38 +521,56 @@ export async function nextSession(
   token: string,
   answer?: string,
 ) {
-  return withCardSessionLease<SessionNext>(project.main, run, { token }, async lease => {
-    if (answer !== undefined && lease.approval === undefined)
-      throw new Error('The workflow must be parked at an approval shown in this session')
-    if (lease.approval !== undefined && answer === undefined)
-      return {
-        result: { run: 'parked', ready: [], ...approvalPrompt(lease.approval) },
-        approval: lease.approval,
-      }
+  const result = await withCardSessionLease<SessionNext>(
+    project.main,
+    run,
+    { token },
+    async lease => {
+      if (answer !== undefined && lease.approval === undefined)
+        throw new Error('The workflow must be parked at an approval shown in this session')
+      if (lease.approval !== undefined && answer === undefined)
+        return {
+          result: { run: 'parked', ready: [], ...approvalPrompt(lease.approval) },
+          approval: lease.approval,
+        }
 
-    const workflow = frozenWorkflow(run)
-    const config = effectiveConfiguration(run)
-    const packet = (launch: StepLaunch) =>
-      stepPacket(workflow, config, { ...lease, project }, launch)
-    if (lease.launch !== undefined)
-      return {
-        result: { run: 'running', ready: [packet(lease.launch)] },
-        launch: lease.launch,
-        launchStartedAt: lease.launchStartedAt,
-      }
-    const observed = observeRun(run)
-    const writer = sessionTelemetry(observed, workflow, config, lease)
-    const advanced = await advanceSession(
-      { project, run: observed, lease, answer },
-      addressedSteps(workflow),
-      packet,
-      writer,
+      const workflow = frozenWorkflow(run)
+      const config = effectiveConfiguration(run)
+      const packet = (launch: StepLaunch) =>
+        stepPacket(workflow, config, { ...lease, project }, launch)
+      if (lease.launch !== undefined)
+        return {
+          result: { run: 'running', ready: [packet(lease.launch)] },
+          launch: lease.launch,
+          launchStartedAt: lease.launchStartedAt,
+        }
+      const observed = observeRun(run)
+      const writer = sessionTelemetry(observed, workflow, config, lease)
+      const advanced = await advanceSession(
+        { project, run: observed, lease, answer },
+        addressedSteps(workflow),
+        packet,
+        writer,
+      )
+      const result: SessionNext = advanced.result
+      if (result.run !== 'running')
+        await writer?.close(result.held === undefined ? result.run : 'skipped')
+      return advanced
+    },
+  )
+  const step = result.ready[0]
+  if (step !== undefined) reportProcessControls(step)
+  return result
+}
+
+function reportProcessControls(step: StepLaunch) {
+  const keys = []
+  if (step.timeoutMinutes !== undefined) keys.push('timeout-minutes')
+  if (step.retries !== undefined) keys.push('retries')
+  if (keys.length > 0)
+    process.stderr.write(
+      `Warning: ${step.id}: ${keys.join(', ')} apply only to pair-cli run. Session dispatch runs this attempt without a process watchdog or automatic process retries.\n`,
     )
-    const result: SessionNext = advanced.result
-    if (result.run !== 'running')
-      await writer?.close(result.held === undefined ? result.run : 'skipped')
-    return advanced
-  })
 }
 
 export async function recordSession(

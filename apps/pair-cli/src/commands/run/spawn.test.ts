@@ -486,6 +486,7 @@ out({type:'item.completed',item:{type:'agent_message',text:'done, no json here'}
       cwd: dir,
       autonomyArgs: [],
       timeoutSeconds: 30,
+      shouldFinalizeLastMessage: result => result.final === undefined,
     })
 
   it('reads the final result from the channel file when the last stream message is not the result JSON', async () => {

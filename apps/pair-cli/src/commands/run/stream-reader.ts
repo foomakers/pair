@@ -1,3 +1,4 @@
+import type { ProcessDiagnostics } from '@pair/workflows'
 import type { EngineDefinition, TerminalEventRule } from './engines'
 import { eventBodyRuns, parseRunEvent, progressRunEvents, type RunEvent } from './run-events'
 
@@ -5,9 +6,8 @@ import { eventBodyRuns, parseRunEvent, progressRunEvents, type RunEvent } from '
  * The JSONL terminal-event reader (US-451 T-7) — the ONLY thing that decides an iteration's
  * outcome.
  *
- * The exit code is never consulted, anywhere: pi documents no exit-code contract, so an outcome
- * inferred from it would be noise. An explicit terminal event in the stream is the signal; its
- * ABSENCE is a FAILURE (AC7, BR6 — when in doubt, fail).
+ * The reader decides success from terminal events. A missing terminal event fails closed
+ * regardless of the process exit code, which the workflow host can use to diagnose the failure.
  *
  * The reader is engine-agnostic: which line is terminal, and what makes it a success, are
  * `TerminalEventRule`s in the engine map. Stream content is untrusted input — a malformed line
@@ -27,6 +27,10 @@ export interface IterationResult {
   readonly outcome: IterationOutcome
   /** Why, in one line — the terminal event's own detail, or the fail-closed reason. */
   readonly detail: string
+  readonly process?: ProcessDiagnostics & {
+    readonly stoppedBy?: 'idle' | 'timeout'
+    readonly timeoutSeconds?: number
+  }
   /**
    * The continue-token the skill printed, if any (ADR-017 §4 / `pair-loop`'s output format).
    *
@@ -42,6 +46,8 @@ export interface IterationResult {
   readonly stalled?: true
   /** The stage's final JSON result from the terminal event's text, when the engine exposes it and it carries one. */
   readonly final?: StageFinalResult
+  /** Raw final text read from the engine's last-message file, for workflow validation. */
+  readonly lastMessage?: string
   /** US-573: set when the iteration failed for one of the truthful-outcome causes. */
   readonly cause?: FailureCause
   /** US-573: unparseable stream lines + malformed `PAIR_EVENT` bodies, skipped (present when > 0). */
@@ -78,30 +84,95 @@ function asFinal(value: unknown): StageFinalResult | undefined {
 }
 
 /** Every TOP-LEVEL `{…}` span of a text (string-aware, so braces in strings and nested objects never count). */
-function topLevelObjects(text: string): string[] {
+function topLevelObjects(text: string, skipProgress = false): string[] {
+  const starts = skipProgress
+    ? /(?<![\p{ID_Continue}\u200C\u200D])(_*)PAIR_EVENT[ \t]+|\{/gu
+    : /\{/g
   const spans: string[] = []
-  const scan = { depth: 0, start: -1, inString: false, escaped: false }
-  for (let i = 0; i < text.length; i++) {
-    if (stepString(scan, text[i]!)) continue
-    if (text[i] === '"' && scan.depth > 0) scan.inString = true
-    else if (text[i] === '{') openBrace(scan, i)
-    else if (text[i] === '}' && scan.depth > 0 && --scan.depth === 0) {
-      spans.push(text.slice(scan.start, i + 1))
+  for (let match = starts.exec(text); match; match = starts.exec(text)) {
+    if (match[0] !== '{') {
+      const start = starts.lastIndex
+      const end = progressEnd(text, start, match[1])
+      // An underscored identifier is markup only with a bounded payload and a matching close.
+      const emphasis = match[1]
+      if (!emphasis || (end !== undefined && closesEmphasis(text, end, emphasis))) {
+        starts.lastIndex = end ?? lineEnd(text, start)
+      }
+      continue
     }
+    starts.lastIndex = containerEnd(text, match.index, false) ?? text.length
+    spans.push(text.slice(match.index, starts.lastIndex))
   }
   return spans
 }
 
-interface Scan {
-  depth: number
-  start: number
-  inString: boolean
-  escaped: boolean
+function closesEmphasis(text: string, at: number, emphasis?: string): boolean {
+  return (
+    !!emphasis && text.startsWith(emphasis, at) && !continuesIdentifier(text, at + emphasis.length)
+  )
 }
 
-function openBrace(scan: Scan, at: number): void {
-  if (scan.depth === 0) scan.start = at
-  scan.depth++
+function continuesIdentifier(text: string, at: number): boolean {
+  const part = /[\p{ID_Continue}\u200C\u200D]/uy
+  part.lastIndex = at
+  return part.test(text)
+}
+
+/** A scalar must be valid JSON. Sentence punctuation belongs to the surrounding prose. */
+function progressEnd(text: string, start: number, emphasis?: string): number | undefined {
+  if (text[start] === '{' || text[start] === '[') return containerEnd(text, start, true)
+  const scalar = /"(?:\\[^\r\n]|[^"\\\r\n])*"|[a-zA-Z0-9.+-]+/y
+  scalar.lastIndex = start
+  const token = scalar.exec(text)?.[0].replace(/\.+$/, '')
+  if (!token) return undefined
+  const end = start + token.length
+  if (continuesIdentifier(text, end) && !closesEmphasis(text, end, emphasis)) return undefined
+  try {
+    JSON.parse(token)
+    return end
+  } catch {
+    return undefined
+  }
+}
+
+/** Progress records fit on one line, even when truncated. A handoff may span several. */
+function containerEnd(text: string, start: number, singleLine: boolean): number | undefined {
+  const closing = [text[start] === '[' ? ']' : '}']
+  const scan = { inString: false, escaped: false }
+  for (let i = start + 1; i < text.length; i++) {
+    const ch = text[i]!
+    if (singleLine && '\r\n'.includes(ch)) return undefined
+    if (stepString(scan, ch)) continue
+    if (ch === '"') {
+      scan.inString = true
+      continue
+    }
+    const boundary = containerBoundary(closing, ch, singleLine)
+    if (boundary === 'closed') return i + 1
+    if (boundary === 'malformed') return undefined
+  }
+  return undefined
+}
+
+function lineEnd(text: string, start: number): number {
+  const newline = /[\r\n]/g
+  newline.lastIndex = start
+  return newline.exec(text)?.index ?? text.length
+}
+
+function containerBoundary(closing: string[], ch: string, includeArrays: boolean) {
+  if (ch === '{') closing.push('}')
+  else if (includeArrays && ch === '[') closing.push(']')
+  else if (ch === '}' || (includeArrays && ch === ']')) {
+    if (closing.pop() !== ch) return 'malformed'
+    if (closing.length === 0) return 'closed'
+  }
+  return 'open'
+}
+
+interface Scan {
+  inString: boolean
+  escaped: boolean
 }
 
 /** Advances the in-string state; `true` when the character was consumed as string content. */
@@ -126,7 +197,7 @@ const isResultShaped = (raw: Record<string, unknown>): boolean =>
 export function parseFinalResult(text: string): StageFinalResult | undefined {
   let shaped: StageFinalResult | undefined
   let any: StageFinalResult | undefined
-  for (const span of topLevelObjects(text)) {
+  for (const span of topLevelObjects(text, true)) {
     let raw: unknown
     try {
       raw = JSON.parse(span)
@@ -145,6 +216,9 @@ const NO_TERMINAL_EVENT: IterationResult = {
   outcome: 'failed',
   detail: 'no terminal event in the engine stream (fail-closed: the exit code is never consulted)',
 }
+
+export const noTerminalEvent = (result: IterationResult): boolean =>
+  result.detail === NO_TERMINAL_EVENT.detail
 
 /**
  * `pair-loop`'s own one-card-path marker, borrowed verbatim — the driver invents no protocol.
@@ -266,14 +340,40 @@ export function agentMessageOf(engine: EngineDefinition, payload: unknown): stri
   return typeof text === 'string' ? text : undefined
 }
 
+function piFinalText(payload: unknown): string | undefined {
+  if (!matches(payload, { type: 'message_end', 'message.role': 'assistant' })) return undefined
+  const reason = fieldAt(payload, 'message.stopReason')
+  if (reason !== 'stop' && reason !== 'endTurn') return undefined
+  const content = fieldAt(payload, 'message.content')
+  if (!Array.isArray(content)) return undefined
+  const parts = content.flatMap(part => {
+    const value = fieldAt(part, 'text')
+    return fieldAt(part, 'type') === 'text' && typeof value === 'string' ? [value] : []
+  })
+  return parts.length === 0 ? undefined : parts.join('\n')
+}
+
+function openCodeFinalText(payload: unknown, previous: string | undefined): string | undefined {
+  if (matches(payload, { type: 'step_start' })) return undefined
+  if (!matches(payload, { type: 'text', 'part.type': 'text' })) return previous
+  const text = fieldAt(payload, 'part.text')
+  return typeof text === 'string' ? text : previous
+}
+
 /**
- * US-652: the agent's final text as ONE decoded event carries it — a terminal event's `resultField`,
- * else the engine's agent message. The last defined value over a stream is the agent's final message.
+ * US-652: update the candidate final message from one decoded event. OpenCode text belongs
+ * to the current step, so a new step starts with no candidate.
  */
-export function finalTextOf(engine: EngineDefinition, payload: unknown): string | undefined {
+export function finalTextOf(
+  engine: EngineDefinition,
+  payload: unknown,
+  previous?: string,
+): string | undefined {
+  if (engine.id === 'pi') return piFinalText(payload) ?? previous
+  if (engine.id === 'opencode') return openCodeFinalText(payload, previous)
   const rule = engine.terminalEvents.find(candidate => matches(payload, candidate.match))
   const text = rule?.resultField ? fieldAt(payload, rule.resultField) : undefined
-  return typeof text === 'string' ? text : agentMessageOf(engine, payload)
+  return typeof text === 'string' ? text : (agentMessageOf(engine, payload) ?? previous)
 }
 
 /** The model, when the engine names it in a structured event. */

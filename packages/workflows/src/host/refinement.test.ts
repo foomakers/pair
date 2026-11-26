@@ -42,7 +42,7 @@ describe('refinement kinds (#678 AC-1 and AC-9)', () => {
                   }
                 : { status: 'needs-decision', summary: question }
               : { status: 'ok', summary: 'Planned', boardStatus: 'Draft', tasks: 2 }
-          return '```json\n' + JSON.stringify(output) + '\n```'
+          return { final: '```json\n' + JSON.stringify(output) + '\n```' }
         },
       },
       dir,
@@ -80,14 +80,25 @@ describe('refinement kinds (#678 AC-1 and AC-9)', () => {
         isSafeText: () => true,
         async launch(step) {
           steps.push(step.id)
-          if (step.kind === 'plan-tasks' && timedOut) return undefined
+          if (step.kind === 'plan-tasks' && timedOut)
+            return {
+              fault: {
+                kind: 'timeout',
+                detail: 'timeout',
+                exitCode: null,
+                signal: 'SIGTERM',
+                elapsedMs: 60000,
+                stderrTail: [],
+              },
+            }
           const outputs =
             step.kind === 'refine-story' ? { riskTag, openQuestions: [] } : { tasks: 1 }
-          return (
-            '```json\n' +
-            JSON.stringify({ status: 'ok', summary: 'Prepared', boardStatus, ...outputs }) +
-            '\n```'
-          )
+          return {
+            final:
+              '```json\n' +
+              JSON.stringify({ status: 'ok', summary: 'Prepared', boardStatus, ...outputs }) +
+              '\n```',
+          }
         },
         async readResultFacts() {
           return {

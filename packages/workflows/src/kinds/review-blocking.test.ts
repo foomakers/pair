@@ -140,7 +140,19 @@ describe('runSteps: a review that answers ok with a blocking finding (r0-1)', ()
       isSafeText: text => !text.includes('`') && !text.includes('\n'),
       launch: async step => {
         launched.push(step.id)
-        return step.kind === 'review' ? reviews.shift() : implemented
+        const final = step.kind === 'review' ? reviews.shift() : implemented
+        return final === undefined
+          ? {
+              fault: {
+                kind: 'no-result',
+                detail: 'no final message',
+                exitCode: 0,
+                signal: null,
+                elapsedMs: 5,
+                stderrTail: [],
+              },
+            }
+          : { final }
       },
       report: () => undefined,
     }

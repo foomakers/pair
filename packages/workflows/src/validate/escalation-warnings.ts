@@ -5,8 +5,8 @@ function possibleStatuses(step: Step): ReadonlySet<string> {
   if (step.kind === 'loop') return new Set(['ok', 'exhausted'])
   // The host can record a failure independently of the kind's agent result contract.
   const statuses = new Set(['ok', 'failed', ...Object.keys(kindByName[step.kind].returns)])
-  // A host can report an unavailable gate separately from a gate that ran and failed.
-  if (step.kind === 'gate') statuses.add('blocked')
+  // The host can block on an unavailable gate or an agent's exhausted process retries.
+  if (step.kind === 'gate' || step.retries !== undefined) statuses.add('blocked')
   return statuses
 }
 

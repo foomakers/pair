@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { basename, join } from 'node:path'
 import { readResult } from '../dispatch'
+import type { Diagnosis, FaultAttempt, StepFaults } from '../diagnosis'
 import {
   addressedSteps,
   assignmentFor,
@@ -99,6 +100,9 @@ export interface StepRecord extends StepExecutionIdentity {
   readonly round?: number
   /** How many times the step was launched in this run. */
   readonly executions?: number
+  readonly attempts?: readonly FaultAttempt[]
+  /** Process retries still available for this running or interrupted execution. */
+  readonly remainingRetries?: number
   readonly summary?: string
   readonly reason?: string
   readonly detail?: string
@@ -126,6 +130,14 @@ export interface RunStateFile {
   readonly replay?: StepReplay
 }
 
+function executionHistory(previous?: StepRecord) {
+  const { executions, attempts } = previous ?? {}
+  return {
+    ...(executions !== undefined && { executions }),
+    ...(attempts !== undefined && { attempts }),
+  }
+}
+
 export interface LoopRecord {
   readonly round: number
   readonly max: number
@@ -146,12 +158,15 @@ export interface StepLaunch {
   /** Validation the host runs after the step ends `ok`. */
   readonly gates?: readonly string[]
   readonly inputs: Readonly<Record<string, unknown>>
+  readonly timeoutMinutes?: number
+  readonly retries?: number
   /** The number of this execution of the step in the run: 1 the first time. */
   readonly attempt: number
   readonly round?: number
   readonly startState?: CardState
   readonly confirmState?: CardState
   readonly pendingSuccess?: StepResult
+  readonly exhaustedFault?: FaultAttempt
   readonly retryBoardStatus?: string
 
   /** Distinguishes a replay from earlier executions that used the same inputs. */
@@ -446,7 +461,11 @@ function withMoreRounds(
       ...Object.fromEntries(
         children.map(child => [
           `${id}/${child.id}`,
-          { state: 'pending', executions: state.steps[`${id}/${child.id}`]?.executions ?? 0 },
+          {
+            state: 'pending',
+            executions: 0,
+            ...executionHistory(state.steps[`${id}/${child.id}`]),
+          },
         ]),
       ),
     },
@@ -620,14 +639,12 @@ function replayFrom(run: RunDirectory, state: RunStateFile, replay: StepReplay):
   const records = { ...state.steps }
   const loops = { ...state.loops }
   for (const step of steps.slice(from)) {
-    const executions = records[step.id]?.executions
-    records[step.id] = { state: 'pending', ...(executions !== undefined && { executions }) }
+    records[step.id] = { state: 'pending', ...executionHistory(records[step.id]) }
     if (step.kind === 'loop') {
       loops[step.id] = { round: 1, max: loopMax(frozenConfiguration(run), step) }
       for (const child of step.steps ?? []) {
         const id = `${step.id}/${child.id}`
-        const count = records[id]?.executions
-        records[id] = { state: 'pending', ...(count !== undefined && { executions: count }) }
+        records[id] = { state: 'pending', ...executionHistory(records[id]) }
       }
     }
   }
@@ -681,17 +698,49 @@ function reopenedSteps(
         (child ? childSettled(step, saved.state) : stepSettled(step, saved.state))
       )
         return [id, saved]
-      return [id, reopenStep(run, saved, child ? undefined : step)]
+      return [id, reopenStep(run, saved, child ? undefined : step, step?.retries)]
     }),
   )
 }
 
-function reopenStep(run: RunDirectory, saved: StepRecord, step: Step | undefined): StepRecord {
+function legacyBudget(saved: StepRecord, retries: number | undefined): number | undefined {
+  if (saved.state !== 'running' || retries === undefined) return undefined
+  // Older states only recorded the fault attempts. Count the consecutive faults before
+  // the interrupted attempt in this round, up to the configured budget.
+  let remaining = retries
+  let expected = (saved.executions ?? 1) - 1
+  for (const fault of (saved.attempts ?? []).slice().reverse()) {
+    if (fault.attempt > expected) continue
+    if (remaining === 0 || fault.round !== saved.round || fault.attempt !== expected) break
+    remaining--
+    expected--
+  }
+  return remaining
+}
+
+/** A finalized attempt has a fault at its launch number. A reserved retry has the next number. */
+function exhaustedFault(saved: StepRecord | undefined, retries: number | undefined) {
+  if (saved?.state !== 'running') return undefined
+  const fault = saved.attempts?.at(-1)
+  if (fault === undefined || fault.attempt !== saved.executions || fault.round !== saved.round)
+    return undefined
+  return (saved.remainingRetries ?? legacyBudget(saved, retries) ?? 0) === 0 ? fault : undefined
+}
+
+function reopenStep(
+  run: RunDirectory,
+  saved: StepRecord,
+  step: Step | undefined,
+  retries: number | undefined,
+): StepRecord {
+  if (exhaustedFault(saved, retries)) return saved
   const pendingSuccess =
     step === undefined ? saved.pendingSuccess : pendingTransitionResult(run, step, saved)
+  const remainingRetries = saved.remainingRetries ?? legacyBudget(saved, retries)
   return {
     state: 'pending',
-    ...(saved.executions !== undefined && { executions: saved.executions }),
+    ...executionHistory(saved),
+    ...(remainingRetries !== undefined && { remainingRetries }),
     ...retryBoardStatusOf(saved),
     ...(pendingSuccess !== undefined && { pendingSuccess, ...executionOf(saved) }),
   }
@@ -871,6 +920,48 @@ function haltAt(state: RunStateFile, step: Step, approval?: string): Halt | unde
 
 const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 
+const agentOptionsOf = (step: Step) => ({
+  ...(step['timeout-minutes'] !== undefined && { timeoutMinutes: step['timeout-minutes'] }),
+  ...(step.retries !== undefined && { retries: step.retries }),
+})
+
+/** Keep process faults before moving on to the next launch or settling the step. */
+export async function recordFault(
+  run: RunDirectory,
+  step: StepLaunch,
+  diagnosis: Diagnosis,
+  origin?: FaultAttempt['origin'],
+): Promise<StepLaunch | undefined> {
+  const state = requireState(run)
+  const previous = state.steps[step.id]
+  if (previous?.state !== 'running' || previous.executions !== step.attempt)
+    throw new Error(`cannot record a fault for inactive step ${step.id}`)
+  const { attempt, round } = step
+  const attempts = [
+    ...(previous.attempts ?? []),
+    {
+      ...diagnosis,
+      attempt,
+      origin,
+      ...(round !== undefined && { round }),
+    },
+  ]
+  const remaining = previous.remainingRetries ?? step.retries ?? 0
+  const executions = remaining > 0 ? attempt + 1 : attempt
+  const remainingRetries = Math.max(remaining - 1, 0)
+  await writeState(run, {
+    ...state,
+    steps: { ...state.steps, [step.id]: { ...previous, executions, attempts, remainingRetries } },
+  })
+  return remaining > 0 ? { ...step, attempt: executions } : undefined
+}
+
+export function faultsOf(run: RunDirectory): StepFaults[] {
+  return Object.entries(requireState(run).steps).flatMap(([step, { attempts }]) =>
+    attempts === undefined ? [] : [{ step, attempts }],
+  )
+}
+
 const pendingOf = (saved?: Pick<StepRecord, 'pendingSuccess'>) =>
   saved?.pendingSuccess === undefined ? {} : { pendingSuccess: saved.pendingSuccess }
 
@@ -926,8 +1017,13 @@ async function reserveLaunch(
   loop?: { id: string; round: number },
 ): Promise<NextLaunch> {
   const { id, kind, attempt, round } = launch
+  const saved = state.steps[id]
+  const fault = exhaustedFault(saved, launch.retries)
+  if (fault !== undefined)
+    return { ready: [{ ...launch, attempt: fault.attempt, exhaustedFault: fault }], run: 'running' }
   const summary = await check?.(launch)
   if (summary !== undefined) return { ready: [], run: 'running', held: { id, kind, summary } }
+  const remainingRetries = saved?.remainingRetries ?? launch.retries
   await writeState(run, {
     ...state,
     steps: {
@@ -935,7 +1031,9 @@ async function reserveLaunch(
       ...(loop !== undefined && { [loop.id]: { state: 'running' as const, round: loop.round } }),
       [id]: {
         state: 'running',
+        ...executionHistory(saved),
         executions: attempt,
+        ...(remainingRetries !== undefined && { remainingRetries }),
         ...(round !== undefined && { round }),
         ...pendingOf(launch),
         ...retryBoardStatusOf(launch),
@@ -968,6 +1066,7 @@ async function nextInLoop(
     interactive: interactiveOf(child),
     with: child.with ?? {},
     ...gatesOf(child),
+    ...agentOptionsOf(child),
     ...boardStatesOf(child),
     ...pending,
     ...assignment,
@@ -1081,13 +1180,15 @@ async function checkWhen(
   const child = inLoop ? loopChild(state, step).child : undefined
   const target = child ?? step
   const id = inLoop ? `${step.id}/${target.id}` : step.id
-  if (awaitingTransition(state.steps[id])) return undefined
+  const saved = state.steps[id]
+  if (awaitingTransition(saved) || exhaustedFault(saved, target.retries)) return undefined
   const failure = await whenFailure(target.when, state, card)
   if (failure === undefined) return undefined
   const checked = { id, kind: target.kind as KindName }
   if (failure.unavailable) return { step: checked, error: failure.reason }
   const entry: StepRecord = {
     state: 'skipped',
+    ...executionHistory(state.steps[id]),
     summary: 'skipped: when did not match',
     reason: failure.reason,
   }
@@ -1128,6 +1229,7 @@ function plainLaunch(
     interactive: interactiveOf(step),
     with: step.with ?? {},
     ...gatesOf(step),
+    ...agentOptionsOf(step),
     ...boardStatesOf(step),
     ...pendingOf(saved),
     ...retryBoardStatusOf(saved),
@@ -1210,7 +1312,8 @@ function closeRound({ state, outer, outputs }: Advance, { steps, loops }: Progre
           `${outerId}/${child.id}`,
           {
             state: 'pending' as const,
-            executions: steps[`${outerId}/${child.id}`]?.executions ?? 0,
+            executions: 0,
+            ...executionHistory(steps[`${outerId}/${child.id}`]),
           },
         ]),
       ),
@@ -1307,12 +1410,12 @@ function recordOf(
   { status, summary, reason, detail }: StepResult,
   outputs: Record<string, unknown>,
   round: number | undefined,
-  executions: number | undefined,
+  previous: StepRecord | undefined,
 ): StepRecord {
   return {
     state: status,
     ...(round !== undefined && { round }),
-    ...(executions !== undefined && { executions }),
+    ...executionHistory(previous),
     summary,
     ...(reason !== undefined && { reason }),
     ...(detail !== undefined && { detail }),
@@ -1393,7 +1496,7 @@ export async function record(
       .map(name => [name, settled[name]]),
   )
   const entry = {
-    ...recordOf(settled, outputs, round, previous?.executions),
+    ...recordOf(settled, outputs, round, previous),
     ...executionOf(previous?.pendingSuccess === undefined ? options : previous),
     ...retryAfter(status, previous, invalidatePendingSuccess),
   }

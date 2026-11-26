@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { readFileSync } from 'fs'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { handleRunCommand, type IterationRunner } from './handler'
 import { parseRunCommand } from './parser'
 import { POLICY_PATH } from './automation-policy'
 import { readIterationOutcome, toLines } from './stream-reader'
+import { spawnIteration } from './spawn'
 
 /**
  * US-573 T-8 — e2e over a recorded workflow stream: banner, live lines, audit, summary, exit code.
@@ -30,6 +32,7 @@ function projectFs() {
       }),
       [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '',
       '/bin/claude': '',
+      '/bin/codex': '',
       [`${cwd}/${POLICY_PATH}`]:
         '## Eligibility\n\nrisk:green\n\n## Stop Predicate\n\nmax-iterations: 5\nidle-timeout: 900\n',
     },
@@ -92,6 +95,271 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
     expect(out()).toMatch(
       /stopped: the skill reported itself finished.*, 0 eligible card\(s\) left/,
     )
+  })
+
+  it('#704 F11: a completed Codex loop settles while the engine is still shutting down', async () => {
+    const stream = readFileSync(join(__dirname, '__fixtures__/codex-workflow-events.jsonl'), 'utf8')
+    const program = `require('node:fs').writeFileSync(1, ${JSON.stringify(stream)}); setInterval(() => {}, 1000)`
+    const audit: string[] = []
+    capture()
+
+    const code = await handleRunCommand(
+      parseRunCommand({ root: '212', engine: 'codex', iterationTimeout: '1' }),
+      projectFs(),
+      {
+        runIteration: input =>
+          spawnIteration({
+            ...input,
+            cwd: tmpdir(),
+            engine: {
+              ...input.engine,
+              command: process.execPath,
+              headlessArgs: ['-e', program, '--'],
+            },
+          }),
+        runAudit: (_path, line) => void audit.push(line),
+      },
+    )
+
+    expect(code).toBe(0)
+    expect(JSON.parse(audit.at(-1)!)).toMatchObject({
+      event: 'loop-end',
+      detail: { status: 'completed' },
+    })
+  })
+
+  const formatError = 'missing-field:inputHead'
+  const handoff = (reason: string) => JSON.stringify({ status: 'failed', reason })
+  const progress = 'PAIR_EVENT {"event":"loop-end","status":"halted","reason":"handoff rejected"}'
+  const handoffThenProgress = [handoff(formatError), progress].join('\n')
+  const progressThenHandoff = [progress, handoff(formatError)].join('\n')
+  const keepAlive = 'setInterval(() => {}, 1000)'
+
+  it.each([
+    {
+      label: 'echoed progress and a file-only handoff',
+      streamResult: progress,
+      file: handoff(formatError),
+      retry: true,
+    },
+    {
+      label: 'a handoff before echoed progress',
+      streamResult: handoffThenProgress,
+      file: handoffThenProgress,
+      retry: true,
+    },
+    {
+      label: 'a handoff after echoed progress',
+      streamResult: progressThenHandoff,
+      file: progressThenHandoff,
+      retry: true,
+    },
+    {
+      label: 'a file-only handoff before echoed progress',
+      file: handoffThenProgress,
+      retry: true,
+    },
+    {
+      label: 'progress quoted in Markdown',
+      streamResult: `> ${progress}`,
+      file: handoff(formatError),
+      retry: true,
+    },
+    {
+      label: 'progress quoted in prose',
+      streamResult: `Observed ${progress}`,
+      file: handoff(formatError),
+      retry: true,
+    },
+    {
+      label: 'a stream decision beside progress',
+      streamResult: `${progress} ${handoff('gate-red')}`,
+      file: handoff(formatError),
+      failure: 'halted: handoff rejected',
+    },
+    {
+      label: 'a file handoff beside progress',
+      file: `${progress} ${handoff(formatError)}`,
+      retry: true,
+    },
+    {
+      label: 'a handoff after an incomplete progress record',
+      streamResult: ['PAIR_EVENT {"event":"loop-end",', handoff('gate-red')].join('\n'),
+      file: handoff(formatError),
+      failure: 'halted: handoff rejected',
+    },
+    {
+      label: 'a genuine decision carrying event metadata',
+      streamResult: JSON.stringify({ status: 'failed', event: 'loop-end', reason: 'gate-red' }),
+      file: handoff(formatError),
+      failure: 'halted: handoff rejected',
+    },
+    {
+      label: 'a marked array containing a decision in the stream',
+      streamResult: `PAIR_EVENT [${handoff('gate-red')}]`,
+      file: handoff(formatError),
+      retry: true,
+    },
+    {
+      label: 'a file handoff before a marked array containing a decision',
+      file: `${handoff(formatError)}\nPAIR_EVENT [${handoff('gate-red')}]`,
+      retry: true,
+    },
+    {
+      label: 'a stream handoff after a marked string containing a brace',
+      streamResult: `PAIR_EVENT "{"\n${handoff(formatError)}`,
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'a file handoff after a marked string containing a brace',
+      file: `PAIR_EVENT "{"\n${handoff(formatError)}`,
+      retry: true,
+    },
+    {
+      label: 'a malformed mixed container hiding a decision',
+      streamResult: `PAIR_EVENT [{] ${handoff('gate-red')}}]`,
+      file: handoff(formatError),
+      retry: true,
+    },
+    {
+      label: 'an invalid quoted token before a decision',
+      streamResult: `PAIR_EVENT "{"xxx${handoff('gate-red')}`,
+      file: handoff(formatError),
+      retry: true,
+    },
+    {
+      label: 'a handoff beside a Markdown-quoted marked scalar',
+      streamResult: ['`PAIR_EVENT "{"`', handoff(formatError)].join(' '),
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'an invalid JSON escape before a same-line decision',
+      streamResult: [String.raw`PAIR_EVENT "\q"`, handoff(formatError)].join(' '),
+      file: handoff('gate-red'),
+      failure: 'halted: handoff rejected',
+    },
+    {
+      label: 'a genuine handoff after a scalar quoted in a sentence',
+      streamResult: `Observed PAIR_EVENT -2.4e-5. Then ${handoff(formatError)}`,
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'a genuine handoff after an ordinary underscored identifier',
+      streamResult: `_PAIR_EVENT ${handoff(formatError)}`,
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'a fused scalar identifier before a same-line handoff',
+      streamResult: `PAIR_EVENT null_suffix ${handoff(formatError)}`,
+      file: handoff('gate-red'),
+      failure: 'halted: handoff rejected',
+    },
+    {
+      label: 'an underscore in genuine handoff data after a literal identifier',
+      streamResult: `_PAIR_EVENT unknown ${JSON.stringify({ status: 'failed', reason: formatError, detail: '_' })}`,
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'a literal identifier before quoted data with a fused suffix',
+      streamResult: `_PAIR_EVENT unknown "_"suffix ${handoff(formatError)}`,
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'a file handoff after a quoted underscore and fused suffix',
+      file: `_PAIR_EVENT unknown "_"suffix ${handoff(formatError)}`,
+      retry: true,
+    },
+    { label: 'file-only format error', file: handoff(formatError), retry: true },
+    {
+      label: 'stream format error',
+      streamResult: handoff(formatError),
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'stream decision with a live child',
+      streamResult: handoff('gate-red'),
+      file: handoff(formatError),
+      shutdown: keepAlive,
+      failure: 'halted: handoff rejected',
+    },
+    { label: 'file-only decision', file: handoff('gate-red'), failure: 'halted: handoff rejected' },
+    { label: 'malformed file', file: '{broken', failure: 'halted: handoff rejected' },
+    { label: 'missing file', failure: 'halted: handoff rejected' },
+    {
+      label: 'unclean exit',
+      file: handoff(formatError),
+      shutdown: 'process.exitCode = 1',
+      failure: 'last-message finalization did not exit cleanly',
+    },
+    {
+      label: 'finalization timeout',
+      iterationTimeout: '1',
+      file: handoff(formatError),
+      shutdown: keepAlive,
+      failure: 'stalled: no terminal event within 1s',
+    },
+  ])('#704 F12/F13/F14/F15: handles a Codex loop HALT with $label', async row => {
+    const { file, streamResult, shutdown, failure, retry, iterationTimeout = '5' } = row
+    const prompts: string[] = []
+    const { out } = capture()
+    const code = await handleRunCommand(
+      parseRunCommand({ root: '212', engine: 'codex', iterationTimeout }),
+      projectFs(),
+      {
+        runIteration: input => {
+          prompts.push(input.promptText)
+          const first = prompts.length === 1
+          const text = first
+            ? ['pair-loop: HALT — handoff rejected', streamResult].join('\n')
+            : 'done'
+          const events = [
+            ...(first
+              ? [
+                  {
+                    type: 'item.completed',
+                    item: { type: 'command_execution', aggregated_output: progress, exit_code: 0 },
+                  },
+                ]
+              : []),
+            { type: 'item.completed', item: { type: 'agent_message', text } },
+            { type: 'turn.completed' },
+          ]
+          const stream = events.map(event => JSON.stringify(event)).join('\n') + '\n'
+          const program = `const fs = require('node:fs')
+            const output = process.argv[process.argv.indexOf('--output-last-message') + 1]
+            const file = ${first ? JSON.stringify(file) : 'undefined'}
+            if (file !== undefined) fs.writeFileSync(output, file)
+            fs.writeFileSync(1, ${JSON.stringify(stream)})
+            ${first ? (shutdown ?? '') : ''}`
+          return spawnIteration({
+            ...input,
+            cwd: tmpdir(),
+            engine: {
+              ...input.engine,
+              command: process.execPath,
+              headlessArgs: ['-e', program, '--'],
+            },
+          })
+        },
+        runAudit: () => undefined,
+      },
+    )
+
+    expect(prompts).toHaveLength(retry ? 2 : 1)
+    expect(code).toBe(retry ? 0 : 1)
+    if (retry) {
+      expect(prompts[1]).toContain(`handoff validation: ${formatError}.`)
+      expect(prompts[1]).toContain(prompts[0]!)
+    } else {
+      expect(out()).toContain(failure)
+    }
   })
 
   it('counts a prepared terminal card separately from failures', async () => {

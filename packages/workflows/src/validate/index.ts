@@ -175,12 +175,25 @@ const failedEscalationErrors: Check = (workflow, step, _deps, path) => {
     : []
 }
 
+const AGENT_ONLY = ['timeout-minutes', 'retries'] as const
+
+const hostOptionErrors: Check = (workflow, step, _deps, path) =>
+  step.kind !== 'loop' && kindByName[step.kind].host === true
+    ? AGENT_ONLY.filter(key => step[key] !== undefined).map(key =>
+        errorAt(workflow, [...path, key], {
+          problem: `${key} is only allowed on an agent step`,
+          fix: `remove '${key}'`,
+        }),
+      )
+    : []
+
 const CHECKS: readonly Check[] = [
   skillErrors,
   withErrors,
   reservedOutputs,
   gateErrors,
   gateNeedsWork,
+  hostOptionErrors,
   safetyErrors,
   failedEscalationErrors,
 ]
@@ -239,7 +252,7 @@ function loopOwnErrors(workflow: Workflow, step: Step, path: readonly string[]):
         fix: 'remove it',
       }),
     )
-  for (const key of ['skill', 'uses', 'with', 'gates', 'on-resume'] as const)
+  for (const key of ['skill', 'uses', 'with', 'gates', 'on-resume', ...AGENT_ONLY] as const)
     if (step[key] !== undefined)
       errors.push(
         errorAt(workflow, [...path, key], {

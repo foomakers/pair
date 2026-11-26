@@ -47,6 +47,8 @@ steps:
 | `uses` | String naming an included workflow. | Absent. | A typed or generic include call. The included steps replace the call in file order. | `uses: shared` |
 | `with` | Object of kind-specific options. | Empty object and kind defaults. | Executable steps. On an include, options apply to the selected output step of the same kind. | `with: { question: 'Merge this PR?' }` |
 | `gates` | List of gate keys, `target:<name>` values or project-owned `command:<shell line>` entries. | Empty. | Post-success checks for executable steps. On `gate`, it supplies the gate's commands and takes precedence over `with.gates`. | `gates: [target:increment]` |
+| `timeout-minutes` | Integer from 1 to 35791. | Run cap from `--iteration-timeout`, when set. | Agent processes launched by `pair-cli run`, including loop children. The step value overrides the run cap per attempt. | `timeout-minutes: 15` |
+| `retries` | Nonnegative integer. | No retries and existing failure routing. | Agent processes launched by `pair-cli run`, including loop children. | `retries: 2` |
 | `on-failed` | `stop` or `continue`. | `stop`. | Top-level executable steps. Shorthand for `escalate.failed`. Inside loops, use a child `escalate` rule. | `on-failed: continue` |
 | `on-resume` | `{ reason, step }` with a non-empty reason and earlier top-level step ID. | Absent. | Top-level executable steps. A stopped failure with that reason refreshes the linked PR head and replays from `step` on resume. | `on-resume: { reason: head-changed, step: review }` |
 | `alias` | String declared under `aliases`. | Step or run configuration. | Steps that launch an agent. The alias supplies engine, model and effort defaults. | `alias: build` |
@@ -88,7 +90,7 @@ steps:
     on-failed: stop
 ```
 
-The expanded IDs are `fix/repair`, then `fix/check`. `outputs.from` selects `repair`. Without it the last step supplies outputs. A typed caller requires the selected step to supply its kind's outputs. `with` applies to the selected step when it has the caller's kind, and `on-failed` applies to the last step. Declare `interactive`, `when`, `gates`, `state`, `on-resume` and `escalate` on included steps.
+The expanded IDs are `fix/repair`, then `fix/check`. `outputs.from` selects `repair`. Without it the last step supplies outputs. A typed caller requires the selected step to supply its kind's outputs. `with` applies to the selected step when it has the caller's kind, and `on-failed` applies to the last step. Declare `interactive`, `when`, `gates`, `state`, `on-resume`, `escalate`, `timeout-minutes` and `retries` on included steps.
 
 Includes may nest up to three levels; cycles, unknown names and workflow/skill name clashes fail validation. An include may introduce a loop outside a loop, but loops cannot nest, including through an include. Configuration can target expanded IDs such as `fix/repair`. `--dry-run` shows the expanded order; a run freezes it and warns on resume if an included source changes.
 
@@ -143,6 +145,29 @@ An `ok` result from `until` exits the loop immediately. By default, a failed `un
 ```
 
 Card facts are read as the step is about to start. Conditions combine keys with AND and match any value inside a list. For an output condition use `<step>.<name>` or `loop/step.name` with `is: [...]`. The producer must appear first. An unmatched condition records `skipped` and the run continues. Validation refuses an input that only a skippable step produces.
+
+## Agent timeouts and retries
+
+```yaml
+steps:
+  implement:
+    kind: implement
+    timeout-minutes: 15
+    retries: 2
+    escalate: { blocked: stop }
+```
+
+`pair-cli run` stops the agent when its time cap expires. The idle watchdog still applies. The host reruns a process fault with the same prompt in the same worktree, preserving any partial changes. Each retry gets its own time cap and stays in the current loop round.
+
+Process faults include a wall-clock timeout, idle timeout, crash, missing final message or invalid result. A valid `failed`, `blocked` or `needs-decision` result goes directly to escalation. A host interrupt leaves the step running for resume.
+
+With `retries` declared, including `retries: 0`, exhaustion records `blocked` with reason `fault`. An invalid final result records `failed` with reason `invalid-result`. The step's escalation rules apply to that outcome. If `retries` is omitted, a missing final result keeps the existing `failed` / `no-result` route.
+
+Recovered fault telemetry uses the engine, model and effort saved with the original attempt. Older fault records without an engine use `unknown`. Unrecorded model and effort fields are omitted.
+
+The session host displays a warning when a delegated or interactive step declares either key. It executes the session attempt once and settles the final message it receives. To enforce a process time cap or retry budget, run the agent step with `pair-cli run`. On takeover, the session honors faults already persisted by the terminal and settles exhausted attempts without relaunching them.
+
+The top-level keys apply to agent steps only. A host-run `gate` can still set `with.timeout-minutes` for its CI wait.
 
 ## Outcomes and escalation
 
@@ -374,13 +399,15 @@ steps:
 .pair/working/runs/<run-id>/
   run.lock              one process per run
   workflow.yaml         the workflow, frozen when the run started
-  state.json            the state and the outputs of each step
+  state.json            each step’s state, outputs and process fault attempts
   steps/<step-id>/
     result.json         the validated result of the step
     output.log          the final message of the agent
 ```
 
 `<run-id>` defaults to `<workflow>-<card>`. A step starts `pending`, becomes `running` when launched and ends with one of the recorded [outcomes](#outcomes-and-escalation).
+
+A step's `attempts` array records its process faults with an attempt number, loop round when applicable, detail, exit code, signal, elapsed time in milliseconds and the last 20 stderr lines. The end-of-run output includes these diagnoses, and enabled telemetry records each fault on its own step-attempt row.
 
 | When                                | What happens                                                      |
 | ----------------------------------- | ----------------------------------------------------------------- |

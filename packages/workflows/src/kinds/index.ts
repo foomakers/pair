@@ -85,11 +85,11 @@ const outputsOf = (kind: StepKind, { status, reason }: StepResult): StepKind['ou
  * its kind is `invalid-result` too, and keeps its outputs. The host and engine can record outcomes
  * outside the kind's agent contract, such as host gate failures or invalid agent results.
  */
-export function settle(
+export function checkResult(
   kind: StepKind,
   value: unknown,
   source: 'agent' | 'engine' = 'engine',
-): StepResult {
+): { valid: boolean; result: StepResult } {
   const common = violations(source === 'agent' ? agentResultSchema(kind) : COMMON_RESULT, value)
   const result = value as StepResult
   const found = common.length > 0 ? common : violations(outputsOf(kind, result), value)
@@ -100,10 +100,20 @@ export function settle(
   } as const
   if (found.length > 0) {
     const detail = found.map(one => `${one.path.join('.') || 'result'}: ${one.problem}`).join('; ')
-    return { ...invalid, detail }
+    return { valid: false, result: { ...invalid, detail } }
   }
   const broken = result.status === 'ok' ? kind.rule?.broken(result) : undefined
-  return broken === undefined ? result : { ...result, ...invalid, detail: broken }
+  return broken === undefined
+    ? { valid: true, result }
+    : { valid: false, result: { ...result, ...invalid, detail: broken } }
+}
+
+export function settle(
+  kind: StepKind,
+  value: unknown,
+  source: 'agent' | 'engine' = 'engine',
+): StepResult {
+  return checkResult(kind, value, source).result
 }
 
 /**

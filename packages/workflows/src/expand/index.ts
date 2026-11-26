@@ -149,6 +149,17 @@ function rebaseStep(step: Step, id: string): Step {
   }
 }
 
+const INCLUDE_FORBIDDEN_KEYS = [
+  'interactive',
+  'when',
+  'gates',
+  'state',
+  'on-resume',
+  'escalate',
+  'timeout-minutes',
+  'retries',
+] as const
+
 function expandStep(state: ExpansionState, context: StepContext, chain: readonly string[]): Step[] {
   const { workflow, step, id } = context
   const target = step.uses === undefined ? undefined : state.resolve(step.uses)
@@ -156,9 +167,7 @@ function expandStep(state: ExpansionState, context: StepContext, chain: readonly
     recordOrigins(state.origins, workflow, step, id)
     return [expandLoop(state, { ...context, step: rebaseStep(step, id) }, chain)]
   }
-  const unsupported = (
-    ['interactive', 'when', 'gates', 'state', 'on-resume', 'escalate'] as const
-  ).find(key => step[key] !== undefined)
+  const unsupported = INCLUDE_FORBIDDEN_KEYS.find(key => step[key] !== undefined)
   if (unsupported) {
     state.errors.push(
       errorAt(workflow, ['steps', step.id, unsupported], {

@@ -286,7 +286,7 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
               if (id === 'fix') fixFindings.push(inputs['findings'])
               const reply = replies[id]
               if (reply === undefined) throw new Error(`Unexpected agent step ${id}`)
-              return agentResult(reply)
+              return { final: agentResult(reply) }
             },
             runGates: async entries => {
               const result = await gates(entries)
@@ -398,16 +398,27 @@ it('the shipped workflow fails at fix after review produces no verdict (#726 AC-
       launch: async step => {
         launched.push(step.id)
         if (step.kind === 'implement')
-          return agentResult({
-            status: 'ok',
-            summary: 'ready',
-            branch: 'feature/US-726-test',
-            pr: 735,
-            head,
-          })
+          return {
+            final: agentResult({
+              status: 'ok',
+              summary: 'ready',
+              branch: 'feature/US-726-test',
+              pr: 735,
+              head,
+            }),
+          }
         if (step.kind === 'fix')
-          return agentResult({ status: 'ok', summary: 'fixed', head, resolutions: [] })
-        return undefined
+          return { final: agentResult({ status: 'ok', summary: 'fixed', head, resolutions: [] }) }
+        return {
+          fault: {
+            kind: 'no-result',
+            detail: 'no final message',
+            exitCode: 0,
+            signal: null,
+            elapsedMs: 5,
+            stderrTail: [],
+          },
+        }
       },
     },
     run.dir,

@@ -8,7 +8,12 @@ import {
   skillForStep,
   cardStateOf,
   cardStateToConfirm,
+  checkAgentResult,
   completedRun,
+  faultsOf,
+  observeRun,
+  recoverTerminalFaults,
+  telemetryWriter,
   effectiveSelection,
   escalationAction,
   checkAgainstEngines,
@@ -31,6 +36,7 @@ import {
   start,
   stoppedApproval,
   stoppedLoop,
+  type AgentLaunchResult,
   type Assignment,
   type CardState,
   type Configuration,
@@ -38,6 +44,8 @@ import {
   type RunDirectory,
   type RunOutcome,
   type StepResult,
+  type StepFaults,
+  type Started,
   type ResultFacts,
   type ResolvedAssignment,
   type StepEvent,
@@ -114,7 +122,12 @@ import {
 import { assignWorkflowCard, workflowOperation } from './workflow-facts'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
-import { finalTextOf, reportedModelOf, type IterationResult } from './stream-reader'
+import {
+  finalTextOf,
+  noTerminalEvent,
+  reportedModelOf,
+  type IterationResult,
+} from './stream-reader'
 import { observeEngineEvent, type EngineObservation } from './telemetry'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
 import { mainCheckoutOrCwd, readRunnableCard, resolveBranch, runSetupCommand } from './cycle-wiring'
@@ -396,7 +409,11 @@ function stepSettings(
   if (effective === undefined)
     return { engine: id, model: declaredEngineModel(resolved.project, id) }
   const { engine, model, effort } = settingsFor(effective, step, resolved.workflow.aliases)
-  return { engine, model: model ?? declaredEngineModel(resolved.project, engine), effort }
+  return {
+    engine,
+    model: model ?? declaredEngineModel(resolved.project, engine),
+    effort: engineOf(resolved, engine).effortArgs ? effort : undefined,
+  }
 }
 
 /** The engine of a step: the run's own, or the one the configuration names for it. */
@@ -429,6 +446,26 @@ function policiesOf({ config, resolved, services }: Launch) {
   }
 }
 
+function agentOutcome(
+  result: IterationResult,
+  final: string | undefined,
+  elapsedMs: number,
+): AgentLaunchResult {
+  const { stoppedBy, ...process } = result.process ?? {
+    exitCode: null,
+    signal: null,
+    elapsedMs,
+    stderrTail: [],
+  }
+  // The stream reader reports a work HALT on a successful terminal event as an iteration failure.
+  const terminalSucceeded = result.outcome === 'success' || result.cause === 'halted'
+  if (stoppedBy === undefined && terminalSucceeded && final !== undefined) return { final, process }
+  const cleanExitWithoutResult = process.exitCode === 0 && noTerminalEvent(result)
+  const kind =
+    stoppedBy ?? (result.outcome === 'success' || cleanExitWithoutResult ? 'no-result' : 'crash')
+  return { fault: { kind, detail: result.detail, ...process } }
+}
+
 /** One agent per step, in the card's worktree, on the engine, model and effort its settings say. */
 function launcher(run: Launch) {
   const { config, resolved, services } = run
@@ -441,6 +478,7 @@ function launcher(run: Launch) {
     let text: string | undefined
     let actualModel: string | undefined
     let observed: EngineObservation = {}
+    const started = performance.now()
     const result = await runIteration({
       engine,
       promptText: message,
@@ -448,10 +486,16 @@ function launcher(run: Launch) {
       autonomyArgs,
       model: settings.model,
       effort: settings.effort,
-      timeoutSeconds: config.iterationTimeoutSeconds,
+      timeoutSeconds:
+        step.timeoutMinutes === undefined
+          ? config.iterationTimeoutSeconds
+          : step.timeoutMinutes * 60,
+      diagnoseProcess: true,
       idleTimeoutSeconds: idle,
+      shouldFinalizeLastMessage: () =>
+        text === undefined || !checkAgentResult(text, kindByName[step.kind]).valid,
       onEvent: payload => {
-        text = finalTextOf(engine, payload) ?? text
+        text = finalTextOf(engine, payload, text)
         actualModel = reportedModelOf(engine, payload) ?? actualModel
         // The usage the engine reports, read by the per-engine parsers; none reported, none metered.
         observed = observeEngineEvent(observed, engine.id, payload)
@@ -462,10 +506,14 @@ function launcher(run: Launch) {
     })
     // An interrupted run records nothing: the step stays `running` on disk and runs again at the next launch.
     if (isInterrupted()) throw new Error('interrupted')
-    if (result.outcome === 'success' && text !== undefined)
-      return { output: text, model: actualModel ?? (engine.modelFlag ? settings.model : undefined) }
-    console.log(`  ${step.id}: the agent ended with no result — ${result.detail}`)
-    return { model: actualModel }
+    const outcome = agentOutcome(
+      result,
+      result.lastMessage ?? text,
+      Math.round(performance.now() - started),
+    )
+    const model =
+      actualModel ?? ('final' in outcome && engine.modelFlag ? settings.model : undefined)
+    return { ...outcome, model, settings }
   }
 }
 
@@ -504,6 +552,28 @@ const ENDINGS: Readonly<Record<RunOutcome['run'], { status: string; exit: number
         `parked at step ${at} — it needs a person: ${why}. Resume with: ${resume}`,
     },
   }
+
+function reportProcessFaults(faults: readonly StepFaults[] = []): void {
+  for (const { step, attempts } of faults) {
+    for (const {
+      attempt,
+      round,
+      kind,
+      detail,
+      exitCode,
+      signal,
+      elapsedMs,
+      stderrTail,
+    } of attempts) {
+      const location = round === undefined ? step : `${step} round ${round}`
+      const process = `exit=${exitCode ?? 'unknown'}, signal=${signal ?? 'none'}, elapsed=${elapsedMs}ms`
+      console.log(
+        `  Process fault — ${location} attempt ${attempt} (${kind}): ${detail} [${process}]`,
+      )
+      for (const line of stderrTail) console.log(`  stderr: ${line}`)
+    }
+  }
+}
 
 function conclude(outcome: RunOutcome, { request, runDir }: Opened, sink: ConsoleSink): number {
   const ending = ENDINGS[outcome.run]
@@ -618,7 +688,14 @@ const engineIdOf = (opened: Opened, id: string): keyof typeof ENGINES => {
 }
 
 /** The run's telemetry: the flag over the configuration's `telemetry` key; off when neither says. */
-const telemetryOf = (config: RunCommandConfig, { resolved, effective, telemetryWarned }: Opened) =>
+const telemetryOf = (
+  config: RunCommandConfig,
+  {
+    resolved,
+    effective,
+    telemetryWarned,
+  }: Pick<Opened, 'resolved' | 'effective' | 'telemetryWarned'>,
+) =>
   (config.telemetry ?? effective?.telemetry) === true
     ? {
         host: 'pair-run' as const,
@@ -795,6 +872,7 @@ async function runOnConsole(
       telemetryOf(config, opened),
     )
     reportRunOutcome(opened, outcome)
+    reportProcessFaults(outcome.faults)
     return exhaustedEnding(opened, outcome, sink, fs) ?? conclude(outcome, opened, sink)
   } finally {
     sink.finish()
@@ -888,7 +966,11 @@ function reportStopped(opened: Opened, status: string): number | undefined {
   return stopped
 }
 
-async function finishClosure(opened: Opened, fs: FileSystemService): Promise<number> {
+async function finishClosure(
+  opened: Opened,
+  fs: FileSystemService,
+  config: RunCommandConfig,
+): Promise<number> {
   const { resolved, runDir } = opened
   const step = await closureStep(opened, fs)
   if (!step) throw new Error('The closed card no longer has a resumable merge')
@@ -901,6 +983,12 @@ async function finishClosure(opened: Opened, fs: FileSystemService): Promise<num
   const result = await record({ dir: runDir, files: fs }, step.id, await finish(step), {
     host: 'pair-run',
   })
+  await restoreStoppedFaults(
+    { files: fs, dir: runDir },
+    result.status === 'ok' ? 'complete' : 'failed',
+    config,
+    resolved,
+  )
   console.log(`  Run: ${result.summary}`)
   return result.status === 'ok' ? 0 : 1
 }
@@ -927,7 +1015,7 @@ async function drive(
 ): Promise<number> {
   const { resolved, request, runDir } = opened
   const { fs, deps } = services
-  if (opened.closureOnly) return finishClosure(opened, fs)
+  if (opened.closureOnly) return finishClosure(opened, fs, config)
   const flagStep = parkedApproval(opened, fs)
   const replay = await workflowReplay(opened, fs)
   const prepare = () =>
@@ -951,7 +1039,10 @@ async function drive(
     deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   )
   const stopped = reportStopped(opened, started.status)
-  if (stopped !== undefined) return stopped
+  if (stopped !== undefined) {
+    await restoreStoppedFaults({ files: fs, dir: runDir }, started.status, config, resolved)
+    return stopped
+  }
   const worktree = replayTree ?? (await prepare())
   console.log(`  Worktree: ${worktree}`)
   return runOnConsole(
@@ -1208,15 +1299,33 @@ async function acceptsCard(
   return matchesWorkflowCard(found, selection.accepts, run)
 }
 
+function restoreStoppedFaults(
+  run: RunDirectory,
+  status: Started['status'],
+  config: RunCommandConfig,
+  resolved: Resolved,
+) {
+  reportProcessFaults(faultsOf(run))
+  const options = telemetryOf(config, { resolved, effective: effectiveConfiguration(run) })
+  return recoverTerminalFaults(status, options && telemetryWriter(observeRun(run), options))
+}
+
 /** Completed runs keep their outcome if optional telemetry needs a later retry. */
-export async function migrateCompletedRunTelemetry(run: RunDirectory): Promise<void> {
-  if (!hasLegacyRunTelemetry(run)) return
+export async function migrateCompletedRunTelemetry(
+  run: RunDirectory,
+  config: RunCommandConfig,
+  resolved: Resolved,
+  card: string,
+): Promise<void> {
   try {
     const lock = acquireRunLock(run.dir)
     if (lock.kind !== 'acquired') return
     try {
+      if (!completedRun(run, { card, workflow: resolved.workflow.name })) return
+      if (!hasLegacyRunTelemetry(run) && faultsOf(run).length === 0) return
       const warning = await migrateRunTelemetry(run)
       if (warning !== undefined) console.log(`  Warning: ${warning}`)
+      await restoreStoppedFaults(run, 'complete', config, resolved)
     } finally {
       lock.release()
     }
@@ -1239,12 +1348,12 @@ export async function handleWorkflowRun(
   if (resolved === undefined) return 1
   printPlan(resolved.workflow)
   if (config.dryRun) return printWorkflowPreview(resolved)
-  const opened = await openCard(resolved, request, services, card)
+  const opened = await openCard({ config, resolved }, request, services, card)
   return opened === undefined ? 0 : runWithCardLock(config, opened, services, batch?.releases)
 }
 
 async function openCard(
-  resolved: Resolved,
+  { config, resolved }: { config: RunCommandConfig; resolved: Resolved },
   request: WorkflowRunRequest,
   services: Services,
   { read, batch }: CardSource,
@@ -1257,7 +1366,7 @@ async function openCard(
     request.flagAnswer === undefined &&
     completedRun(run, { workflow: resolved.workflow.name, card: request.card })
   ) {
-    await migrateCompletedRunTelemetry(run)
+    await migrateCompletedRunTelemetry(run, config, resolved, request.card)
     console.log('  Run: already complete — nothing to do. Pass --restart to start over.')
     return undefined
   }

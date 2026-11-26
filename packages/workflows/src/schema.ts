@@ -16,6 +16,7 @@ export interface JsonSchema {
   readonly propertyNames?: { readonly pattern: string }
   readonly minProperties?: number
   readonly minimum?: number
+  readonly maximum?: number
   readonly items?: JsonSchema
 }
 
@@ -69,6 +70,13 @@ const SCALAR_CHECKS: readonly Scalar[] = [
       ? {
           problem: `${show(value)} is below ${schema.minimum}`,
           fix: `use at least ${schema.minimum}`,
+        }
+      : undefined,
+  (schema, value) =>
+    schema.maximum !== undefined && typeof value === 'number' && value > schema.maximum
+      ? {
+          problem: `${show(value)} is above ${schema.maximum}`,
+          fix: `use at most ${schema.maximum}`,
         }
       : undefined,
 ]

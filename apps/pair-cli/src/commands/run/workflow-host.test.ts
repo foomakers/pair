@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { once } from 'node:events'
+import { createServer, type AddressInfo, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
+import { PassThrough } from 'node:stream'
 import { basename, join } from 'path'
 import {
   hashOf,
@@ -16,11 +19,17 @@ import deliveryDefinition from '../../../../../.pair/adoption/tech/workflows/del
 import quickDefinition from '../../../../../packages/knowledge-hub/dataset/.pair/adoption/tech/workflows/quick.yaml?raw'
 // @ts-expect-error Vite loads the portable definition as fixture text.
 import portableQuick from '../../../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-examples/quick.yaml?raw'
+// @ts-expect-error Vite loads the recorded engine stream as fixture text.
+import piSuccess from './__fixtures__/pi-success.jsonl?raw'
+// @ts-expect-error Vite loads the recorded engine stream as fixture text.
+import openCodeSuccess from './__fixtures__/opencode-success.jsonl?raw'
+// @ts-expect-error Vite loads the recorded engine stream as fixture text.
+import openCodeIntermediate from './__fixtures__/opencode-intermediate-steps.jsonl?raw'
 import baseConfig from '../../../config.json'
 import { acquireRunLock } from './run-lock'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
-import type { SpawnIterationInput } from './spawn'
+import { spawnIteration, type SpawnIterationInput } from './spawn'
 import { runHostProcess } from './host-process'
 import type { WorkflowHostDependencies } from './workflow-host'
 
@@ -732,6 +741,596 @@ describe('validation before any launch (AC-2, AC-3)', () => {
       lines.some(line => line.includes('quick.yaml:1: version: unknown value 2 — fix: use 1')),
     ).toBe(true)
   })
+})
+
+it.each([
+  ['    timeout-minutes: 2\n', 120],
+  ['', 7],
+])(
+  '#704 AC-1: uses the step timeout or falls back to the run cap (%s)',
+  async (timeout, seconds) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('    kind: implement\n', `    kind: implement\n${timeout}`),
+    )
+    const limits: (number | undefined)[] = []
+    const recordLimit = (input: SpawnIterationInput) => {
+      limits.push(input.timeoutSeconds)
+      return IMPLEMENTED
+    }
+    expect(
+      await run(
+        ['quick'],
+        { ...OK, 'pair-process-implement': recordLimit },
+        { iterationTimeout: '7' },
+      ),
+    ).toBe(0)
+    expect(limits).toEqual([seconds])
+  },
+)
+
+function replayEngine(input: SpawnIterationInput, stream: string) {
+  const program = `require('node:fs').writeFileSync(1, ${JSON.stringify(stream)})`
+  return spawnIteration({
+    ...input,
+    cwd: tmpdir(),
+    engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', program, '--'] },
+  })
+}
+
+async function finalizeCodex(
+  input: SpawnIterationInput,
+  message: string,
+  {
+    initialText = '',
+    streamText,
+    exitCode = 0,
+    finalizationMs,
+  }: {
+    initialText?: string
+    streamText?: string
+    exitCode?: number | null
+    finalizationMs?: number
+  } = {},
+) {
+  const server = createServer(socket => socket.on('error', () => socket.destroy())).listen(
+    0,
+    '127.0.0.1',
+  )
+  try {
+    await once(server, 'listening')
+    const { port } = server.address() as AddressInfo
+    const connected = once(server, 'connection') as Promise<[Socket]>
+    const program = `const fs = require('node:fs')
+      const flag = process.argv.indexOf('--output-last-message')
+      const output = fs.openSync(process.argv[flag + 1], 'w')
+      fs.writeFileSync(output, ${JSON.stringify(initialText)})
+      const exitCode = ${exitCode}
+      const shutdown = require('node:net').connect(${port}, '127.0.0.1')
+      shutdown.once('connect', () => {
+        const text = ${JSON.stringify(streamText)}
+        if (text !== undefined) {
+          fs.writeFileSync(1, JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text } }) + '\\n')
+        }
+        fs.writeFileSync(1, '{"type":"turn.completed"}\\n')
+      })
+      shutdown.once('end', () => {
+        fs.ftruncateSync(output, 0)
+        fs.writeSync(output, ${JSON.stringify(message)}, 0, 'utf8')
+        fs.closeSync(output)
+        if (exitCode === null) setInterval(() => {}, 1000)
+        else process.exitCode = exitCode
+      })`
+    let sawTerminal = false
+    const result = await spawnIteration({
+      ...input,
+      cwd: tmpdir(),
+      engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', program, '--'] },
+      onEvent: event => {
+        input.onEvent?.(event)
+        if ((event as { type: string }).type !== 'turn.completed') return
+        sawTerminal = true
+        if (finalizationMs !== undefined)
+          vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+        // Release shutdown after the terminal event has been consumed.
+        setImmediate(() => {
+          if (finalizationMs !== undefined) {
+            vi.advanceTimersByTime(finalizationMs)
+            vi.useRealTimers()
+          }
+          void connected.then(([socket]) => socket.end())
+        })
+      },
+    })
+    expect(sawTerminal).toBe(true)
+    return result
+  } finally {
+    server.close()
+  }
+}
+
+it.each([
+  { label: 'a fenced result' },
+  {
+    label: 'a fenced result after an unmatched brace',
+    prose: 'Config contains an unmatched { brace.\n',
+  },
+  {
+    label: 'a fenced result after status in stream prose',
+    streamText: 'Earlier step reported {"status":"ok"}. Waiting for approval.',
+  },
+  {
+    label: 'a fenced result after an incomplete stream result',
+    streamText: fenced({ status: 'ok' }),
+  },
+  { label: 'a fenced result after six seconds of finalization', finalizationMs: 6000 },
+])(
+  '#704 F9: records $label from the Codex file without a retry (AC-2)',
+  async ({ prose = '', streamText, finalizationMs }) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
+    )
+    const result =
+      prose + fenced({ status: 'blocked', summary: 'Waiting', reason: 'approval-required' })
+    const runIteration = vi.fn((input: SpawnIterationInput) =>
+      finalizeCodex(input, result, {
+        ...(streamText !== undefined && { streamText }),
+        ...(finalizationMs !== undefined && { finalizationMs }),
+      }),
+    )
+
+    const exit = await run(
+      ['quick'],
+      OK,
+      { engine: 'codex', iterationTimeout: '30' },
+      { runIteration },
+    )
+    expect.soft(exit).toBe(0)
+    const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+    expect.soft(state.steps['implement']).toMatchObject({
+      state: 'blocked',
+      reason: 'approval-required',
+    })
+    expect(runIteration).toHaveBeenCalledTimes(1)
+  },
+)
+
+it('#704 F9: retains the valid Codex stream result when the file is malformed (AC-2)', async () => {
+  const streamText = fenced({ status: 'blocked', summary: 'Waiting', reason: 'approval-required' })
+  const runIteration = vi.fn((input: SpawnIterationInput) =>
+    finalizeCodex(input, fenced({ summary: 'Missing status' }), { streamText }),
+  )
+
+  expect(await run(['quick'], OK, { engine: 'codex' }, { runIteration })).toBe(0)
+  const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+  expect(state.steps['implement']).toMatchObject({ state: 'blocked', reason: 'approval-required' })
+  expect(runIteration).toHaveBeenCalledTimes(1)
+})
+
+it('#704 F9: rejects a finalized result without status even if the earlier file was valid (AC-3)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
+  )
+  const result = fenced({ summary: 'Missing status' })
+  const runIteration = (input: SpawnIterationInput) =>
+    finalizeCodex(input, result, {
+      initialText: fenced({ status: 'blocked', summary: 'Stale', reason: 'stale-result' }),
+      streamText: 'Earlier step reported {"status":"ok"}.',
+    })
+
+  const exit = await run(['quick'], OK, { engine: 'codex' }, { runIteration })
+  const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+  expect.soft(state.steps['implement']).toMatchObject({
+    state: 'failed',
+    reason: 'invalid-result',
+    attempts: [{ kind: 'invalid-result', detail: expect.stringMatching(/status/) }],
+  })
+  expect(exit).toBe(1)
+})
+
+it.each([
+  { exitCode: 1, kind: 'crash' },
+  { exitCode: null, kind: 'timeout' },
+])(
+  '#704 F9: records a $kind when Codex writes valid-looking text without a clean exit (AC-2)',
+  async ({ exitCode, kind }) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
+    )
+    const result = fenced({
+      status: 'blocked',
+      summary: 'Not finalized',
+      reason: 'approval-required',
+    })
+    const runIteration = (input: SpawnIterationInput) =>
+      finalizeCodex(input, result, {
+        initialText: result,
+        streamText: 'Earlier step reported {"status":"ok"}.',
+        exitCode,
+      })
+
+    const limits = kind === 'timeout' ? { iterationTimeout: '1' } : {}
+    expect(await run(['quick'], OK, { engine: 'codex', ...limits }, { runIteration })).toBe(0)
+    const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+    expect(state.steps['implement']).toMatchObject({
+      state: 'blocked',
+      reason: 'fault',
+      attempts: [{ kind, exitCode }],
+    })
+  },
+)
+
+it.each([
+  [
+    'pi with endTurn',
+    'pi',
+    piSuccess as string,
+    'CONTINUE-TOKEN: pair-loop --root 212 --iteration 5',
+  ],
+  [
+    'pi with stop',
+    'pi',
+    (piSuccess as string).replace('"stopReason":"endTurn"', '"stopReason":"stop"'),
+    'CONTINUE-TOKEN: pair-loop --root 212 --iteration 5',
+  ],
+  ['opencode', 'opencode', openCodeSuccess as string, 'LOOP RUN: stop reason nothing eligible'],
+] as const)(
+  '#704 F4: records the work result from %s without a retry (AC-2)',
+  async (_label, engine, fixture, original) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
+    )
+    const final = fenced({ status: 'blocked', summary: 'Waiting for the maintainer' })
+    const stream = fixture.replace(JSON.stringify(original), () => JSON.stringify(final))
+    const runIteration = vi.fn((input: SpawnIterationInput) => replayEngine(input, stream))
+
+    expect(await run(['quick'], OK, { engine, approveProjectTrust: true }, { runIteration })).toBe(
+      0,
+    )
+    expect(runIteration).toHaveBeenCalledTimes(1)
+    expect(states()['implement']).toBe('blocked')
+    expect(lines).toEqual(
+      expect.arrayContaining([expect.stringContaining('Waiting for the maintainer')]),
+    )
+  },
+)
+
+it('#704 F7: OpenCode faults when only a tool-call step has text (AC-2, AC-3)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
+  )
+  const events = (openCodeIntermediate as string).split('\n')
+  const text = fenced({ status: 'blocked', summary: 'Intermediate', reason: 'intermediate-only' })
+  events.splice(1, 0, JSON.stringify({ type: 'text', part: { type: 'text', text } }))
+  const runIteration = (input: SpawnIterationInput) => replayEngine(input, events.join('\n'))
+
+  expect(await run(['quick'], OK, { engine: 'opencode' }, { runIteration })).toBe(0)
+  const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+  expect(state.steps['implement']).toMatchObject({
+    state: 'blocked',
+    reason: 'fault',
+    attempts: [{ attempt: 1, kind: 'no-result' }],
+  })
+})
+
+it.each([
+  { subtype: 'success', attempts: 1, reason: 'approval-required' },
+  { subtype: 'error_during_execution', attempts: 2, reason: 'fault' },
+])('#704 F5: a $subtype terminal event uses the correct retry path (AC-2)', async row => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
+  )
+  const result = fenced({
+    status: 'blocked',
+    summary: 'pair-loop: HALT — approval required',
+    reason: 'approval-required',
+  })
+  const stream = JSON.stringify({ type: 'result', subtype: row.subtype, result }) + '\n'
+  const runIteration = vi.fn((input: SpawnIterationInput) => replayEngine(input, stream))
+
+  expect(await run(['quick'], OK, {}, { runIteration })).toBe(0)
+  expect(runIteration).toHaveBeenCalledTimes(row.attempts)
+  const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+  expect(state.steps['implement']).toMatchObject({ state: 'blocked', reason: row.reason })
+})
+
+it('#704 F6: the default live terminal prints the final stderr tail (AC-4)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
+  )
+  const tty = Object.assign(new PassThrough(), { isTTY: true, columns: 80, rows: 24 })
+  let output = ''
+  tty.on('data', text => {
+    output += String(text)
+  })
+  vi.spyOn(process, 'stdout', 'get').mockReturnValue(tty as unknown as typeof process.stdout)
+
+  expect(
+    await run(
+      ['quick'],
+      OK,
+      {},
+      {
+        runIteration: async () => ({
+          outcome: 'failed',
+          detail: 'engine exited',
+          process: { exitCode: 1, signal: null, elapsedMs: 42, stderrTail: ['Connection refused'] },
+        }),
+      },
+    ),
+  ).toBe(0)
+  expect(output).toContain('Process fault — implement attempt 1')
+  expect(output).toContain('  stderr: Connection refused\n')
+})
+
+it('#704 F8: telemetry keeps the watchdog limit and redacts stderr (AC-4)', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
+  )
+  const program = `require('node:fs').writeSync(2, 'synthetic-secret\\n'); setInterval(() => {}, 1000)`
+  const runIteration = (input: SpawnIterationInput) =>
+    spawnIteration({
+      ...input,
+      cwd: tmpdir(),
+      engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', program, '--'] },
+    })
+
+  expect(
+    await run(['quick'], OK, { telemetry: true, iterationTimeout: '1' }, { runIteration }),
+  ).toBe(0)
+  const [step] = fs.readFileSync(join(runDir(), 'telemetry.jsonl')).trim().split('\n')
+  expect(JSON.parse(step!)).toMatchObject({
+    step: 'implement',
+    attempt: 1,
+    diagnosis: {
+      kind: 'timeout',
+      detail: 'stalled: no terminal event within 1s — the engine was stopped',
+      stderrTail: ['[redacted]'],
+    },
+  })
+})
+
+it.each(['complete', 'parked', 'failed'])(
+  '#704 F17: headless %s opens recover a terminal fault before returning',
+  async disposition => {
+    const draft =
+      '{ kind: generic, skill: pair-process-implement, retries: 0, escalate: { blocked: continue } }'
+    const steps =
+      disposition === 'complete'
+        ? `  draft: ${draft}`
+        : `  rounds:\n    kind: loop\n    max: 1\n    until: draft\n    on-max: ${disposition === 'parked' ? 'escalate' : 'fail'}\n    steps:\n      draft: ${draft}`
+    write('.pair/adoption/tech/workflows/quick.yaml', `version: 1\nname: quick\nsteps:\n${steps}\n`)
+    const options = { telemetry: true }
+    await run(['quick'], { 'pair-process-implement': () => undefined }, options)
+    const ledger = join(runDir(), 'telemetry.jsonl')
+    expect(fs.readFileSync(ledger)).toContain('"diagnosis"')
+    await fs.unlink(ledger)
+    lines.length = 0
+    const count = launched.length
+    await run(['quick'], { 'pair-process-implement': () => undefined }, options)
+    expect(launched).toHaveLength(count)
+    expect(lines.join('\n')).toContain(
+      `Process fault — ${disposition === 'complete' ? 'draft' : 'rounds/draft round 1'} attempt 1 (crash)`,
+    )
+    const rows = fs
+      .readFileSync(ledger)
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line))
+    expect(rows[0]).toMatchObject({
+      type: 'step',
+      host: 'pair-run',
+      attempt: 1,
+      diagnosis: { kind: 'crash' },
+    })
+    expect(rows.at(-1)).toMatchObject({
+      type: 'run',
+      status: disposition === 'complete' ? 'done' : disposition,
+    })
+  },
+)
+
+it.each(['saved origin', 'legacy origin', 'telemetry originally off', 'existing row'])(
+  '#704 F18: recovers original settings for %s after project defaults change',
+  async variant => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      'version: 1\nname: quick\nsteps:\n  draft: { kind: generic, skill: pair-process-implement, retries: 0, escalate: { blocked: continue } }\n',
+    )
+    const skills = { 'pair-process-implement': () => undefined }
+    const ledger = join(runDir(), 'telemetry.jsonl')
+    const path = join(runDir(), 'state.json')
+    const read = () => JSON.parse(fs.readFileSync(ledger).split('\n')[0]!)
+    expect(
+      await run(['quick'], skills, {
+        telemetry: variant !== 'telemetry originally off',
+        engine: 'codex',
+      }),
+    ).toBe(0)
+    if (variant !== 'telemetry originally off') {
+      expect(read()).not.toHaveProperty('model')
+      if (variant !== 'existing row') await fs.unlink(ledger)
+    }
+    if (variant === 'legacy origin') {
+      const state = JSON.parse(fs.readFileSync(path))
+      delete state.steps.draft.attempts[0].origin
+      fs.writeFileSync(path, JSON.stringify(state))
+    }
+    write('pair.config.json', JSON.stringify({ run: { defaults: { model: 'later-model' } } }))
+    const count = launched.length
+    expect(await run(['quick'], skills, { telemetry: true, engine: 'pi' })).toBe(0)
+    expect(launched).toHaveLength(count)
+    expect(read().engine).toBe(variant === 'legacy origin' ? 'unknown' : 'codex')
+    expect(read()).not.toHaveProperty('model')
+    expect(read()).not.toHaveProperty('effort')
+  },
+)
+
+it.each([
+  ['opencode', undefined],
+  ['pi', undefined],
+  ['claude', 'high'],
+  ['codex', 'high'],
+] as const)(
+  '#704 F19: %s records only the effort its launcher can send',
+  async (engine, effort) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      'version: 1\nname: quick\nsteps:\n  draft: { kind: generic, skill: pair-process-implement, retries: 0, escalate: { blocked: continue } }\n',
+    )
+    write(
+      '.pair/adoption/tech/configurations/quick.yaml',
+      `version: 1\nname: quick\ndefaults: { engine: ${engine}, effort: high }\n`,
+    )
+    const options = { telemetry: true, config: 'quick', approveProjectTrust: true }
+    const skills = { 'pair-process-implement': () => undefined }
+    const ledger = join(runDir(), 'telemetry.jsonl')
+    const read = () => JSON.parse(fs.readFileSync(ledger).split('\n')[0]!)
+    expect(await run(['quick'], skills, options)).toBe(0)
+    const live = read()
+    await fs.unlink(ledger)
+    const launches = launched.length
+    expect(await run(['quick'], skills, options)).toBe(0)
+    expect(launched).toHaveLength(launches)
+    expect([live.effort, read().effort]).toEqual([effort, effort])
+  },
+)
+
+it('#704 F17: rechecks a completed run under lock before repairing its final telemetry', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    `version: 1\nname: quick\nsteps:\n  draft: { kind: generic, skill: pair-process-implement, retries: 0, escalate: { blocked: continue } }\n`,
+  )
+  const options = { telemetry: true }
+  const skills = { 'pair-process-implement': () => undefined }
+  await run(['quick'], skills, options)
+  const ledger = join(runDir(), 'telemetry.jsonl')
+  await fs.unlink(ledger)
+  vi.mocked(acquireRunLock).mockImplementationOnce(() => {
+    const path = join(runDir(), 'state.json')
+    const saved = JSON.parse(fs.readFileSync(path))
+    saved.steps.draft.state = 'running'
+    fs.writeFileSync(path, JSON.stringify(saved))
+    return { kind: 'acquired', release }
+  })
+  await run(['quick'], skills, options)
+  expect(fs.existsSync(ledger)).toBe(false)
+})
+
+it('#704 F17: an overlapping restart can archive state before the telemetry lock is acquired', async () => {
+  const options = { telemetry: true }
+  await run(['quick'], OK, options)
+  const ledger = join(runDir(), 'telemetry.jsonl')
+  const state = join(runDir(), 'state.json')
+  const exists = fs.existsSync.bind(fs)
+  let locked = false
+  vi.mocked(acquireRunLock).mockImplementationOnce(() => {
+    locked = true
+    return { kind: 'acquired', release }
+  })
+  vi.spyOn(fs, 'existsSync').mockImplementation(path => {
+    if (path === ledger && !locked && exists(state)) fs.rmSync(state)
+    return exists(path)
+  })
+  await expect(run(['quick'], OK, options)).resolves.toBe(0)
+})
+
+it('#704 F17: a refused backfill preserves the delivery outcome without an incomplete summary and retries on reopen', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    'version: 1\nname: quick\nsteps:\n  draft: { kind: generic, skill: pair-process-implement, retries: 0, escalate: { blocked: continue } }\n',
+  )
+  const options = { telemetry: true }
+  const skills = { 'pair-process-implement': () => undefined }
+  await run(['quick'], skills, options)
+  const ledger = join(runDir(), 'telemetry.jsonl')
+  await fs.unlink(ledger)
+  const rename = fs.rename.bind(fs)
+  let failed = false
+  vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+    if (!failed && to === ledger) {
+      failed = true
+      throw new Error('disk unavailable')
+    }
+    await rename(from, to)
+  })
+  expect(await run(['quick'], skills, options)).toBe(0)
+  expect(failed).toBe(true)
+  expect(fs.existsSync(ledger)).toBe(false)
+  expect(lines.join('\n')).toContain('disk unavailable')
+  expect(await run(['quick'], skills, options)).toBe(0)
+  expect(
+    fs
+      .readFileSync(ledger)
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line)),
+  ).toEqual([
+    expect.objectContaining({ attempt: 1, diagnosis: expect.objectContaining({ kind: 'crash' }) }),
+    expect.objectContaining({ type: 'run', status: 'done', steps: 1 }),
+  ])
+})
+
+it('#704 AC-4: quick retries a killed agent and records both diagnoses', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
+  )
+  const killAgent = `const {writeSync} = require('node:fs')
+    for (let i = 1; i <= 25; i++) writeSync(2, 'line ' + i + '\\n')
+    process.kill(process.pid, 'SIGKILL')`
+  const prompts: string[] = []
+  const runIteration = async (input: SpawnIterationInput) => {
+    prompts.push(input.promptText)
+    return spawnIteration({
+      ...input,
+      cwd: tmpdir(),
+      engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', killAgent, '--'] },
+    })
+  }
+
+  expect(await run(['quick'], OK, { telemetry: true }, { runIteration })).toBe(0)
+  expect(prompts).toEqual([prompts[0], prompts[0]])
+  const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+  const diagnosis = {
+    kind: 'crash',
+    detail: expect.stringContaining('no terminal event'),
+    exitCode: null,
+    signal: 'SIGKILL',
+    elapsedMs: expect.any(Number),
+    stderrTail: Array.from({ length: 20 }, (_, i) => `line ${i + 6}`),
+  }
+  expect(state.steps['implement']).toMatchObject({
+    state: 'blocked',
+    reason: 'fault',
+    attempts: [
+      { attempt: 1, ...diagnosis },
+      { attempt: 2, ...diagnosis },
+    ],
+  })
+  const telemetry = fs.readFileSync(join(runDir(), 'telemetry.jsonl')).trim().split('\n')
+  const safeDiagnosis = { ...diagnosis, stderrTail: Array.from({ length: 20 }, () => '[redacted]') }
+  expect(telemetry.slice(0, 2).map(line => JSON.parse(line))).toEqual([
+    expect.objectContaining({ step: 'implement', attempt: 1, diagnosis: safeDiagnosis }),
+    expect.objectContaining({ step: 'implement', attempt: 2, diagnosis: safeDiagnosis }),
+  ])
+  expect(lines).toEqual(
+    expect.arrayContaining([
+      expect.stringMatching(/Process fault — implement attempt 1 .*signal=SIGKILL/),
+      expect.stringMatching(/Process fault — implement attempt 2 .*signal=SIGKILL/),
+      '  stderr: line 25',
+      expect.stringContaining('Run: parked at step implement'),
+    ]),
+  )
+  expect(lines).not.toContain('  stderr: line 5')
 })
 
 describe('skill and options of a step (AC-4, AC-5)', () => {
@@ -1538,7 +2137,7 @@ it.each([true, false])(
     const text = `version: 1
 name: closure
 steps:
-  implement: { kind: implement }
+  implement: { kind: implement, retries: 1 }
   late: { kind: generic, skill: my-skill, when: { status: [Done] } }
   review: { kind: review }
   gate: { kind: gate, with: { checks: [head-unchanged] } }
@@ -1553,7 +2152,23 @@ steps:
     const path = join(dir, 'state.json')
     const state = JSON.parse(fs.readFileSync(path))
     state.steps = {
-      implement: { state: 'ok', outputs: { pr: 12, head: HEAD } },
+      implement: {
+        state: 'ok',
+        executions: 2,
+        attempts: [
+          {
+            attempt: 1,
+            kind: 'crash',
+            detail: 'Connection refused',
+            elapsedMs: 12,
+            exitCode: 1,
+            signal: null,
+            stderrTail: [],
+            origin: { host: 'pair-run', engine: 'codex' },
+          },
+        ],
+        outputs: { pr: 12, head: HEAD },
+      },
       late: { state: 'skipped' },
       review: { state: 'ok', outputs: { reviewedHead: HEAD } },
       gate: { state: 'ok', outputs: { gatedHead: HEAD } },
@@ -1583,11 +2198,13 @@ steps:
         JSON.stringify({ status: 'ok', summary: 'Closed', merged: true, mergeCommit: HEAD }),
       )
     })
-    const resumed = run(['closure'], {}, {}, { readCard: async () => 'closed' })
+    const resumed = run(['closure'], {}, { telemetry: true }, { readCard: async () => 'closed' })
     if (matches) {
       expect(await resumed).toBe(0)
       expect(states('closure-627')).toMatchObject({ late: 'skipped', merge: 'ok' })
       expect(actions.filter(action => action === 'merge')).toHaveLength(1)
+      expect(lines.join('\n')).toContain('Process fault — implement attempt 1 (crash)')
+      expect(fs.readFileSync(join(dir, 'telemetry.jsonl'))).toContain('"diagnosis"')
     } else {
       await expect(resumed).rejects.toThrow('card-closed')
       expect(actions).not.toContain('merge')
