@@ -210,8 +210,9 @@ it.each(['reference', 'compilerOptions.types'])(
           config,
           JSON.stringify({
             extends: join(root, 'packages/brand/tsconfig.json'),
-            compilerOptions: { types },
+            compilerOptions: { noLib: true, types },
             files: ['dev/style-fixture.ts'],
+            include: [],
           }),
         )
 
@@ -236,13 +237,18 @@ it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types',
     const importer = 'apps/website/app/style-fixture.ts'
     const stylesheet = join(cwd, 'apps/website/app/fixture.module.css')
     const specifier = './fixture.module.css'
+    const website = join(cwd, 'apps/website')
+    const config = join(website, 'tsconfig.json')
+    fs.symlinkSync(join(root, 'apps/website/node_modules'), join(website, 'node_modules'))
+    fs.writeFileSync(join(website, 'next-env.d.ts'), '/// <reference types="next" />\n')
     fs.writeFileSync(join(cwd, importer), `import styles from '${specifier}'\nexport { styles }\n`)
     fs.writeFileSync(
-      join(cwd, 'tsconfig.json'),
+      config,
       JSON.stringify({
         extends: join(root, 'apps/website/tsconfig.json'),
         compilerOptions: { incremental: false },
-        files: [importer],
+        files: ['next-env.d.ts', 'app/style-fixture.ts'],
+        include: [],
       }),
     )
 
@@ -250,7 +256,7 @@ it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types',
     expect(checkStylesheets(cwd)).toEqual([])
     fs.rmSync(stylesheet)
 
-    const checked = spawnSync(process.execPath, [compiler, '--pretty', 'false'], {
+    const checked = spawnSync(process.execPath, [compiler, '-p', config, '--pretty', 'false'], {
       cwd,
       encoding: 'utf8',
     })
