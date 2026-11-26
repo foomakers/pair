@@ -243,14 +243,22 @@ function findNullableProperties(source, checker, symbols) {
         isNullishType(checker.getTypeAtLocation(declaration.name)))
     for (const type of constituents(checker.getTypeAtLocation(node))) {
       if (!(type.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection))) continue
+      const literal = type.getSymbol()?.valueDeclaration
+      const original =
+        literal && ts.isObjectLiteralExpression(literal)
+          ? checker.getTypeAtLocation(literal)
+          : undefined
       for (const property of checker.getPropertiesOfType(type)) {
         if (property.declarations?.some(alreadyChecked)) continue
+        const optional = Boolean(property.flags & ts.SymbolFlags.Optional)
+        // TypeScript pads inferred union arms with optional fields missing from their literals.
+        if (optional && original && !original.getProperty(property.name)) continue
         report(
           checker.getTypeOfSymbolAtLocation(property, node),
           name.text,
           property.name,
           name,
-          Boolean(property.flags & ts.SymbolFlags.Optional),
+          optional,
         )
       }
     }
