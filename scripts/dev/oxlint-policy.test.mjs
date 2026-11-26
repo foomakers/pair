@@ -785,14 +785,17 @@ for (const [label, path, source, expected] of [
   })
 }
 
-test('#750 AC-7 CI hygiene detects tracked suppressions independently of Oxlint', t => {
+test('#750 AC-7/R13 CI hygiene detects tracked suppressions independently of Oxlint', t => {
   const cwd = mkdtempSync(join(tmpdir(), 'pair-hygiene-'))
   t.after(() => rmSync(cwd, { recursive: true, force: true }))
   const rootFixture = `packages/content-ops/${compilerFixtures}`
   const allowed = `${rootFixture}/allowed.ts`
   const missing = `${rootFixture}/missing.ts`
   const directive = 'oxlint-' + 'disable'
+  const scanner = 'packages/dev-tools/src/quality-gates/code-hygiene-check.ts'
+  const scannerSource = readFileSync(join(root, scanner), 'utf8')
   const suppressions = [
+    [scanner, `/* ${directive} no-var */\n${reasonedMismatch}${scannerSource}`, 1, 2],
     ['src/file.ts', `/* ${directive} no-var */\nvar count = 1\n`, 1],
     ['src/line.ts', `var count = 1 // ${directive}-line no-var\n`, 1],
     ['src/next.ts', `// ${directive}-next-line no-var\nvar count = 1\n`, 1],
@@ -811,7 +814,8 @@ test('#750 AC-7 CI hygiene detects tracked suppressions independently of Oxlint'
   git('init', '-q')
   writeFixture(cwd, allowed, reasonedMismatch)
   writeFixture(cwd, 'src/untracked.ts', reasonedMismatch)
-  git('add', allowed)
+  writeFixture(cwd, scanner, scannerSource)
+  git('add', allowed, scanner)
   const clean = hygiene()
   assert.match(clean.stdout, /PASS — no violations/)
   assert.equal(clean.status, 0)
@@ -820,7 +824,7 @@ test('#750 AC-7 CI hygiene detects tracked suppressions independently of Oxlint'
   git('add', ...suppressions.map(([path]) => path))
   const violations = hygiene()
   const reported = violations.stdout.split('\n').filter(line => /^  \S+:\d+$/.test(line)).sort()
-  assert.deepEqual(reported, suppressions.map(([path, , line]) => `  ${path}:${line}`).sort())
+  assert.deepEqual(reported, suppressions.flatMap(([path, , ...lines]) => lines.map(line => `  ${path}:${line}`)).sort())
   assert.equal(violations.status, 1)
 })
 
