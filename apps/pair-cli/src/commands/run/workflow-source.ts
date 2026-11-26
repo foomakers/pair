@@ -11,7 +11,7 @@ import {
 import type { Config } from '#registry'
 import { getKnowledgeHubDatasetPath } from '#config/kb-resolver'
 import { isSafePromptText } from './prompt-safety'
-import { createSkillProbe } from './skill-probe'
+import { createSkillProbe, workflowDefaultSkill } from './skill-probe'
 import { locateCycleScripts } from './cycle-scripts'
 import { canCommentOnCard } from './workflow-facts'
 
@@ -58,8 +58,10 @@ export function checkWorkflow(
 ) {
   const registry = join(main, WAY_OF_WORKING)
   const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
+  const installed = workflowDefaultSkill(fs, project, cwd)
   return validate(source.text, source.file, {
-    skillExists: createSkillProbe(fs, project, cwd),
+    skillExists: createSkillProbe(fs, project, cwd, true),
+    defaultSkillExists: name => installed(name) !== undefined,
     gateKeys: Object.keys(readGateRegistry(registryText)),
     gateTargets: Object.keys(readGateTargets(registryText)),
     launchInputs: ['card'],

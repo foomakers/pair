@@ -10,10 +10,21 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "import": "./dist/cli/index.js",
+      "require": "./dist/cli/index.js"
+    },
+    "./worktree": {
+      "types": "./dist/worktree/index.d.ts",
+      "import": "./dist/worktree/index.js",
+      "require": "./dist/worktree/index.js"
     }
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
+    "bundle:workflow": "node scripts/bundle-workflow.mjs",
     "prettier:fix": "prettier-fix",
     "prettier:check": "prettier-check",
     "test": "vitest run",
@@ -36,6 +47,7 @@
     "@pair/prettier-config": "workspace:*",
     "@pair/ts-config": "workspace:*",
     "@types/node": "catalog:",
+    "@vercel/ncc": "0.45.0",
     "@vitest/coverage-v8": "catalog:",
     "ts-node": "catalog:",
     "typescript": "catalog:",

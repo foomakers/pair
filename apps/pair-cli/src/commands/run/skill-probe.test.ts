@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
-import { createSkillProbe, readInstalledSkill } from './skill-probe'
+import { createSkillProbe, readInstalledSkill, workflowDefaultSkill } from './skill-probe'
+
+import { locateCycleScripts } from './cycle-scripts'
 
 const cwd = '/project'
 
@@ -31,6 +33,36 @@ function probe(files: string[], config: Config) {
 }
 
 describe('createSkillProbe', () => {
+  it('R754-06: prepares workflow runs with the configured built-in cycle skill', () => {
+    const directory = join(cwd, 'team/skills/team-workflow-cycle')
+    const fs = new InMemoryFileSystemService({ [join(directory, 'SKILL.md')]: '' }, cwd, cwd)
+    expect(locateCycleScripts(fs, skillsConfig(['team/skills'], 'team'), cwd).scriptsDir).toBe(
+      join(directory, 'scripts'),
+    )
+  })
+
+  it('R754-06: uses a legacy install manifest until its recorded skill is removed', () => {
+    const old = 'pair-process-refine-story'
+    const active = 'team-process-refine-story'
+    const directory = `${cwd}/team/skills`
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/.pair/.skill-name-map.json`]: JSON.stringify({
+          version: 1,
+          skills: { 'refine-story': active },
+        }),
+        [`${directory}/${old}/SKILL.md`]: '',
+        [`${directory}/${active}/SKILL.md`]: '',
+      },
+      cwd,
+      cwd,
+    )
+    const resolve = workflowDefaultSkill(fs, skillsConfig(['team/skills'], 'pair'), cwd)
+    expect(resolve(old)).toBe(active)
+    fs.rmSync(`${directory}/${active}/SKILL.md`)
+    expect(resolve(old)).toBeUndefined()
+  })
+
   it('finds a prefixed skill under the registry target', () => {
     const isInstalled = probe(
       [`${cwd}/.claude/skills/pair-loop/SKILL.md`],

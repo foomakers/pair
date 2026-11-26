@@ -5,6 +5,7 @@ export const SEVERITIES = ['Critical', 'Major', 'Minor'] as const
 
 export const review: StepKind = {
   name: 'review',
+  defaultInteractive: false,
   defaultSkill: 'pair-process-review',
   inputs: {
     type: 'object',

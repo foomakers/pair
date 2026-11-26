@@ -149,6 +149,10 @@ These schemas come from the workflow validator.
               "pattern": "^[a-z0-9][a-z0-9:._-]*$",
               "description": "The skill that runs. Optional for a typed kind, required for `generic`."
             },
+            "interactive": {
+              "type": "boolean",
+              "description": "Run this step in the session conversation. Headless runs park when they reach it. Defaults to the kind contract. Set it on loop children and included steps."
+            },
             "when": {
               "type": "object",
               "additionalProperties": false,

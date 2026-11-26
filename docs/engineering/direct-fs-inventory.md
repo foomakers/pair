@@ -70,6 +70,10 @@ The published `word-limits.mjs` helpers (publish-pr, write-issue, review),
 `standalone-script` exceptions. Their skill or asset consumers invoke them with
 Node in an installed project; no workspace package is available there.
 
+The session workflow command uses an exact-path adapter for the disk and stdin.
+Its installed-script integration test uses real Git worktrees and coordinates
+with the headless run lock.
+
 The scan recognizes static imports, re-exports, TypeScript import-equals,
 `require('...')`, and literal `import('...')` for `fs`, `node:fs`,
 `fs/promises`, and `node:fs/promises`. It scans tracked JS/TS extensions under

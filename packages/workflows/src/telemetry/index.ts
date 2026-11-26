@@ -5,6 +5,7 @@ import {
   writeAtomic,
   type EngineOutcome,
   type RunDirectory,
+  type RunHost,
   type RunIdentity,
   type RunEndStatus,
   type StepLaunch,
@@ -58,7 +59,7 @@ export const estimated = (sent: string, final: string): Tokens => ({
   written: fromText(final),
 })
 
-export type TelemetryHost = 'pair-run' | 'session'
+export type TelemetryHost = RunHost
 
 export interface EscalationTelemetry {
   readonly status: EngineOutcome['status']

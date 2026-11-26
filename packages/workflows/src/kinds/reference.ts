@@ -28,6 +28,7 @@ function section(name: (typeof KIND_NAMES)[number]): string[] {
     `## ${name}`,
     '',
     `- **Default skill**: ${skill}`,
+    `- **Default interactive**: \`${String(kind.defaultInteractive)}\``,
     ...(kind.handoff === undefined ? [] : [`- **Handoff**: \`${kind.handoff}\``]),
     '- **Inputs**',
     ...fields(kind.inputs),

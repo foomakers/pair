@@ -22,6 +22,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## implement
 
 - **Default skill**: `pair-process-implement`
+- **Default interactive**: `false`
 - **Handoff**: `published-pr`
 - **Inputs**
   - `card`: `string` — The card to implement.
@@ -39,6 +40,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## review
 
 - **Default skill**: `pair-process-review`
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card the pull request delivers.
   - `pr`: `integer` — The pull request to review.
@@ -60,6 +62,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## fix
 
 - **Default skill**: `pair-process-fix`
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card the pull request delivers.
   - `pr`: `integer` — The pull request to fix.
@@ -85,6 +88,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## generic
 
 - **Default skill**: none: `skill` is required
+- **Default interactive**: `false`
 - **Inputs**
   - Whatever the launch and the earlier steps produced.
 - **Outputs**, required when `status` is `ok`
@@ -99,6 +103,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## gate
 
 - **Default skill**: none: the host runs it, no agent
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card.
   - `pr`: `integer` — The pull request, for the checks that read it.
@@ -116,6 +121,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## approval
 
 - **Default skill**: none: the host runs it, no agent
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card.
   - `reviewedHead`: `string` — The head verified by a preceding review.
@@ -134,6 +140,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## merge
 
 - **Default skill**: none: the host runs it, no agent
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card, closed after the merge.
   - `pr`: `integer` — The pull request to merge.
@@ -154,6 +161,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## refine-story
 
 - **Default skill**: `pair-process-refine-story`
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card to prepare.
 - **Outputs**, required when `status` is `ok`
@@ -168,6 +176,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## plan-tasks
 
 - **Default skill**: `pair-process-plan-tasks`
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card to prepare.
 - **Outputs**, required when `status` is `ok`

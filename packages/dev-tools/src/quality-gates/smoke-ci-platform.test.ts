@@ -140,3 +140,11 @@ describe('smoke CI platform coverage (#135)', () => {
     expect(readme).not.toMatch(/Windows support/i)
   })
 })
+
+it('R754-09: the CLI package can resolve its release bundler from a workspace install', () => {
+  const version = execFileSync('pnpm', ['exec', 'ncc', 'version'], {
+    cwd: join(REPO_ROOT, 'apps/pair-cli'),
+    encoding: 'utf8',
+  })
+  expect(version).toMatch(/0\.45\.0/)
+})

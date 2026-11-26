@@ -1,27 +1,43 @@
 import { posix } from 'node:path'
 
-// AC-8: the package launches nothing, uses no git and no PM tool, and never reaches into a host.
-// An allow-list, so a new dependency is a decision and not a drift.
+// #696 AC-6: the workflow core launches nothing, uses no git and never imports a host adapter.
 const ALLOWED = new Set(['yaml', 'node:crypto', 'node:path'])
-const TEST_ONLY = new Set(['vitest'])
+const HOST_ADAPTER = /^(?:cli|worktree)(?:\/|$)/
 
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)['"]([^'"]+)['"]/g
 
 /** Every import of `source` (a file at `path`, relative to `src/`) the boundary forbids. */
 function forbiddenImports(path: string, source: string): string[] {
   const isTest = path.endsWith('.test.ts')
+  const isHost = HOST_ADAPTER.test(path)
+  const allowed = new Set(ALLOWED)
+  if (isTest) allowed.add('vitest')
+  if (isHost) allowed.add('node:fs')
+  if (['cli/card-lock.ts', 'cli/lock-holder.ts', 'cli/run-lock.ts'].includes(path))
+    allowed.add('node:os')
+  if (path === 'cli/session-files.ts') allowed.add('node:fs/promises')
+  if (path === 'cli/workflow.ts') allowed.add('node:util')
+  if (path.startsWith('worktree/')) allowed.add('node:child_process')
   return [...source.matchAll(SPECIFIER)]
     .map(match => match[1] as string)
     .filter(specifier => {
       // A test may read a published page as text, to prove it is not stale.
       if (isTest && specifier.endsWith('.md?raw')) return false
-      if (specifier.startsWith('.'))
-        return posix.normalize(posix.join(posix.dirname(path), specifier)).startsWith('..')
-      return !ALLOWED.has(specifier) && !(isTest && TEST_ONLY.has(specifier))
+      // The standalone host embeds the installer's data. The core remains independent.
+      if (
+        path === 'cli/session-project.ts' &&
+        specifier === '../../../../apps/pair-cli/config.json'
+      )
+        return false
+      if (specifier.startsWith('.')) {
+        const target = posix.normalize(posix.join(posix.dirname(path), specifier))
+        return target.startsWith('..') || (!isHost && HOST_ADAPTER.test(target))
+      }
+      return !allowed.has(specifier)
     })
 }
 
-describe('package boundary (AC-8)', () => {
+describe('workflow core boundary (#696 AC-6)', () => {
   it.each([
     ["import { spawn } from 'node:child_process'", 'node:child_process'],
     ["import { execFileSync } from 'child_process'", 'child_process'],
@@ -35,6 +51,8 @@ describe('package boundary (AC-8)', () => {
       '../../../apps/pair-cli/src/commands/run/engines',
     ],
     ["import { readFileSync } from 'node:fs'", 'node:fs'],
+    ["import { prepareWorktree } from '../worktree'", '../worktree'],
+    ["const host = await import('../cli/index')", '../cli/index'],
   ])('refuses %s', (source, specifier) => {
     expect(forbiddenImports('engine/index.ts', source)).toEqual([specifier])
   })
@@ -42,6 +60,20 @@ describe('package boundary (AC-8)', () => {
   it('accepts the package own modules and its declared dependencies', () => {
     const source = "import { parseDocument } from 'yaml'\nimport { kindByName } from '../kinds'"
     expect(forbiddenImports('validate/index.ts', source)).toEqual([])
+  })
+
+  it('allows only the worktree adapter to import Git process support', () => {
+    const source = "import { spawnSync } from 'node:child_process'"
+    expect(forbiddenImports('worktree/index.ts', source)).toEqual([])
+    expect(forbiddenImports('cli/index.ts', source)).toEqual(['node:child_process'])
+  })
+
+  it('allows only the CLI lock adapters to import the host OS module', () => {
+    const source = "import { hostname } from 'node:os'"
+    expect(forbiddenImports('engine/index.ts', source)).toEqual(['node:os'])
+    expect(forbiddenImports('worktree/index.ts', source)).toEqual(['node:os'])
+    expect(forbiddenImports('cli/index.ts', source)).toEqual(['node:os'])
+    expect(forbiddenImports('cli/run-lock.ts', source)).toEqual([])
   })
 
   it('lets a test, and only a test, read a published page as text', () => {

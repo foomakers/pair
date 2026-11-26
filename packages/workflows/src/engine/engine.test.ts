@@ -63,6 +63,7 @@ describe('engine: a linear run (AC-1)', () => {
           id: 'implement',
           kind: 'implement',
           uses: 'pair-process-implement',
+          interactive: false,
           with: { gates: ['quality-gate'] },
           startState: 'In Progress',
           assignment: { value: 'me', source: 'default' },
@@ -81,6 +82,7 @@ describe('engine: a linear run (AC-1)', () => {
           id: 'review',
           kind: 'review',
           uses: 'pair-process-review',
+          interactive: false,
           with: {},
           inputs: { card: '627', pr: 12, head: HEAD },
           attempt: 1,
@@ -110,6 +112,27 @@ describe('engine: a linear run (AC-1)', () => {
     })
   })
 
+  it('resumes an interrupted run and keeps each host and actual model (#696 AC-4/AC-5)', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    await next(run)
+    const pairRun = { host: 'pair-run', model: 'claude-sonnet-5-5', output: 'CLI result' } as const
+    await record(run, 'implement', IMPLEMENTED, pairRun)
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'review', attempt: 1 })
+
+    const resumed = { dir: run.dir, files: run.files }
+    expect(await start(resumed, SOURCE, { card: '627' })).toMatchObject({ status: 'resumed' })
+    expect((await next(resumed)).ready[0]).toMatchObject({ id: 'review', attempt: 2 })
+    const session = { host: 'session', model: 'claude-opus-5-5', output: 'Session result' } as const
+    await record(resumed, 'review', REVIEWED, session)
+
+    expect((await next(resumed)).run).toBe('done')
+    expect(stateOf(resumed).steps).toMatchObject({
+      implement: { state: 'ok', executions: 1, host: 'pair-run', model: 'claude-sonnet-5-5' },
+      review: { state: 'ok', executions: 2, host: 'session', model: 'claude-opus-5-5' },
+    })
+  })
+
   it('names the hash of the frozen workflow by its algorithm', () => {
     expect(hashOf('')).toBe(
       'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -135,6 +158,7 @@ describe('engine: a linear run (AC-1)', () => {
         id: 'notes',
         kind: 'generic',
         uses: 'my-skill',
+        interactive: false,
         with: {},
         inputs: {
           card: '627',
@@ -169,6 +193,16 @@ describe('engine: a linear run (AC-1)', () => {
     expect(written).toContain(`${DIR}/state.json.tmp`)
     expect(written).not.toContain(`${DIR}/state.json`)
     expect(run.files.existsSync(`${DIR}/state.json.tmp`)).toBe(false)
+  })
+})
+
+describe('interactive launches (#696 AC-2)', () => {
+  it('hands the host an interactive step', async () => {
+    const run = open()
+    const text = QUICK.replace('kind: implement\n', 'kind: implement\n    interactive: true\n')
+    await start(run, { ...SOURCE, text }, { card: '627' })
+
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'implement', interactive: true })
   })
 })
 
@@ -210,6 +244,19 @@ steps:
     await record(run, 'implement', IMPLEMENTED)
     return run
   }
+
+  it('hands the host an interactive loop child (#696 AC-2)', async () => {
+    const run = open()
+    const interactive = text.replace(
+      'review: { kind: review }',
+      'review: { kind: review, interactive: true }',
+    )
+    await start(run, { ...source, text: interactive }, { card: '627' })
+    await next(run)
+    await record(run, 'implement', IMPLEMENTED)
+
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', interactive: true })
+  })
 
   describe('#728 AC-3: legacy parked run migration', () => {
     const statePath = `${DIR}/state.json`
@@ -342,6 +389,7 @@ steps:
     await record(run, 'rounds/review', failedReview)
     expect((await next(run)).ready[0]).toMatchObject({
       id: 'rounds/fix',
+      interactive: false,
       round: 1,
       inputs: { findings },
     })

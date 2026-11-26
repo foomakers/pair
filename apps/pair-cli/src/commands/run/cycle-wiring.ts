@@ -218,8 +218,11 @@ async function readGh(
   throw new Error('host-transient: gh read exhausted')
 }
 
-export async function readCard(card: string, cwd: string): Promise<CardView> {
-  const script = join(cwd, CYCLE_STATE_REL)
+export async function readCard(
+  card: string,
+  cwd: string,
+  script = join(cwd, CYCLE_STATE_REL),
+): Promise<CardView> {
   if (existsSync(script)) {
     const r = await runHostProcess(process.execPath, [script, 'card', '--story', card], cwd)
     throwHostTimeout(r.error)
@@ -231,7 +234,7 @@ export async function readCard(card: string, cwd: string): Promise<CardView> {
     }
     if (r.status !== 0 || view === undefined || view.error !== undefined)
       throw new CardUnreadableError(
-        `card-unreadable: \`cycle-state.mjs card --story ${card}\` failed — ${view?.error ?? (r.stderr || r.stdout || '').trim()}. ` +
+        `card-unreadable: \`cycle-state.mjs card --story ${card}\` failed — ${view?.error ?? (r.stderr || r.stdout).trim()}. ` +
           `pair-cli reads the card through the PM adapter way-of-working.md binds.`,
       )
     return view
@@ -357,9 +360,14 @@ export async function readCardTitle(card: string, cwd: string): Promise<string |
 export async function readRunnableCard(
   card: string,
   cwd: string,
+  scriptsDir?: string,
 ): Promise<{ readonly title: string } | 'missing' | 'closed'> {
   try {
-    const view = await readCard(card, cwd)
+    const view = await readCard(
+      card,
+      cwd,
+      scriptsDir ? join(scriptsDir, 'cycle-state.mjs') : undefined,
+    )
     return view.state === 'CLOSED' ? 'closed' : { title: view.title?.trim() ?? '' }
   } catch (error) {
     if (String(error).includes('host-transient:')) throw error

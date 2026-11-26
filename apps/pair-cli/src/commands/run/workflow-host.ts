@@ -1,9 +1,11 @@
+import { workflowDefaultSkill } from './skill-probe'
 import { savedRunState, savedWorkflow } from './workflow-saved-state'
-import { prepareReplayHead, recoverWorktree } from './workflow-worktree'
+import { prepareReplayHead } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
 import {
+  skillForStep,
   cardStateOf,
   cardStateToConfirm,
   completedRun,
@@ -11,7 +13,9 @@ import {
   escalationAction,
   checkAgainstEngines,
   describeSettings,
+  expandedWorkflowSource,
   formatError,
+  interactiveOf,
   hasConfigurationTiers,
   hasLegacyRunTelemetry,
   kindByName,
@@ -22,12 +26,9 @@ import {
   parseWorkflow,
   pendingMergeClosure,
   record,
-  readGateRegistry,
-  readGateTargets,
   runSteps,
   settingsFor,
   start,
-  stepSettled,
   stoppedApproval,
   stoppedLoop,
   type Assignment,
@@ -48,6 +49,13 @@ import {
   type WorkflowHost,
   type WorkflowsConfig,
 } from '@pair/workflows'
+import {
+  approvalPlatform,
+  hostSteps,
+  refreshReplayInputs,
+  riskTagFamily,
+} from '@pair/workflows/cli'
+import { prepareCardWorktree } from '@pair/workflows/worktree'
 import { loadConfigWithOverrides } from '#config'
 import type { Config } from '#registry'
 import type { RunCommandConfig, RunWorkflowRequest } from './parser'
@@ -56,6 +64,7 @@ import {
   declaredEngine,
   declaredEngineModel,
   declaredRunIdleTimeout,
+  projectWorkingArea,
   resolveAutonomyFor,
   withRunAgentRunner,
 } from './run-context'
@@ -102,16 +111,14 @@ import {
   readWorkflowCards,
   type WorkflowCard,
 } from './workflow-selection'
-import { assignWorkflowCard, workflowFacts, workflowOperation } from './workflow-facts'
-import { sectionBodies } from './policy-sections'
+import { assignWorkflowCard, workflowOperation } from './workflow-facts'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { resolveIdleTimeout, spawnIteration, type SpawnIterationInput } from './spawn'
-import { finalTextOf, type IterationResult } from './stream-reader'
+import { finalTextOf, reportedModelOf, type IterationResult } from './stream-reader'
 import { observeEngineEvent, type EngineObservation } from './telemetry'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
 import { mainCheckoutOrCwd, readRunnableCard, resolveBranch, runSetupCommand } from './cycle-wiring'
-import { performHostKind, runStepGates } from './workflow-kinds'
-import { approvalPlatform, approvalRunner } from './workflow-approval'
+import { runHostProcess } from './host-process'
 import { workflowMerge } from './workflow-merge'
 import {
   createCycleScriptsBridge,
@@ -168,31 +175,29 @@ export interface Services {
 async function cycleWorktree(input: WorktreeInput): Promise<string> {
   const location = locateCycleScripts(input.fs, input.project, input.cwd)
   const bridge = createCycleScriptsBridge(location, input.cwd)
-  const resolve = (pr?: number) => resolveBranch(input.card, input.title, pr, input.cwd)
-  const made = await recoverWorktree(
-    resolve(),
-    branch =>
-      bridge.worktree({
-        main: input.main,
-        story: input.card,
-        branch,
-        base: readCycleDefaults(location).baseBranch,
-        worktreeRoot: resolveCycleWorktreeRoot(location, input.main, undefined),
-      }),
-    async () => {
-      const platform = approvalPlatform((action, card, data) =>
-        workflowOperation(() => location.scriptsDir, input.cwd, { action, card, data }),
-      )
-      return (await platform.target(input.card)).pr
+  return prepareCardWorktree(
+    {
+      main: input.main,
+      story: input.card,
+      base: readCycleDefaults(location).baseBranch,
+      worktreeRoot: resolveCycleWorktreeRoot(location, input.main, undefined),
     },
-    resolve,
+    {
+      worktree: bridge.worktree,
+      resolveBranch: pr => resolveBranch(input.card, input.title, pr, input.cwd),
+      async linkedPr() {
+        const platform = approvalPlatform((action, card, data) =>
+          workflowOperation(() => location.scriptsDir, input.cwd, { action, card, data }),
+        )
+        return (await platform.target(input.card)).pr
+      },
+      setup: runSetupCommand,
+    },
   )
-  const failed = made.created ? await runSetupCommand(input.main, made.path) : undefined
-  if (failed !== undefined) throw new Error(`worktree-setup-failed: ${failed}`)
-  return made.path
 }
 
 interface Resolved {
+  readonly defaultSkill: ReturnType<typeof workflowDefaultSkill>
   readonly workflow: Workflow
   readonly source: Located
   readonly project: Config
@@ -251,19 +256,6 @@ export function configureWorkflowRun(
   }
 }
 
-/** Serialize the expanded workflow for the engine's frozen source. */
-function expandedSource(workflow: Workflow): string {
-  const entries = (steps: Workflow['steps']): Record<string, unknown> =>
-    Object.fromEntries(
-      steps.map(({ id, steps: children, ...step }) => [
-        id,
-        { ...step, ...(children && { steps: entries(children) }) },
-      ]),
-    )
-  const { version, name, description, aliases, select, assign, steps } = workflow
-  return `${JSON.stringify({ version, name, description, aliases, select, assign, steps: entries(steps) }, null, 2)}\n`
-}
-
 function resumeWorkflow(
   fs: Services['fs'],
   request: RunWorkflowRequest,
@@ -285,11 +277,6 @@ function resumeWorkflow(
   }
   return { ...parseWorkflow(fs.readFileSync(frozen), source.file, true), warnings: [] }
 }
-
-const hasExpansion = (workflow: Workflow) =>
-  workflow.steps.some(
-    step => step.id.includes('/') || step.steps?.some(child => child.id.includes('/')),
-  )
 
 /** Validate the workflow and tier declarations before looking up card labels. */
 export function resolveWorkflowDefinition(
@@ -325,10 +312,9 @@ export function resolveWorkflowDefinition(
     return undefined
   }
   return {
+    defaultSkill: workflowDefaultSkill(fs, project, cwd),
     workflow: checked.workflow,
-    source: hasExpansion(checked.workflow)
-      ? { ...source, text: expandedSource(checked.workflow) }
-      : source,
+    source: expandedWorkflowSource(checked.workflow, source),
     project,
     engine,
     main,
@@ -448,15 +434,12 @@ function launcher(run: Launch) {
   const { config, resolved, services } = run
   const policyOf = policiesOf(run)
   const runIteration = services.deps.workflow?.runIteration ?? spawnIteration
-  return async (
-    step: StepLaunch,
-    message: string,
-    meter: (usage: Usage) => void,
-  ): Promise<string | undefined> => {
+  return async (step: StepLaunch, message: string, meter: (usage: Usage) => void) => {
     const settings = stepSettings(resolved, run.effective, stepOf(resolved, step.id))
     const engine = engineOf(resolved, settings.engine)
     const { autonomyArgs, idle } = policyOf(engine)
     let text: string | undefined
+    let actualModel: string | undefined
     let observed: EngineObservation = {}
     const result = await runIteration({
       engine,
@@ -469,6 +452,7 @@ function launcher(run: Launch) {
       idleTimeoutSeconds: idle,
       onEvent: payload => {
         text = finalTextOf(engine, payload) ?? text
+        actualModel = reportedModelOf(engine, payload) ?? actualModel
         // The usage the engine reports, read by the per-engine parsers; none reported, none metered.
         observed = observeEngineEvent(observed, engine.id, payload)
         const { tokens } = observed
@@ -478,9 +462,10 @@ function launcher(run: Launch) {
     })
     // An interrupted run records nothing: the step stays `running` on disk and runs again at the next launch.
     if (isInterrupted()) throw new Error('interrupted')
-    if (result.outcome === 'success' && text !== undefined) return text
+    if (result.outcome === 'success' && text !== undefined)
+      return { output: text, model: actualModel ?? (engine.modelFlag ? settings.model : undefined) }
     console.log(`  ${step.id}: the agent ended with no result — ${result.detail}`)
-    return undefined
+    return { model: actualModel }
   }
 }
 
@@ -488,6 +473,12 @@ function resumeCommand(request: RunWorkflowRequest): string {
   const runId = request.runId === undefined ? '' : ` --run-id ${request.runId}`
   return `pair-cli run ${request.name} --card ${request.card}${runId}`
 }
+
+const INTERACTIVE_PARK = {
+  status: 'needs-decision',
+  reason: 'interactive-step',
+  summary: 'This step needs the conversation in an agent session',
+} as const
 
 type Ending = (at: string, why: string, resume: string) => string
 
@@ -514,7 +505,7 @@ const ENDINGS: Readonly<Record<RunOutcome['run'], { status: string; exit: number
     },
   }
 
-function conclude(outcome: RunOutcome, request: RunWorkflowRequest, sink: ConsoleSink): number {
+function conclude(outcome: RunOutcome, { request, runDir }: Opened, sink: ConsoleSink): number {
   const ending = ENDINGS[outcome.run]
   const why = explain(outcome.last)
   sink.event({
@@ -523,7 +514,11 @@ function conclude(outcome: RunOutcome, request: RunWorkflowRequest, sink: Consol
     status: ending.status,
     ...(outcome.run !== 'done' && { reason: why }),
   })
-  console.log(`  Run: ${ending.line(outcome.last?.step ?? '?', why, resumeCommand(request))}`)
+  const resume =
+    outcome.run === 'parked' && outcome.last?.reason === INTERACTIVE_PARK.reason
+      ? `pair-workflow-run ${basename(runDir)}`
+      : resumeCommand(request)
+  console.log(`  Run: ${ending.line(outcome.last?.step ?? '?', why, resume)}`)
   return ending.exit
 }
 
@@ -540,40 +535,6 @@ interface Opened {
   readonly flagStep?: string
   readonly closureOnly?: true
   readonly telemetryWarned?: boolean
-}
-
-const NON_RISK_PROJECTIONS = new Set([
-  'cost',
-  'light',
-  'security-relevance',
-  'business-impact',
-  'coupling-balance',
-  'change-risk',
-  'service-criticality',
-])
-
-function riskTagFamily(fs: FileSystemService, main: string): string | null | undefined {
-  const path = join(main, RISK_MATRIX)
-  if (!fs.existsSync(path)) return undefined
-  const markdown = fs
-    .readFileSync(path)
-    .replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[^\n]*$/gm, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-  const projections = sectionBodies(markdown, 'Tag Projection')
-  if (projections.length > 1) return null
-  const [projection] = projections
-  const active = projection?.join('\n').match(/^Active:[ \t]*(.+)$/m)?.[1]
-  if (active === undefined) return undefined
-  const families = new Set(
-    active
-      .split(',')
-      .map(family => family.trim())
-      .filter(Boolean),
-  )
-  if (families.has('none')) return null
-  if (families.has('risk')) return 'risk'
-  const renamed = [...families].filter(family => !NON_RISK_PROJECTIONS.has(family))
-  return renamed.length === 1 ? renamed[0]! : null
 }
 
 function hostCardFacts(resolved: Resolved, cardId: string, { fs, deps }: Services) {
@@ -599,7 +560,8 @@ function hostCardFacts(resolved: Resolved, cardId: string, { fs, deps }: Service
     async readResultFacts(step: StepLaunch, result: StepResult) {
       const facts = await readResultFacts(step, result)
       if (facts.card === undefined) return facts
-      const family = riskTagFamily(fs, resolved.main)
+      const path = join(resolved.main, RISK_MATRIX)
+      const family = riskTagFamily(fs.existsSync(path) ? fs.readFileSync(path) : undefined)
       return family === undefined ? facts : { ...facts, riskTagFamily: family }
     },
   }
@@ -616,44 +578,32 @@ function hostKindsOf(
   const { fs } = services
   const path = join(resolved.main, WAY_OF_WORKING)
   const way = fs.existsSync(path) ? fs.readFileSync(path) : ''
-  const registry = readGateRegistry(way)
-  const targets = readGateTargets(way)
-  const cwd = worktree ?? resolved.cwd
   const scriptDir = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
-  const call = (action: string, card: string, data?: unknown) =>
-    workflowOperation(scriptDir, resolved.cwd, { action, card, data })
-  const gate = performHostKind(registry, cwd, targets, step =>
-    workflowFacts(scriptDir, resolved.cwd, step),
-  )
-  const approval = approvalRunner(
-    { dir: runDir, files: fs },
-    approvalPlatform(call),
+  const reply =
     flagStep !== undefined && request.flagAnswer !== undefined
       ? { step: flagStep, answer: request.flagAnswer }
-      : undefined,
-  )
-  const merge = workflowMerge(call, resolved.main)
+      : undefined
   return {
     ...hostCardFacts(resolved, request.card, services),
+    ...hostSteps({
+      run: { dir: runDir, files: fs },
+      main: resolved.main,
+      worktree: worktree ?? resolved.cwd,
+      adoption: way,
+      operation: input => workflowOperation(scriptDir, resolved.cwd, input),
+      process: runHostProcess,
+      reply,
+    }),
     assignCard: (assign: Assignment) =>
       assignWorkflowCard(scriptDir, resolved.cwd, request.card, assign),
     commentOnCard: async ({ card, marker, body }) => {
-      await call('comment-on-card', card, { marker, body })
+      await workflowOperation(scriptDir, resolved.cwd, {
+        action: 'comment-on-card',
+        card,
+        data: { marker, body },
+      })
     },
     warn: (message: string) => console.log(`  Warning: ${message}`),
-    perform: async (step: StepLaunch) => {
-      if (step.kind !== 'approval' && step.kind !== 'merge') return gate(step)
-      try {
-        return await (step.kind === 'approval' ? approval(step) : merge(step))
-      } catch (error) {
-        return {
-          status: 'failed',
-          summary: `The host could not complete ${step.kind}`,
-          reason: error instanceof Error ? error.message : String(error),
-        }
-      }
-    },
-    runGates: runStepGates(registry, cwd, targets),
   }
 }
 
@@ -752,6 +702,7 @@ function cardTransitions({ request, resolved }: Opened, services: Services) {
     },
     async transition(event: StepEvent) {
       const step = stepOf(resolved, event.step)
+      if (interactiveOf(step)) return
       const set = cardStateOf(step)
       if (set === undefined || set.when !== whenOf(event.state) || cardStateToConfirm(step)) return
       try {
@@ -823,9 +774,13 @@ async function runOnConsole(
     sink.event({ event: 'card-start', card: request.card, title: opened.title })
     const outcome = await runSteps(
       {
+        id: 'pair-run',
         files: fs,
         style: resolved.engine.engine.skillInvocationStyle,
         isSafeText: isSafePromptText,
+        parkInteractive: INTERACTIVE_PARK,
+        skillOf: step =>
+          skillForStep(stepOf(resolved, step.id), resolved.defaultSkill) ?? step.uses,
         styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
         ...hostKindsOf(opened, services),
@@ -840,7 +795,7 @@ async function runOnConsole(
       telemetryOf(config, opened),
     )
     reportRunOutcome(opened, outcome)
-    return exhaustedEnding(opened, outcome, sink, fs) ?? conclude(outcome, request, sink)
+    return exhaustedEnding(opened, outcome, sink, fs) ?? conclude(outcome, opened, sink)
   } finally {
     sink.finish()
     restore()
@@ -898,33 +853,11 @@ function parkedApproval(opened: Opened, fs: FileSystemService): string | undefin
   return parked
 }
 
-async function refreshReplayInputs(
-  opened: Opened,
-  fs: FileSystemService,
-): Promise<StepReplay | undefined> {
-  const saved = savedWorkflow(opened.request, opened.runDir, fs)
-  if (saved === undefined) return undefined
-  const { workflow, state } = saved
-  const { resolved, request } = opened
-  const stopped = workflow.steps.find(step => !stepSettled(step, state.steps[step.id]?.state))
-  const route = stopped?.['on-resume']
-  if (stopped === undefined || route === undefined) return undefined
-  const failure = state.steps[stopped.id]
-  if (failure?.state !== 'failed' || failure.reason !== route.reason) return undefined
-  const from = workflow.steps.findIndex(step => step.id === route.step)
-  const pr = workflow.steps
-    .slice(0, from)
-    .reverse()
-    .map(step => state.steps[step.id]?.outputs?.['pr'])
-    .find(value => typeof value === 'number')
-  if (pr === undefined) throw new Error('Cannot replay without the original workflow PR')
+function workflowReplay({ request, runDir, resolved }: Opened, fs: FileSystemService) {
   const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
-  const platform = approvalPlatform((action, card, data) =>
+  return refreshReplayInputs(savedWorkflow(request, runDir, fs), (action, card, data) =>
     workflowOperation(locate, resolved.cwd, { action, card, data }),
   )
-  const current = await platform.target(request.card)
-  if (current.pr !== pr) throw new Error('The workflow PR changed; start a new run for that PR')
-  return { from: route.step, inputs: { head: current.head } }
 }
 
 function recordIncludeSources(
@@ -965,7 +898,9 @@ async function finishClosure(opened: Opened, fs: FileSystemService): Promise<num
     resolved.main,
     true,
   )
-  const result = await record({ dir: runDir, files: fs }, step.id, await finish(step))
+  const result = await record({ dir: runDir, files: fs }, step.id, await finish(step), {
+    host: 'pair-run',
+  })
   console.log(`  Run: ${result.summary}`)
   return result.status === 'ok' ? 0 : 1
 }
@@ -994,7 +929,7 @@ async function drive(
   const { fs, deps } = services
   if (opened.closureOnly) return finishClosure(opened, fs)
   const flagStep = parkedApproval(opened, fs)
-  const replay = await refreshReplayInputs(opened, fs)
+  const replay = await workflowReplay(opened, fs)
   const prepare = () =>
     (deps.workflow?.prepareWorktree ?? cycleWorktree)({
       fs,
@@ -1005,7 +940,7 @@ async function drive(
       title: opened.title,
     })
   const replayTree = replay && (await prepare())
-  if (replay && replayTree) await prepareReplayHead(replayTree, String(replay.inputs['head']))
+  if (replay && replayTree) await prepareReplayHead(replayTree, replay.inputs.head)
   const started = await startOnConsole(opened, fs, replay)
   const effective = effectiveConfiguration({ files: fs, dir: runDir })
   printSettings(resolved, effective)
@@ -1033,6 +968,10 @@ async function drive(
   )
 }
 
+function usesCliEngine(workflow: Workflow): boolean {
+  return addressedSteps(workflow).some(step => step.kind !== 'loop' && !interactiveOf(step))
+}
+
 /** Engines preflight did not probe on a resume: the run's own when no configuration was frozen, the frozen copy's when none resolved now. */
 function probeUnchecked(
   resolved: Resolved,
@@ -1041,14 +980,15 @@ function probeUnchecked(
   probe: ExecutableProbe,
 ): void {
   if (effective === undefined) {
-    if (resolved.configuration !== undefined) assertEngineAvailable(resolved.engine, probe)
+    if (resolved.configuration !== undefined && usesCliEngine(resolved.workflow))
+      assertEngineAvailable(resolved.engine, probe)
     return
   }
   if (resolved.configuration !== undefined) return
   const { errors } = checkAgainstEngines(effective, {
     file: join(runDir, 'configuration.yaml'),
     facts: engineFacts(resolved.project, probe),
-    steps: resolved.workflow.steps,
+    steps: addressedSteps(resolved.workflow),
     aliases: resolved.workflow.aliases,
   })
   if (errors.length > 0) throw new Error(errors.map(formatError).join('\n'))
@@ -1109,7 +1049,11 @@ async function closureStep(
 async function preflight(opened: Omit<Opened, 'title'>, services: Services): Promise<Opened> {
   const { resolved, request } = opened
   const { card } = request
-  const read = await (services.deps.workflow?.readCard ?? readRunnableCard)(card, resolved.cwd)
+  const readCard =
+    services.deps.workflow?.readCard ??
+    ((id, cwd) =>
+      readRunnableCard(id, cwd, locateCycleScripts(services.fs, resolved.project, cwd).scriptsDir))
+  const read = await readCard(card, resolved.cwd)
   if (read === 'missing')
     throw new Error(
       `card-not-found: card ${card} cannot be read from the tracker; nothing was launched.`,
@@ -1119,7 +1063,7 @@ async function preflight(opened: Omit<Opened, 'title'>, services: Services): Pro
       return { ...opened, title: `Card ${card}: finish post-merge closure`, closureOnly: true }
     throw new Error(`card-closed: card ${card} is closed; nothing was launched.`)
   }
-  if (resolved.configuration === undefined)
+  if (resolved.configuration === undefined && usesCliEngine(resolved.workflow))
     assertEngineAvailable(
       resolved.engine,
       services.deps.workflow?.engineAvailable ?? createExecutableProbe(services.fs),
@@ -1171,7 +1115,7 @@ function printWorkflowPreview(resolved: Resolved): number {
   }
   addressedSteps(resolved.workflow).forEach(step => {
     const host = step.kind === 'loop' || kindByName[step.kind].host === true
-    const skill = host ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
+    const skill = host ? undefined : skillForStep(step, resolved.defaultSkill)
     const assignment =
       step.kind === 'loop'
         ? ''
@@ -1338,7 +1282,7 @@ async function runWithCardLock(
 ): Promise<number> {
   const { resolved, request } = opened
   const cardLock = (services.deps.acquireLock ?? acquireCardLock)({
-    workingArea: join(resolved.main, '.pair/working'),
+    workingArea: projectWorkingArea(services.fs, resolved.cwd, resolved.main, resolved.project),
     card: request.card,
   })
   if (cardLock.kind !== 'acquired') {

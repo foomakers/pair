@@ -8,41 +8,16 @@
  * what a section MEANS — that stays with the reader that owns the section.
  */
 
+import { sectionBodies } from '@pair/workflows/cli'
 import { isSafePromptText, promptSafetyFailure } from './prompt-safety'
+
+export { sectionBodies }
 
 export const POLICY_PATH = '.pair/adoption/tech/automation.md'
 
 /** A HALT on the policy read: the message names the file and the offending value. */
 export function policyHalt(detail: string): never {
   throw new Error(`${POLICY_PATH} — ${detail}. Fix the adoption file, then re-run.`)
-}
-
-/**
- * The body of a level-2 section, as RENDERED markdown: an occurrence inside a fenced code block
- * is not a heading (the schema documents its own declarations inside fences, so a line scan that
- * ignored fences would read a documentation example as a declaration).
- */
-export function sectionBodies(markdown: string, heading: string): string[][] {
-  const bodies: string[][] = []
-  let current: string[] | undefined
-  let fenced = false
-
-  for (const raw of markdown.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (line.startsWith('```')) {
-      fenced = !fenced
-      if (current) current.push(raw)
-      continue
-    }
-    if (!fenced && /^##\s+/.test(line)) {
-      if (current) bodies.push(current)
-      current = line.replace(/^##\s+/, '') === heading ? [] : undefined
-      continue
-    }
-    if (current) current.push(raw)
-  }
-  if (current) bodies.push(current)
-  return bodies
 }
 
 /** The section's non-empty lines, trimmed — the unit every schema rule is stated over. */
