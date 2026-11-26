@@ -269,3 +269,24 @@ it('#757 AC-4 R758-02: checks workspace stylesheet exports', () => {
     }
   })
 })
+
+it('#757 AC-4 R758-04: distinguishes JSX text from stylesheet imports', () => {
+  withCssFixture(cwd => {
+    const importer = 'apps/website/app/style-example.tsx'
+    const path = join(cwd, importer)
+    const example = "export const Example = () => <code>import './example.css'</code>\n"
+    fs.writeFileSync(path, example)
+    expect(checkStylesheets(cwd)).toEqual([])
+
+    fs.writeFileSync(
+      path,
+      "import './actual.css'\n" +
+        example +
+        "export const Button = () => <button onClick={() => void import('./lazy.css')} />\n",
+    )
+    expect(checkStylesheets(cwd)).toEqual([
+      `Missing stylesheet: ${importer} imports ./actual.css`,
+      `Missing stylesheet: ${importer} imports ./lazy.css`,
+    ])
+  })
+})
