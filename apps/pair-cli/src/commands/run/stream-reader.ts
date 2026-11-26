@@ -85,42 +85,59 @@ function asFinal(value: unknown): StageFinalResult | undefined {
 
 /** Every TOP-LEVEL `{…}` span of a text (string-aware, so braces in strings and nested objects never count). */
 function topLevelObjects(text: string, skipProgress = false): string[] {
-  const starts = skipProgress ? /(?:\b|(?<!\w)_+)PAIR_EVENT[ \t]+|\{/g : /\{/g
+  const starts = skipProgress ? /(?:\b|(?<!\w)(_+))PAIR_EVENT[ \t]+|\{/g : /\{/g
   const spans: string[] = []
   for (let match = starts.exec(text); match; match = starts.exec(text)) {
     if (match[0] !== '{') {
-      starts.lastIndex = progressEnd(text, starts.lastIndex)
+      const start = starts.lastIndex
+      const end = progressEnd(text, start)
+      if (claimsMarker(text, start, end, match[1])) starts.lastIndex = end ?? lineEnd(text, start)
       continue
     }
-    starts.lastIndex = containerEnd(text, match.index, false)
+    starts.lastIndex = containerEnd(text, match.index, false) ?? text.length
     spans.push(text.slice(match.index, starts.lastIndex))
   }
   return spans
 }
 
-/** Consume one marked JSON value. Unrecognizable payloads stop at the physical line end. */
-function progressEnd(text: string, start: number): number {
+/** An underscored identifier is a marker only when it is enclosed by matching emphasis. */
+function claimsMarker(
+  text: string,
+  start: number,
+  end: number | undefined,
+  emphasis?: string,
+): boolean {
+  if (!emphasis) return true
+  if (end !== undefined)
+    return text.startsWith(emphasis, end) && !/\w/.test(text.charAt(end + emphasis.length))
+  const body = text.slice(start, lineEnd(text, start))
+  return Array.from(body.matchAll(/_+/g)).some(
+    match => match[0] === emphasis && !/\w/.test(body.charAt(match.index + emphasis.length)),
+  )
+}
+
+/** A scalar must be valid JSON. Sentence punctuation belongs to the surrounding prose. */
+function progressEnd(text: string, start: number): number | undefined {
   if (text[start] === '{' || text[start] === '[') return containerEnd(text, start, true)
-  const scalar =
-    /(?:"(?:\\[^\r\n]|[^"\\\r\n])*"|[a-zA-Z0-9.+-]+)(?=[`*_~'">\p{Pe}\p{Pf}]*(?:[\s{]|$))/uy
+  const scalar = /"(?:\\[^\r\n]|[^"\\\r\n])*"|[a-zA-Z0-9.+-]+/y
   scalar.lastIndex = start
-  const match = scalar.exec(text)
-  if (!match) return lineEnd(text, start)
+  const token = scalar.exec(text)?.[0].replace(/\.+$/, '')
+  if (!token || /[\p{L}\p{N}]/u.test(text.charAt(start + token.length))) return undefined
   try {
-    JSON.parse(match[0])
-    return scalar.lastIndex
+    JSON.parse(token)
+    return start + token.length
   } catch {
-    return lineEnd(text, start)
+    return undefined
   }
 }
 
 /** Progress records fit on one line, even when truncated. A handoff may span several. */
-function containerEnd(text: string, start: number, singleLine: boolean): number {
+function containerEnd(text: string, start: number, singleLine: boolean): number | undefined {
   const closing = [text[start] === '[' ? ']' : '}']
   const scan = { inString: false, escaped: false }
   for (let i = start + 1; i < text.length; i++) {
     const ch = text[i]!
-    if (singleLine && '\r\n'.includes(ch)) return i
+    if (singleLine && '\r\n'.includes(ch)) return undefined
     if (stepString(scan, ch)) continue
     if (ch === '"') {
       scan.inString = true
@@ -128,9 +145,9 @@ function containerEnd(text: string, start: number, singleLine: boolean): number 
     }
     const boundary = containerBoundary(closing, ch, singleLine)
     if (boundary === 'closed') return i + 1
-    if (boundary === 'malformed') return lineEnd(text, i)
+    if (boundary === 'malformed') return undefined
   }
-  return text.length
+  return undefined
 }
 
 function lineEnd(text: string, start: number): number {
