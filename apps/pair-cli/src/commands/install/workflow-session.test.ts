@@ -118,8 +118,9 @@ it.each([
 ])(
   'R754-06 / AC-1, AC-4, AC-8: resolves skills with $name',
   async ({ prefix, target, skills, override, update }) => {
-    const root = fileSystemService.mkdtempSync(join(tmpdir(), 'pair-install-session-'))
-    roots.push(root)
+    const fixture = fileSystemService.mkdtempSync(join(tmpdir(), 'pair-install-session-'))
+    roots.push(fixture)
+    const root = join(fixture, 'primary')
     const fs = fileSystemService
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -222,10 +223,12 @@ steps:
     const { runId, lease } = invoke('start', 'installed', '--card', '42', '--engine', 'codex')
     invoke('stop', runId, '--lease', lease)
 
-    const linked = join(root, 'linked')
+    const linked = join(fixture, 'linked')
     git(root, 'worktree', 'add', '--detach', linked)
     write(linked, 'pair.config.json', fs.readFileSync(join(root, 'pair.config.json')))
-    expect(await install(linked, config)).toBe(0)
+    if (update) expect(await install(linked)).toBe(0)
+    expect(await install(linked, config, update ? 'update' : 'install')).toBe(0)
+    if (update) expect(fs.existsSync(skillFile(linked, 'pair-process-refine-story'))).toBe(true)
     write(linked, vendor, vendorSkill)
     const invokeLinked = runner(linked, script(linked))
     expect(invokeLinked('validate', 'installed')).toMatchObject(preview)
