@@ -188,7 +188,7 @@ function matchingFiles(pattern, directory = '.', root = workspaceRoot) {
     if (isExcluded(resolve(file), false) || frameworkExtensions.includes(extname(file))) return []
     // Broken included links abort discovery before Oxlint can modify any selected source.
     const target = realpathSync.native(file)
-    if (!isWithin(workspaceRoot, target) || !isWalkDirectory(dirname(resolve(root, path)), root)) return []
+    if (!isWalkDirectory(dirname(resolve(root, path)), root)) return []
     if (dirent.isSymbolicLink()) {
       const stat = statSync(target)
       if (stat.isDirectory() && sourceExtensions.includes(extname(file).slice(1))) {
@@ -196,6 +196,7 @@ function matchingFiles(pattern, directory = '.', root = workspaceRoot) {
       }
       if (!stat.isFile()) return []
     }
+    if (!isWithin(workspaceRoot, target)) return []
     checkReadable(file)
     return [file]
   })
