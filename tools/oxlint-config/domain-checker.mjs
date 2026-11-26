@@ -10,13 +10,15 @@ const dependencyFailures = new Set([
   2882, 6053, 6305, 7016,
 ])
 
+function failDiagnostic(diagnostic, project) {
+  const location = diagnostic.file?.fileName ?? project
+  throw new Error(
+    `${location}: TS${diagnostic.code} ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`,
+  )
+}
+
 function loadProject(project) {
-  const fail = diagnostic => {
-    const location = diagnostic.file?.fileName ?? project
-    throw new Error(
-      `${location}: TS${diagnostic.code} ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`,
-    )
-  }
+  const fail = diagnostic => failDiagnostic(diagnostic, project)
   const config = ts.getParsedCommandLineOfConfigFile(
     project,
     {},
@@ -31,7 +33,7 @@ function loadProject(project) {
   }
   const program = ts.createProgram({
     rootNames: config.fileNames,
-    // Local declarations can carry unresolved re-exports into a model.
+    // Imported declarations can carry unresolved types into a model.
     options: { ...config.options, skipLibCheck: false },
     projectReferences: config.projectReferences,
   })
@@ -49,6 +51,69 @@ function loadProject(project) {
     if (unresolved) fail(unresolved)
   }
   return program
+}
+
+function typeDependencyCheck(program, checker) {
+  const diagnosticsBySource = new Map()
+  const checkedNodes = new Set()
+  const checkedSymbols = new Set()
+
+  function checkDiagnostics(node) {
+    const source = node.getSourceFile()
+    if (!diagnosticsBySource.has(source)) {
+      diagnosticsBySource.set(
+        source,
+        program
+          .getSemanticDiagnostics(source)
+          // Composite build file lists can omit dependencies that still resolve for lint.
+          .filter(d => d.category === ts.DiagnosticCategory.Error && d.code !== 6307),
+      )
+    }
+    const start = node.getStart(source)
+    const failure = diagnosticsBySource
+      .get(source)
+      .find(d => d.start >= start && d.start < node.end)
+    if (failure) failDiagnostic(failure)
+  }
+
+  function follow(symbol) {
+    if (!symbol || checkedSymbols.has(symbol)) return
+    checkedSymbols.add(symbol)
+    const alias = symbol.flags & ts.SymbolFlags.Alias
+    for (const declaration of symbol.declarations ?? []) {
+      if (alias) {
+        checkDiagnostics(declaration)
+        // Resolution errors can be on the shared module specifier instead of the binding.
+        for (let node = declaration.parent; node; node = node.parent) {
+          if (!ts.isImportDeclaration(node) && !ts.isExportDeclaration(node)) continue
+          if (node.moduleSpecifier) checkDiagnostics(node.moduleSpecifier)
+          break
+        }
+      } else {
+        check(ts.isTypeAliasDeclaration(declaration) ? declaration : declaration.type)
+      }
+    }
+    if (alias) follow(checker.getImmediateAliasedSymbol(symbol))
+  }
+
+  function check(node) {
+    if (
+      !node ||
+      checkedNodes.has(node) ||
+      program.isSourceFileDefaultLibrary(node.getSourceFile())
+    ) {
+      return
+    }
+    checkedNodes.add(node)
+    checkDiagnostics(node)
+    function visit(part) {
+      if (ts.isIdentifier(part)) follow(checker.getSymbolAtLocation(part))
+      ts.forEachChild(part, visit)
+    }
+    visit(node)
+  }
+
+  return check
 }
 
 function hasDirectNullishType(type) {
@@ -192,9 +257,13 @@ function returnedExpression(node) {
   if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return node.body
 }
 
-function findNullableProperties(source, checker, symbols) {
+function findNullableProperties(source, checker, symbols, checkTypeDependency) {
   const findings = new Map()
   const inScope = owner => !symbols || symbols.includes(owner)
+
+  function checkPropertyDependencies(property) {
+    for (const declaration of property.declarations ?? []) checkTypeDependency(declaration.type)
+  }
 
   // The declaration visitor reports in-scope getters at their names.
   function reportsGetter(declaration) {
@@ -229,6 +298,7 @@ function findNullableProperties(source, checker, symbols) {
     for (const type of constituents(checker.getTypeAtLocation(expression))) {
       for (const property of objectProperties(type, checker)) {
         if (property.declarations?.some(reportsGetter)) continue
+        checkPropertyDependencies(property)
         const declaration = property.valueDeclaration
         const local =
           declaration?.getSourceFile() === source &&
@@ -258,6 +328,7 @@ function findNullableProperties(source, checker, symbols) {
       )
     for (const property of checker.getPropertiesOfType(checker.getTypeAtLocation(node))) {
       if (property.declarations?.some(declaredHere)) continue
+      checkPropertyDependencies(property)
       report(
         checker.getTypeOfSymbolAtLocation(property, node),
         name.text,
@@ -283,6 +354,7 @@ function findNullableProperties(source, checker, symbols) {
     for (const type of constituents(checker.getTypeAtLocation(node))) {
       for (const property of objectProperties(type, checker)) {
         if (property.declarations?.some(alreadyChecked)) continue
+        checkPropertyDependencies(property)
         report(
           checker.getTypeOfSymbolAtLocation(property, node),
           name.text,
@@ -299,8 +371,11 @@ function findNullableProperties(source, checker, symbols) {
     if (ts.isTypeAliasDeclaration(node)) checkAlias(node)
     if (isDomainProperty(node)) {
       const owner = domainOwner(node)
-      if (inScope(owner) && !node.questionToken && !hasNullishSyntaxFinding(node)) {
-        report(checker.getTypeAtLocation(node.name), owner, node.name.getText(source), node.name)
+      if (inScope(owner) && !node.questionToken) {
+        checkTypeDependency(node.type)
+        if (!hasNullishSyntaxFinding(node)) {
+          report(checker.getTypeAtLocation(node.name), owner, node.name.getText(source), node.name)
+        }
       }
     }
     const expression = returnedExpression(node)
@@ -319,6 +394,7 @@ export function checkNullableDomainProperties(project, files, symbolsByFile = ne
   if (!files.length) return []
   const program = loadProject(resolve(project))
   const checker = program.getTypeChecker()
+  const checkTypeDependency = typeDependencyCheck(program, checker)
   const seen = new Set()
   return files.flatMap(filename => {
     const path = resolve(filename)
@@ -327,10 +403,11 @@ export function checkNullableDomainProperties(project, files, symbolsByFile = ne
     const source = program.getSourceFile(path)
     if (!source) throw new Error(`${project}: domain source ${filename} is absent from the project`)
     if (source.isDeclarationFile) return []
-    return findNullableProperties(source, checker, symbolsByFile.get(filename)).map(finding => ({
-      ...finding,
-      filename,
-      code: nullableDomainRule,
-    }))
+    return findNullableProperties(
+      source,
+      checker,
+      symbolsByFile.get(filename),
+      checkTypeDependency,
+    ).map(finding => ({ ...finding, filename, code: nullableDomainRule }))
   })
 }
