@@ -379,19 +379,25 @@ async function executeAgent(
       model: exchange.model,
       attempt: current.attempt,
     })
-  return settleAgentStep(host, run, current, { ...reply, model: exchange.model })
+  return settleParsedResult(host, run, current, { ...reply, model: exchange.model })
 }
 
 /** Settle the final message after a host's agent or conversation completes. */
-export async function settleAgentStep(
+export function settleAgentStep(
   host: WorkflowHost,
   run: RunDirectory,
   step: StepLaunch,
-  {
-    final,
-    model,
-    result = checkAgentResult(final, kindByName[step.kind]).result,
-  }: { final: string; model?: string | undefined; result?: StepResult },
+  { final, model }: { final: string; model?: string | undefined },
+): Promise<StepExecutionResult> {
+  const { result } = checkAgentResult(final, kindByName[step.kind])
+  return settleParsedResult(host, run, step, { final, model, result })
+}
+
+async function settleParsedResult(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  { final, model, result }: { final: string; model?: string | undefined; result: StepResult },
 ): Promise<StepExecutionResult> {
   // Leave the step running on disk so the next invocation can retry it.
   if (step.kind === 'implement' && result.status === 'failed' && result.reason === 'card-held')

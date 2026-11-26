@@ -1,5 +1,5 @@
-import { runSteps, type StepEvent, type WorkflowHost } from '.'
-import { start, type StepLaunch } from '../engine'
+import { runSteps, settleAgentStep, type StepEvent, type WorkflowHost } from '.'
+import { next, start, type StepLaunch } from '../engine'
 import { createMemoryFiles } from '../engine/memory-files'
 
 const QUICK = `version: 1
@@ -20,6 +20,23 @@ const IMPLEMENTED = fenced({
   branch: 'feature/US-627-x',
   pr: 12,
   head: HEAD,
+})
+
+it('#696/#704: settles a conversation from the final message even when its envelope contains other metadata', async () => {
+  const files = createMemoryFiles()
+  const run = { dir: DIR, files }
+  await start(run, SOURCE, { card: '627' })
+  const [step] = (await next(run)).ready
+  const envelope = { final: IMPLEMENTED, result: { status: 'blocked' as const, summary: 'draft' } }
+  const host: WorkflowHost = {
+    files,
+    style: 'instruction',
+    isSafeText: () => true,
+    launch: async () => {
+      throw new Error('unexpected launch')
+    },
+  }
+  expect(await settleAgentStep(host, run, step!, envelope)).toMatchObject({ status: 'ok', pr: 12 })
 })
 
 const telemetryOf = (host: WorkflowHost) =>
