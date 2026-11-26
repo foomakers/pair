@@ -194,6 +194,28 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
       file: handoff(formatError),
       failure: 'halted: handoff rejected',
     },
+    {
+      label: 'a marked array containing a decision in the stream',
+      streamResult: `PAIR_EVENT [${handoff('gate-red')}]`,
+      file: handoff(formatError),
+      retry: true,
+    },
+    {
+      label: 'a file handoff before a marked array containing a decision',
+      file: `${handoff(formatError)}\nPAIR_EVENT [${handoff('gate-red')}]`,
+      retry: true,
+    },
+    {
+      label: 'a stream handoff after a marked string containing a brace',
+      streamResult: `PAIR_EVENT "{"\n${handoff(formatError)}`,
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'a file handoff after a marked string containing a brace',
+      file: `PAIR_EVENT "{"\n${handoff(formatError)}`,
+      retry: true,
+    },
     { label: 'file-only format error', file: handoff(formatError), retry: true },
     {
       label: 'stream format error',
@@ -224,7 +246,7 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
       shutdown: keepAlive,
       failure: 'stalled: no terminal event within 1s',
     },
-  ])('#704 F12/F13: handles a Codex loop HALT with $label', async row => {
+  ])('#704 F12/F13/F14: handles a Codex loop HALT with $label', async row => {
     const { file, streamResult, shutdown, failure, retry, iterationTimeout = '5' } = row
     const prompts: string[] = []
     const { out } = capture()
