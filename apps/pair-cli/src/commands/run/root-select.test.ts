@@ -203,6 +203,22 @@ describe('selectRootCandidates — one engine process, its marker read back', ()
     expect(call.effort).toBeUndefined()
   })
 
+  it('#704 F9: returns a valid Codex selection from the stream before shutdown', async () => {
+    const program = `const out = value => console.log(JSON.stringify(value))
+      out({ type: 'item.completed', item: { type: 'agent_message', text: ${JSON.stringify(marker({ candidates: [] }))} } })
+      out({ type: 'turn.completed' })
+      setInterval(() => {}, 1000)`
+    const engine = {
+      ...ENGINES.codex,
+      command: process.execPath,
+      headlessArgs: ['-e', program, '--'],
+    }
+
+    await expect(
+      selectRootAnswer({ ...input, engine, cwd: tmpdir(), timeoutSeconds: 1 }),
+    ).resolves.toMatchObject({ candidates: [] })
+  })
+
   it.each(['low', 'medium', 'high', 'xhigh', 'max'])(
     '#617 r0-14: forwards %s with the model through selectOnce',
     async effort => {

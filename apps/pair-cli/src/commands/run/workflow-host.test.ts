@@ -752,7 +752,17 @@ function replayEngine(input: SpawnIterationInput, stream: string) {
 async function finalizeCodex(
   input: SpawnIterationInput,
   message: string,
-  { initialText = '', exitCode = 0 }: { initialText?: string; exitCode?: number | null } = {},
+  {
+    initialText = '',
+    streamText,
+    exitCode = 0,
+    finalizationMs,
+  }: {
+    initialText?: string
+    streamText?: string
+    exitCode?: number | null
+    finalizationMs?: number
+  } = {},
 ) {
   const server = createServer(socket => socket.on('error', () => socket.destroy())).listen(
     0,
@@ -768,7 +778,13 @@ async function finalizeCodex(
       fs.writeFileSync(output, ${JSON.stringify(initialText)})
       const exitCode = ${exitCode}
       const shutdown = require('node:net').connect(${port}, '127.0.0.1')
-      shutdown.once('connect', () => fs.writeFileSync(1, '{"type":"turn.completed"}\\n'))
+      shutdown.once('connect', () => {
+        const text = ${JSON.stringify(streamText)}
+        if (text !== undefined) {
+          fs.writeFileSync(1, JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text } }) + '\\n')
+        }
+        fs.writeFileSync(1, '{"type":"turn.completed"}\\n')
+      })
       shutdown.once('end', () => {
         fs.ftruncateSync(output, 0)
         fs.writeSync(output, ${JSON.stringify(message)}, 0, 'utf8')
@@ -782,10 +798,19 @@ async function finalizeCodex(
       cwd: tmpdir(),
       engine: { ...input.engine, command: process.execPath, headlessArgs: ['-e', program, '--'] },
       onEvent: event => {
-        sawTerminal = true
         input.onEvent?.(event)
+        if ((event as { type: string }).type !== 'turn.completed') return
+        sawTerminal = true
+        if (finalizationMs !== undefined)
+          vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
         // Release shutdown after the terminal event has been consumed.
-        setImmediate(() => void connected.then(([socket]) => socket.end()))
+        setImmediate(() => {
+          if (finalizationMs !== undefined) {
+            vi.advanceTimersByTime(finalizationMs)
+            vi.useRealTimers()
+          }
+          void connected.then(([socket]) => socket.end())
+        })
       },
     })
     expect(sawTerminal).toBe(true)
@@ -796,23 +821,61 @@ async function finalizeCodex(
 }
 
 it.each([
-  ['a fenced result', ''],
-  ['a fenced result after an unmatched brace', 'Config contains an unmatched { brace.\n'],
-])('#704 F9: records %s from the Codex file without a retry (AC-2)', async (_label, prose) => {
-  write(
-    '.pair/adoption/tech/workflows/quick.yaml',
-    QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
+  { label: 'a fenced result' },
+  {
+    label: 'a fenced result after an unmatched brace',
+    prose: 'Config contains an unmatched { brace.\n',
+  },
+  {
+    label: 'a fenced result after status in stream prose',
+    streamText: 'Earlier step reported {"status":"ok"}. Waiting for approval.',
+  },
+  {
+    label: 'a fenced result after an incomplete stream result',
+    streamText: fenced({ status: 'ok' }),
+  },
+  { label: 'a fenced result after six seconds of finalization', finalizationMs: 6000 },
+])(
+  '#704 F9: records $label from the Codex file without a retry (AC-2)',
+  async ({ prose = '', streamText, finalizationMs }) => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('    kind: implement', '    kind: implement\n    retries: 1'),
+    )
+    const result =
+      prose + fenced({ status: 'blocked', summary: 'Waiting', reason: 'approval-required' })
+    const runIteration = vi.fn((input: SpawnIterationInput) =>
+      finalizeCodex(input, result, {
+        ...(streamText !== undefined && { streamText }),
+        ...(finalizationMs !== undefined && { finalizationMs }),
+      }),
+    )
+
+    const exit = await run(
+      ['quick'],
+      OK,
+      { engine: 'codex', iterationTimeout: '30' },
+      { runIteration },
+    )
+    expect.soft(exit).toBe(0)
+    const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+    expect.soft(state.steps['implement']).toMatchObject({
+      state: 'blocked',
+      reason: 'approval-required',
+    })
+    expect(runIteration).toHaveBeenCalledTimes(1)
+  },
+)
+
+it('#704 F9: retains the valid Codex stream result when the file is malformed (AC-2)', async () => {
+  const streamText = fenced({ status: 'blocked', summary: 'Waiting', reason: 'approval-required' })
+  const runIteration = vi.fn((input: SpawnIterationInput) =>
+    finalizeCodex(input, fenced({ summary: 'Missing status' }), { streamText }),
   )
-  const result =
-    prose + fenced({ status: 'blocked', summary: 'Waiting', reason: 'approval-required' })
-  const runIteration = vi.fn((input: SpawnIterationInput) => finalizeCodex(input, result))
 
   expect(await run(['quick'], OK, { engine: 'codex' }, { runIteration })).toBe(0)
   const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
-  expect.soft(state.steps['implement']).toMatchObject({
-    state: 'blocked',
-    reason: 'approval-required',
-  })
+  expect(state.steps['implement']).toMatchObject({ state: 'blocked', reason: 'approval-required' })
   expect(runIteration).toHaveBeenCalledTimes(1)
 })
 
@@ -825,6 +888,7 @@ it('#704 F9: rejects a finalized result without status even if the earlier file 
   const runIteration = (input: SpawnIterationInput) =>
     finalizeCodex(input, result, {
       initialText: fenced({ status: 'blocked', summary: 'Stale', reason: 'stale-result' }),
+      streamText: 'Earlier step reported {"status":"ok"}.',
     })
 
   const exit = await run(['quick'], OK, { engine: 'codex' }, { runIteration })
@@ -832,7 +896,7 @@ it('#704 F9: rejects a finalized result without status even if the earlier file 
   expect.soft(state.steps['implement']).toMatchObject({
     state: 'failed',
     reason: 'invalid-result',
-    attempts: [{ kind: 'invalid-result' }],
+    attempts: [{ kind: 'invalid-result', detail: expect.stringMatching(/status/) }],
   })
   expect(exit).toBe(1)
 })
@@ -853,7 +917,11 @@ it.each([
       reason: 'approval-required',
     })
     const runIteration = (input: SpawnIterationInput) =>
-      finalizeCodex(input, result, { initialText: result, exitCode })
+      finalizeCodex(input, result, {
+        initialText: result,
+        streamText: 'Earlier step reported {"status":"ok"}.',
+        exitCode,
+      })
 
     const limits = kind === 'timeout' ? { iterationTimeout: '1' } : {}
     expect(await run(['quick'], OK, { engine: 'codex', ...limits }, { runIteration })).toBe(0)
