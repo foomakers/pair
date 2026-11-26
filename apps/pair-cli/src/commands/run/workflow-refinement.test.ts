@@ -1176,7 +1176,7 @@ steps:
     const options = { card: '9' }
     expect(await run(['quick'], skills, options), lines.join('\n')).toBe(1)
     expect(lines.join('\n')).toMatch(
-      /check: failed.*board-unreadable: .* after 4 attempts: HTTP 503/,
+      /Run: failed at step check .*board-unreadable: .* after 4 attempts: HTTP 503/,
     )
     expect(states('quick-9')).toEqual({
       label: 'ok',
