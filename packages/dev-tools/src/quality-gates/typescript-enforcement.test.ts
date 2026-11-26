@@ -182,6 +182,21 @@ it('#757 AC-4 R758-03: rejects a wildcard declaration in a new Brand file', () =
   })
 })
 
+it.each([
+  "type Style = import('react').CSSProperties\ndeclare module '*.css' {}",
+  "module '*.css' {}",
+  "declare module '*.css?inline' {}",
+])('#757 AC-4 R758-01: rejects the unreviewed declaration %j', declaration => {
+  withCssFixture(cwd => {
+    const ambient = 'packages/brand/dev/ambient.d.ts'
+    fs.writeFileSync(join(cwd, ambient), "declare module '*.svg?inline' {}\n")
+    expect(checkStylesheets(cwd)).toEqual([])
+
+    fs.writeFileSync(join(cwd, ambient), declaration)
+    expect(checkStylesheets(cwd)).toEqual([`Ambient CSS declaration: ${ambient}`])
+  })
+})
+
 it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types', () => {
   withCssFixture(cwd => {
     const importer = 'apps/website/app/style-fixture.ts'
