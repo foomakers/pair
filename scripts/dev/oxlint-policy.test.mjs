@@ -182,7 +182,7 @@ test('#693 R5 checks sources inside directories with excluded file extensions', 
   assert.equal(readFileSync(join(cwd, 'folder.mts/ignored.mts'), 'utf8'), source)
 })
 
-const discoveryErrors = [['dangling', 'ENOENT'], ['loop', 'ELOOP'], ['directory link', 'EISDIR']]
+const discoveryErrors = [['dangling', 'ENOENT'], ['loop', 'ELOOP'], ['directory link', 'EISDIR'], ['external directory link', 'EISDIR']]
 if (process.getuid?.() !== 0) discoveryErrors.push(['unreadable', 'EACCES'])
 for (const [name, code] of discoveryErrors) {
   test(`#693 R5 package fix fails before writing when discovery encounters a ${name} source`, t => {
@@ -195,8 +195,10 @@ for (const [name, code] of discoveryErrors) {
       mkdirSync(dir)
       chmodSync(dir, 0)
     } else if (code === 'EISDIR') {
-      mkdirSync(join(cwd, 'target'))
-      symlinkSync('target', join(cwd, 'broken.ts'), 'dir')
+      const target = name === 'directory link' ? join(cwd, 'target') : `${cwd}-target`
+      mkdirSync(target)
+      t.after(() => rmSync(target, { recursive: true, force: true }))
+      symlinkSync(target, join(cwd, 'broken.ts'), 'dir')
     } else {
       symlinkSync(name === 'loop' ? 'broken.ts' : 'missing', join(cwd, 'broken.ts'))
     }
