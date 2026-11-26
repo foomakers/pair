@@ -143,6 +143,8 @@ jobs:
       # chain are the enforcement points (#400).
       - name: Run smoke-scenario mode check
         run: pnpm smoke-modes:check
+      - name: Check stylesheet imports and declarations
+        run: pnpm css:check
       - name: Run docs-staleness check
         env:
           GH_TOKEN: ${{ github.token }}

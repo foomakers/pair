@@ -63,7 +63,8 @@
     "remark-parse": "catalog:",
     "tailwindcss": "catalog:",
     "tsx": "catalog:",
-    "typescript": "catalog:",
+    "@typescript/native": "catalog:",
+    "typescript": "catalog:typescript-api",
     "unified": "catalog:",
     "vitest": "catalog:",
     "vitest-axe": "catalog:"

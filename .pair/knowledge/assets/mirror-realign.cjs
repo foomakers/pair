@@ -4,7 +4,7 @@
 
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.main = void 0;
+exports.main = main;
 const node_fs_1 = require("node:fs");
 const node_child_process_1 = require("node:child_process");
 function fail(message, code) {
@@ -192,6 +192,5 @@ function main() {
     }
     commitStagedSet(dir, message, stageable, rows);
 }
-exports.main = main;
 if (require.main === module)
     main();

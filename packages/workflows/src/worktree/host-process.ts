@@ -1,3 +1,5 @@
+/// <reference types="node" preserve="true" />
+
 import { spawn, type ChildProcess } from 'node:child_process'
 
 export interface HostProcessResult {

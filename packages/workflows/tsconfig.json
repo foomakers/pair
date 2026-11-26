@@ -1,6 +1,7 @@
 {
   "extends": "@pair/ts-config/node.json",
   "compilerOptions": {
+    "rootDir": "src",
     "declaration": true,
     "skipLibCheck": true
   },

@@ -239,6 +239,7 @@
 - [Decision: Use Oxlint for workspace lint](.pair/adoption/decision-log/2026-11-25-oxlint-workspace-lint.md)
 - [Decision: Preserve assignment on card updates](.pair/adoption/decision-log/2026-11-25-preserve-assignment-on-card-update.md)
 - [Decision: select YAML workflow configurations by card label](.pair/adoption/decision-log/2026-11-25-yaml-workflow-configuration-tiers.md)
+- [Decision: Adopt the native TypeScript compiler](.pair/adoption/decision-log/2026-11-26-native-typescript-compiler.md)
 - [Decision: Enforce the strict retry domain pilot](.pair/adoption/decision-log/2026-11-26-strict-retry-domain-pilot.md)
 
 ## How-To Guides

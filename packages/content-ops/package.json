@@ -55,7 +55,6 @@
     "@types/mdast": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
-    "ts-node": "catalog:",
     "typescript": "catalog:",
     "vite-tsconfig-paths": "catalog:",
     "vitest": "catalog:"

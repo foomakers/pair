@@ -1,3 +1,5 @@
+/// <reference types="node" preserve="true" />
+
 import { constants, Dirent, promises as fs, Stats, copyFileSync, mkdirSync } from 'fs'
 import {
   readFileSync,

@@ -35,7 +35,8 @@
     "vitest": "catalog:",
     "vite-tsconfig-paths": "catalog:",
     "@vitest/coverage-v8": "catalog:",
-    "typescript": "catalog:",
+    "@typescript/native": "catalog:",
+    "typescript": "catalog:typescript-api",
     "ts-node": "catalog:",
     "yaml": "catalog:"
   },

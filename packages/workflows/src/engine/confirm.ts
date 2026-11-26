@@ -13,7 +13,7 @@ export interface ResultFacts {
   }
 }
 
-export const hasResultFacts = (kind: KindName) =>
+export const hasResultFacts = (kind: KindName): boolean =>
   kind === 'implement' || kind === 'refine-story' || kind === 'plan-tasks'
 
 export const unconfirmed = (detail: string): StepResult => ({

@@ -18,6 +18,6 @@
     "jsonc-parser": "3.3.1",
     "oxlint": "catalog:",
     "oxlint-plugin-eslint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:oxlint"
   }
 }

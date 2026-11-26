@@ -51,6 +51,27 @@ const changedPathsAgainstBase = (): string[] => {
   return [...new Set(`${tracked}\n${worktree}`.split(/\n+/).filter(Boolean))].sort()
 }
 
+const preservedNodeTypes = '+/// <reference types="node" preserve="true" />'
+
+const onlyPreservesNodeTypes = (diff: string): boolean => {
+  const hunk = diff.indexOf('\n@@ ')
+  if (hunk === -1 || /^(?:old|new) (?:file )?mode /m.test(diff)) return false
+  const changes = diff
+    .slice(hunk)
+    .split('\n')
+    .filter(line => /^[+-]/.test(line))
+  return (
+    changes.includes(preservedNodeTypes) &&
+    changes.every(line => line === '+' || line === preservedNodeTypes)
+  )
+}
+
+const fileDiffAgainstBase = (base: string, path: string): string =>
+  execFileSync('git', ['diff', '--unified=0', base, '--', path], {
+    cwd: REPO_ROOT,
+    encoding: 'utf-8',
+  })
+
 describe('smoke CI platform coverage (#135)', () => {
   it('AC1/AC2 converts the smoke job to a linux+macOS matrix without weakening the job', () => {
     const job = smokeJob()
@@ -102,10 +123,15 @@ describe('smoke CI platform coverage (#135)', () => {
 
   it('AC6 requires a platform-injected unit test when product path handling changes', () => {
     const changed = changedPathsAgainstBase()
+    const base = execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf-8',
+    }).trim()
     const productionPathFixes = changed.filter(
       path =>
         (path.startsWith('packages/content-ops/src/') || path.startsWith('apps/pair-cli/src/')) &&
-        !path.endsWith('.test.ts'),
+        !path.endsWith('.test.ts') &&
+        !onlyPreservesNodeTypes(fileDiffAgainstBase(base, path)),
     )
     if (productionPathFixes.length === 0) return
 
@@ -117,6 +143,12 @@ describe('smoke CI platform coverage (#135)', () => {
       tests,
       `product path fixes need platform-injected tests: ${productionPathFixes.join(', ')}`,
     ).toMatch(/platform.*(?:darwin|linux)|(?:darwin|linux).*platform/)
+  })
+
+  it('#757 AC-2: declaration-only Node references leave platform smoke coverage unchanged', () => {
+    const diff = `--- a/path.ts\n+++ b/path.ts\n@@ -0,0 +1,2 @@\n${preservedNodeTypes}\n+\n`
+    expect(onlyPreservesNodeTypes(diff)).toBe(true)
+    expect(onlyPreservesNodeTypes(diff + '+const path = resolve(input)\n')).toBe(false)
   })
 
   it('AC7 records macOS cost beside the smoke job and states parallel wall-clock semantics', () => {
