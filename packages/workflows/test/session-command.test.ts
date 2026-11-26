@@ -1084,6 +1084,29 @@ it('R754-06: starts from a redirected skills target with explicit installed name
   })
 })
 
+it('R754-06: previews and invokes the configured implicit default', () => {
+  write(
+    'pair.config.json',
+    JSON.stringify({
+      worktreeRoot: 'worktrees',
+      asset_registries: { skills: { prefix: 'team', target_path: 'team/skills' } },
+    }),
+  )
+  const skill = 'team-process-refine-story'
+  write(`team/skills/${skill}/SKILL.md`, 'Current skill.')
+  write(
+    workflowFile,
+    namedWorkflow('  refine: { kind: refine-story, with: { mode: autonomous } }\n'),
+  )
+  expect(JSON.parse(successful(['validate', 'quick'])).steps).toMatchObject([{ skill }])
+  const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
+  expect(advance(lease)).toMatchObject({
+    ready: [
+      { id: 'refine', uses: skill, message: expect.stringContaining(`Run the ${skill} skill.`) },
+    ],
+  })
+})
+
 it.each([
   { options: '{ mode: interactive }', interactive: true },
   { options: '{}', interactive: true },

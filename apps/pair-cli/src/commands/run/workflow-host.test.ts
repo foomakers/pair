@@ -696,6 +696,40 @@ describe('validation before any launch (AC-2, AC-3)', () => {
     expect(fs.existsSync(runDir())).toBe(false)
   })
 
+  it('R754-06: previews and invokes the installed default, keeping explicit names literal', async () => {
+    write(
+      'pair.config.json',
+      JSON.stringify({
+        asset_registries: { skills: { prefix: 'team', target_path: 'team/skills' } },
+      }),
+    )
+    const skill = 'team-process-refine-story'
+    write(`team/skills/${skill}/SKILL.md`, 'Refine a story.')
+    const file = '.pair/adoption/tech/workflows/quick.yaml'
+    const definition =
+      'version: 1\nname: quick\nsteps:\n  refine: { kind: refine-story, with: { mode: autonomous } }\n'
+    write(
+      file,
+      definition.replace(
+        'kind: refine-story',
+        'kind: refine-story, skill: pair-process-refine-story',
+      ),
+    )
+    expect(await run(['quick'], {}, { dryRun: true })).toBe(1)
+    write(file, definition)
+    expect(await run(['quick'], {}, { dryRun: true })).toBe(0)
+    expect(lines.some(line => line.includes(`refine: refine-story skill=${skill}`))).toBe(true)
+    const refined = fenced({
+      status: 'ok',
+      summary: 'Refined',
+      boardStatus: 'Ready',
+      riskTag: 'green',
+      openQuestions: [],
+    })
+    expect(await run(['quick'], { [skill]: () => refined })).toBe(0)
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([skill])
+  })
+
   it('--dry-run refuses an invalid workflow', async () => {
     write('.pair/adoption/tech/workflows/quick.yaml', QUICK.replace('version: 1', 'version: 2'))
     expect(await run(['quick'], OK, { dryRun: true })).toBe(1)

@@ -4,6 +4,8 @@ import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
 import { createSkillProbe, readInstalledSkill } from './skill-probe'
 
+import { locateCycleScripts } from './cycle-scripts'
+
 const cwd = '/project'
 
 const skillsConfig = (targets: string[], prefix?: string): Config =>
@@ -31,6 +33,14 @@ function probe(files: string[], config: Config) {
 }
 
 describe('createSkillProbe', () => {
+  it('R754-06: prepares workflow runs with the configured built-in cycle skill', () => {
+    const directory = join(cwd, 'team/skills/team-workflow-cycle')
+    const fs = new InMemoryFileSystemService({ [join(directory, 'SKILL.md')]: '' }, cwd, cwd)
+    expect(locateCycleScripts(fs, skillsConfig(['team/skills'], 'team'), cwd).scriptsDir).toBe(
+      join(directory, 'scripts'),
+    )
+  })
+
   it('finds a prefixed skill under the registry target', () => {
     const isInstalled = probe(
       [`${cwd}/.claude/skills/pair-loop/SKILL.md`],
