@@ -1,12 +1,6 @@
 import type { ProcessDiagnostics } from '@pair/workflows'
 import type { EngineDefinition, TerminalEventRule } from './engines'
-import {
-  eventBodyRuns,
-  parseRunEvent,
-  progressRunEvents,
-  runEventObjectStarts,
-  type RunEvent,
-} from './run-events'
+import { eventBodyRuns, parseRunEvent, progressRunEvents, type RunEvent } from './run-events'
 
 /**
  * The JSONL terminal-event reader (US-451 T-7) — the ONLY thing that decides an iteration's
@@ -90,31 +84,62 @@ function asFinal(value: unknown): StageFinalResult | undefined {
 }
 
 /** Every TOP-LEVEL `{…}` span of a text (string-aware, so braces in strings and nested objects never count). */
-function topLevelObjects(text: string, progress?: ReadonlySet<number>): string[] {
+function topLevelObjects(text: string, skipProgress = false): string[] {
+  const starts = skipProgress ? /\bPAIR_EVENT[ \t]+|\{/g : /\{/g
   const spans: string[] = []
-  let start = text.indexOf('{')
-  while (start !== -1) {
-    const isProgress = progress?.has(start) === true
-    const end = objectEnd(text, start, isProgress)
-    if (!isProgress) spans.push(text.slice(start, end))
-    start = text.indexOf('{', end)
+  for (let match = starts.exec(text); match; match = starts.exec(text)) {
+    if (match[0] !== '{') {
+      starts.lastIndex = progressEnd(text, starts.lastIndex)
+      continue
+    }
+    starts.lastIndex = containerEnd(text, match.index, false)
+    spans.push(text.slice(match.index, starts.lastIndex))
   }
   return spans
 }
 
+/** Consume one marked JSON value. Unrecognizable payloads stop at the physical line end. */
+function progressEnd(text: string, start: number): number {
+  if (text[start] === '{' || text[start] === '[') return containerEnd(text, start, true)
+  const scalar =
+    /(?:"(?:\\[^\r\n]|[^"\\\r\n])*"|true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=[\s{]|$)/y
+  scalar.lastIndex = start
+  return scalar.test(text) ? scalar.lastIndex : lineEnd(text, start)
+}
+
 /** Progress records fit on one line, even when truncated. A handoff may span several. */
-function objectEnd(text: string, start: number, singleLine: boolean): number {
+function containerEnd(text: string, start: number, singleLine: boolean): number {
+  const closing = [text[start] === '[' ? ']' : '}']
   const scan = { inString: false, escaped: false }
-  let depth = 1
   for (let i = start + 1; i < text.length; i++) {
     const ch = text[i]!
-    if (singleLine && (ch === '\r' || ch === '\n')) return i
+    if (singleLine && '\r\n'.includes(ch)) return i
     if (stepString(scan, ch)) continue
-    if (ch === '"') scan.inString = true
-    else if (ch === '{') depth++
-    else if (ch === '}' && --depth === 0) return i + 1
+    if (ch === '"') {
+      scan.inString = true
+      continue
+    }
+    const boundary = containerBoundary(closing, ch, singleLine)
+    if (boundary === 'closed') return i + 1
+    if (boundary === 'malformed') return lineEnd(text, i)
   }
   return text.length
+}
+
+function lineEnd(text: string, start: number): number {
+  const newline = /[\r\n]/g
+  newline.lastIndex = start
+  return newline.exec(text)?.index ?? text.length
+}
+
+function containerBoundary(closing: string[], ch: string, includeArrays: boolean) {
+  if (ch === '{') closing.push('}')
+  else if (includeArrays && ch === '[') closing.push(']')
+  else if (ch === '}' || (includeArrays && ch === ']')) {
+    if (closing.pop() !== ch) return 'malformed'
+    if (closing.length === 0) return 'closed'
+  }
+  return 'open'
 }
 
 interface Scan {
@@ -144,7 +169,7 @@ const isResultShaped = (raw: Record<string, unknown>): boolean =>
 export function parseFinalResult(text: string): StageFinalResult | undefined {
   let shaped: StageFinalResult | undefined
   let any: StageFinalResult | undefined
-  for (const span of topLevelObjects(text, runEventObjectStarts(text))) {
+  for (const span of topLevelObjects(text, true)) {
     let raw: unknown
     try {
       raw = JSON.parse(span)
