@@ -1,0 +1,16 @@
+version: 1
+name: escalating
+aliases:
+  cheap: { engine: claude, model: claude-haiku-5-5, effort: medium }
+  strong: { engine: claude, model: claude-opus-5-5, effort: high }
+steps:
+  implement:
+    kind: implement
+    alias: cheap
+    escalate: { failed: continue, blocked: stop, needs-decision: stop }
+  implement-strong:
+    kind: implement
+    alias: strong
+    when: { output: implement.status, is: [failed] }
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
+  review: { kind: review, alias: strong, escalate: { failed: stop, blocked: stop, needs-decision: stop } }

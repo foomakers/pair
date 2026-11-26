@@ -22,6 +22,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [tokens](#tokens): Count words and estimated tokens per area of a project's pair files
 - [telemetry](#telemetry): Record a manual in-session delivery step or the final card outcome
 - [run](#run): Run a pair skill headlessly on a chosen engine, in a re-invocation loop
+- [workflow](#workflow): Validate a workflow by name or file
 
 ## Rules that apply to every command
 
@@ -798,6 +799,18 @@ pair-cli telemetry step --card 594 --step implement --engine claude --start 2026
 pair-cli telemetry card --card 594 --outcome review-approved --end 2026-11-17T09:06:00Z
 ```
 
+## workflow
+
+**Via:** CLI only.
+
+Validate an adopted workflow name or YAML file. The command reads the definition, installed skills, gate registry and comment capability locally.
+
+```bash
+pair-cli workflow validate quick
+```
+
+Diagnostics name the file, line and fix. Grammar and coherence errors exit `1`. Warnings exit `0` and identify unreachable rules, impossible status conditions, unhandled return cases on a step with explicit escalation, missing comment support or an approval gap before merge.
+
 ## run
 
 **Via (optional, Claude Code):** `--card` is `/pair-workflow-cycle`; `--root`, `--parallel` and `--watch` are `/pair-loop`.
@@ -975,36 +988,44 @@ pair-cli run quick --card 627
 
 `pair-cli run --card 627` with no workflow name is the delivery cycle above, unchanged.
 
-- **Which file.** The argument is a path if that file exists; else
-  `.pair/adoption/tech/workflows/<name>.yaml`; else the knowledge-base default of that name
-  (`quick` ships with pair).
+- **Which file.** The command uses an existing path first, then
+  `.pair/adoption/tech/workflows/<name>.yaml`, then the knowledge-base default. Quick falls back
+  to the portable three-step definition if the project has no adopted copy.
 - **Validated first.** Form (version, keys, kinds, a non-empty `steps`) and coherence (installed
   skills, inputs, options, gate keys) are checked before anything is launched. An error names the
   file, the line and the fix, and the command exits `1`. `--dry-run` validates, prints the steps
-  and launches nothing.
-- **One agent per step**, in the card's worktree (`../pair-worktrees/<card>`). The run prints the
-  selected configuration and each step's engine, model and effort. See [workflow configurations](/docs/reference/configuration#workflow-configurations-workflows) for label-based selection.
+  and launches nothing. Use `pair-cli workflow validate <name-or-file>` to check the definition alone.
+- **Agent steps** each run in the card worktree (`../pair-worktrees/<card>`). The step alias and
+  workflow configuration can select its engine, model and effort. The CLI prints the resolved
+  settings and the selected configuration. See [workflow configurations](/docs/reference/configuration#workflow-configurations-workflows)
+  for label-based selection. The `gate`, `approval` and `merge` kinds run directly in the host.
 - **Each step returns a result.** The agent ends its turn with one JSON object in a fenced `json`
-  block: `status` (`ok`, `failed` or `needs-human`), `summary`, and the fields of the step's kind.
-  A missing or invalid result fails the step with `invalid-result`; an agent that died or timed
-  out fails it with `no-result`.
+  block carrying `status`, `summary` and the fields of the step's kind. A kind accepts `ok` and
+  declares its applicable `failed`, `blocked` and `needs-decision` cases. The engine records
+  `exhausted` for loops at their limit and `skipped` when a condition does not match. Invalid
+  results fail with `invalid-result`. An agent that did not return a result fails with `no-result`.
+- **Route on outcomes.** Use `escalate` to stop or continue and optionally post a card comment.
+  `when: { output: implement.status, is: [failed] }` can start a later retry after a continued
+  failure. A skipped producer leaves its status absent, so the reader is skipped too.
 - **The run directory** is `.pair/working/runs/<run-id>/` in the main checkout: `run.lock`,
   `workflow.yaml` (a copy frozen at the start), `state.json`, and per step `result.json` and
   `output.log`. `<run-id>` defaults to `<workflow>-<card>`; `--run-id` overrides it. A second
   process on the same run exits at once on the lock.
 - **Telemetry, when switched on.** `--telemetry` adds `telemetry.jsonl` to the run directory: one
-  record per execution of a step (duration, tokens, outcome, attempt) and one closing record with
-  their sums. Every token count carries its origin: `measured` from the engine's usage, `estimated`
+  record per execution of a step (duration, tokens, outcome, attempt), a zero-token exhaustion
+  record for a loop at its limit and one closing record with the execution totals. Explicit
+  escalation records include the rule that fired. Every token count carries its origin: `measured` from the engine's usage, `estimated`
   from the exchanged text, or `unknown`. It is off by default, and a record that cannot be written
   never fails a step. The format is in `workflow-telemetry.md`, beside the grammar; the skill
   `/pair-capability-analyze-workflow-runs` reads the runs.
 
 | Outcome                         | What the command does                                                             |
 | ------------------------------- | --------------------------------------------------------------------------------- |
-| Every step `ok`                 | Exit `0`                                                                          |
-| A step `failed`                 | The run stops; exit `1`; the reason is printed and stored                         |
-| A step `needs-human`            | The run parks; exit `0`; prints what is needed and the command that resumes it    |
-| Launched again after a stop     | Resumes at that step; `ok` steps are not run again                                |
+| The run completes               | Exits `0`. |
+| A failure stops the run         | Exits `1` and prints the reason. |
+| `blocked` or `needs-decision` stops the run | Parks with exit `0` and prints the reason and resume command. |
+| A loop exhausts its rounds      | The loop's policy continues, parks or fails the run. Use `--more-rounds` to extend a parked loop. |
+| Launched again after a stop     | Resumes at the stopped step and preserves earlier completed and continued outcomes. |
 | Interrupted, launched again     | The step that was running runs again from the start                               |
 | Launched again when complete    | Nothing runs: "already complete". `--restart` archives the directory and starts over |
 | Workflow file changed mid-run   | The frozen copy is used; a warning says the file changed                          |
@@ -1013,9 +1034,8 @@ pair-cli run quick --card 627
 With a workflow name the command takes `--card`, `--engine`, `--config`, `--config-override`,
 `--reconfigure`, `--more-rounds`, `--run-id`, `--restart`, `--dry-run`, `--approve`, `--reject`,
 `--cwd`, `--autonomous`, `--approve-project-trust`, `--telemetry` / `--no-telemetry`, the timeouts
-and the output flags. `--profile`
-and `--workflow-config` are refused: a workflow run is configured with `--config`. The flags of the
-cycle and of the loop (`--pr`, `--rounds`, `--root`, `--filter`, `--parallel`, …) are refused too.
+and the output flags. Use `--config` for a workflow configuration and `--root`, `--filter` or
+`--parallel` for workflow batch selection as described above.
 
 ### Fan-out: `--parallel <n>` (`--root <id>` and/or `--filter <label>`)
 

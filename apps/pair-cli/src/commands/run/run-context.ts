@@ -34,6 +34,7 @@ import type { CardProcessRunner } from './parallel'
 import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
 import { effectiveSelection } from './autonomy-policy'
 import { acquireCardLock, type CardLock, type LockAcquirer } from './card-lock'
+import { mainCheckoutOrCwd } from './cycle-wiring'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import {
   appendAuditLine,
@@ -188,7 +189,7 @@ export interface RunContext {
   dispatch?: DispatchDecision
   /** US-521: the run's ONE autonomy resolution (entry), or undefined when nothing applies. */
   autonomySelection?: AutonomyResolution
-  /** `<cwd>/<working_path>` — where the lock lives. */
+  /** `<main>/<working_path>` — where every dispatch reserves a card. */
   workingArea: string
   /** `<cwd>/<working_path>/<Audit Location>` — where every dispatch record is appended. */
   auditPath: string
@@ -210,6 +211,16 @@ function readRunSnapshot(path: string | undefined, fs: FileSystemService, cwd: s
       'profile-invalid: run snapshot does not belong to this project; restart the parent run',
     )
   return snapshot
+}
+
+export function projectWorkingArea(
+  fs: FileSystemService,
+  cwd: string,
+  main: string,
+  config: Config,
+) {
+  const project = main === cwd ? config : loadConfigWithOverrides(fs, { projectRoot: main }).config
+  return resolve(main, resolveWorkingPathOverride(project))
 }
 
 export function resolveContext(
@@ -242,7 +253,7 @@ export function resolveContext(
     probe,
     policy,
     ...(dispatch && { dispatch }),
-    workingArea: resolve(cwd, workingPath),
+    workingArea: projectWorkingArea(fs, cwd, mainCheckoutOrCwd(cwd), loaded.config),
     auditPath: resolveAuditPath(cwd, workingPath, policy.auditLocation),
     idleTimeout: resolveIdleTimeout({
       flag: config.idleTimeoutSeconds,

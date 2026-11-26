@@ -232,7 +232,8 @@ This map is judgment rather than syntax, which is why it is worth stating. Confi
 | the shared KB cache inspected or reclaimed | `kb-cache` | list or prune; options from `--help` |
 | words or estimated tokens of their pair files counted | `tokens` | per area; options from `--help` |
 | create, change, explain or configure a workflow | `/pair-capability-workflow` | invoke the authoring skill |
-| run a workflow in the session | `pair-cli run <workflow> --card <id>` | use the terminal until the session launch skill exists |
+| run a workflow in the session | `/pair-workflow-run` | invoke the installed skill with the workflow and card or a saved run ID |
+| run a workflow from the terminal | `pair-cli run <workflow> --card <id>` | launch from the project checkout |
 | to change how pair behaves in this project | **Configure** (below) | autonomy, hooks, profiles, adoption files |
 | to know this project's standards, process or decisions | `.pair/llms.txt` → the file it points to | never answer from memory when the project has its own record |
 | to know what to work on next | `/pair-next` | invoke it — it reads adoption files and PM state; never reimplement it here |

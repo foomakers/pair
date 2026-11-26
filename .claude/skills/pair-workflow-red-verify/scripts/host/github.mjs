@@ -440,7 +440,10 @@ export default defineAdapter({
         const rows = linkedRows(repo)
         const link = resolveLinked(rows, id)
         if (link?.gap) throw new Error(`ambiguous link for card ${id}: PRs ${link.prs.map(n => '#' + n).join(', ')}`)
-        const hits = rows.filter(row => row.state !== 'closed-unmerged' && selectLink(row.links)?.id === String(id))
+        const matching = rows.filter(row => selectLink(row.links)?.id === String(id))
+        // An active delivery takes precedence. A single merged PR still supports closure recovery.
+        const open = matching.filter(row => row.state === 'open')
+        const hits = open.length > 0 ? open : matching.filter(row => row.state === 'merged')
         if (hits.length !== 1) throw new Error(`expected one PR for card ${id}; found ${hits.length}${hits.length ? ': ' + hits.map(row => '#' + row.number).join(', ') : ''}`)
         return hits[0].number
       },

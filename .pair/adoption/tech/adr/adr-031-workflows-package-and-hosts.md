@@ -45,6 +45,14 @@ Choose option 2.
 - **Invocation parity.** The `implement` step executes `pair-process-implement` with the same behavior as a direct invocation given the same inputs, context and interaction mode. The invocation may declare unattended mode and the handoff boundary. Their meaning belongs to the skill. Dispatch prompts must not override the procedure, confirmations, or checks of the selected skill.
 - **Completion.** A step tracks and accounts for all in-scope work. It continues independent work after an item fails or requires a person, respects dependencies, and reports why any remaining item cannot run. The step decides its outcome after processing all available work. An interruption or a prerequisite that prevents the step from starting is reported separately from successful completion.
 
+### Shared host adapters (2026-11-25)
+
+The interpreter boundary applies to the `@pair/workflows` root entry and its core modules. Separate host entry points share worktree preparation through the existing Git bridge and lock the run directory through the existing PID-based lock. The import guard enforces the direction from host adapters to interpreter. Step state can record the host and the model used for execution independently of telemetry. [Technical design and acceptance criteria for #696](https://github.com/foomakers/pair/issues/696#issuecomment-7039644396).
+
+Both hosts resolve implicit step skills through the installer's recorded names and targets in `.pair/.skill-name-map.json`. A one-off installer configuration can change either value. Older manifests supply names only. Both hosts look up those names in the configured targets. A project using an older single-use install override can declare that target in `pair.config.json` or rerun the update with its install configuration. Installations without a manifest use the configured layout. Explicit workflow skill names use the project registry literally.
+
+The standalone session commands open the same run directory as `pair run`. Each open returns a token for a one-hour idle lease in `run.lock`. A command claims the lease with its live PID and renews it when it exits. Calling `next` during a long step renews the lease and returns the outstanding packet with the same attempt. `stop` releases the lease. A new owner on the same machine can take over after the idle lease expires or the active PID dies. It gets a new token and reopens the interrupted step from the frozen run. A host on another machine keeps its ownership.
+
 ## Consequences
 
 ### Benefits

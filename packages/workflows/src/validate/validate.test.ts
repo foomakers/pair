@@ -24,6 +24,9 @@ steps:
 const check = (text: string, over: Partial<ValidationDeps> = {}) =>
   validate(text, 'quick.yaml', { ...deps, ...over })
 
+const decisionStops = 'escalate: { blocked: stop, needs-decision: stop }'
+const allStops = 'escalate: { failed: stop, blocked: stop, needs-decision: stop }'
+
 describe('#728 T-1: kind outputs', () => {
   it.each([
     [
@@ -103,6 +106,48 @@ steps:
   })
 
   it.each([
+    ['an explicit exhaustion rule', 'escalate: { exhausted: continue }'],
+    ['matching rules', 'on-max: escalate\n    escalate: { exhausted: stop }'],
+  ])('accepts %s (#728 AC 9–10)', (_name, rules) => {
+    expect(check(loop.replace('on-max: escalate', rules)).errors).toEqual([])
+  })
+
+  it('reports the conflicting exhaustion rule with its line and fix (#728 AC 10)', () => {
+    const text = loop.replace(
+      '    on-max: escalate',
+      '    on-max: escalate\n    escalate:\n      exhausted: continue',
+    )
+    expect(check(text).errors).toEqual([
+      {
+        file: 'quick.yaml',
+        line: 10,
+        key: 'steps.rounds.escalate.exhausted',
+        problem: expect.stringMatching(/conflict.*on-max|on-max.*conflict/i),
+        fix: expect.stringMatching(/on-max|escalate/),
+      },
+    ])
+  })
+
+  it('rejects a child outcome as an escalation rule on the loop itself (#728 T-5)', () => {
+    const text = loop.replace('max: 2', 'max: 2\n    escalate:\n      failed: stop')
+    expect(check(text).errors).toContainEqual({
+      file: 'quick.yaml',
+      line: 9,
+      key: 'steps.rounds.escalate.failed',
+      problem: expect.stringMatching(/loop/i),
+      fix: expect.stringMatching(/exhausted|child|remove/i),
+    })
+  })
+
+  it('accepts an escalation rule on a loop child (#728 T-5)', () => {
+    const text = loop.replace(
+      'fix: { kind: generic, skill: my-skill }',
+      'fix: { kind: generic, skill: my-skill, escalate: { failed: stop } }',
+    )
+    expect(check(text).errors).toEqual([])
+  })
+
+  it.each([
     [
       'loop gates',
       loop.replace('    max: 2', '    gates: [quality-gate]\n    max: 2'),
@@ -138,7 +183,12 @@ steps:
 
 describe('validate (AC-3, AC-5)', () => {
   it('accepts a coherent workflow', () => {
-    const { workflow, errors, warnings } = check(QUICK)
+    const { workflow, errors, warnings } = check(
+      QUICK.replace('kind: implement', `kind: implement\n    ${allStops}`).replace(
+        'kind: review',
+        `kind: review\n    ${allStops}`,
+      ),
+    )
     expect(errors).toEqual([])
     expect(warnings).toEqual([])
     expect(workflow?.steps.map(step => step.id)).toEqual(['implement', 'review'])
@@ -286,22 +336,65 @@ describe('validate (AC-3, AC-5)', () => {
 })
 
 describe('validate: on-failed (#708 AC-7)', () => {
+  const withContinue = (kind: 'implement' | 'review', other: 'implement' | 'review') =>
+    QUICK.replace(
+      `kind: ${kind}`,
+      `kind: ${kind}\n    on-failed: continue\n    ${decisionStops}`,
+    ).replace(`kind: ${other}`, `kind: ${other}\n    ${allStops}`)
+
   it('warns, without refusing, on the last step', () => {
-    const { errors, warnings } = check(
-      QUICK.replace('kind: review', 'kind: review\n    on-failed: continue'),
-    )
+    const { errors, warnings } = check(withContinue('review', 'implement'))
     expect(errors).toEqual([])
     expect(warnings.map(one => one.key)).toEqual(['steps.review.on-failed'])
   })
 
   it('accepts continue before the last step without a warning', () => {
-    const text = QUICK.replace('kind: implement', 'kind: implement\n    on-failed: continue')
-    expect(check(text).warnings).toEqual([])
+    expect(check(withContinue('implement', 'review')).warnings).toEqual([])
   })
 
   it('refuses any other value', () => {
     const { errors } = check(QUICK.replace('kind: review', 'kind: review\n    on-failed: retry'))
     expect(errors.map(one => one.key)).toEqual(['steps.review.on-failed'])
+  })
+})
+
+describe('validate: escalate and on-failed (#728 AC 10)', () => {
+  const onFailed = (rules: string) =>
+    QUICK.replace(
+      'kind: implement',
+      `kind: implement\n    on-failed: continue\n    escalate:\n${rules}`,
+    )
+
+  it.each([
+    ['the same outcome', '      failed: continue'],
+    ['a different status', '      blocked: stop'],
+  ])('accepts a rule for %s alongside the shorthand', (_name, rule) => {
+    expect(check(onFailed(rule)).errors).toEqual([])
+  })
+
+  it('reports the conflicting failed rule with its line and fix', () => {
+    expect(check(onFailed('      failed: stop')).errors).toEqual([
+      {
+        file: 'quick.yaml',
+        line: 8,
+        key: 'steps.implement.escalate.failed',
+        problem: expect.stringMatching(/conflict.*on-failed|on-failed.*conflict/i),
+        fix: expect.stringMatching(/on-failed|escalate/),
+      },
+    ])
+  })
+})
+
+describe('invalid escalation and jump rules (#728 AC-16)', () => {
+  it.each([
+    ['escalate: { needs-human: stop }', 'steps.implement.escalate.needs-human'],
+    ['escalate: { failed: retry }', 'steps.implement.escalate.failed'],
+    ['escalate: { failed: { do: goto } }', 'steps.implement.escalate.failed.do'],
+    ['goto: review', 'steps.implement.goto'],
+  ])('refuses %s', (rule, key) => {
+    const result = check(QUICK.replace('    kind: implement', `    kind: implement\n    ${rule}`))
+    expect(result.workflow).toBeUndefined()
+    expect(result.errors).toContainEqual(expect.objectContaining({ key }))
   })
 })
 

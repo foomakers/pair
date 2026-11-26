@@ -109,18 +109,27 @@ steps:
 `,
   })
   const FAILED = { status: 'failed', summary: 'crashed', reason: 'crash' }
-  const afterImplement = async (result: object, accepted: string) => {
+  const afterImplement = async (result: object, accepted: string, policy?: string) => {
     const run = open()
-    await start(run, workflow(accepted), { card: '728' })
+    await start(run, workflow(accepted, policy), { card: '728' })
     await next(run)
     await record(run, 'implement', result)
-    return next(run)
+    return { run, after: await next(run) }
   }
 
-  it('starts the retry after a continued failure matching the condition', async () => {
-    const after = await afterImplement(FAILED, 'failed')
-    expect(after.ready.map(step => step.id)).toEqual(['implement-strong'])
-  })
+  it.each([
+    ['on-failed: continue', FAILED],
+    ['escalate: { failed: continue }', FAILED],
+    ['escalate: { blocked: continue }', { ...FAILED, status: 'blocked' }],
+    ['escalate: { needs-decision: continue }', { ...FAILED, status: 'needs-decision' }],
+  ])(
+    'starts the retry after a matching continued outcome with %s (#728 AC-5)',
+    async (policy, result) => {
+      const { run, after } = await afterImplement(result, result.status, policy)
+      expect(after.ready.map(step => step.id)).toEqual(['implement-strong'])
+      expect(states(run).implement).toBe(result.status)
+    },
+  )
 
   it.each([
     ['ok', IMPLEMENTED, 'failed'],
@@ -128,7 +137,8 @@ steps:
   ])(
     'skips when the producer is %s and the condition expects another status',
     async (_, result, accepted) => {
-      expect(await afterImplement(result, accepted)).toMatchObject({
+      const { after } = await afterImplement(result, accepted)
+      expect(after).toMatchObject({
         run: 'done',
         ready: [],
         skipped: [{ id: 'implement-strong', kind: 'implement' }],

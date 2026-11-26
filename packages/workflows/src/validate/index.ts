@@ -1,7 +1,9 @@
 import {
+  addressedSteps,
   errorAt,
-  parseWorkflow,
+  escalationAction,
   expandedStepSchema,
+  parseWorkflow,
   type KindName,
   type Step,
   type Workflow,
@@ -9,8 +11,8 @@ import {
 } from '../grammar'
 import { expand, type WorkflowSource } from '../expand'
 import { fieldsOf, kindByName } from '../kinds'
-import { addressedSteps } from '../grammar'
 import { textsOf, violations } from '../schema'
+import { escalationWarnings } from './escalation-warnings'
 
 /** What the validator asks of its caller: the package reads no skill directory and no adoption file itself. */
 export interface ValidationDeps {
@@ -18,6 +20,8 @@ export interface ValidationDeps {
   readonly availableWorkflows?: readonly string[]
   /** Whether a skill of that name is installed. */
   readonly skillExists: (name: string) => boolean
+  /** Resolve an implicit kind default for this installation, if it uses a different name. */
+  readonly defaultSkillExists?: (name: string) => boolean
   /** The keys of the Custom Gate Registry. */
   readonly gateKeys: readonly string[]
   /** The targets of the Custom Gate Registry. */
@@ -26,6 +30,8 @@ export interface ValidationDeps {
   readonly launchInputs: readonly string[]
   /** The host's prompt-safety check: every text of the file that reaches an agent passes it. */
   readonly isSafeText: (value: string) => boolean
+  /** Whether the host can write escalation comments on the card, queried only when needed. */
+  readonly canCommentOnCard?: boolean | (() => boolean)
 }
 
 export interface Validation {
@@ -69,11 +75,16 @@ const skillErrors: Check = (workflow, step, deps, path) => {
         fix: "add 'skill' with the skill to run",
       }),
     ]
-  if (deps.skillExists(skill)) return []
+  const exists =
+    step.skill === undefined ? (deps.defaultSkillExists ?? deps.skillExists) : deps.skillExists
+  if (exists(skill)) return []
   return [
     errorAt(workflow, [...path, 'skill'], {
       problem: `skill '${skill}' is not installed`,
-      fix: "install it, or name an installed skill in 'skill'",
+      fix:
+        step.skill === undefined
+          ? 'declare the installed skills target in pair.config.json, or run pair-cli update with the install configuration'
+          : "install it, or name an installed skill in 'skill'",
     }),
   ]
 }
@@ -151,6 +162,19 @@ const gateNeedsWork: Check = (workflow, step, _deps, path) =>
       ]
     : []
 
+const failedEscalationErrors: Check = (workflow, step, _deps, path) => {
+  const rule = escalationAction(step.escalate?.failed)
+  const shorthand = step['on-failed']
+  return rule !== undefined && shorthand !== undefined && rule !== shorthand
+    ? [
+        errorAt(workflow, [...path, 'escalate', 'failed'], {
+          problem: 'escalate.failed conflicts with on-failed',
+          fix: 'remove on-failed or make both actions agree',
+        }),
+      ]
+    : []
+}
+
 const CHECKS: readonly Check[] = [
   skillErrors,
   withErrors,
@@ -158,13 +182,47 @@ const CHECKS: readonly Check[] = [
   gateErrors,
   gateNeedsWork,
   safetyErrors,
+  failedEscalationErrors,
 ]
 
-const LOOP_ONLY = ['until', 'max', 'on-max', 'steps'] as const
+const LOOP_REQUIRED = ['until', 'max', 'steps'] as const
+const LOOP_ONLY = [...LOOP_REQUIRED, 'on-max'] as const
+
+function loopEscalationErrors(workflow: Workflow, step: Step, path: readonly string[]) {
+  const errors = Object.keys(step.escalate ?? {})
+    .filter(status => status !== 'exhausted')
+    .map(status =>
+      errorAt(workflow, [...path, 'escalate', status], {
+        problem: 'a loop can only escalate on exhausted',
+        fix: `move the ${status} rule to a child step`,
+      }),
+    )
+  const action = escalationAction(step.escalate?.exhausted)
+  const shorthand = step['on-max']
+  if (action === undefined && shorthand === undefined)
+    errors.push(
+      errorAt(workflow, path, {
+        problem: "missing key 'on-max'",
+        fix: "add 'on-max' or 'escalate.exhausted'",
+      }),
+    )
+  if (
+    action !== undefined &&
+    shorthand !== undefined &&
+    (shorthand === 'fail' || action !== 'stop')
+  )
+    errors.push(
+      errorAt(workflow, [...path, 'escalate', 'exhausted'], {
+        problem: `escalate.exhausted conflicts with on-max: ${shorthand}`,
+        fix: 'keep only on-max or escalate.exhausted',
+      }),
+    )
+  return errors
+}
 
 function loopOwnErrors(workflow: Workflow, step: Step, path: readonly string[]): WorkflowError[] {
-  const errors: WorkflowError[] = []
-  for (const key of LOOP_ONLY)
+  const errors = loopEscalationErrors(workflow, step, path)
+  for (const key of LOOP_REQUIRED)
     if (step[key] === undefined)
       errors.push(errorAt(workflow, path, { problem: `missing key '${key}'`, fix: `add '${key}'` }))
   if (step.until !== undefined && !step.steps?.some(child => child.id === step.until))
@@ -248,9 +306,10 @@ function outputErrors(
   const at = (problem: string, fix: string) => [
     errorAt(workflow, [...path, 'when', 'output'], { problem, fix }),
   ]
-  if (!earlier.has(id) || target === undefined || target.kind === 'loop')
+  if (!earlier.has(id) || target === undefined)
     return at(`'${id}' is not a step before this one`, 'name an earlier step')
   if (name === 'status') return []
+  if (target.kind === 'loop') return at(`loop '${id}' has no output '${name}'`, 'use status')
   const declared = fieldsOf(kindByName[target.kind].outputs)
   return declared.includes(name)
     ? []
@@ -325,9 +384,10 @@ function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowErro
   const checkStep: CheckStep = (step, path) => {
     const id = path.filter((_, index) => index % 2 === 1).join('/')
     const earlier = new Set(seen)
-    seen.add(id)
-    if (step.kind !== 'loop')
+    if (step.kind !== 'loop') {
+      seen.add(id)
       return plainStepErrors(scope, step as Step & { kind: KindName }, path, earlier)
+    }
     let exitInputs = new Set(available)
     const errors = [
       ...loopOwnErrors(workflow, step, path),
@@ -353,6 +413,7 @@ function coherenceErrors(workflow: Workflow, deps: ValidationDeps): WorkflowErro
         return found
       }),
     ]
+    seen.add(id)
     available.clear()
     exitInputs.forEach(input => available.add(input))
     return errors
@@ -393,12 +454,14 @@ function mergeWarnings(workflow: Workflow): WorkflowError[] {
   return flat.flatMap((step, index) => {
     if (step.kind !== 'merge') return []
     const before = flat.slice(0, index)
+    const approval = before.some(one => one.kind === 'approval')
+    const path = ['steps', step.id.split('/')[0] ?? step.id]
     const lastChange = before.reduce(
       (at, one, i) => (one.kind === 'implement' || one.kind === 'fix' ? i : at),
       -1,
     )
     const missing = [
-      before.some(one => one.kind === 'approval') ? '' : 'approval step',
+      approval ? '' : 'approval step',
       lastChange >= 0 && !before.slice(lastChange).some(one => one.kind === 'review')
         ? 'review after the last code-changing step'
         : '',
@@ -410,12 +473,26 @@ function mergeWarnings(workflow: Workflow): WorkflowError[] {
         ? ''
         : "gate with the 'head-unchanged' check",
     ].filter(Boolean)
-    return missing.map(what =>
-      errorAt(workflow, ['steps', step.id.split('/')[0] ?? step.id], {
+    const guards = missing.map(what =>
+      errorAt(workflow, path, {
         problem: `merge has no ${what}`,
         fix: `add a ${what} before the merge, or accept that it merges without`,
       }),
     )
+    if (approval) return guards
+    return [
+      ...guards,
+      ...before.flatMap(producer =>
+        (['blocked', 'needs-decision'] as const)
+          .filter(status => escalationAction(producer.escalate?.[status]) === 'continue')
+          .map(status =>
+            errorAt(workflow, path, {
+              problem: `merge can follow '${status}' on '${producer.id}' without approval`,
+              fix: `add an approval step before merge or set escalate.${status} to stop`,
+            }),
+          ),
+      ),
+    ]
   })
 }
 
@@ -447,6 +524,10 @@ export function validate(text: string, file: string, deps: ValidationDeps): Vali
     : {
         workflow: parsed.workflow,
         errors: [],
-        warnings: [...warnings(parsed.workflow), ...mergeWarnings(parsed.workflow)].map(locate),
+        warnings: [
+          ...warnings(parsed.workflow),
+          ...escalationWarnings(parsed.workflow, deps.canCommentOnCard),
+          ...mergeWarnings(parsed.workflow),
+        ].map(locate),
       }
 }

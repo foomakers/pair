@@ -323,12 +323,13 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
     return result.configuration
   }
 
-  it('quick declares build (implement, fix) and judge (review)', () => {
+  it('quick assigns the agent aliases and leaves the host gate without an alias', () => {
     expect(Object.keys(workflow?.aliases ?? {})).toEqual(['build', 'judge'])
     expect(workflow?.steps.map(step => [step.id, step.alias])).toEqual([
       ['implement', 'build'],
       ['review', 'judge'],
       ['fix', 'build'],
+      ['gate', undefined],
     ])
   })
 
@@ -408,10 +409,12 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
         .errors,
     ).toEqual([])
     expect(
-      steps.map(step => {
-        const s = settingsFor(c, step, workflow?.aliases)
-        return [s.engine, s.model, s.effort]
-      }),
+      steps
+        .filter(step => step.kind !== 'gate')
+        .map(step => {
+          const s = settingsFor(c, step, workflow?.aliases)
+          return [s.engine, s.model, s.effort]
+        }),
     ).toEqual(expected.map(([model, effort]) => [engine, model, effort]))
   })
 })

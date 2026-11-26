@@ -13,6 +13,7 @@ The agent ends its turn with one JSON object in a fenced `json` block. Whatever 
 - `reason`: `string`, optional — Why, when the status is not `ok`.
 
 An agent can return `ok` and the statuses listed for its kind below.
+The `returns` contract describes when each non-success outcome applies. The workflow decides what happens next through [`escalate`](workflow-grammar.md#outcomes-and-escalation). The engine produces `exhausted` and `skipped`.
 
 A result that is missing, is not JSON or breaks the contract of its kind makes the step `failed` with reason `invalid-result`.
 
@@ -21,6 +22,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## implement
 
 - **Default skill**: `pair-process-implement`
+- **Default interactive**: `false`
 - **Handoff**: `published-pr`
 - **Inputs**
   - `card`: `string` — The card to implement.
@@ -38,6 +40,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## review
 
 - **Default skill**: `pair-process-review`
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card the pull request delivers.
   - `pr`: `integer` — The pull request to review.
@@ -59,17 +62,19 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## fix
 
 - **Default skill**: `pair-process-fix`
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card the pull request delivers.
   - `pr`: `integer` — The pull request to fix.
-  - `head`: `string` — The head the findings are about.
+  - `head`: `string` — The current PR head to fix.
+  - `reviewedHead`: `string` — The head the findings and report are about. Defaults to head.
   - `reportPath`: `string` — Local review report for the reviewed head.
   - `findings`: `array of object` — The review findings: `id`, `severity`, `title`, `blocking`.
 - **Outputs**, required when `status` is `ok` or `failed`
   - `head`: `string matching ^[0-9a-f]{40}$` — The head after the push, or the input head when nothing changed.
   - `resolutions`: `array of { id: string, status: "resolved" | "not-resolved", reason: string }` — One per finding in scope.
   - `gateFailures`: `array of { gate: string, reason: string }` — Failed gates reported when continuation is enabled.
-- **Rule**: The status is "failed", never "ok", when at least one resolution is "not-resolved".
+- **Rule**: When a resolution is "not-resolved", choose "failed", "blocked" or "needs-decision" according to the reason.
 - **Options** (`with`)
   - `severity`: `"Critical" | "Major" | "Minor"` — The lowest severity to fix. Default `Minor`, the review's blocking floor. Ignored when `findings` is given.
   - `findings`: `array of string` — Finding ids. When present only these are fixed.
@@ -83,6 +88,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## generic
 
 - **Default skill**: none: `skill` is required
+- **Default interactive**: `false`
 - **Inputs**
   - Whatever the launch and the earlier steps produced.
 - **Outputs**, required when `status` is `ok`
@@ -97,6 +103,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## gate
 
 - **Default skill**: none: the host runs it, no agent
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card.
   - `pr`: `integer` — The pull request, for the checks that read it.
@@ -114,6 +121,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## approval
 
 - **Default skill**: none: the host runs it, no agent
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card.
   - `reviewedHead`: `string` — The head verified by a preceding review.
@@ -132,6 +140,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## merge
 
 - **Default skill**: none: the host runs it, no agent
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card, closed after the merge.
   - `pr`: `integer` — The pull request to merge.
@@ -152,6 +161,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## refine-story
 
 - **Default skill**: `pair-process-refine-story`
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card to prepare.
 - **Outputs**, required when `status` is `ok`
@@ -166,6 +176,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 ## plan-tasks
 
 - **Default skill**: `pair-process-plan-tasks`
+- **Default interactive**: `false`
 - **Inputs**
   - `card`: `string` — The card to prepare.
 - **Outputs**, required when `status` is `ok`

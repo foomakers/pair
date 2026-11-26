@@ -224,15 +224,17 @@ if (
     const result =
       command === 'resolve'
         ? resolveControlState(JSON.parse(json), mapping)
-        : command === 'mapping'
-          ? (mapping ?? null)
-          : command === 'ready-board-state'
-            ? readyBoardState(mapping)
-            : command === 'status-filter'
-              ? validateStatusFilter(json, mapping)
-              : (() => {
-                  throw new Error(`unknown command: ${command}`)
-                })()
+        : command === 'macrostate'
+          ? { macrostate: resolveMacrostate(json, mapping) ?? null }
+          : command === 'mapping'
+            ? (mapping ?? null)
+            : command === 'ready-board-state'
+              ? readyBoardState(mapping)
+              : command === 'status-filter'
+                ? validateStatusFilter(json, mapping)
+                : (() => {
+                    throw new Error(`unknown command: ${command}`)
+                  })()
     process.stdout.write(`${JSON.stringify(result)}\n`)
   } catch (error) {
     process.stderr.write(`${error.message}\n`)

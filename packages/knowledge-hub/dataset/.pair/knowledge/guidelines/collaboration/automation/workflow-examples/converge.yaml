@@ -1,0 +1,37 @@
+version: 1
+name: converge
+aliases:
+  build: { effort: medium }
+  judge: { effort: medium }
+  strong: { effort: high }
+steps:
+  implement:
+    kind: implement
+    alias: build
+    escalate:
+      failed: stop
+      blocked: stop
+      needs-decision: { do: stop, comment: 'A choice is needed: {reason}' }
+  rounds:
+    kind: loop
+    until: review
+    max: 3
+    escalate: { exhausted: continue }
+    steps:
+      review:
+        kind: review
+        alias: judge
+        escalate: { failed: continue, blocked: stop, needs-decision: stop }
+      fix:
+        kind: fix
+        escalate: { failed: continue, blocked: stop, needs-decision: stop }
+        alias: build
+        when: { output: rounds/review.verdict, is: [changes-requested] }
+  last-chance:
+    kind: fix
+    alias: strong
+    when: { output: rounds.status, is: [exhausted] }
+    escalate:
+      failed: { do: stop, comment: The fix does not converge after the final round. }
+      blocked: stop
+      needs-decision: stop

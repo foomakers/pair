@@ -83,6 +83,8 @@ To make pi the project's default engine, declare it in `pair.config.json`:
 
 ## In-Session Cycle with `pi-subagents`
 
+Use [`/pair-workflow-run`](/docs/guides/run-workflow-in-session) for YAML workflows when the session has the `subagent` tool.
+
 pi's base agent has no sub-agents. The third-party [`pi-subagents`](https://github.com/nicobailon/pi-subagents)
 package adds them, and `/pair-workflow-cycle` uses it to drive a card from inside an interactive pi
 session: every stage runs as a `subagent` child, and a `reuse` transition revives the same stage

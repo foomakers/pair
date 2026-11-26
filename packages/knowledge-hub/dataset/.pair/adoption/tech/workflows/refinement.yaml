@@ -10,10 +10,12 @@ aliases:
 steps:
   refine:
     kind: refine-story
+    escalate: { needs-decision: stop }
     alias: judge
     # A standalone refinement moves to Ready. The shipped workflow waits for tasks.
     state: none
     with: { mode: autonomous }
   tasks:
     kind: plan-tasks
+    escalate: { needs-decision: stop }
     alias: build

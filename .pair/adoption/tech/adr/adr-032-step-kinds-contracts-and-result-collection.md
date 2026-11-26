@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted (amended 2026-11-25 — workflow escalation in [ADR-037](adr-037-workflow-escalation.md))
 
 ## Date
 
-2026-11-20
+2026-11-20 (amended 2026-11-25)
 
 ## Context
 
@@ -22,7 +22,7 @@ A workflow step runs a skill in a fresh agent process. The engine needs to know 
 
 ### Option 2: A contract object per kind, the result asked for in the launch message
 
-- **Description**: A kind is data: default skill, inputs, outputs, options, escalations. The launch message ends with a block generated from that data, asking for one JSON object.
+- **Description**: A kind describes its default skill, inputs, outputs, options and return cases. The launch message ends with a block generated from that data, asking for one JSON object.
 - **Pros**: Skills stay as they are; any skill can be a step; the contract, the message and the reference page share one source.
 - **Cons**: A skill may ignore the block; the step then fails.
 
@@ -30,8 +30,8 @@ A workflow step runs a skill in a fresh agent process. The engine needs to know 
 
 Choose option 2.
 
-- **Contract.** `StepKind` = `name`, `defaultUses`, `inputs`, `outputs`, `with` (JSON Schema objects) and `escalations`. One file per kind in `packages/workflows/src/kinds`.
-- **Common result.** Every step returns `status` (`ok`, `failed`, `needs-human`), `summary` and optionally `reason`. A kind's outputs are required only when `status` is `ok`.
+- **Contract.** `StepKind` declares `name`, `defaultSkill`, `inputs`, `outputs`, `with` and `returns`. One file per kind in `packages/workflows/src/kinds`.
+- **Common result.** Every step returns `status`, `summary` and optionally `reason`. The kind accepts `ok` and any of `failed`, `blocked` and `needs-decision` it declares. A kind may require its outputs for `ok` and `failed` to apply a result rule. See [ADR-037](adr-037-workflow-escalation.md).
 - **Inputs.** An input is a launch argument (`--card`) or an output of an earlier step with the same name. The validator refuses a workflow in which an input is neither. A `generic` step receives every scalar produced so far.
 - **Launch message.** `buildMessage` writes the skill invocation in the engine's style (a parameter: the package holds no engine table), the inputs, the `with` values, then the fixed result block. Every spliced value passes the host's prompt-safety check; a value that fails it fails the step with `unsafe-value` before any launch.
 - **Result collection.** `readResult` takes the last fenced `json` block of the agent's final message and validates it against the common fields and the kind's outputs. Missing or invalid: the step is `failed`, reason `invalid-result`, with the field and the violation. An agent that died or timed out: `failed`, reason `no-result`. No automatic re-ask.
@@ -39,7 +39,7 @@ Choose option 2.
 - **Gate keys.** The Custom Gate Registry in `way-of-working.md` gains a unique `Key` column. `implement` takes `with.gates`, a list of those keys; the validator refuses an unknown key. The `gate` kind (#680) will use the same keys.
 - **Kind reference.** `workflow-kinds.md` is generated from the kind objects (`pnpm --filter @pair/workflows kinds:reference`); a test fails when the published page differs.
 
-**Scope clarification (2026-11-23).** Kind contracts describe invocation, data and result validation. The selected skill owns step procedure and completion, as specified in [ADR-031](adr-031-workflows-package-and-hosts.md#workflow-and-skill-responsibilities-2026-11-23). The launch message may pass an interaction mode and handoff boundary. Step-specific escalation policy, task instructions and quality execution belong to the step implementation.
+**Scope clarification (2026-11-23, amended 2026-11-25).** Kind contracts describe invocation, data and result validation. The selected skill owns step procedure and completion, as specified in [ADR-031](adr-031-workflows-package-and-hosts.md#workflow-and-skill-responsibilities-2026-11-23). The launch message may pass an interaction mode and handoff boundary. The workflow owns what happens after a step returns. See [ADR-037](adr-037-workflow-escalation.md).
 
 ## Consequences
 

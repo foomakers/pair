@@ -63,6 +63,7 @@ describe('engine: a linear run (AC-1)', () => {
           id: 'implement',
           kind: 'implement',
           uses: 'pair-process-implement',
+          interactive: false,
           with: { gates: ['quality-gate'] },
           startState: 'In Progress',
           assignment: { value: 'me', source: 'default' },
@@ -81,6 +82,7 @@ describe('engine: a linear run (AC-1)', () => {
           id: 'review',
           kind: 'review',
           uses: 'pair-process-review',
+          interactive: false,
           with: {},
           inputs: { card: '627', pr: 12, head: HEAD },
           attempt: 1,
@@ -110,6 +112,27 @@ describe('engine: a linear run (AC-1)', () => {
     })
   })
 
+  it('resumes an interrupted run and keeps each host and actual model (#696 AC-4/AC-5)', async () => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    await next(run)
+    const pairRun = { host: 'pair-run', model: 'claude-sonnet-5-5', output: 'CLI result' } as const
+    await record(run, 'implement', IMPLEMENTED, pairRun)
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'review', attempt: 1 })
+
+    const resumed = { dir: run.dir, files: run.files }
+    expect(await start(resumed, SOURCE, { card: '627' })).toMatchObject({ status: 'resumed' })
+    expect((await next(resumed)).ready[0]).toMatchObject({ id: 'review', attempt: 2 })
+    const session = { host: 'session', model: 'claude-opus-5-5', output: 'Session result' } as const
+    await record(resumed, 'review', REVIEWED, session)
+
+    expect((await next(resumed)).run).toBe('done')
+    expect(stateOf(resumed).steps).toMatchObject({
+      implement: { state: 'ok', executions: 1, host: 'pair-run', model: 'claude-sonnet-5-5' },
+      review: { state: 'ok', executions: 2, host: 'session', model: 'claude-opus-5-5' },
+    })
+  })
+
   it('names the hash of the frozen workflow by its algorithm', () => {
     expect(hashOf('')).toBe(
       'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -135,6 +158,7 @@ describe('engine: a linear run (AC-1)', () => {
         id: 'notes',
         kind: 'generic',
         uses: 'my-skill',
+        interactive: false,
         with: {},
         inputs: {
           card: '627',
@@ -172,6 +196,16 @@ describe('engine: a linear run (AC-1)', () => {
   })
 })
 
+describe('interactive launches (#696 AC-2)', () => {
+  it('hands the host an interactive step', async () => {
+    const run = open()
+    const text = QUICK.replace('kind: implement\n', 'kind: implement\n    interactive: true\n')
+    await start(run, { ...SOURCE, text }, { card: '627' })
+
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'implement', interactive: true })
+  })
+})
+
 describe('loop rounds (#670 AC-1–AC-6)', () => {
   const text = `version: 1
 name: quick
@@ -203,13 +237,26 @@ steps:
     resolutions: [{ id: 'a', status: 'resolved', reason: 'fixed' }],
   }
 
-  async function opened() {
+  async function opened(definition = source) {
     const run = open()
-    await start(run, source, { card: '627' })
+    await start(run, definition, { card: '627' })
     await next(run)
     await record(run, 'implement', IMPLEMENTED)
     return run
   }
+
+  it('hands the host an interactive loop child (#696 AC-2)', async () => {
+    const run = open()
+    const interactive = text.replace(
+      'review: { kind: review }',
+      'review: { kind: review, interactive: true }',
+    )
+    await start(run, { ...source, text: interactive }, { card: '627' })
+    await next(run)
+    await record(run, 'implement', IMPLEMENTED)
+
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', interactive: true })
+  })
 
   describe('#728 AC-3: legacy parked run migration', () => {
     const statePath = `${DIR}/state.json`
@@ -342,6 +389,7 @@ steps:
     await record(run, 'rounds/review', failedReview)
     expect((await next(run)).ready[0]).toMatchObject({
       id: 'rounds/fix',
+      interactive: false,
       round: 1,
       inputs: { findings },
     })
@@ -365,7 +413,7 @@ steps:
     await record(run, 'rounds/fix', fixed)
     expect((await next(run)).run).toBe('parked')
     expect(stateOf(run).steps.rounds).toMatchObject({
-      state: 'needs-decision',
+      state: 'exhausted',
       outputs: { findings },
     })
     expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
@@ -450,6 +498,7 @@ steps:
     await next(run)
     await record(run, 'rounds/fix', fixed)
     expect((await next(run)).run).toBe('failed')
+    expect(statesOf(run).rounds).toBe('exhausted')
     expect(await start(run, failSource, { card: '627' })).toEqual({
       status: 'failed',
       warnings: [],
@@ -469,6 +518,89 @@ steps:
     expect((await next(run)).run).toBe('done')
   })
 
+  it.each([
+    ['exhaustion', failedReview, 'exhausted'],
+    ['convergence', REVIEWED, 'ok'],
+  ] as const)(
+    'routes to the fallback only after %s (#728 AC-13, AC-14)',
+    async (_, result, state) => {
+      const definition = {
+        ...source,
+        text:
+          text
+            .replace('max: 2', 'max: 1')
+            .replace('on-max: escalate', 'escalate: { exhausted: continue }') +
+          '  fallback: { kind: implement, when: { output: rounds.status, is: [exhausted] } }\n',
+      }
+      const run = await opened(definition)
+      expect((await next(run)).ready[0]?.id).toBe('rounds/review')
+      await record(run, 'rounds/review', result)
+      if (state === 'exhausted') {
+        expect((await next(run)).ready[0]?.id).toBe('rounds/fix')
+        await record(run, 'rounds/fix', fixed)
+        expect((await next(run)).ready[0]?.id).toBe('fallback')
+      } else {
+        expect(await next(run)).toMatchObject({
+          run: 'done',
+          ready: [],
+          skipped: [{ id: 'fallback' }],
+        })
+      }
+      expect(statesOf(run).rounds).toBe(state)
+    },
+  )
+
+  it('parks at an explicit exhaustion stop and reopens only that loop with a grant (#728 AC-7, AC-13)', async () => {
+    const definition = {
+      ...source,
+      text:
+        text
+          .replace('max: 2', 'max: 1')
+          .replace('on-max: escalate', 'escalate: { exhausted: { do: stop, comment: Stuck } }') +
+        '  final: { kind: review }\n',
+    }
+    const run = await opened(definition)
+    await next(run)
+    await record(run, 'rounds/review', failedReview)
+    await next(run)
+    await record(run, 'rounds/fix', fixed)
+    expect(await next(run)).toEqual({ run: 'parked', ready: [] })
+    expect(statesOf(run)).toMatchObject({ implement: 'ok', rounds: 'exhausted', final: 'pending' })
+    expect((await start(run, definition, { card: '627' })).status).toBe('parked')
+    expect((await start(run, definition, { card: '627', moreRounds: 1 })).status).toBe('resumed')
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 2 })
+  })
+
+  it.each([
+    ['stop', 'failed', []],
+    ['continue', 'running', ['rounds/review']],
+  ] as const)(
+    'applies a child failed rule of %s before the until step (#728 AC-5, AC-7)',
+    async (action, status, ready) => {
+      const definition = {
+        ...source,
+        text: text.replace(
+          '      review: { kind: review }\n      fix: { kind: fix }',
+          `      build: { kind: implement, escalate: { failed: ${action} } }\n      review: { kind: review }`,
+        ),
+      }
+      const run = await opened(definition)
+      expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/build', round: 1 })
+      await record(run, 'rounds/build', { status: 'failed', summary: 'build failed' })
+      const after = await next(run)
+      expect(after.run).toBe(status)
+      expect(after.ready.map(step => step.id)).toEqual(ready)
+      if (action === 'stop') {
+        expect((await start(run, definition, { card: '627' })).status).toBe('resumed')
+        expect((await next(run)).ready[0]).toMatchObject({
+          id: 'rounds/build',
+          round: 1,
+          attempt: 2,
+        })
+      }
+    },
+  )
+
   it('uses only the frozen configuration max for a loop', async () => {
     const run = open()
     await start(run, source, {
@@ -482,9 +614,9 @@ steps:
 })
 
 describe('engine: outcomes and resume (AC-6)', () => {
-  async function runUntilReview(result: unknown) {
+  async function runUntilReview(result: unknown, source = SOURCE) {
     const run = open()
-    await start(run, SOURCE, { card: '627' })
+    await start(run, source, { card: '627' })
     await next(run)
     await record(run, 'implement', IMPLEMENTED)
     await next(run)
@@ -508,6 +640,52 @@ describe('engine: outcomes and resume (AC-6)', () => {
     const resumed = await next(run)
     expect(resumed.ready.map(step => step.id)).toEqual(['review'])
     expect(resumed.ready[0]?.inputs).toEqual({ card: '627', pr: 12, head: HEAD })
+  })
+
+  it.each([
+    ['failed', 'failed'],
+    ['blocked', 'parked'],
+    ['needs-decision', 'parked'],
+  ] as const)(
+    'stops on explicit %s and resumes only that step (#728 AC-6, AC-7)',
+    async (status, halted) => {
+      const source = {
+        ...SOURCE,
+        text: `${QUICK}    escalate: { ${status}: stop }\n  later: { kind: implement }\n`,
+      }
+      const run = await runUntilReview({ status, summary: 'check failed', reason: 'check' }, source)
+      expect(await next(run)).toEqual({ run: halted, ready: [] })
+      expect(statesOf(run)).toEqual({ implement: 'ok', review: status, later: 'pending' })
+
+      expect((await start(run, source, { card: '627' })).status).toBe('resumed')
+      expect((await next(run)).ready[0]).toMatchObject({ id: 'review', attempt: 2 })
+    },
+  )
+
+  it('keeps a continued failure settled when resuming a later blocked step (#728 AC-5, AC-7)', async () => {
+    const source = {
+      ...SOURCE,
+      text: `version: 1
+name: quick
+steps:
+  implement: { kind: implement, on-failed: continue }
+  fallback:
+    kind: implement
+    when: { output: implement.status, is: [failed] }
+    escalate: { blocked: stop }
+`,
+    }
+    const run = open()
+    await start(run, source, { card: '627' })
+    await next(run)
+    await record(run, 'implement', { status: 'failed', summary: 'first model failed' })
+    expect((await next(run)).ready[0]?.id).toBe('fallback')
+    await record(run, 'fallback', { status: 'blocked', summary: 'no token' })
+    expect((await next(run)).run).toBe('parked')
+
+    expect((await start(run, source, { card: '627' })).status).toBe('resumed')
+    expect(statesOf(run).implement).toBe('failed')
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'fallback', attempt: 2 })
   })
 
   it('#728 AC-3 F2: keeps a legacy step parked until explicit resume', async () => {

@@ -5,6 +5,28 @@ export interface WorkflowSource {
   readonly text: string
   readonly file: string
 }
+
+/** Freeze the validated expansion in the same format for every host. */
+export function expandedWorkflowSource(workflow: Workflow, source: WorkflowSource): WorkflowSource {
+  const expanded = workflow.steps.some(
+    step => step.id.includes('/') || step.steps?.some(child => child.id.includes('/')),
+  )
+  if (!expanded) return source
+  const entries = (steps: Workflow['steps']): Record<string, unknown> =>
+    Object.fromEntries(
+      steps.map(({ id, steps: children, ...step }) => [
+        id,
+        { ...step, ...(children && { steps: entries(children) }) },
+      ]),
+    )
+  const { version, name, description, aliases, select, assign, steps } = workflow
+  const text = JSON.stringify(
+    { version, name, description, aliases, select, assign, steps: entries(steps) },
+    null,
+    2,
+  )
+  return { ...source, text: `${text}\n` }
+}
 export interface Expansion {
   readonly workflow?: Workflow
   readonly errors: readonly WorkflowError[]
@@ -134,9 +156,9 @@ function expandStep(state: ExpansionState, context: StepContext, chain: readonly
     recordOrigins(state.origins, workflow, step, id)
     return [expandLoop(state, { ...context, step: rebaseStep(step, id) }, chain)]
   }
-  const unsupported = (['when', 'gates', 'state', 'on-resume'] as const).find(
-    key => step[key] !== undefined,
-  )
+  const unsupported = (
+    ['interactive', 'when', 'gates', 'state', 'on-resume', 'escalate'] as const
+  ).find(key => step[key] !== undefined)
   if (unsupported) {
     state.errors.push(
       errorAt(workflow, ['steps', step.id, unsupported], {

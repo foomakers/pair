@@ -66,6 +66,7 @@
     "@pair/ts-config": "workspace:*",
     "@types/adm-zip": "catalog:",
     "@types/node": "catalog:",
+    "@vercel/ncc": "0.45.0",
     "@vitest/coverage-v8": "catalog:",
     "ts-node": "catalog:",
     "typescript": "catalog:",
