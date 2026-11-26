@@ -110,6 +110,24 @@ test('#750 AC-6 preserves findings through line movement, a rename and R11 path 
   })
 })
 
+test('#750 AC-6 preserves a verified rename when a differently renamed base is merged', t => {
+  const { check, git } = fixture(t)
+  git('switch', '-qc', 'branch-rename')
+  git('mv', legacy, `${pkg}/src/http/branch-state.ts`)
+  git('commit', '-qm', 'Rename the model on the branch')
+  git('switch', '-q', 'main')
+  git('mv', legacy, `${pkg}/src/http/main-state.ts`)
+  git('commit', '-qm', 'Rename the model on main')
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+  git('switch', '-q', 'branch-rename')
+  git('merge', '-q', '-s', 'ours', 'main', '-m', 'Keep the branch model path')
+
+  assert.deepEqual(check(), {
+    status: 0,
+    out: 'Domain baseline passed on 1 files (2 recorded findings).',
+  })
+})
+
 test('#750 AC-6 refuses a replacement finding and an expanded snapshot, then accepts retirement', t => {
   const { check, write } = fixture(t)
   write(legacy, debt.replace('progressReporter?: string | undefined', 'replacement?: string'))

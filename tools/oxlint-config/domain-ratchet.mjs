@@ -55,33 +55,31 @@ function renames(...revisions) {
   return result
 }
 
-function pathAtRevision(file, revision) {
+function pathAtRevision(file, origin, revision) {
   let path = file
-  let history = revision
-  for (;;) {
-    const blob = spawnSync('git', ['cat-file', '-e', `${revision}:${path}`])
-    if (blob.error) throw blob.error
-    if (blob.status === 0) return path
-
-    // Read merges against their first parent to see renames as they landed on main.
-    const removed = git(
+  let after = origin
+  while (after !== revision) {
+    // Follow the first removal of this path before any later reuse. Read merges
+    // against their first parent to see renames as they landed on the branch.
+    const [removed] = git(
       'log',
       '--first-parent',
       '--diff-merges=first-parent',
       '--no-renames',
       '--diff-filter=D',
       '--no-patch',
-      '-1',
+      '--reverse',
       '--format=%H',
-      history,
+      `${after}..${revision}`,
       '--',
       path,
-    ).trim()
+    ).split('\n', 1)
     const moved = removed && renames(`${removed}^`, removed).get(path)
-    if (!moved) return file
+    if (!moved) break
     path = moved
-    history = `${removed}..${revision}`
+    after = removed
   }
+  return path
 }
 
 function readPrevious(base, path, current) {
@@ -225,7 +223,8 @@ function trackedSuppressions() {
 }
 
 export function checkDomainRatchet() {
-  const base = git('merge-base', 'HEAD', 'origin/main').trim()
+  const head = git('rev-parse', 'HEAD').trim()
+  const base = git('merge-base', head, 'origin/main').trim()
   const files = new Set(
     git('ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'apps', 'packages')
       .split('\0')
@@ -233,17 +232,38 @@ export function checkDomainRatchet() {
   )
   const snapshot = read(baselinePath)
   const [previous, revision] = readPrevious(base, baselinePath, snapshot)
-  const moves = renames(base)
+  const origin =
+    revision === base
+      ? git(
+          'log',
+          '--first-parent',
+          '--diff-merges=first-parent',
+          '--no-renames',
+          '--diff-filter=A',
+          '--no-patch',
+          '-1',
+          '--format=%H',
+          revision,
+          '--',
+          baselinePath,
+        ).trim()
+      : revision
+  const moves = renames(head)
+  const branchMoves = renames(base)
   const basePaths = new Map(
-    [...new Set([...Object.keys(previous), ...legacy.keys()])].map(file => [
-      file,
-      pathAtRevision(file, base),
-    ]),
+    [...new Set([...Object.keys(previous), ...Object.keys(snapshot), ...legacy.keys()])].map(
+      file => [file, pathAtRevision(file, origin, base)],
+    ),
   )
-  const currentPath = file => {
-    const path = basePaths.get(file) ?? file
-    return files.has(path) ? path : (moves.get(path) ?? path)
-  }
+  const currentPaths = new Map(
+    [...basePaths].map(([file, path]) => {
+      const atHead = pathAtRevision(path, base, head)
+      const current = moves.get(atHead) ?? atHead
+      // A base merged into the branch can be outside its first-parent history.
+      return [file, files.has(current) ? current : (branchMoves.get(path) ?? current)]
+    }),
+  )
+  const currentPath = file => currentPaths.get(file)
   const priorKeys = entries(previous, currentPath)
   const priorEntries = counts(priorKeys)
   const currentEntries = entries(snapshot, currentPath)
