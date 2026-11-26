@@ -130,6 +130,24 @@ test('#750 AC-3/4 package lint accepts non-null, opaque and nested types and exc
   assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
 })
 
+test('#750 R2 checks an imported DTO field at the pilot construction', t => {
+  const dto = 'src/http/retry.dto.ts'
+  const cwd = workspace(t, {
+    [pilot]: `import type { RetryDto } from './retry.dto.js'
+export function createRetry(dto: RetryDto) {
+  return { ...dto }
+}
+`,
+    [dto]: 'export interface RetryDto { cause: string }\n',
+  })
+  assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+  writeFileSync(join(cwd, dto), 'export interface RetryDto { cause: string | null }\n')
+  const result = lint(cwd)
+  assert.deepEqual(findings(result), { status: 1, locations: [[pilot, semantic, 3, 10]] })
+  assert.match(JSON.parse(result.stdout).diagnostics[0].message, /createRetry\.cause/)
+})
+
 test('#750 AC-4 package lint distinguishes project-load errors from findings', t => {
   const cwd = workspace(t, { [pilot]: model('cause: unknown') })
   const project = join(cwd, 'tsconfig.json')
