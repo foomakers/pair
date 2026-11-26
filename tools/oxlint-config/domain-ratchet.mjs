@@ -35,13 +35,13 @@ const git = (...args) => execFileSync('git', args, { encoding: 'utf8' })
 const read = path => JSON.parse(readFileSync(path, 'utf8'))
 const key = (file, rule, identity) => JSON.stringify([file, rule, identity])
 
-function renames(ref) {
+function renames(...revisions) {
   const fields = git(
     'diff',
     '--name-status',
     '-z',
     '--find-renames',
-    ref,
+    ...revisions,
     '--',
     'apps',
     'packages',
@@ -53,6 +53,35 @@ function renames(ref) {
     if (status.startsWith('R')) result.set(original, fields[i++])
   }
   return result
+}
+
+function pathAtRevision(file, revision) {
+  let path = file
+  let history = revision
+  for (;;) {
+    const blob = spawnSync('git', ['cat-file', '-e', `${revision}:${path}`])
+    if (blob.error) throw blob.error
+    if (blob.status === 0) return path
+
+    // Read merges against their first parent to see renames as they landed on main.
+    const removed = git(
+      'log',
+      '--first-parent',
+      '--diff-merges=first-parent',
+      '--no-renames',
+      '--diff-filter=D',
+      '--no-patch',
+      '-1',
+      '--format=%H',
+      history,
+      '--',
+      path,
+    ).trim()
+    const moved = removed && renames(`${removed}^`, removed).get(path)
+    if (!moved) return file
+    path = moved
+    history = `${removed}..${revision}`
+  }
 }
 
 function readPrevious(base, path, current) {
@@ -86,11 +115,12 @@ function entries(snapshot, currentPath) {
   )
 }
 
-function previousSites(snapshot, revision, currentPath) {
+function previousSites(snapshot, revision, snapshotPaths, currentPath) {
   const identities = []
   for (const [file, rules] of Object.entries(snapshot)) {
     // Bind the frozen property names to their locations in the reviewed source.
-    const sites = [...domainPropertySites(file, git('show', `${revision}:${file}`)).values()]
+    const path = snapshotPaths.get(file) ?? file
+    const sites = [...domainPropertySites(path, git('show', `${revision}:${path}`)).values()]
     for (const [rule, properties] of Object.entries(rules)) {
       for (const [property, quantity] of counts(properties)) {
         const matches = sites.filter(site => {
@@ -201,14 +231,19 @@ export function checkDomainRatchet() {
       .split('\0')
       .filter(file => file && lstatSync(file, { throwIfNoEntry: false })?.isFile()),
   )
-  const moves = renames(base)
-  const anchor = spawnSync('git', ['cat-file', '-e', `${reviewedBase}^{commit}`])
-  if (anchor.status === 0 && reviewedBase !== base) {
-    for (const [old, moved] of renames(reviewedBase)) if (!moves.has(old)) moves.set(old, moved)
-  }
-  const currentPath = file => (files.has(file) ? file : (moves.get(file) ?? file))
   const snapshot = read(baselinePath)
   const [previous, revision] = readPrevious(base, baselinePath, snapshot)
+  const moves = renames(base)
+  const basePaths = new Map(
+    [...new Set([...Object.keys(previous), ...legacy.keys()])].map(file => [
+      file,
+      pathAtRevision(file, base),
+    ]),
+  )
+  const currentPath = file => {
+    const path = basePaths.get(file) ?? file
+    return files.has(path) ? path : (moves.get(path) ?? path)
+  }
   const priorKeys = entries(previous, currentPath)
   const priorEntries = counts(priorKeys)
   const currentEntries = entries(snapshot, currentPath)
@@ -259,7 +294,8 @@ export function checkDomainRatchet() {
   }
   const remaining = counts(currentEntries)
   const knownEntries = new Set(priorKeys)
-  const baselinedSites = previousSites(previous, revision, currentPath)
+  const snapshotPaths = revision === base ? basePaths : new Map()
+  const baselinedSites = previousSites(previous, revision, snapshotPaths, currentPath)
   const bySource = new Map()
   function matchesSite(file, rule, property, offset) {
     if (!bySource.has(file))
