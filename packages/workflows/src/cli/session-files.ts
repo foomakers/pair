@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { chmod, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { RunFiles } from '../engine'
+import { applyProjectConfig } from './project-config'
 
 export const readText = (file: string): string => readFileSync(file, 'utf8')
 
@@ -44,6 +45,9 @@ export function projectConfig(
   const text = readOptional(join(root, file))
   return text === undefined ? undefined : (JSON.parse(text) as Record<string, unknown>)
 }
+
+export const loadSessionProjectConfig = (root: string): Record<string, unknown> | undefined =>
+  applyProjectConfig(sessionFiles, {}, root)
 
 /** A final message can be a file or a stream, including stdin from a parent process. */
 export const readMessage = (file: string): string =>

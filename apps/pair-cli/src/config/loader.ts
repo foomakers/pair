@@ -1,6 +1,12 @@
 import { join, posix } from 'path'
 import { FileSystemService, isValidFlattenDepth, resolvesWithinSync } from '@pair/content-ops'
 import {
+  applyProjectConfig,
+  assertSkipRegistries,
+  isPlainObject,
+  mergeConfigs,
+} from '@pair/workflows/cli'
+import {
   Config,
   extractRegistries,
   validateAllRegistries,
@@ -97,16 +103,6 @@ function withSkipRegistries(loaded: LoadedConfig): LoadedConfig {
   return skip ? { ...loaded, skipRegistries: skip } : loaded
 }
 
-function assertSkipRegistries(parsed: unknown, path: string, objectOnly = false): void {
-  if (objectOnly && !isPlainObject(parsed)) {
-    throw new Error(`Invalid ${path}: must be a JSON object`)
-  }
-  const skip = isPlainObject(parsed) ? parsed['skipRegistries'] : undefined
-  if (skip !== undefined && !(Array.isArray(skip) && skip.every(n => typeof n === 'string'))) {
-    throw new Error(`Invalid ${path}: skipRegistries must be an array of registry names`)
-  }
-}
-
 /**
  * Applies the declaration, then checks the RESOLVED configuration as a whole — and backs
  * the declaration out entirely if it is what made the result invalid.
@@ -191,7 +187,7 @@ function layerOverrides(
   const { customConfigPath, projectRoot = fsService.rootModuleDirectory() } = options
   let { config, source } = start
 
-  const pairApplied = applyPairConfigIfExists(fsService, config, projectRoot, {
+  const pairApplied = applyProjectConfig(fsService, config, projectRoot, {
     // The base config is not a project override of itself: when the project root IS the
     // module dir (the released layout), re-merging `config.json` here would silently undo
     // the source KB's declaration applied just above.
@@ -201,7 +197,7 @@ function layerOverrides(
     ...(options.projectConfigOnly && { pairConfigOnly: true }),
   })
   if (pairApplied) {
-    config = pairApplied.config
+    config = pairApplied
     source = `${source} < pair.config.json`
   }
 
@@ -275,10 +271,6 @@ const SOURCE_DECLARABLE_FIELDS = [
   'description',
   'prefix',
 ] as const
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 /**
  * `prefix` becomes a directory name; `source` and `description` are echoed on a single
@@ -490,65 +482,6 @@ function loadBaseConfig(fsService: FileSystemService): { config: Config; source:
   }
 }
 
-function registryBaseForRuntimeConfig(
-  fs: FileSystemService,
-  base: Config,
-  project: unknown,
-  legacy: { path: string; allowed: boolean },
-): Config {
-  if (
-    !legacy.allowed ||
-    !isPlainObject(project) ||
-    ['asset_registries', 'dataset_registries'].some(key => Object.hasOwn(project, key))
-  )
-    return base
-  const declaration = JSON.parse(fs.readFileSync(legacy.path))
-  assertSkipRegistries(declaration, legacy.path)
-  return mergeConfigs(base, declaration)
-}
-
-function applyPairConfigIfExists(
-  fsService: FileSystemService,
-  baseConfig: Config,
-  projectRoot: string,
-  options: { alreadyLoaded?: string; pairConfigOnly?: boolean } = {},
-): { config: Config } | null {
-  const pairConfigPath = join(projectRoot, 'pair.config.json')
-  const configJsonPath = join(projectRoot, 'config.json')
-
-  // Try pair.config.json first, then fall back to config.json — unless that config.json is
-  // the base config this resolution already started from, or the caller pointed us at a
-  // real project root, where `config.json` is a name any tool may own.
-  const fallbackAllowed =
-    !options.pairConfigOnly &&
-    fsService.existsSync(configJsonPath) &&
-    configJsonPath !== options.alreadyLoaded
-  const configPath = fsService.existsSync(pairConfigPath)
-    ? pairConfigPath
-    : fallbackAllowed
-      ? configJsonPath
-      : null
-
-  if (configPath) {
-    try {
-      const pairConfigContent = fsService.readFileSync(configPath)
-      const pairConfig = JSON.parse(pairConfigContent)
-      assertSkipRegistries(pairConfig, configPath, options.pairConfigOnly)
-      const registryBase = registryBaseForRuntimeConfig(fsService, baseConfig, pairConfig, {
-        path: configJsonPath,
-        allowed: configPath === pairConfigPath && fallbackAllowed,
-      })
-      return { config: mergeConfigs(registryBase, pairConfig) }
-    } catch (err) {
-      // install/update: an unreadable project config silently dropping `skipRegistries`
-      // would overwrite the user's own files.
-      if (options.pairConfigOnly) throw new Error(`Failed to load ${configPath}: ${reasonOf(err)}`)
-      console.warn(`Warning: Failed to load ${configPath}, continuing with base config`)
-    }
-  }
-  return null
-}
-
 function mergeWithCustomConfig(
   fsService: FileSystemService,
   baseConfig: Config,
@@ -562,34 +495,6 @@ function mergeWithCustomConfig(
   } catch (err) {
     throw new Error(`Failed to load custom config file ${customConfigPath}: ${reasonOf(err)}`)
   }
-}
-
-/**
- * Performs a deep-ish merge of configurations, specifically handling the asset_registries map correctly.
- */
-function mergeConfigs(baseConfig: Config, overrideConfig: Config): Config {
-  const merged = { ...baseConfig }
-
-  if (overrideConfig.asset_registries) {
-    merged.asset_registries = { ...merged.asset_registries }
-
-    Object.entries(overrideConfig.asset_registries).forEach(([registryName, registryConfig]) => {
-      if (typeof registryConfig === 'object' && registryConfig !== null) {
-        merged.asset_registries[registryName] = {
-          ...merged.asset_registries[registryName],
-          ...registryConfig,
-        }
-      }
-    })
-  }
-
-  Object.keys(overrideConfig).forEach(key => {
-    if (key !== 'asset_registries') {
-      merged[key] = (overrideConfig as Record<string, unknown>)[key]
-    }
-  })
-
-  return merged
 }
 
 /**

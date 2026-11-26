@@ -1,0 +1,73 @@
+import { join } from 'node:path'
+import type { RunFiles } from '../engine'
+
+type Config = Record<string, unknown>
+type ConfigFiles = Pick<RunFiles, 'existsSync' | 'readFileSync'>
+
+export function isPlainObject(value: unknown): value is Config {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function assertSkipRegistries(parsed: unknown, path: string, objectOnly = false): void {
+  if (objectOnly && !isPlainObject(parsed)) {
+    throw new Error(`Invalid ${path}: must be a JSON object`)
+  }
+  const skip = isPlainObject(parsed) ? parsed['skipRegistries'] : undefined
+  if (skip !== undefined && !(Array.isArray(skip) && skip.every(n => typeof n === 'string'))) {
+    throw new Error(`Invalid ${path}: skipRegistries must be an array of registry names`)
+  }
+}
+
+/** Merge each asset registry by field and replace other top-level keys. */
+export function mergeConfigs<T extends Config>(base: T, override: Config): T {
+  const merged: Config = { ...base }
+  const registries = override['asset_registries']
+  if (registries) {
+    const entries = { ...(base['asset_registries'] as Config | undefined) }
+    for (const [name, registry] of Object.entries(registries)) {
+      if (typeof registry === 'object' && registry !== null)
+        entries[name] = { ...(entries[name] as Config | undefined), ...registry }
+    }
+    merged['asset_registries'] = entries
+  }
+  for (const key of Object.keys(override)) {
+    if (key !== 'asset_registries') merged[key] = override[key]
+  }
+  return merged as T
+}
+
+function readConfig(fs: ConfigFiles, path: string, objectOnly?: boolean): Config {
+  const parsed = JSON.parse(fs.readFileSync(path))
+  assertSkipRegistries(parsed, path, objectOnly)
+  return parsed as Config
+}
+
+/** A runtime-only pair.config.json layers over config.json. A registry declaration owns the project layer. */
+export function applyProjectConfig<T extends Config>(
+  fs: ConfigFiles,
+  base: T,
+  root: string,
+  { alreadyLoaded, pairConfigOnly }: { alreadyLoaded?: string; pairConfigOnly?: boolean } = {},
+): T | undefined {
+  const primary = join(root, 'pair.config.json')
+  const legacy = join(root, 'config.json')
+  const allowLegacy = !pairConfigOnly && fs.existsSync(legacy) && legacy !== alreadyLoaded
+  const path = fs.existsSync(primary) ? primary : allowLegacy ? legacy : undefined
+  if (path === undefined) return undefined
+
+  try {
+    const project = readConfig(fs, path, pairConfigOnly)
+    const inheritLegacy =
+      path === primary &&
+      allowLegacy &&
+      isPlainObject(project) &&
+      !['asset_registries', 'dataset_registries'].some(key => Object.hasOwn(project, key))
+    return mergeConfigs(inheritLegacy ? mergeConfigs(base, readConfig(fs, legacy)) : base, project)
+  } catch (err) {
+    // Install/update must not silently drop skipRegistries from an unreadable project config.
+    if (pairConfigOnly)
+      throw new Error(`Failed to load ${path}: ${err instanceof Error ? err.message : String(err)}`)
+    console.warn(`Warning: Failed to load ${path}, continuing with base config`)
+    return undefined
+  }
+}

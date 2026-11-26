@@ -50,7 +50,7 @@ import { approvalQuestion, type ApprovalTarget } from './workflow-approval'
 import { runWorkflowOperation, type Operation } from './workflow-facts'
 import { workflowMerge } from './workflow-merge'
 import { refreshReplayInputs } from './workflow-replay'
-import { projectConfig, readMessage, readText, sessionFiles } from './session-files'
+import { loadSessionProjectConfig, readMessage, readText, sessionFiles } from './session-files'
 import { resolveWorkingPathOverride } from './working-area'
 import {
   checkWorkflowConfiguration,
@@ -277,7 +277,7 @@ function withCardSessionLease<T>(
   input: { engine: string; card?: string } | { token: string },
   command: Parameters<typeof withSessionLease<T>>[2],
 ): Promise<T> {
-  const config = projectConfig(main) ?? projectConfig(main, 'config.json')
+  const config = loadSessionProjectConfig(main)
   const workingArea = resolve(main, resolveWorkingPathOverride(config))
   return withSessionLease(run.dir, input, async lease => {
     const card = ('card' in input && input.card) || requireState(run).card
