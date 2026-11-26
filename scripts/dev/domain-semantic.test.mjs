@@ -211,6 +211,35 @@ export type Direct = RetryDto & { message: string | null }
   })
 })
 
+function constructorModel(parameters, before = '', subclass = false) {
+  const declaration = subclass
+    ? 'class Base {}\nexport class Retry extends Base'
+    : 'export class Retry'
+  const body = subclass ? '\n    super()\n  ' : ''
+  return `${before}${declaration} {\n  constructor(${parameters}) {${body}}\n}\n`
+}
+
+for (const [property, alias, rule, line, subclass] of [
+  ['message?: string', '', 'pair-domain(no-optional-domain-properties)', 2],
+  ['message: string | null', '', 'pair-domain(no-explicit-nullish-domain-types)', 2],
+  ["message: string | null = ''", '', 'pair-domain(no-explicit-nullish-domain-types)', 3, true],
+  ['message: Cause', 'type Cause = string | null\n', semantic, 3],
+]) {
+  test(`#750 R14 rejects the constructor parameter property ${property}`, t => {
+    const cwd = workspace(t, { [pilot]: constructorModel(`readonly ${property}`, alias, subclass) })
+    const result = lint(cwd)
+    assert.deepEqual(findings(result), { status: 1, locations: [[pilot, rule, line, 24]] })
+    assert.match(JSON.parse(result.stdout).diagnostics[0].message, /Retry\.message[. ]/)
+  })
+}
+
+test('#750 R14 accepts a required field and an ordinary nullable constructor parameter', t => {
+  const cwd = workspace(t, {
+    [pilot]: constructorModel("readonly message: string = '', _input?: string | null"),
+  })
+  assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+})
+
 test('#750 R7 rejects optional DTO fields copied into a pilot factory result', t => {
   const source = `import type { RetryDto } from './retry.dto.js'
 export function createRetry(dto: RetryDto) {
