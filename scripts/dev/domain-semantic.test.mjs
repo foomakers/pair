@@ -529,6 +529,47 @@ for (const [code, dependency, source, broken] of [
   })
 }
 
+for (const [bridge, code, broken, dependencies] of [
+  [
+    'types/bridge.ts',
+    'TS2303',
+    "export type { Cause } from './fallback.js'\n",
+    { 'types/fallback.ts': "export type { Cause } from './bridge.js'\n" },
+  ],
+  [
+    'types/bridge.ts',
+    'TS2308',
+    "export type * from './cause.js'\nexport type * from './fallback.js'\n",
+    { 'types/fallback.ts': 'export type Cause = number\n' },
+  ],
+  ['types/bridge.d.ts', 'TS2307', "export type { Cause } from './missing.js'\n", {}],
+]) {
+  for (const detail of [false, true]) {
+    const context = detail ? 'with a nullable field' : 'without a nullable field'
+    test(`#750 750-R22 AC-4 rejects a broken type re-export (${code}, ${context})`, t => {
+      const importCause = "import type { Cause } from '../../types/bridge.js'\n"
+      const cwd = workspace(t, {
+        [pilot]: detail
+          ? model('cause: Cause\n  detail: Detail', `${importCause}type Detail = string | null\n`)
+          : model('cause: Cause', importCause),
+        [bridge]: "export type { Cause } from './cause.js'\n",
+        'types/cause.ts': 'export type Cause = string\n',
+        ...dependencies,
+      })
+      assert.deepEqual(findings(lint(cwd)), {
+        status: detail ? 1 : 0,
+        locations: detail ? [[pilot, semantic, 5, 3]] : [],
+      })
+
+      writeFileSync(join(cwd, bridge), broken)
+      const { status, stdout, stderr } = lint(cwd)
+      assert.equal(status, 2, stdout + stderr)
+      assert.ok(stderr.includes(`${bridge}: ${code}`), stderr)
+      assert.equal(stdout, '')
+    })
+  }
+}
+
 test('#750 AC-4 package lint distinguishes project-load errors from findings', t => {
   const cwd = workspace(t, { [pilot]: model('cause: unknown') })
   const project = join(cwd, 'tsconfig.json')
