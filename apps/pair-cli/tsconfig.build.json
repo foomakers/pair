@@ -7,6 +7,10 @@
     "outDir": "dist",
     "rootDir": "src"
   },
+  "references": [
+    { "path": "../../packages/content-ops/tsconfig.build.json" },
+    { "path": "../../packages/workflows/tsconfig.build.json" }
+  ],
   "include": ["src/**/*.ts"],
   "exclude": [
     "node_modules",
