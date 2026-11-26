@@ -298,8 +298,7 @@ function watchTransport(child: EngineChild, input: SpawnIterationInput) {
     }
   })
   // Ending the terminal-event reader cancels its iterator; Node reports ABORT_ERR on the pipe.
-  child.stdout.on('error', capture)
-  child.stderr.on('error', capture)
+  for (const pipe of [child.stdout, child.stderr]) pipe.on('error', capture)
   const stderrTail: string[] = []
   const stderr = relayLines(
     child.stderr,

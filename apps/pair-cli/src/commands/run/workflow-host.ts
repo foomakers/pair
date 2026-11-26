@@ -476,6 +476,19 @@ function agentOutcome(
   return { fault: { kind, detail: result.detail, ...process } }
 }
 
+function stderrOptions(run: Launch, stepId: string) {
+  if (run.config.verbose) return {}
+  return {
+    onStderr: async (line: string) => {
+      try {
+        await run.services.fs.appendFile(join(run.runDir, 'stderr.log'), `[${stepId}] ${line}\n`)
+      } catch {
+        console.log(line)
+      }
+    },
+  }
+}
+
 /** One agent per step, in the card's worktree, on the engine, model and effort its settings say. */
 function launcher(run: Launch) {
   const { config, resolved, services } = run
@@ -501,15 +514,7 @@ function launcher(run: Launch) {
           ? config.iterationTimeoutSeconds
           : step.timeoutMinutes * 60,
       diagnoseProcess: true,
-      ...(config.verbose !== true && {
-        onStderr: async (line: string) => {
-          try {
-            await services.fs.appendFile(join(run.runDir, 'stderr.log'), `[${step.id}] ${line}\n`)
-          } catch {
-            console.log(line)
-          }
-        },
-      }),
+      ...stderrOptions(run, step.id),
       idleTimeoutSeconds: idle,
       shouldFinalizeLastMessage: () =>
         text === undefined || !checkAgentResult(text, kindByName[step.kind]).valid,
@@ -811,23 +816,33 @@ function cardTransitions({ request, resolved }: Opened, services: Services) {
   }
 }
 
-/** The ending of a run parked or failed on an exhausted loop, drawn on the console; undefined otherwise. */
-function exhaustedEnding(
-  { request, runDir, report, watch }: Opened,
+function describeExhaustion(
+  opened: Pick<Opened, 'request' | 'runDir'>,
   outcome: RunOutcome,
-  sink: ConsoleSink,
   fs: Services['fs'],
-  verbose: boolean,
-): number | undefined {
+) {
   if (outcome.run === 'done' || outcome.run === 'skipped') return undefined
+  const { request, runDir } = opened
   const saved = savedWorkflow({ card: request.card, restart: false }, runDir, fs)
-  if (saved === undefined) return undefined
+  if (!saved) return undefined
   const stopped = stoppedLoop(saved.workflow, saved.state)
   if (stopped?.run !== outcome.run) return undefined
   const { id } = stopped.step
   const last = saved.state.steps[`${id}/${untilStep(stopped.step)}`]
   const summary = saved.state.steps[id]?.summary ?? 'loop exhausted'
   const why = `${summary}; last until: ${last?.state} — ${last?.summary}`
+  return { stopped, summary, why }
+}
+
+/** The ending of a run parked or failed on an exhausted loop, drawn on the console; undefined otherwise. */
+function exhaustedEnding(
+  { request, runDir, report, watch }: Opened,
+  outcome: RunOutcome,
+  { sink, fs, verbose }: { sink: ConsoleSink; fs: Services['fs']; verbose: boolean },
+): number | undefined {
+  const description = describeExhaustion({ request, runDir }, outcome, fs)
+  if (!description) return undefined
+  const { stopped, summary, why } = description
   const { status, exit } = ENDINGS[stopped.run]
   if (stopped.run === 'parked' && watch?.(runDir) === true)
     report?.({
@@ -866,7 +881,6 @@ async function runOnConsole(
   launch: ReturnType<typeof launcher>,
   services: Services,
 ): Promise<number> {
-  const { fs } = services
   const { resolved, request, runDir } = opened
   const sink = createConsoleSink({
     out: process.stdout,
@@ -881,7 +895,7 @@ async function runOnConsole(
     const outcome = await runSteps(
       {
         id: 'pair-run',
-        files: fs,
+        files: services.fs,
         style: resolved.engine.engine.skillInvocationStyle,
         isSafeText: isSafePromptText,
         parkInteractive: INTERACTIVE_PARK,
@@ -902,10 +916,8 @@ async function runOnConsole(
     )
     reportRunOutcome(opened, outcome)
     reportProcessFaults(outcome.faults)
-    return (
-      exhaustedEnding(opened, outcome, sink, fs, config.verbose === true) ??
-      conclude(outcome, opened, sink)
-    )
+    const ending = { sink, fs: services.fs, verbose: config.verbose === true }
+    return exhaustedEnding(opened, outcome, ending) ?? conclude(outcome, opened, sink)
   } finally {
     sink.finish()
     restore()
@@ -1079,20 +1091,14 @@ async function drive(
   if (replay && replayTree) await prepareReplayHead(replayTree, replay.inputs.head)
   const started = await startOnConsole(opened, fs, config.verbose === true, replay)
   const effective = effectiveConfiguration({ files: fs, dir: runDir })
-  if (config.verbose) printSettings(resolved, effective)
-  probeUnchecked(
-    resolved,
-    effective,
-    runDir,
-    deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
-  )
+  prepareSettings(config, opened, services, effective)
   const stopped = reportStopped(opened, started.status, fs, config.verbose === true)
   if (stopped !== undefined) {
     await restoreStoppedFaults({ files: fs, dir: runDir }, started.status, config, resolved)
     return stopped
   }
   const worktree = replayTree ?? (await prepare())
-  if (config.verbose) console.log(`  Worktree: ${worktree}`)
+  logWorktree(config, worktree)
   return runOnConsole(
     config,
     {
@@ -1104,6 +1110,25 @@ async function drive(
     },
     launcher({ config, resolved, services, worktree, runDir, effective }),
     services,
+  )
+}
+
+function logWorktree(config: RunCommandConfig, worktree: string) {
+  if (config.verbose) console.log(`  Worktree: ${worktree}`)
+}
+
+function prepareSettings(
+  config: RunCommandConfig,
+  { resolved, runDir }: Opened,
+  { fs, deps }: Services,
+  effective: Configuration | undefined,
+) {
+  if (config.verbose) printSettings(resolved, effective)
+  probeUnchecked(
+    resolved,
+    effective,
+    runDir,
+    deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   )
 }
 
@@ -1398,10 +1423,8 @@ export async function handleWorkflowRun(
   if (resolved === undefined) return 1
   if (config.verbose || config.dryRun) printPlan(resolved.workflow)
   if (config.dryRun) return printWorkflowPreview(resolved)
-  if (request.moreRounds !== undefined && !request.restart) {
-    const granted = await grantToWatchingBatch(resolved, request, services.fs)
-    if (granted !== undefined) return granted
-  }
+  const granted = await grantToWatchingBatch(resolved, request, services.fs)
+  if (granted !== undefined) return granted
   const opened = await openCard({ config, resolved }, request, services, card)
   return opened === undefined ? 0 : runWithCardLock(config, opened, services, batch?.releases)
 }
@@ -1447,6 +1470,7 @@ async function grantToWatchingBatch(
   request: WorkflowRunRequest,
   fs: FileSystemService,
 ): Promise<number | undefined> {
+  if (request.moreRounds === undefined || request.restart) return undefined
   const runDir = workflowRunDir(resolved, request)
   const waiting = batchWaitDirectory(runDir)
   if (!fs.existsSync(waiting)) return undefined

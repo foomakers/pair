@@ -133,6 +133,73 @@ function startPoolTask<T, Outcome>(
   state.active.set(index, task)
 }
 
+async function waitForPool<T, Outcome>(
+  input: PoolInput<T, Outcome>,
+  state: {
+    active: Map<number, Promise<void>>
+    results: Outcome[]
+    pending: number[]
+    suspended: number[]
+  },
+  mayStart: () => boolean,
+): Promise<void> {
+  const { active, suspended, results, pending } = state
+  const { polling } = input
+  if (!polling || suspended.length === 0) {
+    await Promise.race(active.values())
+    return
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const tick = new Promise<boolean>(done => {
+    timer = setTimeout(() => done(true), polling.intervalMs)
+  })
+  const elapsed = await Promise.race([
+    tick,
+    ...[...active.values()].map(task => task.then(() => false)),
+  ])
+  clearTimeout(timer)
+  if (!elapsed || !mayStart()) return
+  for (const index of suspended) {
+    try {
+      if (!polling.ready(results[index]!)) continue
+    } catch (error) {
+      results[index] = input.onWorkerError(input.items[index]!, error)
+      continue
+    }
+    delete results[index]
+    pending.push(index)
+  }
+}
+
+function poolReady<T, Outcome>(input: PoolInput<T, Outcome>, held: ReadonlySet<string>) {
+  return (index: number) => {
+    const item = input.items[index]!
+    return (
+      (input.ready?.(item) ?? true) &&
+      (input.resources?.(item) ?? []).every(resource => !held.has(resource))
+    )
+  }
+}
+
+function fillPool<T, Outcome>(
+  input: PoolInput<T, Outcome>,
+  state: {
+    results: Outcome[]
+    active: Map<number, Promise<void>>
+    held: Set<string>
+    pending: number[]
+  },
+  ready: (index: number) => boolean,
+) {
+  const { active, pending } = state
+  while (active.size < input.limit && pending.length > 0) {
+    const position = pending.findIndex(ready)
+    if (position < 0) break
+    const [index] = pending.splice(position, 1)
+    startPoolTask(input, index!, state)
+  }
+}
+
 export async function runPool<T, Outcome = CardOutcome>(
   input: PoolInput<T, Outcome>,
 ): Promise<Outcome[]> {
@@ -142,23 +209,12 @@ export async function runPool<T, Outcome = CardOutcome>(
   const active = new Map<number, Promise<void>>()
   const held = new Set<string>()
   const state = { results, active, held }
-  const ready = (index: number) => {
-    const item = input.items[index]!
-    return (
-      (input.ready?.(item) ?? true) &&
-      (input.resources?.(item) ?? []).every(resource => !held.has(resource))
-    )
-  }
+  const ready = poolReady(input, held)
   for (;;) {
     if (!mayStart()) {
       for (const index of pending.splice(0)) results[index] = input.notStarted(input.items[index]!)
     }
-    while (active.size < input.limit && pending.length > 0) {
-      const position = pending.findIndex(ready)
-      if (position < 0) break
-      const [index] = pending.splice(position, 1)
-      startPoolTask(input, index!, state)
-    }
+    fillPool(input, { ...state, pending }, ready)
     const polling = input.polling
     const suspended =
       polling && mayStart()
@@ -168,31 +224,7 @@ export async function runPool<T, Outcome = CardOutcome>(
       for (const index of pending) results[index] = input.notStarted(input.items[index]!)
       break
     }
-    if (polling === undefined || suspended.length === 0) {
-      await Promise.race(active.values())
-      continue
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const tick = new Promise<boolean>(done => {
-      timer = setTimeout(() => done(true), polling.intervalMs)
-    })
-    const elapsed = await Promise.race([
-      tick,
-      ...[...active.values()].map(task => task.then(() => false)),
-    ])
-    clearTimeout(timer)
-    if (elapsed && mayStart()) {
-      for (const index of suspended) {
-        try {
-          if (!polling.ready(results[index]!)) continue
-        } catch (error) {
-          results[index] = input.onWorkerError(input.items[index]!, error)
-          continue
-        }
-        delete results[index]
-        pending.push(index)
-      }
-    }
+    await waitForPool(input, { active, results, pending, suspended }, mayStart)
   }
   return results
 }

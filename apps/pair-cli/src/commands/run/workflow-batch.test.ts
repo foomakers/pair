@@ -19,17 +19,19 @@ describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
       })
       const running = scheduleWorkflowCards(
         cards,
-        2,
+        {
+          limit: 2,
+          polling: {
+            intervalMs: 30_000,
+            watches: result => result.id === '757' && result.outcome === 'parked',
+            ready: () => ready,
+          },
+        },
         new Map(),
         async ({ id }) => {
           launches.push(id)
           if (id === '750') await peer
           return { id, outcome: id === '757' && !ready ? 'parked' : 'done' }
-        },
-        {
-          intervalMs: 30_000,
-          watches: result => result.id === '757' && result.outcome === 'parked',
-          ready: () => ready,
         },
       )
       await vi.advanceTimersByTimeAsync(30_000)
@@ -61,7 +63,7 @@ describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
       { id: '10', prerequisites: [] },
       { id: '11', prerequisites: ['10'] },
     ]
-    const running = scheduleWorkflowCards(cards, 2, new Map(), async ({ id }) => {
+    const running = scheduleWorkflowCards(cards, { limit: 2 }, new Map(), async ({ id }) => {
       launches.push(id)
       if (id === '12') announceDependent()
       await new Promise<void>(resolve => finish.set(id, resolve))
@@ -88,7 +90,7 @@ describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
       { id: '9', prerequisites: [] },
     ]
     const launched: string[] = []
-    const result = await scheduleWorkflowCards(cards, 1, prior, async ({ id }) => {
+    const result = await scheduleWorkflowCards(cards, { limit: 1 }, prior, async ({ id }) => {
       launched.push(id)
       return { id, outcome: 'done' }
     })
