@@ -2,7 +2,7 @@
 
 ## Post-migration baseline
 
-Card [#750](https://github.com/foomakers/pair/issues/750) starts at `e2dac9e3b5b303636e9f4cabf793abca0f08cbc4`, which contains the #693 merge `0811d0a9f1f5cbd2116f42347d03763af3cd2fe1`. The workspace pins Oxlint 1.95.0, TypeScript 5.4.5 and pnpm 10.15.0. CI uses Node 20. Baseline samples ran on Darwin arm64 with Node 24.15.0. `pnpm --filter @pair/content-ops exec tsc --showConfig` resolves `baseUrl` to `../../tools/ts-config` and enables `strictNullChecks`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`.
+Card [#750](https://github.com/foomakers/pair/issues/750) starts at `e2dac9e3b5b303636e9f4cabf793abca0f08cbc4`, which contains the #693 merge `0811d0a9f1f5cbd2116f42347d03763af3cd2fe1`. At that revision the workspace pinned Oxlint 1.95.0, TypeScript 5.4.5 and pnpm 10.15.0. CI used Node 20. Baseline samples ran on Darwin arm64 with Node 24.15.0. `pnpm --filter @pair/content-ops exec tsc --showConfig` resolved `baseUrl` to `../../tools/ts-config` and enabled `strictNullChecks`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`.
 
 Three consecutive cold/warm pairs ran `pnpm exec turbo lint --filter=@pair/content-ops --filter=@pair/pair-cli --cache=local:rw --cache-dir=<pair-cache> --output-logs=errors-only`. Each cold run used a fresh local cache and each warm run reused its preceding cache. All runs passed with zero lint findings.
 
@@ -32,15 +32,17 @@ The frozen deferred inventory is seven optional-property findings and seven expl
 
 ## Typed Oxlint probes
 
-Node 20.20.2, Oxlint 1.95.0 and oxlint-tsgolint 7.0.2008 were exercised together. From `packages/content-ops`, `oxlint -c .oxlintrc.json --tsconfig tsconfig.json --type-aware -D typescript/switch-exhaustiveness-check <file>` loaded the actual package config. One fixture omitted a union case and the other covered both cases. Both exited 1 with `typescript(tsconfig-error)` at `tsconfig.json:3:3` because the typed runner rejected inherited `baseUrl`. The failure occurred before rule evaluation. Keep the workspace path settings and use a TypeScript `never` witness at each pilot dispatch.
+On the #693 baseline, Node 20.20.2, Oxlint 1.95.0 and oxlint-tsgolint 7.0.2008 were exercised together. From `packages/content-ops`, `oxlint -c .oxlintrc.json --tsconfig tsconfig.json --type-aware -D typescript/switch-exhaustiveness-check <file>` used the actual package config. One fixture omitted a union case and the other covered both cases. Both exited 1 with `typescript(tsconfig-error)` at `tsconfig.json:3:3` because the typed runner rejected inherited `baseUrl`. The failure occurred before rule evaluation.
 
-A separate custom JS plugin probe ran against a working NodeNext project without `baseUrl`. The nullable alias and the non-null control both ran the plugin and exited 1 at `1:1` with the probe's own missing-checker finding. `context.sourceCode.parserServices` supplied no TypeScript program. This pins the semantic fallback to the workspace TypeScript compiler API.
+After merging #757, native `tsc` 7.0.2 shows no `baseUrl` in the effective content-ops project. The same switch command and runner versions loaded that project successfully. The switch missing the `failure` case exited 1 with `typescript(switch-exhaustiveness-check)` at `2:11`. The complete switch exited 0 with zero diagnostics. Keep the compiler-checked `never` witness at the retry dispatch.
+
+A separate custom JS plugin probe on the merged configuration still exited 1 at `1:1` for both the nullable alias and the non-null control. The probe reported its own missing-checker finding because `context.sourceCode.parserServices` supplied no TypeScript program. The custom semantic rule therefore uses the compiler API fallback.
 
 The scoped syntax and independent suppression suite passed 18/18 on Node 20. Failed syntax fixtures matched their specific rule and source position. The existing base and React controls and twelve hygiene unit tests also passed. Legacy TypeScript suppressions are frozen by exact Git grep record. A moved or changed directive requires removal of the suppression.
 
 ## Compiler API fallback
 
-The content-ops lint route runs the workspace TypeScript 5.4.5 checker on the same pilot paths as the syntax override. `pair-domain/nullable-domain-property` locates checker-resolved null or undefined at the model property. The syntax visitors own optional properties and directly written nullish types. TypeScript declarations outside the scan can still be resolved as imports.
+The content-ops lint route uses the TypeScript 6.0.3 compiler API from `@typescript/typescript6` 6.0.2 on the same pilot paths as the syntax override. `pair-domain/nullable-domain-property` locates checker-resolved null or undefined at the model property. The syntax visitors own optional properties and directly written nullish types. TypeScript declarations outside the scan can still be resolved as imports.
 
 Eight Node 20 fixtures passed through the package's `pnpm lint` command. Local, imported, transitive and inferred nullish fields each produced one semantic finding at their property, including with duplicate file operands. The clean control accepted non-null aliases, opaque causes and nested nullable element types, and left an ingress DTO outside the model check. Broken config and an unresolved transitive import returned exit 2 with project diagnostics.
 

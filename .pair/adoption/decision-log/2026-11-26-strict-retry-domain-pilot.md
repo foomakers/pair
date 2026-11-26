@@ -14,15 +14,15 @@ Tooling Preference
 
 ## Context
 
-[#750](https://github.com/foomakers/pair/issues/750) follows the #693 Oxlint migration and the #748 retry comparison. The pinned typed Oxlint runner rejects the inherited `baseUrl`. Its JavaScript plugin API also supplies no TypeScript checker to custom rules. The private retry model needs compiler and lint checks for required variants, resolved nullish types and exhaustive dispatch.
+[#750](https://github.com/foomakers/pair/issues/750) follows the #693 Oxlint migration and the #748 retry comparison. The historical #693 probe failed because the pinned typed Oxlint runner rejected inherited `baseUrl`. The merged project has no `baseUrl`, and the native switch rule runs on the pinned runner. The JavaScript plugin API still supplies no TypeScript checker to custom rules.
 
 ## Decision
 
-Use native Oxlint for syntax and TypeScript 5.4.5 for semantic checks over the same pilot files. Dispatch the tagged retry outcomes with a compiler-checked `never` witness. Join legacy findings by verified Git path, rule and model property identity, and require the baseline to shrink when a finding is fixed. Check newly authored model files under `src` in the dedicated model locations or with the model or domain filename suffix. Preserve named boundary DTO exceptions and independently check suppression directives in tracked source.
+Use native Oxlint for syntax and the TypeScript 6.0.3 API from `@typescript/typescript6` 6.0.2 for resolved nullish property checks over the same pilot files. Keep the compiler-checked `never` witness for tagged retry dispatch under native `tsc` 7.0.2. Join legacy findings by verified Git path, rule and model property identity, and require the baseline to shrink when a finding is fixed. Check newly authored model files under `src` in the dedicated model locations or with the model or domain filename suffix. Preserve named boundary DTO exceptions and independently check suppression directives in tracked source.
 
 ## Alternatives Considered
 
-- A typed Oxlint-only implementation would require changing inherited TypeScript path settings and still has no checker in the custom JS rules on the pinned version.
+- A typed Oxlint-only implementation leaves custom JS rules without a checker on the pinned version.
 - Immediate workspace-wide promotion would couple the pilot to migration of unrelated modules. Named legacy models retain their reviewed entries while new findings fail the gate.
 
 ## Consequences
