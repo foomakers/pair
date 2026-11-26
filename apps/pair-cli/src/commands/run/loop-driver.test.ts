@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { readFileSync } from 'fs'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { handleRunCommand, type IterationRunner } from './handler'
 import { parseRunCommand } from './parser'
 import { POLICY_PATH } from './automation-policy'
 import { readIterationOutcome, toLines } from './stream-reader'
+import { spawnIteration } from './spawn'
 
 /**
  * US-573 T-8 — e2e over a recorded workflow stream: banner, live lines, audit, summary, exit code.
@@ -30,6 +32,7 @@ function projectFs() {
       }),
       [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '',
       '/bin/claude': '',
+      '/bin/codex': '',
       [`${cwd}/${POLICY_PATH}`]:
         '## Eligibility\n\nrisk:green\n\n## Stop Predicate\n\nmax-iterations: 5\nidle-timeout: 900\n',
     },
@@ -92,6 +95,37 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
     expect(out()).toMatch(
       /stopped: the skill reported itself finished.*, 0 eligible card\(s\) left/,
     )
+  })
+
+  it('#704 F11: a completed Codex loop settles while the engine is still shutting down', async () => {
+    const stream = readFileSync(join(__dirname, '__fixtures__/codex-workflow-events.jsonl'), 'utf8')
+    const program = `require('node:fs').writeFileSync(1, ${JSON.stringify(stream)}); setInterval(() => {}, 1000)`
+    const audit: string[] = []
+    capture()
+
+    const code = await handleRunCommand(
+      parseRunCommand({ root: '212', engine: 'codex', iterationTimeout: '1' }),
+      projectFs(),
+      {
+        runIteration: input =>
+          spawnIteration({
+            ...input,
+            cwd: tmpdir(),
+            engine: {
+              ...input.engine,
+              command: process.execPath,
+              headlessArgs: ['-e', program, '--'],
+            },
+          }),
+        runAudit: (_path, line) => void audit.push(line),
+      },
+    )
+
+    expect(code).toBe(0)
+    expect(JSON.parse(audit.at(-1)!)).toMatchObject({
+      event: 'loop-end',
+      detail: { status: 'completed' },
+    })
   })
 
   it('counts a prepared terminal card separately from failures', async () => {

@@ -12,7 +12,7 @@ import {
   selectRootAnswer,
   selectRootCandidates,
 } from './root-select'
-import type { SpawnIterationInput } from './spawn'
+import { spawnIteration, type SpawnIterationInput } from './spawn'
 
 /**
  * US-491 AC7 — selection stays `pair-next`'s: the fan-out asks `pair-next --root` (plus the policy's
@@ -217,6 +217,51 @@ describe('selectRootCandidates — one engine process, its marker read back', ()
     await expect(
       selectRootAnswer({ ...input, engine, cwd: tmpdir(), timeoutSeconds: 1 }),
     ).resolves.toMatchObject({ candidates: [] })
+  })
+
+  it.each([
+    ['missing', 'Selection complete.'],
+    ['malformed', `${CANDIDATES_MARKER} {nope}`],
+    ['timed-out', undefined],
+  ] as const)('#704 F11: handles a %s Codex selection with a live child', async (state, text) => {
+    let launches = 0
+    const engine = { ...ENGINES.codex, command: process.execPath }
+    const runIteration = vi.fn((spawn: SpawnIterationInput) => {
+      const first = launches++ === 0
+      const answer = first ? text : marker({ candidates: [] })
+      const events =
+        answer === undefined
+          ? []
+          : [
+              { type: 'item.completed', item: { type: 'agent_message', text: answer } },
+              { type: 'turn.completed' },
+            ]
+      const program = `for (const event of ${JSON.stringify(events)}) console.log(JSON.stringify(event)); ${first ? 'setInterval(() => {}, 1000)' : ''}`
+      return spawnIteration({
+        ...spawn,
+        engine: { ...engine, headlessArgs: ['-e', program, '--'] },
+      })
+    })
+    const selection = selectRootAnswer({
+      ...input,
+      engine,
+      cwd: tmpdir(),
+      timeoutSeconds: 1,
+      runIteration,
+    })
+
+    if (text === undefined) {
+      await expect(selection).rejects.toThrow(/selection process failed .*stalled/)
+      expect(runIteration).toHaveBeenCalledTimes(1)
+    } else {
+      await expect(selection).resolves.toMatchObject({ candidates: [] })
+      expect(runIteration).toHaveBeenCalledTimes(2)
+      expect(runIteration.mock.calls[1]![0].promptText).toContain(
+        state === 'missing'
+          ? `the stream carried no ${CANDIDATES_MARKER} line`
+          : 'the candidates line is not valid JSON',
+      )
+    }
   })
 
   it.each(['low', 'medium', 'high', 'xhigh', 'max'])(

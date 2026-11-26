@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { buildStageArgs, styleFor, runStage } from './stage-runner'
-import { buildEngineArgs } from './spawn'
+import { tmpdir } from 'os'
+import { buildEngineArgs, spawnIteration } from './spawn'
 import { ENGINES } from './engines'
 
 /**
@@ -110,6 +111,25 @@ describe("runStage — wiring only: spawns the packet's own prompt, returns the 
       processOutcome: 'failed',
       detail:
         'no terminal event in the engine stream (fail-closed: the exit code is never consulted)',
+    })
+  })
+
+  it('#704 F11: a Codex stage still consumes the last-message file for its result', async () => {
+    const program = `const fs = require('node:fs')
+      const output = process.argv[process.argv.indexOf('--output-last-message') + 1]
+      fs.writeFileSync(1, '{"type":"turn.completed"}\\n')
+      fs.writeFileSync(output, '{"status":"blocked","reason":"approval-required"}')`
+    const result = await runStage({
+      engine: { ...ENGINES.codex, command: process.execPath, headlessArgs: ['-e', program, '--'] },
+      packet: { step: 'implement', phase: 'a0', worktree: tmpdir(), prompt: 'go' },
+      autonomyArgs: [],
+      timeoutSeconds: 10,
+      runIteration: spawnIteration,
+    })
+
+    expect(result).toMatchObject({
+      processOutcome: 'success',
+      final: { status: 'blocked', reason: 'approval-required' },
     })
   })
 })
