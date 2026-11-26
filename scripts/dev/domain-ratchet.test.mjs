@@ -42,6 +42,9 @@ function fixture(
   }
   const git = (...args) => execFileSync('git', args, { cwd })
   git('init', '-q', '-b', 'main')
+  git('config', 'user.name', 'Fixture')
+  git('config', 'user.email', 'fixture@example.test')
+  git('config', 'commit.gpgsign', 'false')
   write(legacy, model)
   write(`${pkg}/tsconfig.json`, { compilerOptions: { strict: true }, include: ['src/**/*.ts'] })
   write(`${pkg}/.oxlintrc.json`, {
@@ -56,17 +59,7 @@ function fixture(
   write(baseline, { [legacy]: rules })
   for (const [file, source] of Object.entries(files)) write(file, source)
   git('add', '.')
-  git(
-    '-c',
-    'user.name=Fixture',
-    '-c',
-    'user.email=fixture@example.test',
-    '-c',
-    'commit.gpgsign=false',
-    'commit',
-    '-qm',
-    'Freeze legacy model',
-  )
+  git('commit', '-qm', 'Freeze legacy model')
   git('update-ref', 'refs/remotes/origin/main', 'HEAD')
   const check = () => {
     const output = spawnSync(process.execPath, [runner], { cwd, encoding: 'utf8' })
@@ -83,8 +76,16 @@ test('#750 AC-6 accepts existing findings through line movement and a verified G
   assert.deepEqual(check(), accepted)
   write(legacy, `// Moved down one line.\n${debt}`)
   assert.deepEqual(check(), accepted)
+  git('switch', '-qc', 'rename')
   git('add', legacy)
   git('mv', legacy, `${pkg}/src/http/download-state.ts`)
+  assert.deepEqual(check(), accepted)
+
+  // R8: the snapshot still names the original file after the rename lands on main.
+  git('commit', '-qm', 'Rename legacy model')
+  git('switch', '-q', 'main')
+  git('merge', '--no-ff', '-q', 'rename')
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD')
   assert.deepEqual(check(), accepted)
 })
 
