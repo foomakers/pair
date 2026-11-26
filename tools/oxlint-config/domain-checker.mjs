@@ -116,8 +116,7 @@ function isDomainProperty(node) {
     ts.isPropertySignature(node) ||
     ts.isPropertyDeclaration(node) ||
     isParameterProperty(node) ||
-    (ts.isGetAccessorDeclaration(node) &&
-      (ts.isClassLike(node.parent) || ts.isInterfaceDeclaration(node.parent)))
+    ts.isGetAccessorDeclaration(node)
   )
 }
 
@@ -191,6 +190,16 @@ function findNullableProperties(source, checker, symbols) {
   const findings = new Map()
   const inScope = owner => !symbols || symbols.includes(owner)
 
+  // The declaration visitor reports in-scope getters at their names.
+  function reportsGetter(declaration) {
+    return (
+      ts.isGetAccessorDeclaration(declaration) &&
+      declaration.getSourceFile() === source &&
+      inScope(domainOwner(declaration)) &&
+      isNullishType(checker.getTypeAtLocation(declaration.name))
+    )
+  }
+
   function report(type, owner, name, location, optional = false) {
     if (!optional && !isNullishType(type)) return
     const start = location.getStart(source)
@@ -213,6 +222,7 @@ function findNullableProperties(source, checker, symbols) {
   function checkReturn(expression, owner) {
     for (const type of constituents(checker.getTypeAtLocation(expression))) {
       for (const property of objectProperties(type, checker)) {
+        if (property.declarations?.some(reportsGetter)) continue
         const declaration = property.valueDeclaration
         const local =
           declaration?.getSourceFile() === source &&
@@ -256,13 +266,14 @@ function findNullableProperties(source, checker, symbols) {
     const { name } = node
     if (!inScope(name.text)) return
     const alreadyChecked = declaration =>
-      ts.isPropertySignature(declaration) &&
-      declaration.getSourceFile() === source &&
-      declaration.pos >= node.type.pos &&
-      declaration.end <= node.type.end &&
-      (declaration.questionToken ||
-        hasDirectNullishType(declaration.type) ||
-        isNullishType(checker.getTypeAtLocation(declaration.name)))
+      reportsGetter(declaration) ||
+      (ts.isPropertySignature(declaration) &&
+        declaration.getSourceFile() === source &&
+        declaration.pos >= node.type.pos &&
+        declaration.end <= node.type.end &&
+        (declaration.questionToken ||
+          hasDirectNullishType(declaration.type) ||
+          isNullishType(checker.getTypeAtLocation(declaration.name))))
     for (const type of constituents(checker.getTypeAtLocation(node))) {
       for (const property of objectProperties(type, checker)) {
         if (property.declarations?.some(alreadyChecked)) continue
