@@ -216,6 +216,18 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
       file: `PAIR_EVENT "{"\n${handoff(formatError)}`,
       retry: true,
     },
+    {
+      label: 'a malformed mixed container hiding a decision',
+      streamResult: `PAIR_EVENT [{] ${handoff('gate-red')}}]`,
+      file: handoff(formatError),
+      retry: true,
+    },
+    {
+      label: 'an invalid quoted token before a decision',
+      streamResult: `PAIR_EVENT "{"xxx${handoff('gate-red')}`,
+      file: handoff(formatError),
+      retry: true,
+    },
     { label: 'file-only format error', file: handoff(formatError), retry: true },
     {
       label: 'stream format error',
