@@ -236,11 +236,8 @@ function loopEscalationErrors(workflow: Workflow, step: Step, path: readonly str
   return errors
 }
 
-function loopOwnErrors(workflow: Workflow, step: Step, path: readonly string[]): WorkflowError[] {
-  const errors = loopEscalationErrors(workflow, step, path)
-  for (const key of LOOP_REQUIRED)
-    if ((key === 'max' ? untilMax(step) : step[key]) === undefined)
-      errors.push(errorAt(workflow, path, { problem: `missing key '${key}'`, fix: `add '${key}'` }))
+function untilErrors(workflow: Workflow, step: Step, path: readonly string[]): WorkflowError[] {
+  const errors: WorkflowError[] = []
   const target = untilStep(step)
   if (typeof step.until === 'object' && step.until.condition.length === 0)
     errors.push(
@@ -263,6 +260,15 @@ function loopOwnErrors(workflow: Workflow, step: Step, path: readonly string[]):
         fix: 'name a step of this loop',
       }),
     )
+  return errors
+}
+
+function loopOwnErrors(workflow: Workflow, step: Step, path: readonly string[]): WorkflowError[] {
+  const errors = loopEscalationErrors(workflow, step, path)
+  for (const key of LOOP_REQUIRED)
+    if ((key === 'max' ? untilMax(step) : step[key]) === undefined)
+      errors.push(errorAt(workflow, path, { problem: `missing key '${key}'`, fix: `add '${key}'` }))
+  errors.push(...untilErrors(workflow, step, path))
   if (step['on-failed'] !== undefined)
     errors.push(
       errorAt(workflow, [...path, 'on-failed'], {

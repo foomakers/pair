@@ -1075,9 +1075,9 @@ steps:
         await start(run, source, { card: '627', moreRounds: 1 })
       }
       expect((await next(run)).ready[0]?.id).toBe('rounds/check')
-      await record(run, 'rounds/check', REVIEWED)
-      expect(await next(run)).toEqual({ ready: [], run: 'done' })
-      expect(calls).toHaveLength(1)
+      await record(run, 'rounds/check', approved ? REVIEWED : rejected)
+      expect(await next(run)).toEqual({ ready: [], run: approved ? 'done' : 'failed' })
+      expect(calls).toHaveLength(approved ? 1 : 2)
     },
   )
 })

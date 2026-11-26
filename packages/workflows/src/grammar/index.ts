@@ -157,6 +157,46 @@ const escalationRule: JsonSchema = {
 
 const loopLimit = { type: 'integer', minimum: 1 } as const
 const loopLimitAction = { enum: ['escalate', 'fail'] } as const
+const loopConditions: JsonSchema = {
+  type: 'array',
+  items: {
+    anyOf: [
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['when', 'do'],
+        properties: {
+          do: { enum: ['complete', 'escalate'] },
+          when: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['output', 'equals'],
+            properties: {
+              output: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9]*$' },
+              equals: {
+                anyOf: [
+                  { type: 'string' },
+                  { type: 'integer' },
+                  { type: 'boolean' },
+                  { const: null },
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['prompt', 'do'],
+        properties: {
+          do: { enum: ['complete', 'escalate'] },
+          prompt: { type: 'string', pattern: '\\S' },
+        },
+      },
+    ],
+  },
+}
 const untilSchema = (pattern: string): JsonSchema => ({
   anyOf: [
     { type: 'string', pattern },
@@ -168,46 +208,7 @@ const untilSchema = (pattern: string): JsonSchema => ({
         step: { type: 'string', pattern },
         max: loopLimit,
         'on-max': loopLimitAction,
-        condition: {
-          type: 'array',
-          items: {
-            anyOf: [
-              {
-                type: 'object',
-                additionalProperties: false,
-                required: ['when', 'do'],
-                properties: {
-                  do: { enum: ['complete', 'escalate'] },
-                  when: {
-                    type: 'object',
-                    additionalProperties: false,
-                    required: ['output', 'equals'],
-                    properties: {
-                      output: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9]*$' },
-                      equals: {
-                        anyOf: [
-                          { type: 'string' },
-                          { type: 'integer' },
-                          { type: 'boolean' },
-                          { const: null },
-                        ],
-                      },
-                    },
-                  },
-                },
-              },
-              {
-                type: 'object',
-                additionalProperties: false,
-                required: ['prompt', 'do'],
-                properties: {
-                  do: { enum: ['complete', 'escalate'] },
-                  prompt: { type: 'string', pattern: '\\S' },
-                },
-              },
-            ],
-          },
-        },
+        condition: loopConditions,
       },
     },
   ],

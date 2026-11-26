@@ -1292,6 +1292,40 @@ function observeExhaustion(run: RunDirectory, { exhaustion }: Progress): void {
   if (exhaustion !== undefined) run.observeOutcome?.(exhaustion)
 }
 
+function exhaustLoop(
+  { state, outer, outputs }: Pick<Advance, 'state' | 'outer' | 'outputs'>,
+  { steps, loops }: Progress,
+  loop: NonNullable<RunStateFile['loops']>[string],
+  condition: boolean,
+): Progress {
+  const outerId = outer.id
+  const reason = condition ? 'loop-condition' : 'loop-max'
+  const summary = condition
+    ? `loop ${outerId} matched an escalation condition`
+    : `loop ${outerId} reached ${loop.max} rounds`
+  const rule = explicitEscalation(outer, 'exhausted')
+  return {
+    steps: {
+      ...steps,
+      [outerId]: {
+        state: 'exhausted',
+        outputs: mergeOutputs(loop.untilResult, state.latest, outputs),
+        reason,
+        summary,
+      },
+    },
+    loops: { ...loops, [outerId]: { ...loop, exhausted: true } },
+    exhaustion: {
+      id: outerId,
+      status: 'exhausted',
+      round: loop.round,
+      reason,
+      summary,
+      ...(rule !== undefined && { rule }),
+    },
+  }
+}
+
 /** The round is over and the loop goes on: max stops it, otherwise the children run again. */
 function closeRound(
   { state, outer, outputs }: Advance,
@@ -1301,33 +1335,9 @@ function closeRound(
   const outerId = outer.id
   const loop = loops?.[outerId]
   if (loop === undefined) throw new Error(`run-state-unreadable: loop ${outerId} has no round`)
-  if (condition || loop.round >= loop.max) {
-    const reason = condition ? 'loop-condition' : 'loop-max'
-    const summary = condition
-      ? `loop ${outerId} matched an escalation condition`
-      : `loop ${outerId} reached ${loop.max} rounds`
-    const rule = explicitEscalation(outer, 'exhausted')
-    return {
-      steps: {
-        ...steps,
-        [outerId]: {
-          state: 'exhausted',
-          outputs: mergeOutputs(loop.untilResult, state.latest, outputs),
-          reason,
-          summary,
-        },
-      },
-      loops: { ...loops, [outerId]: { ...loop, exhausted: true } },
-      exhaustion: {
-        id: outerId,
-        status: 'exhausted',
-        round: loop.round,
-        reason,
-        summary,
-        ...(rule !== undefined && { rule }),
-      },
-    }
-  }
+  if (condition || loop.round >= loop.max)
+    return exhaustLoop({ state, outer, outputs }, { steps, loops }, loop, condition)
+
   return {
     steps: {
       ...steps,
@@ -1389,46 +1399,64 @@ async function advanceLoop(
   recorded: Record<string, StepRecord>,
   evaluate: UntilEvaluator | undefined,
 ): Promise<Progress> {
-  const { state, outer, child, status, outputs } = a
-  const isUntil = child.id === untilStep(outer)
+  const { state, outer, child, status } = a
   const progress: Progress = { steps: recorded, loops: state.loops }
   if (!childSettled(child, status)) return progress
-  if (isUntil) {
-    const loop = state.loops?.[outer.id]
-    if (loop === undefined) throw new Error(`run-state-unreadable: loop ${outer.id} has no round`)
-    const current = { round: loop.round, status, outputs }
-    const history = loop.untilHistory ?? []
-    const extended = typeof outer.until === 'object' ? outer.until : undefined
-    const decision = extended
-      ? await evaluateConditions(
-          extended,
-          { current, history, inputs: state.latest ?? {} },
-          evaluate,
-        )
-      : status === 'ok'
-        ? 'complete'
-        : undefined
-    progress.loops = {
-      ...state.loops,
-      [outer.id]: {
-        ...loop,
-        untilResult: outputs,
-        ...(extended && { untilHistory: [...history, current] }),
+  if (child.id === untilStep(outer)) return advanceUntil(a, progress, evaluate)
+  if (status === 'failed' && explicitEscalation(child, status) === undefined)
+    return closeRound(a, progress)
+  return advanceChild(a, progress)
+}
+
+function advanceChild(a: Advance, progress: Progress): Progress {
+  return a.outer.steps?.at(-1)?.id === a.child.id ? closeRound(a, progress) : progress
+}
+
+async function observeUntil(
+  { state, status, outputs }: Advance,
+  loop: NonNullable<RunStateFile['loops']>[string],
+  extended: Exclude<Step['until'], string>,
+  evaluate: UntilEvaluator | undefined,
+) {
+  const current = { round: loop.round, status, outputs }
+  const history = loop.untilHistory ?? []
+  const decision = extended
+    ? await evaluateConditions(extended, { current, history, inputs: state.latest ?? {} }, evaluate)
+    : status === 'ok'
+      ? 'complete'
+      : undefined
+  return {
+    decision,
+    observed: {
+      ...loop,
+      untilResult: outputs,
+      ...(extended && { untilHistory: [...history, current] }),
+    },
+  }
+}
+
+async function advanceUntil(
+  a: Advance,
+  progress: Progress,
+  evaluate: UntilEvaluator | undefined,
+): Promise<Progress> {
+  const { state, outer, outputs } = a
+  const loop = state.loops?.[outer.id]
+  if (loop === undefined) throw new Error(`run-state-unreadable: loop ${outer.id} has no round`)
+  const extended = typeof outer.until === 'object' ? outer.until : undefined
+  const { decision, observed } = await observeUntil(a, loop, extended, evaluate)
+  progress.loops = { ...state.loops, [outer.id]: observed }
+  if (decision === 'escalate') return closeRound(a, progress, true)
+  if (decision === 'complete')
+    return {
+      ...progress,
+      steps: {
+        ...progress.steps,
+        [outer.id]: { state: 'ok', outputs: mergeOutputs(state.latest, outputs) },
       },
     }
-    if (decision === 'escalate') return closeRound(a, progress, true)
-    if (decision === 'complete')
-      return {
-        ...progress,
-        steps: {
-          ...recorded,
-          [outer.id]: { state: 'ok', outputs: mergeOutputs(state.latest, outputs) },
-        },
-      }
-    if (extended && loop.round >= loop.max) return closeRound(a, progress)
-  } else if (status === 'failed' && explicitEscalation(child, status) === undefined)
-    return closeRound(a, progress)
-  return outer.steps?.at(-1)?.id === child.id ? closeRound(a, progress) : progress
+  if (extended && loop.round >= loop.max) return closeRound(a, progress)
+  return advanceChild(a, progress)
 }
 
 /** The step `stepId` names (`id` or `loop/id`), with its loop; a loop itself is not launchable. */
