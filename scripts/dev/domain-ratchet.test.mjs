@@ -70,15 +70,17 @@ function fixture(
   return { write, git, check }
 }
 
-test('#750 AC-6 accepts existing findings through line movement and a verified Git rename', t => {
+test('#750 AC-6 preserves findings through line movement, a rename and R11 path reuse', t => {
   const { check, git, write } = fixture(t)
+  const moved = `${pkg}/src/http/download-state.ts`
+  const initialBase = git('rev-parse', 'HEAD').toString().trim()
   const accepted = { status: 0, out: 'Domain baseline passed on 1 files (2 recorded findings).' }
   assert.deepEqual(check(), accepted)
   write(legacy, `// Moved down one line.\n${debt}`)
   assert.deepEqual(check(), accepted)
   git('switch', '-qc', 'rename')
   git('add', legacy)
-  git('mv', legacy, `${pkg}/src/http/download-state.ts`)
+  git('mv', legacy, moved)
   assert.deepEqual(check(), accepted)
 
   // R8: the snapshot still names the original file after the rename lands on main.
@@ -87,6 +89,25 @@ test('#750 AC-6 accepts existing findings through line movement and a verified G
   git('merge', '--no-ff', '-q', 'rename')
   git('update-ref', 'refs/remotes/origin/main', 'HEAD')
   assert.deepEqual(check(), accepted)
+
+  git('switch', '-qc', 'reuse')
+  write(legacy, 'export const replacement = true\n')
+  git('add', legacy)
+  git('commit', '-qm', 'Reuse the former path for a clean module')
+  assert.deepEqual(check(), accepted)
+  git('switch', '-q', 'main')
+  git('merge', '--no-ff', '-q', 'reuse')
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+  assert.deepEqual(check(), accepted)
+
+  git('update-ref', 'refs/remotes/origin/main', initialBase)
+  assert.deepEqual(check(), accepted)
+
+  write(moved, debt.replace('  progressReporter', '  extra?: string\n  progressReporter'))
+  assert.deepEqual(check(), {
+    status: 1,
+    out: `${moved}:2:3: ${optional}: Make WriteOptions.extra required on the appropriate tagged variant.`,
+  })
 })
 
 test('#750 AC-6 refuses a replacement finding and an expanded snapshot, then accepts retirement', t => {
