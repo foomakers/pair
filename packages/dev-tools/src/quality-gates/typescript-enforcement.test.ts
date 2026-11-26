@@ -197,6 +197,40 @@ it.each([
   })
 })
 
+it.each(['reference', 'compilerOptions.types'])(
+  '#757 AC-4 R758-01: rejects CSS declarations enabled by %s',
+  channel => {
+    withCssFixture(cwd => {
+      const brand = join(cwd, 'packages/brand')
+      const config = join(brand, 'tsconfig.json')
+      const source = join(brand, 'dev/style-fixture.ts')
+      fs.symlinkSync(join(root, 'packages/brand/node_modules'), join(brand, 'node_modules'))
+      const writeConfig = (types: string[]) =>
+        fs.writeFileSync(
+          config,
+          JSON.stringify({
+            extends: join(root, 'packages/brand/tsconfig.json'),
+            compilerOptions: { types },
+            files: ['dev/style-fixture.ts'],
+          }),
+        )
+
+      writeConfig([])
+      fs.writeFileSync(source, "import './styles.css'\n")
+      expect(checkStylesheets(cwd)).toEqual([])
+
+      if (channel === 'reference') {
+        fs.writeFileSync(source, '/// <reference types="vite/client" />\nimport \'missing.css\'\n')
+      } else {
+        writeConfig(['vite/client'])
+      }
+      expect(checkStylesheets(cwd)).toEqual([
+        expect.stringMatching(/^Ambient CSS declaration: .*vite\/client\.d\.ts$/),
+      ])
+    })
+  },
+)
+
 it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types', () => {
   withCssFixture(cwd => {
     const importer = 'apps/website/app/style-fixture.ts'
