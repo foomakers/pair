@@ -425,6 +425,15 @@ steps:
         },
       ],
     }
+    const cliPreview = parseRunCommand({ card: '42', cwd: root, dryRun: true }, ['installed'])
+    expect(
+      await handleRunCommand(cliPreview, fs, {
+        workflow: { readCard: async () => ({ title: 'Prepare release notes' }) },
+      }),
+    ).toBe(0)
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining(`refine: refine-story skill=${prefix}-process-refine-story`),
+    )
     const invoke = runner(root, script(root))
     git(root, 'init', '-b', 'main')
     git(
