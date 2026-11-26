@@ -437,6 +437,45 @@ it.each([
     alternatives: ['fallback.css'],
   },
   {
+    target: 'the loading component of a Next Edge page',
+    importer: 'apps/website/app/edge/loading.jsx',
+    files: {
+      'app/edge/page.jsx': "export const runtime = 'edge'\nexport default () => null\n",
+    },
+    afterImport: 'export default () => null\n',
+    manifest: {
+      exports: { './theme.css': { 'edge-light': './theme.css', default: './fallback.css' } },
+    },
+    alternatives: ['fallback.css'],
+  },
+  {
+    target: 'a Next loading component shared by Edge and Node routes',
+    importer: 'apps/website/app/group/loading.jsx',
+    files: {
+      'app/group/edge/page.jsx': "export const runtime = 'edge'\nexport default () => null\n",
+      'app/group/node/page.jsx': 'export default () => null\n',
+    },
+    afterImport: 'export default () => null\n',
+    manifest: {
+      exports: { './theme.css': { 'edge-light': './theme.css', default: './fallback.css' } },
+    },
+    alternatives: ['fallback.css'],
+    needsAlternative: true,
+  },
+  {
+    target: 'a Next root loading component shared by an Edge page and the built-in 404',
+    importer: 'apps/website/app/loading.jsx',
+    files: {
+      'app/edge/page.jsx': "export const runtime = 'edge'\nexport default () => null\n",
+    },
+    afterImport: 'export default () => null\n',
+    manifest: {
+      exports: { './theme.css': { 'edge-light': './theme.css', default: './fallback.css' } },
+    },
+    alternatives: ['fallback.css'],
+    needsAlternative: true,
+  },
+  {
     target: 'Next development server',
     importer: 'apps/website/app/page.tsx',
     manifest: { exports: { './theme.css': { development: './theme.css', default: './prod.css' } } },
@@ -482,7 +521,9 @@ it.each([
       )
       const specifier = '@pair/styles/theme.css'
       for (const [file, source] of Object.entries(files ?? {})) {
-        fs.writeFileSync(join(cwd, workspace, file), source)
+        const path = join(cwd, workspace, file)
+        fs.mkdirSync(dirname(path), { recursive: true })
+        fs.writeFileSync(path, source)
       }
       fs.writeFileSync(join(cwd, importer), `${beforeImport}import '${specifier}'\n${afterImport}`)
       for (const alternative of alternatives) fs.writeFileSync(join(styles, alternative), '')
