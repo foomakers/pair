@@ -1,7 +1,7 @@
 import { fileSystemService as fs } from '@pair/content-ops'
 import { create, type FileSystem, type ResolveFunctionPromise } from 'enhanced-resolve'
 import { execFileSync } from 'node:child_process'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { callbackify } from 'node:util'
 import ts from 'typescript'
 
@@ -40,11 +40,12 @@ const website = 'apps/website/'
 const brand = 'packages/brand/'
 const nextApp = `${website}app`
 const nextPage = /\/page\.[jt]sx?$/
+const nextDefault = /\/default\.[jt]sx?$/
 const nextLayout = /\/layout\.[jt]sx?$/
 const nextSegmentComponent =
   /\/(?:layout|template|loading|error|global-error|not-found|forbidden|unauthorized)\.[jt]sx?$/
 const nextRouteEntry =
-  /\/(?:page|route|default|icon|apple-icon|opengraph-image|twitter-image|robots|sitemap)\.[jt]sx?$/
+  /\/(?:route|icon|apple-icon|opengraph-image|twitter-image|robots|sitemap)\.[jt]sx?$/
 
 // Enhanced-resolve uses the path-and-callback forms for its package and symlink lookups.
 const resolverFileSystem = {
@@ -258,27 +259,142 @@ function nextEntryRuntime(path: string, components: string[], sources: Map<strin
   return sources.get(path)?.runtime ?? inherited ?? 'nodejs'
 }
 
+function groupPaths(paths: string[], keyFor: (path: string) => string) {
+  const groups = new Map<string, string[]>()
+  for (const path of paths) {
+    const key = keyFor(path)
+    const group = groups.get(key) ?? []
+    group.push(path)
+    groups.set(key, group)
+  }
+  return groups
+}
+
+function nextRouteName(path: string) {
+  const segments = dirname(path)
+    .slice(nextApp.length + 1)
+    .split('/')
+  // Route groups and named slots do not contribute to the public URL.
+  return `/${segments.filter(segment => !segment.startsWith('@') && !/^\(.*\)$/.test(segment)).join('/')}`
+}
+
+function nextSlotPath(path: string) {
+  return path
+    .split('/')
+    .filter(segment => segment.startsWith('@') && segment !== '@children')
+    .join('/')
+}
+
+function nextCatchAllPages(routes: Map<string, string[]>) {
+  return [...routes]
+    .flatMap(([route, pages]) => {
+      const start = route.indexOf('/[...')
+      if (start === -1) return []
+      const prefix = route.slice(0, start + 1)
+      return pages.map(path => ({ path, prefix, slot: nextSlotPath(path) }))
+    })
+    .sort((a, b) => b.path.split('/').length - a.path.split('/').length)
+}
+
+function nextMatchingPages(
+  route: string,
+  pages: string[],
+  catchAlls: ReturnType<typeof nextCatchAllPages>,
+) {
+  if (/\(\.{1,3}\)/.test(route)) return pages
+  const matchedSlots = new Set(pages.map(nextSlotPath))
+  const matched = [...pages]
+  for (const { path, prefix, slot } of catchAlls) {
+    if (route.startsWith(prefix) && route !== prefix && !matchedSlots.has(slot)) {
+      matched.push(path)
+      matchedSlots.add(slot)
+    }
+  }
+  return matched.sort()
+}
+
+function nextDefaultOwner(dir: string) {
+  return basename(dir).startsWith('@') ? dirname(dir) : dir
+}
+
+function nextChildPage(dir: string, pages: string[], branchOf: (path: string) => string) {
+  const children = pages.filter(path => !branchOf(path).startsWith('@'))
+  // A regular children branch takes precedence over a branch with only parallel pages.
+  return (
+    children.find(path => dirname(path) === dir) ??
+    children.find(path => !path.includes('/@')) ??
+    children[0]
+  )
+}
+
+function* nextPageFallbacks(
+  dir: string,
+  branches: Map<string, string[]>,
+  hasChild: boolean,
+  defaults: Map<string, string[]>,
+) {
+  if (!hasChild && !branches.has('@children')) {
+    for (const fallback of defaults.get(nextDefaultOwner(dir)) ?? []) {
+      if (dirname(fallback) === dir) yield fallback
+    }
+  }
+  for (const fallback of defaults.get(dir) ?? []) {
+    const slot = dirname(fallback)
+    if (slot !== dir && !branches.has(basename(slot))) yield fallback
+  }
+}
+
+function* nextPageTree(
+  dir: string,
+  pages: string[],
+  segments: Map<string, string[]>,
+  defaults: Map<string, string[]>,
+): Generator<string> {
+  yield* segments.get(dir) ?? []
+  const branchOf = (path: string) => path.slice(dir.length + 1).split('/', 1)[0] ?? ''
+  const branches = groupPaths(pages, branchOf)
+  const child = nextChildPage(dir, pages, branchOf)
+  const implicit = child && branchOf(child)
+  for (const [branch, paths] of branches) {
+    if (branch !== implicit && !branch.startsWith('@')) continue
+    const leaf = paths.find(path => dirname(path) === dir)
+    if (leaf) yield leaf
+    else yield* nextPageTree(`${dir}/${branch}`, paths, segments, defaults)
+  }
+  yield* nextPageFallbacks(dir, branches, implicit !== undefined, defaults)
+}
+
 function* nextRouteEntries(
   sources: Map<string, Source>,
   appPaths: string[],
   segmentFiles: string[],
 ) {
-  const segments = new Map<string, string[]>()
-  for (const path of segmentFiles) {
-    const dir = dirname(path)
-    const components = segments.get(dir) ?? []
-    components.push(path)
-    segments.set(dir, components)
+  const segments = groupPaths(segmentFiles, dirname)
+  const defaults = groupPaths(
+    appPaths.filter(path => nextDefault.test(path)),
+    path => nextDefaultOwner(dirname(path)),
+  )
+  const routes = groupPaths(
+    appPaths.filter(path => nextPage.test(path)),
+    nextRouteName,
+  )
+  const catchAlls = nextCatchAllPages(routes)
+  for (const [route, pages] of routes) {
+    const matched = nextMatchingPages(route, pages, catchAlls)
+    const paths = [...nextPageTree(nextApp, matched, segments, defaults)]
+    // Each page entry compiles the shared tree with its own page and layout config.
+    for (const page of pages) {
+      yield { paths, runtime: nextEntryRuntime(page, ancestorComponents(page, segments), sources) }
+    }
   }
   for (const path of appPaths.filter(path => nextRouteEntry.test(path))) {
-    const components = nextPage.test(path) ? ancestorComponents(path, segments) : []
-    yield { paths: [path, ...components], runtime: nextEntryRuntime(path, components, sources) }
+    yield { paths: [path], runtime: nextEntryRuntime(path, [], sources) }
   }
 
   // The root segment also renders the 404 route, with the built-in page on Node.
   const paths = segments.get(nextApp) ?? []
   const notFound = paths.find(path => /\/not-found\.[jt]sx?$/.test(path))
-  if (notFound || appPaths.some(path => nextPage.test(path))) {
+  if (notFound || routes.size > 0) {
     yield { paths, runtime: notFound ? nextEntryRuntime(notFound, paths, sources) : 'nodejs' }
   }
 }
