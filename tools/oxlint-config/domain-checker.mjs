@@ -147,6 +147,10 @@ function constituents(type) {
   return type.isUnion() ? type.types : [type]
 }
 
+function isNullishType(type) {
+  return constituents(type).some(part => part.flags & nullish)
+}
+
 function returnedExpression(node) {
   if (ts.isReturnStatement(node)) return node.expression
   if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return node.body
@@ -157,7 +161,7 @@ function findNullableProperties(source, checker, symbols) {
   const inScope = owner => !symbols || symbols.includes(owner)
 
   function report(type, owner, name, location, optional = false) {
-    if (!optional && !constituents(type).some(part => part.flags & nullish)) return
+    if (!optional && !isNullishType(type)) return
     const start = location.getStart(source)
     const { line, character } = source.getLineAndCharacterOfPosition(start)
     const property = owner ? `${owner}.${name}` : name
@@ -215,8 +219,35 @@ function findNullableProperties(source, checker, symbols) {
     }
   }
 
+  function checkIntersection(node) {
+    const { name } = node
+    if (!inScope(name.text)) return
+    const alreadyChecked = declaration =>
+      ts.isPropertySignature(declaration) &&
+      declaration.getSourceFile() === source &&
+      declaration.pos >= node.type.pos &&
+      declaration.end <= node.type.end &&
+      (declaration.questionToken ||
+        hasDirectNullishType(declaration.type) ||
+        isNullishType(checker.getTypeAtLocation(declaration.name)))
+    for (const type of constituents(checker.getTypeAtLocation(node))) {
+      if (!type.isIntersection()) continue
+      for (const property of checker.getPropertiesOfType(type)) {
+        if (property.declarations?.some(alreadyChecked)) continue
+        report(
+          checker.getTypeOfSymbolAtLocation(property, node),
+          name.text,
+          property.name,
+          name,
+          Boolean(property.flags & ts.SymbolFlags.Optional),
+        )
+      }
+    }
+  }
+
   function visit(node) {
     if (ts.isInterfaceDeclaration(node) || ts.isClassDeclaration(node)) checkInherited(node)
+    if (ts.isTypeAliasDeclaration(node)) checkIntersection(node)
     if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) {
       const owner = domainOwner(node)
       if (inScope(owner) && !node.questionToken && !hasDirectNullishType(node.type)) {
