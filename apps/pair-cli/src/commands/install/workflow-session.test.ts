@@ -170,6 +170,49 @@ async function verifyCardExclusion(
   expect(runIteration).toHaveBeenCalledTimes(1)
 }
 
+async function verifyRedirectedCardPreflight(root: string, skill: string) {
+  const runIteration = vi.fn(async (input: SpawnIterationInput) => {
+    input.onEvent?.({
+      type: 'result',
+      subtype: 'success',
+      result: '```json\n{"status":"needs-decision","summary":"Question"}\n```',
+    })
+    return { outcome: 'success' as const, detail: 'test engine' }
+  })
+  await handleRunCommand(
+    parseRunCommand({ card: '42', cwd: root, engine: 'codex' }, ['native.yaml']),
+    fileSystemService,
+    {
+      workflow: { runIteration, engineAvailable: () => true, prepareWorktree: async () => root },
+    },
+  )
+  expect(runIteration.mock.calls.map(([input]) => input.promptText.split('\n')[0])).toEqual([
+    `Run the ${skill} skill.`,
+  ])
+}
+
+async function verifyUnlocatedLegacyTarget(root: string, bundle: string) {
+  const fs = fileSystemService
+  const file = join(root, '.pair/.skill-name-map.json')
+  const original = fs.readFileSync(file)
+  const saved = JSON.parse(original)
+  fs.writeFileSync(file, JSON.stringify({ version: 1, skills: saved.skills }))
+  try {
+    const cli = parseRunCommand({ card: '42', cwd: root, dryRun: true }, ['native.yaml'])
+    const messages = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await handleRunCommand(cli, fs)).toBe(1)
+    expect.soft(messages).toHaveBeenCalledWith(expect.stringContaining('pair.config.json'))
+    const session = spawnSync(process.execPath, [bundle, 'validate', 'native.yaml'], {
+      cwd: root,
+      encoding: 'utf8',
+    })
+    expect.soft(session.status).toBe(1)
+    expect(session.stderr).toContain('pair.config.json')
+  } finally {
+    fs.writeFileSync(file, original)
+  }
+}
+
 async function verifyConfiguredSkill(
   root: string,
   script: string,
@@ -449,6 +492,15 @@ steps:
       '-m',
       'Fixture',
     )
+    if (override && !skills && !legacySkills) {
+      write(
+        root,
+        'native.yaml',
+        'version: 1\nname: native\nsteps:\n  refine: { kind: refine-story, with: { mode: autonomous } }\n',
+      )
+      await verifyUnlocatedLegacyTarget(root, script(root))
+      await verifyRedirectedCardPreflight(root, `${prefix}-process-refine-story`)
+    }
     if (legacySkills !== undefined)
       await verifyConfiguredSkill(root, script(root), legacySkills, skills)
     expect(invoke('validate', 'installed')).toMatchObject(preview)
