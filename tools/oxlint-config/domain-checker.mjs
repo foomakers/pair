@@ -71,55 +71,69 @@ function constituents(type) {
   return type.isUnion() ? type.types : [type]
 }
 
-function returnedProperties(node, checker) {
-  let expression
-  if (ts.isReturnStatement(node)) expression = node.expression
-  if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) expression = node.body
-  if (!expression) return []
-  return constituents(checker.getTypeAtLocation(expression))
-    .filter(type => type.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection))
-    .flatMap(type => checker.getPropertiesOfType(type))
-    .flatMap(property => property.declarations ?? [])
-    .filter(
-      declaration =>
-        ts.isPropertyAssignment(declaration) || ts.isShorthandPropertyAssignment(declaration),
-    )
+function returnedExpression(node) {
+  if (ts.isReturnStatement(node)) return node.expression
+  if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return node.body
 }
 
 function findNullableProperties(source, checker, symbols) {
-  const candidates = new Set()
+  const findings = new Map()
+  const inScope = owner => !symbols || symbols.includes(owner)
+
+  function report(type, owner, name, location) {
+    if (!constituents(type).some(part => part.flags & nullish)) return
+    const start = location.getStart(source)
+    const { line, character } = source.getLineAndCharacterOfPosition(start)
+    const property = owner ? `${owner}.${name}` : name
+    findings.set(`${start}:${property}`, {
+      property,
+      span: {
+        offset: Buffer.byteLength(source.text.slice(0, start)),
+        length: Buffer.byteLength(location.getText(source)),
+        line: line + 1,
+        column: character + 1,
+      },
+    })
+  }
+
+  function checkReturn(expression, owner) {
+    for (const type of constituents(checker.getTypeAtLocation(expression))) {
+      if (!(type.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection))) continue
+      for (const property of checker.getPropertiesOfType(type)) {
+        if (property.flags & ts.SymbolFlags.Optional) continue
+        const declaration = property.valueDeclaration
+        const local =
+          declaration?.getSourceFile() === source &&
+          declaration.pos >= expression.pos &&
+          declaration.end <= expression.end &&
+          (ts.isPropertyAssignment(declaration) || ts.isShorthandPropertyAssignment(declaration))
+        const location = local ? declaration.name : expression.getFirstToken(source)
+        report(
+          checker.getTypeOfSymbolAtLocation(property, expression),
+          owner,
+          property.name,
+          location,
+        )
+      }
+    }
+  }
+
   function visit(node) {
-    if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) candidates.add(node)
-    for (const property of returnedProperties(node, checker)) {
-      if (property.getSourceFile() === source) candidates.add(property)
+    if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) {
+      const owner = domainOwner(node)
+      if (inScope(owner) && !node.questionToken && !hasDirectNullishType(node.type)) {
+        report(checker.getTypeAtLocation(node.name), owner, node.name.getText(source), node.name)
+      }
+    }
+    const expression = returnedExpression(node)
+    if (expression) {
+      const owner = domainOwner(expression)
+      if (inScope(owner)) checkReturn(expression, owner)
     }
     ts.forEachChild(node, visit)
   }
   visit(source)
-
-  return [...candidates]
-    .flatMap(property => {
-      if (property.questionToken || hasDirectNullishType(property.type)) return []
-      const owner = domainOwner(property)
-      if (symbols && !symbols.includes(owner)) return []
-      const type = checker.getTypeAtLocation(property.name)
-      if (!constituents(type).some(part => part.flags & nullish)) return []
-      const start = property.name.getStart(source)
-      const { line, character } = source.getLineAndCharacterOfPosition(start)
-      const name = property.name.getText(source)
-      return [
-        {
-          property: owner ? `${owner}.${name}` : name,
-          span: {
-            offset: Buffer.byteLength(source.text.slice(0, start)),
-            length: Buffer.byteLength(name),
-            line: line + 1,
-            column: character + 1,
-          },
-        },
-      ]
-    })
-    .sort((a, b) => a.span.offset - b.span.offset)
+  return [...findings.values()].sort((a, b) => a.span.offset - b.span.offset)
 }
 
 /** Check selected paths relative to the current directory. Scope entries are keyed by those paths. */
