@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
@@ -57,9 +57,10 @@ test('#693 AC-2 preserves package lint scope and check/fix behavior', t => {
   assert.equal(readFileSync(join(cwd, 'fixable.ts'), 'utf8'), fixable)
   assert.equal(lint(cwd, 'tracked.ts').status, 1)
   assert.equal(lint(cwd, join(cwd, 'tracked.ts')).status, 1)
-  assert.equal(lint(cwd, 'ignored.config.ts').status, 0)
-  for (const file of ['ignored.vue', 'ignored.svelte', 'ignored.astro']) {
-    assert.deepEqual(lint(cwd, file), { diagnostics: [], status: 0 }, `#693 R5: ${file}`)
+  for (const file of ['ignored.config.ts', 'ignored.vue', 'ignored.svelte', 'ignored.astro']) {
+    const direct = lint(cwd, file)
+    assert.equal(direct.status, 0, file)
+    assert.deepEqual(direct.diagnostics.map(({ filename, severity }) => [filename, severity]), [[file, 'warning']])
   }
 
   const fix = lint(cwd, '--workspace', '--fix')
@@ -100,20 +101,30 @@ test('#693 R5 direct lint restores Git-ignored files within the requested direct
   }
 })
 
-test('#693 R5 direct lint accepts ignored files with options and rejects a missing path', t => {
+test('#693 R5 direct lint warns about explicit ignored files without a warning limit', t => {
   const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
   const vue = '<script>const x = ;</script>'
   writeFileSync(join(cwd, 'vitest.config.ts'), 'debugger;\n')
   writeFileSync(join(cwd, 'Widget.vue'), vue)
 
   for (const args of [['--format', 'json', 'vitest.config.ts'], ['--fix', 'Widget.vue']]) {
-    assert.deepEqual(lint(cwd, ...args), { diagnostics: [], status: 0 }, args.join(' '))
+    const check = lint(cwd, ...args)
+    assert.equal(check.status, 0)
+    assert.deepEqual(check.diagnostics.map(({ filename, severity }) => [filename, severity]), [
+      [args.at(-1), 'warning'],
+    ])
   }
+  assert.deepEqual(lint(cwd, '--quiet', 'vitest.config.ts'), { diagnostics: [], status: 0 })
   assert.equal(readFileSync(join(cwd, 'Widget.vue'), 'utf8'), vue)
+})
+
+test('#693 R5 direct lint rejects a missing path', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
   writeFileSync(join(cwd, 'clean.ts'), 'export const value = 1\n')
   for (const paths of [['missing.ts'], ['clean.ts', 'missing.ts']]) {
-    const missing = spawnSync(process.execPath, [runner, '--format=json', ...paths], { cwd })
-    assert.equal(missing.status, 1)
+    const missing = spawnSync(process.execPath, [runner, '--format=json', ...paths], { cwd, encoding: 'utf8' })
+    assert.equal(missing.status, 2)
+    assert.match(missing.stderr, /missing\.ts/)
   }
 })
 
@@ -166,6 +177,24 @@ test('#693 R5 quoted patterns lint matching files and honor excludes', t => {
     ['literal[1].ts', 'error'],
     ['src/tracked.cjs', 'error'],
   ])
+})
+
+test('#693 R5 quoted patterns select file symlinks without walking directory symlinks', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  mkdirSync(join(cwd, 'src'))
+  mkdirSync(join(cwd, 'outside'))
+  writeFileSync(join(cwd, 'src/clean.cjs'), 'module.exports = 1\n')
+  writeFileSync(join(cwd, 'outside/target.cjs'), 'debugger;\n')
+  symlinkSync('../outside/target.cjs', join(cwd, 'src/link.cjs'))
+  symlinkSync('../outside', join(cwd, 'src/linked-dir'), 'dir')
+
+  for (const input of ['src/link.cjs', 'src/*.cjs', 'src/**/*.cjs']) {
+    const check = lint(cwd, input)
+    assert.equal(check.status, 1, input)
+    assert.deepEqual(check.diagnostics.map(({ filename, code }) => [filename, code]), [
+      ['src/link.cjs', 'eslint(no-debugger)'],
+    ], input)
+  }
 })
 
 for (const [name, input] of [
