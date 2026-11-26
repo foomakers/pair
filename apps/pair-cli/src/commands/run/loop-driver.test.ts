@@ -228,6 +228,18 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
       file: handoff(formatError),
       retry: true,
     },
+    {
+      label: 'a handoff beside a Markdown-quoted marked scalar',
+      streamResult: ['`PAIR_EVENT "{"`', handoff(formatError)].join(' '),
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'an invalid JSON escape before a same-line decision',
+      streamResult: [String.raw`PAIR_EVENT "\q"`, handoff(formatError)].join(' '),
+      file: handoff('gate-red'),
+      failure: 'halted: handoff rejected',
+    },
     { label: 'file-only format error', file: handoff(formatError), retry: true },
     {
       label: 'stream format error',
