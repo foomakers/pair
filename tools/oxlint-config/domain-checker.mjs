@@ -4,9 +4,10 @@ import ts from '@typescript/typescript6'
 export const nullableDomainRule = 'pair-domain/nullable-domain-property'
 
 const nullish = ts.TypeFlags.Null | ts.TypeFlags.Undefined
-// A missing module, declaration output or exported member can make an alias look like `any`.
-const importFailures = new Set([
-  1192, 2305, 2306, 2307, 2459, 2613, 2614, 2688, 2694, 2724, 2732, 2792, 2882, 6305, 7016,
+// An unresolved import, export or file reference can make an alias look like `any`.
+const dependencyFailures = new Set([
+  1192, 2305, 2306, 2307, 2459, 2613, 2614, 2688, 2694, 2724, 2732, 2792, 2834, 2835, 2882,
+  6053, 6305, 7016,
 ])
 
 function loadProject(project) {
@@ -39,7 +40,7 @@ function loadProject(project) {
     if (program.isSourceFileFromExternalLibrary(source)) continue
     const unresolved = program
       .getSemanticDiagnostics(source)
-      .find(diagnostic => importFailures.has(diagnostic.code))
+      .find(diagnostic => dependencyFailures.has(diagnostic.code))
     if (unresolved) fail(unresolved)
   }
   return program
