@@ -144,15 +144,52 @@ it.each(configs)('#757 AC-3: %s enforces strictness in handwritten and generated
   }
 })
 
+const reviewedDeclarations = [
+  'apps/website/app/global.d.css.ts',
+  'packages/brand/dev/styles.d.css.ts',
+]
+
+function cssProblems(cwd: string, sources: string[]) {
+  const problems = sources
+    .filter(path => path.endsWith('.d.css.ts') && !reviewedDeclarations.includes(path))
+    .map(path => `Unreviewed CSS declaration: ${path}`)
+  for (const declaration of reviewedDeclarations) {
+    if (
+      !sources.includes(declaration) ||
+      !fs.existsSync(join(cwd, declaration.replace(/\.d\.css\.ts$/, '.css')))
+    ) {
+      problems.push(`Missing reviewed CSS declaration or stylesheet: ${declaration}`)
+    }
+  }
+  for (const path of sources) {
+    if (
+      /declare\s+module\s+['"](?:[^'"]*\.css|\*|\*\.\*)['"]/.test(fs.readFileSync(join(cwd, path)))
+    ) {
+      problems.push(`Ambient CSS declaration: ${path}`)
+    }
+  }
+  return problems
+}
+
 it('#757 AC-4: accepts only reviewed declarations backed by their CSS files', () => {
   const sources = trackedPaths('apps', 'packages').filter(path => /\.(?:[cm]?ts|tsx)$/.test(path))
-  const styles = sources.filter(path => path.endsWith('.d.css.ts'))
-  expect(styles).toEqual(['apps/website/app/global.d.css.ts', 'packages/brand/dev/styles.d.css.ts'])
-  for (const style of styles) {
-    expect(fs.existsSync(join(root, style.replace(/\.d\.css\.ts$/, '.css'))), style).toBe(true)
+  expect(cssProblems(root, sources)).toEqual([])
+})
+
+it('#757 AC-4 R758-01: rejects an unreviewed legacy CSS declaration', () => {
+  const cwd = fs.mkdtempSync(join(tmpdir(), 'pair-css-declarations-'))
+  try {
+    for (const declaration of reviewedDeclarations) {
+      fs.mkdirSync(dirname(join(cwd, declaration)), { recursive: true })
+      fs.writeFileSync(join(cwd, declaration), 'export {}\n')
+      fs.writeFileSync(join(cwd, declaration.replace(/\.d\.css\.ts$/, '.css')), '')
+    }
+    const legacy = 'packages/brand/dev/missing-review.css.d.ts'
+    fs.writeFileSync(join(cwd, legacy), 'export {}\n')
+    expect(cssProblems(cwd, [...reviewedDeclarations, legacy])).toEqual([
+      `Unreviewed CSS declaration: ${legacy}`,
+    ])
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true })
   }
-  const ambient = sources.filter(path =>
-    /declare\s+module\s+['"](?:[^'"]*\.css|\*|\*\.\*)['"]/.test(fs.readFileSync(join(root, path))),
-  )
-  expect(ambient).toEqual([])
 })
