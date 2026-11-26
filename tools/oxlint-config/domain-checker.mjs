@@ -194,7 +194,21 @@ function findNullableProperties(source, checker, symbols) {
     }
   }
 
+  function checkInherited(node) {
+    const name = node.name
+    if (!name || !inScope(name.text)) return
+    if (!node.heritageClauses?.some(clause => clause.token === ts.SyntaxKind.ExtendsKeyword)) return
+    const declarations = checker.getSymbolAtLocation(name)?.declarations ?? []
+    for (const property of checker.getPropertiesOfType(checker.getTypeAtLocation(node))) {
+      if (property.flags & ts.SymbolFlags.Optional) continue
+      if (property.declarations?.some(declaration => declarations.includes(declaration.parent)))
+        continue
+      report(checker.getTypeOfSymbolAtLocation(property, node), name.text, property.name, name)
+    }
+  }
+
   function visit(node) {
+    if (ts.isInterfaceDeclaration(node) || ts.isClassDeclaration(node)) checkInherited(node)
     if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) {
       const owner = domainOwner(node)
       if (inScope(owner) && !node.questionToken && !hasDirectNullishType(node.type)) {
