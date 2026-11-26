@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
@@ -278,6 +278,21 @@ test('#693 R5 rejects default discovery when only ignored files exist', t => {
   }
   writeFileSync(join(cwd, 'clean.ts'), 'export const value = 1\n')
   assert.deepEqual(lint(cwd, '--workspace'), { status: 0, diagnostics: [] })
+})
+
+test('#693 R11 source-empty website package scripts succeed on check and fix', t => {
+  const cwd = workspace(t, 'apps/website/.oxlintrc.json')
+  const website = join(root, 'apps/website')
+  const { scripts } = JSON.parse(readFileSync(join(website, 'package.json'), 'utf8'))
+  writeFileSync(join(cwd, 'package.json'), JSON.stringify({ private: true, scripts }))
+  const ignored = join(cwd, 'ignored.mts')
+  writeFileSync(ignored, 'export let value = 1\n')
+  const env = { ...process.env, PATH: join(website, 'node_modules/.bin') + delimiter + process.env.PATH }
+  for (const task of ['lint', 'lint:fix']) {
+    const result = spawnSync('pnpm', ['--silent', 'run', task], { cwd, env, encoding: 'utf8' })
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(readFileSync(ignored, 'utf8'), 'export let value = 1\n')
+  }
 })
 
 test('#693 R3 fix mode fails on an error introduced by an applied fix', t => {
