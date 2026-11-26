@@ -632,8 +632,16 @@ describe('always autonomous (AC-12)', () => {
 })
 
 describe('a linear run (AC-1)', () => {
-  it('runs the steps in file order in the card worktree, prints each outcome, leaves every step ok', async () => {
+  it('keeps startup and individual step details out of normal output', async () => {
     expect(await run(['quick'])).toBe(0)
+    expect(lines.join('\n')).not.toMatch(
+      /pair run quick —|1\. implement —|Run dir:|Configuration:|Worktree:|implement: ok —/,
+    )
+    expect(lines).toContain('  Run: done — every step is ok.')
+  })
+
+  it('runs the steps in file order in the card worktree, prints each outcome, leaves every step ok', async () => {
+    expect(await run(['quick'], OK, { verbose: true })).toBe(0)
 
     expect(launched.map(one => skillOf(one.promptText))).toEqual([
       'pair-process-implement',
@@ -651,7 +659,7 @@ describe('a linear run (AC-1)', () => {
     expect(await run(['quick'], { ...OK, 'pair-process-implement': failing })).toBe(1)
 
     expect(launched).toHaveLength(1)
-    expect(lines).toContain('  implement: failed — gate red (quality-gate)')
+    expect(lines).not.toContain('  implement: failed — gate red (quality-gate)')
     expect(lines).toContain(
       '  Run: failed at step implement — gate red (quality-gate). Fix it, then resume with: pair-cli run quick --card 627',
     )
@@ -662,7 +670,7 @@ describe('a linear run (AC-1)', () => {
   })
 
   it('prints the engine with the level of the cascade that chose it', async () => {
-    await run(['quick'], OK, { engine: 'codex' })
+    await run(['quick'], OK, { engine: 'codex', verbose: true })
     expect(lines.find(line => line.startsWith('  Engine: '))).toMatch(
       /^ {2}Engine: codex — .*\(from --engine\)$/,
     )
@@ -1358,7 +1366,10 @@ describe('skill and options of a step (AC-4, AC-5)', () => {
   ])('fails the step on %s', async (_name, skill, reason) => {
     expect(await run(['quick'], { ...OK, 'pair-process-implement': skill })).toBe(1)
     expect(
-      lines.some(line => line.startsWith('  implement: failed — ') && line.includes(`(${reason}`)),
+      lines.some(
+        line =>
+          line.startsWith('  Run: failed at step implement — ') && line.includes(`(${reason}`),
+      ),
     ).toBe(true)
     expect(states()).toEqual({ implement: 'failed', review: 'pending' })
   })

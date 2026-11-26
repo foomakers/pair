@@ -117,7 +117,7 @@ const run = (
   over: Partial<WorkflowHostDependencies> = {},
 ) =>
   handleRunCommand(
-    parseRunCommand({ card: '627', cwd: project, ...options }, args),
+    parseRunCommand({ card: '627', cwd: project, verbose: true, ...options }, args),
     fs,
     deps(skills, over),
   )
@@ -865,7 +865,7 @@ describe('#723 T-6 assignment configuration (AC-7, AC-9)', () => {
           return code
         })
 
-      await runCli([process.execPath, ...argv, '--cwd', project])
+      await runCli([process.execPath, ...argv, '--cwd', project, '--verbose'])
       expect(handle).toHaveBeenCalledOnce()
       expect(assignments).toEqual([])
       printsAssignment('implement', 'none', 'configuration.assign')

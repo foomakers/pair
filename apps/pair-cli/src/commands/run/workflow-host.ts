@@ -263,7 +263,8 @@ export function configureWorkflowRun(
     reportConfigurationErrors(outcome.errors)
     return undefined
   }
-  if (outcome.plan === undefined) console.log(`  ${describeEngineResolution(at.engine)}`)
+  if ((config.verbose || config.dryRun) && outcome.plan === undefined)
+    console.log(`  ${describeEngineResolution(at.engine)}`)
   return {
     ...at,
     ...(outcome.plan && { configuration: outcome.plan }),
@@ -312,7 +313,8 @@ export function resolveWorkflowDefinition(
       ? undefined
       : resumeWorkflow(fs, request, source, { main, sources })) ??
     checkWorkflow(fs, project, { cwd, main, sources }, source)
-  console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
+  if (config.verbose || config.dryRun)
+    console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
   reportValidation(checked)
   if (checked.workflow === undefined) return undefined
   const engine = withRunAgentRunner(
@@ -875,7 +877,7 @@ async function runOnConsole(
         report: event => {
           if (event.state === 'running')
             sink.event({ event: 'stage', card: request.card, stage: event.step })
-          else console.log(stepLine(event))
+          else if (config.verbose) console.log(stepLine(event))
         },
       },
       runDir,
@@ -1003,7 +1005,12 @@ async function finishClosure(
   return result.status === 'ok' ? 0 : 1
 }
 
-async function startOnConsole(opened: Opened, fs: FileSystemService, replay?: StepReplay) {
+async function startOnConsole(
+  opened: Opened,
+  fs: FileSystemService,
+  verbose: boolean,
+  replay?: StepReplay,
+) {
   const { resolved, runDir } = opened
   const started = await start(
     { files: fs, dir: runDir },
@@ -1013,7 +1020,7 @@ async function startOnConsole(opened: Opened, fs: FileSystemService, replay?: St
   recordIncludeSources(fs, runDir, resolved.sources, started.status)
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   if (started.telemetryWarning !== undefined) console.log(`  Warning: ${started.telemetryWarning}`)
-  console.log(`  Run dir: ${runDir} (${started.status})`)
+  if (verbose) console.log(`  Run dir: ${runDir} (${started.status})`)
   return started
 }
 
@@ -1039,9 +1046,9 @@ async function drive(
     })
   const replayTree = replay && (await prepare())
   if (replay && replayTree) await prepareReplayHead(replayTree, replay.inputs.head)
-  const started = await startOnConsole(opened, fs, replay)
+  const started = await startOnConsole(opened, fs, config.verbose === true, replay)
   const effective = effectiveConfiguration({ files: fs, dir: runDir })
-  printSettings(resolved, effective)
+  if (config.verbose) printSettings(resolved, effective)
   probeUnchecked(
     resolved,
     effective,
@@ -1054,7 +1061,7 @@ async function drive(
     return stopped
   }
   const worktree = replayTree ?? (await prepare())
-  console.log(`  Worktree: ${worktree}`)
+  if (config.verbose) console.log(`  Worktree: ${worktree}`)
   return runOnConsole(
     config,
     {
@@ -1356,7 +1363,7 @@ export async function handleWorkflowRun(
   const cardLabels = await runTierLabels(definition, request, services, card)
   const resolved = configureWorkflowRun(config, request, services, { ...definition, cardLabels })
   if (resolved === undefined) return 1
-  printPlan(resolved.workflow)
+  if (config.verbose || config.dryRun) printPlan(resolved.workflow)
   if (config.dryRun) return printWorkflowPreview(resolved)
   const opened = await openCard({ config, resolved }, request, services, card)
   return opened === undefined ? 0 : runWithCardLock(config, opened, services, batch?.releases)
