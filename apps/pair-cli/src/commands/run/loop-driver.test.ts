@@ -184,16 +184,17 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
     },
     {
       label: 'finalization timeout',
+      iterationTimeout: '1',
       file: handoff(formatError),
       shutdown: keepAlive,
       failure: 'stalled: no terminal event within 1s',
     },
   ])('#704 F12: handles a Codex loop HALT with $label', async row => {
-    const { file, streamResult, shutdown, failure, retry } = row
+    const { file, streamResult, shutdown, failure, retry, iterationTimeout = '5' } = row
     const prompts: string[] = []
     const { out } = capture()
     const code = await handleRunCommand(
-      parseRunCommand({ root: '212', engine: 'codex', iterationTimeout: '1' }),
+      parseRunCommand({ root: '212', engine: 'codex', iterationTimeout }),
       projectFs(),
       {
         runIteration: input => {
