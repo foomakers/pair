@@ -400,6 +400,43 @@ it.each([
     alternatives: ['browser.css'],
   },
   {
+    target: 'a Next Server Action imported by a Client Component',
+    importer: 'apps/website/app/action.ts',
+    beforeImport: "'use server'\n",
+    files: {
+      'app/page.tsx': "export { default } from './client'\n",
+      'app/client.tsx':
+        "'use client'\nimport { save } from './action'\nexport default () => <form action={save} />\n",
+    },
+    afterImport: 'export async function save() {}\n',
+    manifest: {
+      exports: { './theme.css': { 'react-server': './theme.css', default: './fallback.css' } },
+    },
+    alternatives: ['fallback.css'],
+  },
+  {
+    target: 'a Next Edge page',
+    importer: 'apps/website/app/page.tsx',
+    afterImport: "export const runtime = 'edge'\nexport default () => null\n",
+    manifest: {
+      exports: { './theme.css': { 'edge-light': './theme.css', default: './fallback.css' } },
+    },
+    alternatives: ['fallback.css'],
+  },
+  {
+    target: 'a Next page inheriting the Edge runtime',
+    importer: 'apps/website/app/page.tsx',
+    files: {
+      'app/layout.tsx':
+        "export const runtime = 'edge'\nexport default ({ children }) => <html><body>{children}</body></html>\n",
+    },
+    afterImport: 'export default () => null\n',
+    manifest: {
+      exports: { './theme.css': { 'edge-light': './theme.css', default: './fallback.css' } },
+    },
+    alternatives: ['fallback.css'],
+  },
+  {
     target: 'Next development server',
     importer: 'apps/website/app/page.tsx',
     manifest: { exports: { './theme.css': { development: './theme.css', default: './prod.css' } } },
@@ -428,6 +465,9 @@ it.each([
     alternatives,
     selected = 'theme.css',
     needsAlternative = false,
+    beforeImport = '',
+    afterImport = '',
+    files,
   }) => {
     await withCssFixture(async cwd => {
       const workspace = importer.split('/').slice(0, 2).join('/')
@@ -441,7 +481,10 @@ it.each([
         JSON.stringify({ name: '@pair/styles', ...manifest }),
       )
       const specifier = '@pair/styles/theme.css'
-      fs.writeFileSync(join(cwd, importer), `import '${specifier}'\n`)
+      for (const [file, source] of Object.entries(files ?? {})) {
+        fs.writeFileSync(join(cwd, workspace, file), source)
+      }
+      fs.writeFileSync(join(cwd, importer), `${beforeImport}import '${specifier}'\n${afterImport}`)
       for (const alternative of alternatives) fs.writeFileSync(join(styles, alternative), '')
       fs.writeFileSync(join(styles, selected), '')
       expect(await checkStylesheets(cwd)).toEqual([])
