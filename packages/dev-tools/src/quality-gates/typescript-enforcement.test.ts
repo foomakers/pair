@@ -151,7 +151,9 @@ const reviewedDeclarations = [
 
 function cssProblems(cwd: string, sources: string[]) {
   const problems = sources
-    .filter(path => path.endsWith('.d.css.ts') && !reviewedDeclarations.includes(path))
+    .filter(
+      path => /(?:\.d\.css\.ts|\.css\.d\.ts)$/.test(path) && !reviewedDeclarations.includes(path),
+    )
     .map(path => `Unreviewed CSS declaration: ${path}`)
   for (const declaration of reviewedDeclarations) {
     if (
