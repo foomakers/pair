@@ -116,7 +116,8 @@ function isDomainProperty(node) {
     ts.isPropertySignature(node) ||
     ts.isPropertyDeclaration(node) ||
     isParameterProperty(node) ||
-    (ts.isGetAccessorDeclaration(node) && ts.isClassLike(node.parent))
+    (ts.isGetAccessorDeclaration(node) &&
+      (ts.isClassLike(node.parent) || ts.isInterfaceDeclaration(node.parent)))
   )
 }
 
