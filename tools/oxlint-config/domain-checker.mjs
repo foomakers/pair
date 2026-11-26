@@ -203,10 +203,15 @@ function findNullableProperties(source, checker, symbols) {
     if (!node.heritageClauses?.some(clause => clause.token === ts.SyntaxKind.ExtendsKeyword)) return
     const declarations = checker.getSymbolAtLocation(name)?.declarations ?? []
     for (const property of checker.getPropertiesOfType(checker.getTypeAtLocation(node))) {
-      if (property.flags & ts.SymbolFlags.Optional) continue
       if (property.declarations?.some(declaration => declarations.includes(declaration.parent)))
         continue
-      report(checker.getTypeOfSymbolAtLocation(property, node), name.text, property.name, name)
+      report(
+        checker.getTypeOfSymbolAtLocation(property, node),
+        name.text,
+        property.name,
+        name,
+        Boolean(property.flags & ts.SymbolFlags.Optional),
+      )
     }
   }
 
