@@ -1055,7 +1055,7 @@ it('R754-05: renews the lease without replacing an outstanding step attempt', ()
   }
 })
 
-it('R754-06: starts from a redirected skills target and resolves prefixed names', () => {
+it('R754-06: starts from a redirected skills target with explicit installed names', () => {
   const target = 'team/skills'
   write(
     'pair.config.json',
@@ -1068,7 +1068,12 @@ it('R754-06: starts from a redirected skills target and resolves prefixed names'
   )
   for (const skill of ['team-pair-fixture-draft', 'fixture-discuss'])
     write(`${target}/${skill}/SKILL.md`, `---\nname: ${skill}\ndescription: Fixture skill\n---\n`)
-  write(workflowFile, workflow.replace('pair-fixture-discuss', 'team-fixture-discuss'))
+  write(
+    workflowFile,
+    workflow
+      .replace('pair-fixture-draft', 'team-pair-fixture-draft')
+      .replace('pair-fixture-discuss', 'fixture-discuss'),
+  )
   cpSync(join(main, cycle), join(main, target, 'team-workflow-cycle/scripts'), { recursive: true })
   rmSync(join(main, '.claude/skills/pair-fixture-draft'), { recursive: true })
   rmSync(join(main, cycle), { recursive: true })

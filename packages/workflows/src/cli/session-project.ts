@@ -131,7 +131,7 @@ function installedSkillPaths(project: Project, name: string, root = project.main
   ]
 }
 
-export function sessionSkill(project: Project, name: string): string {
+export function sessionDefaultSkill(project: Project, name: string): string {
   const installed = installedSkillPaths(project, name, project.cwd).find(dir =>
     isFile(join(dir, 'SKILL.md')),
   )
@@ -161,10 +161,22 @@ export function controlStateScript(project: Project): string {
   return script
 }
 
-function skillExists(project: Project, skill: string): boolean {
+function skillExists(project: Project, skill: string, implicit = false): boolean {
+  const bundle = bundleLayout(project)
+  const candidates = implicit
+    ? installedSkillPaths(project, skill, project.cwd)
+    : [
+        ...(bundle === undefined ? [] : skillPaths(bundle.target, ['.'], undefined, skill)),
+        ...skillPaths(
+          project.cwd,
+          registryTargets(skillsRegistry(project, project.cwd)),
+          undefined,
+          skill,
+        ),
+      ]
   const [, category, name] = /^pair-(capability|process|workflow)-(.+)$/.exec(skill) ?? []
   return (
-    installedSkillPaths(project, skill, project.cwd).some(dir => isFile(join(dir, 'SKILL.md'))) ||
+    candidates.some(dir => isFile(join(dir, 'SKILL.md'))) ||
     (category !== undefined &&
       name !== undefined &&
       isFile(join(project.cwd, '.skills', category, name, 'SKILL.md')))
@@ -200,6 +212,7 @@ export function workflowDefinition(project: Project, name: string) {
   const adoption = readAdoption(project)
   const checked = validate(source.text, source.file, {
     skillExists: skill => skillExists(project, skill),
+    defaultSkillExists: skill => skillExists(project, skill, true),
     gateKeys: Object.keys(readGateRegistry(adoption)),
     gateTargets: Object.keys(readGateTargets(adoption)),
     launchInputs: ['card'],
@@ -304,12 +317,14 @@ export function workflowSummary(
     configuration: configuration?.name,
     steps: addressedSteps(workflow).flatMap(step => {
       if (step.kind === 'loop') return []
-      const skill = step.skill ?? kindByName[step.kind].defaultSkill
+      const defaultSkill = kindByName[step.kind].defaultSkill
       return [
         {
           id: step.id,
           kind: step.kind,
-          skill: skill === undefined ? undefined : sessionSkill(project, skill),
+          skill:
+            step.skill ??
+            (defaultSkill === undefined ? undefined : sessionDefaultSkill(project, defaultSkill)),
           interactive: sessionInteractiveOf(step),
           settings: effectiveSettings(configuration, workflow, step, engine),
         },

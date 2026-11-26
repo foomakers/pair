@@ -20,6 +20,8 @@ export interface ValidationDeps {
   readonly availableWorkflows?: readonly string[]
   /** Whether a skill of that name is installed. */
   readonly skillExists: (name: string) => boolean
+  /** Resolve an implicit kind default for this installation, if it uses a different name. */
+  readonly defaultSkillExists?: (name: string) => boolean
   /** The keys of the Custom Gate Registry. */
   readonly gateKeys: readonly string[]
   /** The targets of the Custom Gate Registry. */
@@ -73,7 +75,9 @@ const skillErrors: Check = (workflow, step, deps, path) => {
         fix: "add 'skill' with the skill to run",
       }),
     ]
-  if (deps.skillExists(skill)) return []
+  const exists =
+    step.skill === undefined ? (deps.defaultSkillExists ?? deps.skillExists) : deps.skillExists
+  if (exists(skill)) return []
   return [
     errorAt(workflow, [...path, 'skill'], {
       problem: `skill '${skill}' is not installed`,

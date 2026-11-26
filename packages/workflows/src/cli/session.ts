@@ -58,8 +58,8 @@ import {
   effectiveSettings,
   isSafeText,
   readAdoption,
+  sessionDefaultSkill,
   sessionInteractiveOf,
-  sessionSkill,
   workflowConfiguration,
   workflowDefinition,
   workflowName,
@@ -333,9 +333,13 @@ export async function openSession(project: Project, input: OpenInput) {
   )
 }
 
-const sessionLaunch = (project: Project, launch: StepLaunch): StepLaunch => ({
+const sessionLaunch = (
+  project: Project,
+  launch: StepLaunch,
+  explicitSkill: string | undefined,
+): StepLaunch => ({
   ...launch,
-  uses: sessionSkill(project, launch.uses),
+  uses: explicitSkill ?? sessionDefaultSkill(project, launch.uses),
   interactive: sessionInteractiveOf(launch),
 })
 
@@ -347,6 +351,7 @@ const sessionMessage = (launch: StepLaunch, worktree: string | undefined) =>
   })
 
 function stepPacket(
+  project: Project,
   workflow: Workflow,
   configuration: Configuration | undefined,
   context: { readonly engine: string; readonly worktree?: string },
@@ -354,11 +359,12 @@ function stepPacket(
 ) {
   const step = addressedSteps(workflow).find(candidate => candidate.id === launch.id)
   if (step === undefined) throw new Error(`step-unknown: ${launch.id}`)
+  const resolved = sessionLaunch(project, launch, step.skill)
   return {
-    ...launch,
+    ...resolved,
     worktree: context.worktree,
     settings: effectiveSettings(configuration, workflow, step, context.engine),
-    message: sessionMessage(launch, context.worktree),
+    message: sessionMessage(resolved, context.worktree),
   }
 }
 
@@ -516,8 +522,7 @@ export async function nextSession(
 
     const workflow = frozenWorkflow(run)
     const config = effectiveConfiguration(run)
-    const packet = (launch: StepLaunch) =>
-      stepPacket(workflow, config, lease, sessionLaunch(project, launch))
+    const packet = (launch: StepLaunch) => stepPacket(project, workflow, config, lease, launch)
     if (lease.launch !== undefined)
       return {
         result: { run: 'running', ready: [packet(lease.launch)] },
@@ -558,15 +563,21 @@ export async function recordSession(
       throw new Error(`step-not-reserved: ${step} needs the attempt returned by next`)
     const workflow = frozenWorkflow(run)
     const config = effectiveConfiguration(run)
+    const steps = addressedSteps(workflow)
     const host = sessionHost(project, run, {
-      steps: addressedSteps(workflow),
+      steps,
       worktree: lease.worktree,
     })
     const observed = observeRun(run)
     const writer = sessionTelemetry(observed, workflow, config, lease)
     const startedAt = new Date(lease.launchStartedAt ?? Date.now())
     const sent =
-      writer === undefined ? '' : sessionMessage(sessionLaunch(project, launch), lease.worktree)
+      writer === undefined
+        ? ''
+        : sessionMessage(
+            sessionLaunch(project, launch, steps.find(step => step.id === launch.id)?.skill),
+            lease.worktree,
+          )
     const final = readMessage(file)
     const result = await settleAgentStep(host, observed, launch, { final, model })
     await writer?.execution(launch, result, { sent, final, usage, startedAt, model })
