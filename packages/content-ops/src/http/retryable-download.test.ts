@@ -104,5 +104,6 @@ describe('downloadWithRetry', () => {
     await downloadWithRetry('https://example.com/kb.zip', '/out.zip', opts, { downloadFn })
 
     expect(downloadFn).toHaveBeenCalledWith('https://example.com/kb.zip', '/out.zip', opts)
+    expect(downloadFn.mock.calls[0]?.[2]).toBe(opts)
   })
 })

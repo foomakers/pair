@@ -45,3 +45,11 @@ The content-ops lint route runs the workspace TypeScript 5.4.5 checker on the sa
 Eight Node 20 fixtures passed through the package's `pnpm lint` command. Local, imported, transitive and inferred nullish fields each produced one semantic finding at their property, including with duplicate file operands. The clean control accepted non-null aliases, opaque causes and nested nullable element types, and left an ingress DTO outside the model check. Broken config and an unresolved transitive import returned exit 2 with project diagnostics.
 
 A cold clean run of `turbo lint --filter=@pair/content-ops` warmed the cache. The same command hit that result on the second run. Changing only the imported alias from `string` to `string | null` missed the cache and reported one semantic finding at `src/http/retry.domain.ts:3:3`. The CI `pnpm lint` command reported the same single finding. This was recorded while the pilot was in warning mode.
+
+## Retry parity and boundaries
+
+The private `retry.domain.ts` uses `success`, `transient` and `permanent` variants. Both failures preserve the original `unknown` cause. `resolveRetryConfig` converts caller `RetryOptions` to a required `RetryPolicy`, while `classifyRejection` classifies a transport rejection once and retains the original value. The public download adapters still pass caller options, dependencies and reporting behavior through their existing entry points.
+
+The real strict TypeScript project passed the fresh success, exhaustive consumer, normalized ingress and bidirectional Promise signature controls. The isolated negatives reported TS2353 for extra success data, TS2532 for unchecked indexing, TS2741 for a raw option shape and TS2322 for raw rejection input and for an additional variant at the live `never` assignment. The compile runner checked exit status, diagnostic code and source location.
+
+Node 20 passed the 11 original retry tests, the 16 frozen CLI rows and the fractional-budget witness through the rebuilt CLI. Checked fields include arguments, supplied options and reporter identity, handler messages, timer requests and rejection identity. An extra field on a structurally typed alias can still pass TypeScript, and a caller can still discard a result. The pilot constructs each variant in place and consumes each outcome at the exhaustive dispatch.
