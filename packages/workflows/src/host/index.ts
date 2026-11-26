@@ -15,6 +15,7 @@ import {
   type RunHost,
   type RunState,
   type StepLaunch,
+  type Started,
 } from '../engine'
 import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
 import {
@@ -541,8 +542,8 @@ export function telemetryWriter(run: ObservedRun, telemetry: TelemetryOptions) {
   return {
     now,
     settings: telemetry.settings,
-    reconcile: () =>
-      safe(() => recordMissingFaultSteps(run, recoverableFaults(run, telemetry, now))),
+    reconcile: (terminal?: RunEndStatus) =>
+      safe(() => recordMissingFaultSteps(run, recoverableFaults(run, telemetry, now), terminal)),
     step,
     execution: (
       launch: StepLaunch,
@@ -572,6 +573,12 @@ export function telemetryWriter(run: ObservedRun, telemetry: TelemetryOptions) {
 }
 
 type Writer = ReturnType<typeof telemetryWriter> | undefined
+
+/** Restore an interrupted terminal fault write without reopening the run or launching a step. */
+export async function recoverTerminalFaults(status: Started['status'], writer: Writer) {
+  if (writer === undefined || status === 'started' || status === 'resumed') return
+  await writer.reconcile(status === 'complete' ? 'done' : status)
+}
 
 interface ObservedRun extends RunDirectory {
   readonly outcomes: EngineOutcome[]

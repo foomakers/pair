@@ -47,8 +47,8 @@ steps:
 | `uses` | String naming an included workflow. | Absent. | A typed or generic include call. The included steps replace the call in file order. | `uses: shared` |
 | `with` | Object of kind-specific options. | Empty object and kind defaults. | Executable steps. On an include, options apply to the selected output step of the same kind. | `with: { question: 'Merge this PR?' }` |
 | `gates` | List of gate keys, `target:<name>` values or project-owned `command:<shell line>` entries. | Empty. | Post-success checks for executable steps. On `gate`, it supplies the gate's commands and takes precedence over `with.gates`. | `gates: [target:increment]` |
-| `timeout-minutes` | Integer from 1 to 35791. | Run cap from `--iteration-timeout`, when set. | Agent steps, including loop children. The step value overrides the run cap per attempt. | `timeout-minutes: 15` |
-| `retries` | Nonnegative integer. | No retries and existing failure routing. | Agent steps, including loop children. | `retries: 2` |
+| `timeout-minutes` | Integer from 1 to 35791. | Run cap from `--iteration-timeout`, when set. | Agent processes launched by `pair-cli run`, including loop children. The step value overrides the run cap per attempt. | `timeout-minutes: 15` |
+| `retries` | Nonnegative integer. | No retries and existing failure routing. | Agent processes launched by `pair-cli run`, including loop children. | `retries: 2` |
 | `on-failed` | `stop` or `continue`. | `stop`. | Top-level executable steps. Shorthand for `escalate.failed`. Inside loops, use a child `escalate` rule. | `on-failed: continue` |
 | `on-resume` | `{ reason, step }` with a non-empty reason and earlier top-level step ID. | Absent. | Top-level executable steps. A stopped failure with that reason refreshes the linked PR head and replays from `step` on resume. | `on-resume: { reason: head-changed, step: review }` |
 | `alias` | String declared under `aliases`. | Step or run configuration. | Steps that launch an agent. The alias supplies engine, model and effort defaults. | `alias: build` |
@@ -157,11 +157,13 @@ steps:
     escalate: { blocked: stop }
 ```
 
-The host stops the agent when its time cap expires. The idle watchdog still applies. The host reruns a process fault with the same prompt in the same worktree, preserving any partial changes. Each retry gets its own time cap and stays in the current loop round.
+`pair-cli run` stops the agent when its time cap expires. The idle watchdog still applies. The host reruns a process fault with the same prompt in the same worktree, preserving any partial changes. Each retry gets its own time cap and stays in the current loop round.
 
 Process faults include a wall-clock timeout, idle timeout, crash, missing final message or invalid result. A valid `failed`, `blocked` or `needs-decision` result goes directly to escalation. A host interrupt leaves the step running for resume.
 
 With `retries` declared, including `retries: 0`, exhaustion records `blocked` with reason `fault`. An invalid final result records `failed` with reason `invalid-result`. The step's escalation rules apply to that outcome. If `retries` is omitted, a missing final result keeps the existing `failed` / `no-result` route.
+
+The session host displays a warning when a delegated or interactive step declares either key. It executes the session attempt once and settles the final message it receives. To enforce a process time cap or retry budget, run the agent step with `pair-cli run`. On takeover, the session honors faults already persisted by the terminal and settles exhausted attempts without relaunching them.
 
 The top-level keys apply to agent steps only. A host-run `gate` can still set `with.timeout-minutes` for its CI wait.
 

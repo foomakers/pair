@@ -15,6 +15,8 @@ Use `/pair-workflow-run <run-id>` in the project. The run keeps its saved workfl
 
 Use the terminal command printed by the skill when the session lacks a subagent primitive or a step requests another engine. When only the configured model or effort is unavailable, the skill reports the session settings it will use before starting the step.
 
+The session reports a warning when a step declares `timeout-minutes` or `retries`. Only `pair-cli run` enforces process timeouts and retries. Session takeover preserves diagnoses already recorded by the terminal.
+
 ## Verify
 
 The skill reports each step's start and outcome, then the final state and how to resume a parked or failed run. Inspect `.pair/working/runs/<run-id>/state.json` and the step results in that directory for details. When the frozen configuration enables telemetry, `telemetry.jsonl` records measured usage when the host supplies it and estimates usage from the exchanged text otherwise.

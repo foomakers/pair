@@ -252,6 +252,7 @@ type RecoveredFault = Omit<StepExecution, 'durationMs' | 'tokens'> & { diagnosis
 export async function recordMissingFaultSteps(
   run: RunDirectory,
   faults: Iterable<RecoveredFault>,
+  terminal?: RunEndStatus,
 ): Promise<void> {
   const recovered = [...faults]
   if (recovered.length === 0) return
@@ -264,8 +265,8 @@ export async function recordMissingFaultSteps(
   const missing = recovered.filter(
     ({ step }) => !recorded.has(attemptKey(step.id, step.attempt, step.round)),
   )
-  if (missing.length === 0) return
-  await write(run, [
+  if (missing.length === 0 && terminal === undefined) return
+  const repaired = [
     ...steps,
     ...missing.map(fault =>
       stepRecord(run, {
@@ -274,7 +275,11 @@ export async function recordMissingFaultSteps(
         tokens: { read: UNKNOWN, cached: UNKNOWN, written: UNKNOWN },
       }),
     ),
-  ])
+  ]
+  await write(
+    run,
+    terminal === undefined ? repaired : [...repaired, closingRecord(run, repaired, terminal)],
+  )
 }
 
 function sumOf(name: TokenName, steps: readonly StepTelemetry[]): TokenSum {
@@ -294,8 +299,16 @@ function sumOf(name: TokenName, steps: readonly StepTelemetry[]): TokenSum {
 /** Writes a completed run's outcome and the totals of its step executions. */
 export async function closeRun(run: RunDirectory, status: RunTelemetry['status']): Promise<void> {
   const steps = stepsOf(run)
+  await write(run, [...steps, closingRecord(run, steps, status)])
+}
+
+function closingRecord(
+  run: RunDirectory,
+  steps: readonly StepTelemetry[],
+  status: RunTelemetry['status'],
+): RunTelemetry {
   const executions = steps.filter(step => step.kind !== 'loop')
-  const record: RunTelemetry = {
+  return {
     type: 'run',
     schema: TELEMETRY_SCHEMA,
     ...identityOf(run),
@@ -308,7 +321,6 @@ export async function closeRun(run: RunDirectory, status: RunTelemetry['status']
     },
     steps: executions.length,
   }
-  await write(run, [...steps, record])
 }
 
 /**

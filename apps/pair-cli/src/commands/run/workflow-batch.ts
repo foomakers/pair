@@ -418,10 +418,15 @@ export async function handleWorkflowBatch(
   if (config.dryRun) return previewBatch(plan)
   for (const [id, outcome] of plan.prior) {
     if (outcome.outcome === 'skipped')
-      await migrateCompletedRunTelemetry({
-        files: services.fs,
-        dir: join(resolved.main, '.pair/working/runs', plan.runId(id)),
-      })
+      await migrateCompletedRunTelemetry(
+        {
+          files: services.fs,
+          dir: join(resolved.main, '.pair/working/runs', plan.runId(id)),
+        },
+        config,
+        resolved,
+        id,
+      )
   }
   return driveBatch(input, plan)
 }

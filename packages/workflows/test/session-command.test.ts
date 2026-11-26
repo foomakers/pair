@@ -448,6 +448,96 @@ it.each([0, 1])(
   },
 )
 
+it.each([
+  ['timeout-minutes: 1', 'timeout-minutes'],
+  ['retries: 0', 'retries'],
+  ['interactive: true, timeout-minutes: 1, retries: 2', 'timeout-minutes, retries'],
+])('#704 F16: session dispatch discloses headless process controls for %s', (keys, described) => {
+  const lease = startWorkflow(`  draft: { kind: generic, skill: pair-fixture-draft, ${keys} }\n`)
+  for (let n = 0; n < 2; n++) {
+    const result = invoke(['next', runId, ...lease])
+    expect(JSON.parse(result.stdout)).toMatchObject({ ready: [{ id: 'draft', attempt: 1 }] })
+    expect(result.stderr).toContain(`draft: ${described} apply only to pair-cli run`)
+  }
+})
+
+it.each([
+  [
+    'complete',
+    'done',
+    '  draft: { kind: generic, skill: pair-fixture-draft, retries: 0, escalate: { blocked: continue } }',
+  ],
+  ...(['fail', 'escalate'] as const).map(policy => [
+    policy === 'fail' ? 'failed' : 'parked',
+    policy === 'fail' ? 'failed' : 'parked',
+    `  rounds:\n    kind: loop\n    until: draft\n    max: 1\n    on-max: ${policy}\n    steps:\n      draft: { kind: generic, skill: pair-fixture-draft, retries: 0, escalate: { blocked: continue } }`,
+  ]),
+])(
+  '#704 F17: reconciles terminal %s on open and preserves the closing record across reopens',
+  async (disposition, status, steps) => {
+    const text = namedWorkflow(steps + '\n')
+    const run = { dir: runDir, files }
+    await start(
+      run,
+      { file: join(main, workflowFile), text },
+      { card, configuration: { text: `${configurationDefaults}telemetry: true\n` } },
+    )
+    const hostFiles = {
+      ...files,
+      async rename(from: string, to: string) {
+        await files.rename(from, to)
+        if (to !== join(runDir, 'state.json')) return
+        const saved = JSON.parse(readRun('state.json')).steps
+        if (saved.draft?.state === 'blocked' || saved.rounds?.state === 'exhausted')
+          throw new Error('interrupted after terminal settlement')
+      },
+    }
+    await expect(
+      runSteps(
+        {
+          id: 'pair-run',
+          files: hostFiles,
+          style: 'instruction',
+          isSafeText: () => true,
+          launch: async () => ({
+            model: 'observed-model',
+            fault: {
+              kind: 'crash',
+              detail: 'agent exited',
+              exitCode: 1,
+              signal: null,
+              elapsedMs: 12,
+              stderrTail: [],
+            },
+          }),
+        },
+        runDir,
+        { host: 'pair-run', settings: () => ({ engine: 'headless-engine' }) },
+      ),
+    ).rejects.toThrow('interrupted after terminal settlement')
+    git('worktree', 'add', '-b', branch, worktree, 'main')
+    let log: string | undefined
+    for (let n = 0; n < 2; n++) {
+      const opened = JSON.parse(successful(['resume', runId, '--engine', 'codex']))
+      expect(opened.status).toBe(disposition)
+      const rows = readTelemetry()
+      expect(rows).toEqual([
+        expect.objectContaining({
+          attempt: 1,
+          host: 'pair-run',
+          engine: 'headless-engine',
+          model: 'observed-model',
+          diagnosis: expect.objectContaining({ kind: 'crash', elapsedMs: 12 }),
+        }),
+        expect.objectContaining({ type: 'run', status, steps: 1, durationMs: 12 }),
+      ])
+      if (log !== undefined) expect(readRun('telemetry.jsonl')).toBe(log)
+      log = readRun('telemetry.jsonl')
+      successful(['stop', runId, '--lease', opened.lease])
+    }
+  },
+)
+
 it('#696 AC-1/AC-4: resumes a completed headless run without recreating its worktree', async () => {
   await seedHeadlessRun()
   const run = { dir: runDir, files }

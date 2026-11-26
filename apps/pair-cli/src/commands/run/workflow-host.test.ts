@@ -1098,6 +1098,121 @@ it('#704 F8: telemetry keeps the watchdog limit and redacts stderr (AC-4)', asyn
   })
 })
 
+it.each(['complete', 'parked', 'failed'])(
+  '#704 F17: headless %s opens recover a terminal fault before returning',
+  async disposition => {
+    const draft =
+      '{ kind: generic, skill: pair-process-implement, retries: 0, escalate: { blocked: continue } }'
+    const steps =
+      disposition === 'complete'
+        ? `  draft: ${draft}`
+        : `  rounds:\n    kind: loop\n    max: 1\n    until: draft\n    on-max: ${disposition === 'parked' ? 'escalate' : 'fail'}\n    steps:\n      draft: ${draft}`
+    write('.pair/adoption/tech/workflows/quick.yaml', `version: 1\nname: quick\nsteps:\n${steps}\n`)
+    const options = { telemetry: true }
+    await run(['quick'], { 'pair-process-implement': () => undefined }, options)
+    const ledger = join(runDir(), 'telemetry.jsonl')
+    expect(fs.readFileSync(ledger)).toContain('"diagnosis"')
+    await fs.unlink(ledger)
+    lines.length = 0
+    const count = launched.length
+    await run(['quick'], { 'pair-process-implement': () => undefined }, options)
+    expect(launched).toHaveLength(count)
+    expect(lines.join('\n')).toContain(
+      `Process fault — ${disposition === 'complete' ? 'draft' : 'rounds/draft round 1'} attempt 1 (crash)`,
+    )
+    const rows = fs
+      .readFileSync(ledger)
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line))
+    expect(rows[0]).toMatchObject({
+      type: 'step',
+      host: 'pair-run',
+      attempt: 1,
+      diagnosis: { kind: 'crash' },
+    })
+    expect(rows.at(-1)).toMatchObject({
+      type: 'run',
+      status: disposition === 'complete' ? 'done' : disposition,
+    })
+  },
+)
+
+it('#704 F17: rechecks a completed run under lock before repairing its final telemetry', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    `version: 1\nname: quick\nsteps:\n  draft: { kind: generic, skill: pair-process-implement, retries: 0, escalate: { blocked: continue } }\n`,
+  )
+  const options = { telemetry: true }
+  const skills = { 'pair-process-implement': () => undefined }
+  await run(['quick'], skills, options)
+  const ledger = join(runDir(), 'telemetry.jsonl')
+  await fs.unlink(ledger)
+  vi.mocked(acquireRunLock).mockImplementationOnce(() => {
+    const path = join(runDir(), 'state.json')
+    const saved = JSON.parse(fs.readFileSync(path))
+    saved.steps.draft.state = 'running'
+    fs.writeFileSync(path, JSON.stringify(saved))
+    return { kind: 'acquired', release }
+  })
+  await run(['quick'], skills, options)
+  expect(fs.existsSync(ledger)).toBe(false)
+})
+
+it('#704 F17: an overlapping restart can archive state before the telemetry lock is acquired', async () => {
+  const options = { telemetry: true }
+  await run(['quick'], OK, options)
+  const ledger = join(runDir(), 'telemetry.jsonl')
+  const state = join(runDir(), 'state.json')
+  const exists = fs.existsSync.bind(fs)
+  let locked = false
+  vi.mocked(acquireRunLock).mockImplementationOnce(() => {
+    locked = true
+    return { kind: 'acquired', release }
+  })
+  vi.spyOn(fs, 'existsSync').mockImplementation(path => {
+    if (path === ledger && !locked && exists(state)) fs.rmSync(state)
+    return exists(path)
+  })
+  await expect(run(['quick'], OK, options)).resolves.toBe(0)
+})
+
+it('#704 F17: a refused backfill preserves the delivery outcome without an incomplete summary and retries on reopen', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    'version: 1\nname: quick\nsteps:\n  draft: { kind: generic, skill: pair-process-implement, retries: 0, escalate: { blocked: continue } }\n',
+  )
+  const options = { telemetry: true }
+  const skills = { 'pair-process-implement': () => undefined }
+  await run(['quick'], skills, options)
+  const ledger = join(runDir(), 'telemetry.jsonl')
+  await fs.unlink(ledger)
+  const rename = fs.rename.bind(fs)
+  let failed = false
+  vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+    if (!failed && to === ledger) {
+      failed = true
+      throw new Error('disk unavailable')
+    }
+    await rename(from, to)
+  })
+  expect(await run(['quick'], skills, options)).toBe(0)
+  expect(failed).toBe(true)
+  expect(fs.existsSync(ledger)).toBe(false)
+  expect(lines.join('\n')).toContain('disk unavailable')
+  expect(await run(['quick'], skills, options)).toBe(0)
+  expect(
+    fs
+      .readFileSync(ledger)
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line)),
+  ).toEqual([
+    expect.objectContaining({ attempt: 1, diagnosis: expect.objectContaining({ kind: 'crash' }) }),
+    expect.objectContaining({ type: 'run', status: 'done', steps: 1 }),
+  ])
+})
+
 it('#704 AC-4: quick retries a killed agent and records both diagnoses', async () => {
   write(
     '.pair/adoption/tech/workflows/quick.yaml',
@@ -1956,7 +2071,7 @@ it.each([true, false])(
     const text = `version: 1
 name: closure
 steps:
-  implement: { kind: implement }
+  implement: { kind: implement, retries: 1 }
   late: { kind: generic, skill: my-skill, when: { status: [Done] } }
   review: { kind: review }
   gate: { kind: gate, with: { checks: [head-unchanged] } }
@@ -1971,7 +2086,23 @@ steps:
     const path = join(dir, 'state.json')
     const state = JSON.parse(fs.readFileSync(path))
     state.steps = {
-      implement: { state: 'ok', outputs: { pr: 12, head: HEAD } },
+      implement: {
+        state: 'ok',
+        executions: 2,
+        attempts: [
+          {
+            attempt: 1,
+            kind: 'crash',
+            detail: 'Connection refused',
+            elapsedMs: 12,
+            exitCode: 1,
+            signal: null,
+            stderrTail: [],
+            origin: { host: 'pair-run', engine: 'codex' },
+          },
+        ],
+        outputs: { pr: 12, head: HEAD },
+      },
       late: { state: 'skipped' },
       review: { state: 'ok', outputs: { reviewedHead: HEAD } },
       gate: { state: 'ok', outputs: { gatedHead: HEAD } },
@@ -2001,11 +2132,13 @@ steps:
         JSON.stringify({ status: 'ok', summary: 'Closed', merged: true, mergeCommit: HEAD }),
       )
     })
-    const resumed = run(['closure'], {}, {}, { readCard: async () => 'closed' })
+    const resumed = run(['closure'], {}, { telemetry: true }, { readCard: async () => 'closed' })
     if (matches) {
       expect(await resumed).toBe(0)
       expect(states('closure-627')).toMatchObject({ late: 'skipped', merge: 'ok' })
       expect(actions.filter(action => action === 'merge')).toHaveLength(1)
+      expect(lines.join('\n')).toContain('Process fault — implement attempt 1 (crash)')
+      expect(fs.readFileSync(join(dir, 'telemetry.jsonl'))).toContain('"diagnosis"')
     } else {
       await expect(resumed).rejects.toThrow('card-closed')
       expect(actions).not.toContain('merge')
