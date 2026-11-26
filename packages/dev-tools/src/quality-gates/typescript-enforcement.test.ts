@@ -178,20 +178,58 @@ it('#757 AC-4: accepts only reviewed declarations backed by their CSS files', ()
   expect(cssProblems(root, sources)).toEqual([])
 })
 
-it('#757 AC-4 R758-01: rejects an unreviewed legacy CSS declaration', () => {
-  const cwd = fs.mkdtempSync(join(tmpdir(), 'pair-css-declarations-'))
+function withCssFixture(run: (cwd: string) => void) {
+  const cwd = fs.mkdtempSync(join(tmpdir(), 'pair-css-'))
   try {
     for (const declaration of reviewedDeclarations) {
       fs.mkdirSync(dirname(join(cwd, declaration)), { recursive: true })
       fs.writeFileSync(join(cwd, declaration), 'export {}\n')
       fs.writeFileSync(join(cwd, declaration.replace(/\.d\.css\.ts$/, '.css')), '')
     }
+    run(cwd)
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true })
+  }
+}
+
+it('#757 AC-4 R758-01: rejects an unreviewed legacy CSS declaration', () => {
+  withCssFixture(cwd => {
     const legacy = 'packages/brand/dev/missing-review.css.d.ts'
     fs.writeFileSync(join(cwd, legacy), 'export {}\n')
     expect(cssProblems(cwd, [...reviewedDeclarations, legacy])).toEqual([
       `Unreviewed CSS declaration: ${legacy}`,
     ])
-  } finally {
-    fs.rmSync(cwd, { recursive: true, force: true })
-  }
+  })
+})
+
+it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types', () => {
+  withCssFixture(cwd => {
+    const importer = 'apps/website/app/style-fixture.ts'
+    const stylesheet = join(cwd, 'apps/website/app/fixture.module.css')
+    const specifier = './fixture.module.css'
+    fs.writeFileSync(join(cwd, importer), `import styles from '${specifier}'\nexport { styles }\n`)
+    fs.writeFileSync(
+      join(cwd, 'tsconfig.json'),
+      JSON.stringify({
+        extends: join(root, 'apps/website/tsconfig.json'),
+        compilerOptions: { incremental: false },
+        files: [importer],
+      }),
+    )
+
+    const sources = [...reviewedDeclarations, importer]
+    fs.writeFileSync(stylesheet, '')
+    expect(cssProblems(cwd, sources)).toEqual([])
+    fs.rmSync(stylesheet)
+
+    const checked = spawnSync(process.execPath, [compiler, '--pretty', 'false'], {
+      cwd,
+      encoding: 'utf8',
+    })
+    expect(checked.error).toBeUndefined()
+    expect(checked.status, checked.stdout + checked.stderr).toBe(0)
+    expect(cssProblems(cwd, sources)).toEqual([
+      `Missing stylesheet: ${importer} imports ${specifier}`,
+    ])
+  })
 })
