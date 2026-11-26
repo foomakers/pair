@@ -128,6 +128,89 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
     })
   })
 
+  const formatError = 'missing-field:inputHead'
+  const handoff = (reason: string) => JSON.stringify({ status: 'failed', reason })
+  const keepAlive = 'setInterval(() => {}, 1000)'
+
+  it.each([
+    { label: 'file-only format error', file: handoff(formatError), retry: true },
+    {
+      label: 'stream format error',
+      streamResult: handoff(formatError),
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'stream decision with a live child',
+      streamResult: handoff('gate-red'),
+      file: handoff(formatError),
+      shutdown: keepAlive,
+      failure: 'halted: handoff rejected',
+    },
+    { label: 'file-only decision', file: handoff('gate-red'), failure: 'halted: handoff rejected' },
+    { label: 'malformed file', file: '{broken', failure: 'halted: handoff rejected' },
+    { label: 'missing file', failure: 'halted: handoff rejected' },
+    {
+      label: 'unclean exit',
+      file: handoff(formatError),
+      shutdown: 'process.exitCode = 1',
+      failure: 'last-message finalization did not exit cleanly',
+    },
+    {
+      label: 'finalization timeout',
+      file: handoff(formatError),
+      shutdown: keepAlive,
+      failure: 'stalled: no terminal event within 1s',
+    },
+  ])('#704 F12: handles a Codex loop HALT with $label', async row => {
+    const { file, streamResult, shutdown, failure, retry } = row
+    const prompts: string[] = []
+    const { out } = capture()
+    const code = await handleRunCommand(
+      parseRunCommand({ root: '212', engine: 'codex', iterationTimeout: '1' }),
+      projectFs(),
+      {
+        runIteration: input => {
+          prompts.push(input.promptText)
+          const first = prompts.length === 1
+          const text = first
+            ? ['pair-loop: HALT — handoff rejected', streamResult].join('\n')
+            : 'done'
+          const events = [
+            { type: 'item.completed', item: { type: 'agent_message', text } },
+            { type: 'turn.completed' },
+          ]
+          const stream = events.map(event => JSON.stringify(event)).join('\n') + '\n'
+          const program = `const fs = require('node:fs')
+            const output = process.argv[process.argv.indexOf('--output-last-message') + 1]
+            const file = ${first ? JSON.stringify(file) : 'undefined'}
+            if (file !== undefined) fs.writeFileSync(output, file)
+            fs.writeFileSync(1, ${JSON.stringify(stream)})
+            ${first ? (shutdown ?? '') : ''}`
+          return spawnIteration({
+            ...input,
+            cwd: tmpdir(),
+            engine: {
+              ...input.engine,
+              command: process.execPath,
+              headlessArgs: ['-e', program, '--'],
+            },
+          })
+        },
+        runAudit: () => undefined,
+      },
+    )
+
+    expect(prompts).toHaveLength(retry ? 2 : 1)
+    expect(code).toBe(retry ? 0 : 1)
+    if (retry) {
+      expect(prompts[1]).toContain(`handoff validation: ${formatError}.`)
+      expect(prompts[1]).toContain(prompts[0]!)
+    } else {
+      expect(out()).toContain(failure)
+    }
+  })
+
   it('counts a prepared terminal card separately from failures', async () => {
     const runIteration: IterationRunner = input => {
       input.onRunEvent?.({ event: 'card-end', card: '596', status: 'prepared' })
