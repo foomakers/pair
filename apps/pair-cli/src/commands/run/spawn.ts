@@ -78,6 +78,8 @@ export function resolveIdleTimeout(input: {
 export interface SpawnIterationInput extends EngineArgsInput {
   /** Capture process facts for workflow attempt history. */
   readonly diagnoseProcess?: boolean
+  /** Whether the caller already received a usable result via onEvent. Overrides the default JSON check. */
+  readonly hasStreamResult?: () => boolean
   /** Opt-in total wall-clock cap per iteration (`--iteration-timeout`); absent ⇒ none (US-573). */
   readonly timeoutSeconds?: number | undefined
   /** The hang guard: seconds without an engine event before the engine is stopped (default 30 min). */
@@ -202,7 +204,9 @@ function openLastMessageChannel(engine: EngineDefinition) {
       const lastMessage = readFileSync(path, 'utf-8')
       if (lastMessage.trim() === '') return undefined
       const final = parseFinalResult(lastMessage)
-      return { ...result, lastMessage, ...(final !== undefined && { final }) }
+      const merged = { ...result, lastMessage }
+      delete merged.final
+      return final === undefined ? merged : { ...merged, final }
     },
     close: () => rmSync(dir, { recursive: true, force: true }),
   }
@@ -353,7 +357,7 @@ function handleReadError(error: unknown, transport: ReturnType<typeof watchTrans
   if (code === 'EPIPE') transport.capture(error)
 }
 
-async function waitForExit(child: ChildProcess, timeoutMs = 1000): Promise<void> {
+async function waitForExit(child: ChildProcess, until?: Promise<unknown>): Promise<void> {
   // Pipe EOF can arrive before the child emits exit, even after a signal killed it.
   if (child.pid === undefined || hasExited(child)) return
   await new Promise<void>(resolve => {
@@ -362,16 +366,20 @@ async function waitForExit(child: ChildProcess, timeoutMs = 1000): Promise<void>
       child.off('exit', done)
       resolve()
     }
-    const timer = setTimeout(done, timeoutMs).unref()
+    const timer = until === undefined ? setTimeout(done, 1000).unref() : undefined
     child.once('exit', done)
+    void until?.then(done)
   })
 }
 
-function needsLastMessage(result: IterationResult | undefined): result is IterationResult {
+function needsLastMessage(
+  result: IterationResult | undefined,
+  hasStreamResult: SpawnIterationInput['hasStreamResult'],
+): result is IterationResult {
   return (
     result !== undefined &&
-    result.final === undefined &&
-    (result.outcome === 'success' || result.cause === 'halted')
+    (result.outcome === 'success' || result.cause === 'halted') &&
+    !(hasStreamResult?.() ?? result.final !== undefined)
   )
 }
 
@@ -389,7 +397,7 @@ async function finalizeLastMessage(
 ): Promise<IterationResult> {
   // Drain pending stdout while Codex finishes writing its file and exits.
   child.stdout.resume()
-  await Promise.race([waitForExit(child, ENGINE_GRACE_MS), transport.failed])
+  await waitForExit(child, Promise.race([watchdog.grace, transport.failed]))
   if (watchdog.stopped() !== undefined || transport.hasError()) return result
   if (child.exitCode === 0) return channel.merge(result) ?? result
   const failure = {
@@ -405,14 +413,10 @@ async function cleanUpIteration(
   child: EngineChild,
   { channel, watchdog, transport }: IterationLifecycle,
   diagnoseProcess: boolean | undefined,
-  awaitingLastMessage: boolean,
 ): Promise<void> {
   watchdog.clear()
   if (channel) child.stdout.destroy()
-  const forced =
-    watchdog.stopped() !== undefined ||
-    transport.hasError() ||
-    (awaitingLastMessage && !hasExited(child))
+  const forced = watchdog.stopped() !== undefined || transport.hasError()
   try {
     await reap(child, forced, diagnoseProcess)
   } finally {
@@ -484,17 +488,15 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   const watchdog = createWatchdog(input, signal => child.kill(signal))
   const lifecycle = { channel, watchdog, transport }
   let result: IterationResult | undefined
-  let awaitingLastMessage = false
   try {
     result = await readEngineResult(child, input, watchdog, transport)
-    if (channel && needsLastMessage(result)) {
-      awaitingLastMessage = true
+    if (channel && needsLastMessage(result, input.hasStreamResult)) {
       result = await finalizeLastMessage(child, result, channel, lifecycle)
     }
   } catch (error) {
     handleReadError(error, transport)
   } finally {
-    await cleanUpIteration(child, lifecycle, input.diagnoseProcess, awaitingLastMessage)
+    await cleanUpIteration(child, lifecycle, input.diagnoseProcess)
   }
   const stopped = watchdog.stopped()
   const failure = transport.finish()
