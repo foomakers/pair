@@ -815,6 +815,7 @@ function exhaustedEnding(
   outcome: RunOutcome,
   sink: ConsoleSink,
   fs: Services['fs'],
+  verbose: boolean,
 ): number | undefined {
   if (outcome.run === 'done' || outcome.run === 'skipped') return undefined
   const saved = savedWorkflow({ card: request.card, restart: false }, runDir, fs)
@@ -823,7 +824,8 @@ function exhaustedEnding(
   if (stopped?.run !== outcome.run) return undefined
   const { id, until } = stopped.step
   const last = saved.state.steps[`${id}/${until}`]
-  const why = `${saved.state.steps[id]?.summary}; last until: ${last?.state} — ${last?.summary}`
+  const summary = saved.state.steps[id]?.summary ?? 'loop exhausted'
+  const why = `${summary}; last until: ${last?.state} — ${last?.summary}`
   const { status, exit } = ENDINGS[stopped.run]
   if (stopped.run === 'parked' && watch?.(runDir) === true)
     report?.({
@@ -836,10 +838,10 @@ function exhaustedEnding(
     event: 'card-end',
     card: request.card,
     status,
-    reason: why,
+    reason: verbose ? why : summary,
   })
   const flag = stopped.run === 'failed' ? '--restart' : '--more-rounds <n>'
-  console.log(`  Run: ${why}. Resume with: ${resumeCommand(request)} ${flag}`)
+  if (verbose) console.log(`  Run: ${why}. Resume with: ${resumeCommand(request)} ${flag}`)
   return exit
 }
 
@@ -898,7 +900,10 @@ async function runOnConsole(
     )
     reportRunOutcome(opened, outcome)
     reportProcessFaults(outcome.faults)
-    return exhaustedEnding(opened, outcome, sink, fs) ?? conclude(outcome, opened, sink)
+    return (
+      exhaustedEnding(opened, outcome, sink, fs, config.verbose === true) ??
+      conclude(outcome, opened, sink)
+    )
   } finally {
     sink.finish()
     restore()
@@ -929,10 +934,12 @@ function startOptions({ resolved, request }: Opened, replay?: StepReplay) {
 }
 
 /** The exit code of a run that has nothing to launch, with its message; undefined when steps remain. */
-function stopOf(status: string, request: Opened['request']): number | undefined {
+function stopOf(status: string, request: Opened['request'], verbose: boolean): number | undefined {
   if (status === 'parked') {
     console.log(
-      `  Run: loop reached max — resume with: ${resumeCommand(request)} --more-rounds <n>`,
+      verbose
+        ? `  Run: loop reached max — resume with: ${resumeCommand(request)} --more-rounds <n>`
+        : '  Run: awaiting-human — grant more rounds with --more-rounds <n>.',
     )
     return 0
   }
@@ -980,8 +987,13 @@ function recordIncludeSources(
   }
 }
 
-function reportStopped(opened: Opened, status: string, fs: FileSystemService): number | undefined {
-  const stopped = stopOf(status, opened.request)
+function reportStopped(
+  opened: Opened,
+  status: string,
+  fs: FileSystemService,
+  verbose: boolean,
+): number | undefined {
+  const stopped = stopOf(status, opened.request, verbose)
   if (stopped === undefined) return undefined
   opened.report?.({
     id: opened.request.card,
@@ -1072,7 +1084,7 @@ async function drive(
     runDir,
     deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   )
-  const stopped = reportStopped(opened, started.status, fs)
+  const stopped = reportStopped(opened, started.status, fs, config.verbose === true)
   if (stopped !== undefined) {
     await restoreStoppedFaults({ files: fs, dir: runDir }, started.status, config, resolved)
     return stopped

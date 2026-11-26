@@ -248,9 +248,10 @@ describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
         return { outcome: 'success', detail: 'terminal event: success' }
       },
     }
-    const command = parseRunCommand({ cwd: project, card: ids.join(','), parallel: '2' }, [
-      'refinement',
-    ])
+    const command = parseRunCommand(
+      { cwd: project, card: ids.join(','), parallel: '2', verbose: true },
+      ['refinement'],
+    )
     if (noSummary) {
       const writeFile = fs.writeFileSync
       const summaryWrite = vi.spyOn(fs, 'writeFileSync').mockImplementation((path, content) => {
@@ -354,7 +355,7 @@ it.each([
   const batch = run(
     ['quick'],
     OK,
-    { card: '9,10' },
+    { card: '9,10', verbose: true },
     {
       readSelection: async () => ({
         cards: ['9', '10'].map(id => ({
@@ -452,7 +453,7 @@ it.each([
     const exit = await run(
       ['quick'],
       OK,
-      { card: '9,10', ...options },
+      { card: '9,10', verbose: true, ...options },
       {
         readSelection: async () => ({
           cards: ['9', '10'].map(id => ({
@@ -937,7 +938,7 @@ it.each(['refine', 'tasks'])(
         board: { getState: async () => facts.boardStatus, setState: async () => {} },
       },
     )
-    const options = { cwd: project, card: '12,13', filter: 'risk:green' }
+    const options = { cwd: project, card: '12,13', filter: 'risk:green', verbose: true }
     write(`${backlog}/13.md`, STORY_BEFORE_TASKS + STORY_TASKS)
     const command = parseRunCommand(options, ['refinement'])
     expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(1)

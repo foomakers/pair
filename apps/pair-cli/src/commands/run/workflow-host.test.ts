@@ -587,7 +587,7 @@ ${declaresAssign ? 'assign: me\n' : ''}steps:
         'my-skill': () => fenced({ status: 'ok', summary: 'Finished' }),
         'pair-process-implement': () => IMPLEMENTED,
       }
-      const batch = () => run(['quick'], skills, { card: '627,628,629' }, workflow)
+      const batch = () => run(['quick'], skills, { card: '627,628,629', verbose: true }, workflow)
       const launches = () =>
         launched.map(({ cwd, promptText }) => `${basename(cwd)}:${skillOf(promptText)}`)
       const summary = (id: string) => lines.find(line => line.trimStart().startsWith(`#${id}:`))
@@ -1512,6 +1512,7 @@ steps:
       'pair-process-fix': () => fixed,
     }
     expect(await run(['quick'], skills)).toBe(0)
+    expect(lines.join('\n')).not.toContain('last until:')
     expect(states()).toMatchObject({
       rounds: 'exhausted',
       'rounds/review': 'failed',
@@ -1582,6 +1583,7 @@ steps:
       expect(reviews).toBe(2)
       expect(await batch).toBe(0)
       expect(launched.some(launch => basename(launch.cwd) === '628')).toBe(true)
+      expect(lines.join('\n')).not.toContain('Summary:')
       expect(waiting).toBe(false)
     } finally {
       vi.useRealTimers()
@@ -1595,11 +1597,15 @@ steps:
         '.pair/adoption/tech/workflows/quick.yaml',
         loop.replace('on-max: escalate', `on-max: ${action}`),
       )
-      await run(['quick'], {
-        ...OK,
-        'pair-process-review': () => failedReview,
-        'pair-process-fix': () => fixed,
-      })
+      await run(
+        ['quick'],
+        {
+          ...OK,
+          'pair-process-review': () => failedReview,
+          'pair-process-fix': () => fixed,
+        },
+        { verbose: true },
+      )
       const output = lines.join('\n')
       expect(output).toContain('loop rounds reached 1 rounds')
       expect(output).toContain('gap')

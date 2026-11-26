@@ -365,17 +365,24 @@ function previewBatch(plan: Plan): number {
   return [...plan.prior.values()].some(card => card.outcome === 'failed') ? 1 : 0
 }
 
-function writeSummary(fs: Services['fs'], summary: string, cards: readonly BatchOutcome[]): number {
+function writeSummary(
+  fs: Services['fs'],
+  summary: string,
+  cards: readonly BatchOutcome[],
+  verbose: boolean,
+): number {
   const totals: Partial<Record<Outcome, number>> = {}
   for (const result of cards) {
     totals[result.outcome] = (totals[result.outcome] ?? 0) + 1
-    printOutcome(result)
+    if (verbose) printOutcome(result)
   }
   fs.mkdirSync(dirname(summary), { recursive: true })
   fs.writeFileSync(summary, `${JSON.stringify({ cards, totals }, null, 2)}\n`)
-  console.log(`  Summary: ${summary} · ${JSON.stringify(totals)}`)
-  if (totals.waiting || totals.parked)
-    console.log('  Resume parked and waiting cards by repeating this command.')
+  if (verbose) {
+    console.log(`  Summary: ${summary} · ${JSON.stringify(totals)}`)
+    if (totals.waiting || totals.parked)
+      console.log('  Resume parked and waiting cards by repeating this command.')
+  }
   return totals.failed ? 1 : 0
 }
 
@@ -437,8 +444,10 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
     plain: config.verbose !== true,
   })
   const restore = routeConsoleTo(sink)
+  const displayed = new Set<string>()
   const launch = (card: WorkflowCard) =>
     renderBatchCard(sink, card, async () => {
+      displayed.add(card.id)
       const run = {
         ...request,
         card: card.id,
@@ -459,8 +468,8 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
         releases.forEach(release => release())
         watches.forEach(release => release())
       },
-      async () =>
-        writeSummary(services.fs, plan.summary, [
+      async () => {
+        const cards = [
           ...(await scheduleWorkflowCards(selected, limit, prior, launch, {
             intervalMs,
             watches: result => result.checkpoint !== undefined,
@@ -487,7 +496,18 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
             },
           })),
           ...excluded,
-        ]),
+        ]
+        for (const result of cards) {
+          if (displayed.has(result.id)) continue
+          sink.event({
+            event: 'card-end',
+            card: result.id,
+            status: result.outcome,
+            ...(result.reason && { reason: result.reason }),
+          })
+        }
+        return writeSummary(services.fs, plan.summary, cards, config.verbose === true)
+      },
     )
   } finally {
     watches.forEach(release => release())
