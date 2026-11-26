@@ -75,9 +75,19 @@ function tokenArgs(token) {
   return args.slice(token.index, token.index + (token.inlineValue === false ? 2 : 1))
 }
 
-function selectionError(path, status) {
+function selectionError(path) {
   process.stderr.write(`No files found to lint at ${JSON.stringify(path)}.\n`)
-  process.exitCode = status
+  process.exitCode = 2
+}
+
+function matchingFiles(glob, pattern) {
+  // Keep file symlinks under their matched paths without descending into directory symlinks.
+  return glob.sync(pattern, {
+    dot: true, followSymbolicLinks: false, onlyFiles: false, objectMode: true,
+    ignore: ['**/.git/**', '**/node_modules/**'],
+  }).filter(({ dirent, path }) => dirent.isFile()
+    || (dirent.isSymbolicLink() && statSync(path, { throwIfNoEntry: false })?.isFile()))
+    .map(({ path }) => path)
 }
 
 function prepareDirectLint() {
@@ -88,8 +98,8 @@ function prepareDirectLint() {
   const maxArg = values['max-warnings']
   const max = Number(maxArg)
   const maxTokens = tokens.filter(token => token.kind === 'option' && token.name === 'max-warnings')
-  const countIgnored = maxTokens.length === 1 && /^\+?\d+$/.test(maxArg)
-    && Number.isSafeInteger(max) && !('debug' in values)
+  const countIgnored = maxTokens.length === 1 && /^\+?\d+$/.test(maxArg) && Number.isSafeInteger(max)
+  const reportIgnored = !('debug' in values) && (maxTokens.length === 0 || countIgnored)
   const replacements = new Map()
   const ignored = new Map()
 
@@ -99,30 +109,28 @@ function prepareDirectLint() {
     const directory = stat?.isDirectory()
     const pattern = !stat && glob.isDynamicPattern(path)
     const collection = directory || pattern
-    if (!stat && !pattern && strictSelection) return selectionError(path, 1)
+    if (!stat && !pattern && strictSelection) return selectionError(path)
 
-    const paths = pattern
-      ? glob.sync(path, { dot: true, followSymbolicLinks: false, ignore: ['**/.git/**', '**/node_modules/**'] })
-      : [path]
+    const paths = pattern ? matchingFiles(glob, path) : [path]
     if (directory) paths.push(...gitIgnoredFiles(path))
     // Prefix relative paths so filenames beginning with a dash stay operands.
     const operands = paths.map(file => isAbsolute(file) || file.startsWith('./') ? file : `./${file}`)
     // An unmatched operand prevents Oxlint from falling back to the whole cwd.
     replacements.set(token.index, operands.length ? operands : [path])
 
-    if (collection ? !strictSelection : !countIgnored || !stat?.isFile()) continue
-    if (!operands.length) return selectionError(path, 2)
+    if (collection ? !strictSelection : !reportIgnored || !stat?.isFile()) continue
+    if (!operands.length) return selectionError(path)
     // Ask Oxlint to apply its ignore rules without linting or writing files.
     const selection = runLint(['--debug=files', ...selectionArgs, ...operands], capture)
     if (selection.status !== 0) return finishLint(selection)
     if (selection.stdout.length) continue
-    if (collection) return selectionError(path, 2)
+    if (collection) return selectionError(path)
     const absolute = resolve(path)
     if (!ignored.has(absolute)) ignored.set(absolute, path)
   }
 
-  const remainingWarnings = max - ignored.size
-  if (ignored.size) {
+  const remainingWarnings = countIgnored ? max - ignored.size : Infinity
+  if (countIgnored && ignored.size) {
     const [token] = maxTokens
     replacements.set(token.index, [`--max-warnings=${Math.max(0, remainingWarnings)}`])
     if (token.inlineValue === false) replacements.set(token.index + 1, [])
@@ -132,7 +140,7 @@ function prepareDirectLint() {
     warnings: [...ignored.values()].map(filename => ({
       filename, severity: 'warning', message: 'File ignored by lint configuration or unsupported file type.', labels: [],
     })),
-    overLimit: ignored.size > 0 && remainingWarnings < 0,
+    overLimit: remainingWarnings < 0,
   }
 }
 
