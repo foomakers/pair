@@ -2,7 +2,8 @@ import { relayHostRetries } from './host-retry-audit'
 import { runHostProcess } from './host-process'
 import { spawnSync } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
-import { isAbsolute, join, posix, relative, resolve, win32 } from 'path'
+import { defaultSkillPaths, skillsLayout } from '@pair/workflows/cli'
+import { join, posix, resolve, win32 } from 'path'
 import { pathToFileURL } from 'url'
 import type { FileSystemService } from '@pair/content-ops'
 import { extractRegistries, type Config } from '#registry'
@@ -19,7 +20,6 @@ import { POLICY_PATH } from './policy-sections'
  * rule and relays their answer, verbatim, typed.
  */
 
-const SKILLS_REGISTRY = 'skills'
 const CYCLE_SKILL_NAME = 'pair-workflow-cycle'
 
 export interface CycleScriptsLocation {
@@ -54,45 +54,14 @@ export function locateCycleScripts(
   config: Config,
   projectRoot: string,
 ): CycleScriptsLocation {
-  const registry = extractRegistries(config)[SKILLS_REGISTRY]
-  const targets = registry?.targets?.map(target => target.path) ?? ['.claude/skills']
-  const directories = candidateDirectories(registry?.prefix)
-
-  for (const target of targets) {
-    const found = findInstalledUnder(fs, projectRoot, target, directories)
-    if (found !== undefined) return { scriptsDir: join(found, 'scripts') }
-  }
+  const found = defaultSkillPaths(projectRoot, skillsLayout(config), CYCLE_SKILL_NAME).find(dir =>
+    fs.existsSync(join(dir, 'SKILL.md')),
+  )
+  if (found !== undefined) return { scriptsDir: join(found, 'scripts') }
   throw new Error(
     `skill-missing: ${CYCLE_SKILL_NAME} is not installed under any configured skills target — ` +
       `install it (\`pair-cli install\`) before running \`pair-cli run --card\` on a Ready card.`,
   )
-}
-
-/** Every directory name the skill could be installed under, first match wins. */
-function candidateDirectories(prefix: string | undefined): readonly string[] {
-  if (!prefix) return [CYCLE_SKILL_NAME]
-  return [CYCLE_SKILL_NAME, `${prefix}-${CYCLE_SKILL_NAME}`, stripPrefix(CYCLE_SKILL_NAME, prefix)]
-}
-
-/** The first `<target>/<directory>` (of the candidates) that stays inside `target` and has a `SKILL.md`. */
-function findInstalledUnder(
-  fs: FileSystemService,
-  projectRoot: string,
-  target: string,
-  directories: readonly string[],
-): string | undefined {
-  const targetRoot = resolve(projectRoot, target)
-  for (const directory of directories) {
-    const candidate = resolve(targetRoot, directory)
-    const inside = relative(targetRoot, candidate)
-    if (inside.startsWith('..') || isAbsolute(inside)) continue
-    if (fs.existsSync(join(candidate, 'SKILL.md'))) return candidate
-  }
-  return undefined
-}
-
-function stripPrefix(name: string, prefix: string): string {
-  return name.startsWith(`${prefix}-`) ? name.slice(prefix.length + 1) : name
 }
 
 // ── typed wrappers over the real scripts (real spawn, never a fixture standing in for them) ────

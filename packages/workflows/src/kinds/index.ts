@@ -31,6 +31,15 @@ export const kindByName: Readonly<Record<KindName, StepKind>> = {
   'plan-tasks': planTasks,
 }
 
+/** Explicit names are literal. Only a kind default follows the installation's naming convention. */
+export function skillForStep(
+  step: Pick<Step, 'skill' | 'kind'>,
+  installed: (name: string) => string | undefined,
+) {
+  const name = step.kind === 'loop' ? undefined : kindByName[step.kind].defaultSkill
+  return step.skill ?? (name === undefined ? undefined : (installed(name) ?? name))
+}
+
 /** Whether the workflow needs a session conversation for this step. */
 export function interactiveOf({
   kind,

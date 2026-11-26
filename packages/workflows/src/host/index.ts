@@ -54,6 +54,8 @@ export interface WorkflowHost {
   readonly style: InvocationStyle
   /** A step whose engine is not the host's own: how that engine is told to run a skill. */
   readonly styleOf?: (stepId: string) => InvocationStyle
+  /** Installed skill name for this step. */
+  readonly skillOf?: (step: StepLaunch) => string
   /** The host's prompt-safety check. */
   readonly isSafeText: (value: string) => boolean
   /** How a headless host parks a step that needs the session conversation. */
@@ -611,7 +613,8 @@ export async function runStep(
   writer?: Writer,
 ): Promise<StepEvent> {
   const launch = await startStep(host, step)
-  const result = await executeMetered(host, run, launch, writer)
+  const installed = host.skillOf ? { ...launch, uses: host.skillOf(launch) } : launch
+  const result = await executeMetered(host, run, installed, writer)
   await flushOutcomes(host, run, writer)
   return endStep(host, step, result)
 }

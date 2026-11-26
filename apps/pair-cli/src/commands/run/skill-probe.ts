@@ -1,4 +1,9 @@
-import { findSkillFile, skillsLayout } from '@pair/workflows/cli'
+import {
+  defaultSkillPaths,
+  findDefaultSkill,
+  findSkillFile,
+  skillsLayout,
+} from '@pair/workflows/cli'
 import type { FileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
 import type { SkillProbe } from './resolve-skill'
@@ -36,4 +41,11 @@ export function readInstalledSkill(
 ): string | undefined {
   const path = findSkillFile(isFile(fs), projectRoot, skillsLayout(config), name)
   return path === undefined ? undefined : fs.readFileSync(path)
+}
+
+/** The name an implicit workflow step invokes in this installation. */
+export function workflowDefaultSkill(fs: FileSystemService, config: Config, root: string) {
+  const layout = skillsLayout(config)
+  return (name: string) =>
+    findDefaultSkill(isFile(fs), root, defaultSkillPaths(root, layout, name), name)
 }

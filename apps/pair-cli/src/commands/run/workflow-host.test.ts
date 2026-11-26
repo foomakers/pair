@@ -719,14 +719,9 @@ describe('validation before any launch (AC-2, AC-3)', () => {
     write(file, definition)
     expect(await run(['quick'], {}, { dryRun: true })).toBe(0)
     expect(lines.some(line => line.includes(`refine: refine-story skill=${skill}`))).toBe(true)
-    const refined = fenced({
-      status: 'ok',
-      summary: 'Refined',
-      boardStatus: 'Ready',
-      riskTag: 'green',
-      openQuestions: [],
+    await run(['quick'], {
+      [skill]: () => fenced({ status: 'needs-decision', summary: 'Question' }),
     })
-    expect(await run(['quick'], { [skill]: () => refined })).toBe(0)
     expect(launched.map(one => skillOf(one.promptText))).toEqual([skill])
   })
 

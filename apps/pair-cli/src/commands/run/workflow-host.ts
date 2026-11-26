@@ -1,9 +1,11 @@
+import { workflowDefaultSkill } from './skill-probe'
 import { savedRunState, savedWorkflow } from './workflow-saved-state'
 import { prepareReplayHead } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
 import {
+  skillForStep,
   cardStateOf,
   cardStateToConfirm,
   completedRun,
@@ -195,6 +197,7 @@ async function cycleWorktree(input: WorktreeInput): Promise<string> {
 }
 
 interface Resolved {
+  readonly defaultSkill: ReturnType<typeof workflowDefaultSkill>
   readonly workflow: Workflow
   readonly source: Located
   readonly project: Config
@@ -309,6 +312,7 @@ export function resolveWorkflowDefinition(
     return undefined
   }
   return {
+    defaultSkill: workflowDefaultSkill(fs, project, cwd),
     workflow: checked.workflow,
     source: expandedWorkflowSource(checked.workflow, source),
     project,
@@ -775,6 +779,8 @@ async function runOnConsole(
         style: resolved.engine.engine.skillInvocationStyle,
         isSafeText: isSafePromptText,
         parkInteractive: INTERACTIVE_PARK,
+        skillOf: step =>
+          skillForStep(stepOf(resolved, step.id), resolved.defaultSkill) ?? step.uses,
         styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
         ...hostKindsOf(opened, services),
@@ -1105,7 +1111,7 @@ function printWorkflowPreview(resolved: Resolved): number {
   }
   addressedSteps(resolved.workflow).forEach(step => {
     const host = step.kind === 'loop' || kindByName[step.kind].host === true
-    const skill = host ? undefined : (step.skill ?? kindByName[step.kind].defaultSkill)
+    const skill = host ? undefined : skillForStep(step, resolved.defaultSkill)
     const assignment =
       step.kind === 'loop'
         ? ''

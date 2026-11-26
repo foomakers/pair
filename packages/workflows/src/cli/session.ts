@@ -32,7 +32,7 @@ import {
   telemetryWriter,
   type StepEvent,
 } from '../host'
-import { kindByName } from '../kinds'
+import { skillForStep, kindByName } from '../kinds'
 import { effectiveSelection, type CardFacts } from '../select'
 import { reopenRun, type Usage } from '../telemetry'
 import { prepareReplayHead } from '../worktree'
@@ -345,7 +345,7 @@ function sessionLaunch(project: Project, launch: StepLaunch, steps: readonly Ste
     step,
     resolved: {
       ...launch,
-      uses: step.skill ?? sessionDefaultSkill(project, launch.uses),
+      uses: skillForStep(step, name => sessionDefaultSkill(project, name)) ?? launch.uses,
       interactive: sessionInteractiveOf(launch),
     },
   }

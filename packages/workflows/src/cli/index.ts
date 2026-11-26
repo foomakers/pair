@@ -12,7 +12,13 @@ export { riskTagFamily, sectionBodies } from './risk-tag-family'
 export { canCommentOnCard } from '../worktree/session'
 export * from './card-lock'
 export { livenessOf, readHolder, type HolderNote, type Liveness } from './lock-holder'
-export { findSkillFile, skillPaths, skillsLayout } from './skill-paths'
+export {
+  defaultSkillPaths,
+  findDefaultSkill,
+  findSkillFile,
+  skillPaths,
+  skillsLayout,
+} from './skill-paths'
 export {
   applyProjectConfig,
   assertSkipRegistries,
