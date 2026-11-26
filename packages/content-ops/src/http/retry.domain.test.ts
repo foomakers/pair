@@ -3,7 +3,10 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import ts from 'typescript'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// Each control invokes tsc on the full project. Allow for concurrent CI jobs.
+vi.setConfig({ testTimeout: 30_000 })
 
 const packageRoot = resolve(__dirname, '../..')
 const model = 'src/http/retry.domain.ts'
@@ -23,7 +26,7 @@ function compile(workspace: string) {
       '--pretty',
       'false',
     ],
-    { cwd: workspace, encoding: 'utf8' },
+    { cwd: workspace, encoding: 'utf8', timeout: 25_000 },
   )
   if (result.error) throw result.error
   const output = result.stdout + result.stderr
