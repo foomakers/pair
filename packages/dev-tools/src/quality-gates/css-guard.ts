@@ -77,7 +77,6 @@ function hasAmbientStylesheets(node: ts.Node, reviewed = false): boolean {
 
 function effectiveTypeProblems(root: string, paths: string[], sources: Set<string>) {
   const problems = new Set<string>()
-  const inspected = new Set(sources)
   const nextGlobal = join(root, 'apps/website/node_modules/next/types/global.d.ts')
   const reviewedNextGlobal = isFile(nextGlobal) ? fs.realpathSync(nextGlobal) : undefined
 
@@ -99,11 +98,12 @@ function effectiveTypeProblems(root: string, paths: string[], sources: Set<strin
       options: config.options,
       projectReferences: config.projectReferences ?? [],
     })
+    const inspected = new Set(sources)
     for (const source of program.getSourceFiles()) {
       const file = relative(root, source.fileName)
       if (inspected.has(file)) continue
       inspected.add(file)
-      const reviewed = source.fileName === reviewedNextGlobal
+      const reviewed = path.startsWith('apps/website/') && source.fileName === reviewedNextGlobal
       if (hasAmbientStylesheets(source, reviewed)) problems.add(`Ambient CSS declaration: ${file}`)
     }
   }
