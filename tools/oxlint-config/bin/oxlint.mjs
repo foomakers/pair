@@ -345,11 +345,11 @@ async function checkDomain(paths) {
   if (!files.length) return []
   const { checkNullableDomainProperties } = await import('../domain-checker.mjs')
   return checkNullableDomainProperties(values.tsconfig ?? 'tsconfig.json', files).map(
-    ({ filename, code, property, span }) => ({
+    ({ filename, code, property, span, message }) => ({
       filename,
       code,
       severity: severity === 'error' || severity === 'deny' ? 'error' : 'warning',
-      message: `Remove the resolved null or undefined from ${property} and model absence as a separate variant.`,
+      message: message ?? `Remove the resolved null or undefined from ${property} and model absence as a separate variant.`,
       labels: [{ span }],
     }),
   )

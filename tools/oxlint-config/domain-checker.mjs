@@ -156,13 +156,16 @@ function findNullableProperties(source, checker, symbols) {
   const findings = new Map()
   const inScope = owner => !symbols || symbols.includes(owner)
 
-  function report(type, owner, name, location) {
-    if (!constituents(type).some(part => part.flags & nullish)) return
+  function report(type, owner, name, location, optional = false) {
+    if (!optional && !constituents(type).some(part => part.flags & nullish)) return
     const start = location.getStart(source)
     const { line, character } = source.getLineAndCharacterOfPosition(start)
     const property = owner ? `${owner}.${name}` : name
     findings.set(`${start}:${property}`, {
       property,
+      message: optional
+        ? `Make ${property} required on the appropriate tagged variant.`
+        : undefined,
       span: {
         offset: Buffer.byteLength(source.text.slice(0, start)),
         length: Buffer.byteLength(location.getText(source)),
@@ -176,7 +179,6 @@ function findNullableProperties(source, checker, symbols) {
     for (const type of constituents(checker.getTypeAtLocation(expression))) {
       if (!(type.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection))) continue
       for (const property of checker.getPropertiesOfType(type)) {
-        if (property.flags & ts.SymbolFlags.Optional) continue
         const declaration = property.valueDeclaration
         const local =
           declaration?.getSourceFile() === source &&
@@ -189,6 +191,7 @@ function findNullableProperties(source, checker, symbols) {
           owner,
           property.name,
           location,
+          Boolean(property.flags & ts.SymbolFlags.Optional),
         )
       }
     }
