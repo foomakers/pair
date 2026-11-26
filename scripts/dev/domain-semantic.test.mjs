@@ -148,6 +148,27 @@ export function createRetry(dto: RetryDto) {
   assert.match(JSON.parse(result.stdout).diagnostics[0].message, /createRetry\.cause/)
 })
 
+test('#750 R3 fails package lint when an imported type is no longer exported', t => {
+  const input = 'src/http/inputs.ts'
+  const cwd = workspace(t, {
+    [pilot]: model('cause: Cause', "import type { Cause } from './inputs.js'\n"),
+    [input]: 'export type Cause = string | null\n',
+  })
+  assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, 3, 3]] })
+
+  for (const [source, code] of [
+    ['export type Unrelated = string\n', 'TS2305'],
+    ['type Cause = string | null\nexport {}\n', 'TS2459'],
+  ]) {
+    writeFileSync(join(cwd, input), source)
+    const { status, stdout, stderr } = lint(cwd)
+    const output = stdout + stderr
+    assert.equal(status, 2, output)
+    assert.ok(stderr.includes(code), output)
+    assert.ok(!output.includes(semantic), output)
+  }
+})
+
 test('#750 AC-4 package lint distinguishes project-load errors from findings', t => {
   const cwd = workspace(t, { [pilot]: model('cause: unknown') })
   const project = join(cwd, 'tsconfig.json')
