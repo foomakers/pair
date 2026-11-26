@@ -432,7 +432,10 @@ async function nextCompilation(root: string, build: BuildMode, sources: Map<stri
       if (resolved) await visit(relative(root, resolved), runtime, layer)
     }
   }
-  const appPaths = [...sources.keys()].filter(path => path.startsWith(`${nextApp}/`))
+  // Keep private modules in sources so routes can still reach them through imports.
+  const appPaths = [...sources.keys()].filter(
+    path => path.startsWith(`${nextApp}/`) && !dirname(path).includes('/_'),
+  )
   const segmentFiles = appPaths.filter(path => nextSegmentComponent.test(path))
   for (const { paths, runtime } of nextRouteEntries(sources, appPaths, segmentFiles)) {
     for (const path of paths) await visit(path, runtime, 'rsc')
