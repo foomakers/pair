@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { dirname, join, resolve } from 'path'
 import {
   chooseWorkflow,
+  checkpointCanResume,
   completedRun,
   dependencyGraph,
   effectiveSelection,
@@ -18,6 +19,8 @@ import { isInterrupted, whileInterruptible } from './interrupt'
 import { runPool } from './parallel'
 import { inPooledCard } from './pooled-card'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
+import { acquireRunLock } from './run-lock'
+import { batchWaitDirectory, checkpointVersion, savedWorkflow } from './workflow-saved-state'
 import {
   matchesWorkflowCard,
   pendingWorkflowCard,
@@ -47,6 +50,7 @@ export interface BatchOutcome {
   readonly lastStep?: string
   readonly reason?: string
   readonly skipReason?: 'card-held'
+  readonly checkpoint?: { readonly runDir: string; version: string }
 }
 
 const isCompleted = (result: BatchOutcome | undefined) =>
@@ -62,6 +66,11 @@ export async function scheduleWorkflowCards<T extends Schedulable>(
   limit: number,
   prior: Map<string, BatchOutcome>,
   launch: (card: T) => Promise<BatchOutcome>,
+  polling?: {
+    intervalMs: number
+    watches: (result: BatchOutcome) => boolean
+    ready: (result: BatchOutcome) => boolean
+  },
 ): Promise<BatchOutcome[]> {
   const graph = dependencyGraph(cards)
   const blocked = (id: string) =>
@@ -71,6 +80,7 @@ export async function scheduleWorkflowCards<T extends Schedulable>(
     limit,
     ready: card => blocked(card.id).length === 0,
     mayStart: () => !isInterrupted(),
+    ...(polling && { polling }),
     worker: async card => {
       const result = await launch(card)
       prior.set(card.id, result)
@@ -390,7 +400,7 @@ async function renderBatchCard(
     sink.event({
       event: 'card-end',
       card: card.id,
-      status: result.outcome,
+      status: result.checkpoint === undefined ? result.outcome : 'awaiting-human',
       ...(result.reason && { reason: result.reason }),
     })
   }
@@ -400,6 +410,7 @@ async function renderBatchCard(
 async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
   const { config, request, services } = input
   const { selected, limit, prior, excluded, runId, members } = plan
+  const intervalMs = 1000 * checkpointPollSeconds()
   // Save selection membership before a card can advance past its original status filter.
   for (const { id } of selected) {
     const member = members.get(id)
@@ -407,6 +418,17 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
       services.fs.mkdirSync(member, { recursive: true })
   }
   const releases = new Set<() => void>()
+  const resumed = new Set<string>()
+  const watches = new Map<string, () => void>()
+  const watch = (runDir: string): boolean => {
+    if (watches.has(runDir)) return true
+    const directory = batchWaitDirectory(runDir)
+    services.fs.mkdirSync(directory, { recursive: true })
+    const lock = acquireRunLock(directory)
+    if (lock.kind !== 'acquired') return false
+    watches.set(runDir, lock.release)
+    return true
+  }
   const sink = createConsoleSink({
     out: process.stdout,
     err: process.stderr,
@@ -417,27 +439,70 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
   const restore = routeConsoleTo(sink)
   const launch = (card: WorkflowCard) =>
     renderBatchCard(sink, card, async () => {
-      const run = { ...request, card: card.id, runId: runId(card.id) }
+      const run = {
+        ...request,
+        card: card.id,
+        runId: runId(card.id),
+        restart: request.restart && !resumed.has(card.id),
+      }
       const exit = await handleWorkflowRun(config, run, services, {
         card,
         report: result => prior.set(card.id, result),
         releases,
+        watch,
       })
       return prior.get(card.id) ?? { id: card.id, outcome: exit === 0 ? 'done' : 'failed' }
     })
   try {
     return await whileInterruptible(
-      () => releases.forEach(release => release()),
+      () => {
+        releases.forEach(release => release())
+        watches.forEach(release => release())
+      },
       async () =>
         writeSummary(services.fs, plan.summary, [
-          ...(await scheduleWorkflowCards(selected, limit, prior, launch)),
+          ...(await scheduleWorkflowCards(selected, limit, prior, launch, {
+            intervalMs,
+            watches: result => result.checkpoint !== undefined,
+            ready: result => {
+              const checkpoint = result.checkpoint!
+              const version = checkpointVersion(services.fs, checkpoint.runDir)
+              if (version === checkpoint.version) return false
+              const lock = acquireRunLock(checkpoint.runDir)
+              if (lock.kind !== 'acquired') return false
+              try {
+                const saved = savedWorkflow(
+                  { card: result.id, restart: false },
+                  checkpoint.runDir,
+                  services.fs,
+                )
+                checkpoint.version = version
+                if (!saved || !checkpointCanResume(saved.workflow, saved.state)) return false
+                prior.delete(result.id)
+                resumed.add(result.id)
+                return true
+              } finally {
+                lock.release()
+              }
+            },
+          })),
           ...excluded,
         ]),
     )
   } finally {
+    watches.forEach(release => release())
     sink.finish()
     restore()
   }
+}
+
+function checkpointPollSeconds(): number {
+  const seconds = Number(process.env['PAIR_CHECKPOINT_POLL_SECONDS'] ?? 30)
+  if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 2_147_483)
+    throw new Error(
+      'PAIR_CHECKPOINT_POLL_SECONDS must be a positive integer within the timer range',
+    )
+  return seconds
 }
 
 export async function handleWorkflowBatch(

@@ -1,7 +1,53 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { scheduleWorkflowCards } from './workflow-batch'
 
 describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
+  it('resumes a parked card once its checkpoint becomes ready while its peer is active', async () => {
+    vi.useFakeTimers()
+    try {
+      const cards = [
+        { id: '750', prerequisites: [] },
+        { id: '757', prerequisites: [] },
+        { id: '756', prerequisites: [] },
+        { id: '758', prerequisites: ['757'] },
+      ]
+      let ready = false
+      const launches: string[] = []
+      let finish!: () => void
+      const peer = new Promise<void>(resolve => {
+        finish = resolve
+      })
+      const running = scheduleWorkflowCards(
+        cards,
+        2,
+        new Map(),
+        async ({ id }) => {
+          launches.push(id)
+          if (id === '750') await peer
+          return { id, outcome: id === '757' && !ready ? 'parked' : 'done' }
+        },
+        {
+          intervalMs: 30_000,
+          watches: result => result.id === '757' && result.outcome === 'parked',
+          ready: () => ready,
+        },
+      )
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(launches).toEqual(['750', '757', '756'])
+      ready = true
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(launches).toEqual(['750', '757', '756', '757', '758'])
+      finish()
+      expect((await running).map(result => result.outcome)).toEqual([
+        'done',
+        'done',
+        'done',
+        'done',
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
   it('fills slots in order and releases a dependent only after success', async () => {
     const launches: string[] = []
     const finish = new Map<string, () => void>()

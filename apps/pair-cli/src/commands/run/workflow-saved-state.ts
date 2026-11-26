@@ -8,6 +8,13 @@ import {
   type Workflow,
 } from '@pair/workflows'
 
+export function checkpointVersion(fs: FileSystemService, runDir: string): string {
+  const stat = fs.statSync(join(runDir, STATE_FILE))
+  return `${stat.ino}:${stat.mtimeMs}:${stat.size}`
+}
+
+export const batchWaitDirectory = (runDir: string): string => join(runDir, 'batch-wait')
+
 export function savedRunState(
   request: { readonly card: string; readonly restart: boolean },
   runDir: string,

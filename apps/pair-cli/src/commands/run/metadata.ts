@@ -34,7 +34,8 @@ export const runCommandMetadata = {
     },
     {
       flags: '--more-rounds <n>',
-      description: 'Grant n further rounds to a workflow loop parked at max',
+      description:
+        'Grant n rounds to a parked loop. An active batch resumes it after its checkpoint poll (PAIR_CHECKPOINT_POLL_SECONDS, default 30)',
     },
     {
       flags: '--approve <card>',

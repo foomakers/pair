@@ -100,6 +100,11 @@ export interface PoolInput<T, Outcome = CardOutcome> {
   readonly notStarted: (item: T) => Outcome
   /** Outcome of a worker that threw — isolation: the pool never rejects on one card (AC4). */
   readonly onWorkerError: (item: T, error: unknown) => Outcome
+  readonly polling?: {
+    readonly intervalMs: number
+    readonly watches: (result: Outcome) => boolean
+    readonly ready: (result: Outcome) => boolean
+  }
 }
 
 /** At most `limit` workers in flight; results in input order; never rejects. */
@@ -154,11 +159,40 @@ export async function runPool<T, Outcome = CardOutcome>(
       const [index] = pending.splice(position, 1)
       startPoolTask(input, index!, state)
     }
-    if (active.size === 0) {
+    const polling = input.polling
+    const suspended =
+      polling && mayStart()
+        ? results.flatMap((result, index) => (polling.watches(result) ? [index] : []))
+        : []
+    if (active.size === 0 && suspended.length === 0) {
       for (const index of pending) results[index] = input.notStarted(input.items[index]!)
       break
     }
-    await Promise.race(active.values())
+    if (polling === undefined || suspended.length === 0) {
+      await Promise.race(active.values())
+      continue
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const tick = new Promise<boolean>(done => {
+      timer = setTimeout(() => done(true), polling.intervalMs)
+    })
+    const elapsed = await Promise.race([
+      tick,
+      ...[...active.values()].map(task => task.then(() => false)),
+    ])
+    clearTimeout(timer)
+    if (elapsed && mayStart()) {
+      for (const index of suspended) {
+        try {
+          if (!polling.ready(results[index]!)) continue
+        } catch (error) {
+          results[index] = input.onWorkerError(input.items[index]!, error)
+          continue
+        }
+        delete results[index]
+        pending.push(index)
+      }
+    }
   }
   return results
 }

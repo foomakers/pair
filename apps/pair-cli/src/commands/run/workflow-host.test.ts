@@ -1528,6 +1528,66 @@ steps:
     ).toMatchObject({ rounds: 1 })
   })
 
+  it('grants a round to the waiting batch and resumes it from the saved loop', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      write('.pair/adoption/tech/workflows/quick.yaml', loop)
+      const statSync = fs.statSync.bind(fs)
+      const content = fs.readFileSync.bind(fs)
+      vi.spyOn(fs, 'statSync').mockImplementation(path => ({
+        ...statSync(path),
+        ...(path.endsWith('/state.json') && { size: content(path).length }),
+      }))
+      let waiting = false
+      vi.mocked(acquireRunLock).mockImplementation(dir => {
+        if (!dir.endsWith('/batch-wait')) return { kind: 'acquired', release }
+        if (waiting) return { kind: 'run-locked' }
+        waiting = true
+        return {
+          kind: 'acquired',
+          release: () => {
+            waiting = false
+          },
+        }
+      })
+      let reviews = 0
+      const skills = {
+        ...OK,
+        'pair-process-review': ({ cwd }: { cwd: string }) =>
+          basename(cwd) === '627' && ++reviews === 1 ? failedReview : REVIEWED,
+        'pair-process-fix': () => fixed,
+      }
+      const readSelection = async () => ({
+        cards: ['627', '628'].map(id => ({
+          id,
+          title: id,
+          body: '',
+          labels: [],
+          boardState: null,
+          closed: false,
+          prerequisites: id === '628' ? ['627'] : [],
+        })),
+      })
+      const batch = run(['quick'], skills, { card: '627,628' }, { readSelection })
+      await vi.waitFor(() => expect(waiting).toBe(true))
+      const read = vi.spyOn(fs, 'readFileSync')
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(read.mock.calls.some(([path]) => path.endsWith('/state.json'))).toBe(false)
+      read.mockRestore()
+      expect(reviews).toBe(1)
+      expect(launched.some(launch => basename(launch.cwd) === '628')).toBe(false)
+      expect(await run(['quick'], skills, { moreRounds: '1' })).toBe(0)
+      expect(reviews).toBe(1)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(reviews).toBe(2)
+      expect(await batch).toBe(0)
+      expect(launched.some(launch => basename(launch.cwd) === '628')).toBe(true)
+      expect(waiting).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it.each(['escalate', 'fail'])(
     'reports exhaustion and the last until outcome on %s (#670-exhaustion-message)',
     async action => {

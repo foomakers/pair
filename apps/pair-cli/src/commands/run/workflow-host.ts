@@ -1,5 +1,10 @@
 import { workflowDefaultSkill } from './skill-probe'
-import { savedRunState, savedWorkflow } from './workflow-saved-state'
+import {
+  batchWaitDirectory,
+  checkpointVersion,
+  savedRunState,
+  savedWorkflow,
+} from './workflow-saved-state'
 import { prepareReplayHead } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
@@ -614,6 +619,7 @@ interface Opened {
   /** The card's worktree, where gate commands run. */
   readonly worktree?: string
   readonly report?: (outcome: BatchOutcome) => void
+  readonly watch?: (runDir: string) => boolean
   readonly flagStep?: string
   readonly closureOnly?: true
   readonly telemetryWarned?: boolean
@@ -805,7 +811,7 @@ function cardTransitions({ request, resolved }: Opened, services: Services) {
 
 /** The ending of a run parked or failed on an exhausted loop, drawn on the console; undefined otherwise. */
 function exhaustedEnding(
-  { request, runDir }: Opened,
+  { request, runDir, report, watch }: Opened,
   outcome: RunOutcome,
   sink: ConsoleSink,
   fs: Services['fs'],
@@ -819,6 +825,13 @@ function exhaustedEnding(
   const last = saved.state.steps[`${id}/${until}`]
   const why = `${saved.state.steps[id]?.summary}; last until: ${last?.state} — ${last?.summary}`
   const { status, exit } = ENDINGS[stopped.run]
+  if (stopped.run === 'parked' && watch?.(runDir) === true)
+    report?.({
+      id: request.card,
+      outcome: 'parked',
+      reason: why,
+      checkpoint: { runDir, version: checkpointVersion(fs, runDir) },
+    })
   sink.event({
     event: 'card-end',
     card: request.card,
@@ -967,13 +980,17 @@ function recordIncludeSources(
   }
 }
 
-function reportStopped(opened: Opened, status: string): number | undefined {
+function reportStopped(opened: Opened, status: string, fs: FileSystemService): number | undefined {
   const stopped = stopOf(status, opened.request)
   if (stopped === undefined) return undefined
   opened.report?.({
     id: opened.request.card,
     outcome: status === 'complete' ? 'skipped' : status === 'parked' ? 'parked' : 'failed',
     reason: status === 'complete' ? 'workflow already complete' : 'loop exhausted',
+    ...(status === 'parked' &&
+      opened.watch?.(opened.runDir) === true && {
+        checkpoint: { runDir: opened.runDir, version: checkpointVersion(fs, opened.runDir) },
+      }),
   })
   return stopped
 }
@@ -1055,7 +1072,7 @@ async function drive(
     runDir,
     deps.workflow?.engineAvailable ?? createExecutableProbe(fs),
   )
-  const stopped = reportStopped(opened, started.status)
+  const stopped = reportStopped(opened, started.status, fs)
   if (stopped !== undefined) {
     await restoreStoppedFaults({ files: fs, dir: runDir }, started.status, config, resolved)
     return stopped
@@ -1209,6 +1226,7 @@ type BatchCard = {
   card: WorkflowCard
   report: (outcome: BatchOutcome) => void
   releases: Set<() => void>
+  watch?: (runDir: string) => boolean
 }
 
 type WorkflowRunRequest = RunWorkflowRequest & {
@@ -1365,6 +1383,10 @@ export async function handleWorkflowRun(
   if (resolved === undefined) return 1
   if (config.verbose || config.dryRun) printPlan(resolved.workflow)
   if (config.dryRun) return printWorkflowPreview(resolved)
+  if (request.moreRounds !== undefined && !request.restart) {
+    const granted = await grantToWatchingBatch(resolved, request, services.fs)
+    if (granted !== undefined) return granted
+  }
   const opened = await openCard({ config, resolved }, request, services, card)
   return opened === undefined ? 0 : runWithCardLock(config, opened, services, batch?.releases)
 }
@@ -1397,7 +1419,41 @@ async function openCard(
   const opened = { resolved, request, runDir }
   return batch === undefined
     ? preflight(opened, services)
-    : { ...opened, title: batch.card.title, report: batch.report }
+    : {
+        ...opened,
+        title: batch.card.title,
+        report: batch.report,
+        ...(batch.watch && { watch: batch.watch }),
+      }
+}
+
+async function grantToWatchingBatch(
+  resolved: Resolved,
+  request: WorkflowRunRequest,
+  fs: FileSystemService,
+): Promise<number | undefined> {
+  const runDir = workflowRunDir(resolved, request)
+  const waiting = batchWaitDirectory(runDir)
+  if (!fs.existsSync(waiting)) return undefined
+  const owner = acquireRunLock(waiting)
+  if (owner.kind === 'acquired') {
+    owner.release()
+    return undefined
+  }
+  const lock = acquireRunLock(runDir)
+  if (lock.kind !== 'acquired')
+    throw new Error('run-locked: retry the round grant once the checkpoint is parked')
+  try {
+    await start(
+      { files: fs, dir: runDir },
+      resolved.source,
+      startOptions({ resolved, request, runDir, title: '' }),
+    )
+    console.log(`  Round grant saved for #${request.card}. The active batch will resume it.`)
+    return 0
+  } finally {
+    lock.release()
+  }
 }
 
 async function runWithCardLock(

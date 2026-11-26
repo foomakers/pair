@@ -918,6 +918,12 @@ function haltAt(state: RunStateFile, step: Step, approval?: string): Halt | unde
   return id === approval ? undefined : haltFor(child, state.steps[id]?.state)
 }
 
+/** Observe the frozen workflow without reserving a step or writing the checkpoint. */
+export function checkpointCanResume(workflow: Workflow, state: RunStateFile): boolean {
+  const step = workflow.steps.find(one => !stepSettled(one, state.steps[one.id]?.state))
+  return step !== undefined && haltAt(state, step) === undefined
+}
+
 const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 
 const agentOptionsOf = (step: Step) => ({
