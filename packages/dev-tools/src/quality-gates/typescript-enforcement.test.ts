@@ -424,6 +424,19 @@ it.each([
     alternatives: ['fallback.css'],
   },
   {
+    target: 'a private component imported by a Next Edge page',
+    importer: 'apps/website/app/_components/nested/page.jsx',
+    files: {
+      'app/page.jsx':
+        "export const runtime = 'edge'\nexport { default } from './_components/nested/page'\n",
+    },
+    afterImport: 'export default () => null\n',
+    manifest: {
+      exports: { './theme.css': { 'edge-light': './theme.css', default: './fallback.css' } },
+    },
+    alternatives: ['fallback.css'],
+  },
+  {
     target: 'a Next page inheriting the Edge runtime',
     importer: 'apps/website/app/page.tsx',
     files: {
@@ -480,13 +493,16 @@ it.each([
     { slot: 'default', page: 'nested/page', needsAlternative: false },
     { slot: 'page', page: 'page', needsAlternative: true },
     { slot: '[...slug]/page', page: 'nested/page', needsAlternative: true },
-  ].map(({ slot, page, needsAlternative }) => ({
-    target: `a Next parallel slot ${slot} consumed by Edge ${page}`,
+    { slot: 'default', page: 'page', extraPage: '_components/nested', needsAlternative: false },
+    { slot: 'default', page: 'page', extraPage: 'components/nested', needsAlternative: true },
+  ].map(({ slot, page, extraPage, needsAlternative }) => ({
+    target: `a Next parallel slot ${slot} consumed by Edge ${page}${extraPage ? ` beside ${extraPage}` : ''}`,
     importer: `apps/website/app/edge/@panel/${slot}.jsx`,
     files: {
       'app/layout.jsx': 'export default ({ children }) => <html><body>{children}</body></html>\n',
       'app/edge/layout.jsx': 'export default ({ children, panel }) => <>{children}{panel}</>\n',
       [`app/edge/${page}.jsx`]: "export const runtime = 'edge'\nexport default () => null\n",
+      ...(extraPage && { [`app/edge/${extraPage}/page.jsx`]: 'export default () => null\n' }),
     },
     afterImport: 'export default () => null\n',
     manifest: {
