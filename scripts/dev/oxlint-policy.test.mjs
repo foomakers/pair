@@ -486,6 +486,18 @@ for (const [name, source, expected, status] of [
   })
 }
 
+test('#693 R4 empty object destructuring retains its error after the accepted const fix', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const file = join(cwd, 'empty.js')
+  writeFileSync(file, 'var {} = foo\n')
+  for (const flags of [['--fix'], [], ['--fix']]) {
+    const result = lint(cwd, '--workspace', ...flags)
+    assert.equal(result.status, 1)
+    assert.deepEqual(result.diagnostics.map(d => [d.code, d.severity]), [['eslint(no-empty-pattern)', 'error']])
+    assert.equal(readFileSync(file, 'utf8'), 'const {} = foo\n')
+  }
+})
+
 for (const [name, source] of [
   ['a hoisted call before initialization', 'function run() { print(); var n = 1; function print() { console.log(n) } }\nrun()\n'],
   ['a catch-shadowed declaration', 'try { JSON.parse("invalid") } catch (n) { var n = 2; console.log(n) }\nconsole.log(n)\n'],

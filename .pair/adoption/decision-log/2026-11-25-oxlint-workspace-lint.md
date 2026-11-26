@@ -22,6 +22,8 @@ Pin Oxlint 1.95.0 and define Pair-owned base and React profiles in JSON. Use nat
 
 Keep the `no-var` error and leave the source unchanged for catch-shadowed declarations and bindings read by a hoisted function before initialization. Ordinary safe declarations still autofix. [Maintainer decision](https://github.com/foomakers/pair/issues/693#issuecomment-7172593619)
 
+On 2026-11-26 the maintainer accepted Oxlint writing `const {} = foo` for `var {} = foo`. ESLint writes `let {} = foo`. The pattern binds no names. Both fixes preserve the `no-empty-pattern` error and exit 1.
+
 ## Alternatives Considered
 
 - **Cloudflare's standalone preset.** Its rule set, test policy, globals and parser requirements would change the migration scope.
