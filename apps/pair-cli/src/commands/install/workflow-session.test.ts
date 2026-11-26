@@ -223,6 +223,36 @@ steps:
     const { runId, lease } = invoke('start', 'installed', '--card', '42', '--engine', 'codex')
     invoke('stop', runId, '--lease', lease)
 
+    if (update) {
+      const skill = 'pair-process-refine-story'
+      write(
+        root,
+        '.pair/adoption/tech/workflows/explicit.yaml',
+        `version: 1
+name: explicit
+steps:
+  refine: { kind: generic, skill: ${skill} }
+`,
+      )
+      const explicit = { steps: [{ id: 'refine', skill }] }
+      expect.soft(invoke('validate', 'explicit')).toMatchObject(explicit)
+      const opened = invoke('start', 'explicit', '--card', '42', '--engine', 'codex')
+      expect.soft(opened).toMatchObject(explicit)
+      expect.soft(invoke('next', opened.runId, '--lease', opened.lease)).toMatchObject({
+        ready: [{ uses: skill, message: expect.stringContaining(`Run the ${skill} skill.`) }],
+      })
+      invoke('stop', opened.runId, '--lease', opened.lease)
+
+      fs.rmSync(dirname(skillFile(root, skill)), { recursive: true })
+      const absent = spawnSync(process.execPath, [script(root), 'validate', 'explicit'], {
+        cwd: root,
+        encoding: 'utf8',
+        timeout: 5_000,
+      })
+      expect(absent.stderr).toContain(`skill '${skill}' is not installed`)
+      expect(absent.status).toBe(1)
+    }
+
     const linked = join(fixture, 'linked')
     git(root, 'worktree', 'add', '--detach', linked)
     write(linked, 'pair.config.json', fs.readFileSync(join(root, 'pair.config.json')))
