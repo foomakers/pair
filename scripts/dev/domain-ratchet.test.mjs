@@ -30,6 +30,7 @@ function fixture(
       [optional]: ['WriteOptions.progressReporter'],
       [explicit]: ['WriteOptions.progressReporter'],
     },
+    files = {},
   } = {},
 ) {
   const cwd = mkdtempSync(join(tmpdir(), 'pair-ratchet-test-'))
@@ -53,6 +54,7 @@ function fixture(
   })
   write(suppressions, [])
   write(baseline, { [legacy]: rules })
+  for (const [file, source] of Object.entries(files)) write(file, source)
   git('add', '.')
   git(
     '-c',
@@ -173,4 +175,27 @@ test('#750 AC-7 freezes the legacy directive snapshot', t => {
     status: 1,
     out: `legacy suppression baseline cannot grow: ${record}`,
   })
+})
+
+test('#750 R5 requires retirement when a tracked frozen directive is removed', t => {
+  const file = `${pkg}/src/http/retryable-download.ts`
+  const directive = '// @ts-' + 'expect-error: legacy assignment'
+  const record = `${file}:1:${directive}`
+  const clean = 'export const amount: number = 1\n'
+  const { check, write } = fixture(t, {
+    files: {
+      [file]: `${directive}\nexport const amount: number = 'legacy'\n`,
+      [suppressions]: [record],
+    },
+  })
+  assert.equal(check().status, 0)
+
+  write(file, clean)
+  assert.deepEqual(check(), {
+    status: 1,
+    out: `retire removed legacy suppression: ${record}`,
+  })
+
+  write(suppressions, [])
+  assert.equal(check().status, 0)
 })
