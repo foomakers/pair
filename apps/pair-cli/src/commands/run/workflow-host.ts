@@ -1049,12 +1049,11 @@ async function closureStep(
 async function preflight(opened: Omit<Opened, 'title'>, services: Services): Promise<Opened> {
   const { resolved, request } = opened
   const { card } = request
-  const read = await (services.deps.workflow?.readCard?.(card, resolved.cwd) ??
-    readRunnableCard(
-      card,
-      resolved.cwd,
-      locateCycleScripts(services.fs, resolved.project, resolved.cwd).scriptsDir,
-    ))
+  const readCard =
+    services.deps.workflow?.readCard ??
+    ((id, cwd) =>
+      readRunnableCard(id, cwd, locateCycleScripts(services.fs, resolved.project, cwd).scriptsDir))
+  const read = await readCard(card, resolved.cwd)
   if (read === 'missing')
     throw new Error(
       `card-not-found: card ${card} cannot be read from the tracker; nothing was launched.`,

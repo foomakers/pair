@@ -234,7 +234,7 @@ export async function readCard(
     }
     if (r.status !== 0 || view === undefined || view.error !== undefined)
       throw new CardUnreadableError(
-        `card-unreadable: \`cycle-state.mjs card --story ${card}\` failed — ${view?.error ?? (r.stderr || r.stdout || '').trim()}. ` +
+        `card-unreadable: \`cycle-state.mjs card --story ${card}\` failed — ${view?.error ?? (r.stderr || r.stdout).trim()}. ` +
           `pair-cli reads the card through the PM adapter way-of-working.md binds.`,
       )
     return view
