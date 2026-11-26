@@ -163,6 +163,67 @@ test('#693 R5 checks selection before autofix with readable and unreadable exclu
   }
 })
 
+test('#693 R5 checks sources inside directories with excluded file extensions', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const source = 'export let value = 1\n'
+  const selected = 'folder.mts/nested.cts/components.jsx/covered.ts'
+  mkdirSync(dirname(join(cwd, selected)), { recursive: true })
+  writeFileSync(join(cwd, selected), source)
+  writeFileSync(join(cwd, 'folder.mts/ignored.mts'), source)
+  assert.equal(spawnSync('git', ['init', '-q'], { cwd }).status, 0)
+  assert.equal(spawnSync('git', ['add', selected], { cwd }).status, 0)
+  for (const args of [['--workspace'], [selected]]) {
+    const check = lint(cwd, ...args)
+    assert.deepEqual(check.diagnostics.map(d => [d.filename, d.code]), [[selected, 'eslint-js(prefer-const)']])
+    assert.equal(check.status, 1)
+  }
+  assert.equal(lint(cwd, '--workspace', '--fix').status, 0)
+  assert.equal(readFileSync(join(cwd, selected), 'utf8'), 'export const value = 1\n')
+  assert.equal(readFileSync(join(cwd, 'folder.mts/ignored.mts'), 'utf8'), source)
+})
+
+const discoveryErrors = [['dangling', 'ENOENT'], ['loop', 'ELOOP']]
+if (process.getuid?.() !== 0) discoveryErrors.push(['unreadable', 'EACCES'])
+for (const [name, code] of discoveryErrors) {
+  test(`#693 R5 package fix fails before writing when discovery encounters a ${name} source`, t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const source = 'export let value = 1\n'
+    const ordinary = join(cwd, 'ordinary.ts')
+    writeFileSync(ordinary, source)
+    if (code === 'EACCES') {
+      const dir = join(cwd, 'included')
+      mkdirSync(dir)
+      chmodSync(dir, 0)
+    } else {
+      symlinkSync(name === 'loop' ? 'broken.ts' : 'missing', join(cwd, 'broken.ts'))
+    }
+    const result = runLint(cwd, join(dirname(runner), 'lint-fix.sh'))
+    if (code === 'EACCES') chmodSync(join(cwd, 'included'), 0o700)
+    assert.equal(result.status, 2)
+    assert.ok(result.stderr.includes(code))
+    assert.equal(readFileSync(ordinary, 'utf8'), source)
+  })
+}
+
+test('#693 R5 ignores broken links excluded by the workspace policy', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  for (const name of ['ignored.config.ts', 'ignored.mts', 'ignored.vue']) symlinkSync('missing', join(cwd, name))
+  writeFileSync(join(cwd, 'ordinary.ts'), 'export let value = 1\n')
+  assert.equal(lint(cwd, '--workspace', '--fix').status, 0)
+  assert.equal(readFileSync(join(cwd, 'ordinary.ts'), 'utf8'), 'export const value = 1\n')
+})
+
+test('#693 R5 rejects default discovery when only ignored files exist', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  for (const name of ['README.md', 'ignored.mts', 'ignored.config.ts']) writeFileSync(join(cwd, name), '')
+  for (const args of [[], ['--workspace'], ['--workspace', '--fix']]) {
+    const empty = runLint(cwd, runner, ...args)
+    assert.equal(empty.status, 2)
+  }
+  writeFileSync(join(cwd, 'clean.ts'), 'export const value = 1\n')
+  assert.deepEqual(lint(cwd, '--workspace'), { status: 0, diagnostics: [] })
+})
+
 test('#693 R3 fix mode fails on an error introduced by an applied fix', t => {
   const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
   const path = join(cwd, 'array.ts')
