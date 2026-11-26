@@ -148,6 +148,22 @@ export function createRetry(dto: RetryDto) {
   assert.match(JSON.parse(result.stdout).diagnostics[0].message, /createRetry\.cause/)
 })
 
+test('#750 R6 checks an inherited DTO field at the pilot declaration', t => {
+  const dto = 'src/http/retry.dto.ts'
+  const cwd = workspace(t, {
+    [pilot]: `import type { RetryDto } from './retry.dto.js'
+export interface Retry extends RetryDto { tag: 'retry' }
+`,
+    [dto]: 'export interface RetryDto { message: string }\n',
+  })
+  assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+  writeFileSync(join(cwd, dto), 'export interface RetryDto { message: string | null }\n')
+  const result = lint(cwd)
+  assert.deepEqual(findings(result), { status: 1, locations: [[pilot, semantic, 2, 18]] })
+  assert.match(JSON.parse(result.stdout).diagnostics[0].message, /Retry\.message/)
+})
+
 test('#750 R3 fails package lint when an imported type is no longer exported', t => {
   const input = 'src/http/inputs.ts'
   const cwd = workspace(t, {
