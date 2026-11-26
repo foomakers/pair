@@ -4,6 +4,10 @@ import { dirname, join, resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { fileSystemService } from '@pair/content-ops'
 import { handleInstallCommand } from './handler'
+import { handleRunCommand } from '../run/handler'
+import { parseRunCommand } from '../run/parser'
+import { resolveContext, takeCardLock } from '../run/run-context'
+import type { SpawnIterationInput } from '../run/spawn'
 import { handleUpdateCommand } from '../update/handler'
 
 const CLI = join(__dirname, '../../..')
@@ -72,6 +76,58 @@ function install(cwd: string, config?: string, command: 'install' | 'update' = '
     : handleUpdateCommand({ command, ...source }, fs, options)
 }
 
+async function verifyCardExclusion(root: string, linked: string, stop: () => void) {
+  const fs = fileSystemService
+  const card = '42'
+  const lockPath = '.pair/scratch/automation/locks/42'
+  write(
+    root,
+    '.pair/adoption/tech/workflows/compete.yaml',
+    'version: 1\nname: compete\nsteps:\n  notes: { kind: generic, skill: vendor-notes }\n',
+  )
+  const bare = (cwd: string) =>
+    takeCardLock(resolveContext(parseRunCommand({ card, cwd }, []), fs, cwd, true), {}, card)
+  const runIteration = vi.fn(async ({ onEvent }: SpawnIterationInput) => {
+    onEvent?.({
+      type: 'result',
+      subtype: 'success',
+      result: '```json\n{"status":"ok","summary":"Notes prepared"}\n```',
+    })
+    return { outcome: 'success' as const, detail: 'fixture' }
+  })
+  const named = () =>
+    handleRunCommand(parseRunCommand({ card, cwd: linked }, ['compete']), fs, {
+      workflow: {
+        runIteration,
+        readCard: async () => ({ title: 'Prepare release notes' }),
+        prepareWorktree: async () => linked,
+        engineAvailable: () => true,
+      },
+    })
+
+  expect.soft(fs.existsSync(join(root, lockPath))).toBe(true)
+  for (const cwd of [root, linked]) {
+    const lock = bare(cwd)
+    expect.soft(lock).toBeUndefined()
+    lock?.release()
+  }
+  expect(await named()).toBe(0)
+  expect.soft(runIteration).not.toHaveBeenCalled()
+  expect
+    .soft(console.log)
+    .toHaveBeenCalledWith(
+      expect.stringMatching(/card-locked: .*\.pair\/scratch\/automation\/locks\/42/),
+    )
+
+  stop()
+  expect(fs.existsSync(join(root, lockPath))).toBe(false)
+  const released = bare(root)
+  expect(released?.path).toContain(lockPath)
+  released?.release()
+  expect(await named()).toBe(0)
+  expect(runIteration).toHaveBeenCalledTimes(1)
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   for (const root of roots.splice(0))
@@ -79,7 +135,12 @@ afterEach(() => {
 })
 
 it.each([
-  { name: 'default registry', prefix: 'pair', target: defaultTarget },
+  {
+    name: 'default registry (R754-01 / AC-4)',
+    prefix: 'pair',
+    target: defaultTarget,
+    customWorkingArea: true,
+  },
   { name: 'project prefix', prefix: 'team', target: defaultTarget, skills: { prefix: 'team' } },
   {
     name: 'project target and prefix',
@@ -117,7 +178,7 @@ it.each([
   },
 ])(
   'R754-06 / AC-1, AC-4, AC-8: resolves skills with $name',
-  async ({ prefix, target, skills, override, update }) => {
+  async ({ prefix, target, skills, override, update, customWorkingArea }) => {
     const fixture = fileSystemService.mkdtempSync(join(tmpdir(), 'pair-install-session-'))
     roots.push(fixture)
     const root = join(fixture, 'primary')
@@ -129,6 +190,7 @@ it.each([
       'pair.config.json',
       JSON.stringify({
         worktreeRoot: 'worktrees',
+        ...(customWorkingArea && { working_path: '.pair/scratch' }),
         ...(skills !== undefined && { asset_registries: { skills } }),
       }),
     )
@@ -264,6 +326,12 @@ steps:
     expect(invokeLinked('validate', 'installed')).toMatchObject(preview)
     const resumed = invokeLinked('resume', runId, '--engine', 'codex')
     expect(invokeLinked('next', runId, '--lease', resumed.lease)).toMatchObject(dispatch)
+    if (customWorkingArea)
+      await verifyCardExclusion(root, linked, () => {
+        expect(invokeLinked('stop', runId, '--lease', resumed.lease)).toMatchObject({
+          stopped: true,
+        })
+      })
     expect(facts('board-state', '42', JSON.stringify({ state: 'Ready', adoption }))).toMatchObject({
       confirmed: true,
     })
