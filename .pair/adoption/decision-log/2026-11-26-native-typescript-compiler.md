@@ -28,6 +28,9 @@ the native binary. Keep the Oxlint compatibility plugin on TypeScript
 5.4.5 within `@pair/oxlint-config`, within the plugin's supported peer
 range. Keep path mappings relative to their declaring project config.
 
+Enable `noUncheckedSideEffectImports` in the shared base preset. The
+compiler rejects unresolved side-effect imports with TS2882.
+
 ## Alternatives Considered
 
 - Using only TypeScript 7 leaves Next 15, `ts-node`, ncc and compiler API tools without the API their existing entry points need.
@@ -40,6 +43,13 @@ its JavaScript imports. Retire each compatibility dependency when its
 consumers can run with the native compiler. The maintainer owns that
 replay. The Oxlint peer can be retired with the compatibility plugin or
 updated when the plugin's supported range changes.
+
+The CSS declaration exceptions cover only `apps/website/app/global.css`
+through `apps/website/app/global.d.css.ts` and `packages/brand/dev/styles.css`
+through `packages/brand/dev/styles.d.css.ts`. The dev-tools guard checks that
+both stylesheets exist and rejects additional CSS declarations. The Pair
+maintainer owns both exceptions and retires each declaration when exact
+module types are generated for the stylesheet or its import is removed.
 
 ## Adoption Impact
 

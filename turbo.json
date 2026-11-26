@@ -155,6 +155,8 @@
     // `turbo run test --filter @pair/dev-tools` replayed `1 cached, 125ms >>> FULL TURBO`.
     // A task dependency enters the hash, so this invalidates on the WHOLE CLI closure and,
     // unlike a hand-listed set of trees, cannot go stale when that closure grows.
+    // #757: Compiler enforcement tests read the workspace configs and scan workspace TypeScript
+    // sources for CSS declarations. Hash those inputs and the two required stylesheets in both variants.
     "@pair/dev-tools#test": {
       "dependsOn": ["build", "@pair/pair-cli#build"],
       "outputs": [],
@@ -164,7 +166,12 @@
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/tools/oxlint-config/**",
         "$TURBO_ROOT$/apps/*/.oxlintrc.json",
-        "$TURBO_ROOT$/docs/engineering/lint-migration-693-cases.json"
+        "$TURBO_ROOT$/docs/engineering/lint-migration-693-cases.json",
+        "$TURBO_ROOT$/tools/ts-config/*.json",
+        "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
+        "$TURBO_ROOT$/{apps,packages}/**/*.{ts,tsx,cts,mts}",
+        "$TURBO_ROOT$/apps/website/app/global.css",
+        "$TURBO_ROOT$/packages/brand/dev/styles.css"
       ]
     },
     "@pair/dev-tools#test:coverage": {
@@ -176,7 +183,12 @@
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/tools/oxlint-config/**",
         "$TURBO_ROOT$/apps/*/.oxlintrc.json",
-        "$TURBO_ROOT$/docs/engineering/lint-migration-693-cases.json"
+        "$TURBO_ROOT$/docs/engineering/lint-migration-693-cases.json",
+        "$TURBO_ROOT$/tools/ts-config/*.json",
+        "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
+        "$TURBO_ROOT$/{apps,packages}/**/*.{ts,tsx,cts,mts}",
+        "$TURBO_ROOT$/apps/website/app/global.css",
+        "$TURBO_ROOT$/packages/brand/dev/styles.css"
       ]
     },
     // #568: `next build` regenerates apps/website/.source/index.ts (fumadocs-mdx); a parallel tsc read it
