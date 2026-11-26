@@ -310,6 +310,51 @@ it('#757 AC-4 R758-02: checks workspace stylesheet exports', () => {
   })
 })
 
+it.each([
+  {
+    form: 'static import',
+    statement: "import '@pair/styles/theme.css'",
+    targets: { import: './theme.css', require: './missing.css' },
+    missing: false,
+  },
+  {
+    form: 'dynamic import',
+    statement: "void import('@pair/styles/theme.css')",
+    targets: { import: './missing.css', require: './theme.css' },
+    missing: true,
+  },
+  {
+    form: 'require',
+    statement: "require('@pair/styles/theme.css')",
+    targets: { import: './missing.css', require: './theme.css' },
+    missing: false,
+  },
+  {
+    form: 'Vite browser import',
+    statement: "import '@pair/styles/theme.css'",
+    targets: { browser: './theme.css', import: './missing.css', require: './missing.css' },
+    missing: false,
+  },
+])('#757 AC-4 R758-02: selects the package export for $form', ({ statement, targets, missing }) => {
+  withCssFixture(cwd => {
+    const importer = 'packages/brand/dev/style-fixture.ts'
+    const scope = join(cwd, 'packages/brand/node_modules/@pair')
+    const styles = join(cwd, 'packages/styles')
+    fs.mkdirSync(scope, { recursive: true })
+    fs.mkdirSync(styles)
+    fs.symlinkSync(styles, join(scope, 'styles'))
+    fs.writeFileSync(join(styles, 'theme.css'), '')
+    fs.writeFileSync(
+      join(styles, 'package.json'),
+      JSON.stringify({ name: '@pair/styles', exports: { './theme.css': targets } }),
+    )
+    fs.writeFileSync(join(cwd, importer), statement)
+    expect(checkStylesheets(cwd)).toEqual(
+      missing ? [`Missing stylesheet: ${importer} imports @pair/styles/theme.css`] : [],
+    )
+  })
+})
+
 it('#757 AC-4 R758-04: distinguishes JSX text from stylesheet imports', () => {
   withCssFixture(cwd => {
     const importer = 'apps/website/app/style-example.tsx'
