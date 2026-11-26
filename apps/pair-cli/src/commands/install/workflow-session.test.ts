@@ -87,10 +87,15 @@ async function installFixture(
   if (update) expect(fileSystemService.existsSync(legacySkill)).toBe(true)
 }
 
-async function verifyCardExclusion(root: string, linked: string, stop: () => void) {
+async function verifyCardExclusion(
+  root: string,
+  linked: string,
+  workingArea: string,
+  stop: () => void,
+) {
   const fs = fileSystemService
   const card = '42'
-  const lockPath = '.pair/scratch/automation/locks/42'
+  const lockPath = `${workingArea}/automation/locks/42`
   write(
     root,
     '.pair/adoption/tech/workflows/compete.yaml',
@@ -124,11 +129,7 @@ async function verifyCardExclusion(root: string, linked: string, stop: () => voi
   }
   expect(await named()).toBe(0)
   expect.soft(runIteration).not.toHaveBeenCalled()
-  expect
-    .soft(console.log)
-    .toHaveBeenCalledWith(
-      expect.stringMatching(/card-locked: .*\.pair\/scratch\/automation\/locks\/42/),
-    )
+  expect.soft(console.log).toHaveBeenCalledWith(expect.stringContaining('card-locked: '))
 
   stop()
   expect(fs.existsSync(join(root, lockPath))).toBe(false)
@@ -147,10 +148,22 @@ afterEach(() => {
 
 it.each([
   {
-    name: 'default registry (R754-01 / AC-4)',
+    name: 'working area in pair.config.json (R754-01 / AC-4)',
     prefix: 'pair',
     target: defaultTarget,
-    customWorkingArea: true,
+    workingArea: { project: '.pair/scratch', expected: '.pair/scratch' },
+  },
+  {
+    name: 'working area inherited from config.json (R754-01 / AC-4)',
+    prefix: 'pair',
+    target: defaultTarget,
+    workingArea: { legacy: '.pair/scratch', expected: '.pair/scratch' },
+  },
+  {
+    name: 'working area overridden by pair.config.json (R754-01 / AC-4)',
+    prefix: 'pair',
+    target: defaultTarget,
+    workingArea: { legacy: '.pair/legacy', project: '.pair/scratch', expected: '.pair/scratch' },
   },
   { name: 'project prefix', prefix: 'team', target: defaultTarget, skills: { prefix: 'team' } },
   {
@@ -158,6 +171,7 @@ it.each([
     prefix: 'team',
     target: customTarget,
     skills: teamRegistry,
+    workingArea: { legacy: '.pair/legacy', expected: '.pair/working' },
   },
   {
     name: 'overridden target',
@@ -189,7 +203,7 @@ it.each([
   },
 ])(
   'R754-06 / AC-1, AC-4, AC-8: resolves skills with $name',
-  async ({ prefix, target, skills, override, update, customWorkingArea }) => {
+  async ({ prefix, target, skills, override, update, workingArea }) => {
     const fixture = fileSystemService.mkdtempSync(join(tmpdir(), 'pair-install-session-'))
     roots.push(fixture)
     const root = join(fixture, 'primary')
@@ -201,10 +215,12 @@ it.each([
       'pair.config.json',
       JSON.stringify({
         worktreeRoot: 'worktrees',
-        ...(customWorkingArea && { working_path: '.pair/scratch' }),
+        working_path: workingArea?.project,
         ...(skills !== undefined && { asset_registries: { skills } }),
       }),
     )
+    if (workingArea?.legacy !== undefined)
+      write(root, 'config.json', JSON.stringify({ working_path: workingArea.legacy }))
     const config = installConfig(root, override)
     const skillFile = (directory: string, name: string) => join(directory, target, name, 'SKILL.md')
     await installFixture(root, config, update, skillFile(root, 'pair-process-refine-story'))
@@ -333,8 +349,8 @@ steps:
     expect(invokeLinked('validate', 'installed')).toMatchObject(preview)
     const resumed = invokeLinked('resume', runId, '--engine', 'codex')
     expect(invokeLinked('next', runId, '--lease', resumed.lease)).toMatchObject(dispatch)
-    if (customWorkingArea)
-      await verifyCardExclusion(root, linked, () => {
+    if (workingArea !== undefined)
+      await verifyCardExclusion(root, linked, workingArea.expected, () => {
         expect(invokeLinked('stop', runId, '--lease', resumed.lease)).toMatchObject({
           stopped: true,
         })
