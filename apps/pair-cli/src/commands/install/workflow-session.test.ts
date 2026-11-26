@@ -106,17 +106,6 @@ function install(cwd: string, config?: string, command: 'install' | 'update' = '
     : handleUpdateCommand({ command, ...source }, fs, options)
 }
 
-async function installFixture(
-  root: string,
-  config: string | undefined,
-  update: boolean | undefined,
-  legacySkill: string,
-) {
-  if (update) expect(await install(root)).toBe(0)
-  expect(await install(root, config, update ? 'update' : 'install')).toBe(0)
-  if (update) expect(fileSystemService.existsSync(legacySkill)).toBe(true)
-}
-
 async function verifyCardExclusion(
   root: string,
   linked: string,
@@ -441,7 +430,9 @@ it.each([
     writeProjectConfigs(root, skills, legacySkills, workingArea)
     const config = installConfig(root, override)
     const skillFile = (directory: string, name: string) => join(directory, target, name, 'SKILL.md')
-    await installFixture(root, config, update, skillFile(root, 'pair-process-refine-story'))
+    if (update) expect(await install(root)).toBe(0)
+    expect(await install(root, config, update ? 'update' : 'install')).toBe(0)
+    if (update) expect(fs.existsSync(skillFile(root, 'pair-process-refine-story'))).toBe(true)
     expect(fs.existsSync(skillFile(root, `${prefix}-process-refine-story`))).toBe(true)
 
     const configuredTarget = vendorTarget(skills ?? legacySkills)
@@ -525,6 +516,8 @@ steps:
     )
     const invoke = runner(root, script(root))
     git(root, 'init', '-b', 'main')
+    // A linked checkout of the updated installation must resolve the same retained aliases.
+    if (update) git(root, 'add', '-f', '--', target, '.pair/.skill-name-map.json')
     git(
       root,
       '-c',
@@ -579,7 +572,8 @@ steps:
     write(linked, 'pair.config.json', fs.readFileSync(join(root, 'pair.config.json')))
     if (legacySkills !== undefined)
       write(linked, 'config.json', fs.readFileSync(join(root, 'config.json')))
-    await installFixture(linked, config, update, skillFile(linked, 'pair-process-refine-story'))
+    if (update) expect(fs.existsSync(skillFile(linked, 'pair-process-refine-story'))).toBe(true)
+    else expect(await install(linked, config)).toBe(0)
     if (target !== configuredTarget)
       write(linked, configuredEstimate, fs.readFileSync(skillFile(linked, estimate)))
     write(linked, vendor, vendorSkill)
