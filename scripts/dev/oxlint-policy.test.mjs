@@ -243,6 +243,14 @@ test('#693 R5 an explicitly selected in-workspace directory link remains lintabl
   assert.deepEqual(lint(cwd, '--no-error-on-unmatched-pattern', 'alias/**/*.ts'), {
     status: 0, diagnostics: [],
   })
+  const workspaceAlias = `${cwd}-alias`
+  symlinkSync(cwd, workspaceAlias, 'dir')
+  t.after(() => rmSync(workspaceAlias, { force: true }))
+  symlinkSync('.', join(cwd, 'nested-workspace-alias'), 'dir')
+  assert.equal(lint(cwd, join(workspaceAlias, 'real/**/*.ts')).diagnostics.length, 2)
+  assert.deepEqual(lint(cwd, '--no-error-on-unmatched-pattern', join(workspaceAlias, 'nested-workspace-alias/real/**/*.ts')), {
+    status: 0, diagnostics: [],
+  })
   assert.deepEqual(lint(cwd, 'alias').diagnostics.map(({ filename }) => filename).sort(), [
     'alias/nested-target/other.ts', 'alias/target.ts',
   ])
@@ -261,9 +269,10 @@ test('#693 R5 fix keeps workspace sibling fixtures outside every selection', t =
   symlinkSync(sibling, join(cwd, 'linked-dir'), 'dir')
 
   for (const selection of [
-    ['linked-file.ts'], ['linked-dir'], ['linked-dir/target.ts'], ['linked-dir/**/*.ts'],
-    [target], [sibling], [`${sibling}/*.ts`],
-    ['*.ts'], ['.'], [],
+    ['linked-file.ts', 'linked-dir', 'linked-dir/target.ts', target, sibling],
+    ['linked-dir/**/*.ts', `${sibling}/*.ts`, '*.ts'],
+    ['.'],
+    [],
   ]) {
     const args = ['--no-error-on-unmatched-pattern', ...selection]
     writeFileSync(target, source)
