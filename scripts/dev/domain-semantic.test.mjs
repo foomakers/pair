@@ -211,6 +211,26 @@ export type Direct = RetryDto & { message: string | null }
   })
 })
 
+test('#750 R15 accepts absent inferred fields and reports authored optional DTO fields', t => {
+  const cwd = workspace(t, {
+    [pilot]: `import type { classifyFromDto } from './retry.dto.js'
+export function classify(ok: boolean, cause: unknown) {
+  if (ok) return { tag: 'success' } satisfies { tag: 'success' }
+  return { tag: 'failure', cause } satisfies { tag: 'failure'; cause: unknown }
+}
+export type Retry = ReturnType<typeof classify>
+export type Unvalidated = ReturnType<typeof classifyFromDto>
+`,
+    'src/http/retry.dto.ts': `interface RetryDto { cause?: never }
+export function classifyFromDto(ok: boolean, dto: RetryDto) {
+  if (ok) return { tag: 'success', ...dto } satisfies { tag: 'success' }
+  return { tag: 'failure', cause: 'error' } satisfies { tag: 'failure'; cause: unknown }
+}
+`,
+  })
+  assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, 7, 13]] })
+})
+
 function constructorModel(parameters, before = '', subclass = false) {
   const declaration = subclass
     ? 'class Base {}\nexport class Retry extends Base'
