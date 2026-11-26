@@ -181,6 +181,19 @@ function projectFor(file) {
   throw new Error(`${file}: no TypeScript project for domain lint`)
 }
 
+function trackedSuppressions() {
+  const directive = '@ts-' + 'expect-error'
+  const result = spawnSync(
+    'git',
+    ['grep', '--no-color', '-n', '-F', '-e', directive, '--', '*.ts', '*.tsx', '*.mts', '*.cts'],
+    { encoding: 'utf8' },
+  )
+  if (result.error) throw result.error
+  if (![0, 1].includes(result.status))
+    throw new Error(`Could not scan suppressions: ${result.stderr}`)
+  return new Set(result.stdout.split('\n'))
+}
+
 export function checkDomainRatchet() {
   const base = git('merge-base', 'HEAD', 'origin/main').trim()
   const files = new Set(
@@ -205,9 +218,11 @@ export function checkDomainRatchet() {
   const suppressions = read(suppressionPath)
   const [previousSuppressions] = readPrevious(base, suppressionPath, suppressions)
   const priorSuppressions = counts(previousSuppressions)
+  const tracked = suppressions.length ? trackedSuppressions() : new Set()
   for (const entry of suppressions) {
     if (!consume(priorSuppressions, entry))
       errors.push(`legacy suppression baseline cannot grow: ${entry}`)
+    else if (!tracked.has(entry)) errors.push(`retire removed legacy suppression: ${entry}`)
   }
 
   const scopes = new Map(
