@@ -164,6 +164,24 @@ export interface Retry extends RetryDto { tag: 'retry' }
   assert.match(JSON.parse(result.stdout).diagnostics[0].message, /Retry\.message/)
 })
 
+test('#750 R7 rejects optional DTO fields copied into a pilot factory result', t => {
+  const source = `import type { RetryDto } from './retry.dto.js'
+export function createRetry(dto: RetryDto) {
+  return { message: dto.message ?? '' }
+}
+`
+  const cwd = workspace(t, {
+    [pilot]: source,
+    'src/http/retry.dto.ts': 'export interface RetryDto { message?: string }\n',
+  })
+  assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+  writeFileSync(join(cwd, pilot), source.replace("message: dto.message ?? ''", '...dto'))
+  const result = lint(cwd)
+  assert.deepEqual(findings(result), { status: 1, locations: [[pilot, semantic, 3, 10]] })
+  assert.match(JSON.parse(result.stdout).diagnostics[0].message, /createRetry\.message/)
+})
+
 test('#750 R3 fails package lint when an imported type is no longer exported', t => {
   const input = 'src/http/inputs.ts'
   const cwd = workspace(t, {
