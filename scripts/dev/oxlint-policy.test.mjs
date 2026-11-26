@@ -9,12 +9,12 @@ import { fileURLToPath } from 'node:url'
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const runner = join(root, 'tools/oxlint-config/bin/oxlint.mjs')
 
-function workspace(t, configPath) {
+function workspace(t, configPath, overrides = {}) {
   const cwd = mkdtempSync(join(tmpdir(), 'pair-oxlint-'))
   t.after(() => rmSync(cwd, { recursive: true, force: true }))
   const config = JSON.parse(readFileSync(join(root, configPath), 'utf8'))
   config.extends = config.extends.map(path => join(root, dirname(configPath), path))
-  writeFileSync(join(cwd, '.oxlintrc.json'), JSON.stringify(config))
+  writeFileSync(join(cwd, '.oxlintrc.json'), JSON.stringify({ ...config, ...overrides }))
   return cwd
 }
 
@@ -23,7 +23,14 @@ function lint(cwd, ...args) {
 }
 
 function lintCommand(cwd, command, ...args) {
-  const result = spawnSync(command, args, {
+  const result = runLint(cwd, command, ...args)
+  assert.equal(result.stderr, '')
+  const { diagnostics } = JSON.parse(result.stdout)
+  return { diagnostics, status: result.status }
+}
+
+function runLint(cwd, command, ...args) {
+  return spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
     env: {
@@ -31,9 +38,6 @@ function lintCommand(cwd, command, ...args) {
       PAIR_LINT_REPORT: args.some(arg => /^--format(?:=|$)/.test(arg)) ? '' : 'json',
     },
   })
-  assert.equal(result.stderr, '')
-  const { diagnostics } = JSON.parse(result.stdout)
-  return { diagnostics, status: result.status }
 }
 
 test('#693 AC-2 preserves package lint scope and check/fix behavior', t => {
@@ -77,39 +81,86 @@ test('#693 AC-2 preserves package lint scope and check/fix behavior', t => {
   assert.equal(readFileSync(join(cwd, 'fixable.ts'), 'utf8'), 'export const value = 1\n')
 })
 
-test('#693 R5 excluded unreadable directories leave check and fix unaffected', t => {
-  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+test('#693 R5 checks selection before autofix with readable and unreadable excludes', async t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json', {
+    extends: [],
+    rules: { 'eslint/prefer-const': 'error' },
+  })
   const excluded = join(cwd, 'dist')
+  const output = 'dist/deep/excluded.ts'
   const included = 'nested/dist/covered.ts'
+  const staged = 'staged.ts'
+  const ignored = 'staged.config.ts'
+  const files = [included, staged, ignored, output]
   const source = 'export let value = 1\n'
-  mkdirSync(excluded)
+  const fixedSource = 'export const value = 1\n'
+  mkdirSync(join(excluded, 'deep'), { recursive: true })
   mkdirSync(join(cwd, 'nested/dist'), { recursive: true })
-  writeFileSync(join(excluded, 'excluded.ts'), source)
-  chmodSync(excluded, 0o000)
-
-  try {
-    if (process.getuid?.() !== 0) assert.throws(() => readdirSync(excluded), { code: 'EACCES' })
-    for (const [command, fixCommand, args] of [
-      [join(dirname(runner), 'lint.sh'), join(dirname(runner), 'lint-fix.sh'), ['--config', '.oxlintrc.json']],
-      [runner, runner, ['.']],
-      [runner, runner, ['**/*.ts']],
-      [runner, runner, ['--no-error-on-unmatched-pattern', 'dist/**/*.ts', 'nested']],
-      [runner, runner, []],
-    ]) {
-      writeFileSync(join(cwd, included), source)
-      const check = lintCommand(cwd, command, ...args)
-      assert.equal(check.status, 1)
-      assert.deepEqual(check.diagnostics.map(({ filename }) => filename), [included])
-      assert.equal(readFileSync(join(cwd, included), 'utf8'), source)
-
-      const fix = command === runner ? ['--fix'] : []
-      assert.deepEqual(lintCommand(cwd, fixCommand, ...fix, ...args), { status: 0, diagnostics: [] })
-      assert.equal(readFileSync(join(cwd, included), 'utf8'), 'export const value = 1\n')
-    }
-  } finally {
-    chmodSync(excluded, 0o700)
+  mkdirSync(join(cwd, 'empty'))
+  for (const file of files) writeFileSync(join(cwd, file), source)
+  writeFileSync(join(cwd, '.gitignore'), `${staged}\n`)
+  for (const args of [['init', '-q'], ['add', '-f', staged, ignored]]) {
+    assert.equal(spawnSync('git', args, { cwd }).status, 0)
   }
-  assert.equal(readFileSync(join(excluded, 'excluded.ts'), 'utf8'), source)
+  const index = spawnSync('git', ['diff', '--cached', '--name-only', '-z'], { cwd, encoding: 'utf8' })
+  assert.equal(index.status, 0)
+  const stagedPaths = index.stdout.split('\0').filter(Boolean)
+  assert.deepEqual(stagedPaths, [ignored, staged])
+
+  const allowEmpty = '--no-error-on-unmatched-pattern'
+  const defaultFiles = [included, staged]
+  const cases = [
+    { name: 'package defaults', args: ['--config', '.oxlintrc.json'], selected: defaultFiles, package: true },
+    { name: 'direct defaults', args: [], selected: defaultFiles },
+    { name: 'workspace directory', args: ['.'], selected: defaultFiles },
+    { name: 'broad glob', args: ['**/*.ts'], selected: defaultFiles },
+    { name: 'brace glob', args: ['{dist,nested}/**/*.ts'], selected: [included] },
+    { name: 'permitted file', args: [included], selected: [included] },
+    { name: 'staged operands', args: stagedPaths, selected: [staged], warning: ignored },
+    { name: 'unmatched glob', args: [allowEmpty, 'empty/*.ts', 'nested'], selected: [included] },
+    { name: 'explicit excluded directory', args: [allowEmpty, 'dist', 'nested'], selected: [included], explicit: true },
+    { name: 'explicit excluded glob', args: [allowEmpty, 'dist/**/*.ts', 'nested'], selected: [included], explicit: true },
+    { name: 'explicit brace glob', args: [allowEmpty, 'dist/deep/{excluded,missing}.ts', 'nested'], selected: [included], explicit: true },
+    { name: 'glob after staged operands', args: [allowEmpty, ...stagedPaths, 'dist/deep/**/*.ts', 'nested'], selected: defaultFiles, warning: ignored, explicit: true },
+  ]
+  const modes = process.getuid?.() === 0 ? [0o700] : [0o700, 0o000]
+  for (const mode of modes) {
+    for (const { name, args, selected, warning, explicit, package: packageLint } of cases) {
+      for (const fix of [false, true]) {
+        await t.test(`${mode ? 'readable' : 'unreadable'} / ${name} / ${fix ? 'fix' : 'check'}`, () => {
+          for (const file of files) writeFileSync(join(cwd, file), source)
+          chmodSync(excluded, mode)
+          const command = packageLint ? join(dirname(runner), fix ? 'lint-fix.sh' : 'lint.sh') : runner
+          const flags = fix && !packageLint ? ['--fix'] : []
+          let result
+          try {
+            if (!mode) assert.throws(() => readdirSync(excluded), { code: 'EACCES' })
+            result = runLint(cwd, command, ...flags, ...args)
+          } finally {
+            chmodSync(excluded, 0o700)
+          }
+
+          const denied = !mode && explicit
+          if (denied) {
+            assert.equal(result.status, 2)
+            assert.match(result.stderr, /EACCES.*dist/)
+            assert.equal(result.stdout, '')
+          } else {
+            assert.equal(result.status, fix ? 0 : 1)
+            assert.equal(result.stderr, '')
+            const expected = fix ? [] : selected.map(file => [file, 'error'])
+            if (warning) expected.push([warning, 'warning'])
+            const { diagnostics } = JSON.parse(result.stdout)
+            assert.deepEqual(diagnostics.map(({ filename, severity }) => [filename, severity]).sort(), expected.sort())
+          }
+          for (const file of files) {
+            const expected = fix && !denied && selected.includes(file) ? fixedSource : source
+            assert.equal(readFileSync(join(cwd, file), 'utf8'), expected, file)
+          }
+        })
+      }
+    }
+  }
 })
 
 test('#693 R3 fix mode fails on an error introduced by an applied fix', t => {
