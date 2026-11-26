@@ -263,6 +263,28 @@ it('#757 AC-4 R758-02: rejects a missing CSS module despite Next ambient types',
     expect(checked.error).toBeUndefined()
     expect(checked.status, checked.stdout + checked.stderr).toBe(0)
     expect(checkStylesheets(cwd)).toEqual([`Missing stylesheet: ${importer} imports ${specifier}`])
+
+    // The same Next file is inspected first for the website, then for Brand.
+    fs.writeFileSync(stylesheet, '')
+    const brand = join(cwd, 'packages/brand')
+    fs.writeFileSync(join(brand, 'dev/fixture.module.css'), '')
+    fs.writeFileSync(
+      join(brand, 'dev/style-fixture.ts'),
+      '/// <reference path="../../../apps/website/next-env.d.ts" />\n' +
+        "import './fixture.module.css'\n",
+    )
+    fs.writeFileSync(
+      join(brand, 'tsconfig.json'),
+      JSON.stringify({
+        extends: join(root, 'packages/brand/tsconfig.json'),
+        compilerOptions: { noLib: true, types: [] },
+        files: ['dev/style-fixture.ts'],
+        include: [],
+      }),
+    )
+    expect(checkStylesheets(cwd)).toEqual([
+      expect.stringMatching(/^Ambient CSS declaration: .*next\/types\/global\.d\.ts$/),
+    ])
   })
 })
 
