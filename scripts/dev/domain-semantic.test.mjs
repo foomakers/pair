@@ -390,6 +390,30 @@ test('#750 R14 accepts a required field and an ordinary nullable constructor par
   assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
 })
 
+const explicitNullish = 'pair-domain(no-explicit-nullish-domain-types)'
+for (const [invalid, valid, rule, column] of [
+  [
+    'abstract label?: string',
+    'abstract label: string',
+    'pair-domain(no-optional-domain-properties)',
+    12,
+  ],
+  ['abstract label: string | null', 'abstract label: string', explicitNullish, 12],
+  ['accessor label: string | null = null', 'accessor label: string = ""', explicitNullish, 12],
+  ['abstract accessor label: string | null', 'abstract accessor label: string', explicitNullish, 21],
+]) {
+  test(`#750 750-R23 AC-2/3 reports ${invalid} once`, t => {
+    const source = field => `export abstract class Retry {\n  ${field}\n}\n`
+    const cwd = workspace(t, { [pilot]: source(valid) })
+    assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+    writeFileSync(join(cwd, pilot), source(invalid))
+    const result = lint(cwd)
+    assert.deepEqual(findings(result), { status: 1, locations: [[pilot, rule, 2, column]] })
+    assert.match(JSON.parse(result.stdout).diagnostics[0].message, /Retry\.label[. ]/)
+  })
+}
+
 test('#750 R7 rejects optional DTO fields copied into a pilot factory result', t => {
   const source = `import type { RetryDto } from './retry.dto.js'
 export function createRetry(dto: RetryDto) {
