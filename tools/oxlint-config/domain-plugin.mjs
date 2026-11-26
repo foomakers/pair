@@ -3,7 +3,14 @@ const domainDeclarations = new Set([
   'TSTypeAliasDeclaration',
   'ClassDeclaration',
 ])
-const propertyVisitors = ['TSPropertySignature', 'PropertyDefinition', 'TSParameterProperty']
+const propertyVisitors = [
+  'TSPropertySignature',
+  'PropertyDefinition',
+  'TSAbstractPropertyDefinition',
+  'AccessorProperty',
+  'TSAbstractAccessorProperty',
+  'TSParameterProperty',
+]
 const assertionVisitors = ['TSAsExpression', 'TSTypeAssertion', 'TSNonNullExpression']
 
 function domainOwner(node) {
