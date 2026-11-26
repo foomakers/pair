@@ -231,6 +231,35 @@ export function classifyFromDto(ok: boolean, dto: RetryDto) {
   assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, 7, 13]] })
 })
 
+test('#750 R16 accepts a factory forwarding an inferred retry union', t => {
+  const cwd = workspace(t, {
+    [pilot]: `function classify(ok: boolean, cause: unknown) {
+  if (ok) return { tag: 'success' } satisfies { tag: 'success' }
+  return { tag: 'failure', cause } satisfies { tag: 'failure'; cause: unknown }
+}
+export const createRetry = (ok: boolean, cause: unknown) => classify(ok, cause)
+`,
+  })
+  assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+})
+
+test('#750 R16 reports authored optional DTO fields in a forwarded union', t => {
+  const cwd = workspace(t, {
+    [pilot]: `import { classify } from './retry.dto.js'
+export const createRetry = (ok: boolean) => classify(ok, {})
+`,
+    'src/http/retry.dto.ts': `interface RetryDto { cause?: never }
+export function classify(ok: boolean, dto: RetryDto) {
+  if (ok) return { tag: 'success', ...dto } satisfies { tag: 'success' }
+  return { tag: 'failure', cause: 'error' } satisfies { tag: 'failure'; cause: unknown }
+}
+`,
+  })
+  const result = lint(cwd)
+  assert.deepEqual(findings(result), { status: 1, locations: [[pilot, semantic, 2, 45]] })
+  assert.match(JSON.parse(result.stdout).diagnostics[0].message, /createRetry\.cause/)
+})
+
 function constructorModel(parameters, before = '', subclass = false) {
   const declaration = subclass
     ? 'class Base {}\nexport class Retry extends Base'
