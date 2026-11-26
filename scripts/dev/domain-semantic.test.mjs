@@ -290,6 +290,19 @@ export class Retry {
   })
 }
 
+for (const [type, locations] of [
+  ['string | null', [[pilot, semantic, 3, 7]]],
+  ['string', []],
+]) {
+  test(`#750 750-R18 AC-3 checks an interface getter of imported type ${type}`, t => {
+    const cwd = workspace(t, {
+      [pilot]: model('get cause(): Cause', "import type { Cause } from './inputs.js'\n"),
+      'src/http/inputs.ts': `export type Cause = ${type}\n`,
+    })
+    assert.deepEqual(findings(lint(cwd)), { status: locations.length, locations })
+  })
+}
+
 function constructorModel(parameters, before = '', subclass = false) {
   const declaration = subclass
     ? 'class Base {}\nexport class Retry extends Base'
