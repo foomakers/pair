@@ -260,6 +260,36 @@ export function classify(ok: boolean, dto: RetryDto) {
   assert.match(JSON.parse(result.stdout).diagnostics[0].message, /createRetry\.cause/)
 })
 
+for (const { label, value, type, locations } of [
+  {
+    label: 'reports an imported nullable getter',
+    value: 'null',
+    type: 'string | null',
+    locations: [[pilot, semantic, 3, 7]],
+  },
+  {
+    label: 'accepts an imported required getter',
+    value: "'error'",
+    type: 'string',
+    locations: [],
+  },
+]) {
+  test(`#750 R17 ${label}`, t => {
+    const cwd = workspace(t, {
+      [pilot]: `import type { Cause } from './inputs.js'
+export class Retry {
+  get cause(): Cause { return ${value} }
+}
+`,
+      'src/http/inputs.ts': `export type Cause = ${type}\n`,
+    })
+    const result = lint(cwd)
+    assert.deepEqual(findings(result), { status: locations.length, locations })
+    if (locations.length)
+      assert.match(JSON.parse(result.stdout).diagnostics[0].message, /Retry\.cause/)
+  })
+}
+
 function constructorModel(parameters, before = '', subclass = false) {
   const declaration = subclass
     ? 'class Base {}\nexport class Retry extends Base'
