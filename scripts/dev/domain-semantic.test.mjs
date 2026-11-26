@@ -564,7 +564,8 @@ for (const [bridge, code, broken, dependencies] of [
       writeFileSync(join(cwd, bridge), broken)
       const { status, stdout, stderr } = lint(cwd)
       assert.equal(status, 2, stdout + stderr)
-      assert.ok(stderr.includes(`${bridge}: ${code}`), stderr)
+      const location = code === 'TS2303' ? 'types/fallback.ts' : bridge
+      assert.ok(stderr.includes(`${location}: ${code}`), stderr)
       assert.equal(stdout, '')
     })
   }

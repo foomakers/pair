@@ -6,8 +6,8 @@ export const nullableDomainRule = 'pair-domain/nullable-domain-property'
 const nullish = ts.TypeFlags.Null | ts.TypeFlags.Undefined
 // An unresolved import, export or file reference can make an alias look like `any`.
 const dependencyFailures = new Set([
-  1192, 2305, 2306, 2307, 2459, 2613, 2614, 2688, 2694, 2724, 2732, 2792, 2834, 2835, 2882,
-  6053, 6305, 7016,
+  1192, 2303, 2305, 2306, 2307, 2308, 2459, 2613, 2614, 2688, 2694, 2724, 2732, 2792, 2834, 2835,
+  2882, 6053, 6305, 7016,
 ])
 
 function loadProject(project) {
@@ -31,13 +31,18 @@ function loadProject(project) {
   }
   const program = ts.createProgram({
     rootNames: config.fileNames,
-    options: config.options,
+    // Local declarations can carry unresolved re-exports into a model.
+    options: { ...config.options, skipLibCheck: false },
     projectReferences: config.projectReferences,
   })
   const [error] = program.getOptionsDiagnostics()
   if (error) fail(error)
   for (const source of program.getSourceFiles()) {
-    if (program.isSourceFileFromExternalLibrary(source)) continue
+    if (
+      program.isSourceFileFromExternalLibrary(source) ||
+      program.isSourceFileDefaultLibrary(source)
+    )
+      continue
     const unresolved = program
       .getSemanticDiagnostics(source)
       .find(diagnostic => dependencyFailures.has(diagnostic.code))
