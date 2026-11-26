@@ -22,7 +22,16 @@ const debt = `export interface WriteOptions {
 export interface DownloadOptions { allowed?: string | null }
 `
 
-function fixture(t) {
+function fixture(
+  t,
+  {
+    model = debt,
+    rules = {
+      [optional]: ['WriteOptions.progressReporter'],
+      [explicit]: ['WriteOptions.progressReporter'],
+    },
+  } = {},
+) {
   const cwd = mkdtempSync(join(tmpdir(), 'pair-ratchet-test-'))
   t.after(() => rmSync(cwd, { recursive: true, force: true }))
   function write(path, source) {
@@ -32,7 +41,7 @@ function fixture(t) {
   }
   const git = (...args) => execFileSync('git', args, { cwd })
   git('init', '-q', '-b', 'main')
-  write(legacy, debt)
+  write(legacy, model)
   write(`${pkg}/tsconfig.json`, { compilerOptions: { strict: true }, include: ['src/**/*.ts'] })
   write(`${pkg}/.oxlintrc.json`, {
     overrides: [
@@ -43,12 +52,7 @@ function fixture(t) {
     ],
   })
   write(suppressions, [])
-  write(baseline, {
-    [legacy]: {
-      [optional]: ['WriteOptions.progressReporter'],
-      [explicit]: ['WriteOptions.progressReporter'],
-    },
-  })
+  write(baseline, { [legacy]: rules })
   git('add', '.')
   git(
     '-c',
@@ -104,6 +108,42 @@ test('#750 AC-6 refuses a replacement finding and an expanded snapshot, then acc
     out: 'Domain baseline passed on 1 files (0 recorded findings).',
   })
 })
+
+for (const [description, model] of [
+  [
+    'union variant',
+    `export type WriteOptions =
+  | { tag: 'file'; progress?: string }
+  | { tag: 'stream'; progress: string }
+`,
+  ],
+  [
+    'nested property',
+    `export interface WriteOptions {
+  file: { progress?: string }
+  stream: { progress: string }
+}
+`,
+  ],
+]) {
+  test(`#750 R4 refuses debt moved to a different ${description}`, t => {
+    const { check, write } = fixture(t, { model, rules: { [optional]: ['WriteOptions.progress'] } })
+    const [header, file, stream, ...rest] = model.split('\n')
+    write(legacy, [header, stream, file, ...rest].join('\n'))
+    assert.equal(check().status, 0)
+
+    write(legacy, [
+      header,
+      file.replace('progress?', 'progress'),
+      stream.replace('progress:', 'progress?:'),
+      ...rest,
+    ].join('\n'))
+    const moved = check()
+    assert.equal(moved.status, 1, moved.out)
+    assert.match(moved.out, /:3:\d+: pair-domain\/no-optional-domain-properties:/)
+    assert.match(moved.out, /retire fixed domain baseline entry: .* WriteOptions\.progress/)
+  })
+}
 
 test('#750 AC-6 finds alias-only violations in new authored files and excludes generated sources and DTOs', t => {
   const { check, write } = fixture(t)
