@@ -219,7 +219,7 @@ function findNullableProperties(source, checker, symbols) {
     }
   }
 
-  function checkIntersection(node) {
+  function checkAlias(node) {
     const { name } = node
     if (!inScope(name.text)) return
     const alreadyChecked = declaration =>
@@ -231,7 +231,7 @@ function findNullableProperties(source, checker, symbols) {
         hasDirectNullishType(declaration.type) ||
         isNullishType(checker.getTypeAtLocation(declaration.name)))
     for (const type of constituents(checker.getTypeAtLocation(node))) {
-      if (!type.isIntersection()) continue
+      if (!(type.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection))) continue
       for (const property of checker.getPropertiesOfType(type)) {
         if (property.declarations?.some(alreadyChecked)) continue
         report(
@@ -247,7 +247,7 @@ function findNullableProperties(source, checker, symbols) {
 
   function visit(node) {
     if (ts.isInterfaceDeclaration(node) || ts.isClassDeclaration(node)) checkInherited(node)
-    if (ts.isTypeAliasDeclaration(node)) checkIntersection(node)
+    if (ts.isTypeAliasDeclaration(node)) checkAlias(node)
     if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) {
       const owner = domainOwner(node)
       if (inScope(owner) && !node.questionToken && !hasDirectNullishType(node.type)) {
