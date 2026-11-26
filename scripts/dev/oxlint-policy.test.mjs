@@ -261,6 +261,35 @@ if (process.getuid?.() !== 0) {
     chmodSync(file, 0o444)
     assert.equal(lint(cwd, '--workspace', '--fix').status, 0)
   })
+
+  test('#693 R12 a transient native write failure survives a subsequent permission change', t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const file = join(cwd, 'blocked.ts')
+    const sibling = join(cwd, 'sibling.ts')
+    const source = 'export let value = 1\n'
+    writeFileSync(file, source)
+    writeFileSync(sibling, source)
+    chmodSync(file, 0o444)
+    mkdirSync(join(cwd, 'dist'))
+    const release = join(cwd, 'dist/release.cjs')
+    // Release the real file as soon as the native fix returns, before the adapter observes its result.
+    writeFileSync(release, `
+      const child = require('node:child_process')
+      const nativeSpawn = child.spawnSync
+      child.spawnSync = (command, args, options) => {
+        const result = nativeSpawn(command, args, options)
+        if (args.includes('--fix')) require('node:fs').chmodSync('blocked.ts', 0o600)
+        return result
+      }
+      require('node:module').syncBuiltinESMExports()
+    `)
+    const result = runLint(cwd, process.execPath, '--require', release, runner, '--workspace', '--fix')
+    assert.equal(result.status, 2)
+    const { diagnostics } = JSON.parse(result.stdout)
+    assert.ok(diagnostics.some(d => d.message.includes('Failed to write file') && d.message.includes('blocked.ts')))
+    assert.equal(readFileSync(file, 'utf8'), source)
+    assert.equal(readFileSync(sibling, 'utf8'), 'export const value = 1\n')
+  })
 }
 
 test('#693 R5 ignores broken links excluded by the workspace policy', t => {
