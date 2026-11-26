@@ -11,7 +11,9 @@
     "/dataset/.workflows/",
     "/dataset/.skills/**/scripts/**/*.mjs",
     "*.mts",
-    "*.cts"
+    "!*.mts/",
+    "*.cts",
+    "!*.cts/"
   ],
   "settings": {
     "react": {

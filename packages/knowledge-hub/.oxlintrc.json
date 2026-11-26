@@ -11,7 +11,10 @@
     "/dataset/.workflows/",
     "/dataset/.skills/**/scripts/**/*.mjs",
     "*.mts",
+    "!*.mts/",
     "*.cts",
-    "*.jsx"
+    "!*.cts/",
+    "*.jsx",
+    "!*.jsx/"
   ]
 }

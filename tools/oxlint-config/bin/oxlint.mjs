@@ -11,7 +11,8 @@ const glob = require('fast-glob')
 const ignore = require('ignore')
 const { parse: parseJsonc } = require('jsonc-parser')
 const workspaceRoot = realpathSync.native('.')
-const sourcePattern = '**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,vue,svelte,astro}'
+const sourcePattern = '**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}'
+const frameworkExtensions = ['.vue', '.svelte', '.astro']
 // An impossible operand keeps an empty selection from starting Oxlint's default walk.
 const emptySelection = join(cli, 'no-files')
 
@@ -41,10 +42,10 @@ if (workspace) args.shift()
 const { positionals, tokens, values } = parseArgs({
   args, options: argumentOptions, strict: false, allowPositionals: true, tokens: true,
 })
-const options = ['*.vue', '*.svelte', '*.astro'].flatMap(pattern => ['--ignore-pattern', pattern])
+const options = frameworkExtensions.flatMap(extension => ['--ignore-pattern', `*${extension}`])
 if (process.env.PAIR_LINT_REPORT === 'json' && !('format' in values)) options.push('--format', 'json')
 const lintsFiles = !nonLintOptions.some(name => name in values)
-const excludeDirectory = lintsFiles ? directoryExclusions() : () => false
+const isExcluded = lintsFiles ? configExclusions() : () => false
 
 function runLint(args, stdio) {
   const result = spawnSync(process.execPath, [cli, ...options, ...args], {
@@ -78,7 +79,7 @@ function isWithin(root, path) {
   return fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot)
 }
 
-function directoryExclusions() {
+function configExclusions() {
   const candidates = values.config ? [values.config] : ['.oxlintrc.json', '.oxlintrc.jsonc']
   for (const candidate of candidates) {
     if (!['.json', '.jsonc'].includes(extname(candidate))) break
@@ -94,11 +95,19 @@ function directoryExclusions() {
     }
 
     const patterns = config?.ignorePatterns
-    // Leave negated patterns to Oxlint: a descendant can be explicitly re-included.
-    if (!Array.isArray(patterns) || patterns.some(pattern => typeof pattern !== 'string' || pattern.startsWith('!'))) break
+    if (!Array.isArray(patterns) || patterns.some(pattern => typeof pattern !== 'string')) break
+    // A file-extension exclusion followed by its directory exception never prunes that directory.
+    // Leave more general re-inclusions to Oxlint, which may select an excluded directory's descendants.
+    const mayPrune = patterns.every((pattern, index) => !pattern.startsWith('!')
+      || (pattern.endsWith('/') && pattern === `!${patterns[index - 1]}/`))
+    if (!mayPrune) break
     const matcher = ignore({ ignorecase: false }).add(patterns)
     const root = dirname(file)
-    return path => path !== root && isWithin(root, path) && matcher.ignores(`${relative(root, path).split(sep).join('/')}/`)
+    return (path, directory = true) => {
+      if (path === root || !isWithin(root, path)) return false
+      const name = relative(root, path).split(sep).join('/')
+      return matcher.ignores(directory ? `${name}/` : name)
+    }
   }
   // Oxlint reports configuration errors and handles any other config formats.
   return () => false
@@ -109,7 +118,7 @@ function operandTarget(path) {
     return realPath(path)
   } catch (error) {
     // Let glob roots be validated separately from an inaccessible excluded file operand.
-    if (error.code !== 'EACCES' || !excludeDirectory(dirname(resolve(path)))) throw error
+    if (error.code !== 'EACCES' || !isExcluded(dirname(resolve(path)))) throw error
   }
 }
 
@@ -154,15 +163,17 @@ function matchingFiles(pattern, directory = '.', root = workspaceRoot) {
     fs: {
       readdirSync(dir, options) {
         const selectedDir = resolve(directory, relative(root, dir))
-        if (excludeDirectory(selectedDir) || !isWalkDirectory(dir, root)) return []
-        if (!isWithin(workspaceRoot, selectedDir) && excludeDirectory(realPath(selectedDir))) return []
+        if (isExcluded(selectedDir) || !isWalkDirectory(dir, root)) return []
+        if (!isWithin(workspaceRoot, selectedDir) && isExcluded(realPath(selectedDir))) return []
         return readdirSync(dir, options)
       },
     },
   }).flatMap(({ dirent, path }) => {
     if (!dirent.isFile() && !dirent.isSymbolicLink()) return []
     const file = isAbsolute(path) ? normalize(path) : join(directory, path)
-    const target = realPath(file)
+    if (isExcluded(resolve(file), false) || frameworkExtensions.includes(extname(file))) return []
+    // Broken included links abort discovery before Oxlint can modify any selected source.
+    const target = realpathSync.native(file)
     if (!isWithin(workspaceRoot, target) || !isWalkDirectory(dirname(resolve(root, path)), root)) return []
     return dirent.isFile() || statSync(target, { throwIfNoEntry: false })?.isFile() ? [file] : []
   })
@@ -270,17 +281,21 @@ function main() {
     options.push('--no-error-on-unmatched-pattern')
   }
   let prepared
+  let paths = []
   try {
     prepared = explicit ? prepareExplicitLint() : {}
+    if (lintsFiles && !explicit) {
+      paths = matchingFiles(sourcePattern).map(asOperand)
+      if (!paths.length && !values['no-error-on-unmatched-pattern']) return selectionError('.')
+    }
   } catch (error) {
-    if (!['EACCES', 'EPERM'].includes(error.code)) throw error
+    if (!['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR', 'ELOOP'].includes(error.code)) throw error
     process.stderr.write(`${error.message}\n`)
     process.exitCode = 2
     return
   }
   if (!prepared) return
   const { replacements, warnings, overLimit } = prepared
-  const paths = lintsFiles && !explicit ? matchingFiles(sourcePattern).map(asOperand) : []
   const selected = explicit
     ? tokens.some(token => token.kind === 'positional' && replacements.get(token.index).length)
     : paths.length > 0
