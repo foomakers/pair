@@ -159,6 +159,18 @@ function isNullishType(type) {
   return constituents(type).some(part => part.flags & nullish)
 }
 
+function objectProperties(type, checker) {
+  if (!(type.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection))) return []
+  const properties = checker.getPropertiesOfType(type)
+  const literal = type.getSymbol()?.valueDeclaration
+  if (!literal || !ts.isObjectLiteralExpression(literal)) return properties
+  const original = checker.getTypeAtLocation(literal)
+  // TypeScript pads inferred union arms with optional fields missing from their literals.
+  return properties.filter(
+    property => !(property.flags & ts.SymbolFlags.Optional) || original.getProperty(property.name),
+  )
+}
+
 function returnedExpression(node) {
   if (ts.isReturnStatement(node)) return node.expression
   if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return node.body
@@ -189,8 +201,7 @@ function findNullableProperties(source, checker, symbols) {
 
   function checkReturn(expression, owner) {
     for (const type of constituents(checker.getTypeAtLocation(expression))) {
-      if (!(type.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection))) continue
-      for (const property of checker.getPropertiesOfType(type)) {
+      for (const property of objectProperties(type, checker)) {
         const declaration = property.valueDeclaration
         const local =
           declaration?.getSourceFile() === source &&
@@ -242,23 +253,14 @@ function findNullableProperties(source, checker, symbols) {
         hasDirectNullishType(declaration.type) ||
         isNullishType(checker.getTypeAtLocation(declaration.name)))
     for (const type of constituents(checker.getTypeAtLocation(node))) {
-      if (!(type.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection))) continue
-      const literal = type.getSymbol()?.valueDeclaration
-      const original =
-        literal && ts.isObjectLiteralExpression(literal)
-          ? checker.getTypeAtLocation(literal)
-          : undefined
-      for (const property of checker.getPropertiesOfType(type)) {
+      for (const property of objectProperties(type, checker)) {
         if (property.declarations?.some(alreadyChecked)) continue
-        const optional = Boolean(property.flags & ts.SymbolFlags.Optional)
-        // TypeScript pads inferred union arms with optional fields missing from their literals.
-        if (optional && original && !original.getProperty(property.name)) continue
         report(
           checker.getTypeOfSymbolAtLocation(property, node),
           name.text,
           property.name,
           name,
-          optional,
+          Boolean(property.flags & ts.SymbolFlags.Optional),
         )
       }
     }
