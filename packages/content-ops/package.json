@@ -46,6 +46,7 @@
     "mdlint:fix": "markdownlint-fix"
   },
   "devDependencies": {
+    "@typescript/typescript6": "6.0.2",
     "@pair/oxlint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",

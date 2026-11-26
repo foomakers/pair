@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import ts from 'typescript'
+import ts from '@typescript/typescript6'
 import { describe, expect, it, vi } from 'vitest'
 
 // Each control invokes tsc on the full project. Allow for concurrent CI jobs.
@@ -160,7 +160,7 @@ export function consume(outcome: RetryOutcome): unknown {
   it.each(negatives)('rejects $name', ({ source, code, line = 2, column }) => {
     inProject(workspace => {
       const result = compile(workspace)
-      expect(result.status, result.output).toBe(2)
+      expect(result.status, result.output).toBe(1)
       expect(result.errors, result.output).toBe(1)
       expect(result.locations, result.output).toEqual([[fixture, code, line, column]])
     }, source)
@@ -204,7 +204,7 @@ export function consume(outcome: RetryOutcome): unknown {
       }
       expect(expected.length).toBeGreaterThan(0)
       const result = compile(workspace)
-      expect(result.status, result.output).toBe(2)
+      expect(result.status, result.output).toBe(1)
       expect(result.errors, result.output).toBe(expected.length)
       expect(result.locations, result.output).toEqual(expected)
       expect(result.output).toContain('test-only-added-variant')
