@@ -1,4 +1,4 @@
-import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import {
   checkAgainstEngines,
   checkWorkflowTiers,
@@ -81,6 +81,12 @@ const DEFAULT_TARGETS = [
 
 type SkillsRegistry = { targets?: { path: string }[]; target_path?: string; prefix?: string }
 
+const BUILT_IN_SKILLS = new Set([
+  ...Object.values(kindByName).map(kind => kind.defaultSkill),
+  'pair-workflow-cycle',
+  'pair-next',
+])
+
 function skillsRegistry(project: Project, root: string): SkillsRegistry {
   const config = projectConfig(root) ?? projectConfig(project.main)
   const registries = (config?.['asset_registries'] ?? config?.['dataset_registries']) as
@@ -89,34 +95,40 @@ function skillsRegistry(project: Project, root: string): SkillsRegistry {
   return registries?.skills ?? {}
 }
 
-// A local bundle identifies its install target and prefix, including source and CLI overrides.
+// The executing bundle identifies its own installation, including in a linked worktree.
 function bundleLayout(project: Project) {
   const bundle = dirname(project.scriptDir)
-  const target = relative(project.main, dirname(bundle))
   const installed = /^(?:(.+)-)?capability-workflow$/.exec(basename(bundle))
-  if (installed === null || isAbsolute(target) || target === '..' || target.startsWith(`..${sep}`))
-    return undefined
-  return { target, prefix: installed[1] ?? '' }
+  return installed === null ? undefined : { target: dirname(bundle), prefix: installed[1] ?? '' }
 }
 
-function registryTargets(registry: SkillsRegistry, bundleTarget: string | undefined): string[] {
+function registryTargets(registry: SkillsRegistry): string[] {
   if (registry.targets?.length) return registry.targets.map(entry => entry.path)
   // A partial registry override inherits the installer's default targets.
-  return [
-    ...(bundleTarget === undefined ? [] : [bundleTarget]),
-    ...(registry.target_path ? [registry.target_path] : []),
-    ...DEFAULT_TARGETS,
-  ]
+  return [...(registry.target_path ? [registry.target_path] : []), ...DEFAULT_TARGETS]
+}
+
+function skillCandidates(root: string, targets: string[], prefix: string, name: string) {
+  const names = name.startsWith('pair-') ? [name, name.slice(5)] : [name]
+  return names.flatMap(candidate => skillPaths(root, targets, prefix, candidate))
 }
 
 function installedSkillPaths(project: Project, name: string, root = project.main) {
   const registry = skillsRegistry(project, root)
   const bundle = bundleLayout(project)
-  const targets = registryTargets(registry, bundle?.target)
   const prefix = registry.prefix ?? bundle?.prefix ?? 'pair'
-  const paths = skillPaths(root, targets, prefix, name)
-  if (name.startsWith('pair-')) paths.push(...skillPaths(root, targets, prefix, name.slice(5)))
-  return paths
+  const configured = skillCandidates(root, registryTargets(registry), prefix, name)
+  if (bundle === undefined) return configured
+
+  // Prefer the matching built-in even if the original name still exists after an update.
+  const sibling = BUILT_IN_SKILLS.has(name)
+    ? [bundle.prefix, name.slice(5)].filter(Boolean).join('-')
+    : name
+  return [
+    ...skillPaths(bundle.target, ['.'], undefined, sibling),
+    ...configured,
+    ...skillCandidates(bundle.target, ['.'], bundle.prefix, name),
+  ]
 }
 
 export function sessionSkill(project: Project, name: string): string {
