@@ -287,23 +287,36 @@ function finishLint(result, warnings = [], overLimit = false) {
   for (const { filename, message } of warnings) process.stderr.write(`${JSON.stringify(filename)}: warning: ${message}\n`)
 }
 
-function runFix(args, checkArgs, reportArgs, stdio) {
-  const first = runLint(args, capture)
-  if (![0, 1].includes(first.status) || first.stderr.length) return first
-  // A no-var fix can leave prefer-const for a second pass. Read the native structured
-  // report so write failures remain operational errors in every user-facing format.
-  const fixed = runLint(reportArgs, capture, true)
-  if (fixed.status === 1 && !fixed.stderr.length) {
+function runFix(checkArgs, reportArgs, validatePresentation, stdio) {
+  if (validatePresentation) {
+    // Validate user-supplied reporter options before a machine-formatted pass can write.
+    const valid = runLint(['--debug=files', ...checkArgs], capture)
+    if (valid.status !== 0) return valid
+  }
+  // A no-var fix can leave prefer-const for a second pass. Inspect each writing pass
+  // before retrying: a later success must never hide an earlier filesystem failure.
+  for (let pass = 0; pass < 2; pass++) {
+    const fixed = runLint(reportArgs, capture, true)
+    if (fixed.status === 0 && !fixed.stderr.length) continue
+    if (fixed.status !== 1 || fixed.stderr.length) return fixed
     let report
     try {
       report = JSON.parse(fixed.stdout)
     } catch {
       return fixed
     }
-    if (report?.diagnostics?.some(d => !d.filename && !d.code && d.message.startsWith('Failed to write file '))) {
-      return { ...first, status: 2 }
+    if (!Array.isArray(report?.diagnostics)) return fixed
+    const errors = report.diagnostics.filter(d => d.severity === 'error' && !d.filename && !d.code)
+    if (errors.length) {
+      fixed.status = 2
+      if (values.silent) fixed.stdout = Buffer.alloc(0)
+      else if ((values.format ?? process.env.PAIR_LINT_REPORT) !== 'json') {
+        fixed.stdout = Buffer.alloc(0)
+        fixed.stderr = Buffer.from(errors.map(d => `${d.message}\n`).join(''))
+      }
+      return fixed
     }
-  } else if (fixed.status !== 0 || fixed.stderr.length) return fixed
+  }
   return runLint(checkArgs, stdio)
 }
 
@@ -341,7 +354,7 @@ function main() {
   ]
   const stdio = warnings?.length ? capture : 'inherit'
   const result = fixIndices.size
-    ? runFix(lintArgs(), lintArgs(fixIndices), lintArgs(presentationIndices), stdio)
+    ? runFix(lintArgs(fixIndices), lintArgs(presentationIndices), presentation.length > 0, stdio)
     : runLint(lintArgs(), stdio)
   finishLint(result, warnings, overLimit)
 }
