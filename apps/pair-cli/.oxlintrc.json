@@ -16,5 +16,22 @@
     "!*.cts/",
     "*.jsx",
     "!*.jsx/"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "src/commands/run/card-entry-prepare.test.ts",
+        "src/commands/run/cards-lifecycle-4.test.ts",
+        "src/commands/run/cycle.test.ts",
+        "src/commands/run/workflow-facts.test.ts",
+        "src/commands/run/workflow-host.test.ts"
+      ],
+      "rules": {
+        "legacy-typescript/ban-ts-comment": [
+          "error",
+          { "ts-expect-error": "allow-with-description" }
+        ]
+      }
+    }
   ]
 }

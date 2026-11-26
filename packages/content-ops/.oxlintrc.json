@@ -16,5 +16,24 @@
     "!*.cts/",
     "*.jsx",
     "!*.jsx/"
+  ],
+  "overrides": [
+    {
+      "files": ["src/http/retry.domain.ts"],
+      "rules": {
+        "pair-domain/no-optional-domain-properties": "warn",
+        "pair-domain/no-explicit-nullish-domain-types": "warn",
+        "pair-domain/no-unsafe-domain-assertions": "warn"
+      }
+    },
+    {
+      "files": ["test/fixtures/domain-compile-negative/**/*.{ts,tsx}"],
+      "rules": {
+        "legacy-typescript/ban-ts-comment": [
+          "error",
+          { "ts-expect-error": { "descriptionFormat": "^:\\s*\\S" }, "minimumDescriptionLength": 0 }
+        ]
+      }
+    }
   ]
 }

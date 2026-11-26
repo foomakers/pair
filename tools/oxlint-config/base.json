@@ -109,7 +109,7 @@
         "eslint-js/prefer-const": "error",
         "eslint-js/max-params": ["error", 4],
         "eslint-js/no-extra-boolean-cast": "error",
-        "legacy-typescript/ban-ts-comment": "error",
+        "legacy-typescript/ban-ts-comment": ["error", { "ts-expect-error": true }],
         "legacy-typescript/no-array-constructor": "error",
         "legacy-typescript/no-duplicate-enum-values": "error",
         "legacy-typescript/no-misused-new": "error",
@@ -180,6 +180,10 @@
     {
       "name": "legacy-typescript",
       "specifier": "@typescript-eslint/eslint-plugin"
+    },
+    {
+      "name": "pair-domain",
+      "specifier": "./domain-plugin.mjs"
     }
   ]
 }

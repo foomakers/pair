@@ -29,3 +29,11 @@ The original content-ops retry suite passed 11/11. The [#748 frozen matrix](http
 | Build output, declarations, KB/skill mirrors | Excluded from findings. Imported declarations can still supply type information. |
 
 The frozen deferred inventory is seven optional-property findings and seven explicit undefined findings. The existing hygiene scan reports no first-party ESLint or Oxlint disable directives, TypeScript ignores or TypeScript nochecks. Ten legacy TypeScript expect-error directives occur in CLI run tests (`card-entry-prepare`, `cards-lifecycle-4`, `cycle`, `workflow-facts` and six in `workflow-host`).
+
+## Typed Oxlint probes
+
+Node 20.20.2, Oxlint 1.95.0 and oxlint-tsgolint 7.0.2008 were exercised together. From `packages/content-ops`, `oxlint -c .oxlintrc.json --tsconfig tsconfig.json --type-aware -D typescript/switch-exhaustiveness-check <file>` loaded the actual package config. One fixture omitted a union case and the other covered both cases. Both exited 1 with `typescript(tsconfig-error)` at `tsconfig.json:3:3` because the typed runner rejected inherited `baseUrl`. The failure occurred before rule evaluation. Keep the workspace path settings and use a TypeScript `never` witness at each pilot dispatch.
+
+A separate custom JS plugin probe ran against a working NodeNext project without `baseUrl`. The nullable alias and the non-null control both ran the plugin and exited 1 at `1:1` with the probe's own missing-checker finding. `context.sourceCode.parserServices` supplied no TypeScript program. This pins the semantic fallback to the workspace TypeScript compiler API.
+
+The scoped syntax and independent suppression suite passed 18/18 on Node 20. Failed syntax fixtures matched their specific rule and source position. The existing base and React controls and twelve hygiene unit tests also passed. Legacy TypeScript suppressions are frozen by exact Git grep record. A moved or changed directive requires removal of the suppression.

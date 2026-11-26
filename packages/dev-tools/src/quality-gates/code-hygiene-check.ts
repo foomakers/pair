@@ -16,12 +16,16 @@ import { execSync } from 'child_process'
 import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 
+import legacySuppressions from './legacy-typescript-suppressions.json'
 import { REPO_ROOT } from './repo-root'
 
 // Path of this module, relative to the repo root — excluded from its own scan so
 // the patterns below (deliberately split so they don't match this file) never
 // trip on the string literals that define them.
 const SELF_EXCLUDE = 'packages/dev-tools/src/quality-gates/code-hygiene-check.ts'
+const EXPECT_ERROR = '@ts-' + 'expect-error'
+const COMPILE_NEGATIVE_FIXTURES = 'packages/content-ops/test/fixtures/domain-compile-negative/'
+const FROZEN_SUPPRESSIONS = new Set(legacySuppressions)
 
 export interface HygienePattern {
   label: string
@@ -32,6 +36,7 @@ export interface HygienePattern {
 export const PATTERNS: HygienePattern[] = [
   { label: '@ts-ignore', regex: '@ts-' + 'ignore' },
   { label: '@ts-nocheck', regex: '@ts-' + 'nocheck' },
+  { label: EXPECT_ERROR, regex: EXPECT_ERROR },
   { label: 'eslint-disable', regex: 'eslint-' + 'disable' },
   { label: 'oxlint-disable', regex: 'oxlint-' + 'disable' },
   { label: 'test.skip', regex: '\\btest\\.' + 'skip\\b' },
@@ -39,7 +44,7 @@ export const PATTERNS: HygienePattern[] = [
   { label: 'describe.skip', regex: '\\bdescribe\\.' + 'skip\\b' },
 ]
 
-export const FILE_GLOBS = ['*.ts', '*.tsx', '*.js', '*.cjs', '*.mjs']
+export const FILE_GLOBS = ['*.ts', '*.tsx', '*.mts', '*.cts', '*.js', '*.jsx', '*.cjs', '*.mjs']
 
 /** Build the `git grep` invocation for one pattern (exported for direct assertion). */
 export function buildGitGrepCommand(
@@ -67,12 +72,15 @@ export function quarantinedTitles(
   }
 }
 
-/** Parse raw `git grep -n` stdout into formatted `  file:line` entries; lines carrying an exempt title are dropped. */
-export function parseGrepOutput(out: string, exempt: string[] = []): string[] {
+/** Parse raw `git grep -n` stdout into formatted `  file:line` entries, excluding approved matches. */
+export function parseGrepOutput(
+  out: string,
+  exempt: string[] = [],
+  include: (line: string) => boolean = () => true,
+): string[] {
   return out
-    .trim()
     .split('\n')
-    .filter(Boolean)
+    .filter(line => line.trim() && include(line))
     .filter(line => !exempt.some(t => t && line.includes(t)))
     .map(line => {
       const sep = line.indexOf(':')
@@ -81,6 +89,14 @@ export function parseGrepOutput(out: string, exempt: string[] = []): string[] {
       const lineNum = line.substring(sep + 1, sep2)
       return `  ${file}:${lineNum}`
     })
+}
+
+function isForbiddenExpectError(line: string): boolean {
+  if (FROZEN_SUPPRESSIONS.has(line)) return false
+  const file = line.slice(0, line.indexOf(':'))
+  if (!file.startsWith(COMPILE_NEGATIVE_FIXTURES) || !/\.tsx?$/.test(file)) return true
+  const description = line.slice(line.indexOf(EXPECT_ERROR) + EXPECT_ERROR.length).split('*/')[0]
+  return !/^:\s*\S/.test(description ?? '')
 }
 
 export type Exec = (cmd: string) => string
@@ -96,12 +112,20 @@ export function scanPattern(
   selfExclude: string = SELF_EXCLUDE,
   exec: Exec = defaultExec,
 ): string[] {
+  let out: string
   try {
-    const out = exec(buildGitGrepCommand(pattern.regex, fileGlobs, selfExclude))
-    return parseGrepOutput(out, quarantinedTitles())
-  } catch {
-    return []
+    out = exec(buildGitGrepCommand(pattern.regex, fileGlobs, selfExclude))
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      ('status' in error ? error.status === 1 : error.message === 'exit 1')
+    ) {
+      return []
+    }
+    throw error
   }
+  if (pattern.label === EXPECT_ERROR) return parseGrepOutput(out, [], isForbiddenExpectError)
+  return parseGrepOutput(out, pattern.label.endsWith('.skip') ? quarantinedTitles() : [])
 }
 
 export interface RunResult {
