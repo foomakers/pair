@@ -76,6 +76,17 @@ function install(cwd: string, config?: string, command: 'install' | 'update' = '
     : handleUpdateCommand({ command, ...source }, fs, options)
 }
 
+async function installFixture(
+  root: string,
+  config: string | undefined,
+  update: boolean | undefined,
+  legacySkill: string,
+) {
+  if (update) expect(await install(root)).toBe(0)
+  expect(await install(root, config, update ? 'update' : 'install')).toBe(0)
+  if (update) expect(fileSystemService.existsSync(legacySkill)).toBe(true)
+}
+
 async function verifyCardExclusion(root: string, linked: string, stop: () => void) {
   const fs = fileSystemService
   const card = '42'
@@ -195,11 +206,9 @@ it.each([
       }),
     )
     const config = installConfig(root, override)
-    if (update) expect(await install(root)).toBe(0)
-    expect(await install(root, config, update ? 'update' : 'install')).toBe(0)
     const skillFile = (directory: string, name: string) => join(directory, target, name, 'SKILL.md')
+    await installFixture(root, config, update, skillFile(root, 'pair-process-refine-story'))
     expect(fs.existsSync(skillFile(root, `${prefix}-process-refine-story`))).toBe(true)
-    if (update) expect(fs.existsSync(skillFile(root, 'pair-process-refine-story'))).toBe(true)
 
     const vendor = `${vendorTarget(skills)}/vendor-notes/SKILL.md`
     const vendorSkill = '---\nname: vendor-notes\n---\n'
@@ -318,9 +327,7 @@ steps:
     const linked = join(fixture, 'linked')
     git(root, 'worktree', 'add', '--detach', linked)
     write(linked, 'pair.config.json', fs.readFileSync(join(root, 'pair.config.json')))
-    if (update) expect(await install(linked)).toBe(0)
-    expect(await install(linked, config, update ? 'update' : 'install')).toBe(0)
-    if (update) expect(fs.existsSync(skillFile(linked, 'pair-process-refine-story'))).toBe(true)
+    await installFixture(linked, config, update, skillFile(linked, 'pair-process-refine-story'))
     write(linked, vendor, vendorSkill)
     const invokeLinked = runner(linked, script(linked))
     expect(invokeLinked('validate', 'installed')).toMatchObject(preview)

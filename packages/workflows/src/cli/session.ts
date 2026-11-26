@@ -19,7 +19,7 @@ import {
   type StepLaunch,
   type RunStateFile,
 } from '../engine'
-import { addressedSteps, CARD_STATES, type CardState, type Workflow } from '../grammar'
+import { addressedSteps, CARD_STATES, type CardState, type Step, type Workflow } from '../grammar'
 import {
   advanceStep,
   endStep,
@@ -338,15 +338,18 @@ export async function openSession(project: Project, input: OpenInput) {
   )
 }
 
-const sessionLaunch = (
-  project: Project,
-  launch: StepLaunch,
-  explicitSkill: string | undefined,
-): StepLaunch => ({
-  ...launch,
-  uses: explicitSkill ?? sessionDefaultSkill(project, launch.uses),
-  interactive: sessionInteractiveOf(launch),
-})
+function sessionLaunch(project: Project, launch: StepLaunch, steps: readonly Step[]) {
+  const step = steps.find(candidate => candidate.id === launch.id)
+  if (step === undefined) throw new Error(`step-unknown: ${launch.id}`)
+  return {
+    step,
+    resolved: {
+      ...launch,
+      uses: step.skill ?? sessionDefaultSkill(project, launch.uses),
+      interactive: sessionInteractiveOf(launch),
+    },
+  }
+}
 
 const sessionMessage = (launch: StepLaunch, worktree: string | undefined) =>
   buildMessage(launch, kindByName[launch.kind], {
@@ -356,15 +359,12 @@ const sessionMessage = (launch: StepLaunch, worktree: string | undefined) =>
   })
 
 function stepPacket(
-  project: Project,
   workflow: Workflow,
   configuration: Configuration | undefined,
-  context: { readonly engine: string; readonly worktree?: string },
+  context: { readonly project: Project; readonly engine: string; readonly worktree?: string },
   launch: StepLaunch,
 ) {
-  const step = addressedSteps(workflow).find(candidate => candidate.id === launch.id)
-  if (step === undefined) throw new Error(`step-unknown: ${launch.id}`)
-  const resolved = sessionLaunch(project, launch, step.skill)
+  const { step, resolved } = sessionLaunch(context.project, launch, addressedSteps(workflow))
   return {
     ...resolved,
     worktree: context.worktree,
@@ -527,7 +527,8 @@ export async function nextSession(
 
     const workflow = frozenWorkflow(run)
     const config = effectiveConfiguration(run)
-    const packet = (launch: StepLaunch) => stepPacket(project, workflow, config, lease, launch)
+    const packet = (launch: StepLaunch) =>
+      stepPacket(workflow, config, { ...lease, project }, launch)
     if (lease.launch !== undefined)
       return {
         result: { run: 'running', ready: [packet(lease.launch)] },
@@ -579,10 +580,7 @@ export async function recordSession(
     const sent =
       writer === undefined
         ? ''
-        : sessionMessage(
-            sessionLaunch(project, launch, steps.find(step => step.id === launch.id)?.skill),
-            lease.worktree,
-          )
+        : sessionMessage(sessionLaunch(project, launch, steps).resolved, lease.worktree)
     const final = readMessage(file)
     const result = await settleAgentStep(host, observed, launch, { final, model })
     await writer?.execution(launch, result, { sent, final, usage, startedAt, model })
