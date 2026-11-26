@@ -1,3 +1,4 @@
+import installerConfig from '../../../../apps/pair-cli/config.json'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import {
   checkAgainstEngines,
@@ -29,10 +30,6 @@ import {
   yamlFiles,
 } from './session-files'
 import { defaultSkillPaths, findDefaultSkill, findSkillFile, skillsLayout } from './skill-paths'
-
-// The standalone bundle embeds the same base configuration the installer reads.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const installerConfig = require('../../../../apps/pair-cli/config.json') as Record<string, unknown>
 
 const TECH = '.pair/adoption/tech'
 const PORTABLE_QUICK =
