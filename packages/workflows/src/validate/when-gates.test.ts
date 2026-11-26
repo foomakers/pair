@@ -47,6 +47,25 @@ describe('merge warnings (#680 AC-7)', () => {
       "merge has no gate with the 'head-unchanged' check",
     ])
   })
+  it.each([false, true])('checks a review loop followed by a fix (%s)', laterFix => {
+    const loop = `  rounds:
+    kind: loop
+    until: review
+    max: 3
+    on-max: escalate
+    steps:
+      review: { kind: review, escalate: { failed: continue } }
+      fix: { kind: fix }
+`
+    const steps = FULL.replace('  review: { kind: review, escalate: { ' + allStops + ' } }\n', loop)
+    const candidate = laterFix
+      ? steps.replace('  checks:', '  last-fix: { kind: fix }\n  checks:')
+      : steps
+    expect(problems(candidate)).toEqual([])
+    expect(warned(candidate).filter(problem => problem.startsWith('merge has'))).toEqual(
+      laterFix ? ['merge has no review after the last code-changing step'] : [],
+    )
+  })
   it('a review before the last fix does not count', () => {
     expect(
       warned(FULL.replace('  checks', `  fix: { kind: fix, escalate: { ${allStops} } }\n  checks`)),

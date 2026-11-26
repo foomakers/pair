@@ -17,6 +17,7 @@ import { mainCheckoutOrCwd } from './cycle-wiring'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { runPool } from './parallel'
 import { inPooledCard } from './pooled-card'
+import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
 import {
   matchesWorkflowCard,
   pendingWorkflowCard,
@@ -368,6 +369,34 @@ function writeSummary(fs: Services['fs'], summary: string, cards: readonly Batch
   return totals.failed ? 1 : 0
 }
 
+async function renderBatchCard(
+  sink: ConsoleSink,
+  card: WorkflowCard,
+  launch: () => Promise<BatchOutcome>,
+): Promise<BatchOutcome> {
+  sink.event({ event: 'card-start', card: card.id, title: card.title })
+  let ended = false
+  const result = await inPooledCard(
+    {
+      onLine: (line, print) => print(`[${card.id}] ${line}`),
+      onEvent: event => {
+        if (event.event === 'card-end') ended = true
+        sink.event(event)
+      },
+    },
+    launch,
+  )
+  if (!ended) {
+    sink.event({
+      event: 'card-end',
+      card: card.id,
+      status: result.outcome,
+      ...(result.reason && { reason: result.reason }),
+    })
+  }
+  return result
+}
+
 async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
   const { config, request, services } = input
   const { selected, limit, prior, excluded, runId, members } = plan
@@ -378,8 +407,16 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
       services.fs.mkdirSync(member, { recursive: true })
   }
   const releases = new Set<() => void>()
-  const launch = (card: WorkflowCard): Promise<BatchOutcome> =>
-    inPooledCard({ onLine: (line, print) => print(`[${card.id}] ${line}`) }, async () => {
+  const sink = createConsoleSink({
+    out: process.stdout,
+    err: process.stderr,
+    mode: config.output ?? 'live',
+    color: config.noColor !== true && process.env['NO_COLOR'] === undefined,
+    plain: config.verbose !== true,
+  })
+  const restore = routeConsoleTo(sink)
+  const launch = (card: WorkflowCard) =>
+    renderBatchCard(sink, card, async () => {
       const run = { ...request, card: card.id, runId: runId(card.id) }
       const exit = await handleWorkflowRun(config, run, services, {
         card,
@@ -388,14 +425,19 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
       })
       return prior.get(card.id) ?? { id: card.id, outcome: exit === 0 ? 'done' : 'failed' }
     })
-  return await whileInterruptible(
-    () => releases.forEach(release => release()),
-    async () =>
-      writeSummary(services.fs, plan.summary, [
-        ...(await scheduleWorkflowCards(selected, limit, prior, launch)),
-        ...excluded,
-      ]),
-  )
+  try {
+    return await whileInterruptible(
+      () => releases.forEach(release => release()),
+      async () =>
+        writeSummary(services.fs, plan.summary, [
+          ...(await scheduleWorkflowCards(selected, limit, prior, launch)),
+          ...excluded,
+        ]),
+    )
+  } finally {
+    sink.finish()
+    restore()
+  }
 }
 
 export async function handleWorkflowBatch(

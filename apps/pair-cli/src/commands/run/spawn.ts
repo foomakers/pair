@@ -78,6 +78,7 @@ export function resolveIdleTimeout(input: {
 export interface SpawnIterationInput extends EngineArgsInput {
   /** Capture process facts for workflow attempt history. */
   readonly diagnoseProcess?: boolean
+  readonly onStderr?: (line: string) => Promise<void>
   /** Opt in to waiting for a finalized result file when the stream result is insufficient. */
   readonly shouldFinalizeLastMessage?: (result: IterationResult) => boolean
   /** Opt-in total wall-clock cap per iteration (`--iteration-timeout`); absent ⇒ none (US-573). */
@@ -304,6 +305,7 @@ function watchTransport(child: EngineChild, input: SpawnIterationInput) {
     child.stderr,
     input.engine.id,
     input.diagnoseProcess ? stderrTail : undefined,
+    input.onStderr,
   ).catch(capture)
   return {
     stderr,
@@ -517,6 +519,7 @@ export async function relayLines(
   stream: AsyncIterable<string | Uint8Array>,
   engineId?: string,
   stderrTail?: string[],
+  onLine: (line: string) => void | Promise<void> = line => console.log(line),
 ): Promise<void> {
   for await (const line of toLines(stream)) {
     if (stderrTail !== undefined) {
@@ -524,6 +527,6 @@ export async function relayLines(
       stderrTail.push(line)
     }
     if (!line.trim() || (engineId === 'codex' && line.trim() === CODEX_STDIN_NOISE)) continue
-    console.log(line)
+    await onLine(line)
   }
 }

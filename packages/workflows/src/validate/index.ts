@@ -461,9 +461,31 @@ function warnings(workflow: Workflow): WorkflowError[] {
     : []
 }
 
+/** A successful review loop exits at the review, before running any later fix. */
+function reviewExit(step: Step): boolean {
+  return (
+    step.kind === 'loop' &&
+    step.steps?.some(child => child.id === step.until && child.kind === 'review') === true &&
+    escalationAction(step.escalate?.exhausted) !== 'continue'
+  )
+}
+
+function reviewOrder(workflow: Workflow): readonly Step[] {
+  const reviews = new Set(workflow.steps.filter(reviewExit).map(step => `${step.id}/${step.until}`))
+  const flat = addressedSteps(workflow)
+  return workflow.steps.flatMap(step => {
+    if (step.kind !== 'loop') return [step]
+    const children = flat.filter(child => child.id.startsWith(`${step.id}/`))
+    return [
+      ...children.filter(child => !reviews.has(child.id)),
+      ...children.filter(child => reviews.has(child.id)),
+    ]
+  })
+}
+
 /** `merge` with no approval, review or head check before it: the engine blocks nothing, so say it. */
 function mergeWarnings(workflow: Workflow): WorkflowError[] {
-  const flat = addressedSteps(workflow).filter(step => step.kind !== 'loop')
+  const flat = reviewOrder(workflow)
   return flat.flatMap((step, index) => {
     if (step.kind !== 'merge') return []
     const before = flat.slice(0, index)

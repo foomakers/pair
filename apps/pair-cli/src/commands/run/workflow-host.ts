@@ -263,6 +263,7 @@ export function configureWorkflowRun(
     reportConfigurationErrors(outcome.errors)
     return undefined
   }
+  if (outcome.plan === undefined) console.log(`  ${describeEngineResolution(at.engine)}`)
   return {
     ...at,
     ...(outcome.plan && { configuration: outcome.plan }),
@@ -318,7 +319,6 @@ export function resolveWorkflowDefinition(
     resolveEngine({ flag: config.engine, declared: declaredEngine(project) }),
     project,
   )
-  console.log(`  ${describeEngineResolution(engine)}`)
   const errors = workflowTierErrors({ fs, cwd, main, project })
   if (errors.length > 0) {
     reportConfigurationErrors(errors)
@@ -395,6 +395,7 @@ interface Launch {
   readonly resolved: Resolved
   readonly services: Services
   readonly worktree: string
+  readonly runDir: string
   /** The run's frozen configuration; absent: the run's one engine and its declared model for every step. */
   readonly effective?: Configuration | undefined
 }
@@ -491,6 +492,15 @@ function launcher(run: Launch) {
           ? config.iterationTimeoutSeconds
           : step.timeoutMinutes * 60,
       diagnoseProcess: true,
+      ...(config.verbose !== true && {
+        onStderr: async (line: string) => {
+          try {
+            await services.fs.appendFile(join(run.runDir, 'stderr.log'), `[${step.id}] ${line}\n`)
+          } catch {
+            console.log(line)
+          }
+        },
+      }),
       idleTimeoutSeconds: idle,
       shouldFinalizeLastMessage: () =>
         text === undefined || !checkAgentResult(text, kindByName[step.kind]).valid,
@@ -1054,7 +1064,7 @@ async function drive(
       telemetryWarned: started.telemetryWarning !== undefined,
       ...(flagStep === undefined ? {} : { flagStep }),
     },
-    launcher({ config, resolved, services, worktree, effective }),
+    launcher({ config, resolved, services, worktree, runDir, effective }),
     services,
   )
 }

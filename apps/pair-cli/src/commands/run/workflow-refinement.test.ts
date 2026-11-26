@@ -941,6 +941,7 @@ it.each(['refine', 'tasks'])(
     write(`${backlog}/13.md`, STORY_BEFORE_TASKS + STORY_TASKS)
     const command = parseRunCommand(options, ['refinement'])
     expect(await handleRunCommand(command, fs, workflow), lines.join('\n')).toBe(1)
+    expect(vi.mocked(process.stdout.write).mock.calls.flat().join('')).toMatch(/stage #12 refine/)
     expect(states('refinement-12')).toEqual(
       step === 'refine'
         ? { refine: 'failed', tasks: 'pending' }
