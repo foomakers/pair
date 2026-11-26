@@ -262,6 +262,24 @@ if (process.getuid?.() !== 0) {
     assert.equal(lint(cwd, '--workspace', '--fix').status, 0)
   })
 
+  test('#693 R13 preserves the selected native reporter on a write failure', t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const blocked = join(cwd, 'blocked.ts')
+    writeFileSync(blocked, 'export let value = 1\n')
+    chmodSync(blocked, 0o444)
+    const native = join(root, 'tools/oxlint-config/node_modules/.bin/oxlint')
+    const stable = text => text.replace(/^Finished in .*$/gm, '').trim()
+    for (const format of ['github', 'checkstyle', 'junit', 'gitlab', 'sarif', 'stylish', 'unix', 'agent', 'default']) {
+      const args = ['--fix', '--format', format, 'blocked.ts']
+      const expected = runLint(cwd, native, ...args)
+      assert.equal(expected.status, 1, format)
+      const result = runLint(cwd, runner, ...args)
+      assert.equal(result.status, 2, format)
+      assert.equal(stable(result.stdout), stable(expected.stdout), format)
+      assert.equal(result.stderr, expected.stderr, format)
+    }
+  })
+
   test('#693 R12 a transient native write failure survives a subsequent permission change', t => {
     const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
     const file = join(cwd, 'blocked.ts')
@@ -325,6 +343,47 @@ test('#693 R11 source-empty website package scripts succeed on check and fix', t
     assert.equal(readFileSync(ignored, 'utf8'), 'export let value = 1\n')
   }
 })
+
+test('#693 R14 preserves native file-list and timings debug modes with an explicit fix reporter', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const file = join(cwd, 'file.ts')
+  const source = 'export let value = 1\n'
+  for (const debug of ['files', 'timings']) {
+    writeFileSync(file, source)
+    const result = runLint(cwd, runner, '--fix', '--format=json', `--debug=${debug}`, 'file.ts')
+    assert.equal(result.status, 0, result.stderr)
+    if (debug === 'files') {
+      assert.match(result.stdout, /file\.ts/)
+      assert.equal(readFileSync(file, 'utf8'), source)
+    } else {
+      assert.deepEqual(JSON.parse(result.stdout).diagnostics, [])
+      assert.equal(readFileSync(file, 'utf8'), 'export const value = 1\n')
+    }
+  }
+})
+
+test('#693 CLI ignore patterns exclude matching source-name directory links before validation', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const source = join(cwd, 'sibling.ts')
+  mkdirSync(join(cwd, 'target'))
+  symlinkSync('target', join(cwd, 'linked.ts'), 'dir')
+  writeFileSync(source, 'export let value = 1\n')
+  assert.equal(lint(cwd, '--fix', '--ignore-pattern=link*.ts', '.').status, 0)
+  assert.equal(readFileSync(source, 'utf8'), 'export const value = 1\n')
+})
+
+if (process.getuid?.() !== 0) {
+  test('#693 quiet structured reports keep filesystem errors and suppress unrelated warnings', t => {
+    const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+    const blocked = join(cwd, 'blocked.ts')
+    writeFileSync(blocked, 'export let value = 1\n')
+    chmodSync(blocked, 0o444)
+    writeFileSync(join(cwd, 'warn.ts'), 'export const other = void 0\n')
+    const result = lint(cwd, '--workspace', '--fix', '--quiet', '--format=json', '-W', 'no-void')
+    assert.equal(result.status, 2)
+    assert.deepEqual(result.diagnostics.map(d => d.severity), ['error'])
+  })
+}
 
 test('#693 R3 fix mode fails on an error introduced by an applied fix', t => {
   const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
