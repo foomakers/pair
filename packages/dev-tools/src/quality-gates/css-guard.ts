@@ -16,8 +16,15 @@ const nextCssModules = new Set(['*.module.css', '*.module.sass', '*.module.scss'
 type ImportMode = 'import' | 'require'
 type BuildMode = 'development' | 'production'
 type NextLayer = 'rsc' | 'ssr' | 'browser'
+type NextRuntime = 'nodejs' | 'edge'
+type NextTarget = `${NextRuntime}/${NextLayer}`
 type ModuleReference = { specifier: string; mode: ImportMode; typeOnly: boolean }
-type Source = { references: ModuleReference[]; client: boolean }
+type Source = {
+  references: ModuleReference[]
+  client: boolean
+  server: boolean
+  runtime: NextRuntime | undefined
+}
 type WorkspaceImport = { path: string; reference: ModuleReference }
 type ViteResolver = (specifier: string, importer: string) => Promise<string | undefined>
 type ViteConfigLoader = (
@@ -42,20 +49,23 @@ const resolverFileSystem = {
   stat: callbackify(fs.stat),
 } as FileSystem
 
-function nextResolver(root: string, layer: NextLayer, build: BuildMode, mode: ImportMode) {
-  const browser = layer === 'browser'
+function nextResolver(root: string, target: NextTarget, build: BuildMode, mode: ImportMode) {
+  const [runtime, layer] = target.split('/')
+  const edge = runtime === 'edge' && layer !== 'browser'
+  const web = edge || layer === 'browser'
   return create.promise({
     fileSystem: resolverFileSystem,
     conditionNames: [
       ...(layer === 'rsc' ? ['react-server'] : []),
+      ...(edge ? ['edge-light'] : []),
       mode,
       'module',
       'webpack',
       build,
-      browser ? 'browser' : 'node',
+      web ? 'browser' : 'node',
     ],
-    aliasFields: browser ? ['browser'] : [],
-    mainFields: browser ? ['browser', 'module', 'main'] : ['module', 'main'],
+    aliasFields: web ? ['browser'] : [],
+    mainFields: [...(edge ? ['edge-light'] : []), ...(web ? ['browser'] : []), 'module', 'main'],
     alias: { '@': join(root, website) },
     extensions: ['.js', '.mjs', '.tsx', '.ts', '.jsx', '.json', '.wasm'],
   })
@@ -178,6 +188,21 @@ function calledModule({ expression, arguments: args }: ts.CallExpression) {
   return undefined
 }
 
+function exportedRuntime(source: ts.SourceFile): NextRuntime | undefined {
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue
+    if (!statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
+      continue
+    }
+    const runtime = statement.declarationList.declarations.find(
+      ({ name }) => ts.isIdentifier(name) && name.text === 'runtime',
+    )?.initializer
+    if (!runtime || !ts.isStringLiteralLike(runtime)) continue
+    if (runtime.text === 'edge' || runtime.text === 'nodejs') return runtime.text
+  }
+  return undefined
+}
+
 function inspectSource(root: string, path: string, problems: string[]): Source {
   if (/(?:\.d\.css\.ts|\.css\.d\.ts)$/.test(path) && !reviewedDeclarations.has(path)) {
     problems.push(`Unreviewed CSS declaration: ${path}`)
@@ -202,46 +227,78 @@ function inspectSource(root: string, path: string, problems: string[]): Source {
   }
   visit(source)
   let client = false
+  let server = false
   for (const statement of source.statements) {
     if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) break
     if (statement.expression.text === 'use client') client = true
+    if (statement.expression.text === 'use server') server = true
   }
-  return { references, client }
+  const runtime = nextAppEntry.test(path) ? exportedRuntime(source) : undefined
+  return { references, client, server, runtime }
+}
+
+function ancestorLayouts(path: string, layouts: Map<string, string>) {
+  const ancestors: string[] = []
+  for (let dir = dirname(path); dir.startsWith(website); dir = dirname(dir)) {
+    const layout = layouts.get(dir)
+    if (layout) ancestors.push(layout)
+  }
+  return ancestors
+}
+
+function nextEntryRuntime(path: string, layouts: string[], sources: Map<string, Source>) {
+  const inherited = layouts.map(layout => sources.get(layout)?.runtime).find(Boolean)
+  return sources.get(path)?.runtime ?? inherited ?? 'nodejs'
 }
 
 async function nextCompilation(root: string, build: BuildMode, sources: Map<string, Source>) {
   const resolvers = new Map<string, ResolveFunctionPromise>()
-  const resolveNext = (layer: NextLayer, path: string, { specifier, mode }: ModuleReference) => {
-    const key = `${layer}/${mode}`
+  const resolveNext = (target: NextTarget, path: string, { specifier, mode }: ModuleReference) => {
+    const key = `${target}/${mode}`
     let resolver = resolvers.get(key)
     if (!resolver) {
-      resolver = nextResolver(root, layer, build, mode)
+      resolver = nextResolver(root, target, build, mode)
       resolvers.set(key, resolver)
     }
     return resolveModule(resolver, join(root, path), specifier)
   }
-  const layers = new Map<string, Set<NextLayer>>()
-  const visit = async (path: string, layer: NextLayer): Promise<void> => {
+  const targets = new Map<string, Set<NextTarget>>()
+  const visit = async (path: string, runtime: NextRuntime, layer: NextLayer): Promise<void> => {
     const source = sources.get(path)
     if (!source) return
-    if (source.client && layer === 'rsc') {
-      await visit(path, 'ssr')
-      await visit(path, 'browser')
+    // The client gets a reference to a Server Action. Its implementation runs on the server.
+    if (source.server) layer = 'rsc'
+    else if (source.client && layer === 'rsc') {
+      await visit(path, runtime, 'ssr')
+      await visit(path, runtime, 'browser')
       return
     }
-    const seen = layers.get(path) ?? new Set<NextLayer>()
-    if (seen.has(layer)) return
-    seen.add(layer)
-    layers.set(path, seen)
+    const target: NextTarget = `${runtime}/${layer}`
+    const seen = targets.get(path) ?? new Set<NextTarget>()
+    if (seen.has(target)) return
+    seen.add(target)
+    targets.set(path, seen)
     for (const reference of source.references) {
       if (!isRuntimeWorkspaceImport(reference)) continue
-      const resolved = await resolveNext(layer, path, reference)
-      if (resolved) await visit(relative(root, resolved), layer)
+      const resolved = await resolveNext(target, path, reference)
+      if (resolved) await visit(relative(root, resolved), runtime, layer)
     }
   }
-  // Next compiles a client boundary and its dependencies for SSR and the browser.
-  for (const path of sources.keys()) if (nextAppEntry.test(path)) await visit(path, 'rsc')
-  return { layers, resolveNext }
+  const entries = [...sources.keys()].filter(path => nextAppEntry.test(path))
+  const layouts = new Map(
+    entries.filter(path => /\/layout\.[jt]sx?$/.test(path)).map(path => [dirname(path), path]),
+  )
+  for (const path of entries) {
+    if (layouts.get(dirname(path)) === path) continue
+    const ancestors = /\/page\.[jt]sx?$/.test(path) ? ancestorLayouts(path, layouts) : []
+    const runtime = nextEntryRuntime(path, ancestors, sources)
+    await visit(path, runtime, 'rsc')
+    for (const layout of ancestors) await visit(layout, runtime, 'rsc')
+  }
+  for (const path of layouts.values()) {
+    if (!targets.has(path)) await visit(path, sources.get(path)?.runtime ?? 'nodejs', 'rsc')
+  }
+  return { targets, resolveNext }
 }
 
 function isRuntimeWorkspaceImport({ typeOnly, specifier }: ModuleReference) {
@@ -264,9 +321,9 @@ async function viteResolver(root: string, build: BuildMode) {
   }
 }
 
-function standaloneNextLayers(path: string, source: Source | undefined): NextLayer[] {
+function standaloneNextTargets(path: string, source: Source | undefined): NextTarget[] {
   if (!path.startsWith(website)) return []
-  return source?.client ? ['ssr', 'browser'] : ['rsc']
+  return source?.client ? ['nodejs/ssr', 'nodejs/browser'] : ['nodejs/rsc']
 }
 
 function inspectStylesheetImports(
@@ -307,7 +364,7 @@ function nodeStylesheetResolver(mode: ImportMode) {
 async function workspaceImportResolves(
   root: string,
   { path, reference }: WorkspaceImport,
-  fallbackLayers: NextLayer[],
+  fallbackTargets: NextTarget[],
   resolvers: {
     next: Awaited<ReturnType<typeof nextCompilation>>
     vite: Record<ImportMode, ViteResolver> | undefined
@@ -317,12 +374,14 @@ async function workspaceImportResolves(
   const { next, vite, node } = resolvers
   const { specifier, mode } = reference
   const issuer = join(root, path)
-  const layers = [...(next.layers.get(path) ?? fallbackLayers)]
-  for (const layer of layers) {
-    if (!resolvedStylesheet(await next.resolveNext(layer, path, reference))) return false
+  const targets = [...(next.targets.get(path) ?? fallbackTargets)]
+  for (const target of targets) {
+    if (!resolvedStylesheet(await next.resolveNext(target, path, reference))) return false
   }
   if (path.startsWith(brand) && vite) return viteStylesheetExists(vite[mode], specifier, issuer)
-  return layers.length > 0 || resolvedStylesheet(await resolveModule(node[mode], issuer, specifier))
+  return (
+    targets.length > 0 || resolvedStylesheet(await resolveModule(node[mode], issuer, specifier))
+  )
 }
 
 async function stylesheetImportProblems(root: string, sources: Map<string, Source>) {
@@ -340,8 +399,8 @@ async function stylesheetImportProblems(root: string, sources: Map<string, Sourc
     const vite = hasBrandImports ? await viteResolver(root, build) : undefined
     for (const entry of workspaceImports) {
       const { path, reference } = entry
-      const fallbackLayers = standaloneNextLayers(path, sources.get(path))
-      if (!(await workspaceImportResolves(root, entry, fallbackLayers, { next, vite, node }))) {
+      const fallbackTargets = standaloneNextTargets(path, sources.get(path))
+      if (!(await workspaceImportResolves(root, entry, fallbackTargets, { next, vite, node }))) {
         problems.add(`Missing stylesheet: ${path} imports ${reference.specifier}`)
       }
     }
