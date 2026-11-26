@@ -78,8 +78,8 @@ export function resolveIdleTimeout(input: {
 export interface SpawnIterationInput extends EngineArgsInput {
   /** Capture process facts for workflow attempt history. */
   readonly diagnoseProcess?: boolean
-  /** Whether the caller already received a usable result via onEvent. Overrides the default JSON check. */
-  readonly hasStreamResult?: () => boolean
+  /** Opt in to waiting for a finalized result file when the stream result is insufficient. */
+  readonly shouldFinalizeLastMessage?: (result: IterationResult) => boolean
   /** Opt-in total wall-clock cap per iteration (`--iteration-timeout`); absent ⇒ none (US-573). */
   readonly timeoutSeconds?: number | undefined
   /** The hang guard: seconds without an engine event before the engine is stopped (default 30 min). */
@@ -374,12 +374,12 @@ async function waitForExit(child: ChildProcess, until?: Promise<unknown>): Promi
 
 function needsLastMessage(
   result: IterationResult | undefined,
-  hasStreamResult: SpawnIterationInput['hasStreamResult'],
+  shouldFinalize: SpawnIterationInput['shouldFinalizeLastMessage'],
 ): result is IterationResult {
   return (
     result !== undefined &&
     (result.outcome === 'success' || result.cause === 'halted') &&
-    !(hasStreamResult?.() ?? result.final !== undefined)
+    shouldFinalize?.(result) === true
   )
 }
 
@@ -490,7 +490,7 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   let result: IterationResult | undefined
   try {
     result = await readEngineResult(child, input, watchdog, transport)
-    if (channel && needsLastMessage(result, input.hasStreamResult)) {
+    if (channel && needsLastMessage(result, input.shouldFinalizeLastMessage)) {
       result = await finalizeLastMessage(child, result, channel, lifecycle)
     }
   } catch (error) {

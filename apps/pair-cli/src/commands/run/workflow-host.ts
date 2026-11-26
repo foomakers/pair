@@ -494,8 +494,8 @@ function launcher(run: Launch) {
           : step.timeoutMinutes * 60,
       diagnoseProcess: true,
       idleTimeoutSeconds: idle,
-      hasStreamResult: () =>
-        text !== undefined && checkAgentResult(text, kindByName[step.kind]).valid,
+      shouldFinalizeLastMessage: () =>
+        text === undefined || !checkAgentResult(text, kindByName[step.kind]).valid,
       onEvent: payload => {
         text = finalTextOf(engine, payload, text)
         // The usage the engine reports, read by the per-engine parsers; none reported, none metered.

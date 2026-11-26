@@ -351,7 +351,6 @@ async function selectOnce(input: SelectRootInput, correction: string): Promise<S
     ...(input.effort !== undefined && { effort: input.effort }),
     timeoutSeconds: input.timeoutSeconds,
     idleTimeoutSeconds: input.idleTimeoutSeconds,
-    hasStreamResult: () => answer !== undefined,
     onEvent: payload => {
       try {
         // US-603: an engine with an agent-message rule is read from its LAST message only.
