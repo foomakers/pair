@@ -13,7 +13,6 @@
     "composite": false,
     "allowJs": true,
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
     }

@@ -3,7 +3,8 @@
 ## Core languages and scripting
 
 - TypeScript is adopted for all application logic and development.
-- TypeScript v5.x is the adopted major version.
+- TypeScript 7.0.2 is pinned for workspace type checks and TypeScript builds.
+- The JavaScript compiler API uses `@typescript/typescript6` 6.0.2 (backed by TypeScript 6.0.3 in the lockfile) for `ts-node`, direct API callers, Next 15 and ncc's TypeScript loader. Oxlint's TypeScript ESLint 8.41.0 compatibility plugin has a scoped 5.4.5 peer. See the [compiler adoption decision](../decision-log/2026-11-26-native-typescript-compiler.md).
 - Markdown (CommonMark, .md files) is adopted for documentation and knowledge base files.
 - Bash is adopted for scripting and coordination of AI assistant processes (Bash v5.x adopted).
 

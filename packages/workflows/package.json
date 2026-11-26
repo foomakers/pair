@@ -50,7 +50,8 @@
     "@vercel/ncc": "0.45.0",
     "@vitest/coverage-v8": "catalog:",
     "ts-node": "catalog:",
-    "typescript": "catalog:",
+    "@typescript/native": "catalog:",
+    "typescript": "catalog:typescript-api",
     "vite-tsconfig-paths": "catalog:",
     "vitest": "catalog:"
   },

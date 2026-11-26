@@ -4,7 +4,20 @@
 
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.renderRatchetPlan = exports.ratchetGitPlan = exports.ratchetBranchConfigCommand = exports.gitAuthConfig = exports.ratchetTrackingRefspec = exports.classifyWriteRefusal = exports.applyRaises = exports.planRatchet = exports.shouldSkipCommitBack = exports.readGuardrailFlag = exports.readCommitBackFlag = exports.readBaselineValue = exports.proposeBaseline = exports.EXTRAHEADER_CONFIG_KEY = exports.ADL_SLUG = exports.TOKEN_ENV = exports.DEFAULT_MARGIN_PP = exports.RATCHET_BRANCH = exports.RATCHET_MARKER = void 0;
+exports.EXTRAHEADER_CONFIG_KEY = exports.ADL_SLUG = exports.TOKEN_ENV = exports.DEFAULT_MARGIN_PP = exports.RATCHET_BRANCH = exports.RATCHET_MARKER = void 0;
+exports.proposeBaseline = proposeBaseline;
+exports.readBaselineValue = readBaselineValue;
+exports.readCommitBackFlag = readCommitBackFlag;
+exports.readGuardrailFlag = readGuardrailFlag;
+exports.shouldSkipCommitBack = shouldSkipCommitBack;
+exports.planRatchet = planRatchet;
+exports.applyRaises = applyRaises;
+exports.classifyWriteRefusal = classifyWriteRefusal;
+exports.ratchetTrackingRefspec = ratchetTrackingRefspec;
+exports.gitAuthConfig = gitAuthConfig;
+exports.ratchetBranchConfigCommand = ratchetBranchConfigCommand;
+exports.ratchetGitPlan = ratchetGitPlan;
+exports.renderRatchetPlan = renderRatchetPlan;
 const node_child_process_1 = require("node:child_process");
 const node_fs_1 = require("node:fs");
 exports.RATCHET_MARKER = '[coverage-baseline-ratchet]';
@@ -22,7 +35,6 @@ const isNumeric = (v) => typeof v === 'string' && /^\d+(\.\d+)?$/.test(v.trim())
 function proposeBaseline(measuredPct, marginPp = exports.DEFAULT_MARGIN_PP) {
     return Math.max(0, Math.floor(measuredPct) - marginPp);
 }
-exports.proposeBaseline = proposeBaseline;
 function readBaselineValue(configText, type) {
     const m = new RegExp(`^baseline\\.${esc(type)}=([^\\r\\n]*)`, 'm').exec(configText);
     if (!m)
@@ -30,7 +42,6 @@ function readBaselineValue(configText, type) {
     const raw = (m[1] ?? '').trim();
     return /^\d+$/.test(raw) ? Number(raw) : null;
 }
-exports.readBaselineValue = readBaselineValue;
 const flagPattern = (label) => new RegExp(`^[ \\t]*[-*][ \\t]*\\**[ \\t]*${label}[ \\t]*\\**[ \\t]*:[ \\t]*\`?[ \\t]*(enabled|disabled)`, 'im');
 const COMMIT_BACK_FLAG = flagPattern('coverage[ \\t]+baseline[ \\t]+commit-back');
 const GUARDRAIL_FLAG = flagPattern('coverage[ \\t]+guardrail');
@@ -41,11 +52,9 @@ const readFlag = (text, pattern) => {
 function readCommitBackFlag(wayOfWorkingText) {
     return readFlag(wayOfWorkingText, COMMIT_BACK_FLAG);
 }
-exports.readCommitBackFlag = readCommitBackFlag;
 function readGuardrailFlag(wayOfWorkingText) {
     return readFlag(wayOfWorkingText, GUARDRAIL_FLAG);
 }
-exports.readGuardrailFlag = readGuardrailFlag;
 const RATCHET_MERGE_SUBJECT = new RegExp(`^Merge pull request #\\d+ from \\S+/${esc(exports.RATCHET_BRANCH)}[ \\t\\r]*$`, 'm');
 function isRatchetCommitMessage(message) {
     return message.includes(exports.RATCHET_MARKER) || RATCHET_MERGE_SUBJECT.test(message);
@@ -81,7 +90,6 @@ function shouldSkipCommitBack(ctx) {
     }
     return { skip: false };
 }
-exports.shouldSkipCommitBack = shouldSkipCommitBack;
 function planRatchet(configText, measured, marginPp = exports.DEFAULT_MARGIN_PP) {
     return Object.keys(measured).map(type => {
         const raw = measured[type];
@@ -128,7 +136,6 @@ function planRatchet(configText, measured, marginPp = exports.DEFAULT_MARGIN_PP)
         };
     });
 }
-exports.planRatchet = planRatchet;
 function applyRaises(configText, raises, { pendingText } = {}) {
     let text = configText;
     let changedLines = 0;
@@ -155,7 +162,6 @@ function applyRaises(configText, raises, { pendingText } = {}) {
     }
     return { text, changedLines, dropped };
 }
-exports.applyRaises = applyRaises;
 function classifyWriteRefusal(output, opts) {
     if (!opts.hasToken) {
         return {
@@ -180,7 +186,6 @@ function classifyWriteRefusal(output, opts) {
     }
     return { code: 'unknown', message: `write refused, reason not recognized: ${output.trim()}` };
 }
-exports.classifyWriteRefusal = classifyWriteRefusal;
 function ratchetPrBody(raises, configPath, baseBranch) {
     return [
         `Automated coverage-baseline ratchet — opt-in commit-back from story #372.`,
@@ -199,7 +204,6 @@ function ratchetPrBody(raises, configPath, baseBranch) {
 function ratchetTrackingRefspec(remote) {
     return `+refs/heads/${exports.RATCHET_BRANCH}:refs/remotes/${remote}/${exports.RATCHET_BRANCH}`;
 }
-exports.ratchetTrackingRefspec = ratchetTrackingRefspec;
 function gitAuthConfig(token) {
     const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
     return {
@@ -211,11 +215,9 @@ function gitAuthConfig(token) {
         GH_TOKEN: token,
     };
 }
-exports.gitAuthConfig = gitAuthConfig;
 function ratchetBranchConfigCommand(remote, configPath) {
     return ['git', 'show', `refs/remotes/${remote}/${exports.RATCHET_BRANCH}:${configPath}`];
 }
-exports.ratchetBranchConfigCommand = ratchetBranchConfigCommand;
 const EMPTY_GIT_PLAN = {
     prepare: [],
     commands: [],
@@ -295,7 +297,6 @@ function ratchetGitPlan(input) {
         prBody,
     };
 }
-exports.ratchetGitPlan = ratchetGitPlan;
 function renderRatchetPlan({ skip, plan }) {
     if (skip?.skip) {
         return `coverage-ratchet: SKIPPED (${skip.code}) — ${skip.reason}`;
@@ -306,7 +307,6 @@ function renderRatchetPlan({ skip, plan }) {
     }
     return lines.join('\n');
 }
-exports.renderRatchetPlan = renderRatchetPlan;
 const CLI_FLAGS = {
     '--config': { takesValue: true, apply: (o, v) => void (o.configPath = v) },
     '--way-of-working': { takesValue: true, apply: (o, v) => void (o.wowPath = v) },
