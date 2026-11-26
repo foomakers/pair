@@ -240,6 +240,18 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
       file: handoff('gate-red'),
       failure: 'halted: handoff rejected',
     },
+    {
+      label: 'a genuine handoff after a scalar quoted in a sentence',
+      streamResult: `Observed PAIR_EVENT -2.4e-5. Then ${handoff(formatError)}`,
+      file: handoff('gate-red'),
+      retry: true,
+    },
+    {
+      label: 'a genuine handoff after an ordinary underscored identifier',
+      streamResult: `_PAIR_EVENT ${handoff(formatError)}`,
+      file: handoff('gate-red'),
+      retry: true,
+    },
     { label: 'file-only format error', file: handoff(formatError), retry: true },
     {
       label: 'stream format error',
