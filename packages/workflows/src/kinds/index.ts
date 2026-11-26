@@ -1,4 +1,4 @@
-import type { KindName } from '../grammar'
+import type { KindName, Step } from '../grammar'
 import { violations } from '../schema'
 import { approval } from './approval'
 import { fix } from './fix'
@@ -29,6 +29,26 @@ export const kindByName: Readonly<Record<KindName, StepKind>> = {
   merge,
   'refine-story': refineStory,
   'plan-tasks': planTasks,
+}
+
+/** Explicit names are literal. Only a kind default follows the installation's naming convention. */
+export function skillForStep(
+  step: Pick<Step, 'skill' | 'kind'>,
+  installed: (name: string) => string | undefined,
+) {
+  const name = step.kind === 'loop' ? undefined : kindByName[step.kind].defaultSkill
+  return step.skill ?? (name === undefined ? undefined : (installed(name) ?? name))
+}
+
+/** Whether the workflow needs a session conversation for this step. */
+export function interactiveOf({
+  kind,
+  interactive,
+}: Pick<Step, 'interactive'> & { kind?: Step['kind'] }): boolean {
+  return (
+    kind !== 'loop' &&
+    (interactive ?? (kind === undefined ? false : kindByName[kind].defaultInteractive))
+  )
 }
 
 /** The names of the fields a kind declares in `inputs` or `outputs`. */

@@ -16,9 +16,9 @@ Run `/pair-next` at the start of every session. It reads project adoption files 
 |------|-------|---------|
 | **Process** | 11 | Lifecycle phases — orchestrate capability skills |
 | **Capability** | 36 | Atomic units — perform a single focused operation |
-| **Workflow** | 7 | Delivery stages — dispatched by the batch engine, one mutation boundary each |
+| **Workflow** | 8 | Delivery stages and in-session workflow runners |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 56 (11 process + 36 capability + 7 workflow + 2 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 57 (11 process + 36 capability + 8 workflow + 2 navigator).
 
 ## Full Catalog
 
@@ -141,7 +141,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 |-------|-------|
 | `/pair-capability-grill` | Reusable interview engine (interview / sync modes), write-free |
 
-### Workflow Skills (7)
+### Workflow Skills (8)
 
 Delivery-stage skills the batch engine (`pair-implement-batch`) or the in-session coordinator (`/pair-workflow-cycle`) dispatches to — the four judgment stages of a delivery cycle (US-479, ADR-024 amendment b), the batch-level template contract and the coordinator that drives them. A fresh card starts at implementation — test-first, no up-front contract — and preparation + validation run for each round of review findings (US-506, ADR-024 amendment 2026-09-23). Each resolves the durable cycle state first (`cycle-state.mjs`), owns one mutation boundary and publishes one handoff under `.pair/working/runs/<run>/<story>/`; probe, seal, hash, state and comment publication run as scripts inside them, never as their own dispatch.
 
@@ -154,6 +154,7 @@ Delivery-stage skills the batch engine (`pair-implement-batch`) or the in-sessio
 | `/pair-workflow-review-phase` | 4 final verification | `red-snapshot.mjs verify-chain`, evidence re-run, tier passes, stable finding ids and transitions, readiness bound to the remote head, marker-keyed idempotent publication |
 | `/pair-workflow-contract-phase` | 0 | Ensure the template-derived machine contract (cache-by-hash via ensure-contract.mjs) |
 | `/pair-workflow-cycle` | coordinator | Turns the crank from inside a session: `resolve` → dispatch one stage to a subagent → `resolve`, on any harness with a subagent primitive (probed, never inferred). Owns no cycle rule and never merges |
+| `/pair-workflow-run` | runner | Run a named YAML workflow on a card or resume it by ID, with interactive steps in the conversation |
 
 ## Macro-Phase Modes
 

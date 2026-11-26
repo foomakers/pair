@@ -1,13 +1,13 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
-  "scanned": 1078,
-  "files": 402,
-  "distinctContents": 367,
+  "scanned": 1085,
+  "files": 407,
+  "distinctContents": 372,
   "dispositionCounts": {
-    "standalone-script": 15,
-    "os-guarantee": 25,
+    "standalone-script": 17,
+    "os-guarantee": 31,
     "type-contract": 13,
-    "in-flight-churn": 244,
+    "in-flight-churn": 241,
     "repo-contract": 104,
     "boundary-adapter": 1
   },
@@ -394,22 +394,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/card-lock.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/card-lock.ts",
-      "hash": "9dd859271a06ac95ee6de6259e3839101bc4be84ea16ab85039e55ca4759f0b8",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/card-lock.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
@@ -1551,22 +1535,6 @@
       "testCategory": "root import guard"
     },
     {
-      "path": "apps/pair-cli/src/commands/run/lock-holder.ts",
-      "hash": "71ead865c5eb811d1e0c19402c245291dd937ac5a23eabcbcb3ea8651d0cd42b",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/lock-holder.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
       "path": "apps/pair-cli/src/commands/run/lock-probe.test.ts",
       "hash": "bb1420d1f68e41aa075851bdb986c356fb5f96b4e23f77ad24d2a8eee5329747",
       "dependencies": [
@@ -2010,22 +1978,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/run-lock.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/run-lock.ts",
-      "hash": "4d3223ff7e0bc139d5e11cb6583ccf2f566d69670200d182ae28bc306bf885aa",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/run-lock.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
@@ -6721,6 +6673,188 @@
       "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
       "decision": "Exact-path exception; no migration.",
       "testCategory": "repo-file-contract"
+    },
+    {
+      "path": "packages/workflows/scripts/bundle-workflow.mjs",
+      "hash": "d5614afb4e5f11d7e98742bee7d002a176915f2081a2b614027d444d60589fbc",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs/promises",
+          "line": 1
+        }
+      ],
+      "disposition": "standalone-script",
+      "producer": "packages/workflows/scripts/bundle-workflow.mjs",
+      "observedOperations": ["mkdir", "writeFile"],
+      "reason": "Build tooling emits the standalone artifact to the dataset or a caller-supplied file.",
+      "decision": "Keep direct fs in the bundle generator.",
+      "testCategory": "installed-script-smoke"
+    },
+    {
+      "path": "packages/workflows/src/cli/card-lock.ts",
+      "hash": "7b29788746082a93b98df91362dbf1b5782bcbd9ed46ad3b84e954a2a3827b9d",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/src/cli/card-lock.ts",
+      "observedOperations": [
+        "mkdirSync",
+        "readFileSync",
+        "renameSync",
+        "rmSync",
+        "statSync",
+        "writeFileSync"
+      ],
+      "reason": "A card lock must be created and reclaimed atomically across the CLI and session hosts.",
+      "decision": "Keep the per-card lock protocol in the shared host adapter.",
+      "testCategory": "real lock integration"
+    },
+    {
+      "path": "packages/workflows/src/cli/lock-holder.ts",
+      "hash": "15db2aae6491be3377581400d70950ec86bd085ec9e8db5d532b9cd86fb9ef82",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/src/cli/lock-holder.ts",
+      "observedOperations": ["readFileSync"],
+      "reason": "Both hosts must read the actual holder note before reclaiming a card lock.",
+      "decision": "Keep the per-card lock protocol in the shared host adapter.",
+      "testCategory": "real lock integration"
+    },
+    {
+      "path": "packages/workflows/src/cli/lock-support.ts",
+      "hash": "6153b74d80bac4cafac5b36efab25aab2fc466f249bf16ad3589ea79a28fd7fc",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/src/cli/lock-support.ts",
+      "observedOperations": ["mkdirSync", "rmSync", "statSync"],
+      "reason": "The shared reclaim guard relies on exclusive directory creation across processes.",
+      "decision": "Keep the atomic guard in the host adapter.",
+      "testCategory": "real lock integration"
+    },
+    {
+      "path": "packages/workflows/src/cli/run-lock.ts",
+      "hash": "128fad909e7955a9479d696062a696203fbbcbbd92bf2d68e255bc9f71560a48",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/src/cli/run-lock.ts",
+      "observedOperations": [
+        "linkSync",
+        "readFileSync",
+        "renameSync",
+        "rmSync",
+        "unlinkSync",
+        "writeFileSync"
+      ],
+      "reason": "A run must acquire its lock file exclusively across the CLI and session hosts.",
+      "decision": "Keep the exclusive file operations in the host adapter.",
+      "testCategory": "real lock integration"
+    },
+    {
+      "path": "packages/workflows/src/cli/session-files.ts",
+      "hash": "e0b89798093d348958f082ccdd420f6101adebb15debc8757d8cee614df65082",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 1
+        },
+        {
+          "form": "import",
+          "specifier": "node:fs/promises",
+          "line": 2
+        }
+      ],
+      "disposition": "standalone-script",
+      "producer": "packages/workflows/src/cli/session-files.ts",
+      "observedOperations": [
+        "chmod",
+        "existsSync",
+        "mkdir",
+        "readdirSync",
+        "readFileSync",
+        "rename",
+        "statSync",
+        "unlink",
+        "writeFile"
+      ],
+      "reason": "The installed standalone command reads project sources, streams stdin and passes a native run-files port to the interpreter.",
+      "decision": "Keep direct filesystem access in the session boundary adapter.",
+      "testCategory": "installed-script-smoke"
+    },
+    {
+      "path": "packages/workflows/test/bundle.test.ts",
+      "hash": "605da78a0809e244ff277bab071b8a0bad6297d6d0441bee3e8d02eba6d3eaf8",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/test/bundle.test.ts",
+      "observedOperations": ["mkdtempSync", "readFileSync", "rmSync"],
+      "reason": "Runs a real build to a temporary path, compares the shipped bytes and executes the output there.",
+      "decision": "Keep the filesystem and process boundaries in the shipped-bundle check.",
+      "testCategory": "real-process"
+    },
+    {
+      "path": "packages/workflows/test/session-command.test.ts",
+      "hash": "f5ed17bdd8e93e7b77581640c5889782b9f33d13a3aa4828ddc17ca34bfcc58d",
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 12
+        },
+        {
+          "form": "import",
+          "specifier": "node:fs/promises",
+          "line": 13
+        }
+      ],
+      "disposition": "os-guarantee",
+      "producer": "packages/workflows/test/session-command.test.ts",
+      "observedOperations": [
+        "cpSync",
+        "existsSync",
+        "mkdir",
+        "mkdirSync",
+        "mkdtempSync",
+        "readFileSync",
+        "realpathSync",
+        "rename",
+        "rmSync",
+        "writeFile",
+        "writeFileSync"
+      ],
+      "reason": "Runs the installed script in a real Git fixture and verifies actual worktree reuse and cross-process ownership.",
+      "decision": "Keep direct filesystem access at the integration boundary.",
+      "testCategory": "real-process"
     },
     {
       "path": "scripts/dev/delivery-process-overwrite.test.mjs",

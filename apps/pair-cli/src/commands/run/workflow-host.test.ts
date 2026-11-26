@@ -705,6 +705,35 @@ describe('validation before any launch (AC-2, AC-3)', () => {
     expect(fs.existsSync(runDir())).toBe(false)
   })
 
+  it('R754-06: previews and invokes the installed default, keeping explicit names literal', async () => {
+    write(
+      'pair.config.json',
+      JSON.stringify({
+        asset_registries: { skills: { prefix: 'team', target_path: 'team/skills' } },
+      }),
+    )
+    const skill = 'team-process-refine-story'
+    write(`team/skills/${skill}/SKILL.md`, 'Refine a story.')
+    const file = '.pair/adoption/tech/workflows/quick.yaml'
+    const definition =
+      'version: 1\nname: quick\nsteps:\n  refine: { kind: refine-story, with: { mode: autonomous } }\n'
+    write(
+      file,
+      definition.replace(
+        'kind: refine-story',
+        'kind: refine-story, skill: pair-process-refine-story',
+      ),
+    )
+    expect(await run(['quick'], {}, { dryRun: true })).toBe(1)
+    write(file, definition)
+    expect(await run(['quick'], {}, { dryRun: true })).toBe(0)
+    expect(lines.some(line => line.includes(`refine: refine-story skill=${skill}`))).toBe(true)
+    await run(['quick'], {
+      [skill]: () => fenced({ status: 'needs-decision', summary: 'Question' }),
+    })
+    expect(launched.map(one => skillOf(one.promptText))).toEqual([skill])
+  })
+
   it('--dry-run refuses an invalid workflow', async () => {
     write('.pair/adoption/tech/workflows/quick.yaml', QUICK.replace('version: 1', 'version: 2'))
     expect(await run(['quick'], OK, { dryRun: true })).toBe(1)
@@ -1151,6 +1180,51 @@ describe('skill and options of a step (AC-4, AC-5)', () => {
       lines.some(line => line.startsWith('  implement: failed — ') && line.includes(`(${reason}`)),
     ).toBe(true)
     expect(states()).toEqual({ implement: 'failed', review: 'pending' })
+  })
+})
+
+describe('headless interactive steps (#696 AC-2)', () => {
+  it.each([
+    {
+      scenario: 'after an ordinary step',
+      before: '  implement: { kind: implement }\n',
+      after: '  after: { kind: generic, skill: my-skill }\n',
+      available: true,
+      expectedLaunches: ['pair-process-implement'],
+      expectedStates: { implement: 'ok', decision: 'needs-decision', after: 'pending' },
+    },
+    {
+      scenario: 'without an agent executable',
+      before: '',
+      after: '',
+      available: false,
+      expectedLaunches: [],
+      expectedStates: { decision: 'needs-decision' },
+    },
+  ])('parks $scenario and prints how to resume in a session', async test => {
+    write(
+      '.pair/adoption/tech/workflows/interactive-check.yaml',
+      `version: 1
+name: interactive-check
+steps:
+${test.before}  decision: { kind: generic, skill: my-skill, interactive: true }
+${test.after}`,
+    )
+    const runId = 'session-check'
+    const skills = { ...OK, 'my-skill': () => fenced({ status: 'ok', summary: 'finished' }) }
+    const exit = await run(
+      ['interactive-check'],
+      skills,
+      { runId },
+      { engineAvailable: () => test.available },
+    )
+    const output = lines.join('\n')
+
+    expect(exit, output).toBe(0)
+    expect(launched.map(one => skillOf(one.promptText))).toEqual(test.expectedLaunches)
+    expect(states(runId)).toEqual(test.expectedStates)
+    expect(output).toMatch(/parked at step decision/)
+    expect(output).toMatch(/resume[^\n]*pair-workflow-run[^\n]*\bsession-check\b/i)
   })
 })
 

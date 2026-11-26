@@ -1,0 +1,22 @@
+---
+title: Run a workflow in a session
+description: Start or resume a YAML workflow from a coding session.
+---
+
+## Steps
+
+In a coding session with subagents, open a workflow on a card with `/pair-workflow-run quick --card 627`. Add `--config <name-or-file>` to select a configuration for a fresh run. The skill shows the workflow, card, configuration, step list, and run ID before execution.
+
+An ordinary step runs in its own subagent in the card worktree. A step with `interactive: true` runs in the current conversation and can ask for input. Pair executes gates and merge steps through the configured host. When an approval step parks, check its question, PR, and head before replying `approve` or `reject:<note>`. Pair checks the authenticated code-host identity and binds the answer to that PR head.
+
+### Resume a run
+
+Use `/pair-workflow-run <run-id>` in the project. The run keeps its saved workflow, configuration, steps, and worktree when you switch between the session and `pair-cli run`. If the terminal reaches an interactive step, it parks and prints the session command. A live lock identifies the driver that is using the run.
+
+Use the terminal command printed by the skill when the session lacks a subagent primitive or a step requests another engine. When only the configured model or effort is unavailable, the skill reports the session settings it will use before starting the step.
+
+## Verify
+
+The skill reports each step's start and outcome, then the final state and how to resume a parked or failed run. Inspect `.pair/working/runs/<run-id>/state.json` and the step results in that directory for details. When the frozen configuration enables telemetry, `telemetry.jsonl` records measured usage when the host supplies it and estimates usage from the exchanged text otherwise.
+
+[Create a workflow](/docs/guides/create-workflow) · [Skills catalog](/docs/reference/skills-catalog) · [CLI commands](/docs/reference/cli/commands)

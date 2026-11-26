@@ -41,6 +41,7 @@ steps:
 | --- | --- | --- | --- | --- |
 | `kind` | String. `implement`, `review`, `fix`, `generic`, `gate`, `approval`, `merge`, `refine-story`, `plan-tasks` or `loop`. | Required. | Every step. The kind determines its inputs, `with` keys and result contract. | `kind: implement` |
 | `skill` | Installed skill name. | The kind's default. Required for a `generic` step without an include. | Agent steps. Host kinds execute directly. | `skill: pair-process-review` |
+| `interactive` | Boolean. | The kind's default. Ordinary agent kinds default to `false`. | A skill step with `true` runs in the session conversation. The terminal parks and prints the session resume command. | `interactive: true` |
 | `args` | Reserved outside grammar v1. A YAML `args` key is refused. | Absent. | The launcher supplies inputs from `--card` and earlier outputs. Use `with` for kind options. | `pair-cli run quick --card 627` |
 | `when` | Object with card filters (`has`, `lacks`, `status`, `assignee`) or an earlier `output` and an `is` list. | Run unconditionally. | Executable steps other than a loop's `until` child. A mismatch skips the step. | `when: { output: implement.status, is: [failed] }` |
 | `uses` | String naming an included workflow. | Absent. | A typed or generic include call. The included steps replace the call in file order. | `uses: shared` |
@@ -89,7 +90,7 @@ steps:
     on-failed: stop
 ```
 
-The expanded IDs are `fix/repair`, then `fix/check`. `outputs.from` selects `repair`. Without it the last step supplies outputs. A typed caller requires the selected step to supply its kind's outputs. `with` applies to the selected step when it has the caller's kind, and `on-failed` applies to the last step. Declare `when`, `gates`, `state`, `on-resume`, `escalate`, `timeout-minutes` and `retries` on included steps.
+The expanded IDs are `fix/repair`, then `fix/check`. `outputs.from` selects `repair`. Without it the last step supplies outputs. A typed caller requires the selected step to supply its kind's outputs. `with` applies to the selected step when it has the caller's kind, and `on-failed` applies to the last step. Declare `interactive`, `when`, `gates`, `state`, `on-resume`, `escalate`, `timeout-minutes` and `retries` on included steps.
 
 Includes may nest up to three levels; cycles, unknown names and workflow/skill name clashes fail validation. An include may introduce a loop outside a loop, but loops cannot nest, including through an include. Configuration can target expanded IDs such as `fix/repair`. `--dry-run` shows the expanded order; a run freezes it and warns on resume if an included source changes.
 
@@ -238,7 +239,7 @@ See [workflow configuration](workflow-configuration.md) for configuration files 
 quick.yaml:10: steps.review.kind: unknown value "merge" — fix: use one of "implement", "review", "fix", "generic", "gate", "approval", "merge", "loop"
 ```
 
-Version 1 rejects `args`, `context`, `interactive`, `prompt` and `goto`. File order governs routing.
+Version 1 rejects `args`, `context`, `prompt` and `goto`. File order governs routing.
 
 ## Validation
 

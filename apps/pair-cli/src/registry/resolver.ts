@@ -1,4 +1,5 @@
 import { FileSystemService, Behavior, type TargetConfig } from '@pair/content-ops'
+import { registryEntries, registryTargets } from '@pair/workflows/cli'
 import { getCanonicalTarget } from './layout'
 
 /**
@@ -80,13 +81,9 @@ export interface Config {
  * Normalizes legacy 'target_path' into 'targets' array for backward compatibility.
  */
 export function extractRegistries(config: unknown): Record<string, RegistryConfig> {
-  const cfg = config as Config
-  const raw =
-    cfg?.asset_registries || (config as Record<string, unknown>)?.['dataset_registries'] || {}
-  const registries = raw as unknown as Record<string, Record<string, unknown>>
   const result: Record<string, RegistryConfig> = {}
 
-  for (const [name, reg] of Object.entries(registries)) {
+  for (const [name, reg] of Object.entries(registryEntries(config))) {
     if (reg && typeof reg === 'object' && !Array.isArray(reg)) {
       result[name] = normalizeRegistryConfig(name, reg as Record<string, unknown>)
     } else {
@@ -102,8 +99,6 @@ export function extractRegistries(config: unknown): Record<string, RegistryConfi
  * Normalize a raw registry config, applying defaults and migrating legacy fields.
  */
 function normalizeRegistryConfig(name: string, raw: Record<string, unknown>): RegistryConfig {
-  const targets = normalizeTargets(name, raw)
-
   return {
     source: raw['source'] != null ? String(raw['source']) : name,
     behavior: (raw['behavior'] as Behavior) || 'mirror',
@@ -119,21 +114,8 @@ function normalizeRegistryConfig(name: string, raw: Record<string, unknown>): Re
     // the unbounded default — a null is a config mistake, not an omission.
     ...(raw['flattenDepth'] !== undefined && { flattenDepth: raw['flattenDepth'] as number }),
     ...(raw['prefix'] != null && { prefix: String(raw['prefix']) }),
-    targets,
+    targets: registryTargets<TargetConfig>(name, raw),
   }
-}
-
-/**
- * Build targets array from raw config.
- * Migrates legacy target_path to targets if targets is absent.
- */
-function normalizeTargets(name: string, raw: Record<string, unknown>): TargetConfig[] {
-  if (Array.isArray(raw['targets']) && raw['targets'].length > 0) {
-    return raw['targets'] as TargetConfig[]
-  }
-  const legacyPath = raw['target_path'] as string | undefined
-  const path = legacyPath || name
-  return [{ path, mode: 'canonical' as const }]
 }
 
 /**

@@ -376,6 +376,16 @@ export function finalTextOf(
   return typeof text === 'string' ? text : (agentMessageOf(engine, payload) ?? previous)
 }
 
+/** The model, when the engine names it in a structured event. */
+export function reportedModelOf(engine: EngineDefinition, payload: unknown): string | undefined {
+  let model: unknown
+  if (engine.id === 'claude' && matches(payload, { type: 'system', subtype: 'init' }))
+    model = fieldAt(payload, 'model')
+  if (engine.id === 'pi' && matches(payload, { type: 'message_end', 'message.role': 'assistant' }))
+    model = fieldAt(payload, 'message.model')
+  return typeof model === 'string' && model !== '' ? model : undefined
+}
+
 const TAIL_CHARS = 500
 
 /** The engine's last agent message so far: `undefined` for an engine with no message rule, `{}` before the first one. */

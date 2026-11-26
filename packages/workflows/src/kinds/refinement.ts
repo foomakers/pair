@@ -14,6 +14,7 @@ const boardStatus = {
 
 export const refineStory: StepKind = {
   name: 'refine-story',
+  defaultInteractive: false,
   defaultSkill: 'pair-process-refine-story',
   inputs,
   outputs: {
@@ -35,6 +36,7 @@ export const refineStory: StepKind = {
 
 export const planTasks: StepKind = {
   name: 'plan-tasks',
+  defaultInteractive: false,
   defaultSkill: 'pair-process-plan-tasks',
   inputs,
   outputs: {

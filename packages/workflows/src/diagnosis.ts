@@ -1,3 +1,5 @@
+import type { RunHost } from './engine'
+
 export interface ProcessDiagnostics {
   readonly exitCode: number | null
   readonly signal: string | null
@@ -13,6 +15,14 @@ export interface Diagnosis extends ProcessDiagnostics {
 }
 
 export interface FaultAttempt extends Diagnosis {
+  readonly origin?:
+    | {
+        readonly host: RunHost
+        readonly engine?: string | undefined
+        readonly model?: string | undefined
+        readonly effort?: string | undefined
+      }
+    | undefined
   readonly attempt: number
   readonly round?: number
 }

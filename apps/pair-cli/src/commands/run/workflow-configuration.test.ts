@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { tmpdir } from 'os'
+import { spawnSync } from 'child_process'
+import { hostname, tmpdir } from 'os'
 import { join } from 'path'
 import { fileSystemService as fs } from '@pair/content-ops'
 import { runCli } from '../../cli'
@@ -10,6 +11,7 @@ import { isSafePromptText } from './prompt-safety'
 import { assignmentFor, parseConfiguration, validate } from '@pair/workflows'
 import type { SpawnIterationInput } from './spawn'
 import type { WorkflowHostDependencies } from './workflow-host'
+import type { acquireRunLock } from './run-lock'
 import * as hostProcess from './host-process'
 
 /**
@@ -68,6 +70,13 @@ const write = (path: string, content: string) => {
   fs.writeFileSync(join(project, path), content)
 }
 const runDir = (id = 'quick-627') => join(project, '.pair/working/runs', id)
+
+async function sessionRunLock(): Promise<typeof acquireRunLock> {
+  const entry = '@pair/workflows/cli'
+  const adapter = (await import(entry)) as { acquireRunLock: typeof acquireRunLock }
+  return adapter.acquireRunLock
+}
+
 /** The skill a prompt invokes: `/<skill>` on a slash engine, `Run the <skill> skill.` on an instruction one. */
 const skillOf = (prompt: string) => /^(?:\/|Run the )(\S+)/.exec(prompt)?.[1] ?? ''
 
@@ -165,6 +174,53 @@ describe('settings per step, printed with their source (AC-1)', () => {
     expect(await run(['quick'])).toBe(0)
     expect(lines).toContain('  Configuration: none applies — engine claude, its default model')
     expect(argsOf(0)).toBe('')
+  })
+})
+
+describe('workflow hosts (#696 AC-4/AC-5)', () => {
+  it('pair run respects a live lock held through the session entry', async () => {
+    fs.mkdirSync(runDir(), { recursive: true })
+    const acquire = await sessionRunLock()
+    const lock = acquire(runDir())
+    expect(lock.kind).toBe('acquired')
+    if (lock.kind !== 'acquired') throw new Error('session could not acquire an empty lock')
+    try {
+      const lockFile = join(runDir(), 'run.lock')
+      const before = fs.readFileSync(lockFile)
+      expect(await run(['quick'])).toBe(1)
+      expect(lines).toContain(
+        `  run-locked: pid ${process.pid} on ${hostname()} is driving ${runDir()}; nothing was launched.`,
+      )
+      expect(launched).toHaveLength(0)
+      expect(fs.readFileSync(lockFile)).toBe(before)
+    } finally {
+      lock.release()
+    }
+  })
+
+  it('the session entry takes over an orphan lock in the CLI format', async () => {
+    const { pid } = spawnSync(process.execPath, ['-e', '0'])
+    const lockFile = join(runDir(), 'run.lock')
+    fs.mkdirSync(runDir(), { recursive: true })
+    fs.writeFileSync(lockFile, JSON.stringify({ pid, host: hostname(), startedAt: new Date(0) }))
+
+    const acquire = await sessionRunLock()
+    const lock = acquire(runDir())
+    expect(lock).toMatchObject({ kind: 'acquired', takenOver: { pid, host: hostname() } })
+    expect(JSON.parse(fs.readFileSync(lockFile))).toMatchObject({ pid: process.pid })
+    if (lock.kind === 'acquired') lock.release()
+  })
+
+  it('records the host and launched model in state with telemetry off', async () => {
+    writeConfig()
+    expect(await run(['quick'], OK, { config: 'mine', telemetry: false })).toBe(0)
+    expect(fs.existsSync(join(runDir(), 'telemetry.jsonl'))).toBe(false)
+    expect(JSON.parse(fs.readFileSync(join(runDir(), 'state.json')))).toMatchObject({
+      steps: {
+        implement: { host: 'pair-run', model: 'claude-sonnet-5-5' },
+        review: { host: 'pair-run', model: 'claude-opus-5-5' },
+      },
+    })
   })
 })
 
