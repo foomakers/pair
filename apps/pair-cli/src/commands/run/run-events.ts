@@ -47,8 +47,11 @@ export const runEventLine = (event: Readonly<Record<string, unknown>>): string =
   `PAIR_EVENT ${JSON.stringify(event)}`
 
 const MARKER = /^[ \t]*PAIR_EVENT[ \t]+(.+?)[ \t]*$/gm
-/** Remove progress records before scanning agent text for a stage handoff. */
-export const withoutRunEventLines = (text: string): string => text.replace(MARKER, '')
+/** Object starts marked as progress, including records quoted in prose or Markdown. */
+export const runEventObjectStarts = (text: string): Set<number> =>
+  new Set(
+    Array.from(text.matchAll(/\bPAIR_EVENT[ \t]+(?=\{)/g), match => match.index + match[0].length),
+  )
 
 const MAX_DEPTH = 6
 const STRING_FIELDS = ['title', 'stage', 'status', 'reason', 'detail'] as const

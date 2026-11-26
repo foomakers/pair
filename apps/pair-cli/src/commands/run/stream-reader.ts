@@ -4,7 +4,7 @@ import {
   eventBodyRuns,
   parseRunEvent,
   progressRunEvents,
-  withoutRunEventLines,
+  runEventObjectStarts,
   type RunEvent,
 } from './run-events'
 
@@ -90,30 +90,36 @@ function asFinal(value: unknown): StageFinalResult | undefined {
 }
 
 /** Every TOP-LEVEL `{…}` span of a text (string-aware, so braces in strings and nested objects never count). */
-function topLevelObjects(text: string): string[] {
+function topLevelObjects(text: string, progress?: ReadonlySet<number>): string[] {
   const spans: string[] = []
-  const scan = { depth: 0, start: -1, inString: false, escaped: false }
-  for (let i = 0; i < text.length; i++) {
-    if (stepString(scan, text[i]!)) continue
-    if (text[i] === '"' && scan.depth > 0) scan.inString = true
-    else if (text[i] === '{') openBrace(scan, i)
-    else if (text[i] === '}' && scan.depth > 0 && --scan.depth === 0) {
-      spans.push(text.slice(scan.start, i + 1))
-    }
+  let start = text.indexOf('{')
+  while (start !== -1) {
+    const isProgress = progress?.has(start) === true
+    const end = objectEnd(text, start, isProgress)
+    if (!isProgress) spans.push(text.slice(start, end))
+    start = text.indexOf('{', end)
   }
   return spans
 }
 
-interface Scan {
-  depth: number
-  start: number
-  inString: boolean
-  escaped: boolean
+/** Progress records fit on one line, even when truncated. A handoff may span several. */
+function objectEnd(text: string, start: number, singleLine: boolean): number {
+  const scan = { inString: false, escaped: false }
+  let depth = 1
+  for (let i = start + 1; i < text.length; i++) {
+    const ch = text[i]!
+    if (singleLine && (ch === '\r' || ch === '\n')) return i
+    if (stepString(scan, ch)) continue
+    if (ch === '"') scan.inString = true
+    else if (ch === '{') depth++
+    else if (ch === '}' && --depth === 0) return i + 1
+  }
+  return text.length
 }
 
-function openBrace(scan: Scan, at: number): void {
-  if (scan.depth === 0) scan.start = at
-  scan.depth++
+interface Scan {
+  inString: boolean
+  escaped: boolean
 }
 
 /** Advances the in-string state; `true` when the character was consumed as string content. */
@@ -138,7 +144,7 @@ const isResultShaped = (raw: Record<string, unknown>): boolean =>
 export function parseFinalResult(text: string): StageFinalResult | undefined {
   let shaped: StageFinalResult | undefined
   let any: StageFinalResult | undefined
-  for (const span of topLevelObjects(withoutRunEventLines(text))) {
+  for (const span of topLevelObjects(text, runEventObjectStarts(text))) {
     let raw: unknown
     try {
       raw = JSON.parse(span)
