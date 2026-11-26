@@ -252,6 +252,18 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
       file: handoff('gate-red'),
       retry: true,
     },
+    {
+      label: 'a fused scalar identifier before a same-line handoff',
+      streamResult: `PAIR_EVENT null_suffix ${handoff(formatError)}`,
+      file: handoff('gate-red'),
+      failure: 'halted: handoff rejected',
+    },
+    {
+      label: 'an underscore in genuine handoff data after a literal identifier',
+      streamResult: `_PAIR_EVENT unknown ${JSON.stringify({ status: 'failed', reason: formatError, detail: '_' })}`,
+      file: handoff('gate-red'),
+      retry: true,
+    },
     { label: 'file-only format error', file: handoff(formatError), retry: true },
     {
       label: 'stream format error',
