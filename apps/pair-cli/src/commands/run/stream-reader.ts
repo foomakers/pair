@@ -85,12 +85,14 @@ function asFinal(value: unknown): StageFinalResult | undefined {
 
 /** Every TOP-LEVEL `{…}` span of a text (string-aware, so braces in strings and nested objects never count). */
 function topLevelObjects(text: string, skipProgress = false): string[] {
-  const starts = skipProgress ? /(?:\b|(?<!\w)(_+))PAIR_EVENT[ \t]+|\{/g : /\{/g
+  const starts = skipProgress
+    ? /(?<![\p{ID_Continue}\u200C\u200D])(_*)PAIR_EVENT[ \t]+|\{/gu
+    : /\{/g
   const spans: string[] = []
   for (let match = starts.exec(text); match; match = starts.exec(text)) {
     if (match[0] !== '{') {
       const start = starts.lastIndex
-      const end = progressEnd(text, start)
+      const end = progressEnd(text, start, match[1])
       if (claimsMarker(text, start, end, match[1])) starts.lastIndex = end ?? lineEnd(text, start)
       continue
     }
@@ -108,24 +110,39 @@ function claimsMarker(
   emphasis?: string,
 ): boolean {
   if (!emphasis) return true
-  if (end !== undefined)
-    return text.startsWith(emphasis, end) && !/\w/.test(text.charAt(end + emphasis.length))
+  if (end !== undefined) return closesEmphasis(text, end, emphasis)
   const body = text.slice(start, lineEnd(text, start))
-  return Array.from(body.matchAll(/_+/g)).some(
-    match => match[0] === emphasis && !/\w/.test(body.charAt(match.index + emphasis.length)),
+  // Search punctuation outside complete quoted data, including strings in an adjacent handoff.
+  const tokens = /"(?:\\[^\r\n]|[^"\\\r\n])*"(?![\p{ID_Continue}\u200C\u200D])|_+/gu
+  return Array.from(body.matchAll(tokens)).some(
+    match => match[0] === emphasis && closesEmphasis(body, match.index, emphasis),
   )
 }
 
+function closesEmphasis(text: string, at: number, emphasis?: string): boolean {
+  return (
+    !!emphasis && text.startsWith(emphasis, at) && !continuesIdentifier(text, at + emphasis.length)
+  )
+}
+
+function continuesIdentifier(text: string, at: number): boolean {
+  const part = /[\p{ID_Continue}\u200C\u200D]/uy
+  part.lastIndex = at
+  return part.test(text)
+}
+
 /** A scalar must be valid JSON. Sentence punctuation belongs to the surrounding prose. */
-function progressEnd(text: string, start: number): number | undefined {
+function progressEnd(text: string, start: number, emphasis?: string): number | undefined {
   if (text[start] === '{' || text[start] === '[') return containerEnd(text, start, true)
   const scalar = /"(?:\\[^\r\n]|[^"\\\r\n])*"|[a-zA-Z0-9.+-]+/y
   scalar.lastIndex = start
   const token = scalar.exec(text)?.[0].replace(/\.+$/, '')
-  if (!token || /[\p{L}\p{N}]/u.test(text.charAt(start + token.length))) return undefined
+  if (!token) return undefined
+  const end = start + token.length
+  if (continuesIdentifier(text, end) && !closesEmphasis(text, end, emphasis)) return undefined
   try {
     JSON.parse(token)
-    return start + token.length
+    return end
   } catch {
     return undefined
   }
