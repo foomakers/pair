@@ -167,6 +167,18 @@ for (const { finding, property, declaration, column } of [
     declaration: "type Retry = { tag: 'retry' } & RetryDto",
     column: 13,
   },
+  {
+    finding: 'R12',
+    property: 'message: string | null',
+    declaration: 'type Retry = RetryDto',
+    column: 13,
+  },
+  {
+    finding: 'R12',
+    property: 'message: string | null',
+    declaration: "type Retry = Pick<RetryDto, 'message'>",
+    column: 13,
+  },
 ]) {
   test(`#750 ${finding} reports DTO ${property} on the pilot declaration`, t => {
     const dto = 'src/http/retry.dto.ts'
