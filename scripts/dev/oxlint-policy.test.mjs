@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
@@ -75,6 +75,41 @@ test('#693 AC-2 preserves package lint scope and check/fix behavior', t => {
   assert.equal(readFileSync(join(cwd, 'ignored.config.ts'), 'utf8'), typed)
   assert.equal(lint(cwd, '--workspace', '--fix').diagnostics.length, 3)
   assert.equal(readFileSync(join(cwd, 'fixable.ts'), 'utf8'), 'export const value = 1\n')
+})
+
+test('#693 R5 excluded unreadable directories leave check and fix unaffected', t => {
+  const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json')
+  const excluded = join(cwd, 'dist')
+  const included = 'nested/dist/covered.ts'
+  const source = 'export let value = 1\n'
+  mkdirSync(excluded)
+  mkdirSync(join(cwd, 'nested/dist'), { recursive: true })
+  writeFileSync(join(excluded, 'excluded.ts'), source)
+  chmodSync(excluded, 0o000)
+
+  try {
+    if (process.getuid?.() !== 0) assert.throws(() => readdirSync(excluded), { code: 'EACCES' })
+    for (const [command, fixCommand, args] of [
+      [join(dirname(runner), 'lint.sh'), join(dirname(runner), 'lint-fix.sh'), ['--config', '.oxlintrc.json']],
+      [runner, runner, ['.']],
+      [runner, runner, ['**/*.ts']],
+      [runner, runner, ['--no-error-on-unmatched-pattern', 'dist/**/*.ts', 'nested']],
+      [runner, runner, []],
+    ]) {
+      writeFileSync(join(cwd, included), source)
+      const check = lintCommand(cwd, command, ...args)
+      assert.equal(check.status, 1)
+      assert.deepEqual(check.diagnostics.map(({ filename }) => filename), [included])
+      assert.equal(readFileSync(join(cwd, included), 'utf8'), source)
+
+      const fix = command === runner ? ['--fix'] : []
+      assert.deepEqual(lintCommand(cwd, fixCommand, ...fix, ...args), { status: 0, diagnostics: [] })
+      assert.equal(readFileSync(join(cwd, included), 'utf8'), 'export const value = 1\n')
+    }
+  } finally {
+    chmodSync(excluded, 0o700)
+  }
+  assert.equal(readFileSync(join(excluded, 'excluded.ts'), 'utf8'), source)
 })
 
 test('#693 R3 fix mode fails on an error introduced by an applied fix', t => {
