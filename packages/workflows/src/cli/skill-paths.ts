@@ -77,7 +77,7 @@ function layoutCandidates(root: string, layout: Layout, name: string) {
 export function defaultSkillPaths(
   fs: Files,
   root: string,
-  layouts: readonly Layout[],
+  layouts: readonly [Layout, ...Layout[]],
   name: string,
 ): string[] {
   const manifest = installedNames(fs, root)
@@ -92,12 +92,7 @@ export function defaultSkillPaths(
             withinDirectory(root, resolve(root, target)),
         )
       : []
-    return skillPaths(
-      root,
-      [...targets, ...layouts.flatMap(layout => layout.targets)],
-      undefined,
-      installed,
-    )
+    return skillPaths(root, [...targets, ...layouts[0].targets], undefined, installed)
   }
   return layouts.flatMap(layout => layoutCandidates(root, layout, name))
 }

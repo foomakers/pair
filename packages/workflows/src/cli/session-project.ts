@@ -98,16 +98,21 @@ function bundleLayout(project: Project) {
 function installedSkillPaths(project: Project, name: string, root = project.main) {
   const registry = sessionSkillsLayout(root, project.main)
   const bundle = bundleLayout(project)
-  const layouts = [registry]
-  if (bundle) layouts.push({ targets: [bundle.target], prefix: bundle.prefix })
-  return defaultSkillPaths(sessionFiles, root, layouts, name)
+  return defaultSkillPaths(
+    sessionFiles,
+    root,
+    bundle ? [registry, { targets: [bundle.target], prefix: bundle.prefix }] : [registry],
+    name,
+  )
 }
 
 export function sessionDefaultSkill(project: Project, name: string): string | undefined {
+  const root = project.cwd
+  const registry = sessionSkillsLayout(root)
   return findDefaultSkill(
     isFile,
-    project.cwd,
-    installedSkillPaths(project, name, project.cwd),
+    root,
+    defaultSkillPaths(sessionFiles, root, [registry], name),
     name,
   )
 }
@@ -120,7 +125,10 @@ export function cycleScripts(project: Project): string {
   const scripts = candidates.find(dir =>
     ['cycle-state.mjs', 'cycle-dispatch.mjs'].every(file => isFile(join(dir, file))),
   )
-  if (scripts === undefined) throw new Error('skill-missing: install pair-workflow-cycle')
+  if (scripts === undefined)
+    throw new Error(
+      'skill-missing: declare the installed skills target in pair.config.json or install pair-workflow-cycle',
+    )
   return scripts
 }
 
@@ -131,7 +139,9 @@ export function controlStateScript(project: Project): string {
   ]
   const script = candidates.find(isFile)
   if (script === undefined)
-    throw new Error('skill-missing: install pair-next with control-state.mjs')
+    throw new Error(
+      'skill-missing: declare the installed skills target in pair.config.json or install pair-next with control-state.mjs',
+    )
   return script
 }
 

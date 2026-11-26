@@ -81,7 +81,10 @@ const skillErrors: Check = (workflow, step, deps, path) => {
   return [
     errorAt(workflow, [...path, 'skill'], {
       problem: `skill '${skill}' is not installed`,
-      fix: "install it, or name an installed skill in 'skill'",
+      fix:
+        step.skill === undefined
+          ? 'declare the installed skills target in pair.config.json, or run pair-cli update with the install configuration'
+          : "install it, or name an installed skill in 'skill'",
     }),
   ]
 }

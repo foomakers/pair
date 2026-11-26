@@ -60,7 +60,7 @@ export function locateCycleScripts(
   if (found !== undefined) return { scriptsDir: join(found, 'scripts') }
   throw new Error(
     `skill-missing: ${CYCLE_SKILL_NAME} is not installed under any configured skills target — ` +
-      `install it (\`pair-cli install\`) before running \`pair-cli run --card\` on a Ready card.`,
+      `declare the installed target in pair.config.json or install it (\`pair-cli install\`) before running \`pair-cli run --card\` on a Ready card.`,
   )
 }
 

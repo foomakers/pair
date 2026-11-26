@@ -173,9 +173,11 @@ async function verifyCardExclusion(
 async function verifyRedirectedCardPreflight(root: string, skill: string) {
   const runIteration = vi.fn(async (input: SpawnIterationInput) => {
     input.onEvent?.({
-      type: 'result',
-      subtype: 'success',
-      result: '```json\n{"status":"needs-decision","summary":"Question"}\n```',
+      type: 'item.completed',
+      item: {
+        type: 'agent_message',
+        text: '```json\n{"status":"needs-decision","summary":"Question"}\n```',
+      },
     })
     return { outcome: 'success' as const, detail: 'test engine' }
   })
@@ -208,10 +210,54 @@ async function verifyUnlocatedLegacyTarget(root: string, bundle: string) {
     })
     expect.soft(session.status).toBe(1)
     expect(session.stderr).toContain('pair.config.json')
+    writeProjectConfigs(root, teamRegistry, undefined, undefined)
+    expect(await handleRunCommand(cli, fs)).toBe(0)
+    expect(runner(root, bundle)('validate', 'native.yaml').steps[0].skill).toBe(
+      'team-process-refine-story',
+    )
   } finally {
+    writeProjectConfigs(root, undefined, undefined, undefined)
     fs.writeFileSync(file, original)
   }
 }
+
+it('R754-06: native preflight uses a redirected install and both hosts explain a legacy target gap', async () => {
+  const root = fileSystemService.mkdtempSync(join(tmpdir(), 'pair-native-override-'))
+  roots.push(root)
+  vi.spyOn(console, 'log').mockImplementation(() => {})
+  writeProjectConfigs(root, undefined, undefined, undefined)
+  expect(await install(root, installConfig(root, teamRegistry))).toBe(0)
+  write(root, '.pair/adoption/tech/way-of-working.md', '- `pm-tool`: `filesystem`\n')
+  write(
+    root,
+    '.pair/adoption/product/backlog/03-user-stories/not-started/42.md',
+    '# Prepare release notes\n\n**Status**: Todo\n',
+  )
+  git(root, 'init', '-b', 'main')
+  git(
+    root,
+    '-c',
+    'user.name=Fixture',
+    '-c',
+    'user.email=fixture@example.test',
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '--allow-empty',
+    '-m',
+    'Fixture',
+  )
+  write(
+    root,
+    'native.yaml',
+    'version: 1\nname: native\nsteps:\n  refine: { kind: refine-story, with: { mode: autonomous } }\n',
+  )
+  await verifyUnlocatedLegacyTarget(
+    root,
+    join(root, customTarget, 'team-capability-workflow/scripts/workflow.mjs'),
+  )
+  await verifyRedirectedCardPreflight(root, 'team-process-refine-story')
+}, 45_000)
 
 async function verifyConfiguredSkill(
   root: string,
@@ -492,15 +538,6 @@ steps:
       '-m',
       'Fixture',
     )
-    if (override && !skills && !legacySkills) {
-      write(
-        root,
-        'native.yaml',
-        'version: 1\nname: native\nsteps:\n  refine: { kind: refine-story, with: { mode: autonomous } }\n',
-      )
-      await verifyUnlocatedLegacyTarget(root, script(root))
-      await verifyRedirectedCardPreflight(root, `${prefix}-process-refine-story`)
-    }
     if (legacySkills !== undefined)
       await verifyConfiguredSkill(root, script(root), legacySkills, skills)
     expect(invoke('validate', 'installed')).toMatchObject(preview)
