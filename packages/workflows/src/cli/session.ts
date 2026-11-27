@@ -372,14 +372,12 @@ function stepPacket(
     readonly project: Project
     readonly engine: string
     readonly worktree?: string
-    readonly resumeSessionId: string | undefined
   },
   launch: StepLaunch,
 ) {
   const { step, resolved } = sessionLaunch(context.project, launch, addressedSteps(workflow))
-  const sent = sessionDispatch(resolved, context.resumeSessionId)
   return {
-    ...sent,
+    ...resolved,
     worktree: context.worktree,
     settings: effectiveSettings(configuration, workflow, step, context.engine),
   }
@@ -466,7 +464,7 @@ const needsHost = (step: StepLaunch) =>
 type Selection = Awaited<ReturnType<typeof advanceStep>>
 type SessionNext = Partial<ReturnType<typeof approvalPrompt>> & {
   run: RunState
-  ready: readonly Awaited<ReturnType<typeof readyPacket>>[]
+  ready: readonly (Awaited<ReturnType<typeof readyPacket>> | TransferPacket)[]
   events?: readonly StepEvent[]
   held?: Selection['held']
   blocked?: Selection['blocked']
@@ -512,12 +510,12 @@ type AdvanceInput = {
   lease: SessionLease
 } & NextRequest
 
-type Packet = (launch: StepLaunch, resumeSessionId?: string) => ReturnType<typeof stepPacket>
+type Packet = (launch: StepLaunch) => ReturnType<typeof stepPacket>
+type TransferPacket = Pick<ReturnType<Packet>, 'id' | 'kind' | 'attempt' | 'settings'>
 
 async function readyPacket(
   { run, lease }: { run: RunDirectory; lease: SessionLease },
-  launch: StepLaunch,
-  packet: Packet,
+  launch: ReturnType<Packet>,
   fallbackHandoff = false,
 ) {
   const { resumeSessionId, fallback } = sessionContext(run, lease, launch)
@@ -525,14 +523,13 @@ async function readyPacket(
     fallbackHandoff && resumeSessionId !== undefined
       ? 'the continuation could not be dispatched'
       : fallback
-  const candidate = packet(launch, reason === undefined ? resumeSessionId : undefined)
-  const sameEngine = candidate.settings.engine === lease.engine
-  const ready = sameEngine ? candidate : packet(launch)
-  if (sameEngine && reason !== undefined) {
+  const ready = sessionDispatch(launch, reason === undefined ? resumeSessionId : undefined)
+  if (reason !== undefined) {
     await recordContextFallback(run, launch, reason)
     process.stderr.write(`${launch.id}: using handoff — ${reason}\n`)
   }
-  return { ...ready, message: sessionMessage(ready, lease.worktree) }
+  const { worktree, settings } = launch
+  return { ...ready, worktree, settings, message: sessionMessage(ready, worktree) }
 }
 
 function agentDispatch(
@@ -546,9 +543,13 @@ function agentDispatch(
 ) {
   return async (launch: StepLaunch, launchStartedAt?: number) => {
     const result: SessionNext = { run: 'running', ready: [], events }
+    const routed = packet(launch)
+    const { id, kind, attempt, settings } = routed
+    if (settings.engine !== lease.engine)
+      return { result: { ...result, ready: [{ id, kind, attempt, settings }] } }
     let ready
     try {
-      ready = await readyPacket({ run, lease }, launch, packet, fallbackHandoff)
+      ready = await readyPacket({ run, lease }, routed, fallbackHandoff)
     } catch (error) {
       if (!(error instanceof UnsafeMessageError)) throw error
       const failure = await record(run, launch.id, {
@@ -641,8 +642,7 @@ export async function nextSession(
 
       const workflow = frozenWorkflow(run)
       const config = effectiveConfiguration(run)
-      const packet: Packet = (launch, resumeSessionId) =>
-        stepPacket(workflow, config, { ...lease, project, resumeSessionId }, launch)
+      const packet: Packet = launch => stepPacket(workflow, config, { ...lease, project }, launch)
       const observed = observeRun(run)
       const writer = sessionTelemetry(observed, workflow, config, lease)
       const advanced = await advanceSession(
@@ -658,7 +658,7 @@ export async function nextSession(
     },
   )
   const step = result.ready[0]
-  if (step !== undefined) reportProcessControls(step)
+  if (step !== undefined && 'message' in step) reportProcessControls(step)
   return result
 }
 
