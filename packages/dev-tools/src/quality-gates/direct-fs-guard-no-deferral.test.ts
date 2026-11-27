@@ -103,6 +103,7 @@ const EXCEPTION_OUT_OF_SCOPE = new Set([
   'packages/workflows/scripts/bundle-workflow.mjs',
   'packages/workflows/src/cli/session-files.ts',
   'packages/workflows/test/bundle.test.ts',
+  'packages/workflows/test/delivery.test.ts',
   'packages/workflows/test/session-command.test.ts',
   'packages/knowledge-hub/src/conformance/workflow-authoring.test.ts',
   'scripts/workflow-test-runner.mjs',
