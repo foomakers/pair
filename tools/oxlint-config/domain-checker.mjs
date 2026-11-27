@@ -115,16 +115,13 @@ function typeDependencyCheck(program, checker) {
       const name = ts.isTypeReferenceNode(node) ? node.typeName : node.expression
       let symbol = name && checker.getSymbolAtLocation(name)
       if (symbol?.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol)
-      // These projections preserve the selected property's source declaration.
-      const projection =
-        ['Pick', 'Omit', 'Readonly'].includes(symbol?.name) &&
-        symbol.declarations?.some(declaration =>
-          program.isSourceFileDefaultLibrary(declaration.getSourceFile()),
-        )
-      const source = projection ? node.typeArguments?.[0] : undefined
       for (const argument of node.typeArguments ?? []) {
-        if (argument === source) checkSelectedObjectArguments(argument, contributes, seen)
-        else check(argument)
+        // A projection can preserve the selected property's declaration through aliases.
+        if (contributes(checker.getTypeFromTypeNode(argument))) {
+          checkSelectedObjectArguments(argument, contributes, seen)
+        } else {
+          check(argument)
+        }
       }
       if (!name) return
       checkDiagnostics(node)
