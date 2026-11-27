@@ -51,6 +51,35 @@ const ESTIMATED = [
 const PRICES = { 'claude-fable-5-2': { read: 10, cached: 1, written: 50 } }
 const ask = (question, runs, options = {}) => answer(question, readRuns(runsDir(runs)), options)
 
+// #700 AC-4: report each round and the cohort mean, including growth and new findings after a fix.
+test('convergence: per-card rounds, growth, new findings and cohort mean', () => {
+  const review = (run, card, round, counts) => step(run, 'rounds/review', {
+    schema: 2, workflow: 'delivery', card, kind: 'review', round, findingCounts: counts,
+  })
+  const result = ask('convergence', {
+    a: [review('a', '1', 1, { open: 2, resolved: 0, new: 2 }), review('a', '1', 2, { open: 0, resolved: 2, new: 0 })],
+    b: [review('b', '2', 1, { open: 1, resolved: 0, new: 1 }), review('b', '2', 2, { open: 2, resolved: 0, new: 1 }), review('b', '2', 3, { open: 0, resolved: 2, new: 0 })],
+    c: [review('c', '3', 1, { open: 0, resolved: 0, new: 0 })],
+  })
+  assert.equal(result.meanRounds, 2)
+  assert.deepEqual(result.cards.map(card => [card.card, card.rounds.length, card.growth, card.newAfterFix]), [
+    ['1', 2, false, 0], ['2', 3, true, 1], ['3', 1, false, 0],
+  ])
+  assert.deepEqual(result.cards[1].rounds.map(({ open, resolved, new: fresh }) => [open, resolved, fresh]), [[1, 0, 1], [2, 0, 1], [0, 2, 0]])
+})
+
+// #700 AC-5: comparison retains executions and park causes alongside duration and tokens.
+test('compare: steps and parks with causes are available alongside time and tokens', () => {
+  const parked = [step('a', 'review', { status: 'blocked', reason: 'review-conflict' }), closing('a', 'parked')]
+  const finished = [step('b', 'review'), step('b', 'merge'), closing('b')]
+  const { runs } = ask('compare', { a: parked, b: finished }).groups[0]
+  assert.deepEqual(runs.map(run => [run.steps, run.parks]), [
+    [1, [{ step: 'review', reason: 'review-conflict' }]], [2, []],
+  ])
+  assert.equal(runs[0].durationMs.value, 60_000)
+  assert.equal(runs[1].tokens.read.value, 200)
+})
+
 test('cost: tokens per step and in total, each with its origin, and the cost from the price table', () => {
   const [run] = ask('cost', { 'quick-627': MEASURED }, { prices: PRICES }).runs
   assert.deepEqual(run.steps.map(one => [one.step, one.attempt, one.tokens.read, one.cost]), [

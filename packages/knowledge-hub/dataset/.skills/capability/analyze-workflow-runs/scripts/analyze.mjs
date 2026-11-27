@@ -15,7 +15,7 @@ import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const QUESTIONS = ['cost', 'time', 'passes', 'compare', 'trend']
+const QUESTIONS = ['cost', 'time', 'passes', 'compare', 'trend', 'convergence']
 const TOKENS = ['read', 'cached', 'written']
 const NOT_CALCULATED = 'not calculated'
 /** The record format this script reads (ADR-033). */
@@ -250,6 +250,9 @@ function compare(runs, { prices, by = 'card' }) {
   const rows = runs.map(one => ({
     ...identityOf(one),
     configuration: configurationOf(one.steps),
+    steps: one.steps.length,
+    parks: one.steps.filter(step => ['blocked', 'needs-decision', 'exhausted'].includes(step.status))
+      .map(step => ({ step: step.step, reason: step.reason })),
     durationMs: durationOf(one.steps),
     tokens: tokensOf(one.steps),
     cost: costOf(one.steps, prices),
@@ -314,7 +317,21 @@ const trend = runs => ({
   })),
 })
 
-const ANSWERS = { cost, time, passes, compare, trend }
+const convergence = runs => {
+  const reviews = runs.flatMap(one => one.steps.filter(step => step.kind === 'review' && step.findingCounts && step.round !== undefined))
+  const cards = groupBy(reviews, 'card').map(([card, steps]) => {
+    const rounds = steps.map(step => ({ round: step.round, ...step.findingCounts })).sort((a, b) => a.round - b.round)
+    return {
+      card,
+      rounds,
+      growth: rounds.some((round, index) => index > 0 && round.open > rounds[index - 1].open),
+      newAfterFix: total(rounds.slice(1).map(round => round.new)),
+    }
+  })
+  return { cards, meanRounds: cards.length ? total(cards.map(card => card.rounds.length)) / cards.length : null }
+}
+
+const ANSWERS = { cost, time, passes, compare, trend, convergence }
 
 function notesOf(runs) {
   const sessions = runs.filter(one => one.steps.some(step => step.host === 'session')).map(one => one.run)
@@ -338,7 +355,7 @@ function main(argv) {
   const by = arg('--by')
   if (!QUESTIONS.includes(question) || (by !== undefined && by !== 'card' && by !== 'workflow')) {
     console.error(
-      `usage: analyze.mjs <${QUESTIONS.join('|')}> [--runs <dir>] [--run <id>] [--card <id>] [--workflow <name>] [--prices <file.json>] [--by card|workflow]`,
+      `usage: analyze.mjs <${QUESTIONS.filter(one => one !== 'convergence').join('|')}> (also: convergence) [--runs <dir>] [--run <id>] [--card <id>] [--workflow <name>] [--prices <file.json>] [--by card|workflow]`,
     )
     return 2
   }
