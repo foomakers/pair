@@ -115,13 +115,13 @@ function typeDependencyCheck(program, checker) {
       const name = ts.isTypeReferenceNode(node) ? node.typeName : node.expression
       let symbol = name && checker.getSymbolAtLocation(name)
       if (symbol?.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol)
-      // The selected property already identifies the member of Pick's source object to check.
-      const builtinPick =
-        symbol?.name === 'Pick' &&
+      // These projections preserve the selected property's source declaration.
+      const projection =
+        ['Pick', 'Omit', 'Readonly'].includes(symbol?.name) &&
         symbol.declarations?.some(declaration =>
           program.isSourceFileDefaultLibrary(declaration.getSourceFile()),
         )
-      const source = builtinPick ? node.typeArguments?.[0] : undefined
+      const source = projection ? node.typeArguments?.[0] : undefined
       for (const argument of node.typeArguments ?? []) {
         if (argument === source) checkSelectedObjectArguments(argument, contributes, seen)
         else check(argument)
