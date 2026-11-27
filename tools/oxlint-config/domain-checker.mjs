@@ -104,13 +104,13 @@ function typeDependencyCheck(program, checker) {
     if (alias) follow(checker.getImmediateAliasedSymbol(symbol))
   }
 
-  function checkIndexedObjectArguments(node, keys, selected, seen = new Set()) {
+  function checkSelectedObjectArguments(node, contributes, seen = new Set()) {
     if (seen.has(node) || program.isSourceFileDefaultLibrary(node.getSourceFile())) return
     seen.add(node)
     if (ts.isParenthesizedTypeNode(node)) {
-      checkIndexedObjectArguments(node.type, keys, selected, seen)
+      checkSelectedObjectArguments(node.type, contributes, seen)
     } else if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
-      for (const type of node.types) checkIndexedObjectArguments(type, keys, selected, seen)
+      for (const type of node.types) checkSelectedObjectArguments(type, contributes, seen)
     } else {
       const name = ts.isTypeReferenceNode(node) ? node.typeName : node.expression
       let symbol = name && checker.getSymbolAtLocation(name)
@@ -123,22 +123,26 @@ function typeDependencyCheck(program, checker) {
         )
       const source = builtinPick ? node.typeArguments?.[0] : undefined
       for (const argument of node.typeArguments ?? []) {
-        if (argument === source) checkIndexedObjectArguments(argument, keys, selected, seen)
+        if (argument === source) checkSelectedObjectArguments(argument, contributes, seen)
         else check(argument)
       }
       if (!name) return
       checkDiagnostics(node)
+      const argumentCount = node.typeArguments?.length ?? 0
       for (const declaration of symbol?.declarations ?? []) {
+        // Errors in omitted arguments are reported at their defaults in the declaration.
+        for (const parameter of declaration.typeParameters?.slice(argumentCount) ?? []) {
+          check(parameter.default)
+        }
         if (ts.isTypeAliasDeclaration(declaration)) {
-          checkIndexedObjectArguments(declaration.type, keys, selected, seen)
+          checkSelectedObjectArguments(declaration.type, contributes, seen)
         }
         for (const clause of declaration.heritageClauses ?? []) {
           if (clause.token !== ts.SyntaxKind.ExtendsKeyword) continue
           for (const base of clause.types) {
-            const type = checker.getTypeAtLocation(base)
             // Only follow a base that contributes a declaration for the selected member.
-            if (keys.some(key => indexedValueNodes(type, key)?.some(value => selected.has(value)))) {
-              checkIndexedObjectArguments(base, keys, selected, seen)
+            if (contributes(checker.getTypeAtLocation(base))) {
+              checkSelectedObjectArguments(base, contributes, seen)
             }
           }
         }
@@ -207,7 +211,10 @@ function typeDependencyCheck(program, checker) {
           for (const type of types ?? []) check(type)
         }
         if (selected.every(Boolean)) {
-          checkIndexedObjectArguments(part.objectType, keys, new Set(selected.flat()))
+          const values = new Set(selected.flat())
+          checkSelectedObjectArguments(part.objectType, type =>
+            keys.some(key => indexedValueNodes(type, key)?.some(value => values.has(value))),
+          )
           if (!isUnresolvedType(checker.getTypeFromTypeNode(part))) {
             // The checker has selected the members. The rest of the DTO is outside this dependency.
             excluded.push([part.objectType.getStart(), part.objectType.end])
@@ -249,6 +256,14 @@ function typeDependencyCheck(program, checker) {
 
   return (type, declarations, uses) => {
     for (const declaration of declarations) check(declaration.type)
+    for (const use of uses) {
+      if (!ts.isExpressionWithTypeArguments(use)) continue
+      const contributes = base =>
+        base.getProperties().some(property =>
+          property.declarations?.some(declaration => declarations.includes(declaration)),
+        )
+      if (contributes(checker.getTypeAtLocation(use))) checkSelectedObjectArguments(use, contributes)
+    }
     if (!isUnresolvedType(type)) return
     for (const declaration of declarations) checkInference(declaration)
     // Instantiation can erase the error's origin from the generic property declaration.
