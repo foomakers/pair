@@ -1677,6 +1677,18 @@ function countsHistory(
   return { ...state.findingCounts, [id]: { ...state.findingCounts?.[id], [round]: counts } }
 }
 
+function reviewOrigins(step: Step, result: StepResult, state: RunStateFile): StepResult {
+  const prior = state.latest?.['findings']
+  if (step.kind !== 'review' || !Array.isArray(result['findings'])) return result
+  return {
+    ...result,
+    findings: result['findings'].map(one => ({
+      ...one,
+      origin: Array.isArray(prior) && prior.some(old => old.id === one.id) ? 'carried' : 'new',
+    })),
+  }
+}
+
 /**
  * Records the result of a step: validated against its kind (a result that breaks the contract is
  * recorded `failed`, `invalid-result`), written to `steps/<id>/result.json`, then to `state.json`.
@@ -1696,19 +1708,7 @@ export async function record(
   checkAttempt(stepId, previous, options.attempt)
   const { step, outer, childId } = launchable(run, stepId)
   const kind = kindByName[step.kind]
-  const validated = boundedHandoff(settle(kind, result))
-  const prior = state.latest?.['findings']
-  const settled =
-    step.kind === 'review' && Array.isArray(validated['findings'])
-      ? {
-          ...validated,
-          findings: validated['findings'].map(one => ({
-            ...one,
-            origin:
-              Array.isArray(prior) && prior.some(old => old.id === one.id) ? 'carried' : 'new',
-          })),
-        }
-      : validated
+  const settled = reviewOrigins(step, boundedHandoff(settle(kind, result)), state)
   const round = childId === undefined ? undefined : loopRound(state, outer)
   await writeResult(run, resultDir(run, stepId, round), settled, output)
   const { status } = settled
