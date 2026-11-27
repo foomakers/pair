@@ -94,13 +94,22 @@ export interface StepExecutionIdentity {
   readonly model?: string | undefined
   readonly engine?: string | undefined
   readonly sessionId?: string | undefined
+  /** In-session handles are usable only by the lease that recorded them. */
+  readonly sessionLeaseHash?: string | undefined
 }
 
-const executionOf = ({ host, model, engine, sessionId }: StepExecutionIdentity) => ({
+const executionOf = ({
+  host,
+  model,
+  engine,
+  sessionId,
+  sessionLeaseHash,
+}: StepExecutionIdentity) => ({
   ...(host !== undefined && { host }),
   ...(model !== undefined && { model }),
   ...(engine !== undefined && { engine }),
   ...(sessionId !== undefined && { sessionId }),
+  ...(sessionLeaseHash !== undefined && { sessionLeaseHash }),
 })
 
 export interface StepRecord extends StepExecutionIdentity {

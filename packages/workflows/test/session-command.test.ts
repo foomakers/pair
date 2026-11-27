@@ -323,6 +323,123 @@ it('#696 AC-1/AC-2/AC-5: advances a session run through the shipped script and r
   expect(existsSync(join(runDir, 'run.lock'))).toBe(false)
 }, 15_000)
 
+const draftHandoff = 'The draft covers two release notes.'
+
+function recordDraft(lease: string[], sessionId?: string) {
+  expect(JSON.parse(successful(['next', runId, ...lease]))).toMatchObject({
+    ready: [{ id: 'draft', attempt: 1 }],
+  })
+  const identity = sessionId === undefined ? [] : ['--session-id', sessionId]
+  successful(
+    ['record', runId, 'draft', ...lease, '--result', '-', ...identity],
+    fenced({ ...drafted, handoff: draftHandoff }),
+  )
+}
+
+function startContextSession(context: 'resume' | 'handoff', interactive = false) {
+  write(
+    workflowFile,
+    workflow
+      .replace('interactive: true', `interactive: ${interactive}\n    context: ${context}`)
+      .replace(
+        'skill: pair-fixture-draft',
+        `skill: pair-fixture-draft\n    interactive: ${interactive}`,
+      ),
+  )
+  return openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
+}
+
+it.each([
+  { context: 'subagent', sessionId: 'agent-draft-42', interactive: false },
+  { context: 'main conversation', sessionId: 'conversation', interactive: true },
+])(
+  '#698 AC-4: continues the preceding $context in the same lease',
+  ({ sessionId, interactive }) => {
+    const lease = startContextSession('resume', interactive)
+    recordDraft(lease, sessionId)
+
+    const { ready } = JSON.parse(successful(['next', runId, ...lease]))
+    expect(ready).toMatchObject([
+      {
+        id: 'discuss',
+        attempt: 1,
+        inputs: { card },
+        interactive,
+        resumeSessionId: sessionId,
+        message: expect.stringContaining(`- card: ${card}`),
+      },
+    ])
+    expect(ready[0].message).not.toContain(draftHandoff)
+    expect(ready[0]).not.toHaveProperty('handoff')
+    expect(JSON.parse(readRun('state.json')).steps.discuss).not.toHaveProperty('contextFallback')
+  },
+)
+
+it('#698 AC-4: replaces an unavailable continuation with handoff on the same attempt', () => {
+  const lease = startContextSession('resume')
+  const sessionId = 'agent-draft-42'
+  recordDraft(lease, sessionId)
+  expect(JSON.parse(successful(['next', runId, ...lease]))).toMatchObject({
+    ready: [{ id: 'discuss', attempt: 1, resumeSessionId: sessionId }],
+  })
+
+  const result = invoke(['next', runId, ...lease, '--fallback-handoff'])
+  expect(result.status, result.stderr).toBe(0)
+  const { ready } = JSON.parse(result.stdout)
+  expect(ready).toMatchObject([
+    { id: 'discuss', attempt: 1, inputs: { card }, message: expect.stringContaining(draftHandoff) },
+  ])
+  expect(ready[0]).not.toHaveProperty('resumeSessionId')
+  expect(result.stderr).toMatch(/handoff/i)
+  successful(['record', runId, 'discuss', ...lease, '--result', '-'], fenced(discussed))
+  expect(JSON.parse(readRun('state.json')).steps.discuss).toMatchObject({
+    state: 'ok',
+    executions: 1,
+    contextFallback: expect.stringMatching(/\S/),
+  })
+})
+
+it.each([
+  { context: 'no handle was recorded', reopen: false },
+  { context: 'an interrupted attempt reopened under a new lease', reopen: true },
+])('#698 AC-4: falls back to handoff when $context', ({ reopen }) => {
+  const firstLease = startContextSession('resume')
+  const sessionId = 'agent-draft-42'
+  recordDraft(firstLease, reopen ? sessionId : undefined)
+  if (reopen) {
+    expect(JSON.parse(successful(['next', runId, ...firstLease]))).toMatchObject({
+      ready: [{ id: 'discuss', attempt: 1, resumeSessionId: sessionId }],
+    })
+    successful(['stop', runId, ...firstLease])
+  }
+  const lease = reopen ? openSession(['resume', runId, '--engine', 'codex']) : firstLease
+  const attempt = reopen ? 2 : 1
+
+  const result = invoke(['next', runId, ...lease])
+  expect(result.status, result.stderr).toBe(0)
+  const { ready } = JSON.parse(result.stdout)
+  expect(ready).toMatchObject([
+    { id: 'discuss', attempt, inputs: { card }, message: expect.stringContaining(draftHandoff) },
+  ])
+  expect(ready[0]).not.toHaveProperty('resumeSessionId')
+  expect(JSON.parse(readRun('state.json')).steps.discuss).toMatchObject({
+    executions: attempt,
+    contextFallback: expect.stringMatching(/\S/),
+  })
+  expect(result.stderr).toMatch(/handoff/i)
+})
+
+it('#698 AC-4 control: dispatches an explicit handoff without a fallback', () => {
+  const lease = startContextSession('handoff')
+  recordDraft(lease)
+
+  const { ready } = JSON.parse(successful(['next', runId, ...lease]))
+  expect(ready).toMatchObject([
+    { id: 'discuss', attempt: 1, inputs: { card }, message: expect.stringContaining(draftHandoff) },
+  ])
+  expect(JSON.parse(readRun('state.json')).steps.discuss).not.toHaveProperty('contextFallback')
+})
+
 async function seedHeadlessRun() {
   const run = { dir: runDir, files }
   await start(run, { file: join(main, workflowFile), text: workflow }, { card })

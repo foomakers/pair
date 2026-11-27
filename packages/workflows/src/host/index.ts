@@ -406,10 +406,10 @@ export function settleAgentStep(
   host: WorkflowHost,
   run: RunDirectory,
   step: StepLaunch,
-  { final, model }: { final: string; model?: string | undefined },
+  { final, ...execution }: { final: string } & StepExecutionIdentity,
 ): Promise<StepExecutionResult> {
   const { result } = checkAgentResult(final, kindByName[step.kind])
-  return settleParsedResult(host, run, step, { final, execution: { model }, result })
+  return settleParsedResult(host, run, step, { final, execution, result })
 }
 
 async function settleParsedResult(

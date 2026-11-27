@@ -11,7 +11,7 @@ import {
   sessionRun,
   stopSession,
 } from './session'
-import { workflowDefinition, workflowList, type Project } from './session-project'
+import { isSafeText, workflowDefinition, workflowList, type Project } from './session-project'
 import { validateWorkflow } from './workflow-diagnostics'
 
 const diagnostics = {
@@ -26,8 +26,8 @@ const commands = {
   ...diagnostics,
   start: { count: 1, flags: ['card', 'engine', 'config'] },
   resume: { count: 1, flags: ['engine'] },
-  next: { count: 1, flags: ['lease', 'answer'] },
-  record: { count: 2, flags: ['lease', 'result', 'model', 'attempt', 'usage'] },
+  next: { count: 1, flags: ['lease', 'answer', 'fallback-handoff'] },
+  record: { count: 2, flags: ['lease', 'result', 'model', 'attempt', 'usage', 'session-id'] },
   renew: { count: 1, flags: ['lease'] },
   stop: { count: 1, flags: ['lease'] },
 }
@@ -38,11 +38,17 @@ const options = {
   config: { type: 'string' },
   lease: { type: 'string' },
   answer: { type: 'string' },
+  'fallback-handoff': { type: 'boolean' },
   result: { type: 'string' },
   model: { type: 'string' },
   attempt: { type: 'string' },
   usage: { type: 'string' },
+  'session-id': { type: 'string' },
 } as const
+
+type Options = Partial<Record<Exclude<keyof typeof options, 'fallback-handoff'>, string>> & {
+  'fallback-handoff'?: boolean
+}
 
 type Command = keyof typeof commands
 const isCommand = (value: string): value is Command => Object.hasOwn(commands, value)
@@ -87,19 +93,27 @@ function operate(
   command: 'next' | 'record' | 'renew' | 'stop',
   project: Project,
   [target = '', step = '']: string[],
-  values: Partial<Record<keyof typeof options, string>>,
+  values: Options,
 ) {
   const run = sessionRun(project.main, target)
   const lease = required('lease', values.lease)
-  if (command === 'next') return nextSession(project, run, lease, values.answer)
+  if (command === 'next')
+    return nextSession(project, run, lease, {
+      answer: values.answer,
+      fallbackHandoff: values['fallback-handoff'],
+    })
   if (command === 'renew') return renewSession(project.main, run, lease)
   if (command === 'stop') return stopSession(project.main, run, lease)
+  const sessionId = values['session-id']
+  if (sessionId !== undefined && (sessionId.trim() === '' || !isSafeText(sessionId)))
+    throw new Error('--session-id must be a usable session handle')
   return recordSession(project, run, lease, {
     step,
     file: required('result', values.result),
     model: values.model,
     attempt: attemptNumber(values.attempt),
     usage: usageOf(values.usage),
+    sessionId,
   })
 }
 
@@ -122,7 +136,7 @@ function inspect(
   command: keyof typeof diagnostics,
   project: Project,
   target: string,
-  values: Partial<Record<keyof typeof options, string>>,
+  values: Options,
 ) {
   if (command === 'list') return workflowList(project)
   if (command === 'expand') return workflowDefinition(project, target).workflow
