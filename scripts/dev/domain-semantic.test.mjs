@@ -700,6 +700,13 @@ for (const [argument, code, lookup] of [
 
 for (const [form, definition, retry, location] of [
   [
+    'aliased interface',
+    (argument, value) =>
+      `export interface RetryDto<T extends string = ${argument}> { cause: ${value} }`,
+    'export type Retry = RetryDto',
+    [2, 13],
+  ],
+  [
     'indexed alias',
     (argument, value) =>
       `export type RetryDto<T extends string = ${argument}> = { cause: ${value} }`,
