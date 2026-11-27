@@ -159,7 +159,9 @@ it.each(['approved', 'changes-requested'] as const)(
       expect(['parked', 'failed']).toContain(result.run)
       expect(result.ready).toEqual([])
       const state = JSON.parse(run.files.readFileSync(`${dir}/state.json`))
-      expect(state.steps[finalReview!.id].outputs.findings).toEqual(findings)
+      expect(state.steps[finalReview!.id].outputs.findings).toEqual([
+        { ...findings[0], origin: 'carried' },
+      ])
     }
   },
 )

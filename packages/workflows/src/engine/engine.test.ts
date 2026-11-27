@@ -647,7 +647,7 @@ steps:
     expect((await next(run)).run).toBe('parked')
     expect(stateOf(run).steps.rounds).toMatchObject({
       state: 'exhausted',
-      outputs: { findings },
+      outputs: { findings: findings.map(one => ({ ...one, origin: 'carried' })) },
     })
     expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
     expect(await start(run, source, { card: '627', moreRounds: 1, requestedBy: 'rucka' })).toEqual({
