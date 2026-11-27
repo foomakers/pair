@@ -54,8 +54,6 @@ const fixture = {
   draft: false,
   solo: 'false',
 }
-let github: typeof fixture
-const transport = vi.mocked(spawnSync)
 
 function respondChecks(endpoint: string) {
   if (endpoint.endsWith('/branches/release%2Fnext/protection/required_status_checks'))
@@ -155,6 +153,8 @@ beforeEach(() => {
   })
 })
 
+let github: typeof fixture
+const transport = vi.mocked(spawnSync)
 const facts = (cwd: string, checks: readonly string[] = []) =>
   workflowFacts(() => scripts, cwd, {
     id: 'gate',
