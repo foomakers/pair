@@ -616,6 +616,61 @@ for (const detail of [false, true]) {
   })
 }
 
+for (const [form, declaration, dependency, location] of [
+  ['indexed interface', "export interface Retry { cause: RetryDto['cause'] }", 'RetryDto', [2, 26]],
+  ['generic alias', 'export type Retry = Wrapper<Cause>', 'Cause', [3, 13]],
+  [
+    'generic inheritance',
+    'export interface Retry extends Wrapper<Cause> { tag: string }',
+    'Cause',
+    [3, 18],
+  ],
+  [
+    'inferred factory result',
+    'export const createRetry = () => ({ cause: readCause() })',
+    'readCause',
+    [2, 37],
+  ],
+  ['inferred class field', 'export class Retry { cause = readCause() }', 'readCause', [2, 22]],
+]) {
+  for (const external of [false, true]) {
+    const context = external ? 'package declaration' : 'local source with a nullable field'
+    test(`#750 750-R22 AC-3/4 validates a selected ${form} from ${context}`, t => {
+      const input = external ? '../../node_modules/retry-cause/index.d.ts' : 'src/http/inputs.ts'
+      const specifier = external ? 'retry-cause' : './inputs.js'
+      const imports = dependency === 'readCause' ? 'import' : 'import type'
+      const wrapper = form.startsWith('generic') ? 'interface Wrapper<T> { cause: T }\n' : ''
+      const detail = external
+        ? ''
+        : '\ntype Detail = string | null\nexport interface Extra { detail: Detail }'
+      const source = `${imports} { ${dependency} } from '${specifier}'\n${wrapper}${declaration}${detail}\n`
+      const inputSource = type => {
+        if (dependency === 'RetryDto') return `export interface RetryDto { cause: ${type} }\n`
+        if (dependency === 'Cause') return `export type Cause = ${type}\n`
+        return `export declare function readCause(): ${type}\n`
+      }
+      const cwd = workspace(t, { [pilot]: source, [input]: inputSource('string') })
+      const independent = external ? [] : [[pilot, semantic, location[0] + 2, 26]]
+      assert.deepEqual(findings(lint(cwd)), { status: Number(!external), locations: independent })
+
+      writeFileSync(join(cwd, input), inputSource('string | null'))
+      assert.deepEqual(findings(lint(cwd)), {
+        status: 1,
+        locations: [[pilot, semantic, ...location], ...independent],
+      })
+
+      writeFileSync(join(cwd, input), inputSource('MissingCause'))
+      const { status, stdout, stderr } = lint(cwd)
+      assert.equal(status, 2, stdout + stderr)
+      assert.match(
+        stderr,
+        /(?:retry-cause\/index\.d\.ts|src\/http\/inputs\.ts): TS2304.*MissingCause/,
+      )
+      assert.equal(stdout, '')
+    })
+  }
+}
+
 test('#750 AC-4 package lint distinguishes project-load errors from findings', t => {
   const cwd = workspace(t, { [pilot]: model('cause: unknown') })
   const project = join(cwd, 'tsconfig.json')
