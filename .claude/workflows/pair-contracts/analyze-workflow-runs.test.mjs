@@ -50,6 +50,7 @@ const ESTIMATED = [
 ]
 const PRICES = { 'claude-fable-5-2': { read: 10, cached: 1, written: 50 } }
 const ask = (question, runs, options = {}) => answer(question, readRuns(runsDir(runs)), options)
+const withFixes = reviews => reviews.flatMap((review, index) => index ? [step(review.run, 'rounds/fix', { kind: 'fix' }), review] : [review])
 
 // #700 AC-4: report each round and the cohort mean, including growth and new findings after a fix.
 test('convergence: per-card rounds, growth, new findings and cohort mean', () => {
@@ -57,9 +58,9 @@ test('convergence: per-card rounds, growth, new findings and cohort mean', () =>
     schema: 2, workflow: 'delivery', card, kind: 'review', round, findingCounts: counts,
   })
   const result = ask('convergence', {
-    a: [review('a', '1', 1, { open: 2, resolved: 0, new: 2 }), review('a', '1', 2, { open: 0, resolved: 2, new: 0 })],
-    b: [review('b', '2', 1, { open: 1, resolved: 0, new: 1 }), review('b', '2', 2, { open: 2, resolved: 0, new: 1 }), review('b', '2', 3, { open: 0, resolved: 2, new: 0 })],
-    c: [review('c', '3', 1, { open: 0, resolved: 0, new: 0 })],
+    a: withFixes([review('a', '1', 1, { open: 2, resolved: 0, new: 2 }), review('a', '1', 2, { open: 0, resolved: 2, new: 0 })]),
+    b: withFixes([review('b', '2', 1, { open: 1, resolved: 0, new: 1 }), review('b', '2', 2, { open: 2, resolved: 0, new: 1 }), review('b', '2', 3, { open: 0, resolved: 2, new: 0 })]),
+    c: withFixes([review('c', '3', 1, { open: 0, resolved: 0, new: 0 })]),
   })
   assert.equal(result.meanRounds, 2)
   assert.deepEqual(result.cards.map(card => [card.card, card.rounds.length, card.growth, card.newAfterFix]), [
@@ -72,18 +73,18 @@ test('convergence includes terminal review and compares blocking counts (R763-04
   const review = (id, round, counts) => step('a', id, {
     schema: 2, workflow: 'delivery', card: '1', kind: 'review', ...(round && { round }), findingCounts: counts,
   })
-  const result = ask('convergence', { a: [
+  const result = ask('convergence', { a: withFixes([
     review('rounds/review', 1, { open: 1, blockingOpen: 1, resolved: 0, new: 1 }),
     review('rounds/review', 2, { open: 3, blockingOpen: 1, resolved: 0, new: 2 }),
     review('final-review', undefined, { open: 2, blockingOpen: 2, resolved: 2, new: 1 }),
-  ] })
+  ]) })
   assert.equal(result.cards[0].rounds.length, 3)
   assert.equal(result.cards[0].growth, true)
   assert.equal(result.cards[0].newAfterFix, 3)
-  const noGrowth = ask('convergence', { a: [
+  const noGrowth = ask('convergence', { a: withFixes([
     review('rounds/review', 1, { open: 1, blockingOpen: 1, resolved: 0, new: 1 }),
     review('final-review', undefined, { open: 3, blockingOpen: 1, resolved: 0, new: 2 }),
-  ] })
+  ]) })
   assert.equal(noGrowth.cards[0].growth, false)
 })
 
@@ -93,8 +94,8 @@ test('R763-04: isolate runs and exclude terminal verification from mean loop rou
     ...(round && { round }), findingCounts: { open, blockingOpen: open, resolved: 0, new: fresh },
   })
   const result = ask('convergence', {
-    delivery: [review('delivery', 'rounds/review', 1, 1, 1), review('delivery', 'rounds/review', 2, 0, 0), review('delivery', 'final-review', undefined, 0, 0)],
-    quick: [review('quick', 'review', undefined, 2, 2)],
+    delivery: withFixes([review('delivery', 'rounds/review', 1, 1, 1), review('delivery', 'rounds/review', 2, 0, 0), review('delivery', 'final-review', undefined, 0, 0)]),
+    quick: withFixes([review('quick', 'review', undefined, 2, 2)]),
   })
   assert.equal(result.cards.length, 2)
   const delivery = result.cards.find(card => card.run === 'delivery')

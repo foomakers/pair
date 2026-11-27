@@ -333,11 +333,17 @@ const convergence = runs => {
     const reviews = steps.filter(step => step.kind === 'review' && step.findingCounts)
     if (!reviews.length) return []
     const rounds = reviews.map((step, index) => ({ round: step.round ?? index + 1, ...step.findingCounts }))
+    const pairs = reviews.slice(1).map((review, index) => {
+      const previous = reviews[index]
+      const reset = review.round != null && previous.round != null && review.round <= previous.round
+      const between = steps.slice(steps.indexOf(previous) + 1, steps.indexOf(review))
+      return { review, previous, reset, fixed: !reset && between.some(step => step.kind === 'fix') }
+    })
     return [{
       run, card, workflow, rounds,
       loopRounds: reviews.filter(step => step.round != null).length,
-      growth: rounds.some((round, index) => index > 0 && (round.blockingOpen ?? round.open) > (rounds[index - 1].blockingOpen ?? rounds[index - 1].open)),
-      newAfterFix: total(rounds.slice(1).map(round => round.new)),
+      growth: pairs.some(({ review, previous, reset }) => !reset && (review.findingCounts.blockingOpen ?? review.findingCounts.open) > (previous.findingCounts.blockingOpen ?? previous.findingCounts.open)),
+      newAfterFix: total(pairs.filter(pair => pair.fixed).map(pair => pair.review.findingCounts.new)),
     }]
   })
   const loops = cards.filter(card => card.loopRounds > 0)
