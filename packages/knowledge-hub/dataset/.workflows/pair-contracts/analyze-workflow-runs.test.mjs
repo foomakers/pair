@@ -140,6 +140,14 @@ test('compare: steps and parks with causes are available alongside time and toke
   assert.equal(runs[1].tokens.read.value, 200)
 })
 
+test('R763-10: comparison excludes loop exhaustion from executions', () => {
+  const { runs } = ask('compare', {
+    a: [step('a', 'review')],
+    b: [step('b', 'review'), step('b', 'rounds', { kind: 'loop', status: 'exhausted', escalate: { do: 'continue' } })],
+  }).groups[0]
+  assert.deepEqual(runs.map(run => run.steps), [1, 1])
+})
+
 test('R763-05: failed loop exhaustion is not a park', () => {
   const failed = [step('a', 'rounds', { kind: 'loop', status: 'exhausted', reason: 'loop-max' }), closing('a', 'failed')]
   const parked = [step('b', 'rounds', { kind: 'loop', status: 'exhausted', reason: 'loop-max' }), closing('b', 'parked')]
