@@ -1,4 +1,6 @@
 import { frozenConfiguration, hashOf, next, record, start, type RunDirectory } from '.'
+import { buildMessage } from '../dispatch'
+import { kindByName } from '../kinds'
 import { createMemoryFiles } from './memory-files'
 
 const QUICK = `version: 1
@@ -194,6 +196,75 @@ describe('engine: a linear run (AC-1)', () => {
     expect(written).toContain(`${DIR}/state.json.tmp`)
     expect(written).not.toContain(`${DIR}/state.json`)
     expect(run.files.existsSync(`${DIR}/state.json.tmp`)).toBe(false)
+  })
+})
+
+describe('engine: step context (#698 AC-1/AC-2/AC-6)', () => {
+  const earlier = '## Implementation notes\n\n- The checklist is ready.'
+  const latest = '## Review notes\n\n- Keep the current test.'
+
+  it.each([
+    ['default', '', undefined],
+    ['handoff', '\n    context: handoff', earlier],
+  ])('preserves review inputs with %s context', async (_mode, context, handoff) => {
+    const run = open()
+    const text = QUICK.replace('kind: review', `kind: review${context}`)
+    await start(run, { ...SOURCE, text }, { card: '627' })
+    await next(run)
+    await record(run, 'implement', { ...IMPLEMENTED, handoff: earlier })
+
+    const [review] = (await next(run)).ready
+    expect(review).toMatchObject({ id: 'review', inputs: { card: '627', pr: 12, head: HEAD } })
+    if (handoff === undefined) expect(review).not.toHaveProperty('handoff')
+    else expect(review).toHaveProperty('handoff', handoff)
+  })
+
+  it.each([
+    ['default', '', latest, latest],
+    ['fresh', '\n    context: fresh', latest, undefined],
+    ['missing', '', undefined, undefined],
+    ['empty', '', '', undefined],
+  ])(
+    'uses the last executed step with %s context or handoff',
+    async (_case, context, saved, expected) => {
+      const run = open()
+      const text = `${QUICK}  skipped:
+    kind: generic
+    skill: my-skill
+    when: { output: review.verdict, is: [changes-requested] }
+  notes:
+    kind: generic
+    skill: my-skill${context}
+`
+      await start(run, { ...SOURCE, text }, { card: '627' })
+      await next(run)
+      await record(run, 'implement', { ...IMPLEMENTED, handoff: earlier })
+      await next(run)
+      await record(run, 'review', saved === undefined ? REVIEWED : { ...REVIEWED, handoff: saved })
+
+      const [notes] = (await next(run)).ready
+      expect(notes).toMatchObject({ id: 'notes', inputs: { card: '627', pr: 12, head: HEAD } })
+      if (expected === undefined) expect(notes).not.toHaveProperty('handoff')
+      else expect(notes).toHaveProperty('handoff', expected)
+    },
+  )
+
+  it('launches a literal before-prompt from YAML', async () => {
+    const run = open()
+    const prompt = 'Document ${card} literally.'
+    const text = QUICK.replace(
+      'kind: implement',
+      `kind: implement\n    prompt: ${prompt}\n    prompt-at: before`,
+    )
+    await start(run, { ...SOURCE, text }, { card: '627' })
+
+    const [step] = (await next(run)).ready
+    if (step === undefined) throw new Error('expected implement launch')
+    const message = buildMessage(step, kindByName.implement, {
+      style: 'slash',
+      isSafeText: () => true,
+    })
+    expect(message.split('/pair-process-implement')[0]).toContain(prompt)
   })
 })
 
@@ -903,13 +974,18 @@ describe('engine: on-failed (#708 AC-7)', () => {
     expect((await next(await opened(policy))).run).toBe(run)
   })
 
-  it('retains a failed review handoff (#698 AC-3)', async () => {
+  it('retains and forwards a failed review handoff (#698 AC-2/AC-3)', async () => {
     const handoff = '## Follow-up\n\n- Add the missing assertion.'
     const changes = { ...CHANGES, handoff }
     const run = await opened('\n    on-failed: continue', changes)
 
     expect(statesOf(run).review).toBe('failed')
     expect(run.files.readFileSync(`${DIR}/steps/review/handoff.md`).trimEnd()).toBe(handoff)
+    expect((await next(run)).ready[0]).toMatchObject({
+      id: 'fix',
+      handoff,
+      inputs: { findings: CHANGES.findings, pr: 12 },
+    })
   })
 
   it('hands the next step the outputs of the failed one, and the last step decides the run', async () => {

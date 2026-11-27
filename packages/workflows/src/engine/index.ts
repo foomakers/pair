@@ -11,8 +11,10 @@ import {
   firstWordBeyond,
   parseWorkflow,
   type CardState,
+  type ContextMode,
   type EscalationRule,
   type KindName,
+  type PromptPosition,
   type ResolvedAssignment,
   type Step,
   type When,
@@ -155,6 +157,10 @@ export interface StepLaunch {
   readonly uses: string
   /** Resolved by `next`; a caller constructing a launch can omit it for an ordinary step. */
   readonly interactive?: boolean
+  readonly context?: ContextMode
+  readonly prompt?: string
+  readonly promptAt?: PromptPosition
+  readonly handoff?: string
   readonly with: Readonly<Record<string, unknown>>
   readonly assignment?: ResolvedAssignment
   /** Validation the host runs after the step ends `ok`. */
@@ -925,6 +931,9 @@ const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 const agentOptionsOf = (step: Step) => ({
   ...(step['timeout-minutes'] !== undefined && { timeoutMinutes: step['timeout-minutes'] }),
   ...(step.retries !== undefined && { retries: step.retries }),
+  ...(step.context !== undefined && { context: step.context }),
+  ...(step.prompt !== undefined && { prompt: step.prompt }),
+  ...(step['prompt-at'] !== undefined && { promptAt: step['prompt-at'] }),
 })
 
 /** Keep process faults before moving on to the next launch or settling the step. */
@@ -1214,6 +1223,18 @@ const assignmentOf = (workflow: Workflow, step: Step, run?: RunDirectory) => {
   return assignment === undefined ? {} : { assignment }
 }
 
+function linearHandoff(run: RunDirectory, workflow: Workflow, state: RunStateFile, step: Step) {
+  const predecessor = workflow.steps
+    .slice(0, workflow.steps.indexOf(step))
+    .reverse()
+    .find(({ id }) => state.steps[id]?.outputs !== undefined)
+  if (predecessor === undefined) return {}
+  const path = join(resultDir(run, predecessor.id, undefined), 'handoff.md')
+  if (!run.files.existsSync(path)) return {}
+  const handoff = run.files.readFileSync(path)
+  return handoff.trim() === '' ? {} : { handoff }
+}
+
 function plainLaunch(
   state: RunStateFile,
   workflow: Workflow,
@@ -1224,10 +1245,11 @@ function plainLaunch(
   const attempt = launches(state, step.id)
   const replayAttempt = replayAttemptOf(state)
   const saved = state.steps[step.id]
+  const kind = kindByName[step.kind]
   return {
     id: step.id,
     kind: step.kind,
-    uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
+    uses: step.skill ?? kind.defaultSkill ?? '',
     interactive: interactiveOf(step),
     with: step.with ?? {},
     ...gatesOf(step),
@@ -1236,6 +1258,9 @@ function plainLaunch(
     ...pendingOf(saved),
     ...retryBoardStatusOf(saved),
     ...assignmentOf(workflow, step, run),
+    ...(run !== undefined && (step.context ?? kind.defaultContext) !== 'fresh'
+      ? linearHandoff(run, workflow, state, step)
+      : {}),
     inputs: pick(inputsBefore(step, workflow.steps, state), step.kind),
     attempt,
     ...(replayAttempt !== undefined && { replayAttempt }),
