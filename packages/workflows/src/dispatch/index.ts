@@ -63,16 +63,20 @@ export function isSafeProse(value: string, isSafeText: MessageOptions['isSafeTex
   return value.split(/[ \t]+|\r?\n/).every(part => part === '' || isSafeText(part))
 }
 
+export class UnsafeMessageError extends Error {}
+
 function checkMessageText(step: StepLaunch, isSafeText: MessageOptions['isSafeText']): void {
   const unsafe = textsOf([step.uses, step.inputs, step.with])
     .map(([, text]) => text)
     .find(text => !isSafeText(text))
   if (unsafe !== undefined)
-    throw new Error(`unsafe-value: ${JSON.stringify(unsafe)} cannot be handed to an agent`)
+    throw new UnsafeMessageError(
+      `unsafe-value: ${JSON.stringify(unsafe)} cannot be handed to an agent`,
+    )
   for (const field of ['prompt', 'handoff'] as const) {
     const prose = step[field]
     if (prose !== undefined && !isSafeProse(prose, isSafeText))
-      throw new Error(`unsafe-value: step ${field} cannot be handed to an agent`)
+      throw new UnsafeMessageError(`unsafe-value: step ${field} cannot be handed to an agent`)
   }
 }
 
