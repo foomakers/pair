@@ -112,12 +112,22 @@ function typeDependencyCheck(program, checker) {
     } else if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
       for (const type of node.types) checkIndexedObjectArguments(type, keys, selected, seen)
     } else {
-      for (const argument of node.typeArguments ?? []) check(argument)
-      if (!ts.isTypeReferenceNode(node) && !ts.isExpressionWithTypeArguments(node)) return
       const name = ts.isTypeReferenceNode(node) ? node.typeName : node.expression
-      checkDiagnostics(node)
-      let symbol = checker.getSymbolAtLocation(name)
+      let symbol = name && checker.getSymbolAtLocation(name)
       if (symbol?.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol)
+      // The selected property already identifies the member of Pick's source object to check.
+      const builtinPick =
+        symbol?.name === 'Pick' &&
+        symbol.declarations?.some(declaration =>
+          program.isSourceFileDefaultLibrary(declaration.getSourceFile()),
+        )
+      const source = builtinPick ? node.typeArguments?.[0] : undefined
+      for (const argument of node.typeArguments ?? []) {
+        if (argument === source) checkIndexedObjectArguments(argument, keys, selected, seen)
+        else check(argument)
+      }
+      if (!name) return
+      checkDiagnostics(node)
       for (const declaration of symbol?.declarations ?? []) {
         if (ts.isTypeAliasDeclaration(declaration)) {
           checkIndexedObjectArguments(declaration.type, keys, selected, seen)
