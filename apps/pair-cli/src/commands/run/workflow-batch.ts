@@ -80,6 +80,7 @@ function trackDependencies(
   let updating = 0
   return {
     start: (id: string) => pending.delete(id),
+    pending: () => [...pending],
     updating: () => updating > 0,
     error: (id: string) => errors.get(id),
     blocked: (id: string) =>
@@ -115,12 +116,39 @@ function trackDependencies(
   }
 }
 
+type ExternalDependencies = {
+  intervalMs: number
+  readClosed: NonNullable<WorkflowSelection['readClosed']>
+}
+
+function watchExternalDependencies(
+  deps: ReturnType<typeof trackDependencies>,
+  external: ExternalDependencies,
+) {
+  const closed = new Set<string>()
+  const open = (id: string) => (deps.outside(id) ?? []).filter(dep => !closed.has(dep))
+  const ids = () => [...new Set(deps.pending().flatMap(open))]
+  return {
+    open,
+    intervalMs: external.intervalMs,
+    needed: () => ids().length > 0,
+    refresh: async () => {
+      const refs = ids()
+      if (refs.length === 0) return
+      const resolved = await external.readClosed(refs).catch(() => [])
+      for (const id of resolved) closed.add(id)
+      if (resolved.length > 0) await deps.afterCompletion()
+    },
+  }
+}
+
 export async function scheduleWorkflowCards<T extends Schedulable>(
   cards: readonly T[],
   options: {
     limit: number
     polling?: PoolInput<never, BatchOutcome>['polling']
     refreshDependencies?: WorkflowSelection['readDependencies']
+    external?: ExternalDependencies
   },
   prior: Map<string, BatchOutcome>,
   launch: (card: T) => Promise<BatchOutcome>,
@@ -128,12 +156,16 @@ export async function scheduleWorkflowCards<T extends Schedulable>(
   const { limit, polling } = options
   dependencyGraph(cards)
   const deps = trackDependencies(cards, prior, options.refreshDependencies)
+  const external = options.external && watchExternalDependencies(deps, options.external)
+  if (external) await external.refresh()
+  const blocked = (id: string) => [...deps.blocked(id), ...(external?.open(id) ?? [])]
   await runPool<T, BatchOutcome>({
     items: cards.filter(card => !prior.has(card.id)),
     limit,
-    ready: card => !deps.updating() && !deps.error(card.id) && deps.blocked(card.id).length === 0,
+    ready: card => !deps.updating() && !deps.error(card.id) && blocked(card.id).length === 0,
     mayStart: () => !isInterrupted(),
     ...(polling && { polling: withRefresh(polling, prior) }),
+    ...(external && { pendingPoll: external }),
     worker: async card => {
       deps.start(card.id)
       const result = await launch(card)
@@ -145,8 +177,7 @@ export async function scheduleWorkflowCards<T extends Schedulable>(
       const reason = isInterrupted()
         ? 'interrupted'
         : (deps.error(id) ??
-          `waiting for ${deps
-            .blocked(id)
+          `waiting for ${blocked(id)
             .map(dep => `#${dep}`)
             .join(', ')}`)
       const result = { id, outcome: 'waiting', reason } as const
@@ -205,6 +236,7 @@ interface Plan {
   readonly limit: number
   readonly runId: (id: string) => string
   readonly summary: string
+  readonly readClosed: WorkflowSelection['readClosed']
   readonly readDependencies: WorkflowSelection['readDependencies']
   readonly members: ReadonlyMap<string, string>
 }
@@ -379,7 +411,7 @@ async function planBatch(input: BatchRequest, resolved: BatchDefinition): Promis
     request,
     services: { fs, deps },
   } = input
-  const { cards, assignee, readDependencies } = await (
+  const { cards, assignee, readDependencies, readClosed } = await (
     deps.workflow?.readSelection ?? readWorkflowCards
   )({ fs, ...resolved }, request)
   const { name: workflow, select } = resolved.workflow
@@ -414,6 +446,7 @@ async function planBatch(input: BatchRequest, resolved: BatchDefinition): Promis
     ...candidates,
     selected: await loadDependencies(candidates, readDependencies),
     readDependencies,
+    readClosed,
     limit: request.parallel ?? base?.configuration.parallel ?? 1,
     runId,
     summary,
@@ -615,9 +648,22 @@ function watchBatchCheckpoints(
   return { watch, polling, resumed, release: () => watches.forEach(release => release()) }
 }
 
+function schedulingOptions(
+  { limit, readClosed, readDependencies }: Plan,
+  polling: NonNullable<PoolInput<never, BatchOutcome>['polling']>,
+  intervalMs: number,
+) {
+  return {
+    limit,
+    polling,
+    refreshDependencies: readDependencies,
+    ...(readClosed && { external: { intervalMs, readClosed } }),
+  }
+}
+
 async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
   const { config, services } = input
-  const { selected, limit, prior, excluded, members } = plan
+  const { selected, prior, excluded, members } = plan
   const intervalMs = 1000 * checkpointPollSeconds()
   // Save selection membership before a card can advance past its original status filter.
   for (const { id } of selected) {
@@ -646,7 +692,7 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
         const cards = [
           ...(await scheduleWorkflowCards(
             selected,
-            { limit, polling: checkpoint.polling, refreshDependencies: plan.readDependencies },
+            schedulingOptions(plan, checkpoint.polling, intervalMs),
             prior,
             launch,
           )),

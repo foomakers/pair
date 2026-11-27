@@ -100,6 +100,11 @@ export interface PoolInput<T, Outcome = CardOutcome> {
   readonly notStarted: (item: T) => Outcome
   /** Outcome of a worker that threw — isolation: the pool never rejects on one card (AC4). */
   readonly onWorkerError: (item: T, error: unknown) => Outcome
+  readonly pendingPoll?: {
+    readonly intervalMs: number
+    readonly needed: () => boolean
+    readonly refresh: () => Promise<void>
+  }
   readonly polling?: {
     readonly intervalMs: number
     readonly watches: (result: Outcome) => boolean
@@ -145,15 +150,17 @@ async function waitForPool<T, Outcome>(
   },
   mayStart: () => boolean,
 ): Promise<void> {
-  const { active, suspended, results, pending } = state
-  const { polling } = input
-  if (!polling || suspended.length === 0) {
+  const { active, suspended } = state
+  const { polling, pendingPoll } = input
+  const watchedPending = pendingPoll?.needed() ? pendingPoll : undefined
+  const watchedResults = suspended.length > 0 ? polling : undefined
+  if (!watchedPending && !watchedResults) {
     await Promise.race(active.values())
     return
   }
   let timer: ReturnType<typeof setTimeout> | undefined
   const tick = new Promise<boolean>(done => {
-    timer = setTimeout(() => done(true), polling.intervalMs)
+    timer = setTimeout(() => done(true), (watchedPending ?? watchedResults)!.intervalMs)
   })
   const elapsed = await Promise.race([
     tick,
@@ -161,6 +168,15 @@ async function waitForPool<T, Outcome>(
   ])
   clearTimeout(timer)
   if (!elapsed || !mayStart()) return
+  await watchedPending?.refresh()
+  if (watchedResults) await requeueWatched(input, watchedResults, state)
+}
+
+async function requeueWatched<T, Outcome>(
+  input: PoolInput<T, Outcome>,
+  polling: NonNullable<PoolInput<T, Outcome>['polling']>,
+  { results, suspended, pending }: { results: Outcome[]; suspended: number[]; pending: number[] },
+) {
   for (const index of suspended) {
     try {
       const refreshed = polling.refresh?.(results[index]!)
@@ -220,6 +236,7 @@ function poolMayWait<T, Outcome>(
   watched: readonly number[],
 ): boolean {
   const keepsAlive = input.polling?.keepsAlive
+  if ((input.mayStart?.() ?? true) && input.pendingPoll?.needed()) return true
   return watched.some(index => keepsAlive?.(results[index]!) ?? true)
 }
 

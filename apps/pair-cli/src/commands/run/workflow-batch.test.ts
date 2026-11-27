@@ -106,6 +106,31 @@ describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
     expect(refreshDependencies.mock.calls).toEqual([[['10', '11']], [['10']]])
   })
 
+  it('starts a waiting card in the original batch when its external dependency closes', async () => {
+    vi.useFakeTimers()
+    try {
+      const launch = vi.fn(async ({ id }: { id: string }) => ({ id, outcome: 'done' as const }))
+      const readClosed = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(['742'])
+      const refreshDependencies = vi.fn(async () => [{ id: '756', prerequisites: ['742'] }])
+      const batch = scheduleWorkflowCards(
+        [{ id: '756', prerequisites: ['742'] }],
+        { limit: 1, refreshDependencies, external: { intervalMs: 30_000, readClosed } },
+        new Map(),
+        launch,
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      expect(launch).not.toHaveBeenCalled()
+      expect(readClosed.mock.calls).toEqual([[['742']]])
+      expect(refreshDependencies).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect((await batch)[0]?.outcome).toBe('done')
+      expect(refreshDependencies).toHaveBeenCalledExactlyOnceWith(['756'])
+      expect(launch).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('skips a completed card and starts its dependent', async () => {
     const prior = new Map([['9', { id: '9', outcome: 'skipped' as const }]])
     const cards = [

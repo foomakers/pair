@@ -38,6 +38,7 @@ type DependencyFacts = Pick<WorkflowCard, 'id' | 'prerequisites' | 'uncertain' |
 export interface WorkflowSelection {
   readonly cards: readonly WorkflowCard[]
   readonly assignee?: string
+  readonly readClosed?: (ids: readonly string[]) => Promise<readonly string[]>
   readonly readDependencies?: (ids: readonly string[]) => Promise<readonly DependencyFacts[]>
 }
 
@@ -107,6 +108,15 @@ async function readPlatform<T>(at: Platform, args: string[], timeout = 30_000): 
   return JSON.parse(result.stdout) as T
 }
 
+async function readClosedCards(at: Platform, ids: readonly string[]): Promise<string[]> {
+  const { cards } = await readPlatform<{ cards: Pick<WorkflowCard, 'id' | 'closed'>[] }>(
+    at,
+    ['workflow-cards', '--cards', ids.join(',')],
+    180_000,
+  )
+  return cards.filter(card => card.closed).map(card => card.id)
+}
+
 export async function readWorkflowCards(
   at: Platform,
   scope: WorkflowScope,
@@ -128,6 +138,7 @@ export async function readWorkflowCards(
   const mapping = readStateMapping(at.fs, at.main)
   return {
     ...output,
+    readClosed: ids => readClosedCards(at, ids),
     readDependencies: ids =>
       readPlatform<DependencyFacts[]>(
         at,
