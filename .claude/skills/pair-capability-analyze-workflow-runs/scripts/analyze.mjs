@@ -318,17 +318,19 @@ const trend = runs => ({
 })
 
 const convergence = runs => {
-  const reviews = runs.flatMap(one => one.steps.filter(step => step.kind === 'review' && step.findingCounts))
-  const cards = groupBy(reviews, 'card').map(([card, steps]) => {
-    const rounds = steps.map((step, index) => ({ round: step.round ?? index + 1, ...step.findingCounts })).sort((a, b) => a.round - b.round)
-    return {
-      card,
-      rounds,
+  const cards = runs.flatMap(({ run, card, workflow, steps }) => {
+    const reviews = steps.filter(step => step.kind === 'review' && step.findingCounts)
+    if (!reviews.length) return []
+    const rounds = reviews.map((step, index) => ({ round: step.round ?? index + 1, ...step.findingCounts }))
+    return [{
+      run, card, workflow, rounds,
+      loopRounds: reviews.filter(step => step.round != null).length,
       growth: rounds.some((round, index) => index > 0 && (round.blockingOpen ?? round.open) > (rounds[index - 1].blockingOpen ?? rounds[index - 1].open)),
       newAfterFix: total(rounds.slice(1).map(round => round.new)),
-    }
+    }]
   })
-  return { cards, meanRounds: cards.length ? total(cards.map(card => card.rounds.length)) / cards.length : null }
+  const loops = cards.filter(card => card.loopRounds > 0)
+  return { cards, meanRounds: loops.length ? total(loops.map(card => card.loopRounds)) / loops.length : null }
 }
 
 const ANSWERS = { cost, time, passes, compare, trend, convergence }
