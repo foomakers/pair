@@ -11,6 +11,7 @@ import { kindByName } from '../kinds'
 export interface ResumeFacts {
   /** The effective engine for a runnable step, using its run-wide id. */
   readonly engineFor: (step: string) => string | undefined
+  readonly loopMax?: (loop: string) => number | undefined
   readonly supports: (engine: string) => boolean | undefined
 }
 
@@ -25,6 +26,7 @@ interface LoopExit {
   readonly children: readonly Step[]
   readonly until: string
   readonly last: Step
+  readonly earlyFailure: boolean
 }
 
 interface Predecessors {
@@ -43,10 +45,18 @@ function matchesExit(
   const last = exit.children.indexOf(exit.last)
   // A skipped child or one past the last launch has no status outcome.
   if (child > last) return false
-  if (exit.children[child]?.id !== exit.until) return undefined
+  const step = exit.children[child]!
+  if (step.id !== exit.until) return matchesNonUntil(exit, step, values)
   if (exit.status === 'ok') return values.includes('ok')
   // A successful until-step would have ended this round before exhaustion.
   return values.every(value => value === 'ok') ? false : undefined
+}
+
+function matchesNonUntil(exit: LoopExit, step: Step, values: readonly unknown[]) {
+  if (step === exit.last && exit.earlyFailure) return values.includes('failed')
+  return step.escalate?.failed === undefined && values.every(value => value === 'failed')
+    ? false
+    : undefined
 }
 
 /** An unknown condition leaves both running and skipping possible. */
@@ -58,8 +68,13 @@ function runsOnExit(when: When | undefined, exit: LoopExit | undefined): boolean
   return match === true && Object.keys(cardFilter).length > 0 ? undefined : match
 }
 
-function roundEndings(children: readonly Step[], until: string): readonly Step[] {
-  const early: Step[] = []
+interface RoundEnding {
+  readonly step: Step
+  readonly earlyFailure: boolean
+}
+
+function roundEndings(children: readonly Step[], until: string): readonly RoundEnding[] {
+  const early: RoundEnding[] = []
   let last: readonly Step[] = []
   for (const child of children) {
     const { failed, blocked, 'needs-decision': needsDecision } = child.escalate ?? {}
@@ -72,26 +87,29 @@ function roundEndings(children: readonly Step[], until: string): readonly Step[]
         return early
     } else if (failed === undefined) {
       // A non-until failure without an explicit rule closes the round immediately.
-      early.push(child)
+      early.push({ step: child, earlyFailure: true })
     }
     last = advance(child, last)
   }
-  return [...early, ...last]
+  return [...early, ...last.map(step => ({ step, earlyFailure: false }))]
 }
 
 function loopPredecessors(
   loop: Step,
   children: readonly Step[],
   until: string,
-  endings: readonly Step[],
+  endings: readonly RoundEnding[],
 ): Predecessors[] {
-  const route = (last: Step, status: LoopExit['status']): Predecessors => ({
+  const route = (last: Step, status: LoopExit['status'], earlyFailure = false): Predecessors => ({
     steps: [last],
-    exit: { output: `${loop.id}.status`, status, children, until, last },
+    exit: { output: `${loop.id}.status`, status, children, until, last, earlyFailure },
   })
   const success = children.filter(child => child.id === until).map(child => route(child, 'ok'))
   return escalationAction(loop.escalate?.exhausted) === 'continue'
-    ? [...success, ...endings.map(child => route(child, 'exhausted'))]
+    ? [
+        ...success,
+        ...endings.map(({ step, earlyFailure }) => route(step, 'exhausted', earlyFailure)),
+      ]
     : success
 }
 
@@ -121,6 +139,9 @@ function resumeProblem(
     return staticChecks ? 'there is no preceding agent step to resume' : undefined
   return resume && engineProblem(step, agents, resume)
 }
+
+const repeats = (step: Step, facts: ResumeFacts | undefined) =>
+  (facts?.loopMax?.(step.id) ?? step.max ?? 1) > 1
 
 function collectWarnings(
   workflow: Workflow,
@@ -156,7 +177,9 @@ function collectWarnings(
     const until = `${step.id}/${step.until}`
     const endings = roundEndings(children, until)
     const earlier = previous.flatMap(source => source.steps)
-    let before = (step.max ?? 1) > 1 ? [...earlier, ...endings] : earlier
+    let before = repeats(step, resume)
+      ? [...earlier, ...endings.map(ending => ending.step)]
+      : earlier
     for (const child of children) {
       check(child, [...path, 'steps', child.id.slice(step.id.length + 1)], before)
       before = advance(child, before)

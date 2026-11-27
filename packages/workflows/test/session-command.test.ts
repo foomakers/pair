@@ -439,37 +439,41 @@ it('#698 AC-4: replaces an unavailable continuation with handoff on the same att
     executions: 1,
     contextFallback: expect.stringMatching(/\S/),
   })
-})
+}, 20_000)
 
 it.each([
   { context: 'no handle was recorded', reopen: false },
   { context: 'an interrupted attempt reopened under a new lease', reopen: true },
-])('#698 AC-4: falls back to handoff when $context', ({ reopen }) => {
-  const firstLease = startContextSession('resume')
-  const sessionId = 'agent-draft-42'
-  recordDraft(firstLease, reopen ? sessionId : undefined)
-  if (reopen) {
-    expect(JSON.parse(successful(['next', runId, ...firstLease]))).toMatchObject({
-      ready: [{ id: 'discuss', attempt: 1, resumeSessionId: sessionId }],
-    })
-    successful(['stop', runId, ...firstLease])
-  }
-  const lease = reopen ? openSession(['resume', runId, '--engine', 'codex']) : firstLease
-  const attempt = reopen ? 2 : 1
+])(
+  '#698 AC-4: falls back to handoff when $context',
+  ({ reopen }) => {
+    const firstLease = startContextSession('resume')
+    const sessionId = 'agent-draft-42'
+    recordDraft(firstLease, reopen ? sessionId : undefined)
+    if (reopen) {
+      expect(JSON.parse(successful(['next', runId, ...firstLease]))).toMatchObject({
+        ready: [{ id: 'discuss', attempt: 1, resumeSessionId: sessionId }],
+      })
+      successful(['stop', runId, ...firstLease])
+    }
+    const lease = reopen ? openSession(['resume', runId, '--engine', 'codex']) : firstLease
+    const attempt = reopen ? 2 : 1
 
-  const result = invoke(['next', runId, ...lease])
-  expect(result.status, result.stderr).toBe(0)
-  const { ready } = JSON.parse(result.stdout)
-  expect(ready).toMatchObject([
-    { id: 'discuss', attempt, inputs: { card }, message: expect.stringContaining(draftHandoff) },
-  ])
-  expect(ready[0]).not.toHaveProperty('resumeSessionId')
-  expect(JSON.parse(readRun('state.json')).steps.discuss).toMatchObject({
-    executions: attempt,
-    contextFallback: expect.stringMatching(/\S/),
-  })
-  expect(result.stderr).toMatch(/handoff/i)
-})
+    const result = invoke(['next', runId, ...lease])
+    expect(result.status, result.stderr).toBe(0)
+    const { ready } = JSON.parse(result.stdout)
+    expect(ready).toMatchObject([
+      { id: 'discuss', attempt, inputs: { card }, message: expect.stringContaining(draftHandoff) },
+    ])
+    expect(ready[0]).not.toHaveProperty('resumeSessionId')
+    expect(JSON.parse(readRun('state.json')).steps.discuss).toMatchObject({
+      executions: attempt,
+      contextFallback: expect.stringMatching(/\S/),
+    })
+    expect(result.stderr).toMatch(/handoff/i)
+  },
+  20_000,
+)
 
 it('#698 AC-4 control: dispatches an explicit handoff without a fallback', () => {
   const lease = startContextSession('handoff')

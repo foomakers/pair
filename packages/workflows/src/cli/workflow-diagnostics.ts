@@ -30,6 +30,7 @@ export function workflowResumeWarnings(
     ]),
   )
   return resumeEngineWarnings(workflow, {
+    loopMax: id => configuration?.steps?.[id]?.max,
     engineFor: id => engines.get(id),
     // The OpenCode workflow adapter cannot distinguish a missing session from a new one.
     supports: id => (id === 'opencode' ? false : undefined),

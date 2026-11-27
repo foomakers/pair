@@ -394,6 +394,13 @@ describe('step context (#698 AC-5)', () => {
   })
 
   it.each([
+    {
+      path: 'configured single round',
+      reviewFailure: 'continue',
+      fixEngine: 'codex',
+      loopMax: 1,
+      mismatch: true,
+    },
     { path: 'unconditional fix', reviewFailure: 'continue', mismatch: true },
     { path: 'conditional fix', reviewFailure: 'continue', when: ', when: { has: [repair] }' },
     {
@@ -428,6 +435,7 @@ ${test.beforeFix ?? ''}      fix: { kind: fix, ${allStops}${test.when ?? ''} }
             return 'codex'
           },
           supports: () => true,
+          ...('loopMax' in test && { loopMax: () => test.loopMax }),
         },
       },
     )
@@ -503,6 +511,15 @@ ${test.beforeFix ?? ''}      fix: { kind: fix, ${allStops}${test.when ?? ''} }
       repairEngine: 'codex',
     },
     {
+      path: 'failed child can only reach its early round exit',
+      output: 'rounds/edit.status',
+      outcomes: 'failed',
+      editCanEndRound: true,
+      editEngine: 'claude',
+      repairEngine: 'codex',
+      mismatch: true,
+    },
+    {
       path: 'both exits differ from Pi',
       outcomes: 'ok, exhausted',
       repairEngine: 'codex',
@@ -547,6 +564,7 @@ ${repair}${beforeSummary}  summary: { kind: generic, skill: my-skill, context: r
       {
         resume: {
           engineFor: step => {
+            if (step === 'rounds/edit') return test.editEngine ?? 'codex'
             if (step === 'rounds/verify') return test.verifyEngine ?? 'claude'
             if (step === 'rounds/repair') return test.repairEngine
             if (step === 'summary' || step === 'notify') return summaryEngine

@@ -1173,6 +1173,7 @@ const describeAssignment = (assignment?: ResolvedAssignment): string =>
 
 function printResumeWarnings(resolved: Resolved, effective: Configuration | undefined): void {
   const warnings = resumeEngineWarnings(resolved.workflow, {
+    loopMax: id => effective?.steps?.[id]?.max,
     engineFor: id => stepSettings(resolved, effective, stepOf(resolved, id)).engine,
     supports: engine => isEngineId(engine) && supportsResume(engine),
   })
