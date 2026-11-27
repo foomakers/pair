@@ -1662,7 +1662,8 @@ function reviewFindingCounts(
     resolved: Array.isArray(prior)
       ? prior.filter((old: { id: string }) => !findings.some(one => one.id === old.id)).length
       : 0,
-    new: findings.filter(one => one.origin === 'new').length,
+    new: findings.filter(one => !Array.isArray(prior) || !prior.some(old => old.id === one.id))
+      .length,
   }
 }
 
@@ -1695,7 +1696,19 @@ export async function record(
   checkAttempt(stepId, previous, options.attempt)
   const { step, outer, childId } = launchable(run, stepId)
   const kind = kindByName[step.kind]
-  const settled = boundedHandoff(settle(kind, result))
+  const validated = boundedHandoff(settle(kind, result))
+  const prior = state.latest?.['findings']
+  const settled =
+    step.kind === 'review' && Array.isArray(validated['findings'])
+      ? {
+          ...validated,
+          findings: validated['findings'].map(one => ({
+            ...one,
+            origin:
+              Array.isArray(prior) && prior.some(old => old.id === one.id) ? 'carried' : 'new',
+          })),
+        }
+      : validated
   const round = childId === undefined ? undefined : loopRound(state, outer)
   await writeResult(run, resultDir(run, stepId, round), settled, output)
   const { status } = settled
