@@ -67,9 +67,30 @@ interface Schedulable {
   readonly prerequisites: readonly string[]
 }
 
+async function refreshDependencyFacts(
+  read: NonNullable<WorkflowSelection['readDependencies']>,
+  ids: readonly string[],
+  facts: Map<string, Schedulable>,
+  errors: Map<string, string>,
+) {
+  if (ids.length === 0) return
+  try {
+    const fresh = new Map((await read(ids)).map(row => [row.id, row]))
+    for (const id of ids) {
+      const row = fresh.get(id)
+      if (row && !row.error) {
+        facts.set(id, row)
+        errors.delete(id)
+      } else errors.set(id, row?.error ?? 'dependency facts missing')
+    }
+  } catch (error) {
+    for (const id of ids) errors.set(id, String(error))
+  }
+}
+
 function trackDependencies(
   cards: readonly Schedulable[],
-  prior: ReadonlyMap<string, BatchOutcome>,
+  prior: Map<string, BatchOutcome>,
   read: WorkflowSelection['readDependencies'],
 ) {
   const selected = new Set(cards.map(card => card.id))
@@ -81,6 +102,12 @@ function trackDependencies(
   return {
     start: (id: string) => pending.delete(id),
     pending: () => [...pending],
+    isSettled: (id: string) => prior.has(id),
+    close: (id: string) => {
+      if (!selected.has(id)) return false
+      prior.set(id, { id, outcome: 'done' })
+      return true
+    },
     updating: () => updating > 0,
     error: (id: string) => errors.get(id),
     blocked: (id: string) =>
@@ -92,22 +119,7 @@ function trackDependencies(
       if (read === undefined || pending.size === 0) return refresh
       updating++
       refresh = refresh
-        .then(async () => {
-          const ids = [...pending]
-          if (ids.length === 0) return
-          try {
-            const fresh = new Map((await read(ids)).map(row => [row.id, row]))
-            for (const id of ids) {
-              const row = fresh.get(id)
-              if (row && !row.error) {
-                facts.set(id, row)
-                errors.delete(id)
-              } else errors.set(id, row?.error ?? 'dependency facts missing')
-            }
-          } catch (error) {
-            for (const id of ids) errors.set(id, String(error))
-          }
-        })
+        .then(() => refreshDependencyFacts(read, [...pending], facts, errors))
         .finally(() => {
           updating--
         })
@@ -119,6 +131,7 @@ function trackDependencies(
 type ExternalDependencies = {
   intervalMs: number
   readClosed: NonNullable<WorkflowSelection['readClosed']>
+  onClosed?: (id: string) => void
 }
 
 function watchExternalDependencies(
@@ -127,7 +140,8 @@ function watchExternalDependencies(
 ) {
   const closed = new Set<string>()
   const open = (id: string) => (deps.outside(id) ?? []).filter(dep => !closed.has(dep))
-  const ids = () => [...new Set(deps.pending().flatMap(open))]
+  const refsFor = (id: string) => [...open(id), ...deps.blocked(id).filter(deps.isSettled)]
+  const ids = () => [...new Set(deps.pending().flatMap(refsFor))]
   return {
     open,
     intervalMs: external.intervalMs,
@@ -136,7 +150,10 @@ function watchExternalDependencies(
       const refs = ids()
       if (refs.length === 0) return
       const resolved = await external.readClosed(refs).catch(() => [])
-      for (const id of resolved) closed.add(id)
+      for (const id of resolved) {
+        closed.add(id)
+        if (deps.close(id)) external.onClosed?.(id)
+      }
       if (resolved.length > 0) await deps.afterCompletion()
     },
   }
@@ -200,7 +217,8 @@ function withRefresh(
   return {
     ...polling,
     refresh: (result: BatchOutcome) => {
-      const update = polling.refresh?.(result)
+      const known = prior.get(result.id)
+      const update = isCompleted(known) ? known : polling.refresh?.(result)
       if (update !== undefined) prior.set(update.id, update)
       return update
     },
@@ -652,12 +670,19 @@ function schedulingOptions(
   { limit, readClosed, readDependencies }: Plan,
   polling: NonNullable<PoolInput<never, BatchOutcome>['polling']>,
   intervalMs: number,
+  sink: ConsoleSink,
 ) {
   return {
     limit,
     polling,
     refreshDependencies: readDependencies,
-    ...(readClosed && { external: { intervalMs, readClosed } }),
+    ...(readClosed && {
+      external: {
+        intervalMs,
+        readClosed,
+        onClosed: id => sink.event({ event: 'card-end', card: id, status: 'completed' }),
+      } satisfies ExternalDependencies,
+    }),
   }
 }
 
@@ -692,7 +717,7 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
         const cards = [
           ...(await scheduleWorkflowCards(
             selected,
-            schedulingOptions(plan, checkpoint.polling, intervalMs),
+            schedulingOptions(plan, checkpoint.polling, intervalMs, sink),
             prior,
             launch,
           )),

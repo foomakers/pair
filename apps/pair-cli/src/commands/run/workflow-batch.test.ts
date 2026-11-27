@@ -131,6 +131,34 @@ describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
     }
   })
 
+  it('releases a dependent when another process closes a parked card from this batch', async () => {
+    vi.useFakeTimers()
+    try {
+      const launch = vi.fn(async ({ id }: { id: string }) => ({
+        id,
+        outcome: id === '742' ? ('parked' as const) : ('done' as const),
+      }))
+      const readClosed = vi.fn(async () => ['742'])
+      const batch = scheduleWorkflowCards(
+        [
+          { id: '742', prerequisites: [] },
+          { id: '756', prerequisites: ['742'] },
+        ],
+        { limit: 1, external: { intervalMs: 30_000, readClosed } },
+        new Map(),
+        launch,
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      expect(launch.mock.calls.map(([card]) => card.id)).toEqual(['742'])
+      expect(readClosed).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect((await batch).map(card => card.outcome)).toEqual(['done', 'done'])
+      expect(launch.mock.calls.map(([card]) => card.id)).toEqual(['742', '756'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('skips a completed card and starts its dependent', async () => {
     const prior = new Map([['9', { id: '9', outcome: 'skipped' as const }]])
     const cards = [
