@@ -155,7 +155,7 @@ describe('#728 AC 19: shipped workflow examples', () => {
           pr: 1,
           head: row.fixHead,
           reviewedHead,
-          findings: [latestFinding],
+          findings: [{ ...latestFinding, origin: 'carried' }],
         }),
       }),
     )
