@@ -78,15 +78,15 @@ function collectWarnings(
     }
     const children = (step.steps ?? []).map(child => ({ ...child, id: `${step.id}/${child.id}` }))
     const until = `${step.id}/${step.until}`
-    let before = (step.max ?? 1) > 1 ? [...previous, ...roundEndings(children, until)] : previous
+    const endings = roundEndings(children, until)
+    let before = (step.max ?? 1) > 1 ? [...previous, ...endings] : previous
     for (const child of children) {
       check(child, [...path, 'steps', child.id.slice(step.id.length + 1)], before)
       before = advance(child, before)
     }
-    previous =
-      escalationAction(step.escalate?.exhausted) === 'continue'
-        ? children
-        : children.filter(child => child.id === until)
+    previous = children.filter(child => child.id === until)
+    if (escalationAction(step.escalate?.exhausted) === 'continue')
+      previous = [...previous, ...endings]
   }
   return warnings
 }
