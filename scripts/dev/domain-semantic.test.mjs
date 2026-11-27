@@ -698,6 +698,53 @@ for (const [argument, code, lookup] of [
   })
 }
 
+for (const [form, definition, retry, location] of [
+  [
+    'indexed alias',
+    (argument, value) =>
+      `export type RetryDto<T extends string = ${argument}> = { cause: ${value} }`,
+    "export interface Retry { cause: RetryDto['cause'] }",
+    [2, 26],
+  ],
+  [
+    'indexed inherited interface',
+    (argument, value) =>
+      `interface Envelope<T extends string = ${argument}> { cause: ${value} }\nexport interface RetryDto extends Envelope { tag: string }`,
+    "export interface Retry { cause: RetryDto['cause'] }",
+    [2, 26],
+  ],
+  [
+    'inherited interface',
+    (argument, value) =>
+      `export interface RetryDto<T extends string = ${argument}> { cause: ${value} }`,
+    'export interface Retry extends RetryDto { tag: string }',
+    [2, 18],
+  ],
+]) {
+  test(`#750 750-R22 AC-3/4 validates the default type argument of an ${form}`, t => {
+    const input = 'src/http/dto.ts'
+    const cwd = workspace(t, {
+      [pilot]: `import type { RetryDto } from './dto.js'\n${retry}\n`,
+      [input]: definition('string', 'T'),
+    })
+    assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+    writeFileSync(join(cwd, input), definition('string', 'T | null'))
+    assert.deepEqual(findings(lint(cwd)), {
+      status: 1,
+      locations: [[pilot, semantic, ...location]],
+    })
+
+    for (const value of ['T', 'T | null']) {
+      writeFileSync(join(cwd, input), definition('number', value))
+      const { status, stdout, stderr } = lint(cwd)
+      assert.equal(status, 2, stdout + stderr)
+      assert.match(stderr, /src\/http\/dto\.ts: TS2344.*number/)
+      assert.equal(stdout, '')
+    }
+  })
+}
+
 for (const [shape, dto, lookup = "RetryDto['cause']", imports = 'RetryDto'] of [
   ['interface', type => `export interface RetryDto { cause: ${type}; other: MissingDetail }\n`],
   ['alias', type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`],
