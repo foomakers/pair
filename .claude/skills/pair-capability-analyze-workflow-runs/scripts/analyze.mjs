@@ -124,7 +124,8 @@ export function readRuns(dir, only = {}) {
       const steps = records.filter(record => record.type === 'step')
       if (steps.length === 0) return []
       const { run, workflow, card } = steps[0]
-      const status = records.findLast(record => record.type === 'run')?.status ?? 'open'
+      const last = records.at(-1)
+      const status = last?.type === 'run' && !last.historical ? last.status : 'open'
       let segment = []
       const parks = []
       for (const record of records) {

@@ -105,6 +105,7 @@ export interface RunTelemetry extends RunIdentity {
   readonly type: 'run'
   readonly schema: typeof TELEMETRY_SCHEMA
   readonly status: RunEndStatus
+  readonly historical?: true
   readonly durationMs: number
   readonly tokens: Readonly<Record<TokenName, TokenSum>>
   /** The number of step executions. */
@@ -340,5 +341,6 @@ function closingRecord(
  * dropped, so the file never says `failed` (or `done`) for a run that went on without it.
  */
 export async function reopenRun(run: RunDirectory): Promise<void> {
-  if (run.files.existsSync(fileOf(run))) await write(run, recordsOf(run))
+  if (run.files.existsSync(fileOf(run)))
+    await write(run, recordsOf(run).map(record => record.type === 'run' ? { ...record, historical: true } : record))
 }
