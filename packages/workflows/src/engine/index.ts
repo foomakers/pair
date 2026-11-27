@@ -89,18 +89,24 @@ export type EngineOutcome = {
     }
 )
 
-interface StepExecutionIdentity {
+export interface StepExecutionIdentity {
   readonly host?: RunHost | undefined
   readonly model?: string | undefined
+  readonly engine?: string | undefined
+  readonly sessionId?: string | undefined
 }
 
-const executionOf = ({ host, model }: StepExecutionIdentity) => ({
+const executionOf = ({ host, model, engine, sessionId }: StepExecutionIdentity) => ({
   ...(host !== undefined && { host }),
   ...(model !== undefined && { model }),
+  ...(engine !== undefined && { engine }),
+  ...(sessionId !== undefined && { sessionId }),
 })
 
 export interface StepRecord extends StepExecutionIdentity {
   readonly state: StepState
+  readonly interrupted?: true
+  readonly contextFallback?: string
   readonly round?: number
   /** How many times the step was launched in this run. */
   readonly executions?: number
@@ -161,6 +167,8 @@ export interface StepLaunch {
   readonly prompt?: string
   readonly promptAt?: PromptPosition
   readonly handoff?: string
+  readonly previousAgent?: StepExecutionIdentity
+  readonly interrupted?: true
   readonly with: Readonly<Record<string, unknown>>
   readonly assignment?: ResolvedAssignment
   /** Validation the host runs after the step ends `ok`. */
@@ -748,9 +756,14 @@ function reopenStep(
   return {
     state: 'pending',
     ...executionHistory(saved),
+    ...interruptedOf(saved),
     ...(remainingRetries !== undefined && { remainingRetries }),
     ...retryBoardStatusOf(saved),
-    ...(pendingSuccess !== undefined && { pendingSuccess, ...executionOf(saved) }),
+    ...(pendingSuccess !== undefined && {
+      pendingSuccess,
+      ...executionOf(saved),
+      ...fallbackOf(saved),
+    }),
   }
 }
 
@@ -976,6 +989,12 @@ export function faultsOf(run: RunDirectory): StepFaults[] {
 const pendingOf = (saved?: Pick<StepRecord, 'pendingSuccess'>) =>
   saved?.pendingSuccess === undefined ? {} : { pendingSuccess: saved.pendingSuccess }
 
+const interruptedOf = (saved?: StepRecord) =>
+  saved?.state === 'running' || saved?.interrupted === true ? { interrupted: true as const } : {}
+
+const fallbackOf = (saved?: Pick<StepRecord, 'contextFallback'>) =>
+  saved?.contextFallback === undefined ? {} : { contextFallback: saved.contextFallback }
+
 const retryBoardStatusOf = (saved?: Pick<StepRecord, 'retryBoardStatus'>) =>
   saved?.retryBoardStatus === undefined ? {} : { retryBoardStatus: saved.retryBoardStatus }
 
@@ -1024,11 +1043,12 @@ interface NextLaunch {
 async function reserveLaunch(
   run: RunDirectory,
   { state, check }: LaunchContext,
-  launch: StepLaunch,
+  candidate: StepLaunch,
   loop?: { id: string; round: number },
 ): Promise<NextLaunch> {
-  const { id, kind, attempt, round } = launch
+  const { id, kind, attempt, round } = candidate
   const saved = state.steps[id]
+  const launch = { ...candidate, ...interruptedOf(saved) }
   const fault = exhaustedFault(saved, launch.retries)
   if (fault !== undefined)
     return { ready: [{ ...launch, attempt: fault.attempt, exhaustedFault: fault }], run: 'running' }
@@ -1049,6 +1069,7 @@ async function reserveLaunch(
         ...pendingOf(launch),
         ...retryBoardStatusOf(launch),
         ...stagedExecutionOf(state.steps[id]),
+        ...fallbackOf(saved),
       },
     },
   })
@@ -1223,16 +1244,24 @@ const assignmentOf = (workflow: Workflow, step: Step, run?: RunDirectory) => {
   return assignment === undefined ? {} : { assignment }
 }
 
-function linearHandoff(run: RunDirectory, workflow: Workflow, state: RunStateFile, step: Step) {
+function linearContext(run: RunDirectory, workflow: Workflow, state: RunStateFile, step: Step) {
   const predecessor = workflow.steps
     .slice(0, workflow.steps.indexOf(step))
     .reverse()
     .find(({ id }) => state.steps[id]?.outputs !== undefined)
   if (predecessor === undefined) return {}
+  const saved = state.steps[predecessor.id]
+  const previousAgent =
+    step.context === 'resume' &&
+    predecessor.kind !== 'loop' &&
+    kindByName[predecessor.kind].host !== true &&
+    saved !== undefined
+      ? { previousAgent: executionOf(saved) }
+      : {}
   const path = join(resultDir(run, predecessor.id, undefined), 'handoff.md')
-  if (!run.files.existsSync(path)) return {}
+  if (!run.files.existsSync(path)) return previousAgent
   const handoff = run.files.readFileSync(path)
-  return handoff.trim() === '' ? {} : { handoff }
+  return { ...previousAgent, ...(handoff.trim() !== '' && { handoff }) }
 }
 
 function plainLaunch(
@@ -1259,7 +1288,7 @@ function plainLaunch(
     ...retryBoardStatusOf(saved),
     ...assignmentOf(workflow, step, run),
     ...(run !== undefined && (step.context ?? kind.defaultContext) !== 'fresh'
-      ? linearHandoff(run, workflow, state, step)
+      ? linearContext(run, workflow, state, step)
       : {}),
     inputs: pick(inputsBefore(step, workflow.steps, state), step.kind),
     attempt,
@@ -1495,6 +1524,21 @@ function checkAttempt(id: string, step: StepRecord | undefined, attempt: number 
     throw new Error(`step-not-reserved: ${id} attempt ${attempt} is no longer running`)
 }
 
+/** Keep the chosen fallback if the launch is interrupted or its process retries. */
+export async function recordContextFallback(
+  run: RunDirectory,
+  { id, attempt }: StepLaunch,
+  contextFallback: string,
+): Promise<void> {
+  const state = requireState(run)
+  const step = state.steps[id]
+  checkAttempt(id, step, attempt)
+  await writeState(run, {
+    ...state,
+    steps: { ...state.steps, [id]: { ...step!, contextFallback } },
+  })
+}
+
 function observeEscalation(
   run: RunDirectory,
   { id, round }: { id: string; round: number | undefined },
@@ -1518,7 +1562,7 @@ function observeEscalation(
  * Records the result of a step: validated against its kind (a result that breaks the contract is
  * recorded `failed`, `invalid-result`), written to `steps/<id>/result.json`, then to `state.json`.
  * `output` is the agent's final message, kept as `steps/<id>/output.log`. The executing host and
- * known model go into `state.json`, including when a different host confirms a staged result.
+ * engine identity go into `state.json`, including when a different host confirms a staged result.
  */
 export async function record(
   run: RunDirectory,
@@ -1545,6 +1589,7 @@ export async function record(
   const entry = {
     ...recordOf(settled, outputs, round, previous),
     ...executionOf(previous?.pendingSuccess === undefined ? options : previous),
+    ...fallbackOf(previous),
     ...retryAfter(status, previous, invalidatePendingSuccess),
   }
   const progress: Progress =

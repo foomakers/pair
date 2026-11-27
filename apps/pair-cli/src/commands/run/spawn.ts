@@ -17,8 +17,8 @@ import { ENGINE_GRACE_MS, isInterrupted, trackEngine } from './interrupt'
 /**
  * Spawning one iteration (US-451 T-9).
  *
- * A FRESH process per iteration, never a reused session: that is the shape the whole story
- * rests on, not an implementation detail (BR5). Argument assembly is a pure function so the
+ * A fresh process per iteration. Workflow stages can opt into engine session continuation.
+ * Argument assembly is a pure function so the
  * invariants a reviewer cares about — no shell string, no merge command, stdin closed — are
  * asserted without spawning anything.
  */
@@ -36,12 +36,26 @@ export interface EngineArgsInput {
   readonly effort?: string | undefined
   /** US-623: where the engine writes its final message, for an engine declaring `lastMessageArgs`. */
   readonly lastMessagePath?: string | undefined
+  /** A previous workflow step's session, when the engine supports continuation. */
+  readonly resumeSessionId?: string | undefined
 }
 
 /** The engine's argv: headless/stream flags, an optional cwd flag, autonomy, then the prompt. */
 export function buildEngineArgs(input: EngineArgsInput): string[] {
+  const { engine, resumeSessionId } = input
+  const { resume } = engine
+  const continuing = resume !== undefined && resumeSessionId !== undefined
   return [
-    ...input.engine.headlessArgs,
+    ...(engine.runnerArgs ?? []),
+    ...(continuing ? (resume.headlessArgs ?? engine.headlessArgs) : engine.headlessArgs),
+    ...engineOptions(input),
+    ...(continuing ? resume.sessionArgs(resumeSessionId) : []),
+    input.promptText,
+  ]
+}
+
+function engineOptions(input: EngineArgsInput): string[] {
+  return [
     ...(input.engine.modelFlag && input.model ? [input.engine.modelFlag, input.model] : []),
     ...(input.engine.effortArgs && input.effort ? input.engine.effortArgs(input.effort) : []),
     ...(input.engine.cwdFlag ? [input.engine.cwdFlag, input.cwd] : []),
@@ -49,7 +63,6 @@ export function buildEngineArgs(input: EngineArgsInput): string[] {
       ? input.engine.lastMessageArgs(input.lastMessagePath)
       : []),
     ...input.autonomyArgs,
-    input.promptText,
   ]
 }
 

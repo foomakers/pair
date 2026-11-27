@@ -29,7 +29,7 @@ import baseConfig from '../../../config.json'
 import { acquireRunLock } from './run-lock'
 import { handleRunCommand } from './handler'
 import { parseRunCommand } from './parser'
-import { spawnIteration, type SpawnIterationInput } from './spawn'
+import { buildEngineArgs, spawnIteration, type SpawnIterationInput } from './spawn'
 import { runHostProcess } from './host-process'
 import type { WorkflowHostDependencies } from './workflow-host'
 
@@ -1406,6 +1406,132 @@ ${test.after}`,
     expect(states(runId)).toEqual(test.expectedStates)
     expect(output).toMatch(/parked at step decision/)
     expect(output).toMatch(/resume[^\n]*pair-workflow-run[^\n]*\bsession-check\b/i)
+  })
+})
+
+describe('engine session continuation (#698 AC-4)', () => {
+  const priorSession = '7b673a11-e1f9-4614-ac03-37a02193cf1a'
+  const handoff = 'The migration keeps the original column through the next release.'
+  const first = fenced({
+    status: 'ok',
+    summary: 'PR opened',
+    branch: 'feature/US-627-x',
+    pr: 12,
+    head: HEAD,
+    handoff,
+  })
+  const state = (): RunStateFile => JSON.parse(fs.readFileSync(join(runDir(), 'state.json')))
+  const resumeOf = (input: SpawnIterationInput) => {
+    const args = buildEngineArgs(input)
+    const index = args.indexOf('--resume')
+    return index === -1 ? undefined : args[index + 1]
+  }
+
+  beforeEach(() => {
+    write('.pair/adoption/tech/workflows/quick.yaml', `${QUICK}    context: resume\n`)
+  })
+
+  function transport(
+    scenario: 'available' | 'other engine' | 'unreported session' | 'lost session',
+  ) {
+    return vi.fn<NonNullable<WorkflowHostDependencies['runIteration']>>(async input => {
+      if (skillOf(input.promptText) === 'pair-process-implement') {
+        if (scenario !== 'unreported session')
+          input.onEvent?.({ type: 'system', subtype: 'init', session_id: priorSession })
+        input.onEvent?.({ type: 'result', subtype: 'success', result: first })
+      } else if (scenario === 'lost session' && resumeOf(input) === priorSession) {
+        return {
+          outcome: 'failed',
+          detail: 'no terminal event',
+          process: {
+            exitCode: 1,
+            signal: null,
+            elapsedMs: 1,
+            stderrTail: [`No conversation found with session ID: ${priorSession}`],
+          },
+        }
+      } else if (input.engine.id === 'codex') {
+        input.onEvent?.({
+          type: 'item.completed',
+          item: { type: 'agent_message', text: REVIEWED },
+        })
+      } else {
+        input.onEvent?.({ type: 'result', subtype: 'success', result: REVIEWED })
+      }
+      return { outcome: 'success', detail: 'terminal event: success' }
+    })
+  }
+
+  function expectFallback() {
+    expect(state().steps['review']).toMatchObject({
+      state: 'ok',
+      contextFallback: expect.stringMatching(/\S/),
+    })
+    expect(
+      lines.filter(line => !line.includes('use context: handoff or accept the fallback')),
+    ).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^(?=.*\breview\b)(?=.*\bhandoff\b)/i)]),
+    )
+  }
+
+  it('uses the preceding Claude session, keeps structured inputs and omits the handoff', async () => {
+    const runIteration = transport('available')
+    expect(await run(['quick'], OK, { engine: 'claude' }, { runIteration })).toBe(0)
+
+    const inputs = runIteration.mock.calls.map(([input]) => input)
+    expect(inputs.map(resumeOf)).toEqual([undefined, priorSession])
+    expect(inputs[1]?.promptText).toContain('- pr: 12')
+    expect(inputs[1]?.promptText).not.toContain(handoff)
+    expect(state().steps['implement']).toMatchObject({ engine: 'claude', sessionId: priorSession })
+    expect(state().steps['review']).not.toHaveProperty('contextFallback')
+  })
+
+  it.each(['other engine', 'unreported session', 'lost session'] as const)(
+    'prints and records the handoff fallback for %s',
+    async scenario => {
+      const options = scenario === 'other engine' ? { config: 'quick' } : { engine: 'claude' }
+      if (scenario === 'other engine') {
+        write(
+          '.pair/adoption/tech/configurations/quick.yaml',
+          'version: 1\nname: quick\ndefaults: { engine: claude }\nsteps: { review: { engine: codex } }\n',
+        )
+      }
+      const runIteration = transport(scenario)
+      expect(await run(['quick'], OK, options, { runIteration })).toBe(0)
+
+      const inputs = runIteration.mock.calls.map(([input]) => input).slice(1)
+      expect(inputs.map(resumeOf)).toEqual(
+        scenario === 'lost session' ? [priorSession, undefined] : [undefined],
+      )
+      if (scenario === 'lost session') expect(inputs[0]?.promptText).not.toContain(handoff)
+      expect(inputs.at(-1)?.engine.id).toBe(scenario === 'other engine' ? 'codex' : 'claude')
+      expect(inputs.at(-1)?.promptText).toContain(handoff)
+      expectFallback()
+    },
+  )
+
+  it('uses the handoff when a resume step interrupted during launch is run again', async () => {
+    const runIteration = transport('available')
+    await expect(
+      run(
+        ['quick'],
+        OK,
+        { engine: 'claude' },
+        {
+          runIteration: input => {
+            if (skillOf(input.promptText) === 'pair-process-review') throw new Error('interrupted')
+            return runIteration(input)
+          },
+        },
+      ),
+    ).rejects.toThrow('interrupted')
+    expect(states()).toEqual({ implement: 'ok', review: 'running' })
+
+    expect(await run(['quick'], OK, { engine: 'claude' }, { runIteration })).toBe(0)
+    const inputs = runIteration.mock.calls.map(([input]) => input)
+    expect(inputs.map(resumeOf)).toEqual([undefined, undefined])
+    expect(inputs[1]?.promptText).toContain(handoff)
+    expectFallback()
   })
 })
 
