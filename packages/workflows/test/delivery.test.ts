@@ -201,3 +201,23 @@ it('full default configurations match expanded aliases (R763-01, #700 AC-2)', as
     ).toEqual([])
   }
 })
+
+it('validates the documented review and fix example (R763-06, #700 T-5)', () => {
+  const docs = readFileSync(
+    resolve(
+      __dirname,
+      '../../../apps/website/content/docs/process-lifecycle/shipped-workflows.mdx',
+    ),
+    'utf8',
+  )
+  const section = docs.split('## Review and fix an existing PR')[1]!
+  const yaml = section.match(/```yaml\n([\s\S]*?)\n```/)![1]!
+  expect(
+    validate(yaml, 'review-fix.yaml', {
+      skillExists: () => true,
+      gateKeys: [],
+      launchInputs: ['card'],
+      isSafeText: () => true,
+    }).errors,
+  ).toEqual([])
+})
