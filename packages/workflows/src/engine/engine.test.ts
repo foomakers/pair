@@ -464,6 +464,25 @@ steps:
     },
   )
 
+  it('preserves granted rounds across batch reconfiguration (#761)', async () => {
+    const run = await opened()
+    for (let round = 0; round < 2; round++) {
+      await next(run)
+      await record(run, 'rounds/review', failedReview)
+      await next(run)
+      await record(run, 'rounds/fix', fixed)
+    }
+    await start(run, source, { card: '627', moreRounds: 5 })
+    const configuration = {
+      text: 'version: 1\nname: c\ndefaults: { engine: codex }\nsteps: { rounds: { max: 2 } }\n',
+    }
+    await start(run, source, { card: '627', configuration, reconfigure: true })
+    expect(stateOf(run).loops.rounds.max).toBe(7)
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round: 3 })
+    await record(run, 'rounds/review', failedReview)
+    expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/fix', round: 3 })
+  })
+
   it('increments attempts across rounds and grants (#670-telemetry-attempt)', async () => {
     const run = await opened()
     for (let attempt = 1; attempt <= 3; attempt++) {

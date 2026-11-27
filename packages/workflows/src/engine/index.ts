@@ -415,10 +415,10 @@ async function reconfigured(
   const loops = Object.fromEntries(
     Object.entries(state.loops ?? {}).map(([id, loop]) => {
       const step = frozenWorkflow(run).steps.find(one => one.id === id)
-      return [
-        id,
-        { ...loop, max: step === undefined ? loop.max : loopMax(configuration.text, step) },
-      ]
+      if (step === undefined) return [id, loop]
+      const configuredMax = loopMax(configuration.text, step)
+      const activeGrant = !loop.exhausted && (loop.grants?.length ?? 0) > 0
+      return [id, { ...loop, max: activeGrant ? Math.max(loop.max, configuredMax) : configuredMax }]
     }),
   )
   return {
