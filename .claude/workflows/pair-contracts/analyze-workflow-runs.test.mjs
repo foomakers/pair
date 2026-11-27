@@ -117,6 +117,17 @@ test('R763-04: replacement loop does not attribute its first review to a fix', (
   assert.equal(result.cards[0].newAfterFix, 0)
 })
 
+test('R763-04: replacement round after final review starts a new loop', () => {
+  const review = (id, round, open) => step('a', id, {
+    kind: 'review', ...(round && { round }), findingCounts: { open, blockingOpen: open, resolved: 0, new: open },
+  })
+  const result = ask('convergence', { a: [
+    review('rounds/review', 1, 1), review('rounds/review', 2, 0), review('final-review', undefined, 0),
+    step('a', 'head-check', { status: 'failed', reason: 'head-changed' }), review('rounds/review', 1, 1),
+  ] })
+  assert.equal(result.cards[0].growth, false)
+})
+
 // #700 AC-5: comparison retains executions and park causes alongside duration and tokens.
 test('compare: steps and parks with causes are available alongside time and tokens', () => {
   const parked = [step('a', 'review', { status: 'blocked', reason: 'review-conflict' }), closing('a', 'parked')]
