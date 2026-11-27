@@ -188,16 +188,7 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
   )('$name $file has no new validation warnings', ({ root, file }) => {
     const { errors, warnings } = validateAdopted(root, join(WORKFLOWS, file))
     expect(errors).toEqual([])
-    expect(warnings.map(({ key, problem }) => ({ key, problem }))).toEqual(
-      file === 'delivery.yaml' || file === 'full.yaml'
-        ? [
-            {
-              key: file === 'full.yaml' ? 'steps.delivery' : 'steps.merge',
-              problem: 'merge has no review after the last code-changing step',
-            },
-          ]
-        : [],
-    )
+    expect(warnings.map(({ key, problem }) => ({ key, problem }))).toEqual([])
   })
 
   it.each(

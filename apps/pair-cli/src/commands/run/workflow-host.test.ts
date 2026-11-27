@@ -2143,6 +2143,8 @@ it.each([
     const moveFailure = { status: 'failed', reason: 'head-moved', summary: 'PR head moved' }
     const respond = (action: string | undefined, data: { flag?: object; head?: string }) => {
       switch (action) {
+        case 'ci':
+          return 'green'
         case 'head':
           return currentHead
         case 'approval-target':
