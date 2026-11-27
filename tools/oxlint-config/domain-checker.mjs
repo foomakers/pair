@@ -114,6 +114,32 @@ function typeDependencyCheck(program, checker) {
     }
   }
 
+  function indexedDeclarations(object, key) {
+    let property
+    if (key.isLiteral()) {
+      property = checker.getPropertyOfType(object, String(key.value))
+    } else if (key.flags & ts.TypeFlags.UniqueESSymbol) {
+      property = checker.getPropertiesOfType(object).find(p => p.escapedName === key.escapedName)
+    }
+    if (property) return property.declarations ?? []
+    if (key.flags & (ts.TypeFlags.Any | ts.TypeFlags.Never)) return
+
+    const string = checker.getStringType()
+    const number = checker.getNumberType()
+    const applicable = checker.getIndexInfosOfType(object).filter(
+      ({ keyType }) =>
+        checker.isTypeAssignableTo(key, keyType) ||
+        (keyType === string && checker.isTypeAssignableTo(key, number)) ||
+        (keyType === number && key.isStringLiteral() && String(Number(key.value)) === key.value),
+    )
+    // TypeScript uses the string signature only when no more specific signature applies.
+    const specific = applicable.filter(info => info.keyType !== string)
+    const selected = specific.length ? specific : applicable
+    if (selected.length && selected.every(info => info.declaration)) {
+      return selected.map(info => info.declaration)
+    }
+  }
+
   function check(node) {
     if (
       !node ||
@@ -128,10 +154,10 @@ function typeDependencyCheck(program, checker) {
       if (ts.isIndexedAccessTypeNode(part)) {
         const object = checker.getTypeFromTypeNode(part.objectType)
         const selected = constituents(checker.getTypeFromTypeNode(part.indexType)).map(key =>
-          key.isLiteral() ? checker.getPropertyOfType(object, String(key.value)) : undefined,
+          indexedDeclarations(object, key),
         )
-        for (const property of selected) {
-          for (const declaration of property?.declarations ?? []) check(declaration.type)
+        for (const declarations of selected) {
+          for (const declaration of declarations ?? []) check(declaration.type)
         }
         if (selected.every(Boolean) && !isUnresolvedType(checker.getTypeFromTypeNode(part))) {
           // The checker has selected the members. The rest of the DTO is outside this dependency.
