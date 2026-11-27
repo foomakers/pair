@@ -20,7 +20,12 @@ import { runPool, type PoolInput } from './parallel'
 import { inPooledCard } from './pooled-card'
 import { createConsoleSink, routeConsoleTo, type ConsoleSink } from './run-renderer'
 import { acquireRunLock } from './run-lock'
-import { batchWaitDirectory, checkpointVersion, savedWorkflow } from './workflow-saved-state'
+import {
+  batchWaitDirectory,
+  checkpointVersion,
+  savedRunState,
+  savedWorkflow,
+} from './workflow-saved-state'
 import {
   matchesWorkflowCard,
   pendingWorkflowCard,
@@ -52,10 +57,11 @@ export interface BatchOutcome {
   readonly skipReason?: 'card-held'
   readonly checkpoint?: { readonly runDir: string; version: string }
   readonly retryWhen?: () => Promise<boolean>
-  readonly failedCheckpoint?: {
+  readonly observedCheckpoint?: {
     readonly runDir: string
     version: string
     readonly workflow: string
+    runningStep?: string
   }
 }
 
@@ -589,17 +595,36 @@ function batchLauncher(
   return { launch, displayed }
 }
 
-function refreshCompletedCard(
+function observeExternalStep(
+  fs: Services['fs'],
+  sink: ConsoleSink,
+  id: string,
+  checkpoint: NonNullable<BatchOutcome['observedCheckpoint']>,
+) {
+  const state = savedRunState({ card: id, restart: false }, checkpoint.runDir, fs)
+  const running = Object.entries(state?.steps ?? {}).find(
+    ([step, record]) => record.state === 'running' && state?.loops?.[step] === undefined,
+  )?.[0]
+  if (running === undefined || running === checkpoint.runningStep) return
+  if (checkpoint.runningStep === undefined) sink.event({ event: 'card-start', card: id })
+  checkpoint.runningStep = running
+  sink.event({ event: 'stage', card: id, stage: running })
+}
+
+export function refreshCompletedCard(
   fs: Services['fs'],
   sink: ConsoleSink,
   result: BatchOutcome,
 ): BatchOutcome | undefined {
-  const checkpoint = result.failedCheckpoint
+  const checkpoint = result.observedCheckpoint
   if (checkpoint === undefined) return undefined
   const version = checkpointVersion(fs, checkpoint.runDir)
   if (version === checkpoint.version) return undefined
   const lock = acquireRunLock(checkpoint.runDir)
-  if (lock.kind !== 'acquired') return undefined
+  if (lock.kind !== 'acquired') {
+    observeExternalStep(fs, sink, result.id, checkpoint)
+    return undefined
+  }
   try {
     checkpoint.version = version
     if (
@@ -607,8 +632,17 @@ function refreshCompletedCard(
         { files: fs, dir: checkpoint.runDir },
         { card: result.id, workflow: checkpoint.workflow },
       )
-    )
+    ) {
+      if (checkpoint.runningStep !== undefined) {
+        sink.event({
+          event: 'card-end',
+          card: result.id,
+          status: result.outcome === 'parked' ? 'awaiting-human' : result.outcome,
+        })
+        delete checkpoint.runningStep
+      }
       return undefined
+    }
     sink.event({ event: 'card-end', card: result.id, status: 'completed' })
     return { id: result.id, outcome: 'done' }
   } finally {
@@ -617,14 +651,14 @@ function refreshCompletedCard(
 }
 
 async function mayRetryCheckpoint(fs: Services['fs'], result: BatchOutcome): Promise<boolean> {
-  if (result.retryWhen !== undefined) return result.retryWhen()
-  const checkpoint = result.checkpoint
+  const checkpoint = result.checkpoint ?? result.observedCheckpoint
   if (checkpoint === undefined) return false
   const version = checkpointVersion(fs, checkpoint.runDir)
-  if (version === checkpoint.version) return false
+  if (result.retryWhen === undefined && version === checkpoint.version) return false
   const lock = acquireRunLock(checkpoint.runDir)
   if (lock.kind !== 'acquired') return false
   try {
+    if (result.retryWhen !== undefined) return await result.retryWhen()
     const saved = savedWorkflow({ card: result.id, restart: false }, checkpoint.runDir, fs)
     checkpoint.version = version
     return saved !== undefined && checkpointCanResume(saved.workflow, saved.state)
@@ -652,8 +686,8 @@ function watchBatchCheckpoints(
   }
   const polling: NonNullable<PoolInput<never, BatchOutcome>['polling']> = {
     intervalMs,
-    watches: ({ checkpoint, failedCheckpoint }) =>
-      checkpoint !== undefined || failedCheckpoint !== undefined,
+    watches: ({ checkpoint, observedCheckpoint }) =>
+      checkpoint !== undefined || observedCheckpoint !== undefined,
     keepsAlive: result => result.checkpoint !== undefined || result.retryWhen !== undefined,
     refresh: result => refreshCompletedCard(fs, sink, result),
     ready: async result => {

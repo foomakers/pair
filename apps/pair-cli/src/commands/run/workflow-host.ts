@@ -1,6 +1,8 @@
 import { workflowDefaultSkill } from './skill-probe'
 import {
   batchWaitDirectory,
+  blockedReviewTarget,
+  saveReviewHead,
   checkpointVersion,
   savedRunState,
   savedWorkflow,
@@ -851,20 +853,21 @@ function describeExhaustion(
 
 /** The ending of a run parked or failed on an exhausted loop, drawn on the console; undefined otherwise. */
 function exhaustedEnding(
-  { request, runDir, report, watch }: Opened,
+  opened: Opened,
   outcome: RunOutcome,
   { sink, fs, verbose }: { sink: ConsoleSink; fs: Services['fs']; verbose: boolean },
 ): number | undefined {
+  const { request, runDir, report } = opened
   const description = describeExhaustion({ request, runDir }, outcome, fs)
   if (!description) return undefined
   const { stopped, summary, why } = description
   const { status, exit } = ENDINGS[stopped.run]
-  if (stopped.run === 'parked' && watch?.(runDir) === true)
+  if (stopped.run === 'parked')
     report?.({
       id: request.card,
       outcome: 'parked',
       reason: why,
-      checkpoint: { runDir, version: checkpointVersion(fs, runDir) },
+      ...trackedCheckpoint(opened, fs, stopped.run),
     })
   sink.event({
     event: 'card-end',
@@ -890,20 +893,65 @@ function verifyGateRecovery(
   return async () => (await worktreeMismatch(runHostProcess, worktree, head)) === undefined
 }
 
+function readMovedReviewHead(
+  opened: Opened,
+  fs: FileSystemService,
+  previous: { pr: number; head: string },
+) {
+  const { resolved, request } = opened
+  const locate = () => locateCycleScripts(fs, resolved.project, resolved.cwd).scriptsDir
+  const platform = approvalPlatform((action, card, data) =>
+    workflowOperation(locate, resolved.cwd, { action, card, data }),
+  )
+  return async () => {
+    const target = await platform.target(request.card).catch(() => undefined)
+    return target?.pr === previous.pr && target.head !== previous.head ? target.head : undefined
+  }
+}
+
+async function prepareReviewResume(
+  opened: Opened,
+  fs: FileSystemService,
+  prepare: () => Promise<string>,
+) {
+  const saved = savedWorkflow(opened.request, opened.runDir, fs)
+  const previous = blockedReviewTarget(saved)
+  if (!previous || !saved) return undefined
+  const head = await readMovedReviewHead(opened, fs, previous)()
+  if (!head) return undefined
+  const worktree = await prepare()
+  await prepareReplayHead(worktree, head)
+  await saveReviewHead(fs, opened.runDir, saved.state, head)
+  return worktree
+}
+
+function verifyReviewRecovery(opened: Opened, outcome: RunOutcome, fs: FileSystemService) {
+  if (outcome.last?.kind !== 'review' || outcome.last.state !== 'blocked') return undefined
+  const previous = blockedReviewTarget(savedWorkflow(opened.request, opened.runDir, fs))
+  if (!previous) return undefined
+  const read = readMovedReviewHead(opened, fs, previous)
+  return async () => (await read()) !== undefined
+}
+
+function trackedCheckpoint(opened: Opened, fs: FileSystemService, outcome: RunOutcome['run']) {
+  if (outcome !== 'failed' && outcome !== 'parked') return {}
+  const { runDir, resolved } = opened
+  const state = { runDir, version: checkpointVersion(fs, runDir) }
+  return {
+    ...(outcome === 'parked' && opened.watch?.(runDir) === true && { checkpoint: state }),
+    observedCheckpoint: { ...state, workflow: resolved.workflow.name },
+  }
+}
+
 function reportRunOutcome(opened: Opened, outcome: RunOutcome, fs: Services['fs']): void {
   if (opened.report === undefined) return
-  const retryWhen = verifyGateRecovery(opened, outcome, fs)
+  const retryWhen =
+    verifyGateRecovery(opened, outcome, fs) ?? verifyReviewRecovery(opened, outcome, fs)
   opened.report({
     id: opened.request.card,
     outcome: outcome.run,
     ...(retryWhen && { retryWhen }),
-    ...(outcome.run === 'failed' && {
-      failedCheckpoint: {
-        runDir: opened.runDir,
-        version: checkpointVersion(fs, opened.runDir),
-        workflow: opened.resolved.workflow.name,
-      },
-    }),
+    ...trackedCheckpoint(opened, fs, outcome.run),
     ...(outcome.run === 'skipped' &&
       outcome.last?.reason === 'card-held' && {
         skipReason: outcome.last.reason,
@@ -1053,10 +1101,7 @@ function reportStopped(
     id: opened.request.card,
     outcome: status === 'complete' ? 'skipped' : status === 'parked' ? 'parked' : 'failed',
     reason: status === 'complete' ? 'workflow already complete' : 'loop exhausted',
-    ...(status === 'parked' &&
-      opened.watch?.(opened.runDir) === true && {
-        checkpoint: { runDir: opened.runDir, version: checkpointVersion(fs, opened.runDir) },
-      }),
+    ...trackedCheckpoint(opened, fs, status === 'parked' ? 'parked' : 'done'),
   })
   return stopped
 }
@@ -1127,7 +1172,7 @@ async function drive(
       card: request.card,
       title: opened.title,
     })
-  const replayTree = replay && (await prepare())
+  const replayTree = replay ? await prepare() : await prepareReviewResume(opened, fs, prepare)
   if (replay && replayTree) await prepareReplayHead(replayTree, replay.inputs.head)
   const started = await startOnConsole(opened, fs, config.verbose === true, replay)
   const effective = effectiveConfiguration({ files: fs, dir: runDir })

@@ -1,5 +1,38 @@
 import { describe, expect, it, vi } from 'vitest'
-import { scheduleWorkflowCards } from './workflow-batch'
+import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
+import { acquireRunLock } from './run-lock'
+import { refreshCompletedCard, scheduleWorkflowCards } from './workflow-batch'
+
+vi.mock('./run-lock', () => ({ acquireRunLock: vi.fn() }))
+
+it('shows an externally resumed checkpoint as running without claiming its lock', () => {
+  const fs = new InMemoryFileSystemService(
+    {
+      '/run/workflow.yaml': 'version: 1',
+      '/run/state.json': JSON.stringify({
+        card: '750',
+        steps: { loop: { state: 'running' }, 'loop/review': { state: 'running' } },
+        loops: { loop: { round: 12, max: 12 } },
+      }),
+    },
+    '/',
+    '/',
+  )
+  vi.mocked(acquireRunLock).mockReturnValue({ kind: 'run-locked' })
+  const sink = { inPlace: true, event: vi.fn(), log: vi.fn(), finish: vi.fn() }
+  const result = {
+    id: '750',
+    outcome: 'parked' as const,
+    observedCheckpoint: { runDir: '/run', version: 'previous', workflow: 'delivery' },
+  }
+  expect(refreshCompletedCard(fs, sink, result)).toBeUndefined()
+  expect(sink.event.mock.calls.map(([event]) => event)).toEqual([
+    { event: 'card-start', card: '750' },
+    { event: 'stage', card: '750', stage: 'loop/review' },
+  ])
+  refreshCompletedCard(fs, sink, result)
+  expect(sink.event).toHaveBeenCalledTimes(2)
+})
 
 describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
   it('resumes a parked card once its checkpoint becomes ready while its peer is active', async () => {

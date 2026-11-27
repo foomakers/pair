@@ -1553,6 +1553,97 @@ steps:
     ).toMatchObject({ rounds: 1 })
   })
 
+  it('refreshes a blocked loop review on the same PR and round', async () => {
+    write('.pair/adoption/tech/workflows/quick.yaml', loop)
+    write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Cycle')
+    write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+    const head = 'b'.repeat(40)
+    const blocked = fenced({
+      status: 'blocked',
+      summary: 'PR advanced before review',
+      reason: 'head moved',
+    })
+    expect(await run(['quick'], { ...OK, 'pair-process-review': () => blocked })).toBe(0)
+    hostProcess.mockImplementation(async (bin, args) => {
+      if (bin === 'git') return success(args[0] === 'rev-parse' ? head : '')
+      if (args[1] === 'approval-target') return success(JSON.stringify({ pr: 12, head }))
+      return success('{}')
+    })
+    launched = []
+    expect(
+      await run(['quick'], {
+        ...OK,
+        'pair-process-review': () => blocked,
+      }),
+    ).toBe(0)
+    expect(launched[0]?.promptText).toContain(head)
+    expect(JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))).loops.rounds.round).toBe(1)
+  })
+
+  it('requeues a moved loop review in the same batch without another round grant', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      write('.pair/adoption/tech/workflows/quick.yaml', loop)
+      write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Cycle')
+      write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+      const head = 'b'.repeat(40)
+      hostProcess.mockImplementation(async (bin, args) => {
+        if (bin === 'git') return success(args[0] === 'rev-parse' ? head : '')
+        if (args[1] === 'approval-target') return success(JSON.stringify({ pr: 12, head }))
+        return success('{}')
+      })
+      const reviews: string[] = []
+      const skills = {
+        ...OK,
+        'pair-process-review': (input: { cwd: string; promptText: string }) => {
+          if (basename(input.cwd) !== '627') return REVIEWED
+          reviews.push(input.promptText)
+          return reviews.length === 1
+            ? fenced({
+                status: 'blocked',
+                summary: 'PR advanced before review',
+                reason: 'head moved',
+              })
+            : REVIEWED.replace(HEAD, head)
+        },
+      }
+      const readSelection = async () => ({
+        cards: ['627', '628'].map(id => ({
+          id,
+          title: id,
+          body: '',
+          labels: [],
+          boardState: null,
+          closed: false,
+          prerequisites: id === '628' ? ['627'] : [],
+        })),
+      })
+      const batch = run(
+        ['quick'],
+        skills,
+        { card: '627,628' },
+        {
+          readSelection,
+          readResultFacts: async step => ({
+            head: step.inputs['card'] === '627' && reviews.length > 1 ? head : HEAD,
+          }),
+        },
+      )
+      await vi.waitFor(() => expect(states()['rounds/review']).toBe('blocked'))
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(await batch).toBe(0)
+      expect(reviews).toHaveLength(2)
+      expect(reviews[1]).toContain(head)
+      expect(states()['rounds']).toBe('ok')
+      const { round, grants } = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))).loops
+        .rounds
+      expect(round).toBe(1)
+      expect(grants).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('grants a round to the waiting batch and resumes it from the saved loop', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
