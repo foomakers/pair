@@ -208,6 +208,17 @@
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tools/oxlint-config/**"],
       "outputs": []
     },
+    // The compiler follows inherited config and workspace imports outside content-ops.
+    "@pair/content-ops#lint": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/tools/oxlint-config/**",
+        "$TURBO_ROOT$/tools/ts-config/**",
+        "$TURBO_ROOT$/{apps,packages,tools}/*/tsconfig*.json",
+        "$TURBO_ROOT$/{apps,packages,tools}/*/{src,types}/**/*.{ts,tsx,mts,cts}"
+      ],
+      "outputs": []
+    },
     "lint:fix": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tools/oxlint-config/**"],
       "outputs": []

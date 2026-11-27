@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@typescript-eslint/eslint-plugin": "catalog:",
+    "@typescript/typescript6": "6.0.2",
     "eslint-plugin-react": "catalog:",
     "eslint-plugin-react-hooks": "catalog:",
     "eslint-plugin-jsx-a11y": "catalog:",

@@ -40,12 +40,13 @@
     "test:push": "vitest run --changed \"$PAIR_PUSH_BASE\" --passWithNoTests",
     "test:coverage": "vitest run --coverage",
     "ts:check": "tsc --noEmit",
-    "lint": "lint",
+    "lint": "lint --pair-domain",
     "lint:fix": "lint-fix",
     "mdlint:check": "markdownlint-check",
     "mdlint:fix": "markdownlint-fix"
   },
   "devDependencies": {
+    "@typescript/typescript6": "6.0.2",
     "@pair/oxlint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",

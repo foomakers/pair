@@ -132,6 +132,8 @@ jobs:
         run: pnpm build
       - name: Run lint
         run: pnpm lint
+      - name: Check domain baseline
+        run: pnpm domain:check
       - name: Run code-hygiene check
         run: pnpm hygiene:check
       # Its own step, NOT left to the unit test inside `pnpm test`: `test` is a

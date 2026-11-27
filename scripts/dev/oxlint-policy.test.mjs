@@ -84,6 +84,7 @@ test('#693 AC-2 preserves package lint scope and check/fix behavior', t => {
 test('#693 R5 checks selection before autofix with readable and unreadable excludes', async t => {
   const cwd = workspace(t, 'apps/pair-cli/.oxlintrc.json', {
     extends: [],
+    overrides: [],
     rules: { 'eslint/prefer-const': 'error' },
   })
   const excluded = join(cwd, 'dist')
@@ -683,6 +684,148 @@ test('#693 AC-1 preserves TypeScript assertions and enforces unsafe optional cha
   assert.deepEqual(check.diagnostics.map(item => [item.filename, item.code]), [
     ['unsafe.ts', 'eslint-js(no-unsafe-optional-chaining)'],
   ])
+})
+
+const contentOpsConfig = 'packages/content-ops/.oxlintrc.json'
+const pilotFile = 'src/http/retry.domain.ts'
+const compilerFixtures = 'test/fixtures/domain-compile-negative'
+const optional = 'pair-domain(no-optional-domain-properties)'
+const nullish = 'pair-domain(no-explicit-nullish-domain-types)'
+const assertion = 'pair-domain(no-unsafe-domain-assertions)'
+const property = (kind, shape) => `export ${kind} {\n  ${shape}\n}\n`
+const expression = value => `export const normalize = (value: unknown) =>\n  ${value}\n`
+const domainViolations = [
+  ['interface optional property', property('interface Retry', 'cause?: string'), optional],
+  ['object type optional property', property('type Retry =', 'cause?: string'), optional],
+  ['class optional field', property('class Retry', 'cause?: string'), optional],
+  ['direct null', property('interface Retry', 'cause: null'), nullish],
+  ['direct undefined', property('class Retry', 'cause: undefined'), nullish],
+  ['null in a union', property('type Retry =', 'cause: string | null'), nullish],
+  ['parenthesized undefined in a union', property('interface Retry', 'cause: string | (undefined)'), nullish],
+  ['as assertion', expression('value as string'), assertion],
+  ['angle-bracket assertion', expression('<string>value'), assertion],
+  ['postfix non-null assertion', expression('value!'), assertion],
+  ['const assertion', "export const retry =\n  'ok' as const\n", assertion],
+  ['explicit any', property('interface Retry', 'cause: any'), 'typescript(no-explicit-any)', 10],
+]
+
+function writeFixture(cwd, path, source) {
+  const file = join(cwd, path)
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, source)
+}
+
+function locations(diagnostics) {
+  return diagnostics.map(({ filename, code, labels }) => {
+    const { line, column } = labels[0]?.span ?? {}
+    return [filename, code, line, column]
+  })
+}
+
+for (const [name, source, rule, column = 3] of domainViolations) {
+  test(`#750 AC-2/4 flags an isolated ${name}`, t => {
+    const cwd = workspace(t, contentOpsConfig)
+    writeFixture(cwd, pilotFile, source)
+
+    const result = lint(cwd, '--workspace', '--deny-warnings')
+    assert.deepEqual(locations(result.diagnostics), [[pilotFile, rule, 2, column]])
+    assert.equal(result.status, 1)
+  })
+}
+
+test('#750 AC-2/4 accepts required tagged variants, opaque causes and checked construction', t => {
+  const cwd = workspace(t, contentOpsConfig)
+  writeFixture(cwd, pilotFile, `
+export type Retry = { kind: 'ok'; payload: string } | { kind: 'failure'; cause: unknown }
+export interface Attempts { labels: Array<string | null> }
+export class Failure { readonly cause: unknown }
+export const create = (value: unknown): Retry => {
+  if (typeof value === 'string') return { kind: 'ok', payload: value } satisfies Retry
+  return { kind: 'failure', cause: value }
+}
+  `)
+
+  const result = lint(cwd, '--workspace', '--deny-warnings')
+  assert.deepEqual(result.diagnostics, [])
+  assert.equal(result.status, 0)
+})
+
+test('#750 AC-4 accepts an ingress DTO shape and flags the same optional nullable property in the pilot', t => {
+  const cwd = workspace(t, contentOpsConfig)
+  const source = property('interface Retry', 'cause?: string | null')
+  writeFixture(cwd, 'src/http/retryable-download.ts', source)
+  assert.deepEqual(lint(cwd, '--workspace', '--deny-warnings'), { diagnostics: [], status: 0 })
+
+  writeFixture(cwd, pilotFile, source)
+  const result = lint(cwd, '--workspace', '--deny-warnings')
+  assert.deepEqual(locations(result.diagnostics).sort(), [
+    [pilotFile, nullish, 2, 3],
+    [pilotFile, optional, 2, 3],
+  ])
+  assert.ok(result.diagnostics.every(({ message }) => message.includes('Retry.cause')))
+  assert.equal(result.status, 1)
+})
+
+const expectError = '@ts-' + 'expect-error'
+const typeMismatch = "export const amount: number = 'invalid'\n"
+const reasonedMismatch = `// ${expectError}: Prove string input cannot be used as an amount.\n${typeMismatch}`
+
+for (const [label, path, source, expected] of [
+  ['allows the reasoned fixture', `${compilerFixtures}/allowed.ts`, reasonedMismatch, []],
+  ['rejects the fixture without a reason', `${compilerFixtures}/missing.ts`, `// ${expectError}\n${typeMismatch}`, ['legacy-typescript(ban-ts-comment)']],
+  ['rejects the reasoned directive outside the scope', 'src/http/production.ts', reasonedMismatch, ['legacy-typescript(ban-ts-comment)']],
+]) {
+  test(`#750 AC-7 shared lint ${label}`, t => {
+    const cwd = workspace(t, contentOpsConfig)
+    writeFixture(cwd, path, source)
+
+    const result = lint(cwd, '--workspace', '--deny-warnings')
+    assert.deepEqual(locations(result.diagnostics), expected.map(rule => [path, rule, 1, 1]))
+    assert.equal(result.status, expected.length)
+  })
+}
+
+test('#750 AC-7/R13 CI hygiene detects tracked suppressions independently of Oxlint', t => {
+  const cwd = mkdtempSync(join(tmpdir(), 'pair-hygiene-'))
+  t.after(() => rmSync(cwd, { recursive: true, force: true }))
+  const rootFixture = `packages/content-ops/${compilerFixtures}`
+  const allowed = `${rootFixture}/allowed.ts`
+  const missing = `${rootFixture}/missing.ts`
+  const directive = 'oxlint-' + 'disable'
+  const scanner = 'packages/dev-tools/src/quality-gates/code-hygiene-check.ts'
+  const scannerSource = readFileSync(join(root, scanner), 'utf8')
+  const suppressions = [
+    [scanner, `/* ${directive} no-var */\n${reasonedMismatch}${scannerSource}`, 1, 2],
+    ['src/file.ts', `/* ${directive} no-var */\nvar count = 1\n`, 1],
+    ['src/line.ts', `var count = 1 // ${directive}-line no-var\n`, 1],
+    ['src/next.ts', `// ${directive}-next-line no-var\nvar count = 1\n`, 1],
+    ['src/eslint.ts', `/* ${'eslint-' + 'disable'} no-var */\nvar count = 1\n`, 1],
+    ['src/ignore.ts', `// ${'@ts-' + 'ignore'}\n${typeMismatch}`, 1],
+    ['src/nocheck.ts', `// ${'@ts-' + 'nocheck'}\n${typeMismatch}`, 1],
+    ['src/production.ts', reasonedMismatch, 1],
+    [missing, `// ${expectError}\n${typeMismatch}`, 1],
+  ]
+  const git = (...args) => assert.equal(spawnSync('git', args, { cwd, encoding: 'utf8' }).status, 0)
+  const hygiene = () => spawnSync('pnpm', ['hygiene:check'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, GIT_DIR: join(cwd, '.git'), GIT_WORK_TREE: cwd },
+  })
+  git('init', '-q')
+  writeFixture(cwd, allowed, reasonedMismatch)
+  writeFixture(cwd, 'src/untracked.ts', reasonedMismatch)
+  writeFixture(cwd, scanner, scannerSource)
+  git('add', allowed, scanner)
+  const clean = hygiene()
+  assert.match(clean.stdout, /PASS — no violations/)
+  assert.equal(clean.status, 0)
+
+  for (const [path, source] of suppressions) writeFixture(cwd, path, source)
+  git('add', ...suppressions.map(([path]) => path))
+  const violations = hygiene()
+  const reported = violations.stdout.split('\n').filter(line => /^  \S+:\d+$/.test(line)).sort()
+  assert.deepEqual(reported, suppressions.flatMap(([path, , ...lines]) => lines.map(line => `  ${path}:${line}`)).sort())
+  assert.equal(violations.status, 1)
 })
 
 const controls = JSON.parse(readFileSync(join(root, 'docs/engineering/lint-migration-693-cases.json'), 'utf8'))

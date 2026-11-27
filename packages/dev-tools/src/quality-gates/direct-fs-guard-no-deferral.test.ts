@@ -116,6 +116,7 @@ const EXCEPTION_OUT_OF_SCOPE = new Set([
   'packages/content-ops/src/file-system/file-system-sync-parity.test.ts',
   'packages/content-ops/src/file-system/file-validations.ts',
   'packages/content-ops/src/file-system/path-containment.test.ts',
+  'packages/content-ops/src/http/retry.domain.test.ts', // #750 real tsc project
   'packages/content-ops/src/ops/copy/copy-symlink-containment.test.ts',
   'packages/content-ops/src/ops/copy/copyPathOps.ts',
   'packages/content-ops/src/ops/movePathOps.ts',
@@ -203,6 +204,8 @@ const EXCEPTION_OUT_OF_SCOPE = new Set([
   'packages/knowledge-hub/src/conformance/working-area.test.ts',
   'scripts/dev/hook-git-env.test.mjs',
   'scripts/dev/oxlint-policy.test.mjs',
+  'scripts/dev/domain-ratchet.test.mjs', // #750 real Git, Oxlint and TypeScript
+  'scripts/dev/domain-semantic.test.mjs', // #750 real pnpm lint and TypeScript
   'scripts/dev/rtk-review-hook.mjs',
   'scripts/dev/rtk-review-hook.test.mjs',
   'scripts/dev/rtk-session-path.mjs',

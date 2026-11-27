@@ -1,0 +1,28 @@
+{
+  "packages/content-ops/src/http/download-manager.ts": {
+    "pair-domain/no-optional-domain-properties": [
+      "WriteOptions.progressReporter",
+      "WriteOptions.resumeFrom",
+      "ProgressReporterContext.progressWriter",
+      "ProgressReporterContext.isTTY",
+      "ProgressReporterContext.label"
+    ],
+    "pair-domain/no-explicit-nullish-domain-types": [
+      "WriteOptions.progressReporter",
+      "WriteOptions.resumeFrom",
+      "ProgressReporterContext.progressWriter",
+      "ProgressReporterContext.isTTY",
+      "ProgressReporterContext.label"
+    ]
+  },
+  "packages/content-ops/src/http/resume-manager.ts": {
+    "pair-domain/no-optional-domain-properties": [
+      "DownloadContext.progressWriter",
+      "DownloadContext.isTTY"
+    ],
+    "pair-domain/no-explicit-nullish-domain-types": [
+      "DownloadContext.progressWriter",
+      "DownloadContext.isTTY"
+    ]
+  }
+}
