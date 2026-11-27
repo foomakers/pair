@@ -203,7 +203,7 @@ it('full default configurations match expanded aliases (R763-01, #700 AC-2)', as
   }
 })
 
-it('validates the documented review and fix example (R763-06, #700 T-5)', () => {
+it('validates the documented review and fix example (R763-06, #700 T-5)', async () => {
   const docs = readFileSync(
     resolve(
       __dirname,
@@ -221,4 +221,30 @@ it('validates the documented review and fix example (R763-06, #700 T-5)', () => 
       isSafeText: () => true,
     }).errors,
   ).toEqual([])
+  const workflow = validate(yaml, 'review-fix.yaml', {
+    skillExists: () => true,
+    gateKeys: [],
+    launchInputs: ['card'],
+    isSafeText: () => true,
+  }).workflow!
+  const { parseConfiguration, checkAgainstEngines } = await import('../src/configuration')
+  const root = resolve(__dirname, '../../knowledge-hub/dataset/.pair')
+  const defaults = JSON.parse(readFileSync(resolve(root, 'defaults/pair.config.json'), 'utf8'))
+  for (const name of Object.values(defaults.workflows.default.configuration) as string[]) {
+    const file = resolve(root, `adoption/tech/configurations/${name}.yaml`)
+    const configuration = parseConfiguration(readFileSync(file, 'utf8'), file).configuration!
+    expect(
+      checkAgainstEngines(configuration, {
+        file,
+        aliases: workflow.aliases,
+        steps: workflow.steps,
+        facts: {
+          known: () => true,
+          installed: () => true,
+          models: () => undefined,
+          supportsEffort: () => true,
+        },
+      }).errors,
+    ).toEqual([])
+  }
 })
