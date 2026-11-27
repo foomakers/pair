@@ -20,6 +20,7 @@ it('ships delivery and full with the approved expansion (#700 AC-1, AC-2, AC-6)'
     'refinement/tasks',
     'delivery/implement',
     'delivery/rounds',
+    'delivery/final-review',
     'delivery/checks',
     'delivery/approve',
     'delivery/merge',
@@ -101,3 +102,64 @@ it.each([
   if (reason === 'ci-timeout') expect(time).toBe(30 * 60_000)
   if (reason === undefined) expect(index).toBe(2)
 })
+
+it.each(['approved', 'changes-requested'] as const)(
+  'reviews the last allowed fix before stopping or gating: %s (#700 AC-9)',
+  async verdict => {
+    const { start, next, record } = await import('../src/engine')
+    const { createMemoryFiles } = await import('../src/engine/memory-files')
+    const dir = '/main/.pair/working/runs/delivery-700'
+    const run = { dir, files: createMemoryFiles() }
+    const path = resolve(
+      __dirname,
+      '../../knowledge-hub/dataset/.pair/adoption/tech/workflows/delivery.yaml',
+    )
+    const text = readFileSync(path, 'utf8')
+    const head = 'a'.repeat(40)
+    const fixedHead = 'b'.repeat(40)
+    const findings = [{ id: 'a', severity: 'Major', title: 'gap', blocking: true, origin: 'new' }]
+    await start(run, { text, file: 'delivery.yaml' }, { card: '700' })
+    expect((await next(run)).ready[0]?.id).toBe('implement')
+    await record(run, 'implement', {
+      status: 'ok',
+      summary: 'opened',
+      branch: 'feature/US-700-x',
+      pr: 12,
+      head,
+    })
+    for (let round = 0; round < 3; round++) {
+      expect((await next(run)).ready[0]?.id).toBe('rounds/review')
+      await record(run, 'rounds/review', {
+        status: 'failed',
+        summary: 'gap',
+        verdict: 'changes-requested',
+        reviewedHead: round ? fixedHead : head,
+        findings,
+      })
+      expect((await next(run)).ready[0]?.id).toBe('rounds/fix')
+      await record(run, 'rounds/fix', {
+        status: 'ok',
+        summary: 'fixed',
+        head: fixedHead,
+        resolutions: [{ id: 'a', status: 'resolved', reason: 'fixed' }],
+      })
+    }
+    const finalReview = (await next(run)).ready[0]
+    expect(finalReview).toMatchObject({ kind: 'review', inputs: { head: fixedHead } })
+    await record(
+      run,
+      finalReview!.id,
+      verdict === 'approved'
+        ? { status: 'ok', summary: 'approved', verdict, reviewedHead: fixedHead, findings: [] }
+        : { status: 'failed', summary: 'gap remains', verdict, reviewedHead: fixedHead, findings },
+    )
+    const result = await next(run)
+    if (verdict === 'approved') expect(result.ready[0]?.id).toBe('checks')
+    else {
+      expect(['parked', 'failed']).toContain(result.run)
+      expect(result.ready).toEqual([])
+      const state = JSON.parse(run.files.readFileSync(`${dir}/state.json`))
+      expect(state.steps[finalReview!.id].outputs.findings).toEqual(findings)
+    }
+  },
+)

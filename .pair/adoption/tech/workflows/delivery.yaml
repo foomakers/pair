@@ -13,7 +13,7 @@ steps:
     kind: loop
     until: review
     max: 3
-    on-max: escalate
+    escalate: { exhausted: continue }
     steps:
       review:
         kind: review
@@ -25,6 +25,12 @@ steps:
         escalate: { failed: continue, blocked: stop, needs-decision: stop }
         alias: build
         with: { continue-on-gate-failure: true }
+  final-review:
+    kind: review
+    alias: judge
+    with: { publication: first-and-approved }
+    when: { output: review-rounds.status, is: [exhausted] }
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
   gate:
     kind: gate
     on-resume: { reason: head-changed, step: review-rounds }

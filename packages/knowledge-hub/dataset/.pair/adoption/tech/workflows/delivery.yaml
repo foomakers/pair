@@ -17,7 +17,7 @@ steps:
     kind: loop
     until: review
     max: 3
-    on-max: escalate
+    escalate: { exhausted: continue }
     steps:
       review:
         kind: review
@@ -28,6 +28,11 @@ steps:
         alias: build
         gates: [target:pr]
         escalate: { failed: stop, blocked: stop, needs-decision: stop }
+  final-review:
+    kind: review
+    alias: judge
+    when: { output: rounds.status, is: [exhausted] }
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
   checks:
     kind: gate
     with: { gates: [target:pr], checks: [ci-green, head-unchanged] }
