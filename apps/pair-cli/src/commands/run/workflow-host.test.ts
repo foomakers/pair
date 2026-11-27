@@ -1431,6 +1431,31 @@ describe('engine session continuation (#698 AC-4)', () => {
     write('.pair/adoption/tech/workflows/quick.yaml', `${QUICK}    context: resume\n`)
   })
 
+  const resumeFailureTurns = new Map([
+    ['lost session', null],
+    ['lost session event', 0],
+    ['execution error', 1],
+  ])
+
+  function failedResume(input: SpawnIterationInput, turns: number | null) {
+    const diagnostic = `No conversation found with session ID: ${priorSession}`
+    if (turns !== null) {
+      input.onEvent?.({
+        type: 'result',
+        subtype: 'error_during_execution',
+        is_error: true,
+        num_turns: turns,
+        session_id: priorSession,
+        errors: [diagnostic],
+      })
+    }
+    return {
+      outcome: 'failed' as const,
+      detail: turns === null ? 'no terminal event' : 'error_during_execution',
+      process: { exitCode: 1, signal: null, elapsedMs: 1, stderrTail: [diagnostic] },
+    }
+  }
+
   function transport(
     scenario:
       | 'available'
@@ -1441,37 +1466,13 @@ describe('engine session continuation (#698 AC-4)', () => {
       | 'execution error',
   ) {
     return vi.fn<NonNullable<WorkflowHostDependencies['runIteration']>>(async input => {
+      const turns = resumeFailureTurns.get(scenario)
       if (skillOf(input.promptText) === 'pair-process-implement') {
         if (scenario !== 'unreported session')
           input.onEvent?.({ type: 'system', subtype: 'init', session_id: priorSession })
         input.onEvent?.({ type: 'result', subtype: 'success', result: first })
-      } else if (
-        (scenario === 'lost session' ||
-          scenario === 'lost session event' ||
-          scenario === 'execution error') &&
-        resumeOf(input) === priorSession
-      ) {
-        const diagnostic = `No conversation found with session ID: ${priorSession}`
-        if (scenario !== 'lost session') {
-          input.onEvent?.({
-            type: 'result',
-            subtype: 'error_during_execution',
-            is_error: true,
-            num_turns: scenario === 'lost session event' ? 0 : 1,
-            session_id: priorSession,
-            errors: [diagnostic],
-          })
-        }
-        return {
-          outcome: 'failed',
-          detail: scenario === 'lost session' ? 'no terminal event' : 'error_during_execution',
-          process: {
-            exitCode: 1,
-            signal: null,
-            elapsedMs: 1,
-            stderrTail: [diagnostic],
-          },
-        }
+      } else if (turns !== undefined && resumeOf(input) === priorSession) {
+        return failedResume(input, turns)
       } else if (input.engine.id === 'codex') {
         input.onEvent?.({
           type: 'item.completed',

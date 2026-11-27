@@ -34,6 +34,7 @@ import {
   stepInputFailure,
   telemetryWriter,
   type StepEvent,
+  type WorkflowHost,
 } from '../host'
 import { skillForStep, kindByName } from '../kinds'
 import { effectiveSelection, type CardFacts } from '../select'
@@ -481,12 +482,14 @@ function selectedResponse(selected: Selection, events: StepEvent[]): SessionNext
   }
 }
 
-function approvalResponse(
+function hostStepResponse(
   result: StepEvent,
   step: StepLaunch,
   events: StepEvent[],
-  target?: ApprovalTarget,
+  { definition, target }: { definition: Step | undefined; target: ApprovalTarget | undefined },
 ) {
+  if (definition !== undefined && stepSettled(definition, result.state))
+    return { result: { run: 'running' as const, ready: [], events } }
   const waiting = result.state === 'needs-decision'
   const approval =
     waiting && target !== undefined
@@ -532,34 +535,16 @@ async function readyPacket(
   return { ...ready, message: sessionMessage(ready, lease.worktree) }
 }
 
-async function advanceSession(
-  { project, run, lease, answer, fallbackHandoff }: AdvanceInput,
-  steps: ReturnType<typeof addressedSteps>,
+function agentDispatch(
+  { run, lease, fallbackHandoff }: AdvanceInput,
   packet: Packet,
-  writer: ReturnType<typeof sessionTelemetry>,
+  {
+    host,
+    writer,
+    events,
+  }: { host: WorkflowHost; writer: ReturnType<typeof sessionTelemetry>; events: StepEvent[] },
 ) {
-  const parked = lease.approval
-  const events: StepEvent[] = []
-  let target: ApprovalTarget | undefined
-  let runningOnHost = false
-  const host = sessionHost(project, run, {
-    onPark: approval => {
-      target = approval
-    },
-    reply:
-      answer !== undefined && parked !== undefined
-        ? { step: parked.step, answer: sessionAnswer(answer), target: parked }
-        : undefined,
-    worktree: lease.worktree,
-    steps,
-  })
-  host.report = event => {
-    if (event.state !== 'running') events.push(event)
-    else if (runningOnHost) process.stderr.write(`${JSON.stringify({ event })}\n`)
-  }
-  const canStart = (step: StepLaunch) =>
-    needsHost(step) || packet(step).settings.engine === lease.engine
-  const offer = async (launch: StepLaunch, launchStartedAt?: number) => {
+  return async (launch: StepLaunch, launchStartedAt?: number) => {
     const result: SessionNext = { run: 'running', ready: [], events }
     let ready
     try {
@@ -582,6 +567,37 @@ async function advanceSession(
     }
     return { result: { ...result, ready: [ready] }, launch, launchStartedAt }
   }
+}
+
+async function advanceSession(
+  input: AdvanceInput,
+  steps: ReturnType<typeof addressedSteps>,
+  packet: Packet,
+  writer: ReturnType<typeof sessionTelemetry>,
+) {
+  const { project, run, lease, answer } = input
+  const parked = lease.approval
+  const events: StepEvent[] = []
+  let target: ApprovalTarget | undefined
+  let runningOnHost = false
+  const host = sessionHost(project, run, {
+    onPark: approval => {
+      target = approval
+    },
+    reply:
+      answer !== undefined && parked !== undefined
+        ? { step: parked.step, answer: sessionAnswer(answer), target: parked }
+        : undefined,
+    worktree: lease.worktree,
+    steps,
+  })
+  host.report = event => {
+    if (event.state !== 'running') events.push(event)
+    else if (runningOnHost) process.stderr.write(`${JSON.stringify({ event })}\n`)
+  }
+  const canStart = (step: StepLaunch) =>
+    needsHost(step) || packet(step).settings.engine === lease.engine
+  const offer = agentDispatch(input, packet, { host, writer, events })
   if (lease.launch !== undefined) return offer(lease.launch, lease.launchStartedAt)
   const selected = await advanceStep(host, run, canStart, parked?.step)
   const launchStartedAt = writer?.now().getTime()
@@ -592,9 +608,7 @@ async function advanceSession(
     runningOnHost = true
     const result = await runStep(host, run, step, writer)
     const definition = steps.find(candidate => candidate.id === step.id)
-    if (definition !== undefined && stepSettled(definition, result.state))
-      return { result: { run: 'running' as const, ready: [], events } }
-    return approvalResponse(result, step, events, target)
+    return hostStepResponse(result, step, events, { definition, target })
   }
   const launch = canStart(step) ? await startStep(host, step) : step
   return offer(launch, launchStartedAt)
