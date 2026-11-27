@@ -1,3 +1,5 @@
+import { formatError } from '../grammar'
+import { resumeEngineWarnings } from '../validate'
 import { loadSessionProjectConfig } from './session-files'
 import {
   checkWorkflowConfiguration,
@@ -28,9 +30,15 @@ export function validateWorkflow(
     projectSettings,
   )
   const configWarnings = checkWorkflowConfiguration(workflow, selected, engineFlag)
+  const summary = workflowSummary(project, workflow, selected?.configuration, engine)
+  const engines = new Map(summary.steps.map(step => [step.id, step.settings.engine]))
+  const resumeWarnings = resumeEngineWarnings(workflow, {
+    engineFor: id => engines.get(id),
+    supports: () => undefined,
+  })
   return {
     file: workflow.file,
-    ...workflowSummary(project, workflow, selected?.configuration, engine),
-    warnings: [...warnings, ...configWarnings],
+    ...summary,
+    warnings: [...warnings, ...configWarnings, ...resumeWarnings.map(formatError)],
   }
 }
