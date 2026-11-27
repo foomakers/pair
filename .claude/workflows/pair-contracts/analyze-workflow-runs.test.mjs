@@ -71,7 +71,7 @@ test('convergence: per-card rounds, growth, new findings and cohort mean', () =>
 // #700 AC-5: comparison retains executions and park causes alongside duration and tokens.
 test('compare: steps and parks with causes are available alongside time and tokens', () => {
   const parked = [step('a', 'review', { status: 'blocked', reason: 'review-conflict' }), closing('a', 'parked')]
-  const finished = [step('b', 'review'), step('b', 'merge'), closing('b')]
+  const finished = [step('b', 'rounds', { status: 'exhausted', escalate: { status: 'exhausted', do: 'continue' } }), step('b', 'merge'), closing('b')]
   const { runs } = ask('compare', { a: parked, b: finished }).groups[0]
   assert.deepEqual(runs.map(run => [run.steps, run.parks]), [
     [1, [{ step: 'review', reason: 'review-conflict' }]], [2, []],
