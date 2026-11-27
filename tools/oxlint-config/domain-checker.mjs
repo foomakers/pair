@@ -257,12 +257,14 @@ function typeDependencyCheck(program, checker) {
   return (type, declarations, uses) => {
     for (const declaration of declarations) check(declaration.type)
     for (const use of uses) {
-      if (!ts.isExpressionWithTypeArguments(use)) continue
+      if (!ts.isExpressionWithTypeArguments(use) && !ts.isTypeNode(use)) continue
       const contributes = base =>
         base.getProperties().some(property =>
           property.declarations?.some(declaration => declarations.includes(declaration)),
         )
-      if (contributes(checker.getTypeAtLocation(use))) checkSelectedObjectArguments(use, contributes)
+      if (constituents(checker.getTypeAtLocation(use)).some(contributes)) {
+        checkSelectedObjectArguments(use, contributes)
+      }
     }
     if (!isUnresolvedType(type)) return
     for (const declaration of declarations) checkInference(declaration)
