@@ -9,10 +9,14 @@ import {
   type Workflow,
   type WorkflowError,
 } from '../grammar'
+import { isSafeProse } from '../dispatch'
 import { expand, type WorkflowSource } from '../expand'
 import { fieldsOf, kindByName } from '../kinds'
 import { textsOf, violations } from '../schema'
+import { contextWarnings, type ResumeFacts } from './context-warnings'
 import { escalationWarnings } from './escalation-warnings'
+
+export { resumeEngineWarnings, type ResumeFacts } from './context-warnings'
 
 /** What the validator asks of its caller: the package reads no skill directory and no adoption file itself. */
 export interface ValidationDeps {
@@ -32,6 +36,8 @@ export interface ValidationDeps {
   readonly isSafeText: (value: string) => boolean
   /** Whether the host can write escalation comments on the card, queried only when needed. */
   readonly canCommentOnCard?: boolean | (() => boolean)
+  /** Effective engines and their resume capability, when already known by the host. */
+  readonly resume?: ResumeFacts
 }
 
 export interface Validation {
@@ -175,7 +181,7 @@ const failedEscalationErrors: Check = (workflow, step, _deps, path) => {
     : []
 }
 
-const AGENT_ONLY = ['timeout-minutes', 'retries'] as const
+const AGENT_ONLY = ['timeout-minutes', 'retries', 'context', 'prompt', 'prompt-at'] as const
 
 const hostOptionErrors: Check = (workflow, step, _deps, path) =>
   step.kind !== 'loop' && kindByName[step.kind].host === true
@@ -187,6 +193,27 @@ const hostOptionErrors: Check = (workflow, step, _deps, path) =>
       )
     : []
 
+const promptErrors: Check = (workflow, step, deps, path) => {
+  if (step.kind === 'loop' || kindByName[step.kind].host === true) return []
+  if (step.prompt === undefined)
+    return step['prompt-at'] === undefined
+      ? []
+      : [
+          errorAt(workflow, [...path, 'prompt-at'], {
+            problem: 'prompt-at requires a prompt',
+            fix: 'add a prompt or remove prompt-at',
+          }),
+        ]
+  return isSafeProse(step.prompt, deps.isSafeText)
+    ? []
+    : [
+        errorAt(workflow, [...path, 'prompt'], {
+          problem: 'prompt text is not safe to hand to an agent',
+          fix: 'write plain text without backticks, $( or control characters',
+        }),
+      ]
+}
+
 const CHECKS: readonly Check[] = [
   skillErrors,
   withErrors,
@@ -194,6 +221,7 @@ const CHECKS: readonly Check[] = [
   gateErrors,
   gateNeedsWork,
   hostOptionErrors,
+  promptErrors,
   safetyErrors,
   failedEscalationErrors,
 ]
@@ -541,6 +569,7 @@ export function validate(text: string, file: string, deps: ValidationDeps): Vali
           ...warnings(parsed.workflow),
           ...escalationWarnings(parsed.workflow, deps.canCommentOnCard),
           ...mergeWarnings(parsed.workflow),
+          ...contextWarnings(parsed.workflow, deps.resume),
         ].map(locate),
       }
 }

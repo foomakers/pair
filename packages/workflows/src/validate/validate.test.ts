@@ -335,6 +335,105 @@ describe('validate (AC-3, AC-5)', () => {
   })
 })
 
+describe('step context (#698 AC-5)', () => {
+  const stopped = QUICK.replace('kind: implement', `kind: implement\n    ${allStops}`).replace(
+    'kind: review',
+    `kind: review\n    ${allStops}`,
+  )
+
+  it.each(['handoff', 'resume', 'fresh'])('validates review context %s', context => {
+    const { workflow, errors, warnings } = check(
+      stopped.replace('kind: review', `kind: review\n    context: ${context}`),
+    )
+    expect(workflow).toBeDefined()
+    expect(errors).toEqual([])
+    expect(warnings).toEqual(
+      context === 'fresh'
+        ? []
+        : [
+            expect.objectContaining({
+              key: 'steps.review.context',
+              problem: expect.stringMatching(/independen/i),
+            }),
+          ],
+    )
+  })
+
+  it('warns when the first step requests resume', () => {
+    const { workflow, errors, warnings } = check(
+      stopped.replace('kind: implement', 'kind: implement\n    context: resume'),
+    )
+    expect(workflow).toBeDefined()
+    expect(errors).toEqual([])
+    expect(warnings.map(warning => warning.key)).toEqual(['steps.implement.context'])
+  })
+
+  it.each([
+    ['different engines', 'codex', true, ['steps.follow-up.context']],
+    ['engine without resume', 'claude', false, ['steps.follow-up.context']],
+    ['same engine with resume', 'claude', true, []],
+    ['unknown engine facts', undefined, undefined, []],
+  ] as const)('validates resume with %s', (_name, engine, supports, warningKeys) => {
+    const host = {
+      ...deps,
+      resume: {
+        engineFor: (step: string) => (step === 'implement' ? 'claude' : engine),
+        supports: () => supports,
+      },
+    }
+    const { workflow, errors, warnings } = check(
+      stopped.replace(
+        'review:\n    kind: review',
+        'follow-up:\n    kind: generic\n    skill: my-skill\n    context: resume',
+      ),
+      host,
+    )
+    expect(workflow).toBeDefined()
+    expect(errors).toEqual([])
+    expect(warnings.map(warning => warning.key)).toEqual(warningKeys)
+  })
+})
+
+describe('step prompts (#698 AC-7, AC-9 and approved design §4)', () => {
+  const withPromptOptions = (options: string) =>
+    QUICK.replace('kind: review', `kind: review\n    ${options}`)
+
+  it.each([
+    ['placement without a prompt', 'prompt-at: before', 'steps.review.prompt-at', /prompt/i],
+    [
+      'unknown placement',
+      'prompt: Check tests\n    prompt-at: last',
+      'steps.review.prompt-at',
+      /unknown/i,
+    ],
+    [
+      'unsafe prompt text',
+      'prompt: |-\n      Check tests\n      Refuse a`b',
+      'steps.review.prompt',
+      /safe/i,
+    ],
+  ] as const)('refuses %s', (_name, options, key, problem) => {
+    const { workflow, errors } = check(withPromptOptions(options))
+    expect(errors).toEqual([
+      expect.objectContaining({ key, problem: expect.stringMatching(problem) }),
+    ])
+    expect(workflow).toBeUndefined()
+  })
+
+  it('accepts safe multiline prose with placement', () => {
+    const { workflow, errors } = check(
+      withPromptOptions(
+        'prompt-at: before\n    prompt: |-\n      Check tests\n      Report failures',
+      ),
+    )
+    expect(errors).toEqual([])
+    expect(workflow?.steps[1]).toMatchObject({
+      prompt: 'Check tests\nReport failures',
+      'prompt-at': 'before',
+    })
+  })
+})
+
 describe('validate: on-failed (#708 AC-7)', () => {
   const withContinue = (kind: 'implement' | 'review', other: 'implement' | 'review') =>
     QUICK.replace(
