@@ -671,6 +671,33 @@ for (const [form, declaration, dependency, location] of [
   }
 }
 
+for (const [argument, code, lookup] of [
+  ['MissingCause', 'TS2304', type => `RetryDto<${type}>['cause']`],
+  ['boolean', 'TS2344', type => `(RetryDto<${type}>)['cause']`],
+]) {
+  test(`#750 750-R22 AC-3/4 rejects an invalid indexed type argument (${code})`, t => {
+    const input = '../../node_modules/retry-cause/index.d.ts'
+    const retry = type =>
+      `import type { RetryDto } from 'retry-cause'\nexport interface Retry { cause: ${lookup(type)} }\n`
+    const dto = type =>
+      `export type RetryDto<T extends string | number> = {
+  cause: [T] extends [string | number | boolean] ? ${type} : number
+}\n`
+    const cwd = workspace(t, { [pilot]: retry('string'), [input]: dto('string') })
+    assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+    writeFileSync(join(cwd, input), dto('string | null'))
+    assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, 2, 26]] })
+
+    writeFileSync(join(cwd, pilot), retry(argument))
+    const { status, stdout, stderr } = lint(cwd)
+    assert.equal(status, 2, stdout + stderr)
+    assert.ok(stderr.includes(`${pilot}: ${code}`), stderr)
+    assert.ok(stderr.includes(argument), stderr)
+    assert.equal(stdout, '')
+  })
+}
+
 for (const [shape, dto] of [
   ['interface', type => `export interface RetryDto { cause: ${type}; other: MissingDetail }\n`],
   ['alias', type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`],
