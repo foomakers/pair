@@ -698,17 +698,32 @@ for (const [argument, code, lookup] of [
   })
 }
 
-for (const [shape, dto] of [
+for (const [shape, dto, key = "'cause'", imports = 'RetryDto'] of [
   ['interface', type => `export interface RetryDto { cause: ${type}; other: MissingDetail }\n`],
   ['alias', type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`],
   [
     'transitive alias',
     type => `type TransportDto = { cause: ${type}; other: MissingDetail }\nexport type RetryDto = TransportDto\n`,
   ],
+  [
+    'string index signature',
+    type => `export type RetryDto = { [key: string]: ${type}; other: MissingDetail }\n`,
+  ],
+  [
+    'number index signature with a numeric string key',
+    type => `export type RetryDto = { [key: string]: MissingDetail; [key: number]: ${type} }\n`,
+    "'0'",
+  ],
+  [
+    'unique-symbol property',
+    type => `export declare const key: unique symbol\nexport type RetryDto = { [key]: ${type}; other: MissingDetail }\n`,
+    'typeof key',
+    'RetryDto, key',
+  ],
 ]) {
   test(`#750 750-R24 AC-3/4 checks only the selected property of an imported ${shape}`, t => {
     const input = '../../node_modules/retry-cause/index.d.ts'
-    const source = `import type { RetryDto } from 'retry-cause'\nexport interface Retry { cause: RetryDto['cause'] }\n`
+    const source = `import type { ${imports} } from 'retry-cause'\nexport interface Retry { cause: RetryDto[${key}] }\n`
     const cwd = workspace(t, { [pilot]: source, [input]: dto('string') })
     assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
 
