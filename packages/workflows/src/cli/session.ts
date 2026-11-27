@@ -51,6 +51,7 @@ import { acquireCardLock } from './card-lock'
 import { withSessionLease, type SessionApproval, type SessionLease } from './run-lock'
 import { sessionHost } from './session-host'
 import { approvalQuestion, type ApprovalTarget } from './workflow-approval'
+import { workflowResumeWarnings } from './workflow-diagnostics'
 import { runWorkflowOperation, type Operation } from './workflow-facts'
 import { workflowMerge } from './workflow-merge'
 import { refreshReplayInputs } from './workflow-replay'
@@ -187,6 +188,11 @@ async function startFresh(
   })
   // The session engine describes this host. Other engines are handled at the step boundary.
   const configWarnings = checkWorkflowConfiguration(definition.workflow, selected)
+  const resumeWarnings = workflowResumeWarnings(
+    definition.workflow,
+    selected?.configuration,
+    input.engine,
+  )
   checkSelection(project, scripts, view, {
     workflow: definition.workflow,
     configuration: selected?.configuration,
@@ -206,7 +212,7 @@ async function startFresh(
   )
   return {
     ...started,
-    warnings: [...definition.warnings, ...configWarnings, ...started.warnings],
+    warnings: [...definition.warnings, ...configWarnings, ...resumeWarnings, ...started.warnings],
     card,
     worktree,
   }
