@@ -26,6 +26,9 @@ A custom workflow can resume implementation for the card and then review and fix
 ```yaml
 version: 1
 name: review-fix
+aliases:
+  build: { effort: medium }
+  judge: { effort: medium }
 steps:
   implement:
     kind: implement
