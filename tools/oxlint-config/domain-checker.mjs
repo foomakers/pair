@@ -58,7 +58,7 @@ function typeDependencyCheck(program, checker) {
   const checkedNodes = new Set()
   const checkedSymbols = new Set()
 
-  function checkDiagnostics(node) {
+  function checkDiagnostics(node, excluded = []) {
     const source = node.getSourceFile()
     if (!diagnosticsBySource.has(source)) {
       diagnosticsBySource.set(
@@ -72,7 +72,12 @@ function typeDependencyCheck(program, checker) {
     const start = node.getStart(source)
     const failure = diagnosticsBySource
       .get(source)
-      .find(d => d.start >= start && d.start < node.end)
+      .find(
+        d =>
+          d.start >= start &&
+          d.start < node.end &&
+          !excluded.some(([from, to]) => d.start >= from && d.start < to),
+      )
     if (failure) failDiagnostic(failure)
   }
 
@@ -108,14 +113,21 @@ function typeDependencyCheck(program, checker) {
       return
     }
     checkedNodes.add(node)
-    checkDiagnostics(node)
+    const excluded = []
     function visit(part) {
       if (ts.isIndexedAccessTypeNode(part)) {
         const object = checker.getTypeFromTypeNode(part.objectType)
-        for (const key of constituents(checker.getTypeFromTypeNode(part.indexType))) {
-          if (!key.isLiteral()) continue
-          const property = checker.getPropertyOfType(object, String(key.value))
+        const selected = constituents(checker.getTypeFromTypeNode(part.indexType)).map(key =>
+          key.isLiteral() ? checker.getPropertyOfType(object, String(key.value)) : undefined,
+        )
+        for (const property of selected) {
           for (const declaration of property?.declarations ?? []) check(declaration.type)
+        }
+        if (selected.every(Boolean) && !isUnresolvedType(checker.getTypeFromTypeNode(part))) {
+          // The checker has selected the members. The rest of the DTO is outside this dependency.
+          excluded.push([part.objectType.getStart(), part.objectType.end])
+          visit(part.indexType)
+          return
         }
       }
       if (ts.isCallExpression(part) && isUnresolvedType(checker.getTypeAtLocation(part))) {
@@ -129,6 +141,7 @@ function typeDependencyCheck(program, checker) {
       ts.forEachChild(part, visit)
     }
     visit(node)
+    checkDiagnostics(node, excluded)
   }
 
   function checkInference(declaration) {
