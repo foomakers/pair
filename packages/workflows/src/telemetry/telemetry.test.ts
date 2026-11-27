@@ -251,6 +251,7 @@ describe('closing record (US-697 AC-2)', () => {
     await recordStep(run, { ...REVIEW, status: 'needs-decision', reason: 'approval' })
     await closeRun(run, 'parked')
     await reopenRun(run)
+    expect(recordsOf(run).at(-1)).toMatchObject({ type: 'run', status: 'parked', historical: true })
     await recordStep(run, { ...REVIEW, step: { ...REVIEW.step, attempt: 2 } })
     await closeRun(run, 'done')
     expect(recordsOf(run)).toMatchObject([

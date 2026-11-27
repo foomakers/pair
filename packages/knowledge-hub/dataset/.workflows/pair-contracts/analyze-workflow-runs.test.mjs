@@ -140,6 +140,16 @@ test('compare: steps and parks with causes are available alongside time and toke
   assert.equal(runs[1].tokens.read.value, 200)
 })
 
+test('R763-05: resumed parks remain history while the run is open', () => {
+  const park = { ...closing('a', 'parked'), historical: true }
+  const initial = step('a', 'review', { status: 'needs-decision', reason: 'approval' })
+  for (const records of [[initial, park], [initial, park, step('a', 'merge')]]) {
+    const [run] = readRuns(runsDir({ a: records }))
+    assert.equal(run.status, 'open')
+    assert.deepEqual(run.parks, [{ step: 'review', reason: 'approval' }])
+  }
+})
+
 test('R763-10: comparison excludes loop exhaustion from executions', () => {
   const { runs } = ask('compare', {
     a: [step('a', 'review')],
