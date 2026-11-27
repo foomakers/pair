@@ -710,6 +710,19 @@ for (const [shape, dto, key = "'cause'", imports = 'RetryDto'] of [
     type => `export type RetryDto = { [key: string]: ${type}; other: MissingDetail }\n`,
   ],
   [
+    'record dictionary intersection',
+    type => `export type RetryDto = { other: MissingDetail } & Record<string, ${type}>\n`,
+  ],
+  [
+    'mapped dictionary intersection',
+    type => `export type RetryDto = { other: MissingDetail } & { [Key in string]: ${type} }\n`,
+  ],
+  [
+    'dictionary union',
+    type =>
+      `export type RetryDto = { [key: string]: number; other: MissingDetail } | { [key: string]: ${type}; tag: 'right' }\n`,
+  ],
+  [
     'number index signature with a numeric string key',
     type => `export type RetryDto = { [key: string]: MissingDetail; [key: number]: ${type} }\n`,
     "'0'",
