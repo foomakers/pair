@@ -14,6 +14,7 @@ export const kinds = () =>
         name: kind.name,
         ...(kind.defaultSkill === undefined ? {} : { defaultSkill: kind.defaultSkill }),
         defaultInteractive: kind.defaultInteractive,
+        defaultContext: kind.defaultContext,
         ...(kind.host === undefined ? {} : { host: kind.host }),
         inputs: kind.inputs,
         outputs: kind.outputs,

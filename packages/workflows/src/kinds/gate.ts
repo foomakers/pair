@@ -4,6 +4,7 @@ import type { StepKind } from './kind'
 export const gate: StepKind = {
   name: 'gate',
   defaultInteractive: false,
+  defaultContext: 'handoff',
   host: true,
   inputs: {
     type: 'object',

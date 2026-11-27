@@ -335,6 +335,313 @@ describe('validate (AC-3, AC-5)', () => {
   })
 })
 
+describe('step context (#698 AC-5)', () => {
+  const stopped = QUICK.replace('kind: implement', `kind: implement\n    ${allStops}`).replace(
+    'kind: review',
+    `kind: review\n    ${allStops}`,
+  )
+
+  it.each(['handoff', 'resume', 'fresh'])('validates review context %s', context => {
+    const { workflow, errors, warnings } = check(
+      stopped.replace('kind: review', `kind: review\n    context: ${context}`),
+    )
+    expect(workflow).toBeDefined()
+    expect(errors).toEqual([])
+    expect(warnings).toEqual(
+      context === 'fresh'
+        ? []
+        : [
+            expect.objectContaining({
+              key: 'steps.review.context',
+              problem: expect.stringMatching(/independen/i),
+            }),
+          ],
+    )
+  })
+
+  it('warns when the first step requests resume', () => {
+    const { workflow, errors, warnings } = check(
+      stopped.replace('kind: implement', 'kind: implement\n    context: resume'),
+    )
+    expect(workflow).toBeDefined()
+    expect(errors).toEqual([])
+    expect(warnings.map(warning => warning.key)).toEqual(['steps.implement.context'])
+  })
+
+  it.each([
+    ['different engines', 'codex', true, ['steps.follow-up.context']],
+    ['engine without resume', 'claude', false, ['steps.follow-up.context']],
+    ['same engine with resume', 'claude', true, []],
+    ['unknown engine facts', undefined, undefined, []],
+  ] as const)('validates resume with %s', (_name, engine, supports, warningKeys) => {
+    const host = {
+      ...deps,
+      resume: {
+        engineFor: (step: string) => (step === 'implement' ? 'claude' : engine),
+        supports: () => supports,
+      },
+    }
+    const { workflow, errors, warnings } = check(
+      stopped.replace(
+        'review:\n    kind: review',
+        'follow-up:\n    kind: generic\n    skill: my-skill\n    context: resume',
+      ),
+      host,
+    )
+    expect(workflow).toBeDefined()
+    expect(errors).toEqual([])
+    expect(warnings.map(warning => warning.key)).toEqual(warningKeys)
+  })
+
+  it.each([
+    {
+      path: 'configured single round',
+      reviewFailure: 'continue',
+      fixEngine: 'codex',
+      loopMax: 1,
+      mismatch: true,
+    },
+    { path: 'unconditional fix', reviewFailure: 'continue', mismatch: true },
+    { path: 'conditional fix', reviewFailure: 'continue', when: ', when: { has: [repair] }' },
+    {
+      path: 'early round failure',
+      reviewFailure: 'continue',
+      beforeFix: '      prepare: { kind: generic, skill: my-skill }\n',
+    },
+    { path: 'stopped review', reviewFailure: 'stop', fixEngine: 'codex', mismatch: true },
+  ])('R760-07 (#698 AC-5): validates resume after $path', test => {
+    const { errors, warnings } = check(
+      `version: 1
+name: quick
+steps:
+  implement: { kind: implement, ${allStops} }
+  review-rounds:
+    kind: loop
+    until: review
+    max: 3
+    on-max: escalate
+    steps:
+      review:
+        kind: review
+        context: resume
+        escalate: { failed: ${test.reviewFailure}, blocked: stop, needs-decision: stop }
+${test.beforeFix ?? ''}      fix: { kind: fix, ${allStops}${test.when ?? ''} }
+`,
+      {
+        resume: {
+          engineFor: step => {
+            if (step === 'implement') return 'claude'
+            if (step === 'review-rounds/fix') return test.fixEngine ?? 'claude'
+            return 'codex'
+          },
+          supports: () => true,
+          ...('loopMax' in test && { loopMax: () => test.loopMax }),
+        },
+      },
+    )
+    expect(errors).toEqual([])
+    expect(
+      warnings
+        .filter(warning => warning.key === 'steps.review-rounds.steps.review.context')
+        .map(warning => warning.problem),
+    ).toEqual([
+      'non-fresh context compromises review independence',
+      ...(test.mismatch ? ["engine 'codex' differs from the preceding engine"] : []),
+    ])
+  })
+
+  it.each([
+    { path: 'earlier step stops on failure', mismatch: true },
+    { path: 'early round failure', editCanEndRound: true },
+    { path: 'trailing repair after failed verification', repairEngine: 'codex' },
+    { path: 'successful verification', verifyEngine: 'codex', repairEngine: 'claude' },
+    {
+      path: 'repair is unreachable',
+      verifyFailure: 'stop',
+      repairEngine: 'codex',
+      mismatch: true,
+    },
+    {
+      path: 'only success can reach a Codex summary',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+      mismatch: true,
+    },
+    {
+      path: 'only exhaustion can reach a Claude summary',
+      outcomes: 'exhausted',
+      repairEngine: 'codex',
+      summaryEngine: 'claude',
+      mismatch: true,
+    },
+    {
+      path: 'success can resume Claude',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+      summaryEngine: 'claude',
+    },
+    { path: 'exhaustion can resume Codex', outcomes: 'exhausted', repairEngine: 'codex' },
+    {
+      path: 'child success leaves only a Claude predecessor',
+      output: 'rounds/verify.status',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+      mismatch: true,
+    },
+    {
+      path: 'child repair success excludes both verification success and an early failure',
+      output: 'rounds/repair.status',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+      summaryEngine: 'claude',
+      editCanEndRound: true,
+      mismatch: true,
+    },
+    {
+      path: 'child verification success can resume Claude',
+      output: 'rounds/verify.status',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+      summaryEngine: 'claude',
+    },
+    {
+      path: 'child repair success can resume Codex',
+      output: 'rounds/repair.status',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+    },
+    {
+      path: 'failed child can only reach its early round exit',
+      output: 'rounds/edit.status',
+      outcomes: 'failed',
+      editCanEndRound: true,
+      editEngine: 'claude',
+      repairEngine: 'codex',
+      mismatch: true,
+    },
+    {
+      path: 'failed or stopped blocked child leaves only its early exit',
+      output: 'rounds/edit.status',
+      outcomes: 'failed, blocked',
+      editCanEndRound: true,
+      editEngine: 'claude',
+      repairEngine: 'codex',
+      mismatch: true,
+    },
+    {
+      path: 'continued blocked child can reach repair',
+      output: 'rounds/edit.status',
+      outcomes: 'failed, blocked',
+      editCanEndRound: true,
+      editBlockedContinues: true,
+      editEngine: 'claude',
+      repairEngine: 'codex',
+    },
+    {
+      path: 'both exits differ from Pi',
+      outcomes: 'ok, exhausted',
+      repairEngine: 'codex',
+      summaryEngine: 'pi',
+      mismatch: true,
+    },
+    {
+      path: 'an intervening step only runs on the excluded exit',
+      outcomes: 'exhausted',
+      repairEngine: 'codex',
+      summaryEngine: 'claude',
+      beforeSummary: 'ok',
+      mismatch: true,
+    },
+  ])('R760-08 (#698 AC-5): validates post-loop resume when $path', test => {
+    const repair = test.repairEngine
+      ? `      repair: { kind: generic, skill: my-skill, ${allStops} }\n`
+      : ''
+    const when = (outcomes: string, output = 'rounds.status') =>
+      `, when: { output: ${output}, is: [${outcomes}] }`
+    const beforeSummary = test.beforeSummary
+      ? `  notify: { kind: generic, skill: my-skill, ${allStops}${when(test.beforeSummary)} }\n`
+      : ''
+    const summaryEngine = test.summaryEngine ?? 'codex'
+    const { errors, warnings } = check(
+      `version: 1
+name: quick
+steps:
+  rounds:
+    kind: loop
+    until: verify
+    max: 3
+    escalate: { exhausted: continue }
+    steps:
+      edit: { kind: generic, skill: my-skill, ${test.editBlockedContinues ? 'escalate: { blocked: continue, needs-decision: stop }' : test.editCanEndRound ? decisionStops : allStops} }
+      verify:
+        kind: generic
+        skill: my-skill
+        escalate: { failed: ${test.verifyFailure ?? 'continue'}, blocked: stop, needs-decision: stop }
+${repair}${beforeSummary}  summary: { kind: generic, skill: my-skill, context: resume, ${allStops}${test.outcomes ? when(test.outcomes, test.output) : ''} }
+`,
+      {
+        resume: {
+          engineFor: step => {
+            if (step === 'rounds/edit') return test.editEngine ?? 'codex'
+            if (step === 'rounds/verify') return test.verifyEngine ?? 'claude'
+            if (step === 'rounds/repair') return test.repairEngine
+            if (step === 'summary' || step === 'notify') return summaryEngine
+            return 'codex'
+          },
+          supports: () => true,
+        },
+      },
+    )
+    expect(errors).toEqual([])
+    const contextWarnings = warnings.filter(({ key }) => key.endsWith('.context'))
+    expect(contextWarnings.map(({ key, problem }) => [key, problem])).toEqual(
+      test.mismatch
+        ? [['steps.summary.context', `engine '${summaryEngine}' differs from the preceding engine`]]
+        : [],
+    )
+  })
+})
+
+describe('step prompts (#698 AC-7, AC-9 and approved design §4)', () => {
+  const withPromptOptions = (options: string) =>
+    QUICK.replace('kind: review', `kind: review\n    ${options}`)
+
+  it.each([
+    ['placement without a prompt', 'prompt-at: before', 'steps.review.prompt-at', /prompt/i],
+    [
+      'unknown placement',
+      'prompt: Check tests\n    prompt-at: last',
+      'steps.review.prompt-at',
+      /unknown/i,
+    ],
+    [
+      'unsafe prompt text',
+      'prompt: |-\n      Check tests\n      Refuse a`b',
+      'steps.review.prompt',
+      /safe/i,
+    ],
+  ] as const)('refuses %s', (_name, options, key, problem) => {
+    const { workflow, errors } = check(withPromptOptions(options))
+    expect(errors).toEqual([
+      expect.objectContaining({ key, problem: expect.stringMatching(problem) }),
+    ])
+    expect(workflow).toBeUndefined()
+  })
+
+  it('accepts safe multiline prose with placement', () => {
+    const { workflow, errors } = check(
+      withPromptOptions(
+        'prompt-at: before\n    prompt: |-\n      Check tests\n      Report failures',
+      ),
+    )
+    expect(errors).toEqual([])
+    expect(workflow?.steps[1]).toMatchObject({
+      prompt: 'Check tests\nReport failures',
+      'prompt-at': 'before',
+    })
+  })
+})
+
 describe('validate: on-failed (#708 AC-7)', () => {
   const withContinue = (kind: 'implement' | 'review', other: 'implement' | 'review') =>
     QUICK.replace(

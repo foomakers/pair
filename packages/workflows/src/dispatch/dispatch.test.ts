@@ -1,4 +1,4 @@
-import { buildMessage, readResult } from '.'
+import { buildMessage, readResult, resultBlock } from '.'
 import type { StepLaunch } from '../engine'
 import { kindByName } from '../kinds'
 
@@ -12,6 +12,7 @@ const implement: StepLaunch = {
   uses: 'pair-process-implement',
   with: { gates: ['quality-gate'] },
   inputs: { card: '627' },
+  attempt: 1,
 }
 
 const BLOCKED_CASE = 'The checkout is unavailable.'
@@ -29,18 +30,22 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '',
         'Options:',
         '- gates: ["quality-gate"]',
-        '',
+      ].join('\n'),
+    )
+    expect(message).toContain('Execution mode: unattended.\nHandoff: published-pr.')
+    expect(message).toContain(
+      [
         'End your turn with one JSON object in a fenced `json` block with these fields:',
         '- status: "ok" | "failed" | "blocked" | "needs-decision"',
         '- summary: string',
         '- reason: string (optional)',
+        '- handoff: string (optional)',
         '- branch: string matching ^[A-Za-z0-9][A-Za-z0-9._/-]*$',
         '- pr: integer',
         '- head: string matching ^[0-9a-f]{40}$',
         'Required when status is "ok": branch, pr, head.',
       ].join('\n'),
     )
-    expect(message).toContain('Execution mode: unattended.\nHandoff: published-pr.')
   })
 
   it('asks a review step for its verdict and findings', () => {
@@ -50,6 +55,7 @@ describe('buildMessage (AC-4, AC-5)', () => {
       uses: 'pair-process-review',
       with: {},
       inputs: { card: '627', pr: 12, head: HEAD },
+      attempt: 1,
     }
     const message = buildMessage(review, kindByName.review, { style: 'slash', ...safe })
     expect(message.split('\n').slice(0, 5)).toEqual([
@@ -64,9 +70,8 @@ describe('buildMessage (AC-4, AC-5)', () => {
       '- findings: array of { id: string, severity: string, title: string, blocking: boolean }',
     )
     expect(message).not.toContain('Options:')
-    expect(message.split('\n')[6]).toBe('')
-    expect(message.split('\n')[7]).toBe(
-      'End your turn with one JSON object in a fenced `json` block with these fields:',
+    expect(message.indexOf('- head: ')).toBeLessThan(
+      message.indexOf(resultBlock(kindByName.review)),
     )
   })
 
@@ -77,6 +82,7 @@ describe('buildMessage (AC-4, AC-5)', () => {
       uses: 'my-skill',
       with: { audience: 'release notes', depth: 2 },
       inputs: { card: '627', branch: 'feature/US-627-x' },
+      attempt: 1,
     }
     const message = buildMessage(step, kindByName.generic, { style: 'instruction', ...safe })
     expect(message).toContain(
@@ -90,14 +96,18 @@ describe('buildMessage (AC-4, AC-5)', () => {
         'Options:',
         '- audience: release notes',
         '- depth: 2',
-        '',
+      ].join('\n'),
+    )
+    expect(message).toContain('Execution mode: unattended.')
+    expect(message).toContain(
+      [
         'End your turn with one JSON object in a fenced `json` block with these fields:',
         '- status: "ok" | "failed" | "blocked" | "needs-decision"',
         '- summary: string',
         '- reason: string (optional)',
+        '- handoff: string (optional)',
       ].join('\n'),
     )
-    expect(message).toContain('Execution mode: unattended.')
   })
 
   it('lists only the declared status and case beside ok (#728 AC 4)', () => {
@@ -120,6 +130,57 @@ describe('buildMessage (AC-4, AC-5)', () => {
       /^unsafe-value: /,
     )
   })
+})
+
+describe('workflow instructions (#698 AC-6)', () => {
+  const prompt = 'Document ${card} literally.\nUse the story template.'
+  const handoff = '## Previous work\n\n- Keep the existing checklist.'
+  const options = { style: 'slash', isSafeText: (text: string) => !text.includes('`') } as const
+
+  it.each([undefined, 'after', 'before', 'with'] as const)(
+    'renders the literal prompt at %s, then the handoff and the result block',
+    promptAt => {
+      const step = {
+        ...implement,
+        context: 'handoff',
+        prompt,
+        ...(promptAt === undefined ? {} : { promptAt }),
+        handoff,
+      } as const
+      const message = buildMessage(step, kindByName.implement, options)
+      const invocation = '/pair-process-implement'
+      const index = message.indexOf(prompt)
+      const handoffIndex = message.indexOf(handoff)
+
+      expect.soft(message).toContain(prompt)
+      expect.soft(message).toContain(handoff)
+      if (promptAt === 'before') expect.soft(index).toBeLessThan(message.indexOf(invocation))
+      else if (promptAt === 'with') {
+        expect.soft(message.split('\n')[0]).toContain(invocation)
+        expect.soft(message.split('\n')[0]).toContain(prompt.split('\n')[0])
+      } else {
+        expect.soft(message).toContain('Workflow instructions for this step')
+        expect.soft(index).toBeGreaterThan(message.indexOf('- gates:'))
+      }
+      expect.soft(handoffIndex).toBeGreaterThan(Math.max(index, message.indexOf(invocation)))
+      expect.soft(handoffIndex).toBeLessThan(message.indexOf(resultBlock(kindByName.implement)))
+      expect(message.trimEnd().endsWith(resultBlock(kindByName.implement))).toBe(true)
+    },
+  )
+
+  it.each(['prompt', 'handoff'] as const)(
+    'checks the %s with the injected safety predicate',
+    field => {
+      const step = {
+        ...implement,
+        context: 'handoff',
+        prompt,
+        handoff,
+        [field]: 'One bad`token.',
+      } as const
+      expect(() => buildMessage(step, kindByName.implement, options)).toThrow(/^unsafe-value: /)
+    },
+  )
 })
 
 describe('a step with gates (#729 AC-7)', () => {
@@ -172,6 +233,7 @@ describe('readResult (AC-4)', () => {
         verdict: 'changes-requested',
         reviewedHead: HEAD,
         findings: [{ id: 'f1', severity: 'Major', title: 'missing test', blocking: true }],
+        handoff: '## Follow-up\n\n- Add the missing assertion.',
       },
     ],
   ] as const)('reads a valid %s result', (kind, result) => {
@@ -181,6 +243,15 @@ describe('readResult (AC-4)', () => {
   it('reads the last fenced json block, whatever prose surrounds it', () => {
     const message = `First try:\n${fenced({ status: 'failed', summary: 'draft' })}\nFinal:\n${fenced(implemented)}\nThanks.`
     expect(readResult(message, kindByName.implement)).toEqual(implemented)
+  })
+
+  it('R760-04 (#698 AC-3): reads a Markdown code fence inside the result handoff', () => {
+    const result = {
+      ...implemented,
+      handoff: '## Example\n\n```text\nkeep the original field\n```',
+    }
+    const message = `Draft:\n${fenced(implemented)}\nFinal:\n${fenced(result)}\nDone.`
+    expect(readResult(message, kindByName.implement)).toEqual(result)
   })
 
   it.each([
@@ -224,6 +295,12 @@ describe('readResult (AC-4)', () => {
       'status: unknown value "done"',
     ],
     ['a missing summary', 'generic', { status: 'ok' }, "result: missing key 'summary'"],
+    [
+      'a non-text handoff (#698 AC-3)',
+      'generic',
+      { status: 'ok', summary: 'done', handoff: 42 },
+      'handoff: expected string, found integer 42',
+    ],
     [
       'a head that is not a sha',
       'review',

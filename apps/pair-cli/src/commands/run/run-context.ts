@@ -360,9 +360,10 @@ export function withRunAgentRunner(resolved: ResolvedEngine, config: Config): Re
   const engine = {
     ...resolved.engine,
     command: agent.command ?? resolved.engine.command,
-    headlessArgs: [...(agent.args ?? []), ...resolved.engine.headlessArgs],
+    runnerArgs: agent.args ?? [],
   }
-  return { ...resolved, engine, commandLine: [engine.command, ...engine.headlessArgs].join(' ') }
+  const commandLine = [engine.command, ...engine.runnerArgs, ...engine.headlessArgs].join(' ')
+  return { ...resolved, engine, commandLine }
 }
 
 /**

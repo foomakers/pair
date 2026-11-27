@@ -58,33 +58,64 @@ function section(title: string, values: Readonly<Record<string, unknown>>): stri
   return lines.length === 0 ? [] : ['', `${title}:`, ...lines]
 }
 
-/**
- * The one message a step is launched with: the skill invocation in the engine's style, the step's
- * inputs and options, then the result block of its kind. Throws `unsafe-value` when a value to
- * splice fails the safety check.
- */
-export function buildMessage(step: StepLaunch, kind: StepKind, options: MessageOptions): string {
+/** Apply the host's metadata check to prose without treating Markdown whitespace as metadata. */
+export function isSafeProse(value: string, isSafeText: MessageOptions['isSafeText']): boolean {
+  return value.split(/[ \t]+|\r?\n/).every(part => part === '' || isSafeText(part))
+}
+
+export class UnsafeMessageError extends Error {}
+
+function checkMessageText(step: StepLaunch, isSafeText: MessageOptions['isSafeText']): void {
   const unsafe = textsOf([step.uses, step.inputs, step.with])
     .map(([, text]) => text)
-    .find(text => !options.isSafeText(text))
+    .find(text => !isSafeText(text))
   if (unsafe !== undefined)
-    throw new Error(`unsafe-value: ${JSON.stringify(unsafe)} cannot be handed to an agent`)
+    throw new UnsafeMessageError(
+      `unsafe-value: ${JSON.stringify(unsafe)} cannot be handed to an agent`,
+    )
+  for (const field of ['prompt', 'handoff'] as const) {
+    const prose = step[field]
+    if (prose !== undefined && !isSafeProse(prose, isSafeText))
+      throw new UnsafeMessageError(`unsafe-value: step ${field} cannot be handed to an agent`)
+  }
+}
+
+const WORKFLOW_INSTRUCTIONS = 'Workflow instructions for this step:'
+
+function invocationLines({ uses, prompt, promptAt }: StepLaunch, style: InvocationStyle): string[] {
+  const invocation = style === 'slash' ? `/${uses}` : `Run the ${uses} skill.`
+  if (prompt && promptAt === 'before') return [WORKFLOW_INSTRUCTIONS, prompt, '', invocation]
+  if (prompt && promptAt === 'with') return [`${invocation} ${WORKFLOW_INSTRUCTIONS} ${prompt}`]
+  return [invocation]
+}
+
+/**
+ * The launch message places literal instructions relative to the invocation, then appends any
+ * predecessor handoff and ends with the kind's result block.
+ */
+export function buildMessage(step: StepLaunch, kind: StepKind, options: MessageOptions): string {
+  checkMessageText(step, options.isSafeText)
+  const { prompt, handoff, promptAt = 'after' } = step
+  const instructions = [
+    ...(step.interactive === true ? [] : ['Execution mode: unattended.']),
+    ...(kind.handoff === undefined ? [] : [`Handoff: ${kind.handoff}.`]),
+  ]
   return [
-    options.style === 'slash' ? `/${step.uses}` : `Run the ${step.uses} skill.`,
+    ...invocationLines(step, options.style),
     ...(options.worktree === undefined
       ? []
       : [`Use ${JSON.stringify(options.worktree)} as the working directory for this step.`]),
     ...section('Inputs', step.inputs),
     ...section('Options', step.with),
+    ...(instructions.length === 0 ? [] : ['', ...instructions]),
+    ...(prompt && promptAt === 'after' ? ['', WORKFLOW_INSTRUCTIONS, prompt] : []),
+    ...(handoff ? ['', 'Previous step handoff:', handoff] : []),
     '',
     resultBlock(kind),
-    '',
-    ...(step.interactive === true ? [] : ['Execution mode: unattended.']),
-    ...(kind.handoff === undefined ? [] : [`Handoff: ${kind.handoff}.`]),
   ].join('\n')
 }
 
-const FENCED_JSON = /```json[ \t]*\r?\n([\s\S]*?)```/g
+const FENCED_JSON = /```json[ \t]*\r?\n([\s\S]*?)^[ \t]*`{3,}[ \t]*\r?$/gm
 
 const invalid = (kind: StepKind, detail: string) => ({
   valid: false,

@@ -1,6 +1,10 @@
+import type { Configuration } from '../configuration'
+import { addressedSteps, formatError, type Workflow } from '../grammar'
+import { resumeEngineWarnings } from '../validate'
 import { loadSessionProjectConfig } from './session-files'
 import {
   checkWorkflowConfiguration,
+  effectiveSettings,
   workflowConfiguration,
   workflowDefinition,
   workflowSummary,
@@ -12,6 +16,25 @@ function declaredEngine(config: Record<string, unknown>): string {
   const engine = config['engine'] as { id?: unknown } | undefined
   const declared = run?.defaults?.engine ?? engine?.id
   return typeof declared === 'string' ? declared : 'claude'
+}
+
+export function workflowResumeWarnings(
+  workflow: Workflow,
+  configuration: Configuration | undefined,
+  engine: string,
+): string[] {
+  const engines = new Map(
+    addressedSteps(workflow).map(step => [
+      step.id,
+      effectiveSettings(configuration, workflow, step, engine).engine,
+    ]),
+  )
+  return resumeEngineWarnings(workflow, {
+    loopMax: id => configuration?.steps?.[id]?.max,
+    engineFor: id => engines.get(id),
+    // The OpenCode workflow adapter cannot distinguish a missing session from a new one.
+    supports: id => (id === 'opencode' ? false : undefined),
+  }).map(formatError)
 }
 
 export function validateWorkflow(
@@ -28,9 +51,14 @@ export function validateWorkflow(
     projectSettings,
   )
   const configWarnings = checkWorkflowConfiguration(workflow, selected, engineFlag)
+  const configuration = selected?.configuration
   return {
     file: workflow.file,
-    ...workflowSummary(project, workflow, selected?.configuration, engine),
-    warnings: [...warnings, ...configWarnings],
+    ...workflowSummary(project, workflow, configuration, engine),
+    warnings: [
+      ...warnings,
+      ...configWarnings,
+      ...workflowResumeWarnings(workflow, configuration, engine),
+    ],
   }
 }

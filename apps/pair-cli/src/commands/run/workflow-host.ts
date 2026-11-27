@@ -3,6 +3,7 @@ import { savedRunState, savedWorkflow } from './workflow-saved-state'
 import { prepareReplayHead } from './workflow-worktree'
 import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
+import { stripVTControlCharacters } from 'util'
 import type { FileSystemService } from '@pair/content-ops'
 import {
   skillForStep,
@@ -31,6 +32,7 @@ import {
   parseWorkflow,
   pendingMergeClosure,
   record,
+  resumeEngineWarnings,
   runSteps,
   settingsFor,
   start,
@@ -466,22 +468,103 @@ function agentOutcome(
   return { fault: { kind, detail: result.detail, ...process } }
 }
 
+function lostSession(
+  engine: EngineDefinition,
+  id: string,
+  result: IterationResult,
+  missingResume: boolean,
+): boolean {
+  const process = result.process
+  if (
+    result.outcome !== 'failed' ||
+    result.cause !== undefined ||
+    process === undefined ||
+    process.stoppedBy !== undefined ||
+    process.signal !== null ||
+    process.exitCode === null ||
+    process.exitCode === 0
+  )
+    return false
+  return (
+    missingResume ||
+    [result.detail, ...process.stderrTail].some(line =>
+      engine.resume?.isMissing(stripVTControlCharacters(line).trim(), id),
+    )
+  )
+}
+
+function watchAgent(
+  engine: EngineDefinition,
+  kind: StepLaunch['kind'],
+  meter: (usage: Usage) => void,
+  resumeSessionId: string | undefined,
+) {
+  let text: string | undefined
+  let actualModel: string | undefined
+  let observed: EngineObservation = {}
+  let missingResume = false
+  return {
+    onEvent(payload: unknown) {
+      if (
+        resumeSessionId !== undefined &&
+        engine.resume?.isMissingEvent?.(payload, resumeSessionId)
+      ) {
+        missingResume = true
+        return // The pre-turn error echoes the requested id without starting a session.
+      }
+      text = finalTextOf(engine, payload, text)
+      actualModel = reportedModelOf(engine, payload) ?? actualModel
+      observed = observeEngineEvent(observed, engine.id, payload)
+      const { tokens } = observed
+      if (typeof tokens === 'object')
+        meter({ read: tokens.freshIn, cached: tokens.cachedIn, written: tokens.out })
+    },
+    shouldFinalizeLastMessage: () =>
+      text === undefined || !checkAgentResult(text, kindByName[kind]).valid,
+    finish(result: IterationResult, settings: StepSettings, elapsedMs: number): AgentLaunchResult {
+      const final = result.lastMessage ?? text
+      if (
+        resumeSessionId !== undefined &&
+        observed.sessionId === undefined &&
+        final === undefined &&
+        lostSession(engine, resumeSessionId, result, missingResume)
+      )
+        return { sessionMissing: true }
+      const outcome = agentOutcome(result, final, elapsedMs)
+      if (!('final' in outcome))
+        return { ...outcome, settings, model: actualModel, sessionId: observed.sessionId }
+      const model = actualModel ?? (engine.modelFlag ? settings.model : undefined)
+      const sessionId = observed.sessionId ?? resumeSessionId
+      return { ...outcome, model, settings, sessionId }
+    },
+  }
+}
+
 /** One agent per step, in the card's worktree, on the engine, model and effort its settings say. */
 function launcher(run: Launch) {
   const { config, resolved, services } = run
   const policyOf = policiesOf(run)
   const runIteration = services.deps.workflow?.runIteration ?? spawnIteration
-  return async (step: StepLaunch, message: string, meter: (usage: Usage) => void) => {
+  return async (
+    step: StepLaunch,
+    message: string,
+    meter: (usage: Usage) => void,
+    resumeSessionId?: string,
+  ): Promise<AgentLaunchResult> => {
     const settings = stepSettings(resolved, run.effective, stepOf(resolved, step.id))
     const engine = engineOf(resolved, settings.engine)
     const { autonomyArgs, idle } = policyOf(engine)
-    let text: string | undefined
-    let actualModel: string | undefined
-    let observed: EngineObservation = {}
+    const { onEvent, shouldFinalizeLastMessage, finish } = watchAgent(
+      engine,
+      step.kind,
+      meter,
+      resumeSessionId,
+    )
     const started = performance.now()
     const result = await runIteration({
       engine,
       promptText: message,
+      resumeSessionId,
       cwd: run.worktree,
       autonomyArgs,
       model: settings.model,
@@ -492,28 +575,12 @@ function launcher(run: Launch) {
           : step.timeoutMinutes * 60,
       diagnoseProcess: true,
       idleTimeoutSeconds: idle,
-      shouldFinalizeLastMessage: () =>
-        text === undefined || !checkAgentResult(text, kindByName[step.kind]).valid,
-      onEvent: payload => {
-        text = finalTextOf(engine, payload, text)
-        actualModel = reportedModelOf(engine, payload) ?? actualModel
-        // The usage the engine reports, read by the per-engine parsers; none reported, none metered.
-        observed = observeEngineEvent(observed, engine.id, payload)
-        const { tokens } = observed
-        if (typeof tokens === 'object')
-          meter({ read: tokens.freshIn, cached: tokens.cachedIn, written: tokens.out })
-      },
+      shouldFinalizeLastMessage,
+      onEvent,
     })
     // An interrupted run records nothing: the step stays `running` on disk and runs again at the next launch.
     if (isInterrupted()) throw new Error('interrupted')
-    const outcome = agentOutcome(
-      result,
-      result.lastMessage ?? text,
-      Math.round(performance.now() - started),
-    )
-    const model =
-      actualModel ?? ('final' in outcome && engine.modelFlag ? settings.model : undefined)
-    return { ...outcome, model, settings }
+    return finish(result, settings, Math.round(performance.now() - started))
   }
 }
 
@@ -685,6 +752,21 @@ const stepOf = (resolved: Resolved, id: string) =>
 const engineIdOf = (opened: Opened, id: string): keyof typeof ENGINES => {
   const named = stepSettings(opened.resolved, opened.effective, stepOf(opened.resolved, id)).engine
   return isEngineId(named) ? named : opened.resolved.engine.engine.id
+}
+
+const supportsResume = (engine: keyof typeof ENGINES): boolean =>
+  ENGINES[engine].resume !== undefined
+
+function resumeHostOf(
+  opened: Opened,
+): Pick<WorkflowHost, 'resumeEngineOf' | 'reportContextFallback'> {
+  return {
+    resumeEngineOf: id => {
+      const engine = engineIdOf(opened, id)
+      return supportsResume(engine) ? engine : undefined
+    },
+    reportContextFallback: (step, reason) => console.log(`  ${step}: using handoff — ${reason}`),
+  }
 }
 
 /** The run's telemetry: the flag over the configuration's `telemetry` key; off when neither says. */
@@ -860,6 +942,7 @@ async function runOnConsole(
           skillForStep(stepOf(resolved, step.id), resolved.defaultSkill) ?? step.uses,
         styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
+        ...resumeHostOf(opened),
         ...hostKindsOf(opened, services),
         ...cardTransitions(opened, services),
         report: event => {
@@ -1088,8 +1171,18 @@ function probeUnchecked(
 const describeAssignment = (assignment?: ResolvedAssignment): string =>
   assignment === undefined ? '' : ` assign=${assignment.value} (${assignment.source})`
 
+function printResumeWarnings(resolved: Resolved, effective: Configuration | undefined): void {
+  const warnings = resumeEngineWarnings(resolved.workflow, {
+    loopMax: id => effective?.steps?.[id]?.max,
+    engineFor: id => stepSettings(resolved, effective, stepOf(resolved, id)).engine,
+    supports: engine => isEngineId(engine) && supportsResume(engine),
+  })
+  warnings.forEach(warning => console.log(`  Warning: ${formatError(warning)}`))
+}
+
 /** What every step launches with and where each value came from; or that no configuration applies. */
 function printSettings(resolved: Resolved, effective: Configuration | undefined): void {
+  printResumeWarnings(resolved, effective)
   if (effective === undefined) {
     const { id } = resolved.engine.engine
     console.log(`  Configuration: none applies — engine ${id}, its default model`)
@@ -1200,6 +1293,7 @@ type WorkflowRunRequest = RunWorkflowRequest & {
 }
 
 function printWorkflowPreview(resolved: Resolved): number {
+  printResumeWarnings(resolved, resolved.configuration?.configuration)
   if (resolved.cardLabels !== undefined && resolved.configuration !== undefined) {
     const { configuration, source } = resolved.configuration
     console.log(`  Configuration: ${configuration.name} — ${source}`)

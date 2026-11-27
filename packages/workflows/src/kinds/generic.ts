@@ -3,6 +3,7 @@ import type { StepKind } from './kind'
 export const generic: StepKind = {
   name: 'generic',
   defaultInteractive: false,
+  defaultContext: 'handoff',
   inputs: {
     type: 'object',
     description: 'Whatever the launch and the earlier steps produced.',

@@ -1,4 +1,6 @@
 import { frozenConfiguration, hashOf, next, record, start, type RunDirectory } from '.'
+import { buildMessage } from '../dispatch'
+import { kindByName } from '../kinds'
 import { createMemoryFiles } from './memory-files'
 
 const QUICK = `version: 1
@@ -104,6 +106,7 @@ describe('engine: a linear run (AC-1)', () => {
       IMPLEMENTED,
     )
     expect(run.files.readFileSync(`${DIR}/steps/implement/output.log`)).toBe('final message')
+    expect(run.files.existsSync(`${DIR}/steps/implement/handoff.md`)).toBe(false)
     expect(stateOf(run).steps['implement']).toEqual({
       state: 'ok',
       executions: 1,
@@ -193,6 +196,99 @@ describe('engine: a linear run (AC-1)', () => {
     expect(written).toContain(`${DIR}/state.json.tmp`)
     expect(written).not.toContain(`${DIR}/state.json`)
     expect(run.files.existsSync(`${DIR}/state.json.tmp`)).toBe(false)
+  })
+})
+
+describe('engine: step context (#698 AC-1/AC-2/AC-6)', () => {
+  const earlier = '## Implementation notes\n\n- The checklist is ready.'
+  const latest = '## Review notes\n\n- Keep the current test.'
+
+  it.each([
+    ['default', '', undefined],
+    ['handoff', '\n    context: handoff', earlier],
+  ])('preserves review inputs with %s context', async (_mode, context, handoff) => {
+    const run = open()
+    const text = QUICK.replace('kind: review', `kind: review${context}`)
+    await start(run, { ...SOURCE, text }, { card: '627' })
+    await next(run)
+    await record(run, 'implement', { ...IMPLEMENTED, handoff: earlier })
+
+    const [review] = (await next(run)).ready
+    expect(review).toMatchObject({ id: 'review', inputs: { card: '627', pr: 12, head: HEAD } })
+    if (handoff === undefined) expect(review).not.toHaveProperty('handoff')
+    else expect(review).toHaveProperty('handoff', handoff)
+  })
+
+  it.each([
+    ['default', '', latest, latest],
+    ['fresh', '\n    context: fresh', latest, undefined],
+    ['missing', '', undefined, undefined],
+    ['empty', '', '', undefined],
+  ])(
+    'uses the last executed step with %s context or handoff',
+    async (_case, context, saved, expected) => {
+      const run = open()
+      const text = `${QUICK}  skipped:
+    kind: generic
+    skill: my-skill
+    when: { output: review.verdict, is: [changes-requested] }
+  notes:
+    kind: generic
+    skill: my-skill${context}
+`
+      await start(run, { ...SOURCE, text }, { card: '627' })
+      await next(run)
+      await record(run, 'implement', { ...IMPLEMENTED, handoff: earlier })
+      await next(run)
+      await record(run, 'review', saved === undefined ? REVIEWED : { ...REVIEWED, handoff: saved })
+
+      const [notes] = (await next(run)).ready
+      expect(notes).toMatchObject({ id: 'notes', inputs: { card: '627', pr: 12, head: HEAD } })
+      if (expected === undefined) expect(notes).not.toHaveProperty('handoff')
+      else expect(notes).toHaveProperty('handoff', expected)
+    },
+  )
+
+  it('launches a literal before-prompt from YAML', async () => {
+    const run = open()
+    const prompt = 'Document ${card} literally.'
+    const text = QUICK.replace(
+      'kind: implement',
+      `kind: implement\n    prompt: ${prompt}\n    prompt-at: before`,
+    )
+    await start(run, { ...SOURCE, text }, { card: '627' })
+
+    const [step] = (await next(run)).ready
+    if (step === undefined) throw new Error('expected implement launch')
+    const message = buildMessage(step, kindByName.implement, {
+      style: 'slash',
+      isSafeText: () => true,
+    })
+    expect(message.split('/pair-process-implement')[0]).toContain(prompt)
+  })
+})
+
+describe('engine: handoff storage (#698 AC-3)', () => {
+  const handoff = `# Notes\n\n${'word '.repeat(797)}last`
+  const path = `${DIR}/steps/implement/handoff.md`
+
+  it.each([800, 801])('records an ok step with a %i-word handoff', async words => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    await next(run)
+    const result = await record(run, 'implement', {
+      ...IMPLEMENTED,
+      handoff: words === 800 ? handoff : `${handoff} overflow`,
+    })
+
+    expect(result.status).toBe('ok')
+    const stored = run.files.readFileSync(path)
+    expect(stored).toContain(handoff)
+    if (words === 800) expect(stored.trimEnd()).toBe(handoff)
+    else {
+      expect(stored).not.toContain('overflow')
+      expect(stored.slice(handoff.length)).toMatch(/\btruncated\b/i)
+    }
   })
 })
 
@@ -399,6 +495,62 @@ steps:
       round: 2,
       inputs: { head: HEAD },
     })
+  })
+
+  describe('loop handoff (#698 AC-8)', () => {
+    const reviewHandoff = '## Review notes\n\n- Add a regression test.'
+    const fixHandoff = '## Fix notes\n\n- The new test covers the gap.'
+    const withHandoff = {
+      ...source,
+      text: text
+        .replace('review: { kind: review }', 'review: { kind: review, context: handoff }')
+        .replace('fix: { kind: fix }', 'fix: { kind: fix, context: handoff }'),
+    }
+
+    it('passes the preceding step handoff into the first loop child', async () => {
+      const run = open()
+      const handoff = '## Implementation notes\n\n- The PR is ready.'
+      await start(run, withHandoff, { card: '627' })
+      await next(run)
+      await record(run, 'implement', { ...IMPLEMENTED, handoff })
+
+      const [review] = (await next(run)).ready
+      expect(review).toMatchObject({ id: 'rounds/review', round: 1, handoff })
+    })
+
+    it('passes the failed review handoff to fix in the same round', async () => {
+      const run = await opened(withHandoff)
+      await next(run)
+      await record(run, 'rounds/review', { ...failedReview, handoff: reviewHandoff })
+
+      const [fix] = (await next(run)).ready
+      expect(fix).toMatchObject({
+        id: 'rounds/fix',
+        round: 1,
+        inputs: { findings },
+        handoff: reviewHandoff,
+      })
+    })
+
+    it.each([
+      ['handoff', withHandoff, { ...fixed, handoff: fixHandoff }, fixHandoff],
+      ['missing handoff', withHandoff, fixed, undefined],
+      ['fresh review', source, { ...fixed, handoff: fixHandoff }, undefined],
+    ])(
+      'uses the immediate predecessor across rounds with %s',
+      async (_, definition, result, expected) => {
+        const run = await opened(definition)
+        await next(run)
+        await record(run, 'rounds/review', { ...failedReview, handoff: reviewHandoff })
+        await next(run)
+        await record(run, 'rounds/fix', result)
+
+        const [review] = (await next(run)).ready
+        expect(review).toMatchObject({ id: 'rounds/review', round: 2, inputs: { head: HEAD } })
+        if (expected === undefined) expect(review).not.toHaveProperty('handoff')
+        else expect(review).toHaveProperty('handoff', expected)
+      },
+    )
   })
 
   it('counts another failed step as a spent round and parks at max', async () => {
@@ -862,12 +1014,12 @@ describe('engine: on-failed (#708 AC-7)', () => {
   }
   const text = (policy: string) =>
     `${QUICK.replace('kind: review', `kind: review${policy}`)}  fix:\n    kind: fix\n`
-  const opened = async (policy: string) => {
+  const opened = async (policy: string, changes = CHANGES) => {
     const run = open()
     await start(run, { text: text(policy), file: 'workflows/quick.yaml' }, { card: '627' })
     await record(run, 'implement', IMPLEMENTED)
     await next(run)
-    await record(run, 'review', CHANGES)
+    await record(run, 'review', changes)
     return run
   }
 
@@ -876,6 +1028,20 @@ describe('engine: on-failed (#708 AC-7)', () => {
     ['continue', '\n    on-failed: continue', 'running'],
   ])('a failed step with %s leaves the run %s', async (_name, policy, run) => {
     expect((await next(await opened(policy))).run).toBe(run)
+  })
+
+  it('retains and forwards a failed review handoff (#698 AC-2/AC-3)', async () => {
+    const handoff = '## Follow-up\n\n- Add the missing assertion.'
+    const changes = { ...CHANGES, handoff }
+    const run = await opened('\n    on-failed: continue', changes)
+
+    expect(statesOf(run).review).toBe('failed')
+    expect(run.files.readFileSync(`${DIR}/steps/review/handoff.md`).trimEnd()).toBe(handoff)
+    expect((await next(run)).ready[0]).toMatchObject({
+      id: 'fix',
+      handoff,
+      inputs: { findings: CHANGES.findings, pr: 12 },
+    })
   })
 
   it('hands the next step the outputs of the failed one, and the last step decides the run', async () => {

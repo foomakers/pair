@@ -6,6 +6,7 @@ import {
   next,
   priorRefinement,
   record,
+  recordContextFallback,
   recordFault,
   stageSuccess,
   type EngineOutcome,
@@ -15,6 +16,7 @@ import {
   type RunHost,
   type RunState,
   type StepLaunch,
+  type StepExecutionIdentity,
   type Started,
 } from '../engine'
 import { confirmResult, hasResultFacts, unconfirmed, type ResultFacts } from '../engine/confirm'
@@ -55,7 +57,12 @@ export interface StepEvent {
 export type AgentLaunchResult = (
   | { readonly final: string; readonly process?: ProcessDiagnostics }
   | { readonly fault: Diagnosis }
-) & { readonly model?: string | undefined; readonly settings?: StepSettings }
+  | { readonly sessionMissing: true }
+) & {
+  readonly model?: string | undefined
+  readonly sessionId?: string | undefined
+  readonly settings?: StepSettings
+}
 
 /**
  * What a host implements. The package decides what runs next and what its result means; the host
@@ -70,6 +77,9 @@ export interface WorkflowHost {
   readonly style: InvocationStyle
   /** A step whose engine is not the host's own: how that engine is told to run a skill. */
   readonly styleOf?: (stepId: string) => InvocationStyle
+  /** Effective engine when this host can resume it. */
+  readonly resumeEngineOf?: (stepId: string) => string | undefined
+  readonly reportContextFallback?: (stepId: string, reason: string) => void
   /** Installed skill name for this step. */
   readonly skillOf?: (step: StepLaunch) => string
   /** The host's prompt-safety check. */
@@ -86,6 +96,7 @@ export interface WorkflowHost {
     step: StepLaunch,
     message: string,
     meter: (usage: Usage) => void,
+    resumeSessionId?: string,
   ): Promise<AgentLaunchResult>
   /** The card as it is now: what a step's `when` reads. Absent: a `when` on card facts matches. */
   card?(filter: Filter): Promise<CardFacts>
@@ -145,6 +156,7 @@ interface Exchange {
   usage?: Usage | undefined
   diagnosis?: Diagnosis
   model?: string | undefined
+  identity?: StepExecutionIdentity
 }
 
 type TimedExchange = Omit<Exchange, 'step'> & { startedAt: Date }
@@ -227,6 +239,9 @@ function confirmPriorRefinement(
   return checked.status === 'ok' ? result : checked
 }
 
+const withHandoff = (result: StepResult, handoff: string | undefined): StepResult =>
+  handoff === undefined ? result : { ...result, handoff }
+
 async function recordResult(
   host: WorkflowHost,
   run: RunDirectory,
@@ -234,22 +249,27 @@ async function recordResult(
   {
     result,
     output,
-    model,
+    execution = {},
+    handoff = result.handoff,
     invalidatePendingSuccess,
   }: Confirmation & {
     output?: string
-    model?: string | undefined
+    execution?: StepExecutionIdentity
+    handoff?: string | undefined
   },
 ): Promise<StepResult> {
   let final = result
-  const execution = { host: host.id, model }
+  const identity = { host: host.id, ...execution }
   if (step.pendingSuccess !== undefined && !host.confirmState && result.status === 'ok')
     return record(
       run,
       step.id,
-      unconfirmed(`the host cannot confirm the ${step.confirmState} transition`),
+      withHandoff(
+        unconfirmed(`the host cannot confirm the ${step.confirmState} transition`),
+        handoff,
+      ),
       {
-        ...execution,
+        ...identity,
         attempt: step.attempt,
       },
     )
@@ -258,17 +278,17 @@ async function recordResult(
     host.confirmState &&
     settle(kindByName[step.kind], result).status === 'ok'
   ) {
-    await stageSuccess(run, step.id, result, execution)
+    await stageSuccess(run, step.id, result, identity)
     try {
       await host.confirmState(step.confirmState)
     } catch (error) {
       final = unconfirmed((error as Error).message)
     }
   }
-  return record(run, step.id, final, {
+  return record(run, step.id, withHandoff(final, handoff), {
     output,
     invalidatePendingSuccess,
-    ...execution,
+    ...identity,
     attempt: step.attempt,
   })
 }
@@ -325,7 +345,10 @@ async function execute(
     return recordExhausted(run, step, step.exhaustedFault)
   }
   if (step.pendingSuccess !== undefined)
-    return recordResult(host, run, step, await confirmed(host, run, step, step.pendingSuccess))
+    return recordResult(host, run, step, {
+      ...(await confirmed(host, run, step, step.pendingSuccess)),
+      handoff: step.pendingSuccess.handoff,
+    })
   if (step.interactive === true && host.parkInteractive !== undefined)
     return record(run, step.id, host.parkInteractive)
   const kind = kindByName[step.kind]
@@ -359,29 +382,23 @@ async function executeAgent(
   exchange: Exchange,
   onRetry?: OnRetry,
 ): Promise<StepExecutionResult> {
-  const { step } = exchange
-  const kind = kindByName[step.kind]
-  let message: string
-  try {
-    message = buildMessage(step, kind, {
-      ...host,
-      style: host.styleOf?.(step.id) ?? host.style,
-    })
-  } catch (error) {
-    const summary = (error as Error).message
-    return record(run, step.id, { status: 'failed', reason: 'unsafe-value', summary })
-  }
-  exchange.sent = message
   const reply = await launchWithRetries(host, run, exchange, onRetry)
   const current = exchange.step
+  if ('unsafe' in reply)
+    return record(run, current.id, {
+      status: 'failed',
+      reason: 'unsafe-value',
+      summary: reply.unsafe,
+    })
+  const execution = { ...exchange.identity, model: exchange.model }
   if ('fault' in reply)
     return record(run, current.id, faultResult(current.retries, reply), {
       output: reply.invalid?.final,
       host: host.id,
-      model: exchange.model,
+      ...execution,
       attempt: current.attempt,
     })
-  return settleParsedResult(host, run, current, { ...reply, model: exchange.model })
+  return settleParsedResult(host, run, current, { ...reply, execution })
 }
 
 /** Settle the final message after a host's agent or conversation completes. */
@@ -389,17 +406,25 @@ export function settleAgentStep(
   host: WorkflowHost,
   run: RunDirectory,
   step: StepLaunch,
-  { final, model }: { final: string; model?: string | undefined },
+  { final, ...execution }: { final: string } & StepExecutionIdentity,
 ): Promise<StepExecutionResult> {
   const { result } = checkAgentResult(final, kindByName[step.kind])
-  return settleParsedResult(host, run, step, { final, model, result })
+  return settleParsedResult(host, run, step, { final, execution, result })
 }
 
 async function settleParsedResult(
   host: WorkflowHost,
   run: RunDirectory,
   step: StepLaunch,
-  { final, model, result }: { final: string; model?: string | undefined; result: StepResult },
+  {
+    final,
+    execution,
+    result,
+  }: {
+    final: string
+    execution: StepExecutionIdentity
+    result: StepResult
+  },
 ): Promise<StepExecutionResult> {
   // Leave the step running on disk so the next invocation can retry it.
   if (step.kind === 'implement' && result.status === 'failed' && result.reason === 'card-held')
@@ -408,7 +433,8 @@ async function settleParsedResult(
   return recordResult(host, run, step, {
     ...(await confirmed(host, run, step, checked)),
     output: final,
-    model,
+    execution,
+    handoff: result.handoff,
   })
 }
 
@@ -427,7 +453,11 @@ function faultResult(
   return { status: 'blocked', reason: 'fault', summary: 'the agent process failed', detail }
 }
 
-function replyOf(launched: AgentLaunchResult, kind: KindName, elapsedMs: number): AgentReply {
+function replyOf(
+  launched: Exclude<AgentLaunchResult, { sessionMissing: true }>,
+  kind: KindName,
+  elapsedMs: number,
+): AgentReply {
   if ('fault' in launched) return launched
   const { final, process } = launched
   const { valid, result } = checkAgentResult(final, kindByName[kind])
@@ -442,35 +472,108 @@ function replyOf(launched: AgentLaunchResult, kind: KindName, elapsedMs: number)
   }
 }
 
+interface AgentContext {
+  sessionId?: string
+  fallback?: string
+}
+
+function resumeContext(host: WorkflowHost, step: StepLaunch): AgentContext {
+  if (step.context !== 'resume') return {}
+  if (step.interrupted) return { fallback: 'the step was interrupted' }
+  const previous = step.previousAgent
+  if (previous === undefined) return { fallback: 'no preceding agent step' }
+  if (previous.host !== host.id) return { fallback: 'the preceding step used another host' }
+  const engine = host.resumeEngineOf?.(step.id)
+  if (engine === undefined) return { fallback: 'the selected engine cannot resume' }
+  if (previous.engine !== engine) return { fallback: 'the preceding step used a different engine' }
+  if (!previous.sessionId || !/^[a-z0-9][a-z0-9_-]*$/i.test(previous.sessionId))
+    return { fallback: 'the preceding step has no usable session ID' }
+  return { sessionId: previous.sessionId }
+}
+
+async function reportFallback(
+  host: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  reason: string,
+) {
+  await recordContextFallback(run, step, reason)
+  host.reportContextFallback?.(step.id, reason)
+}
+
+async function launchInContext(
+  host: WorkflowHost,
+  run: RunDirectory,
+  exchange: Exchange,
+  context: AgentContext,
+) {
+  const { step } = exchange
+  for (;;) {
+    delete exchange.usage
+    const { sessionId } = context
+    try {
+      const launch = { ...step }
+      if (sessionId !== undefined) delete launch.handoff
+      exchange.sent = buildMessage(launch, kindByName[step.kind], {
+        ...host,
+        style: host.styleOf?.(step.id) ?? host.style,
+      })
+    } catch (error) {
+      return { unsafe: (error as Error).message }
+    }
+    const launched = await host.launch(
+      step,
+      exchange.sent,
+      usage => {
+        exchange.usage = usage
+      },
+      sessionId,
+    )
+    if (!('sessionMissing' in launched)) return launched
+    if (sessionId === undefined)
+      throw new Error('the host reported a missing session on a fresh launch')
+    await reportFallback(host, run, step, 'the preceding session is unavailable')
+    delete context.sessionId
+  }
+}
+
 async function launchWithRetries(
   host: WorkflowHost,
   run: RunDirectory,
   exchange: Exchange,
   onRetry: OnRetry | undefined,
-): Promise<AgentReply> {
+): Promise<AgentReply | { unsafe: string }> {
+  const context = resumeContext(host, exchange.step)
+  if (context.fallback !== undefined)
+    await reportFallback(host, run, exchange.step, context.fallback)
   for (;;) {
-    delete exchange.usage
     delete exchange.diagnosis
     const { step } = exchange
     const start = Date.now()
-    const launched = await host.launch(step, exchange.sent, usage => {
-      exchange.usage = usage
-    })
+    const launched = await launchInContext(host, run, exchange, context)
+    if ('unsafe' in launched) return launched
     exchange.model = launched.model
+    exchange.identity = { engine: launched.settings?.engine, sessionId: launched.sessionId }
     exchange.final = 'final' in launched ? launched.final : ''
     const reply = replyOf(launched, step.kind, Date.now() - start)
     if (!('fault' in reply)) return reply
-    const origin = exchange.origin && {
-      ...(launched.settings ?? exchange.origin),
-      host: exchange.origin.host,
-      ...(launched.model !== undefined && { model: launched.model }),
-    }
+    const origin = faultOrigin(exchange.origin, launched)
     const next = await recordFault(run, step, reply.fault, origin)
     exchange.diagnosis = reply.fault
     if (next === undefined) return reply
     await onRetry?.(faultResult(step.retries, reply))
     exchange.step = next
   }
+}
+
+function faultOrigin(origin: Exchange['origin'], launched: AgentLaunchResult) {
+  return (
+    origin && {
+      ...(launched.settings ?? origin),
+      host: origin.host,
+      ...(launched.model !== undefined && { model: launched.model }),
+    }
+  )
 }
 
 function recoveredOrigin(origin: FaultAttempt['origin']) {

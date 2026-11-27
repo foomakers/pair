@@ -80,6 +80,22 @@ describe('loop max override (#670 AC-8)', () => {
   })
 })
 
+describe('workflow-only prompt options (#698 AC-7 and AC-9)', () => {
+  it.each([
+    ['prompt', 'Check tests'],
+    ['prompt-at', 'before'],
+  ])('rejects %s in a configuration step', (key, value) => {
+    const { configuration, errors } = parseConfiguration(
+      `${BASE}  review: { ${key}: ${value} }\n`,
+      FILE,
+    )
+    expect(configuration).toBeUndefined()
+    expect(errors).toEqual([
+      expect.objectContaining({ key: `steps.review.${key}`, problem: `unknown key '${key}'` }),
+    ])
+  })
+})
+
 describe('settings of a step (AC-1)', () => {
   const c = parsed()
   it.each([

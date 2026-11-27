@@ -8,10 +8,13 @@ import {
   cardStateOf,
   cardStateToConfirm,
   escalationAction,
+  firstWordBeyond,
   parseWorkflow,
   type CardState,
+  type ContextMode,
   type EscalationRule,
   type KindName,
+  type PromptPosition,
   type ResolvedAssignment,
   type Step,
   type When,
@@ -22,6 +25,7 @@ import {
   fieldsOf,
   interactiveOf,
   kindByName,
+  MAX_HANDOFF_WORDS,
   settle,
   type StepResult,
   type StepStatus,
@@ -85,18 +89,33 @@ export type EngineOutcome = {
     }
 )
 
-interface StepExecutionIdentity {
+export interface StepExecutionIdentity {
   readonly host?: RunHost | undefined
   readonly model?: string | undefined
+  readonly engine?: string | undefined
+  readonly sessionId?: string | undefined
+  /** In-session handles are usable only by the lease that recorded them. */
+  readonly sessionLeaseHash?: string | undefined
 }
 
-const executionOf = ({ host, model }: StepExecutionIdentity) => ({
+const executionOf = ({
+  host,
+  model,
+  engine,
+  sessionId,
+  sessionLeaseHash,
+}: StepExecutionIdentity) => ({
   ...(host !== undefined && { host }),
   ...(model !== undefined && { model }),
+  ...(engine !== undefined && { engine }),
+  ...(sessionId !== undefined && { sessionId }),
+  ...(sessionLeaseHash !== undefined && { sessionLeaseHash }),
 })
 
 export interface StepRecord extends StepExecutionIdentity {
   readonly state: StepState
+  readonly interrupted?: true
+  readonly contextFallback?: string
   readonly round?: number
   /** How many times the step was launched in this run. */
   readonly executions?: number
@@ -144,6 +163,8 @@ export interface LoopRecord {
   readonly exhausted?: boolean
   readonly grants?: readonly { readonly rounds: number; readonly by: string; readonly at: string }[]
   readonly untilResult?: Readonly<Record<string, unknown>>
+  /** The last completed child survives resets of the current round's step records. */
+  readonly lastChild?: StepExecutionIdentity & { readonly id: string; readonly round: number }
 }
 
 /** A step ready to launch: the skill, its options and the inputs it receives. */
@@ -153,6 +174,12 @@ export interface StepLaunch {
   readonly uses: string
   /** Resolved by `next`; a caller constructing a launch can omit it for an ordinary step. */
   readonly interactive?: boolean
+  readonly context?: ContextMode
+  readonly prompt?: string
+  readonly promptAt?: PromptPosition
+  readonly handoff?: string
+  readonly previousAgent?: StepExecutionIdentity
+  readonly interrupted?: true
   readonly with: Readonly<Record<string, unknown>>
   readonly assignment?: ResolvedAssignment
   /** Validation the host runs after the step ends `ok`. */
@@ -740,9 +767,14 @@ function reopenStep(
   return {
     state: 'pending',
     ...executionHistory(saved),
+    ...interruptedOf(saved),
     ...(remainingRetries !== undefined && { remainingRetries }),
     ...retryBoardStatusOf(saved),
-    ...(pendingSuccess !== undefined && { pendingSuccess, ...executionOf(saved) }),
+    ...(pendingSuccess !== undefined && {
+      pendingSuccess,
+      ...executionOf(saved),
+      ...fallbackOf(saved),
+    }),
   }
 }
 
@@ -923,6 +955,9 @@ const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 const agentOptionsOf = (step: Step) => ({
   ...(step['timeout-minutes'] !== undefined && { timeoutMinutes: step['timeout-minutes'] }),
   ...(step.retries !== undefined && { retries: step.retries }),
+  ...(step.context !== undefined && { context: step.context }),
+  ...(step.prompt !== undefined && { prompt: step.prompt }),
+  ...(step['prompt-at'] !== undefined && { promptAt: step['prompt-at'] }),
 })
 
 /** Keep process faults before moving on to the next launch or settling the step. */
@@ -964,6 +999,12 @@ export function faultsOf(run: RunDirectory): StepFaults[] {
 
 const pendingOf = (saved?: Pick<StepRecord, 'pendingSuccess'>) =>
   saved?.pendingSuccess === undefined ? {} : { pendingSuccess: saved.pendingSuccess }
+
+const interruptedOf = (saved?: StepRecord) =>
+  saved?.state === 'running' || saved?.interrupted === true ? { interrupted: true as const } : {}
+
+const fallbackOf = (saved?: Pick<StepRecord, 'contextFallback'>) =>
+  saved?.contextFallback === undefined ? {} : { contextFallback: saved.contextFallback }
 
 const retryBoardStatusOf = (saved?: Pick<StepRecord, 'retryBoardStatus'>) =>
   saved?.retryBoardStatus === undefined ? {} : { retryBoardStatus: saved.retryBoardStatus }
@@ -1013,11 +1054,12 @@ interface NextLaunch {
 async function reserveLaunch(
   run: RunDirectory,
   { state, check }: LaunchContext,
-  launch: StepLaunch,
+  candidate: StepLaunch,
   loop?: { id: string; round: number },
 ): Promise<NextLaunch> {
-  const { id, kind, attempt, round } = launch
+  const { id, kind, attempt, round } = candidate
   const saved = state.steps[id]
+  const launch = { ...candidate, ...interruptedOf(saved) }
   const fault = exhaustedFault(saved, launch.retries)
   if (fault !== undefined)
     return { ready: [{ ...launch, attempt: fault.attempt, exhaustedFault: fault }], run: 'running' }
@@ -1038,6 +1080,7 @@ async function reserveLaunch(
         ...pendingOf(launch),
         ...retryBoardStatusOf(launch),
         ...stagedExecutionOf(state.steps[id]),
+        ...fallbackOf(saved),
       },
     },
   })
@@ -1070,6 +1113,13 @@ async function nextInLoop(
     ...boardStatesOf(child),
     ...pending,
     ...assignment,
+    ...linearContext(
+      run,
+      child,
+      () =>
+        loopPredecessor(state, step, child) ??
+        (round === 1 ? linearPredecessor(workflow, state, step) : undefined),
+    ),
     inputs: pick(mergeOutputs(inputsBefore(step, workflow.steps, state), state.latest), child.kind),
     attempt,
     round,
@@ -1212,6 +1262,67 @@ const assignmentOf = (workflow: Workflow, step: Step, run?: RunDirectory) => {
   return assignment === undefined ? {} : { assignment }
 }
 
+type ContextSource = StepExecutionIdentity & Pick<Step, 'id' | 'kind'> & { round?: number }
+
+function loopPredecessor(
+  state: RunStateFile,
+  step: Step,
+  before?: Step,
+): ContextSource | undefined {
+  const loop = state.loops?.[step.id]
+  if (loop === undefined) return undefined
+  const children = step.steps ?? []
+  const last = loop.lastChild
+  if (last !== undefined) {
+    const child = children.find(one => one.id === last.id)
+    if (child !== undefined) return { ...last, id: `${step.id}/${child.id}`, kind: child.kind }
+  }
+
+  // Older runs may only have the results of children completed in the current round.
+  const earlier = before === undefined ? children : children.slice(0, children.indexOf(before))
+  const completed = [...earlier].reverse().find(({ id }) => {
+    const saved = state.steps[`${step.id}/${id}`]
+    return saved?.round === loop.round && saved.outputs !== undefined
+  })
+  if (completed === undefined) return undefined
+  const id = `${step.id}/${completed.id}`
+  return { id, kind: completed.kind, round: loop.round, ...executionOf(state.steps[id]!) }
+}
+
+function linearPredecessor(
+  workflow: Workflow,
+  state: RunStateFile,
+  step: Step,
+): ContextSource | undefined {
+  const earlier = workflow.steps.slice(0, workflow.steps.indexOf(step)).reverse()
+  for (const predecessor of earlier) {
+    const { id, kind } = predecessor
+    const saved = state.steps[id]
+    if (saved?.outputs === undefined) continue
+    if (kind !== 'loop') return { id, kind, ...executionOf(saved) }
+    const child = loopPredecessor(state, predecessor)
+    if (child !== undefined || (loopRound(state, predecessor) ?? 1) > 1) return child
+  }
+  return undefined
+}
+
+function linearContext(run: RunDirectory, step: Step, source: () => ContextSource | undefined) {
+  if (step.kind === 'loop' || (step.context ?? kindByName[step.kind].defaultContext) === 'fresh')
+    return {}
+  const predecessor = source()
+  if (predecessor === undefined) return {}
+  const previousAgent =
+    step.context === 'resume' &&
+    predecessor.kind !== 'loop' &&
+    kindByName[predecessor.kind].host !== true
+      ? { previousAgent: executionOf(predecessor) }
+      : {}
+  const path = join(resultDir(run, predecessor.id, predecessor.round), 'handoff.md')
+  if (!run.files.existsSync(path)) return previousAgent
+  const handoff = run.files.readFileSync(path)
+  return { ...previousAgent, ...(handoff.trim() !== '' && { handoff }) }
+}
+
 function plainLaunch(
   state: RunStateFile,
   workflow: Workflow,
@@ -1222,10 +1333,11 @@ function plainLaunch(
   const attempt = launches(state, step.id)
   const replayAttempt = replayAttemptOf(state)
   const saved = state.steps[step.id]
+  const kind = kindByName[step.kind]
   return {
     id: step.id,
     kind: step.kind,
-    uses: step.skill ?? kindByName[step.kind].defaultSkill ?? '',
+    uses: step.skill ?? kind.defaultSkill ?? '',
     interactive: interactiveOf(step),
     with: step.with ?? {},
     ...gatesOf(step),
@@ -1234,6 +1346,8 @@ function plainLaunch(
     ...pendingOf(saved),
     ...retryBoardStatusOf(saved),
     ...assignmentOf(workflow, step, run),
+    ...(run !== undefined &&
+      linearContext(run, step, () => linearPredecessor(workflow, state, step))),
     inputs: pick(inputsBefore(step, workflow.steps, state), step.kind),
     attempt,
     ...(replayAttempt !== undefined && { replayAttempt }),
@@ -1322,23 +1436,34 @@ function closeRound({ state, outer, outputs }: Advance, { steps, loops }: Progre
   }
 }
 
-const withUntilResult = (
-  state: RunStateFile,
-  id: string,
-  untilResult: Record<string, unknown>,
-): RunStateFile['loops'] => {
-  const loop = state.loops?.[id]
-  return loop === undefined ? state.loops : { ...state.loops, [id]: { ...loop, untilResult } }
+function withLoopResult(
+  { state, outer, child, outputs }: Advance,
+  saved: StepRecord | undefined,
+  settled: boolean,
+): RunStateFile['loops'] {
+  const loop = state.loops?.[outer.id]
+  if (loop === undefined) return state.loops
+  return {
+    ...state.loops,
+    [outer.id]: {
+      ...loop,
+      ...(child.id === outer.until && { untilResult: outputs }),
+      ...(settled &&
+        saved?.outputs !== undefined && {
+          lastChild: { id: child.id, round: loop.round, ...executionOf(saved) },
+        }),
+    },
+  }
 }
 
 /** A loop child finished: the loop is done, loops back to the next round, or stops at max. */
 function advanceLoop(a: Advance, recorded: Record<string, StepRecord>): Progress {
   const { state, outer, child, status, outputs } = a
-  const isUntil = child.id === outer.until
-  const loops = isUntil ? withUntilResult(state, outer.id, outputs) : state.loops
+  const settled = childSettled(child, status)
+  const loops = withLoopResult(a, recorded[`${outer.id}/${child.id}`], settled)
   const progress = { steps: recorded, loops }
-  if (!childSettled(child, status)) return progress
-  if (isUntil) {
+  if (!settled) return progress
+  if (child.id === outer.until) {
     if (status === 'ok')
       return {
         steps: {
@@ -1371,7 +1496,18 @@ function launchable(
 const resultDir = (run: RunDirectory, stepId: string, round: number | undefined): string =>
   join(run.dir, 'steps', stepId, ...(round === undefined ? [] : [`round-${round}`]))
 
-/** `steps/<id>[/round-n]/result.json` and, when given, `output.log`. */
+function boundedHandoff(result: StepResult): StepResult {
+  const { handoff } = result
+  if (handoff === undefined) return result
+  const end = firstWordBeyond(handoff, MAX_HANDOFF_WORDS)
+  if (end === undefined) return result
+  return {
+    ...result,
+    handoff: `${handoff.slice(0, end).trimEnd()}\n\n*Handoff truncated after ${MAX_HANDOFF_WORDS} words.*\n`,
+  }
+}
+
+/** `steps/<id>[/round-n]/result.json` and the optional handoff and raw output. */
 async function writeResult(
   run: RunDirectory,
   dir: string,
@@ -1380,6 +1516,12 @@ async function writeResult(
 ): Promise<void> {
   await run.files.mkdir(dir, { recursive: true })
   if (output !== undefined) await run.files.writeFile(join(dir, 'output.log'), output)
+  const path = join(dir, 'handoff.md')
+  if (settled.handoff !== undefined) await writeAtomic(run.files, path, settled.handoff)
+  else if (run.files.existsSync(path)) {
+    if (run.files.unlink === undefined) await writeAtomic(run.files, path, '')
+    else await run.files.unlink(path)
+  }
   await writeAtomic(run.files, join(dir, 'result.json'), `${JSON.stringify(settled, null, 2)}\n`)
 }
 
@@ -1401,7 +1543,10 @@ export async function stageSuccess(
   if (step?.state !== 'running' || step.pendingSuccess !== undefined) return
   await writeState(run, {
     ...state,
-    steps: { ...state.steps, [id]: { ...step, pendingSuccess: result, ...executionOf(execution) } },
+    steps: {
+      ...state.steps,
+      [id]: { ...step, pendingSuccess: boundedHandoff(result), ...executionOf(execution) },
+    },
   })
 }
 
@@ -1448,6 +1593,21 @@ function checkAttempt(id: string, step: StepRecord | undefined, attempt: number 
     throw new Error(`step-not-reserved: ${id} attempt ${attempt} is no longer running`)
 }
 
+/** Keep the chosen fallback if the launch is interrupted or its process retries. */
+export async function recordContextFallback(
+  run: RunDirectory,
+  { id, attempt }: StepLaunch,
+  contextFallback: string,
+): Promise<void> {
+  const state = requireState(run)
+  const step = state.steps[id]
+  checkAttempt(id, step, attempt)
+  await writeState(run, {
+    ...state,
+    steps: { ...state.steps, [id]: { ...step!, contextFallback } },
+  })
+}
+
 function observeEscalation(
   run: RunDirectory,
   { id, round }: { id: string; round: number | undefined },
@@ -1471,7 +1631,7 @@ function observeEscalation(
  * Records the result of a step: validated against its kind (a result that breaks the contract is
  * recorded `failed`, `invalid-result`), written to `steps/<id>/result.json`, then to `state.json`.
  * `output` is the agent's final message, kept as `steps/<id>/output.log`. The executing host and
- * known model go into `state.json`, including when a different host confirms a staged result.
+ * engine identity go into `state.json`, including when a different host confirms a staged result.
  */
 export async function record(
   run: RunDirectory,
@@ -1486,7 +1646,7 @@ export async function record(
   checkAttempt(stepId, previous, options.attempt)
   const { step, outer, childId } = launchable(run, stepId)
   const kind = kindByName[step.kind]
-  const settled = settle(kind, result)
+  const settled = boundedHandoff(settle(kind, result))
   const round = childId === undefined ? undefined : loopRound(state, outer)
   await writeResult(run, resultDir(run, stepId, round), settled, output)
   const { status } = settled
@@ -1498,6 +1658,7 @@ export async function record(
   const entry = {
     ...recordOf(settled, outputs, round, previous),
     ...executionOf(previous?.pendingSuccess === undefined ? options : previous),
+    ...fallbackOf(previous),
     ...retryAfter(status, previous, invalidatePendingSuccess),
   }
   const progress: Progress =

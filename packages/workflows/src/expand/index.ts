@@ -151,6 +151,9 @@ function rebaseStep(step: Step, id: string): Step {
 
 const INCLUDE_FORBIDDEN_KEYS = [
   'interactive',
+  'context',
+  'prompt',
+  'prompt-at',
   'when',
   'gates',
   'state',

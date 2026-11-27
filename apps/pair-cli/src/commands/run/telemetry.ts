@@ -112,7 +112,9 @@ export function observeEngineEvent(
         ? event['type'] === 'session'
           ? 'id'
           : 'sessionId'
-        : 'session_id'
+        : engine === 'opencode' && event['sessionID'] !== undefined
+          ? 'sessionID'
+          : 'session_id'
   const session = event[sessionKey]
   const sessionId = typeof session === 'string' ? session : prior.sessionId
   const previous = prior.tokens ?? 'not measured'

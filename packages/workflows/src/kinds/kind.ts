@@ -1,5 +1,5 @@
 import type { JsonSchema } from '../schema'
-import type { KindName } from '../grammar'
+import type { ContextMode, KindName } from '../grammar'
 
 /** What a kind of step receives, accepts and must return. The kind reference page is generated from these objects. */
 export interface StepKind {
@@ -8,6 +8,8 @@ export interface StepKind {
   readonly defaultSkill?: string
   /** Whether a step runs in the session conversation unless its own `interactive` overrides it. */
   readonly defaultInteractive: boolean
+  /** How the step receives context unless its own `context` overrides it. */
+  readonly defaultContext: ContextMode
   /** The boundary the invoked skill returns at, when its direct invocation also handles later phases. */
   readonly handoff?: string
   /** Run by the host, deterministically: no agent, no skill, no token. */
@@ -36,6 +38,7 @@ export interface ResultRule {
 
 export const STEP_STATUSES = ['ok', 'failed', 'blocked', 'needs-decision'] as const
 export type StepStatus = (typeof STEP_STATUSES)[number]
+export const MAX_HANDOFF_WORDS = 800
 
 /** The result every step returns, whatever its kind. */
 export const COMMON_RESULT: JsonSchema = {
@@ -45,6 +48,10 @@ export const COMMON_RESULT: JsonSchema = {
     status: { enum: STEP_STATUSES },
     summary: { type: 'string', description: 'One line: what the step did.' },
     reason: { type: 'string', description: 'Why, when the status is not `ok`.' },
+    handoff: {
+      type: 'string',
+      description: `Markdown for the next step, saved as \`handoff.md\` and truncated after ${MAX_HANDOFF_WORDS} words.`,
+    },
   },
 }
 

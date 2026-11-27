@@ -1,6 +1,7 @@
+import { createHash } from 'node:crypto'
 import { basename, join, resolve } from 'node:path'
 import { configurationText, type Configuration } from '../configuration'
-import { buildMessage } from '../dispatch'
+import { buildMessage, UnsafeMessageError } from '../dispatch'
 import {
   FROZEN_WORKFLOW,
   STATE_FILE,
@@ -10,6 +11,7 @@ import {
   pendingBoardStatus,
   pendingMergeClosure,
   record,
+  recordContextFallback,
   requireState,
   start,
   stepSettled,
@@ -32,6 +34,7 @@ import {
   stepInputFailure,
   telemetryWriter,
   type StepEvent,
+  type WorkflowHost,
 } from '../host'
 import { skillForStep, kindByName } from '../kinds'
 import { effectiveSelection, type CardFacts } from '../select'
@@ -48,6 +51,7 @@ import { acquireCardLock } from './card-lock'
 import { withSessionLease, type SessionApproval, type SessionLease } from './run-lock'
 import { sessionHost } from './session-host'
 import { approvalQuestion, type ApprovalTarget } from './workflow-approval'
+import { workflowResumeWarnings } from './workflow-diagnostics'
 import { runWorkflowOperation, type Operation } from './workflow-facts'
 import { workflowMerge } from './workflow-merge'
 import { refreshReplayInputs } from './workflow-replay'
@@ -184,6 +188,11 @@ async function startFresh(
   })
   // The session engine describes this host. Other engines are handled at the step boundary.
   const configWarnings = checkWorkflowConfiguration(definition.workflow, selected)
+  const resumeWarnings = workflowResumeWarnings(
+    definition.workflow,
+    selected?.configuration,
+    input.engine,
+  )
   checkSelection(project, scripts, view, {
     workflow: definition.workflow,
     configuration: selected?.configuration,
@@ -203,7 +212,7 @@ async function startFresh(
   )
   return {
     ...started,
-    warnings: [...definition.warnings, ...configWarnings, ...started.warnings],
+    warnings: [...definition.warnings, ...configWarnings, ...resumeWarnings, ...started.warnings],
     card,
     worktree,
   }
@@ -365,7 +374,11 @@ const sessionMessage = (launch: StepLaunch, worktree: string | undefined) =>
 function stepPacket(
   workflow: Workflow,
   configuration: Configuration | undefined,
-  context: { readonly project: Project; readonly engine: string; readonly worktree?: string },
+  context: {
+    readonly project: Project
+    readonly engine: string
+    readonly worktree?: string
+  },
   launch: StepLaunch,
 ) {
   const { step, resolved } = sessionLaunch(context.project, launch, addressedSteps(workflow))
@@ -373,8 +386,40 @@ function stepPacket(
     ...resolved,
     worktree: context.worktree,
     settings: effectiveSettings(configuration, workflow, step, context.engine),
-    message: sessionMessage(resolved, context.worktree),
   }
+}
+
+const leaseHash = ({ token }: SessionLease) => createHash('sha256').update(token).digest('hex')
+
+function handleForLease(lease: SessionLease, previous: StepLaunch['previousAgent']) {
+  return previous?.host === 'session' &&
+    previous.engine === lease.engine &&
+    previous.sessionLeaseHash === leaseHash(lease)
+    ? previous.sessionId
+    : undefined
+}
+
+function sessionDispatch(launch: StepLaunch, resumeSessionId?: string) {
+  const step = { ...launch }
+  delete step.previousAgent
+  if (resumeSessionId === undefined) return step
+  delete step.handoff
+  return { ...step, resumeSessionId }
+}
+
+function sessionContext(
+  run: RunDirectory,
+  lease: SessionLease,
+  step: StepLaunch,
+): { resumeSessionId?: string; fallback?: string } {
+  if (step.context !== 'resume' || requireState(run).steps[step.id]?.contextFallback !== undefined)
+    return {}
+  if (step.interrupted) return { fallback: 'the step was interrupted' }
+  const handle = handleForLease(lease, step.previousAgent)
+  if (!handle) return { fallback: 'the preceding step has no session handle for this lease' }
+  if (sessionInteractiveOf(step) && handle !== 'conversation')
+    return { fallback: 'the interactive step requires the main conversation' }
+  return { resumeSessionId: handle }
 }
 
 function sessionTelemetry(
@@ -425,7 +470,7 @@ const needsHost = (step: StepLaunch) =>
 type Selection = Awaited<ReturnType<typeof advanceStep>>
 type SessionNext = Partial<ReturnType<typeof approvalPrompt>> & {
   run: RunState
-  ready: readonly ReturnType<typeof stepPacket>[]
+  ready: readonly (Awaited<ReturnType<typeof readyPacket>> | TransferPacket)[]
   events?: readonly StepEvent[]
   held?: Selection['held']
   blocked?: Selection['blocked']
@@ -441,12 +486,14 @@ function selectedResponse(selected: Selection, events: StepEvent[]): SessionNext
   }
 }
 
-function approvalResponse(
+function hostStepResponse(
   result: StepEvent,
   step: StepLaunch,
   events: StepEvent[],
-  target?: ApprovalTarget,
+  { definition, target }: { definition: Step | undefined; target: ApprovalTarget | undefined },
 ) {
+  if (definition !== undefined && stepSettled(definition, result.state))
+    return { result: { run: 'running' as const, ready: [], events } }
   const waiting = result.state === 'needs-decision'
   const approval =
     waiting && target !== undefined
@@ -467,15 +514,75 @@ type AdvanceInput = {
   project: Project
   run: ReturnType<typeof observeRun>
   lease: SessionLease
-  answer: string | undefined
+} & NextRequest
+
+type Packet = (launch: StepLaunch) => ReturnType<typeof stepPacket>
+type TransferPacket = Pick<ReturnType<Packet>, 'id' | 'kind' | 'attempt' | 'settings'>
+
+async function readyPacket(
+  { run, lease }: { run: RunDirectory; lease: SessionLease },
+  launch: ReturnType<Packet>,
+  fallbackHandoff = false,
+) {
+  const { resumeSessionId, fallback } = sessionContext(run, lease, launch)
+  const reason =
+    fallbackHandoff && resumeSessionId !== undefined
+      ? 'the continuation could not be dispatched'
+      : fallback
+  const ready = sessionDispatch(launch, reason === undefined ? resumeSessionId : undefined)
+  if (reason !== undefined) {
+    await recordContextFallback(run, launch, reason)
+    process.stderr.write(`${launch.id}: using handoff — ${reason}\n`)
+  }
+  const { worktree, settings } = launch
+  return { ...ready, worktree, settings, message: sessionMessage(ready, worktree) }
+}
+
+function agentDispatch(
+  { run, lease, fallbackHandoff }: AdvanceInput,
+  packet: Packet,
+  {
+    host,
+    writer,
+    events,
+  }: { host: WorkflowHost; writer: ReturnType<typeof sessionTelemetry>; events: StepEvent[] },
+) {
+  return async (launch: StepLaunch, launchStartedAt?: number) => {
+    const result: SessionNext = { run: 'running', ready: [], events }
+    const routed = packet(launch)
+    const { id, kind, attempt, settings } = routed
+    if (settings.engine !== lease.engine)
+      return { result: { ...result, ready: [{ id, kind, attempt, settings }] } }
+    let ready
+    try {
+      ready = await readyPacket({ run, lease }, routed, fallbackHandoff)
+    } catch (error) {
+      if (!(error instanceof UnsafeMessageError)) throw error
+      const failure = await record(run, launch.id, {
+        status: 'failed',
+        reason: 'unsafe-value',
+        summary: error.message,
+      })
+      await writer?.execution(launch, failure, {
+        sent: '',
+        final: '',
+        startedAt: new Date(launchStartedAt ?? Date.now()),
+      })
+      await flushOutcomes(host, run, writer)
+      await endStep(host, launch, failure)
+      return { result }
+    }
+    return { result: { ...result, ready: [ready] }, launch, launchStartedAt }
+  }
 }
 
 async function advanceSession(
-  { project, run, lease, answer }: AdvanceInput,
+  input: AdvanceInput,
   steps: ReturnType<typeof addressedSteps>,
-  packet: (launch: StepLaunch) => ReturnType<typeof stepPacket>,
+  packet: Packet,
   writer: ReturnType<typeof sessionTelemetry>,
 ) {
+  const { project, run, lease, answer } = input
   const parked = lease.approval
   const events: StepEvent[] = []
   let target: ApprovalTarget | undefined
@@ -497,6 +604,8 @@ async function advanceSession(
   }
   const canStart = (step: StepLaunch) =>
     needsHost(step) || packet(step).settings.engine === lease.engine
+  const offer = agentDispatch(input, packet, { host, writer, events })
+  if (lease.launch !== undefined) return offer(lease.launch, lease.launchStartedAt)
   const selected = await advanceStep(host, run, canStart, parked?.step)
   const launchStartedAt = writer?.now().getTime()
   await flushOutcomes(host, run, writer)
@@ -506,48 +615,44 @@ async function advanceSession(
     runningOnHost = true
     const result = await runStep(host, run, step, writer)
     const definition = steps.find(candidate => candidate.id === step.id)
-    if (definition !== undefined && stepSettled(definition, result.state))
-      return { result: { run: 'running' as const, ready: [], events } }
-    return approvalResponse(result, step, events, target)
+    return hostStepResponse(result, step, events, { definition, target })
   }
   const launch = canStart(step) ? await startStep(host, step) : step
-  const result = { run: 'running' as const, ready: [packet(launch)], events }
-  return { result, launch, launchStartedAt }
+  return offer(launch, launchStartedAt)
+}
+
+type NextRequest = { answer?: string | undefined; fallbackHandoff?: boolean | undefined }
+
+function approvalWaiting(lease: SessionLease, { answer, fallbackHandoff }: NextRequest) {
+  if (fallbackHandoff && (answer !== undefined || lease.launch?.context !== 'resume'))
+    throw new Error('--fallback-handoff requires a reserved resume step')
+  if (answer !== undefined && lease.approval === undefined)
+    throw new Error('The workflow must be parked at an approval shown in this session')
+  return answer === undefined ? lease.approval : undefined
 }
 
 export async function nextSession(
   project: Project,
   run: RunDirectory,
   token: string,
-  answer?: string,
+  request: NextRequest,
 ) {
   const result = await withCardSessionLease<SessionNext>(
     project.main,
     run,
     { token },
     async lease => {
-      if (answer !== undefined && lease.approval === undefined)
-        throw new Error('The workflow must be parked at an approval shown in this session')
-      if (lease.approval !== undefined && answer === undefined)
-        return {
-          result: { run: 'parked', ready: [], ...approvalPrompt(lease.approval) },
-          approval: lease.approval,
-        }
+      const approval = approvalWaiting(lease, request)
+      if (approval !== undefined)
+        return { result: { run: 'parked', ready: [], ...approvalPrompt(approval) }, approval }
 
       const workflow = frozenWorkflow(run)
       const config = effectiveConfiguration(run)
-      const packet = (launch: StepLaunch) =>
-        stepPacket(workflow, config, { ...lease, project }, launch)
-      if (lease.launch !== undefined)
-        return {
-          result: { run: 'running', ready: [packet(lease.launch)] },
-          launch: lease.launch,
-          launchStartedAt: lease.launchStartedAt,
-        }
+      const packet: Packet = launch => stepPacket(workflow, config, { ...lease, project }, launch)
       const observed = observeRun(run)
       const writer = sessionTelemetry(observed, workflow, config, lease)
       const advanced = await advanceSession(
-        { project, run: observed, lease, answer },
+        { project, run: observed, lease, ...request },
         addressedSteps(workflow),
         packet,
         writer,
@@ -559,7 +664,7 @@ export async function nextSession(
     },
   )
   const step = result.ready[0]
-  if (step !== undefined) reportProcessControls(step)
+  if (step !== undefined && 'message' in step) reportProcessControls(step)
   return result
 }
 
@@ -573,6 +678,14 @@ function reportProcessControls(step: StepLaunch) {
     )
 }
 
+function sessionExecution(lease: SessionLease, sessionId?: string) {
+  return {
+    engine: lease.engine,
+    sessionId,
+    ...(sessionId !== undefined && { sessionLeaseHash: leaseHash(lease) }),
+  }
+}
+
 export async function recordSession(
   project: Project,
   run: RunDirectory,
@@ -582,12 +695,13 @@ export async function recordSession(
     file: string
     attempt?: number | undefined
     model?: string | undefined
+    sessionId?: string | undefined
     usage?: Usage | undefined
   },
 ) {
   return withCardSessionLease(project.main, run, { token }, async lease => {
     const { launch } = lease
-    const { step, file, model, attempt, usage } = input
+    const { step, file, model, sessionId, attempt, usage } = input
     if (launch?.id !== step || launch.attempt !== (attempt ?? 1))
       throw new Error(`step-not-reserved: ${step} needs the attempt returned by next`)
     const workflow = frozenWorkflow(run)
@@ -600,12 +714,18 @@ export async function recordSession(
     const observed = observeRun(run)
     const writer = sessionTelemetry(observed, workflow, config, lease)
     const startedAt = new Date(lease.launchStartedAt ?? Date.now())
+    const { resumeSessionId } = sessionContext(run, lease, launch)
+    const { resolved } = sessionLaunch(project, launch, steps)
     const sent =
       writer === undefined
         ? ''
-        : sessionMessage(sessionLaunch(project, launch, steps).resolved, lease.worktree)
+        : sessionMessage(sessionDispatch(resolved, resumeSessionId), lease.worktree)
     const final = readMessage(file)
-    const result = await settleAgentStep(host, observed, launch, { final, model })
+    const result = await settleAgentStep(host, observed, launch, {
+      final,
+      model,
+      ...sessionExecution(lease, sessionId),
+    })
     await writer?.execution(launch, result, { sent, final, usage, startedAt, model })
     await flushOutcomes(host, observed, writer)
     await endStep(host, launch, result)

@@ -85,8 +85,17 @@ export interface EngineDefinition {
   readonly id: EngineId
   /** The executable, as it must be found on PATH. */
   readonly command: string
+  /** Project-configured runner prefix before the engine's own flags. */
+  readonly runnerArgs?: readonly string[]
   /** Args that put the engine in one-shot headless mode and make it emit JSONL. */
   readonly headlessArgs: readonly string[]
+  /** Verified continuation command and its diagnostic for an unavailable session. */
+  readonly resume?: {
+    readonly headlessArgs?: readonly string[]
+    readonly sessionArgs: (id: string) => readonly string[]
+    readonly isMissing: (line: string, id: string) => boolean
+    readonly isMissingEvent?: (payload: unknown, id: string) => boolean
+  }
   /**
    * The flag this engine takes a model under, when a project pins one (`engine.model` in
    * pair.config.json), or a workflow profile gives a stage one (US-488). Run-wide `engine.model`
@@ -142,6 +151,10 @@ const PI: EngineDefinition = {
   modelFlag: '--model',
   command: 'pi',
   headlessArgs: ['--mode', 'json'],
+  resume: {
+    sessionArgs: id => ['--session', id],
+    isMissing: (line, id) => line === `No session found matching '${id}'`,
+  },
   skillInvocationStyle: 'instruction',
   autonomy: {
     kind: 'always-on',
@@ -170,6 +183,7 @@ const OPENCODE: EngineDefinition = {
   modelFlag: '--model',
   command: 'opencode',
   headlessArgs: ['run', '--format', 'json'],
+  // `opencode run --session` can create a fresh session if the supplied ID is missing.
   cwdFlag: '--dir',
   skillInvocationStyle: 'instruction',
   autonomy: { kind: 'flag', autonomyArgs: ['--auto'] },
@@ -191,6 +205,21 @@ const OPENCODE: EngineDefinition = {
  * `-p` also documents that "the workspace trust dialog is skipped in non-interactive mode",
  * so there is no trust decision here for the driver to take.
  */
+const missingClaudeSession = (id: string) => `No conversation found with session ID: ${id}`
+
+function claudeMissingSessionEvent(payload: unknown, id: string): boolean {
+  if (typeof payload !== 'object' || payload === null) return false
+  const event = payload as Record<string, unknown>
+  return (
+    event['type'] === 'result' &&
+    event['subtype'] === 'error_during_execution' &&
+    event['num_turns'] === 0 &&
+    event['session_id'] === id &&
+    Array.isArray(event['errors']) &&
+    event['errors'].includes(missingClaudeSession(id))
+  )
+}
+
 const CLAUDE: EngineDefinition = {
   id: 'claude',
   modelFlag: '--model',
@@ -207,6 +236,11 @@ const CLAUDE: EngineDefinition = {
     '--settings',
     '{"outputStyle":"default"}',
   ],
+  resume: {
+    sessionArgs: id => ['--resume', id],
+    isMissing: (line, id) => line === missingClaudeSession(id),
+    isMissingEvent: claudeMissingSessionEvent,
+  },
   skillInvocationStyle: 'slash',
   autonomy: { kind: 'flag', autonomyArgs: ['--permission-mode', 'bypassPermissions'] },
   projectTrust: {
@@ -245,6 +279,13 @@ const CODEX: EngineDefinition = {
   effortArgs: level => ['-c', `model_reasoning_effort=${level}`],
   command: 'codex',
   headlessArgs: ['exec', '--json'],
+  resume: {
+    headlessArgs: ['exec', 'resume', '--json'],
+    sessionArgs: id => [id],
+    isMissing: (line, id) =>
+      line.includes(id) &&
+      /No saved session found with ID|no rollout found for thread id/.test(line),
+  },
   skillInvocationStyle: 'instruction',
   autonomy: {
     kind: 'flag',
