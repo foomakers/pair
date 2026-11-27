@@ -125,7 +125,19 @@ export function readRuns(dir, only = {}) {
       if (steps.length === 0) return []
       const { run, workflow, card } = steps[0]
       const status = records.findLast(record => record.type === 'run')?.status ?? 'open'
-      return [{ run, workflow, card, status, steps }]
+      let segment = []
+      const parks = []
+      for (const record of records) {
+        if (record.type === 'step') segment.push(record)
+        if (record.type === 'run') {
+          if (record.status === 'parked') {
+            const cause = segment.findLast(step => ['blocked', 'needs-decision', 'exhausted'].includes(step.status) && step.escalate?.do !== 'continue')
+            if (cause) parks.push({ step: cause.step, reason: cause.reason })
+          }
+          segment = []
+        }
+      }
+      return [{ run, workflow, card, status, steps, parks }]
     })
     .filter(one => ['run', 'card', 'workflow'].every(key => only[key] === undefined || one[key] === only[key]))
 }
@@ -251,8 +263,7 @@ function compare(runs, { prices, by = 'card' }) {
     ...identityOf(one),
     configuration: configurationOf(one.steps),
     steps: one.steps.length,
-    parks: one.steps.filter(step => ['blocked', 'needs-decision', 'exhausted'].includes(step.status) && step.escalate?.do !== 'continue')
-      .map(step => ({ step: step.step, reason: step.reason })),
+    parks: one.parks,
     durationMs: durationOf(one.steps),
     tokens: tokensOf(one.steps),
     cost: costOf(one.steps, prices),
