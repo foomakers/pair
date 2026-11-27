@@ -283,7 +283,9 @@ export async function recordMissingFaultSteps(
     ({ step }) => !recorded.has(attemptKey(step.id, step.attempt, step.round)),
   )
   if (missing.length === 0 && terminal === undefined) return
-  const repaired = [...recordsOf(run), ...missing.map(fault => stepRecord(run, recoveredExecution(fault)))]
+  const retained = recordsOf(run)
+  if (terminal === 'parked' && missing.length === 0 && retained.at(-1)?.type === 'run') return
+  const repaired = [...retained, ...missing.map(fault => stepRecord(run, recoveredExecution(fault)))]
   await write(
     run,
     terminal === undefined ? repaired : [...repaired, closingRecord(run, repaired.filter((row): row is StepTelemetry => row.type === 'step'), terminal)],
@@ -307,7 +309,9 @@ function sumOf(name: TokenName, steps: readonly StepTelemetry[]): TokenSum {
 /** Writes a completed run's outcome and the totals of its step executions. */
 export async function closeRun(run: RunDirectory, status: RunTelemetry['status']): Promise<void> {
   const steps = stepsOf(run)
-  await write(run, [...recordsOf(run), closingRecord(run, steps, status)])
+  const records = recordsOf(run)
+  if (status === 'parked' && records.at(-1)?.type === 'run') return
+  await write(run, [...records, closingRecord(run, steps, status)])
 }
 
 function closingRecord(
