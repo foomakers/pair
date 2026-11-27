@@ -5,6 +5,7 @@ export const MERGE_METHODS = ['squash', 'merge', 'rebase'] as const
 export const merge: StepKind = {
   name: 'merge',
   defaultInteractive: false,
+  defaultContext: 'handoff',
   host: true,
   inputs: {
     type: 'object',

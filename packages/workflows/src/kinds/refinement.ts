@@ -15,6 +15,7 @@ const boardStatus = {
 export const refineStory: StepKind = {
   name: 'refine-story',
   defaultInteractive: false,
+  defaultContext: 'handoff',
   defaultSkill: 'pair-process-refine-story',
   inputs,
   outputs: {
@@ -37,6 +38,7 @@ export const refineStory: StepKind = {
 export const planTasks: StepKind = {
   name: 'plan-tasks',
   defaultInteractive: false,
+  defaultContext: 'handoff',
   defaultSkill: 'pair-process-plan-tasks',
   inputs,
   outputs: {

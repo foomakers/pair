@@ -72,6 +72,70 @@ describe('interactive steps (#696 AC-2)', () => {
   })
 })
 
+describe('step context and prompt (#698 AC-1, AC-2, AC-4, AC-6, AC-7)', () => {
+  const file = 'workflows/quick.yaml'
+  const parseReview = (extra: string) =>
+    parseWorkflow(seeded('kind: review', `kind: review\n    ${extra}`), file)
+
+  it.each(['fresh', 'handoff', 'resume'])('reads context: %s', context => {
+    const { workflow, errors } = parseReview(`context: ${context}`)
+    expect(errors).toEqual([])
+    expect(workflow?.steps[1]).toMatchObject({ context })
+  })
+
+  it('refuses a context outside the three modes', () => {
+    const { errors } = parseReview('context: reuse')
+    expect(errors).toEqual([
+      expect.objectContaining({
+        file,
+        line: 11,
+        key: 'steps.review.context',
+        problem: expect.stringContaining('unknown value'),
+      }),
+    ])
+  })
+
+  it.each(['before', 'with', 'after'])('reads prompt-at: %s with literal prompt text', position => {
+    const prompt = 'Review {card} and {{ head }}.'
+    const { workflow, errors } = parseReview(
+      `prompt: ${JSON.stringify(prompt)}\n    prompt-at: ${position}`,
+    )
+    expect(errors).toEqual([])
+    expect(workflow?.steps[1]).toMatchObject({ prompt, 'prompt-at': position })
+  })
+
+  const maxPrompt = `${'check '.repeat(299)}tests`
+
+  it('accepts a prompt of 300 words without a placement', () => {
+    const { workflow, errors } = parseReview(`prompt: "${maxPrompt}"`)
+    expect(errors).toEqual([])
+    expect(workflow?.steps[1]).toMatchObject({ prompt: maxPrompt })
+  })
+
+  it('refuses a prompt of 301 words with a positioned limit error', () => {
+    const { workflow, errors } = parseReview(`prompt: |-\n      ${maxPrompt}\n      again`)
+    expect(workflow).toBeUndefined()
+    expect(errors).toEqual([
+      expect.objectContaining({
+        file,
+        line: 11,
+        key: 'steps.review.prompt',
+        problem: expect.stringContaining('300'),
+      }),
+    ])
+  })
+
+  it('refuses a prompt that is not text', () => {
+    const { errors } = parseReview('prompt: 42')
+    expect(errors).toEqual([
+      expect.objectContaining({
+        key: 'steps.review.prompt',
+        problem: expect.stringContaining('expected string'),
+      }),
+    ])
+  })
+})
+
 describe('workflow aliases (#672 AC-11)', () => {
   const ALIASED = QUICK.replace(
     'steps:\n',

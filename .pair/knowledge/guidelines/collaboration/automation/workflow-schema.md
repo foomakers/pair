@@ -153,6 +153,26 @@ These schemas come from the workflow validator.
               "type": "boolean",
               "description": "Run this step in the session conversation. Headless runs park when they reach it. Defaults to the kind contract. Set it on loop children and included steps."
             },
+            "context": {
+              "enum": [
+                "fresh",
+                "handoff",
+                "resume"
+              ],
+              "description": "How the step receives context from its predecessor. Defaults to the kind contract."
+            },
+            "prompt": {
+              "type": "string",
+              "description": "Literal instructions for the step, up to 300 words."
+            },
+            "prompt-at": {
+              "enum": [
+                "before",
+                "with",
+                "after"
+              ],
+              "description": "Placement of the prompt relative to the skill invocation. Defaults to `after`."
+            },
             "when": {
               "type": "object",
               "additionalProperties": false,

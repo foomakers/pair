@@ -1,5 +1,5 @@
 import type { JsonSchema } from '../schema'
-import type { KindName } from '../grammar'
+import type { ContextMode, KindName } from '../grammar'
 
 /** What a kind of step receives, accepts and must return. The kind reference page is generated from these objects. */
 export interface StepKind {
@@ -8,6 +8,8 @@ export interface StepKind {
   readonly defaultSkill?: string
   /** Whether a step runs in the session conversation unless its own `interactive` overrides it. */
   readonly defaultInteractive: boolean
+  /** How the step receives context unless its own `context` overrides it. */
+  readonly defaultContext: ContextMode
   /** The boundary the invoked skill returns at, when its direct invocation also handles later phases. */
   readonly handoff?: string
   /** Run by the host, deterministically: no agent, no skill, no token. */

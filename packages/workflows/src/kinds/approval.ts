@@ -3,6 +3,7 @@ import type { StepKind } from './kind'
 export const approval: StepKind = {
   name: 'approval',
   defaultInteractive: false,
+  defaultContext: 'handoff',
   host: true,
   inputs: {
     type: 'object',

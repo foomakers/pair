@@ -17,6 +17,23 @@ export const KIND_NAMES = [
   'plan-tasks',
 ] as const
 export type KindName = (typeof KIND_NAMES)[number]
+
+const CONTEXT_MODES = ['fresh', 'handoff', 'resume'] as const
+export type ContextMode = (typeof CONTEXT_MODES)[number]
+const PROMPT_POSITIONS = ['before', 'with', 'after'] as const
+export type PromptPosition = (typeof PROMPT_POSITIONS)[number]
+const MAX_PROMPT_WORDS = 300
+
+/** The start of the first word beyond the limit, if any. Whitespace separates words. */
+export function firstWordBeyond(text: string, limit: number): number | undefined {
+  let words = 0
+  for (const word of text.matchAll(/\S+/g)) {
+    if (words === limit) return word.index
+    words++
+  }
+  return undefined
+}
+
 /** The macrostates of a card, as the adopted state mapping names them. */
 export const CARD_STATES = ['Draft', 'Ready', 'In Progress', 'Review', 'Done'] as const
 export type CardState = (typeof CARD_STATES)[number]
@@ -170,6 +187,19 @@ export const stepSchema: JsonSchema = {
       type: 'boolean',
       description:
         'Run this step in the session conversation. Headless runs park when they reach it. Defaults to the kind contract. Set it on loop children and included steps.',
+    },
+    context: {
+      enum: CONTEXT_MODES,
+      description:
+        'How the step receives context from its predecessor. Defaults to the kind contract.',
+    },
+    prompt: {
+      type: 'string',
+      description: `Literal instructions for the step, up to ${MAX_PROMPT_WORDS} words.`,
+    },
+    'prompt-at': {
+      enum: PROMPT_POSITIONS,
+      description: 'Placement of the prompt relative to the skill invocation. Defaults to `after`.',
     },
     when: {
       ...whenSchema,
@@ -327,6 +357,9 @@ export interface Step {
   readonly kind: KindName | 'loop'
   readonly skill?: string
   readonly interactive?: boolean
+  readonly context?: ContextMode
+  readonly prompt?: string
+  readonly 'prompt-at'?: PromptPosition
   /** An included workflow. */
   readonly uses?: string
   readonly with?: Readonly<Record<string, unknown>>
@@ -564,6 +597,20 @@ export function parseStrict(text: string, file: string): StrictSource {
   return { value: doc.toJS(), lines: collectLines(doc.contents, [], counter), errors: [] }
 }
 
+function promptLengthErrors(
+  source: Pick<Workflow, 'file' | 'lines'>,
+  path: Path,
+  prompt: string | undefined,
+): WorkflowError[] {
+  if (prompt === undefined || firstWordBeyond(prompt, MAX_PROMPT_WORDS) === undefined) return []
+  return [
+    errorAt(source, [...path, 'prompt'], {
+      problem: `prompt exceeds ${MAX_PROMPT_WORDS} words`,
+      fix: `shorten it to at most ${MAX_PROMPT_WORDS} words`,
+    }),
+  ]
+}
+
 /** Parses one workflow file: a typed `Workflow`, or every error found, each with file, line, key and fix. */
 export function parseWorkflow(text: string, file: string, expanded = false): ParsedWorkflow {
   const source = parseStrict(text, file)
@@ -586,13 +633,13 @@ export function parseWorkflow(text: string, file: string, expanded = false): Par
     ),
   ]
   if (errors.length > 0) return { errors }
-  const undeclared = Object.entries(value.steps)
-    .flatMap(([id, step]) => [
-      [['steps', id], step] as const,
-      ...Object.entries(step.steps ?? {}).map(
-        ([childId, child]) => [['steps', id, 'steps', childId], child] as const,
-      ),
-    ])
+  const stepsWithPaths = Object.entries(value.steps).flatMap(([id, step]) => [
+    [['steps', id], step] as const,
+    ...Object.entries(step.steps ?? {}).map(
+      ([childId, child]) => [['steps', id, 'steps', childId], child] as const,
+    ),
+  ])
+  const undeclared = stepsWithPaths
     .filter(
       ([, step]) => step.alias !== undefined && !Object.hasOwn(value.aliases ?? {}, step.alias),
     )
@@ -602,7 +649,11 @@ export function parseWorkflow(text: string, file: string, expanded = false): Par
         fix: `declare ${String(step.alias)} under aliases, or cite a declared alias`,
       }),
     )
-  if (undeclared.length > 0) return { errors: undeclared }
+  const longPrompts = stepsWithPaths.flatMap(([path, step]) =>
+    promptLengthErrors({ file, lines }, path, step.prompt),
+  )
+  if (undeclared.length > 0 || longPrompts.length > 0)
+    return { errors: [...undeclared, ...longPrompts] }
 
   const steps = Object.entries(value.steps).map(parseStep)
   return { workflow: { ...value, steps, file, lines }, errors: [] }

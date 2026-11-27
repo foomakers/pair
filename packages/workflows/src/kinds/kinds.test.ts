@@ -31,6 +31,17 @@ describe('kind contracts (AC-4, design §3)', () => {
     expect(kindByName.generic.defaultSkill).toBeUndefined()
   })
 
+  it('defaults review to fresh context (#698 AC-1)', () => {
+    expect(kindByName.review.defaultContext).toBe('fresh')
+  })
+
+  it.each(Object.values(kindByName).filter(kind => kind.name !== 'review'))(
+    'defaults $name to handoff context (#698 AC-2)',
+    kind => {
+      expect(kind.defaultContext).toBe('handoff')
+    },
+  )
+
   it.each([
     ['implement', ['card'], ['branch', 'pr', 'head']],
     ['review', ['card', 'pr', 'head'], ['verdict', 'reviewedHead', 'findings']],
