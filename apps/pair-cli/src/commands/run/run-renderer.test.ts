@@ -201,6 +201,36 @@ describe('console sink — TTY: one line per card, rewritten in place (AC2)', ()
     )
   })
 
+  it('replaces batch context below its card and clears it on resume', () => {
+    const out = new FakeOut(true, 100)
+    sink = createConsoleSink({
+      out,
+      err: out,
+      mode: 'live',
+      color: false,
+      ticker: false,
+      plain: true,
+    })
+    sink.event({ event: 'card-start', card: '750' })
+    sink.event({ event: 'card-start', card: '710' })
+    sink.log('[750]   Warning: workflow changed')
+    sink.log('[750]   Run: awaiting-human — grant more rounds')
+    sink.event({ event: 'card-end', card: '750', status: 'awaiting-human' })
+    sink.log('[710]   Merge gate: worktree-setup-command')
+    expect(out.screen.map(line => line.replace(/ · \d\d:\d\d$/, ''))).toEqual([
+      '⏸ #750 · awaiting-human',
+      '    Run: awaiting-human — grant more rounds',
+      '⠋ #710',
+      '    Merge gate: worktree-setup-command',
+    ])
+    sink.event({ event: 'card-start', card: '750' })
+    sink.event({ event: 'stage', card: '710', stage: 'implement' })
+    expect(out.screen.map(line => line.replace(/ · \d\d:\d\d$/, ''))).toEqual([
+      '⠋ #750',
+      '⠋ #710 · implement',
+    ])
+  })
+
   it('re-reads the width on resize', () => {
     const out = new FakeOut(true, 100)
     sink = createConsoleSink({

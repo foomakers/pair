@@ -25,6 +25,7 @@ export interface CardView {
   readonly reason?: string | undefined
   /** Plain mode: the card's latest note (a review verdict, a recovery, an escalation), shown on its own row. */
   readonly note?: string | undefined
+  readonly context?: string | undefined
   readonly startedAt: number
   readonly endedAt?: number | undefined
 }
@@ -208,13 +209,18 @@ export function applyCardEvent(
       ...pr,
       status: event.status ?? 'failed',
       reason: event.reason,
+      context: DONE.has(event.status ?? '') ? undefined : card.context,
       endedAt: at,
     })
   else
     cards.set(event.card, {
       ...card,
       ...pr,
-      ...(event.stage !== undefined && { stage: event.stage, detail: event.detail }),
+      ...(event.stage !== undefined && {
+        stage: event.stage,
+        detail: event.detail,
+        context: undefined,
+      }),
     })
 }
 
@@ -235,6 +241,20 @@ function scrollFinished(cards: Map<string, CardView>, cap: number): CardView[] {
   return gone
 }
 
+function visibleRows(
+  cards: readonly CardView[],
+  cap: number,
+  width: number,
+  lineOf: (card: CardView) => string,
+): string[] {
+  let room = cap - cards.length
+  return cards.slice(0, cap).flatMap(card => {
+    if (card.context === undefined || room <= 0) return [lineOf(card)]
+    room--
+    return [lineOf(card), `    ${card.context}`.slice(0, width - 1)]
+  })
+}
+
 function rowBlock(input: ConsoleSinkInput, cards: Map<string, CardView>, now: () => number) {
   const { out } = input
   let drawn = 0
@@ -253,7 +273,7 @@ function rowBlock(input: ConsoleSinkInput, cards: Map<string, CardView>, now: ()
       out.write(`${up()}${gone.map(l => `${l}\n`).join('')}`)
       drawn = 0
     }
-    const lines = [...cards.values()].slice(0, cap).map(lineOf)
+    const lines = visibleRows([...cards.values()], cap, out.columns ?? 80, lineOf)
     if (status !== undefined) lines.push(status.slice(0, (out.columns ?? 80) - 1))
     if (lines.length === 0 && drawn === 0) return
     // Auto-wrap off while drawing (DECAWM): a row wider than the terminal (an ambiguous-width glyph counted as
@@ -291,6 +311,7 @@ const LOOP_STATUS = /^ {2}(Iteration \d+\/\S+:|Waiting for new cards|Checking fo
 /** A card's plain note (`  #577 review: approved`): on a plain live terminal it becomes the card row's detail. */
 const CARD_NOTE = /^ {2}#(\S+) (.+)$/
 const NOTE_CHARS = 60
+const BATCH_CONTEXT = /^\[([^\]]+)\]\s+((?:Warning|Run|Merge gate):[\s\S]+)$/
 
 /** Plain mode: the loop's iteration and a running card's note land on their rows, never as new lines. */
 function onRow(
@@ -319,6 +340,16 @@ function explainExit(cards: Map<string, CardView>, id: string): void {
     cards.set(id, { ...ended, reason: ended.note })
 }
 
+function updateContext(cards: Map<string, CardView>, line: string): boolean {
+  const context = BATCH_CONTEXT.exec(line)
+  if (!context) return false
+  const card = cards.get(context[1]!)
+  if (!card) return false
+  const message = context[2]!.split(' Resume with:')[0]!.replace(/\s+/g, ' ')
+  cards.set(card.id, { ...card, context: message })
+  return true
+}
+
 function liveTtySink(input: ConsoleSinkInput, now: () => number): ConsoleSink {
   const { out } = input
   const cards = new Map<string, CardView>()
@@ -330,6 +361,7 @@ function liveTtySink(input: ConsoleSinkInput, now: () => number): ConsoleSink {
   // Once finished the rows are final: a later line is appended below them.
   const raw = (line: string) => (finished ? void out.write(`${line}\n`) : block.above(line))
   const log = (line: string) => {
+    if (input.plain === true && !finished && updateContext(cards, line)) return block.render()
     const shown = input.plain === true ? plainNote(line) : line
     if (shown === undefined) return
     if (input.plain === true && !finished && onRow(shown, cards, block)) return
