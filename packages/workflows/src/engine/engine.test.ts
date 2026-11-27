@@ -560,7 +560,7 @@ steps:
     await next(run)
     await record(run, 'rounds/review', {
       ...failedReview,
-      findings: [finding('b', 'carried'), finding('c', 'new')],
+      findings: [finding('b', 'new'), finding('c', 'new')],
     })
     const counts = [
       { open: 2, resolved: 0, new: 2 },
