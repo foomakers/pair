@@ -262,7 +262,7 @@ function compare(runs, { prices, by = 'card' }) {
   const rows = runs.map(one => ({
     ...identityOf(one),
     configuration: configurationOf(one.steps),
-    steps: one.steps.length,
+    steps: one.steps.filter(step => step.kind !== 'loop').length,
     parks: one.parks,
     durationMs: durationOf(one.steps),
     tokens: tokensOf(one.steps),
