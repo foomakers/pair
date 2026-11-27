@@ -36,7 +36,7 @@ steps:
     on-resume: { reason: head-changed, step: review-rounds }
     with:
       gates: [target:pr]
-      checks: [head-unchanged]
+      checks: [ci-green, head-unchanged]
   approval:
     kind: approval
     escalate: { failed: stop, needs-decision: stop }
