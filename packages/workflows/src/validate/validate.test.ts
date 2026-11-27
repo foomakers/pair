@@ -453,10 +453,50 @@ ${test.beforeFix ?? ''}      fix: { kind: fix, ${allStops}${test.when ?? ''} }
       repairEngine: 'codex',
       mismatch: true,
     },
+    {
+      path: 'only success can reach a Codex summary',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+      mismatch: true,
+    },
+    {
+      path: 'only exhaustion can reach a Claude summary',
+      outcomes: 'exhausted',
+      repairEngine: 'codex',
+      summaryEngine: 'claude',
+      mismatch: true,
+    },
+    {
+      path: 'success can resume Claude',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+      summaryEngine: 'claude',
+    },
+    { path: 'exhaustion can resume Codex', outcomes: 'exhausted', repairEngine: 'codex' },
+    {
+      path: 'both exits differ from Pi',
+      outcomes: 'ok, exhausted',
+      repairEngine: 'codex',
+      summaryEngine: 'pi',
+      mismatch: true,
+    },
+    {
+      path: 'an intervening step only runs on the excluded exit',
+      outcomes: 'exhausted',
+      repairEngine: 'codex',
+      summaryEngine: 'claude',
+      beforeSummary: 'ok',
+      mismatch: true,
+    },
   ])('R760-08 (#698 AC-5): validates post-loop resume when $path', test => {
     const repair = test.repairEngine
       ? `      repair: { kind: generic, skill: my-skill, ${allStops} }\n`
       : ''
+    const when = (outcomes: string) => `, when: { output: rounds.status, is: [${outcomes}] }`
+    const beforeSummary = test.beforeSummary
+      ? `  notify: { kind: generic, skill: my-skill, ${allStops}${when(test.beforeSummary)} }\n`
+      : ''
+    const summaryEngine = test.summaryEngine ?? 'codex'
     const { errors, warnings } = check(
       `version: 1
 name: quick
@@ -472,13 +512,14 @@ steps:
         kind: generic
         skill: my-skill
         escalate: { failed: ${test.verifyFailure ?? 'continue'}, blocked: stop, needs-decision: stop }
-${repair}  summary: { kind: generic, skill: my-skill, context: resume, ${allStops} }
+${repair}${beforeSummary}  summary: { kind: generic, skill: my-skill, context: resume, ${allStops}${test.outcomes ? when(test.outcomes) : ''} }
 `,
       {
         resume: {
           engineFor: step => {
             if (step === 'rounds/verify') return test.verifyEngine ?? 'claude'
             if (step === 'rounds/repair') return test.repairEngine
+            if (step === 'summary' || step === 'notify') return summaryEngine
             return 'codex'
           },
           supports: () => true,
@@ -489,7 +530,7 @@ ${repair}  summary: { kind: generic, skill: my-skill, context: resume, ${allStop
     const contextWarnings = warnings.filter(({ key }) => key.endsWith('.context'))
     expect(contextWarnings.map(({ key, problem }) => [key, problem])).toEqual(
       test.mismatch
-        ? [['steps.summary.context', "engine 'codex' differs from the preceding engine"]]
+        ? [['steps.summary.context', `engine '${summaryEngine}' differs from the preceding engine`]]
         : [],
     )
   })
