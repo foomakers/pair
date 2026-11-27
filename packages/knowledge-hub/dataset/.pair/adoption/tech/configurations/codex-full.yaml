@@ -1,0 +1,12 @@
+version: 1
+name: codex-full
+defaults: { engine: codex, model: gpt-6.1-terra, effort: medium }
+aliases:
+  include-72-65-66-69-6e-65-6d-65-6e-74-2f-62-75-69-6c-64:
+    { engine: codex, model: gpt-6.1-terra, effort: medium }
+  include-72-65-66-69-6e-65-6d-65-6e-74-2f-6a-75-64-67-65:
+    { engine: codex, model: gpt-6.2-sol, effort: high }
+  include-64-65-6c-69-76-65-72-79-2f-62-75-69-6c-64:
+    { engine: codex, model: gpt-6.1-terra, effort: medium }
+  include-64-65-6c-69-76-65-72-79-2f-6a-75-64-67-65:
+    { engine: codex, model: gpt-6.2-sol, effort: high }
