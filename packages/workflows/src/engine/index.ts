@@ -163,6 +163,8 @@ export interface LoopRecord {
   readonly exhausted?: boolean
   readonly grants?: readonly { readonly rounds: number; readonly by: string; readonly at: string }[]
   readonly untilResult?: Readonly<Record<string, unknown>>
+  /** The last completed child survives resets of the current round's step records. */
+  readonly lastChild?: StepExecutionIdentity & { readonly id: string; readonly round: number }
 }
 
 /** A step ready to launch: the skill, its options and the inputs it receives. */
@@ -1111,6 +1113,13 @@ async function nextInLoop(
     ...boardStatesOf(child),
     ...pending,
     ...assignment,
+    ...linearContext(
+      run,
+      child,
+      () =>
+        loopPredecessor(state, step, child) ??
+        (round === 1 ? linearPredecessor(workflow, state, step) : undefined),
+    ),
     inputs: pick(mergeOutputs(inputsBefore(step, workflow.steps, state), state.latest), child.kind),
     attempt,
     round,
@@ -1253,21 +1262,62 @@ const assignmentOf = (workflow: Workflow, step: Step, run?: RunDirectory) => {
   return assignment === undefined ? {} : { assignment }
 }
 
-function linearContext(run: RunDirectory, workflow: Workflow, state: RunStateFile, step: Step) {
-  const predecessor = workflow.steps
-    .slice(0, workflow.steps.indexOf(step))
-    .reverse()
-    .find(({ id }) => state.steps[id]?.outputs !== undefined)
+type ContextSource = StepExecutionIdentity & Pick<Step, 'id' | 'kind'> & { round?: number }
+
+function loopPredecessor(
+  state: RunStateFile,
+  step: Step,
+  before?: Step,
+): ContextSource | undefined {
+  const loop = state.loops?.[step.id]
+  if (loop === undefined) return undefined
+  const children = step.steps ?? []
+  const last = loop.lastChild
+  if (last !== undefined) {
+    const child = children.find(one => one.id === last.id)
+    if (child !== undefined) return { ...last, id: `${step.id}/${child.id}`, kind: child.kind }
+  }
+
+  // Older runs may only have the results of children completed in the current round.
+  const earlier = before === undefined ? children : children.slice(0, children.indexOf(before))
+  const completed = [...earlier].reverse().find(({ id }) => {
+    const saved = state.steps[`${step.id}/${id}`]
+    return saved?.round === loop.round && saved.outputs !== undefined
+  })
+  if (completed === undefined) return undefined
+  const id = `${step.id}/${completed.id}`
+  return { id, kind: completed.kind, round: loop.round, ...executionOf(state.steps[id]!) }
+}
+
+function linearPredecessor(
+  workflow: Workflow,
+  state: RunStateFile,
+  step: Step,
+): ContextSource | undefined {
+  const earlier = workflow.steps.slice(0, workflow.steps.indexOf(step)).reverse()
+  for (const predecessor of earlier) {
+    const { id, kind } = predecessor
+    const saved = state.steps[id]
+    if (saved?.outputs === undefined) continue
+    if (kind !== 'loop') return { id, kind, ...executionOf(saved) }
+    const child = loopPredecessor(state, predecessor)
+    if (child !== undefined || (loopRound(state, predecessor) ?? 1) > 1) return child
+  }
+  return undefined
+}
+
+function linearContext(run: RunDirectory, step: Step, source: () => ContextSource | undefined) {
+  if (step.kind === 'loop' || (step.context ?? kindByName[step.kind].defaultContext) === 'fresh')
+    return {}
+  const predecessor = source()
   if (predecessor === undefined) return {}
-  const saved = state.steps[predecessor.id]
   const previousAgent =
     step.context === 'resume' &&
     predecessor.kind !== 'loop' &&
-    kindByName[predecessor.kind].host !== true &&
-    saved !== undefined
-      ? { previousAgent: executionOf(saved) }
+    kindByName[predecessor.kind].host !== true
+      ? { previousAgent: executionOf(predecessor) }
       : {}
-  const path = join(resultDir(run, predecessor.id, undefined), 'handoff.md')
+  const path = join(resultDir(run, predecessor.id, predecessor.round), 'handoff.md')
   if (!run.files.existsSync(path)) return previousAgent
   const handoff = run.files.readFileSync(path)
   return { ...previousAgent, ...(handoff.trim() !== '' && { handoff }) }
@@ -1296,9 +1346,8 @@ function plainLaunch(
     ...pendingOf(saved),
     ...retryBoardStatusOf(saved),
     ...assignmentOf(workflow, step, run),
-    ...(run !== undefined && (step.context ?? kind.defaultContext) !== 'fresh'
-      ? linearContext(run, workflow, state, step)
-      : {}),
+    ...(run !== undefined &&
+      linearContext(run, step, () => linearPredecessor(workflow, state, step))),
     inputs: pick(inputsBefore(step, workflow.steps, state), step.kind),
     attempt,
     ...(replayAttempt !== undefined && { replayAttempt }),
@@ -1387,23 +1436,34 @@ function closeRound({ state, outer, outputs }: Advance, { steps, loops }: Progre
   }
 }
 
-const withUntilResult = (
-  state: RunStateFile,
-  id: string,
-  untilResult: Record<string, unknown>,
-): RunStateFile['loops'] => {
-  const loop = state.loops?.[id]
-  return loop === undefined ? state.loops : { ...state.loops, [id]: { ...loop, untilResult } }
+function withLoopResult(
+  { state, outer, child, outputs }: Advance,
+  saved: StepRecord | undefined,
+  settled: boolean,
+): RunStateFile['loops'] {
+  const loop = state.loops?.[outer.id]
+  if (loop === undefined) return state.loops
+  return {
+    ...state.loops,
+    [outer.id]: {
+      ...loop,
+      ...(child.id === outer.until && { untilResult: outputs }),
+      ...(settled &&
+        saved?.outputs !== undefined && {
+          lastChild: { id: child.id, round: loop.round, ...executionOf(saved) },
+        }),
+    },
+  }
 }
 
 /** A loop child finished: the loop is done, loops back to the next round, or stops at max. */
 function advanceLoop(a: Advance, recorded: Record<string, StepRecord>): Progress {
   const { state, outer, child, status, outputs } = a
-  const isUntil = child.id === outer.until
-  const loops = isUntil ? withUntilResult(state, outer.id, outputs) : state.loops
+  const settled = childSettled(child, status)
+  const loops = withLoopResult(a, recorded[`${outer.id}/${child.id}`], settled)
   const progress = { steps: recorded, loops }
-  if (!childSettled(child, status)) return progress
-  if (isUntil) {
+  if (!settled) return progress
+  if (child.id === outer.until) {
     if (status === 'ok')
       return {
         steps: {

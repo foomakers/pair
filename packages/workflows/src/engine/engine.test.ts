@@ -497,6 +497,62 @@ steps:
     })
   })
 
+  describe('loop handoff (#698 AC-8)', () => {
+    const reviewHandoff = '## Review notes\n\n- Add a regression test.'
+    const fixHandoff = '## Fix notes\n\n- The new test covers the gap.'
+    const withHandoff = {
+      ...source,
+      text: text
+        .replace('review: { kind: review }', 'review: { kind: review, context: handoff }')
+        .replace('fix: { kind: fix }', 'fix: { kind: fix, context: handoff }'),
+    }
+
+    it('passes the preceding step handoff into the first loop child', async () => {
+      const run = open()
+      const handoff = '## Implementation notes\n\n- The PR is ready.'
+      await start(run, withHandoff, { card: '627' })
+      await next(run)
+      await record(run, 'implement', { ...IMPLEMENTED, handoff })
+
+      const [review] = (await next(run)).ready
+      expect(review).toMatchObject({ id: 'rounds/review', round: 1, handoff })
+    })
+
+    it('passes the failed review handoff to fix in the same round', async () => {
+      const run = await opened(withHandoff)
+      await next(run)
+      await record(run, 'rounds/review', { ...failedReview, handoff: reviewHandoff })
+
+      const [fix] = (await next(run)).ready
+      expect(fix).toMatchObject({
+        id: 'rounds/fix',
+        round: 1,
+        inputs: { findings },
+        handoff: reviewHandoff,
+      })
+    })
+
+    it.each([
+      ['handoff', withHandoff, { ...fixed, handoff: fixHandoff }, fixHandoff],
+      ['missing handoff', withHandoff, fixed, undefined],
+      ['fresh review', source, { ...fixed, handoff: fixHandoff }, undefined],
+    ])(
+      'uses the immediate predecessor across rounds with %s',
+      async (_, definition, result, expected) => {
+        const run = await opened(definition)
+        await next(run)
+        await record(run, 'rounds/review', { ...failedReview, handoff: reviewHandoff })
+        await next(run)
+        await record(run, 'rounds/fix', result)
+
+        const [review] = (await next(run)).ready
+        expect(review).toMatchObject({ id: 'rounds/review', round: 2, inputs: { head: HEAD } })
+        if (expected === undefined) expect(review).not.toHaveProperty('handoff')
+        else expect(review).toHaveProperty('handoff', expected)
+      },
+    )
+  })
+
   it('counts another failed step as a spent round and parks at max', async () => {
     const run = await opened()
     await next(run)
