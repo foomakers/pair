@@ -251,7 +251,7 @@ function compare(runs, { prices, by = 'card' }) {
     ...identityOf(one),
     configuration: configurationOf(one.steps),
     steps: one.steps.length,
-    parks: one.steps.filter(step => ['blocked', 'needs-decision', 'exhausted'].includes(step.status))
+    parks: one.steps.filter(step => ['blocked', 'needs-decision', 'exhausted'].includes(step.status) && step.escalate?.do !== 'continue')
       .map(step => ({ step: step.step, reason: step.reason })),
     durationMs: durationOf(one.steps),
     tokens: tokensOf(one.steps),
