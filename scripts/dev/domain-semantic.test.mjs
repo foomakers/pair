@@ -754,6 +754,16 @@ for (const [shape, dto, lookup = "RetryDto['cause']", imports = 'RetryDto'] of [
     "Pick<RetryDto, 'cause'>['cause']",
   ],
   [
+    'Omit projection',
+    type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`,
+    "Omit<RetryDto, 'other'>['cause']",
+  ],
+  [
+    'Readonly projection',
+    type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`,
+    "Readonly<RetryDto>['cause']",
+  ],
+  [
     'transitive alias',
     type => `type TransportDto = { cause: ${type}; other: MissingDetail }\nexport type RetryDto = TransportDto\n`,
   ],
