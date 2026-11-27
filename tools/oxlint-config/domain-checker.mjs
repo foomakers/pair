@@ -111,6 +111,18 @@ function typeDependencyCheck(program, checker) {
       checkSelectedObjectArguments(node.type, contributes, seen)
     } else if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
       for (const type of node.types) checkSelectedObjectArguments(type, contributes, seen)
+    } else if (ts.isIndexedAccessTypeNode(node)) {
+      const excluded = checkIndexedAccess(
+        node,
+        value => checkSelectedObjectArguments(value, contributes, seen),
+        seen,
+      )
+      if (excluded) {
+        check(node.indexType)
+        checkDiagnostics(node, [excluded])
+      } else {
+        check(node)
+      }
     } else {
       const name = ts.isTypeReferenceNode(node) ? node.typeName : node.expression
       let symbol = name && checker.getSymbolAtLocation(name)
@@ -189,6 +201,29 @@ function typeDependencyCheck(program, checker) {
     if (selected.length && selected.every(Boolean)) return selected.flat()
   }
 
+  function checkIndexedAccess(node, checkValue, seen) {
+    const object = checker.getTypeFromTypeNode(node.objectType)
+    const keys = constituents(checker.getTypeFromTypeNode(node.indexType))
+    const selected = keys.map(key => indexedValueNodes(object, key))
+    for (const types of selected) {
+      for (const type of types ?? []) {
+        if (type) checkValue(type)
+      }
+    }
+    if (!selected.every(Boolean)) return
+
+    const values = new Set(selected.flat())
+    checkSelectedObjectArguments(
+      node.objectType,
+      type => keys.some(key => indexedValueNodes(type, key)?.some(value => values.has(value))),
+      seen,
+    )
+    if (isUnresolvedType(checker.getTypeFromTypeNode(node))) return
+
+    // The checker has selected the members. The rest of the DTO is outside this dependency.
+    return [node.objectType.getStart(), node.objectType.end]
+  }
+
   function check(node) {
     if (
       !node ||
@@ -201,23 +236,11 @@ function typeDependencyCheck(program, checker) {
     const excluded = []
     function visit(part) {
       if (ts.isIndexedAccessTypeNode(part)) {
-        const object = checker.getTypeFromTypeNode(part.objectType)
-        const keys = constituents(checker.getTypeFromTypeNode(part.indexType))
-        const selected = keys.map(key => indexedValueNodes(object, key))
-        for (const types of selected) {
-          for (const type of types ?? []) check(type)
-        }
-        if (selected.every(Boolean)) {
-          const values = new Set(selected.flat())
-          checkSelectedObjectArguments(part.objectType, type =>
-            keys.some(key => indexedValueNodes(type, key)?.some(value => values.has(value))),
-          )
-          if (!isUnresolvedType(checker.getTypeFromTypeNode(part))) {
-            // The checker has selected the members. The rest of the DTO is outside this dependency.
-            excluded.push([part.objectType.getStart(), part.objectType.end])
-            visit(part.indexType)
-            return
-          }
+        const objectRange = checkIndexedAccess(part, check)
+        if (objectRange) {
+          excluded.push(objectRange)
+          visit(part.indexType)
+          return
         }
       }
       if (ts.isCallExpression(part) && isUnresolvedType(checker.getTypeAtLocation(part))) {
