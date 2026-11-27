@@ -750,7 +750,9 @@ for (const [argument, code] of [
       const dto = (type, value) =>
         `type Envelope<T extends string> = { cause: [T] extends [string | boolean] ? ${value} : number }\nexport type TransportDto = Envelope<${type}>\nexport type RetryDto = TransportDto\n`
       const source = (type, value) => dto(type, value) + (imported ? '' : retry)
-      const imports = imported ? { [pilot]: "import type { RetryDto } from './inputs.js'\n" + retry } : {}
+      const imports = imported
+        ? { [pilot]: "import type { RetryDto } from './inputs.js'\n" + retry }
+        : {}
       const cwd = workspace(t, { ...imports, [input]: source('string', 'string') })
       assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
 
@@ -759,7 +761,11 @@ for (const [argument, code] of [
         status: 1,
         locations: imported
           ? [[pilot, semantic, 2, 26]]
-          : [[pilot, semantic, 2, 13], [pilot, semantic, 3, 13], [pilot, semantic, 4, 26]],
+          : [
+              [pilot, semantic, 2, 13],
+              [pilot, semantic, 3, 13],
+              [pilot, semantic, 4, 26],
+            ],
       })
 
       for (const value of ['string', 'string | null']) {

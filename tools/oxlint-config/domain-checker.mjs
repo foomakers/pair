@@ -57,6 +57,7 @@ function typeDependencyCheck(program, checker) {
   const diagnosticsBySource = new Map()
   const checkedNodes = new Set()
   const checkedSymbols = new Set()
+  const checkedIndexedObjects = new Set()
 
   function checkDiagnostics(node, excluded = []) {
     const source = node.getSourceFile()
@@ -105,12 +106,26 @@ function typeDependencyCheck(program, checker) {
   }
 
   function checkIndexedObjectArguments(node) {
+    if (
+      checkedIndexedObjects.has(node) ||
+      program.isSourceFileDefaultLibrary(node.getSourceFile())
+    ) {
+      return
+    }
+    checkedIndexedObjects.add(node)
     if (ts.isParenthesizedTypeNode(node)) {
       checkIndexedObjectArguments(node.type)
     } else if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
       for (const type of node.types) checkIndexedObjectArguments(type)
     } else {
       for (const argument of node.typeArguments ?? []) check(argument)
+      if (!ts.isTypeReferenceNode(node)) return
+      checkDiagnostics(node)
+      let symbol = checker.getSymbolAtLocation(node.typeName)
+      if (symbol?.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol)
+      for (const declaration of symbol?.declarations ?? []) {
+        if (ts.isTypeAliasDeclaration(declaration)) checkIndexedObjectArguments(declaration.type)
+      }
     }
   }
 
