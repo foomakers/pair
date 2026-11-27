@@ -20,6 +20,8 @@ Tooling Preference
 
 Use native Oxlint for syntax and the TypeScript 6.0.3 API from `@typescript/typescript6` 6.0.2 for resolved nullish property checks over the same pilot files. Keep the compiler-checked `never` witness for tagged retry dispatch under native `tsc` 7.0.2. Join legacy findings by verified Git path, rule and model property identity, and require the baseline to shrink when a finding is fixed. Check newly authored model files under `src` in the dedicated model locations or with the model or domain filename suffix. Preserve named boundary DTO exceptions and independently check suppression directives in tracked source.
 
+Use the effective project compiler settings for compiler diagnostics. Domain lint checks nullability on resolved internal properties. Normalize external DTO values at ingress into a type owned by the model. For values the model only carries, use `unknown`. This keeps validation of an external value at the boundary where the model consumes it.
+
 ## Alternatives Considered
 
 - A typed Oxlint-only implementation leaves custom JS rules without a checker on the pinned version.

@@ -26,9 +26,15 @@ function workspace(t, sources) {
   mkdirSync(cwd, { recursive: true })
   symlinkSync(join(root, 'tools'), join(dir, 'tools'), 'dir')
   symlinkSync(join(root, packagePath, 'node_modules'), join(cwd, 'node_modules'), 'dir')
-  for (const name of ['package.json', 'tsconfig.json', '.oxlintrc.json']) {
-    copyFileSync(join(root, packagePath, name), join(cwd, name))
-  }
+  const { type, scripts } = JSON.parse(readFileSync(join(root, packagePath, 'package.json')))
+  writeFileSync(
+    join(cwd, 'package.json'),
+    JSON.stringify({ type, scripts: { lint: scripts.lint } }),
+  )
+  copyFileSync(join(root, packagePath, '.oxlintrc.json'), join(cwd, '.oxlintrc.json'))
+  const project = JSON.parse(readFileSync(join(root, packagePath, 'tsconfig.json')))
+  project.include.push('src/**/*.mts', 'types/**/*.ts')
+  writeFileSync(join(cwd, 'tsconfig.json'), JSON.stringify(project))
   for (const [path, source] of Object.entries(sources)) {
     const file = join(cwd, path)
     mkdirSync(dirname(file), { recursive: true })
@@ -128,6 +134,37 @@ test('#750 AC-3/4 package lint accepts non-null, opaque and nested types and exc
     'src/http/retryable-download.ts': model('label: Label', 'type Label = string | null\n'),
   })
   assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+})
+
+test('#750 AC-3/4 requires narrowing external values at the domain boundary', t => {
+  const source = assignment => `import type { Dto } from 'retry-cause'
+export interface Retry { cause: string }
+export function fromDto(dto: Dto): Retry {
+  const cause: unknown = dto.cause
+  return { cause: ${assignment} }
+}
+`
+  const cwd = workspace(t, {
+    [pilot]: source('cause'),
+    '../../node_modules/retry-cause/index.d.ts':
+      'export interface Dto { cause: unknown; other: MissingDetail }\n',
+  })
+  const rejected = lint(cwd)
+  assert.equal(rejected.status, 2, rejected.stdout + rejected.stderr)
+  assert.match(rejected.stderr, /TS2322/)
+  assert.equal(rejected.stdout, '')
+
+  writeFileSync(join(cwd, pilot), source("typeof cause === 'string' ? cause : 'unknown'"))
+  assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+  writeFileSync(
+    join(cwd, pilot),
+    'type Cause = string | null\nexport interface Retry { cause: Cause }\n',
+  )
+  assert.deepEqual(findings(lint(cwd)), {
+    status: 1,
+    locations: [[pilot, semantic, 2, 26]],
+  })
 })
 
 test('#750 R2 checks an imported DTO field at the pilot construction', t => {
@@ -357,7 +394,10 @@ ${declaration}
     assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
 
     writeFileSync(join(cwd, input), 'export type Cause = string | null\n')
-    assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, line, column]] })
+    assert.deepEqual(findings(lint(cwd)), {
+      status: 1,
+      locations: [[pilot, semantic, line, column]],
+    })
   })
 }
 
@@ -400,7 +440,12 @@ for (const [invalid, valid, rule, column] of [
   ],
   ['abstract label: string | null', 'abstract label: string', explicitNullish, 12],
   ['accessor label: string | null = null', 'accessor label: string = ""', explicitNullish, 12],
-  ['abstract accessor label: string | null', 'abstract accessor label: string', explicitNullish, 21],
+  [
+    'abstract accessor label: string | null',
+    'abstract accessor label: string',
+    explicitNullish,
+    21,
+  ],
 ]) {
   test(`#750 750-R23 AC-2/3 reports ${invalid} once`, t => {
     const source = field => `export abstract class Retry {\n  ${field}\n}\n`
@@ -442,7 +487,7 @@ test('#750 R3 fails package lint when an imported type is no longer exported', t
 
   for (const [source, code] of [
     ['export type Unrelated = string\n', 'TS2305'],
-    ['type Cause = string | null\nexport {}\n', 'TS2459'],
+    ['type Cause = string | null\nexport type Internal = Cause\n', 'TS2459'],
   ]) {
     writeFileSync(join(cwd, input), source)
     const { status, stdout, stderr } = lint(cwd)
@@ -542,7 +587,7 @@ for (const [bridge, code, broken, dependencies] of [
     "export type * from './cause.js'\nexport type * from './fallback.js'\n",
     { 'types/fallback.ts': 'export type Cause = number\n' },
   ],
-  ['types/bridge.d.ts', 'TS2307', "export type { Cause } from './missing.js'\n", {}],
+  ['types/bridge.ts', 'TS2307', "export type { Cause } from './missing.js'\n", {}],
   ['types/bridge.ts', 'TS2304', 'export type { Inner as Cause }\n', {}],
   ['types/bridge.ts', 'TS2503', 'export type Cause = Registry.Inner\n', {}],
   ['types/bridge.ts', 'TS2456', 'type Inner = Cause\nexport type Cause = Inner\n', {}],
@@ -574,48 +619,6 @@ for (const [bridge, code, broken, dependencies] of [
   }
 }
 
-for (const detail of [false, true]) {
-  const context = detail ? 'with a nullable field' : 'without a nullable field'
-  test(`#750 750-R22 AC-3/4 validates an imported package type (${context})`, t => {
-    const dependency = '../../node_modules/retry-cause'
-    const bridge = `${dependency}/bridge.d.ts`
-    const retry = cause =>
-      model(
-        detail ? 'cause: Cause\n  detail: Detail' : 'cause: Cause',
-        `import type { ${cause} } from 'retry-cause'\n${detail ? 'type Detail = string | null\n' : ''}`,
-      )
-    const cwd = workspace(t, {
-      [pilot]: retry('Cause'),
-      [`${dependency}/index.d.ts`]: "export type { Cause, OtherCause } from './bridge.js'\n",
-      [bridge]: 'export type Cause = string\nexport type OtherCause = string\n',
-    })
-    const detailLocations = detail ? [[pilot, semantic, 5, 3]] : []
-    const resolved = { status: Number(detail), locations: detailLocations }
-    assert.deepEqual(findings(lint(cwd)), resolved)
-
-    writeFileSync(
-      join(cwd, bridge),
-      'export type Cause = string | null\nexport type OtherCause = string\n',
-    )
-    assert.deepEqual(findings(lint(cwd)), {
-      status: 1,
-      locations: [[pilot, semantic, detail ? 4 : 3, 3], ...detailLocations],
-    })
-
-    writeFileSync(
-      join(cwd, bridge),
-      "export type { Cause } from './missing.js'\nexport type OtherCause = string\n",
-    )
-    const { status, stdout, stderr } = lint(cwd)
-    assert.equal(status, 2, stdout + stderr)
-    assert.ok(stderr.includes('node_modules/retry-cause/bridge.d.ts: TS2307'), stderr)
-    assert.equal(stdout, '')
-
-    writeFileSync(join(cwd, pilot), retry('OtherCause as Cause'))
-    assert.deepEqual(findings(lint(cwd)), resolved)
-  })
-}
-
 for (const [form, declaration, dependency, location] of [
   ['indexed interface', "export interface Retry { cause: RetryDto['cause'] }", 'RetryDto', [2, 26]],
   ['generic alias', 'export type Retry = Wrapper<Cause>', 'Cause', [3, 13]],
@@ -633,42 +636,33 @@ for (const [form, declaration, dependency, location] of [
   ],
   ['inferred class field', 'export class Retry { cause = readCause() }', 'readCause', [2, 22]],
 ]) {
-  for (const external of [false, true]) {
-    const context = external ? 'package declaration' : 'local source with a nullable field'
-    test(`#750 750-R22 AC-3/4 validates a selected ${form} from ${context}`, t => {
-      const input = external ? '../../node_modules/retry-cause/index.d.ts' : 'src/http/inputs.ts'
-      const specifier = external ? 'retry-cause' : './inputs.js'
-      const imports = dependency === 'readCause' ? 'import' : 'import type'
-      const wrapper = form.startsWith('generic') ? 'interface Wrapper<T> { cause: T }\n' : ''
-      const detail = external
-        ? ''
-        : '\ntype Detail = string | null\nexport interface Extra { detail: Detail }'
-      const source = `${imports} { ${dependency} } from '${specifier}'\n${wrapper}${declaration}${detail}\n`
-      const inputSource = type => {
-        if (dependency === 'RetryDto') return `export interface RetryDto { cause: ${type} }\n`
-        if (dependency === 'Cause') return `export type Cause = ${type}\n`
-        return `export declare function readCause(): ${type}\n`
-      }
-      const cwd = workspace(t, { [pilot]: source, [input]: inputSource('string') })
-      const independent = external ? [] : [[pilot, semantic, location[0] + 2, 26]]
-      assert.deepEqual(findings(lint(cwd)), { status: Number(!external), locations: independent })
+  test(`#750 750-R22 AC-3/4 validates a selected ${form} from local source`, t => {
+    const input = 'src/http/inputs.ts'
+    const imports = dependency === 'readCause' ? 'import' : 'import type'
+    const wrapper = form.startsWith('generic') ? 'interface Wrapper<T> { cause: T }\n' : ''
+    const detail = '\ntype Detail = string | null\nexport interface Extra { detail: Detail }'
+    const source = `${imports} { ${dependency} } from './inputs.js'\n${wrapper}${declaration}${detail}\n`
+    const inputSource = type => {
+      if (dependency === 'RetryDto') return `export interface RetryDto { cause: ${type} }\n`
+      if (dependency === 'Cause') return `export type Cause = ${type}\n`
+      return `export declare function readCause(): ${type}\n`
+    }
+    const cwd = workspace(t, { [pilot]: source, [input]: inputSource('string') })
+    const independent = [[pilot, semantic, location[0] + 2, 26]]
+    assert.deepEqual(findings(lint(cwd)), { status: 1, locations: independent })
 
-      writeFileSync(join(cwd, input), inputSource('string | null'))
-      assert.deepEqual(findings(lint(cwd)), {
-        status: 1,
-        locations: [[pilot, semantic, ...location], ...independent],
-      })
-
-      writeFileSync(join(cwd, input), inputSource('MissingCause'))
-      const { status, stdout, stderr } = lint(cwd)
-      assert.equal(status, 2, stdout + stderr)
-      assert.match(
-        stderr,
-        /(?:retry-cause\/index\.d\.ts|src\/http\/inputs\.ts): TS2304.*MissingCause/,
-      )
-      assert.equal(stdout, '')
+    writeFileSync(join(cwd, input), inputSource('string | null'))
+    assert.deepEqual(findings(lint(cwd)), {
+      status: 1,
+      locations: [[pilot, semantic, ...location], ...independent],
     })
-  }
+
+    writeFileSync(join(cwd, input), inputSource('MissingCause'))
+    const { status, stdout, stderr } = lint(cwd)
+    assert.equal(status, 2, stdout + stderr)
+    assert.match(stderr, /src\/http\/inputs\.ts: TS2304.*MissingCause/)
+    assert.equal(stdout, '')
+  })
 }
 
 for (const [argument, code, lookup] of [
@@ -757,134 +751,6 @@ export type RetryDto = { attempt: Envelope }`,
       assert.match(stderr, /src\/http\/dto\.ts: TS2344.*number/)
       assert.equal(stdout, '')
     }
-  })
-}
-
-for (const [shape, dto, lookup = "RetryDto['cause']", imports = 'RetryDto'] of [
-  ['interface', type => `export interface RetryDto { cause: ${type}; other: MissingDetail }\n`],
-  ['alias', type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`],
-  [
-    'Pick projection',
-    type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`,
-    "Pick<RetryDto, 'cause'>['cause']",
-  ],
-  [
-    'Omit projection',
-    type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`,
-    "Omit<RetryDto, 'other'>['cause']",
-  ],
-  [
-    'Readonly projection',
-    type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`,
-    "Readonly<RetryDto>['cause']",
-  ],
-  [
-    'Required projection',
-    type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`,
-    "Required<RetryDto>['cause']",
-  ],
-  [
-    'aliased Readonly projection',
-    type =>
-      `export type RetryDto = { cause: ${type}; other: MissingDetail }\nexport type CauseView<T> = Readonly<T>\n`,
-    "CauseView<RetryDto>['cause']",
-    'CauseView, RetryDto',
-  ],
-  [
-    'transitive alias',
-    type => `type TransportDto = { cause: ${type}; other: MissingDetail }\nexport type RetryDto = TransportDto\n`,
-  ],
-  [
-    'string index signature',
-    type => `export type RetryDto = { [key: string]: ${type}; other: MissingDetail }\n`,
-  ],
-  [
-    'record dictionary intersection',
-    type => `export type RetryDto = { other: MissingDetail } & Record<string, ${type}>\n`,
-  ],
-  [
-    'mapped dictionary intersection',
-    type => `export type RetryDto = { other: MissingDetail } & { [Key in string]: ${type} }\n`,
-  ],
-  [
-    'dictionary union',
-    type =>
-      `export type RetryDto = { [key: string]: number; other: MissingDetail } | { [key: string]: ${type}; tag: 'right' }\n`,
-  ],
-  [
-    'number index signature with a numeric string key',
-    type => `export type RetryDto = { [key: string]: MissingDetail; [key: number]: ${type} }\n`,
-    "RetryDto['0']",
-  ],
-  [
-    'unique-symbol property',
-    type => `export declare const key: unique symbol\nexport type RetryDto = { [key]: ${type}; other: MissingDetail }\n`,
-    'RetryDto[typeof key]',
-    'RetryDto, key',
-  ],
-]) {
-  test(`#750 750-R24 AC-3/4 checks only the selected property of an imported ${shape}`, t => {
-    const input = '../../node_modules/retry-cause/index.d.ts'
-    const source = `import type { ${imports} } from 'retry-cause'\nexport interface Retry { cause: ${lookup} }\n`
-    const cwd = workspace(t, { [pilot]: source, [input]: dto('string') })
-    assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
-
-    writeFileSync(join(cwd, input), dto('string | null'))
-    assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, 2, 26]] })
-
-    writeFileSync(join(cwd, input), dto('MissingCause'))
-    const { status, stdout, stderr } = lint(cwd)
-    assert.equal(status, 2, stdout + stderr)
-    assert.match(stderr, /retry-cause\/index\.d\.ts: TS2304.*MissingCause/)
-    assert.equal(stdout, '')
-  })
-}
-
-test('#750 750-R24 AC-3/4 checks only the inherited properties of an aliased Pick', t => {
-  const input = '../../node_modules/retry-cause/index.d.ts'
-  const dto = type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`
-  const cwd = workspace(t, {
-    [pilot]: `import type { RetryDto } from 'retry-cause'
-type CauseView<T extends { cause: unknown }> = Pick<T, 'cause'>
-export interface Retry extends CauseView<RetryDto> { tag: 'retry' }
-`,
-    [input]: dto('string'),
-  })
-  assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
-
-  writeFileSync(join(cwd, input), dto('string | null'))
-  assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, 3, 18]] })
-
-  writeFileSync(join(cwd, input), dto('MissingCause'))
-  const { status, stdout, stderr } = lint(cwd)
-  assert.equal(status, 2, stdout + stderr)
-  assert.match(stderr, /retry-cause\/index\.d\.ts: TS2304.*MissingCause/)
-  assert.equal(stdout, '')
-})
-
-for (const [composition, arm] of [
-  ['intersection', "& { tag: 'retry' }"],
-  ['union', "| { tag: 'skip' }"],
-]) {
-  test(`#750 750-R24 AC-3/4 checks only selected Pick fields in a tagged ${composition}`, t => {
-    const input = '../../node_modules/retry-cause/index.d.ts'
-    const dto = type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`
-    const cwd = workspace(t, {
-      [pilot]: `import type { RetryDto } from 'retry-cause'
-export type Retry = Pick<RetryDto, 'cause'> ${arm}
-`,
-      [input]: dto('string'),
-    })
-    assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
-
-    writeFileSync(join(cwd, input), dto('string | null'))
-    assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, 2, 13]] })
-
-    writeFileSync(join(cwd, input), dto('MissingCause'))
-    const { status, stdout, stderr } = lint(cwd)
-    assert.equal(status, 2, stdout + stderr)
-    assert.match(stderr, /retry-cause\/index\.d\.ts: TS2304.*MissingCause/)
-    assert.equal(stdout, '')
   })
 }
 

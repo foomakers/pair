@@ -4,12 +4,6 @@ import ts from '@typescript/typescript6'
 export const nullableDomainRule = 'pair-domain/nullable-domain-property'
 
 const nullish = ts.TypeFlags.Null | ts.TypeFlags.Undefined
-// An unresolved import, export or file reference can make an alias look like `any`.
-const dependencyFailures = new Set([
-  1192, 2303, 2305, 2306, 2307, 2308, 2459, 2613, 2614, 2688, 2694, 2724, 2732, 2792, 2834, 2835,
-  2882, 6053, 6305, 7016,
-])
-
 function failDiagnostic(diagnostic, project) {
   const location = diagnostic.file?.fileName ?? project
   throw new Error(
@@ -33,269 +27,14 @@ function loadProject(project) {
   }
   const program = ts.createProgram({
     rootNames: config.fileNames,
-    // Imported declarations can carry unresolved types into a model.
-    options: { ...config.options, skipLibCheck: false },
+    options: config.options,
     projectReferences: config.projectReferences,
   })
-  const [error] = program.getOptionsDiagnostics()
+  const error = ts
+    .getPreEmitDiagnostics(program)
+    .find(diagnostic => diagnostic.category === ts.DiagnosticCategory.Error)
   if (error) fail(error)
-  for (const source of program.getSourceFiles()) {
-    if (
-      program.isSourceFileFromExternalLibrary(source) ||
-      program.isSourceFileDefaultLibrary(source)
-    )
-      continue
-    const unresolved = program
-      .getSemanticDiagnostics(source)
-      .find(diagnostic => dependencyFailures.has(diagnostic.code))
-    if (unresolved) fail(unresolved)
-  }
   return program
-}
-
-function typeDependencyCheck(program, checker) {
-  const diagnosticsBySource = new Map()
-  const checkedNodes = new Set()
-  const checkedSymbols = new Set()
-
-  function checkDiagnostics(node, excluded = []) {
-    const source = node.getSourceFile()
-    if (!diagnosticsBySource.has(source)) {
-      diagnosticsBySource.set(
-        source,
-        program
-          .getSemanticDiagnostics(source)
-          // Composite build file lists can omit dependencies that still resolve for lint.
-          .filter(d => d.category === ts.DiagnosticCategory.Error && d.code !== 6307),
-      )
-    }
-    const start = node.getStart(source)
-    const failure = diagnosticsBySource
-      .get(source)
-      .find(
-        d =>
-          d.start >= start &&
-          d.start < node.end &&
-          !excluded.some(([from, to]) => d.start >= from && d.start < to),
-      )
-    if (failure) failDiagnostic(failure)
-  }
-
-  function follow(symbol) {
-    if (!symbol || checkedSymbols.has(symbol)) return
-    checkedSymbols.add(symbol)
-    const alias = symbol.flags & ts.SymbolFlags.Alias
-    for (const declaration of symbol.declarations ?? []) {
-      if (alias) {
-        checkDiagnostics(declaration)
-        // Resolution errors can be on the shared module specifier instead of the binding.
-        for (let node = declaration.parent; node; node = node.parent) {
-          if (!ts.isImportDeclaration(node) && !ts.isExportDeclaration(node)) continue
-          if (node.moduleSpecifier) checkDiagnostics(node.moduleSpecifier)
-          break
-        }
-      } else {
-        check(ts.isTypeAliasDeclaration(declaration) ? declaration : declaration.type)
-        if (declaration.name && isUnresolvedType(checker.getTypeAtLocation(declaration.name))) {
-          checkInference(declaration)
-        }
-      }
-    }
-    if (alias) follow(checker.getImmediateAliasedSymbol(symbol))
-  }
-
-  function checkSelectedObjectArguments(node, contributes, seen = new Set()) {
-    if (seen.has(node) || program.isSourceFileDefaultLibrary(node.getSourceFile())) return
-    seen.add(node)
-    if (ts.isParenthesizedTypeNode(node)) {
-      checkSelectedObjectArguments(node.type, contributes, seen)
-    } else if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
-      for (const type of node.types) {
-        if (contributes(checker.getTypeFromTypeNode(type))) {
-          checkSelectedObjectArguments(type, contributes, seen)
-        }
-      }
-    } else if (ts.isIndexedAccessTypeNode(node)) {
-      const excluded = checkIndexedAccess(
-        node,
-        value => checkSelectedObjectArguments(value, contributes, seen),
-        seen,
-      )
-      if (excluded) {
-        check(node.indexType)
-        checkDiagnostics(node, [excluded])
-      } else {
-        check(node)
-      }
-    } else {
-      const name = ts.isTypeReferenceNode(node) ? node.typeName : node.expression
-      let symbol = name && checker.getSymbolAtLocation(name)
-      if (symbol?.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol)
-      for (const argument of node.typeArguments ?? []) {
-        // A projection can preserve the selected property's declaration through aliases.
-        if (contributes(checker.getTypeFromTypeNode(argument))) {
-          checkSelectedObjectArguments(argument, contributes, seen)
-        } else {
-          check(argument)
-        }
-      }
-      if (!name) return
-      checkDiagnostics(node)
-      const argumentCount = node.typeArguments?.length ?? 0
-      for (const declaration of symbol?.declarations ?? []) {
-        // Errors in omitted arguments are reported at their defaults in the declaration.
-        for (const parameter of declaration.typeParameters?.slice(argumentCount) ?? []) {
-          check(parameter.default)
-        }
-        if (ts.isTypeAliasDeclaration(declaration)) {
-          checkSelectedObjectArguments(declaration.type, contributes, seen)
-        }
-        for (const clause of declaration.heritageClauses ?? []) {
-          if (clause.token !== ts.SyntaxKind.ExtendsKeyword) continue
-          for (const base of clause.types) {
-            // Only follow a base that contributes a declaration for the selected member.
-            if (contributes(checker.getTypeAtLocation(base))) {
-              checkSelectedObjectArguments(base, contributes, seen)
-            }
-          }
-        }
-      }
-    }
-  }
-
-  function indexValueNodes(object, info) {
-    if (info.declaration) return [info.declaration.type]
-    // The checker combines the value types of signatures with the same key type.
-    if (object.isUnionOrIntersection()) {
-      const parts = object.types.flatMap(type => {
-        const part = checker.getIndexInfosOfType(type).find(index => index.keyType === info.keyType)
-        return part ? [indexValueNodes(type, part)] : []
-      })
-      if (parts.length && parts.every(Boolean)) return parts.flat()
-    }
-    const mapped = object.getSymbol()?.declarations?.find(ts.isMappedTypeNode)
-    if (mapped?.type) return [mapped.type]
-  }
-
-  function indexedValueNodes(object, key) {
-    let property
-    if (key.isLiteral()) {
-      property = checker.getPropertyOfType(object, String(key.value))
-    } else if (key.flags & ts.TypeFlags.UniqueESSymbol) {
-      property = checker.getPropertiesOfType(object).find(p => p.escapedName === key.escapedName)
-    }
-    if (property) return (property.declarations ?? []).map(declaration => declaration.type)
-    if (key.flags & (ts.TypeFlags.Any | ts.TypeFlags.Never)) return
-
-    const string = checker.getStringType()
-    const number = checker.getNumberType()
-    const applicable = checker
-      .getIndexInfosOfType(object)
-      .filter(
-        ({ keyType }) =>
-          checker.isTypeAssignableTo(key, keyType) ||
-          (keyType === string && checker.isTypeAssignableTo(key, number)) ||
-          (keyType === number && key.isStringLiteral() && String(Number(key.value)) === key.value),
-      )
-    // TypeScript uses the string signature only when no more specific signature applies.
-    const specific = applicable.filter(info => info.keyType !== string)
-    const selected = (specific.length ? specific : applicable).map(info =>
-      indexValueNodes(object, info),
-    )
-    if (selected.length && selected.every(Boolean)) return selected.flat()
-  }
-
-  function checkIndexedAccess(node, checkValue, seen) {
-    const object = checker.getTypeFromTypeNode(node.objectType)
-    const keys = constituents(checker.getTypeFromTypeNode(node.indexType))
-    const selected = keys.map(key => indexedValueNodes(object, key))
-    for (const types of selected) {
-      for (const type of types ?? []) {
-        if (type) checkValue(type)
-      }
-    }
-    if (!selected.every(Boolean)) return
-
-    const values = new Set(selected.flat())
-    checkSelectedObjectArguments(
-      node.objectType,
-      type => keys.some(key => indexedValueNodes(type, key)?.some(value => values.has(value))),
-      seen,
-    )
-    if (isUnresolvedType(checker.getTypeFromTypeNode(node))) return
-
-    // The checker has selected the members. The rest of the DTO is outside this dependency.
-    return [node.objectType.getStart(), node.objectType.end]
-  }
-
-  function check(node) {
-    if (
-      !node ||
-      checkedNodes.has(node) ||
-      program.isSourceFileDefaultLibrary(node.getSourceFile())
-    ) {
-      return
-    }
-    checkedNodes.add(node)
-    const excluded = []
-    function visit(part) {
-      if (ts.isIndexedAccessTypeNode(part)) {
-        const objectRange = checkIndexedAccess(part, check)
-        if (objectRange) {
-          excluded.push(objectRange)
-          visit(part.indexType)
-          return
-        }
-      }
-      if (ts.isCallExpression(part) && isUnresolvedType(checker.getTypeAtLocation(part))) {
-        const declaration = checker.getResolvedSignature(part)?.declaration
-        if (declaration) {
-          check(declaration.type)
-          checkInference(declaration)
-        }
-      }
-      if (ts.isIdentifier(part)) follow(checker.getSymbolAtLocation(part))
-      ts.forEachChild(part, visit)
-    }
-    visit(node)
-    checkDiagnostics(node, excluded)
-  }
-
-  function checkInference(declaration) {
-    if (declaration.type) return
-    if (ts.isShorthandPropertyAssignment(declaration)) {
-      follow(checker.getShorthandAssignmentValueSymbol(declaration))
-    }
-    check(declaration.initializer)
-    if (ts.isFunctionLike(declaration) && declaration.body) {
-      if (ts.isBlock(declaration.body)) {
-        ts.forEachReturnStatement(declaration.body, statement => {
-          check(statement.expression)
-        })
-      } else {
-        check(declaration.body)
-      }
-    }
-  }
-
-  return (type, declarations, uses) => {
-    for (const declaration of declarations) check(declaration.type)
-    for (const use of uses) {
-      if (!ts.isExpressionWithTypeArguments(use) && !ts.isTypeNode(use)) continue
-      const contributes = base =>
-        base.getProperties().some(property =>
-          property.declarations?.some(declaration => declarations.includes(declaration)),
-        )
-      if (constituents(checker.getTypeAtLocation(use)).some(contributes)) {
-        checkSelectedObjectArguments(use, contributes)
-      }
-    }
-    if (!isUnresolvedType(type)) return
-    for (const declaration of declarations) checkInference(declaration)
-    // Instantiation can erase the error's origin from the generic property declaration.
-    for (const use of uses) check(use)
-    throw new Error(`${uses[0].getSourceFile().fileName}: cannot resolve domain property type`)
-  }
 }
 
 function hasDirectNullishType(type) {
@@ -446,7 +185,7 @@ function returnedExpression(node) {
   if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return node.body
 }
 
-function findNullableProperties(source, checker, symbols, checkPropertyDependencies) {
+function findNullableProperties(source, checker, symbols) {
   const findings = new Map()
   const inScope = owner => !symbols || symbols.includes(owner)
 
@@ -461,6 +200,9 @@ function findNullableProperties(source, checker, symbols, checkPropertyDependenc
   }
 
   function report(type, owner, name, location, optional = false) {
+    if (isUnresolvedType(type)) {
+      throw new Error(`${source.fileName}: cannot resolve domain property type`)
+    }
     if (!optional && !isNullishType(type)) return
     const start = location.getStart(source)
     const { line, character } = source.getLineAndCharacterOfPosition(start)
@@ -484,7 +226,6 @@ function findNullableProperties(source, checker, symbols, checkPropertyDependenc
       for (const property of objectProperties(type, checker)) {
         if (property.declarations?.some(reportsGetter)) continue
         const propertyType = checker.getTypeOfSymbolAtLocation(property, expression)
-        checkPropertyDependencies(propertyType, property.declarations ?? [], [expression])
         const declaration = property.valueDeclaration
         const local =
           declaration?.getSourceFile() === source &&
@@ -518,7 +259,6 @@ function findNullableProperties(source, checker, symbols, checkPropertyDependenc
     for (const property of checker.getPropertiesOfType(checker.getTypeAtLocation(node))) {
       if (property.declarations?.some(declaredHere)) continue
       const propertyType = checker.getTypeOfSymbolAtLocation(property, node)
-      checkPropertyDependencies(propertyType, property.declarations ?? [], bases.types)
       report(
         propertyType,
         name.text,
@@ -545,7 +285,6 @@ function findNullableProperties(source, checker, symbols, checkPropertyDependenc
       for (const property of objectProperties(type, checker)) {
         if (property.declarations?.some(alreadyChecked)) continue
         const propertyType = checker.getTypeOfSymbolAtLocation(property, node)
-        checkPropertyDependencies(propertyType, property.declarations ?? [], [node.type])
         report(
           propertyType,
           name.text,
@@ -564,7 +303,6 @@ function findNullableProperties(source, checker, symbols, checkPropertyDependenc
       const owner = domainOwner(node)
       if (inScope(owner) && !node.questionToken) {
         const propertyType = checker.getTypeAtLocation(node.name)
-        checkPropertyDependencies(propertyType, [node], [node.name])
         if (!hasNullishSyntaxFinding(node)) {
           report(propertyType, owner, node.name.getText(source), node.name)
         }
@@ -586,7 +324,6 @@ export function checkNullableDomainProperties(project, files, symbolsByFile = ne
   if (!files.length) return []
   const program = loadProject(resolve(project))
   const checker = program.getTypeChecker()
-  const checkPropertyDependencies = typeDependencyCheck(program, checker)
   const seen = new Set()
   return files.flatMap(filename => {
     const path = resolve(filename)
@@ -595,11 +332,10 @@ export function checkNullableDomainProperties(project, files, symbolsByFile = ne
     const source = program.getSourceFile(path)
     if (!source) throw new Error(`${project}: domain source ${filename} is absent from the project`)
     if (source.isDeclarationFile) return []
-    return findNullableProperties(
-      source,
-      checker,
-      symbolsByFile.get(filename),
-      checkPropertyDependencies,
-    ).map(finding => ({ ...finding, filename, code: nullableDomainRule }))
+    return findNullableProperties(source, checker, symbolsByFile.get(filename)).map(finding => ({
+      ...finding,
+      filename,
+      code: nullableDomainRule,
+    }))
   })
 }
