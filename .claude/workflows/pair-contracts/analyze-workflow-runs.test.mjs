@@ -116,6 +116,13 @@ test('compare: steps and parks with causes are available alongside time and toke
   assert.equal(runs[1].tokens.read.value, 200)
 })
 
+test('R763-05: failed loop exhaustion is not a park', () => {
+  const failed = [step('a', 'rounds', { kind: 'loop', status: 'exhausted', reason: 'loop-max' }), closing('a', 'failed')]
+  const parked = [step('b', 'rounds', { kind: 'loop', status: 'exhausted', reason: 'loop-max' }), closing('b', 'parked')]
+  const { runs } = ask('compare', { a: failed, b: parked }).groups[0]
+  assert.deepEqual(runs.map(run => run.parks.length), [0, 1])
+})
+
 test('cost: tokens per step and in total, each with its origin, and the cost from the price table', () => {
   const [run] = ask('cost', { 'quick-627': MEASURED }, { prices: PRICES }).runs
   assert.deepEqual(run.steps.map(one => [one.step, one.attempt, one.tokens.read, one.cost]), [
