@@ -933,12 +933,17 @@ function verifyReviewRecovery(opened: Opened, outcome: RunOutcome, fs: FileSyste
   return async () => (await read()) !== undefined
 }
 
-function trackedCheckpoint(opened: Opened, fs: FileSystemService, outcome: RunOutcome['run']) {
+function trackedCheckpoint(
+  opened: Opened,
+  fs: FileSystemService,
+  outcome: RunOutcome['run'],
+  wait = true,
+) {
   if (outcome !== 'failed' && outcome !== 'parked') return {}
   const { runDir, resolved } = opened
   const state = { runDir, version: checkpointVersion(fs, runDir) }
   return {
-    ...(outcome === 'parked' && opened.watch?.(runDir) === true && { checkpoint: state }),
+    ...(wait && outcome === 'parked' && opened.watch?.(runDir) === true && { checkpoint: state }),
     observedCheckpoint: { ...state, workflow: resolved.workflow.name },
   }
 }
@@ -951,7 +956,7 @@ function reportRunOutcome(opened: Opened, outcome: RunOutcome, fs: Services['fs'
     id: opened.request.card,
     outcome: outcome.run,
     ...(retryWhen && { retryWhen }),
-    ...trackedCheckpoint(opened, fs, outcome.run),
+    ...trackedCheckpoint(opened, fs, outcome.run, retryWhen !== undefined),
     ...(outcome.run === 'skipped' &&
       outcome.last?.reason === 'card-held' && {
         skipReason: outcome.last.reason,
