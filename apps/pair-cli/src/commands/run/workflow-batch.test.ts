@@ -8,8 +8,20 @@ vi.mock('./run-lock', () => ({ acquireRunLock: vi.fn() }))
 it('shows an externally resumed checkpoint as running without claiming its lock', () => {
   const fs = new InMemoryFileSystemService(
     {
-      '/run/workflow.yaml': 'version: 1',
+      '/run/workflow.yaml': `version: 1
+name: delivery
+steps:
+  loop:
+    kind: loop
+    until: review
+    max: 12
+    on-max: escalate
+    steps:
+      review: { kind: generic, skill: sample }
+`,
       '/run/state.json': JSON.stringify({
+        schemaVersion: 1,
+        workflow: { name: 'delivery' },
         card: '750',
         steps: { loop: { state: 'running' }, 'loop/review': { state: 'running' } },
         loops: { loop: { round: 12, max: 12 } },
@@ -32,6 +44,14 @@ it('shows an externally resumed checkpoint as running without claiming its lock'
   ])
   refreshCompletedCard(fs, sink, result)
   expect(sink.event).toHaveBeenCalledTimes(2)
+  vi.mocked(acquireRunLock).mockReturnValue({ kind: 'acquired', release: vi.fn() })
+  refreshCompletedCard(fs, sink, result)
+  expect(sink.event).toHaveBeenLastCalledWith({
+    event: 'card-end',
+    card: '750',
+    status: 'interrupted',
+    reason: 'worker exited before settling the step',
+  })
 })
 
 describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {

@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { dirname, join, resolve } from 'path'
 import {
   chooseWorkflow,
+  ENGINE_CREDITS_EXHAUSTED,
   checkpointCanResume,
   completedRun,
   dependencyGraph,
@@ -535,7 +536,10 @@ async function renderBatchCard(
       },
     },
     launch,
-  )
+  ).catch((error: unknown) => {
+    sink.event({ event: 'card-end', card: card.id, status: 'interrupted', reason: String(error) })
+    throw error
+  })
   if (!ended) {
     sink.event({
       event: 'card-end',
@@ -611,6 +615,20 @@ function observeExternalStep(
   sink.event({ event: 'stage', card: id, stage: running })
 }
 
+function externalStopped(
+  fs: Services['fs'],
+  id: string,
+  checkpoint: NonNullable<BatchOutcome['observedCheckpoint']>,
+) {
+  const state = savedRunState({ card: id, restart: false }, checkpoint.runDir, fs)
+  const step = state?.steps[checkpoint.runningStep ?? '']
+  if (!step || step.state === 'running' || step.state === 'pending')
+    return { status: 'interrupted', reason: 'worker exited before settling the step' }
+  const reason = step.summary ?? step.reason ?? ''
+  if (step.reason === ENGINE_CREDITS_EXHAUSTED) return { status: 'paused', reason }
+  return { status: step.state === 'failed' ? 'failed' : 'awaiting-human', reason }
+}
+
 export function refreshCompletedCard(
   fs: Services['fs'],
   sink: ConsoleSink,
@@ -637,7 +655,7 @@ export function refreshCompletedCard(
         sink.event({
           event: 'card-end',
           card: result.id,
-          status: result.outcome === 'parked' ? 'awaiting-human' : result.outcome,
+          ...externalStopped(fs, result.id, checkpoint),
         })
         delete checkpoint.runningStep
       }

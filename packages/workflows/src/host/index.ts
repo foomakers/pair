@@ -27,7 +27,14 @@ import {
   type KindName,
 } from '../grammar'
 import { violations } from '../schema'
-import type { Diagnosis, FaultAttempt, ProcessDiagnostics, StepFaults } from '../diagnosis'
+import {
+  ENGINE_CREDITS_EXHAUSTED,
+  isCreditExhausted,
+  type Diagnosis,
+  type FaultAttempt,
+  type ProcessDiagnostics,
+  type StepFaults,
+} from '../diagnosis'
 import type { CardFacts, Filter } from '../select'
 import { kindByName, settle, type StepResult, type StepStatus } from '../kinds'
 import {
@@ -329,12 +336,18 @@ export function stepInputFailure(step: StepLaunch): StepResult | undefined {
   }
 }
 
-function recordExhausted(run: RunDirectory, step: StepLaunch, fault: FaultAttempt) {
+function recordExhausted(
+  hostDriver: WorkflowHost,
+  run: RunDirectory,
+  step: StepLaunch,
+  fault: FaultAttempt,
+) {
   const { host = 'pair-run', model } = fault.origin ?? {}
   return record(run, step.id, faultResult(step.retries, { fault }), {
     host,
     model,
     attempt: step.attempt,
+    evaluateUntil: context => evaluateLoopPrompt(hostDriver, step, context),
   })
 }
 
@@ -347,7 +360,7 @@ async function execute(
   const { step } = exchange
   if (step.exhaustedFault !== undefined) {
     exchange.diagnosis = step.exhaustedFault
-    return recordExhausted(run, step, step.exhaustedFault)
+    return recordExhausted(host, run, step, step.exhaustedFault)
   }
   if (step.pendingSuccess !== undefined)
     return recordResult(host, run, step, await confirmed(host, run, step, step.pendingSuccess))
@@ -405,6 +418,7 @@ async function executeAgent(
       host: host.id,
       model: exchange.model,
       attempt: current.attempt,
+      evaluateUntil: context => evaluateLoopPrompt(host, current, context),
     })
   return settleParsedResult(host, run, current, { ...reply, model: exchange.model })
 }
@@ -447,6 +461,13 @@ function faultResult(
 ): StepResult {
   if (reply.invalid !== undefined) return reply.invalid.result
   const { kind, detail } = reply.fault
+  if (isCreditExhausted(reply.fault)) {
+    return {
+      status: 'blocked',
+      reason: ENGINE_CREDITS_EXHAUSTED,
+      summary: 'Engine credits exhausted',
+    }
+  }
   if (kind === 'invalid-result') return { status: 'failed', reason: kind, summary: detail }
   if (retries === undefined) return NO_AGENT_RESULT
   return { status: 'blocked', reason: 'fault', summary: 'the agent process failed', detail }

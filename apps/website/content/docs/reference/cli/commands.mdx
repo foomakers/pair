@@ -1025,6 +1025,8 @@ pair-cli run quick --card 627
 | A failure stops the run         | Exits `1` and prints the reason. |
 | `blocked` or `needs-decision` stops the run | Parks with exit `0` and prints the reason and resume command. |
 | A loop exhausts its rounds      | The loop's policy continues, parks or fails the run. Use `--more-rounds` to extend a parked loop. A waiting card releases its slot. The active batch checks checkpoint metadata every 30 seconds by default and requeues the card when its checkpoint allows it. Set `PAIR_CHECKPOINT_POLL_SECONDS` to change the interval. |
+| Codex reports workspace credits exhausted | Shows the card as paused and releases its slot. An active batch makes one attempt on the same step after a five-minute wait. If credits are still unavailable, the card pauses again. The retry preserves the round and the attempt history. |
+| A worker disappears before settling its step | The batch reports the card as interrupted. Relaunching the run retries the unfinished step. |
 | Launched again after a stop     | Resumes at the stopped step and preserves earlier completed and continued outcomes. |
 | Interrupted, launched again     | The step that was running runs again from the start                               |
 | Launched again when complete    | Nothing runs: "already complete". `--restart` archives the directory and starts over |

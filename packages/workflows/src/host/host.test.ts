@@ -912,3 +912,60 @@ steps:
   await start(run, source, { card: '627', moreRounds: 1 })
   expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/scan', round: 2 })
 })
+
+it('pauses a credit-blocked loop without evaluating convergence and retries the same round', async () => {
+  const files = createMemoryFiles()
+  const run = { dir: DIR, files }
+  const source = {
+    file: 'credits.yaml',
+    text: `version: 1
+name: credits
+steps:
+  rounds:
+    kind: loop
+    until:
+      step: scan
+      condition:
+        - prompt: Check the result
+          do: complete
+      max: 2
+      on-max: escalate
+    steps:
+      scan: { kind: generic, skill: scan, retries: 2, escalate: { blocked: continue } }
+`,
+  }
+  let funded = false
+  const launch = vi.fn<WorkflowHost['launch']>(async (_step, message) => {
+    if (funded)
+      return {
+        final: fenced({
+          status: 'ok',
+          summary: message.includes('Check the result') ? 'true' : 'scanned',
+        }),
+      }
+    return {
+      fault: {
+        kind: 'crash',
+        detail: 'terminal event: Your workspace is out of credits. Add credits to continue.',
+        exitCode: 1,
+        signal: null,
+        elapsedMs: 1,
+        stderrTail: [],
+      },
+    }
+  })
+  const host: WorkflowHost = { files, launch, style: 'instruction', isSafeText: () => true }
+  await start(run, source, { card: '627' })
+  expect(await runSteps(host, DIR)).toMatchObject({
+    run: 'parked',
+    last: { state: 'blocked', reason: 'engine-credits-exhausted' },
+  })
+  expect(launch).toHaveBeenCalledOnce()
+  expect(statesOf(host)['rounds/scan']).toBe('blocked')
+  funded = true
+  await start(run, source, { card: '627' })
+  const resumed = await runSteps(host, DIR)
+  expect(resumed.run).toBe('done')
+  expect(resumed.faults?.[0]?.attempts).toHaveLength(1)
+  expect(launch.mock.calls.map(([step]) => step.round)).toEqual([1, 1, 1])
+})

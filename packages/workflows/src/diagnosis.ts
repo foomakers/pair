@@ -31,3 +31,14 @@ export interface StepFaults {
   readonly step: string
   readonly attempts: readonly FaultAttempt[]
 }
+
+export const ENGINE_CREDITS_EXHAUSTED = 'engine-credits-exhausted'
+
+export function isCreditExhausted(fault: Diagnosis): boolean {
+  return (
+    fault.kind === 'crash' &&
+    /^terminal event: Your workspace is out of credits\. Add credits to continue\./i.test(
+      fault.detail,
+    )
+  )
+}

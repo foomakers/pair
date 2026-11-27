@@ -1644,6 +1644,58 @@ steps:
     }
   })
 
+  it('pauses the batch on exhausted engine credits and retries the same review after backoff', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    try {
+      write('.pair/adoption/tech/workflows/quick.yaml', loop)
+      const runIteration = deps(OK).workflow.runIteration!
+      let funded = false
+      let creditFaults = 0
+      const batch = run(
+        ['quick'],
+        OK,
+        { card: '627,628' },
+        {
+          readSelection: async () => ({
+            cards: ['627', '628'].map(id => ({
+              id,
+              title: id,
+              body: '',
+              labels: [],
+              boardState: null,
+              closed: false,
+              prerequisites: id === '628' ? ['627'] : [],
+            })),
+          }),
+          runIteration: async input => {
+            if (!funded && skillOf(input.promptText) === 'pair-process-review') {
+              creditFaults++
+              return {
+                outcome: 'failed',
+                detail:
+                  'terminal event: Your workspace is out of credits. Add credits to continue.',
+                process: { exitCode: 1, signal: null, elapsedMs: 10, stderrTail: [] },
+              }
+            }
+            return runIteration(input)
+          },
+        },
+      )
+      await vi.waitFor(() => expect(states()['rounds/review']).toBe('blocked'))
+      await vi.advanceTimersByTimeAsync(240_000)
+      expect(creditFaults).toBe(1)
+      funded = true
+      await vi.advanceTimersByTimeAsync(90_000)
+      expect(await batch).toBe(0)
+      const saved = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
+      expect(saved.loops?.['rounds']?.round).toBe(1)
+      expect(saved.steps['rounds/review']?.attempts).toHaveLength(1)
+      expect(states()['rounds/review']).toBe('ok')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('grants a round to the waiting batch and resumes it from the saved loop', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {

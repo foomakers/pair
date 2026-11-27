@@ -39,7 +39,7 @@ export interface LineOptions {
 
 const SPINNER = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 const DONE = new Set(['merged', 'completed'])
-const PARKED = new Set(['awaiting-human', 'ready-for-merge', 'target-ready'])
+const PARKED = new Set(['paused', 'awaiting-human', 'ready-for-merge', 'target-ready'])
 /** `card-end` status of a preparation run whose card goes on into the delivery cycle (one row per card). */
 export const PREPARED = 'prepared'
 const SEP = ' · '
@@ -75,7 +75,7 @@ function stateText(card: CardView): string | undefined {
     card.status !== 'escalated' &&
     card.status !== 'skipped' &&
     card.status !== 'unknown'
-  return (failed || card.status === 'skipped') && card.reason
+  return (failed || ['skipped', 'paused'].includes(card.status)) && card.reason
     ? `${card.status}: ${card.reason.slice(0, 60)}`
     : card.status
 }

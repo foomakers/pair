@@ -1,7 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { basename, join } from 'node:path'
 import { readResult } from '../dispatch'
-import type { Diagnosis, FaultAttempt, StepFaults } from '../diagnosis'
+import {
+  ENGINE_CREDITS_EXHAUSTED,
+  isCreditExhausted,
+  type Diagnosis,
+  type FaultAttempt,
+  type StepFaults,
+} from '../diagnosis'
 import {
   addressedSteps,
   assignmentFor,
@@ -508,6 +514,7 @@ function settledStatus(
   workflow: Workflow,
   state: RunStateFile,
 ): 'failed' | 'parked' | 'complete' | undefined {
+  if (creditPause(state) !== undefined) return undefined
   const exhausted = stoppedLoop(workflow, state)
   if (exhausted !== undefined) return exhausted.run
   return runIsDone(workflow, state) &&
@@ -695,16 +702,25 @@ function reopenedSteps(
     Object.entries(state.steps).map(([id, saved]) => {
       const step = steps.get(id)
       const child = !topLevel.has(id)
-      if (saved.state === 'ok') return [id, saved]
-      if (
-        saved.state !== 'skipped' &&
-        (saved.state !== 'failed' || !retryFailedSteps.has(id)) &&
-        step !== undefined &&
-        (child ? childSettled(step, saved.state) : stepSettled(step, saved.state))
-      )
-        return [id, saved]
+      if (preserveOnResume(saved, step, child, retryFailedSteps.has(id))) return [id, saved]
       return [id, reopenStep(run, saved, child ? undefined : step, step?.retries)]
     }),
+  )
+}
+
+function preserveOnResume(
+  saved: StepRecord,
+  step: Step | undefined,
+  child: boolean,
+  retry: boolean,
+) {
+  if (saved.reason === ENGINE_CREDITS_EXHAUSTED) return false
+  if (saved.state === 'ok') return true
+  return (
+    saved.state !== 'skipped' &&
+    (saved.state !== 'failed' || !retry) &&
+    step !== undefined &&
+    (child ? childSettled(step, saved.state) : stepSettled(step, saved.state))
   )
 }
 
@@ -876,8 +892,10 @@ const childSettled = (child: Step, status: StepState | undefined): boolean =>
   stepSettled(child, status) || (status === 'failed' && child.escalate?.failed === undefined)
 
 /** The state of a run with nothing left to launch: the last step decides. */
-const finalState = (state: RunStateFile, steps: readonly Step[]): 'failed' | 'done' =>
-  state.steps[steps[steps.length - 1]?.id ?? '']?.state === 'failed' ? 'failed' : 'done'
+const finalState = (state: RunStateFile, steps: readonly Step[]): 'failed' | 'done' | 'parked' => {
+  if (creditPause(state) !== undefined) return 'parked'
+  return state.steps[steps[steps.length - 1]?.id ?? '']?.state === 'failed' ? 'failed' : 'done'
+}
 
 const pick = (produced: Record<string, unknown>, kind: KindName): Record<string, unknown> => {
   const declared = fieldsOf(kindByName[kind].inputs)
@@ -916,7 +934,12 @@ export function stoppedApproval(workflow: Workflow, state: RunStateFile): string
     : undefined
 }
 
+function creditPause(state: RunStateFile) {
+  return Object.values(state.steps).find(step => step.reason === ENGINE_CREDITS_EXHAUSTED)
+}
+
 function haltAt(state: RunStateFile, step: Step, approval?: string): Halt | undefined {
+  if (creditPause(state) !== undefined) return 'parked'
   const halted =
     step.id === approval
       ? undefined
@@ -939,6 +962,9 @@ const agentOptionsOf = (step: Step) => ({
   ...(step.retries !== undefined && { retries: step.retries }),
 })
 
+const creditAwareBudget = (fault: Diagnosis, budget: number) =>
+  isCreditExhausted(fault) ? 0 : budget
+
 /** Keep process faults before moving on to the next launch or settling the step. */
 export async function recordFault(
   run: RunDirectory,
@@ -960,7 +986,7 @@ export async function recordFault(
       ...(round !== undefined && { round }),
     },
   ]
-  const remaining = previous.remainingRetries ?? step.retries ?? 0
+  const remaining = creditAwareBudget(diagnosis, previous.remainingRetries ?? step.retries ?? 0)
   const executions = remaining > 0 ? attempt + 1 : attempt
   const remainingRetries = Math.max(remaining - 1, 0)
   await writeState(run, {
@@ -1609,7 +1635,7 @@ export async function record(
     ...retryAfter(status, previous, invalidatePendingSuccess),
   }
   const progress: Progress =
-    childId !== undefined && outer?.kind === 'loop'
+    settled.reason !== ENGINE_CREDITS_EXHAUSTED && childId !== undefined && outer?.kind === 'loop'
       ? await advanceLoop(
           { state, outer, child: step, status, outputs },
           { ...state.steps, [stepId]: entry },

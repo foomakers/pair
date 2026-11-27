@@ -12,6 +12,7 @@ import { basename, extname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
 import {
+  ENGINE_CREDITS_EXHAUSTED,
   skillForStep,
   cardStateOf,
   cardStateToConfirm,
@@ -610,6 +611,9 @@ function reportProcessFaults(faults: readonly StepFaults[] = []): void {
   }
 }
 
+const runEndStatus = (outcome: RunOutcome) =>
+  outcome.last?.reason === ENGINE_CREDITS_EXHAUSTED ? 'paused' : ENDINGS[outcome.run].status
+
 function conclude(
   outcome: RunOutcome,
   { request, runDir }: Opened,
@@ -621,7 +625,7 @@ function conclude(
   sink.event({
     event: 'card-end',
     card: request.card,
-    status: ending.status,
+    status: runEndStatus(outcome),
     ...(outcome.run !== 'done' && { reason: why }),
   })
   const resume =
@@ -948,10 +952,19 @@ function trackedCheckpoint(
   }
 }
 
+function verifyCreditRecovery(outcome: RunOutcome): BatchOutcome['retryWhen'] {
+  if (outcome.last?.reason !== ENGINE_CREDITS_EXHAUSTED) return undefined
+  // A bounded, same-step launch checks availability without a separate engine invocation.
+  const retryAt = Date.now() + 5 * 60_000
+  return async () => Date.now() >= retryAt
+}
+
 function reportRunOutcome(opened: Opened, outcome: RunOutcome, fs: Services['fs']): void {
   if (opened.report === undefined) return
   const retryWhen =
-    verifyGateRecovery(opened, outcome, fs) ?? verifyReviewRecovery(opened, outcome, fs)
+    verifyCreditRecovery(outcome) ??
+    verifyGateRecovery(opened, outcome, fs) ??
+    verifyReviewRecovery(opened, outcome, fs)
   opened.report({
     id: opened.request.card,
     outcome: outcome.run,
