@@ -91,6 +91,9 @@ function typeDependencyCheck(program, checker) {
         }
       } else {
         check(ts.isTypeAliasDeclaration(declaration) ? declaration : declaration.type)
+        if (declaration.name && isUnresolvedType(checker.getTypeAtLocation(declaration.name))) {
+          checkInference(declaration)
+        }
       }
     }
     if (alias) follow(checker.getImmediateAliasedSymbol(symbol))
@@ -107,13 +110,52 @@ function typeDependencyCheck(program, checker) {
     checkedNodes.add(node)
     checkDiagnostics(node)
     function visit(part) {
+      if (ts.isIndexedAccessTypeNode(part)) {
+        const object = checker.getTypeFromTypeNode(part.objectType)
+        for (const key of constituents(checker.getTypeFromTypeNode(part.indexType))) {
+          if (!key.isLiteral()) continue
+          const property = checker.getPropertyOfType(object, String(key.value))
+          for (const declaration of property?.declarations ?? []) check(declaration.type)
+        }
+      }
+      if (ts.isCallExpression(part) && isUnresolvedType(checker.getTypeAtLocation(part))) {
+        const declaration = checker.getResolvedSignature(part)?.declaration
+        if (declaration) {
+          check(declaration.type)
+          checkInference(declaration)
+        }
+      }
       if (ts.isIdentifier(part)) follow(checker.getSymbolAtLocation(part))
       ts.forEachChild(part, visit)
     }
     visit(node)
   }
 
-  return check
+  function checkInference(declaration) {
+    if (declaration.type) return
+    if (ts.isShorthandPropertyAssignment(declaration)) {
+      follow(checker.getShorthandAssignmentValueSymbol(declaration))
+    }
+    check(declaration.initializer)
+    if (ts.isFunctionLike(declaration) && declaration.body) {
+      if (ts.isBlock(declaration.body)) {
+        ts.forEachReturnStatement(declaration.body, statement => {
+          check(statement.expression)
+        })
+      } else {
+        check(declaration.body)
+      }
+    }
+  }
+
+  return (type, declarations, uses) => {
+    for (const declaration of declarations) check(declaration.type)
+    if (!isUnresolvedType(type)) return
+    for (const declaration of declarations) checkInference(declaration)
+    // Instantiation can erase the error's origin from the generic property declaration.
+    for (const use of uses) check(use)
+    throw new Error(`${uses[0].getSourceFile().fileName}: cannot resolve domain property type`)
+  }
 }
 
 function hasDirectNullishType(type) {
@@ -240,6 +282,13 @@ function isNullishType(type) {
   return constituents(type).some(part => part.flags & nullish)
 }
 
+function isUnresolvedType(type) {
+  // The pinned compiler represents failed type resolution as a distinct intrinsic any.
+  return constituents(type).some(
+    part => part.flags & ts.TypeFlags.Any && part.intrinsicName === 'error',
+  )
+}
+
 function objectProperties(type, checker) {
   if (!(type.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection))) return []
   const properties = checker.getPropertiesOfType(type)
@@ -257,13 +306,9 @@ function returnedExpression(node) {
   if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return node.body
 }
 
-function findNullableProperties(source, checker, symbols, checkTypeDependency) {
+function findNullableProperties(source, checker, symbols, checkPropertyDependencies) {
   const findings = new Map()
   const inScope = owner => !symbols || symbols.includes(owner)
-
-  function checkPropertyDependencies(property) {
-    for (const declaration of property.declarations ?? []) checkTypeDependency(declaration.type)
-  }
 
   // The declaration visitor reports in-scope getters at their names.
   function reportsGetter(declaration) {
@@ -298,7 +343,8 @@ function findNullableProperties(source, checker, symbols, checkTypeDependency) {
     for (const type of constituents(checker.getTypeAtLocation(expression))) {
       for (const property of objectProperties(type, checker)) {
         if (property.declarations?.some(reportsGetter)) continue
-        checkPropertyDependencies(property)
+        const propertyType = checker.getTypeOfSymbolAtLocation(property, expression)
+        checkPropertyDependencies(propertyType, property.declarations ?? [], [expression])
         const declaration = property.valueDeclaration
         const local =
           declaration?.getSourceFile() === source &&
@@ -307,7 +353,7 @@ function findNullableProperties(source, checker, symbols, checkTypeDependency) {
           (ts.isPropertyAssignment(declaration) || ts.isShorthandPropertyAssignment(declaration))
         const location = local ? declaration.name : expression.getFirstToken(source)
         report(
-          checker.getTypeOfSymbolAtLocation(property, expression),
+          propertyType,
           owner,
           property.name,
           location,
@@ -320,7 +366,10 @@ function findNullableProperties(source, checker, symbols, checkTypeDependency) {
   function checkInherited(node) {
     const name = node.name
     if (!name || !inScope(name.text)) return
-    if (!node.heritageClauses?.some(clause => clause.token === ts.SyntaxKind.ExtendsKeyword)) return
+    const bases = node.heritageClauses?.find(
+      clause => clause.token === ts.SyntaxKind.ExtendsKeyword,
+    )
+    if (!bases) return
     const declarations = checker.getSymbolAtLocation(name)?.declarations ?? []
     const declaredHere = declaration =>
       declarations.includes(
@@ -328,9 +377,10 @@ function findNullableProperties(source, checker, symbols, checkTypeDependency) {
       )
     for (const property of checker.getPropertiesOfType(checker.getTypeAtLocation(node))) {
       if (property.declarations?.some(declaredHere)) continue
-      checkPropertyDependencies(property)
+      const propertyType = checker.getTypeOfSymbolAtLocation(property, node)
+      checkPropertyDependencies(propertyType, property.declarations ?? [], bases.types)
       report(
-        checker.getTypeOfSymbolAtLocation(property, node),
+        propertyType,
         name.text,
         property.name,
         name,
@@ -354,9 +404,10 @@ function findNullableProperties(source, checker, symbols, checkTypeDependency) {
     for (const type of constituents(checker.getTypeAtLocation(node))) {
       for (const property of objectProperties(type, checker)) {
         if (property.declarations?.some(alreadyChecked)) continue
-        checkPropertyDependencies(property)
+        const propertyType = checker.getTypeOfSymbolAtLocation(property, node)
+        checkPropertyDependencies(propertyType, property.declarations ?? [], [node.type])
         report(
-          checker.getTypeOfSymbolAtLocation(property, node),
+          propertyType,
           name.text,
           property.name,
           name,
@@ -372,9 +423,10 @@ function findNullableProperties(source, checker, symbols, checkTypeDependency) {
     if (isDomainProperty(node)) {
       const owner = domainOwner(node)
       if (inScope(owner) && !node.questionToken) {
-        checkTypeDependency(node.type)
+        const propertyType = checker.getTypeAtLocation(node.name)
+        checkPropertyDependencies(propertyType, [node], [node.name])
         if (!hasNullishSyntaxFinding(node)) {
-          report(checker.getTypeAtLocation(node.name), owner, node.name.getText(source), node.name)
+          report(propertyType, owner, node.name.getText(source), node.name)
         }
       }
     }
@@ -394,7 +446,7 @@ export function checkNullableDomainProperties(project, files, symbolsByFile = ne
   if (!files.length) return []
   const program = loadProject(resolve(project))
   const checker = program.getTypeChecker()
-  const checkTypeDependency = typeDependencyCheck(program, checker)
+  const checkPropertyDependencies = typeDependencyCheck(program, checker)
   const seen = new Set()
   return files.flatMap(filename => {
     const path = resolve(filename)
@@ -407,7 +459,7 @@ export function checkNullableDomainProperties(project, files, symbolsByFile = ne
       source,
       checker,
       symbolsByFile.get(filename),
-      checkTypeDependency,
+      checkPropertyDependencies,
     ).map(finding => ({ ...finding, filename, code: nullableDomainRule }))
   })
 }
