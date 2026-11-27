@@ -286,10 +286,22 @@ export async function recordMissingFaultSteps(
   if (missing.length === 0 && terminal === undefined) return
   const retained = recordsOf(run)
   if (terminal === 'parked' && missing.length === 0 && retained.at(-1)?.type === 'run') return
-  const repaired = [...retained, ...missing.map(fault => stepRecord(run, recoveredExecution(fault)))]
+  const repaired = [
+    ...retained,
+    ...missing.map(fault => stepRecord(run, recoveredExecution(fault))),
+  ]
   await write(
     run,
-    terminal === undefined ? repaired : [...repaired, closingRecord(run, repaired.filter((row): row is StepTelemetry => row.type === 'step'), terminal)],
+    terminal === undefined
+      ? repaired
+      : [
+          ...repaired,
+          closingRecord(
+            run,
+            repaired.filter((row): row is StepTelemetry => row.type === 'step'),
+            terminal,
+          ),
+        ],
   )
 }
 
@@ -342,5 +354,10 @@ function closingRecord(
  */
 export async function reopenRun(run: RunDirectory): Promise<void> {
   if (run.files.existsSync(fileOf(run)))
-    await write(run, recordsOf(run).map(record => record.type === 'run' ? { ...record, historical: true } : record))
+    await write(
+      run,
+      recordsOf(run).map(record =>
+        record.type === 'run' ? { ...record, historical: true } : record,
+      ),
+    )
 }

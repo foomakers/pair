@@ -441,7 +441,8 @@ it('ignores board synchronization jobs in the fallback CI inventory (R763-02)', 
     { id: 2, path: '.github/workflows/pair-board-sync.yml' },
   ]
   const from = (name: string, id: number, conclusion = 'success') => ({
-    ...check(name, conclusion), html_url: `https://github.com/foomakers/pair/actions/runs/${id}/job/1`,
+    ...check(name, conclusion),
+    html_url: `https://github.com/foomakers/pair/actions/runs/${id}/job/1`,
   })
   github.checks = [from('build', 1), from('created', 2, 'skipped'), from('pr-state', 2, 'failure')]
   await expect(facts(dir).ci()).resolves.toBe('green')
