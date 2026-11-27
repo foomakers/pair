@@ -68,6 +68,25 @@ test('convergence: per-card rounds, growth, new findings and cohort mean', () =>
   assert.deepEqual(result.cards[1].rounds.map(({ open, resolved, new: fresh }) => [open, resolved, fresh]), [[1, 0, 1], [2, 0, 1], [0, 2, 0]])
 })
 
+test('convergence includes terminal review and compares blocking counts (R763-04)', () => {
+  const review = (id, round, counts) => step('a', id, {
+    schema: 2, workflow: 'delivery', card: '1', kind: 'review', ...(round && { round }), findingCounts: counts,
+  })
+  const result = ask('convergence', { a: [
+    review('rounds/review', 1, { open: 1, blockingOpen: 1, resolved: 0, new: 1 }),
+    review('rounds/review', 2, { open: 3, blockingOpen: 1, resolved: 0, new: 2 }),
+    review('final-review', undefined, { open: 2, blockingOpen: 2, resolved: 2, new: 1 }),
+  ] })
+  assert.equal(result.cards[0].rounds.length, 3)
+  assert.equal(result.cards[0].growth, true)
+  assert.equal(result.cards[0].newAfterFix, 3)
+  const noGrowth = ask('convergence', { a: [
+    review('rounds/review', 1, { open: 1, blockingOpen: 1, resolved: 0, new: 1 }),
+    review('final-review', undefined, { open: 3, blockingOpen: 1, resolved: 0, new: 2 }),
+  ] })
+  assert.equal(noGrowth.cards[0].growth, false)
+})
+
 // #700 AC-5: comparison retains executions and park causes alongside duration and tokens.
 test('compare: steps and parks with causes are available alongside time and tokens', () => {
   const parked = [step('a', 'review', { status: 'blocked', reason: 'review-conflict' }), closing('a', 'parked')]

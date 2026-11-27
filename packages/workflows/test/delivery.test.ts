@@ -106,7 +106,7 @@ it.each([
 it.each(['approved', 'changes-requested'] as const)(
   'reviews the last allowed fix before stopping or gating: %s (#700 AC-9)',
   async verdict => {
-    const { start, next, record } = await import('../src/engine')
+    const { start, next, record, findingCountsOf } = await import('../src/engine')
     const { createMemoryFiles } = await import('../src/engine/memory-files')
     const dir = '/main/.pair/working/runs/delivery-700'
     const run = { dir, files: createMemoryFiles() }
@@ -153,6 +153,10 @@ it.each(['approved', 'changes-requested'] as const)(
         ? { status: 'ok', summary: 'approved', verdict, reviewedHead: fixedHead, findings: [] }
         : { status: 'failed', summary: 'gap remains', verdict, reviewedHead: fixedHead, findings },
     )
+    expect(findingCountsOf(run, finalReview!.id)).toMatchObject({
+      open: verdict === 'approved' ? 0 : 1,
+      blockingOpen: verdict === 'approved' ? 0 : 1,
+    })
     const result = await next(run)
     if (verdict === 'approved') expect(result.ready[0]?.id).toBe('checks')
     else {
