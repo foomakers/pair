@@ -15,6 +15,7 @@ export const review: StepKind = {
       card: { type: 'string', description: 'The card the pull request delivers.' },
       pr: { type: 'integer', description: 'The pull request to review.' },
       head: { type: 'string', description: 'The head to review.' },
+      findings: { type: 'array', description: 'Findings from the previous review.' },
     },
   },
   outputs: {
@@ -33,12 +34,13 @@ export const review: StepKind = {
         description: 'Every finding. The step is `failed` when at least one is blocking.',
         items: {
           type: 'object',
-          required: ['id', 'severity', 'title', 'blocking'],
+          required: ['id', 'severity', 'title', 'blocking', 'origin'],
           properties: {
             id: { type: 'string' },
             severity: { type: 'string' },
             title: { type: 'string' },
             blocking: { type: 'boolean' },
+            origin: { enum: ['new', 'carried'] },
           },
         },
       },

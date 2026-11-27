@@ -83,7 +83,13 @@ afterEach(() => {
 
 describe('pair run quick: the review answers ok (r0-1, design §3)', () => {
   it('with a blocking finding: exit 1, the review step is not ok, the run is not reported done', async () => {
-    const blocking = { id: 'F1', severity: 'Critical', title: 'data loss', blocking: true }
+    const blocking = {
+      id: 'F1',
+      severity: 'Critical',
+      title: 'data loss',
+      blocking: true,
+      origin: 'new',
+    }
 
     expect(await run(review([blocking], 'changes-requested'))).toBe(1)
 
@@ -92,7 +98,7 @@ describe('pair run quick: the review answers ok (r0-1, design §3)', () => {
   })
 
   it('with non-blocking findings only: exit 0, every step ok', async () => {
-    const note = { id: 'F2', severity: 'Minor', title: 'a typo', blocking: false }
+    const note = { id: 'F2', severity: 'Minor', title: 'a typo', blocking: false, origin: 'new' }
 
     expect(await run(review([note], 'approved'))).toBe(0)
 

@@ -217,7 +217,13 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
       const readSteps = () =>
         (JSON.parse(run.files.readFileSync(join(run.dir, STATE_FILE))) as RunStateFile).steps
       const head = 'a'.repeat(40)
-      const firstFinding = { id: 'f1', severity: 'Major', title: 'Missing check', blocking: true }
+      const firstFinding = {
+        id: 'f1',
+        severity: 'Major',
+        title: 'Missing check',
+        blocking: true,
+        origin: 'new',
+      }
       const freshFinding = { ...firstFinding, id: 'f2', title: 'Missing assertion' }
       const requested = {
         status: 'failed',

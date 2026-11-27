@@ -9,7 +9,13 @@ import { renderKindReference } from './reference'
 // finding, `ok` otherwise." The review kind enforces its own rule and its launch message states it.
 
 const HEAD = 'a'.repeat(40)
-const BLOCKING = { id: 'F1', severity: 'Critical', title: 'data loss', blocking: true }
+const BLOCKING = {
+  id: 'F1',
+  severity: 'Critical',
+  title: 'data loss',
+  blocking: true,
+  origin: 'new',
+}
 const fenced = (value: unknown) => `Done.\n\`\`\`json\n${JSON.stringify(value)}\n\`\`\``
 const reviewed = (over: Record<string, unknown>) => ({
   status: 'ok',

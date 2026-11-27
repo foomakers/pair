@@ -8,8 +8,14 @@ import { renderKindReference } from './reference'
 // #652 r0-1 — controls: what the review rule of design §3 must leave as it is.
 
 const HEAD = 'a'.repeat(40)
-const BLOCKING = { id: 'F1', severity: 'Critical', title: 'data loss', blocking: true }
-const NOTE = { id: 'F2', severity: 'Minor', title: 'a typo', blocking: false }
+const BLOCKING = {
+  id: 'F1',
+  severity: 'Critical',
+  title: 'data loss',
+  blocking: true,
+  origin: 'new',
+}
+const NOTE = { id: 'F2', severity: 'Minor', title: 'a typo', blocking: false, origin: 'new' }
 const approved = { status: 'ok', summary: 'approved', verdict: 'approved', reviewedHead: HEAD }
 const changes = { ...approved, summary: 'reviewed', verdict: 'changes-requested' }
 const PARKED = {

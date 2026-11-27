@@ -9,6 +9,7 @@ import {
   type RunIdentity,
   type RunEndStatus,
   type StepLaunch,
+  type FindingCounts,
 } from '../engine'
 import type { EscalationAction, KindName } from '../grammar'
 import type { StepStatus } from '../kinds'
@@ -90,6 +91,7 @@ export interface StepTelemetry extends RunIdentity {
   /** The execution number of this step in the run. */
   readonly attempt: number
   readonly round?: number
+  readonly findingCounts?: FindingCounts | undefined
 }
 
 /** A sum of entries: an estimate when any summed entry is one. */
@@ -128,6 +130,7 @@ export interface StepExecution {
   readonly reason?: string
   readonly diagnosis?: Diagnosis
   readonly escalate?: EscalationTelemetry
+  readonly findingCounts?: FindingCounts | undefined
 }
 
 const fileOf = (run: RunDirectory): string => join(run.dir, TELEMETRY_FILE)
@@ -195,7 +198,7 @@ const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetr
   )
 
 function stepRecord(run: RunDirectory, execution: StepExecution): StepTelemetry {
-  const { step, settings, tokens, reason, escalate, diagnosis } = execution
+  const { step, settings, tokens, reason, escalate, diagnosis, findingCounts } = execution
   const isEstimate = Object.values(tokens).some(entry => entry.source === 'estimated')
   return {
     type: 'step',
@@ -218,6 +221,7 @@ function stepRecord(run: RunDirectory, execution: StepExecution): StepTelemetry 
     ...(escalate !== undefined && { escalate }),
     attempt: step.attempt,
     ...(step.round !== undefined && { round: step.round }),
+    ...(findingCounts !== undefined && { findingCounts }),
   }
 }
 

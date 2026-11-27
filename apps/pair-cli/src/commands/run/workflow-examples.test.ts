@@ -11,7 +11,13 @@ const EXAMPLES = join(
   '../../../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-examples',
 )
 const HEAD = 'a'.repeat(40)
-const FINDING = { id: 'f1', severity: 'Major', title: 'Missing check', blocking: true }
+const FINDING = {
+  id: 'f1',
+  severity: 'Major',
+  title: 'Missing check',
+  blocking: true,
+  origin: 'new',
+}
 const IMPLEMENTED = {
   status: 'ok',
   summary: 'PR opened',

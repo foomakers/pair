@@ -2,6 +2,7 @@ import { buildMessage, checkAgentResult, type InvocationStyle } from '../dispatc
 import {
   escalationCommentTarget,
   faultsOf,
+  findingCountsOf,
   frozenWorkflow,
   next,
   priorRefinement,
@@ -696,6 +697,9 @@ export function telemetryWriter(run: ObservedRun, telemetry: TelemetryOptions) {
           ...(exchange.diagnosis !== undefined && { diagnosis: exchange.diagnosis }),
           status: result.status,
           ...(result.reason !== undefined && { reason: result.reason }),
+          ...(launch.kind === 'review' && {
+            findingCounts: findingCountsOf(run, launch.id, launch.round),
+          }),
           ...escalationOf(run.outcomes.find(outcome => outcome.id === launch.id)),
         },
         exchange.model,
