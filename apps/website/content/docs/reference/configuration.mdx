@@ -5,6 +5,35 @@ description: Reference for pair-cli's config.json, registry definitions, behavio
 
 pair-cli uses a `config.json` file to define how Knowledge Base content is distributed to your project. This file controls which registries exist, where they install, and how files are synchronized.
 
+## Named YAML workflow configurations
+
+For a named workflow, `pair-cli run delivery --config codex-balanced` selects
+`.pair/adoption/tech/configurations/codex-balanced.yaml`. The configuration
+chooses engine, model and effort for agent steps. The workflow YAML declares
+step order, dependencies between steps, loop conditions and escalation.
+
+```yaml
+version: 1
+name: codex-balanced
+defaults: { engine: codex, model: gpt-6.1-terra, effort: medium }
+aliases:
+  build: { model: gpt-6.1-terra, effort: medium }
+  judge: { model: gpt-6.2-sol, effort: high }
+steps:
+  review-rounds: { max: 6 }
+parallel: 3
+```
+
+`defaults` supplies settings without a more specific override. `aliases`
+configures named roles declared by the workflow. `steps` addresses workflow
+step IDs, with `loop-id/child-id` for a child step. On the loop itself,
+`max` overrides the round limit. `--parallel <n>` overrides `parallel` for
+the invocation. An existing run keeps its frozen configuration until resumed
+with `--reconfigure` and an explicit configuration or override.
+
+See the [run command reference](/docs/reference/cli/commands) for conditional
+loop syntax, checkpoint recovery and batch output.
+
 ## File Location
 
 The config file is located at the root of the KB dataset:

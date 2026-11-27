@@ -16,3 +16,29 @@ Use `configure` to choose engines and models for a workflow and update its confi
 The skill uses installed skills only. It explains requests the grammar cannot express and describes the nearest alternative. It shows warnings and diffs before asking for approval, never writes invalid files, and creates project overrides instead of editing shipped files.
 
 The interactive Matt Pocock worked example is planned after merge in #702.
+
+## Run several cards with dependencies
+
+From the project root, select the cards and set the concurrency limit:
+
+```sh
+pair-cli run delivery --card 101,102,103 --parallel 3 --config codex-medium --autonomous
+```
+
+If 102 depends on 101, the batch queues 102 when 101 closes and the other
+prerequisites are satisfied. The parallel limit caps active work. A parked or
+waiting card leaves a slot available for another eligible card. The batch
+checks outstanding external prerequisites at its checkpoint interval and
+refreshes dependency facts when it detects a closure.
+
+If a review loop parks at its limit, grant one round in another terminal:
+
+```sh
+pair-cli run delivery --card 101 --run-id delivery-101 --more-rounds 1
+```
+
+The active batch sees the checkpoint change and resumes card 101. Use
+`--verbose` to see the resolved settings and detailed diagnostics. See the
+[CLI reference](/docs/reference/cli/commands) for paused or interrupted runs and
+[configuration reference](/docs/reference/configuration#named-yaml-workflow-configurations)
+for a complete profile example.
