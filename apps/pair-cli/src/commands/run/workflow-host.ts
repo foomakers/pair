@@ -468,7 +468,12 @@ function agentOutcome(
   return { fault: { kind, detail: result.detail, ...process } }
 }
 
-function lostSession(engine: EngineDefinition, id: string, result: IterationResult): boolean {
+function lostSession(
+  engine: EngineDefinition,
+  id: string,
+  result: IterationResult,
+  missingResume: boolean,
+): boolean {
   const process = result.process
   if (
     result.outcome !== 'failed' ||
@@ -480,8 +485,11 @@ function lostSession(engine: EngineDefinition, id: string, result: IterationResu
     process.exitCode === 0
   )
     return false
-  return [result.detail, ...process.stderrTail].some(line =>
-    engine.resume?.isMissing(stripVTControlCharacters(line).trim(), id),
+  return (
+    missingResume ||
+    [result.detail, ...process.stderrTail].some(line =>
+      engine.resume?.isMissing(stripVTControlCharacters(line).trim(), id),
+    )
   )
 }
 
@@ -489,12 +497,21 @@ function watchAgent(
   engine: EngineDefinition,
   kind: StepLaunch['kind'],
   meter: (usage: Usage) => void,
+  resumeSessionId: string | undefined,
 ) {
   let text: string | undefined
   let actualModel: string | undefined
   let observed: EngineObservation = {}
+  let missingResume = false
   return {
     onEvent(payload: unknown) {
+      if (
+        resumeSessionId !== undefined &&
+        engine.resume?.isMissingEvent?.(payload, resumeSessionId)
+      ) {
+        missingResume = true
+        return // The pre-turn error echoes the requested id without starting a session.
+      }
       text = finalTextOf(engine, payload, text)
       actualModel = reportedModelOf(engine, payload) ?? actualModel
       observed = observeEngineEvent(observed, engine.id, payload)
@@ -504,18 +521,13 @@ function watchAgent(
     },
     shouldFinalizeLastMessage: () =>
       text === undefined || !checkAgentResult(text, kindByName[kind]).valid,
-    finish(
-      result: IterationResult,
-      settings: StepSettings,
-      resumeSessionId: string | undefined,
-      elapsedMs: number,
-    ): AgentLaunchResult {
+    finish(result: IterationResult, settings: StepSettings, elapsedMs: number): AgentLaunchResult {
       const final = result.lastMessage ?? text
       if (
         resumeSessionId !== undefined &&
         observed.sessionId === undefined &&
         final === undefined &&
-        lostSession(engine, resumeSessionId, result)
+        lostSession(engine, resumeSessionId, result, missingResume)
       )
         return { sessionMissing: true }
       const outcome = agentOutcome(result, final, elapsedMs)
@@ -542,7 +554,12 @@ function launcher(run: Launch) {
     const settings = stepSettings(resolved, run.effective, stepOf(resolved, step.id))
     const engine = engineOf(resolved, settings.engine)
     const { autonomyArgs, idle } = policyOf(engine)
-    const { onEvent, shouldFinalizeLastMessage, finish } = watchAgent(engine, step.kind, meter)
+    const { onEvent, shouldFinalizeLastMessage, finish } = watchAgent(
+      engine,
+      step.kind,
+      meter,
+      resumeSessionId,
+    )
     const started = performance.now()
     const result = await runIteration({
       engine,
@@ -563,7 +580,7 @@ function launcher(run: Launch) {
     })
     // An interrupted run records nothing: the step stays `running` on disk and runs again at the next launch.
     if (isInterrupted()) throw new Error('interrupted')
-    return finish(result, settings, resumeSessionId, Math.round(performance.now() - started))
+    return finish(result, settings, Math.round(performance.now() - started))
   }
 }
 

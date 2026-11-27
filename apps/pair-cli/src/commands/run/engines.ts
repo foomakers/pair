@@ -94,6 +94,7 @@ export interface EngineDefinition {
     readonly headlessArgs?: readonly string[]
     readonly sessionArgs: (id: string) => readonly string[]
     readonly isMissing: (line: string, id: string) => boolean
+    readonly isMissingEvent?: (payload: unknown, id: string) => boolean
   }
   /**
    * The flag this engine takes a model under, when a project pins one (`engine.model` in
@@ -204,6 +205,21 @@ const OPENCODE: EngineDefinition = {
  * `-p` also documents that "the workspace trust dialog is skipped in non-interactive mode",
  * so there is no trust decision here for the driver to take.
  */
+const missingClaudeSession = (id: string) => `No conversation found with session ID: ${id}`
+
+function claudeMissingSessionEvent(payload: unknown, id: string): boolean {
+  if (typeof payload !== 'object' || payload === null) return false
+  const event = payload as Record<string, unknown>
+  return (
+    event['type'] === 'result' &&
+    event['subtype'] === 'error_during_execution' &&
+    event['num_turns'] === 0 &&
+    event['session_id'] === id &&
+    Array.isArray(event['errors']) &&
+    event['errors'].includes(missingClaudeSession(id))
+  )
+}
+
 const CLAUDE: EngineDefinition = {
   id: 'claude',
   modelFlag: '--model',
@@ -222,7 +238,8 @@ const CLAUDE: EngineDefinition = {
   ],
   resume: {
     sessionArgs: id => ['--resume', id],
-    isMissing: (line, id) => line === `No conversation found with session ID: ${id}`,
+    isMissing: (line, id) => line === missingClaudeSession(id),
+    isMissingEvent: claudeMissingSessionEvent,
   },
   skillInvocationStyle: 'slash',
   autonomy: { kind: 'flag', autonomyArgs: ['--permission-mode', 'bypassPermissions'] },
