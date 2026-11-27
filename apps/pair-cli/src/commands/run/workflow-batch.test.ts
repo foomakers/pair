@@ -83,6 +83,29 @@ describe('workflow scheduling (#678 AC-4, AC-5, AC-6)', () => {
     ])
   })
 
+  it('refreshes pending dependencies after completion before starting the next card', async () => {
+    const cards = [
+      { id: '10', prerequisites: ['9'] },
+      { id: '9', prerequisites: [] },
+      { id: '11', prerequisites: [] },
+    ]
+    const launches: string[] = []
+    const refreshDependencies = vi.fn(async (ids: readonly string[]) =>
+      ids.map(id => ({ id, prerequisites: id === '10' ? ['11'] : [] })),
+    )
+    await scheduleWorkflowCards(
+      cards,
+      { limit: 1, refreshDependencies },
+      new Map(),
+      async ({ id }) => {
+        launches.push(id)
+        return { id, outcome: 'done' }
+      },
+    )
+    expect(launches).toEqual(['9', '11', '10'])
+    expect(refreshDependencies.mock.calls).toEqual([[['10', '11']], [['10']]])
+  })
+
   it('skips a completed card and starts its dependent', async () => {
     const prior = new Map([['9', { id: '9', outcome: 'skipped' as const }]])
     const cards = [

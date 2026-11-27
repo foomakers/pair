@@ -67,33 +67,88 @@ interface Schedulable {
   readonly prerequisites: readonly string[]
 }
 
+function trackDependencies(
+  cards: readonly Schedulable[],
+  prior: ReadonlyMap<string, BatchOutcome>,
+  read: WorkflowSelection['readDependencies'],
+) {
+  const selected = new Set(cards.map(card => card.id))
+  const pending = new Set(cards.filter(card => !prior.has(card.id)).map(card => card.id))
+  const facts = new Map(cards.map(card => [card.id, card]))
+  const errors = new Map<string, string>()
+  let refresh = Promise.resolve()
+  let updating = 0
+  return {
+    start: (id: string) => pending.delete(id),
+    updating: () => updating > 0,
+    error: (id: string) => errors.get(id),
+    blocked: (id: string) =>
+      facts
+        .get(id)
+        ?.prerequisites.filter(dep => selected.has(dep) && !isCompleted(prior.get(dep))) ?? [],
+    outside: (id: string) => facts.get(id)?.prerequisites.filter(dep => !selected.has(dep)),
+    afterCompletion: () => {
+      if (read === undefined || pending.size === 0) return refresh
+      updating++
+      refresh = refresh
+        .then(async () => {
+          const ids = [...pending]
+          if (ids.length === 0) return
+          try {
+            const fresh = new Map((await read(ids)).map(row => [row.id, row]))
+            for (const id of ids) {
+              const row = fresh.get(id)
+              if (row && !row.error) {
+                facts.set(id, row)
+                errors.delete(id)
+              } else errors.set(id, row?.error ?? 'dependency facts missing')
+            }
+          } catch (error) {
+            for (const id of ids) errors.set(id, String(error))
+          }
+        })
+        .finally(() => {
+          updating--
+        })
+      return refresh
+    },
+  }
+}
+
 export async function scheduleWorkflowCards<T extends Schedulable>(
   cards: readonly T[],
-  options: { limit: number; polling?: PoolInput<never, BatchOutcome>['polling'] },
+  options: {
+    limit: number
+    polling?: PoolInput<never, BatchOutcome>['polling']
+    refreshDependencies?: WorkflowSelection['readDependencies']
+  },
   prior: Map<string, BatchOutcome>,
   launch: (card: T) => Promise<BatchOutcome>,
 ): Promise<BatchOutcome[]> {
   const { limit, polling } = options
-  const graph = dependencyGraph(cards)
-  const blocked = (id: string) =>
-    graph.get(id)?.selected.filter(dep => !isCompleted(prior.get(dep))) ?? []
+  dependencyGraph(cards)
+  const deps = trackDependencies(cards, prior, options.refreshDependencies)
   await runPool<T, BatchOutcome>({
     items: cards.filter(card => !prior.has(card.id)),
     limit,
-    ready: card => blocked(card.id).length === 0,
+    ready: card => !deps.updating() && !deps.error(card.id) && deps.blocked(card.id).length === 0,
     mayStart: () => !isInterrupted(),
     ...(polling && { polling: withRefresh(polling, prior) }),
     worker: async card => {
+      deps.start(card.id)
       const result = await launch(card)
+      if (isCompleted(result)) await deps.afterCompletion()
       prior.set(card.id, result)
       return result
     },
     notStarted: ({ id }) => {
       const reason = isInterrupted()
         ? 'interrupted'
-        : `waiting for ${blocked(id)
+        : (deps.error(id) ??
+          `waiting for ${deps
+            .blocked(id)
             .map(dep => `#${dep}`)
-            .join(', ')}`
+            .join(', ')}`)
       const result = { id, outcome: 'waiting', reason } as const
       prior.set(id, result)
       return result
@@ -104,7 +159,7 @@ export async function scheduleWorkflowCards<T extends Schedulable>(
       return result
     },
   })
-  return cards.map(({ id }) => withOutsideDependencies(prior.get(id)!, graph.get(id)?.outside))
+  return cards.map(({ id }) => withOutsideDependencies(prior.get(id)!, deps.outside(id)))
 }
 
 function withRefresh(
@@ -150,6 +205,7 @@ interface Plan {
   readonly limit: number
   readonly runId: (id: string) => string
   readonly summary: string
+  readonly readDependencies: WorkflowSelection['readDependencies']
   readonly members: ReadonlyMap<string, string>
 }
 
@@ -357,6 +413,7 @@ async function planBatch(input: BatchRequest, resolved: BatchDefinition): Promis
   return {
     ...candidates,
     selected: await loadDependencies(candidates, readDependencies),
+    readDependencies,
     limit: request.parallel ?? base?.configuration.parallel ?? 1,
     runId,
     summary,
@@ -589,7 +646,7 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
         const cards = [
           ...(await scheduleWorkflowCards(
             selected,
-            { limit, polling: checkpoint.polling },
+            { limit, polling: checkpoint.polling, refreshDependencies: plan.readDependencies },
             prior,
             launch,
           )),
