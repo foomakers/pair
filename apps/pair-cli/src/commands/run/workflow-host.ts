@@ -1019,7 +1019,7 @@ async function runOnConsole(
       telemetryOf(config, opened),
     )
     reportRunOutcome(opened, outcome, services.fs)
-    reportProcessFaults(outcome.faults)
+    if (config.verbose) reportProcessFaults(outcome.faults)
     const ending = { sink, fs: services.fs, verbose: config.verbose === true }
     return (
       exhaustedEnding(opened, outcome, ending) ?? conclude(outcome, opened, sink, ending.verbose)
@@ -1483,7 +1483,7 @@ function restoreStoppedFaults(
   config: RunCommandConfig,
   resolved: Resolved,
 ) {
-  reportProcessFaults(faultsOf(run))
+  if (config.verbose) reportProcessFaults(faultsOf(run))
   const options = telemetryOf(config, { resolved, effective: effectiveConfiguration(run) })
   return recoverTerminalFaults(status, options && telemetryWriter(observeRun(run), options))
 }

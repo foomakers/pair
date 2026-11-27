@@ -1072,7 +1072,7 @@ it.each([
   expect(state.steps['implement']).toMatchObject({ state: 'blocked', reason: row.reason })
 })
 
-it('#704 F6: the default live terminal prints the final stderr tail (AC-4)', async () => {
+it.each([false, true])('#761: verbose=%s controls the live stderr tail', async verbose => {
   write(
     '.pair/adoption/tech/workflows/quick.yaml',
     QUICK.replace('    kind: implement', '    kind: implement\n    retries: 0'),
@@ -1088,7 +1088,7 @@ it('#704 F6: the default live terminal prints the final stderr tail (AC-4)', asy
     await run(
       ['quick'],
       OK,
-      {},
+      { verbose },
       {
         runIteration: async () => ({
           outcome: 'failed',
@@ -1098,8 +1098,8 @@ it('#704 F6: the default live terminal prints the final stderr tail (AC-4)', asy
       },
     ),
   ).toBe(0)
-  expect(output).toContain('Process fault — implement attempt 1')
-  expect(output).toContain('  stderr: Connection refused\n')
+  expect(output.includes('Process fault — implement attempt 1')).toBe(verbose)
+  expect(output.includes('  stderr: Connection refused\n')).toBe(verbose)
 })
 
 it('#704 F8: telemetry keeps the watchdog limit and redacts stderr (AC-4)', async () => {
@@ -1140,7 +1140,7 @@ it.each(['complete', 'parked', 'failed'])(
         ? `  draft: ${draft}`
         : `  rounds:\n    kind: loop\n    max: 1\n    until: draft\n    on-max: ${disposition === 'parked' ? 'escalate' : 'fail'}\n    steps:\n      draft: ${draft}`
     write('.pair/adoption/tech/workflows/quick.yaml', `version: 1\nname: quick\nsteps:\n${steps}\n`)
-    const options = { telemetry: true }
+    const options = { telemetry: true, verbose: true }
     await run(['quick'], { 'pair-process-implement': () => undefined }, options)
     const ledger = join(runDir(), 'telemetry.jsonl')
     expect(fs.readFileSync(ledger)).toContain('"diagnosis"')
@@ -1329,7 +1329,7 @@ it('#704 AC-4: quick retries a killed agent and records both diagnoses', async (
     })
   }
 
-  expect(await run(['quick'], OK, { telemetry: true }, { runIteration })).toBe(0)
+  expect(await run(['quick'], OK, { telemetry: true, verbose: true }, { runIteration })).toBe(0)
   expect(prompts).toEqual([prompts[0], prompts[0]])
   const state = JSON.parse(fs.readFileSync(join(runDir(), 'state.json'))) as RunStateFile
   const diagnosis = {
@@ -2447,7 +2447,7 @@ steps:
       expect(await resumed).toBe(0)
       expect(states('closure-627')).toMatchObject({ late: 'skipped', merge: 'ok' })
       expect(actions.filter(action => action === 'merge')).toHaveLength(1)
-      expect(lines.join('\n')).toContain('Process fault — implement attempt 1 (crash)')
+      expect(lines.join('\n')).not.toContain('Process fault — implement attempt 1 (crash)')
       expect(fs.readFileSync(join(dir, 'telemetry.jsonl'))).toContain('"diagnosis"')
     } else {
       await expect(resumed).rejects.toThrow('card-closed')
