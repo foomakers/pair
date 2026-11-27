@@ -9,6 +9,8 @@ author: Foomakers
 
 ## Arguments
 
+For a request to run the cycle on a card, use `/pair-workflow-run delivery --card <card>`.
+
 Use `/pair-workflow-run <workflow> --card <card> [--config <name-or-file>]` to open a workflow on a card, or `/pair-workflow-run <run-id>` to resume.
 
 | Argument | Description |
