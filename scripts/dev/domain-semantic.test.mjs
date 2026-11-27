@@ -862,6 +862,32 @@ export interface Retry extends CauseView<RetryDto> { tag: 'retry' }
   assert.equal(stdout, '')
 })
 
+for (const [composition, arm] of [
+  ['intersection', "& { tag: 'retry' }"],
+  ['union', "| { tag: 'skip' }"],
+]) {
+  test(`#750 750-R24 AC-3/4 checks only selected Pick fields in a tagged ${composition}`, t => {
+    const input = '../../node_modules/retry-cause/index.d.ts'
+    const dto = type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`
+    const cwd = workspace(t, {
+      [pilot]: `import type { RetryDto } from 'retry-cause'
+export type Retry = Pick<RetryDto, 'cause'> ${arm}
+`,
+      [input]: dto('string'),
+    })
+    assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+    writeFileSync(join(cwd, input), dto('string | null'))
+    assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, 2, 13]] })
+
+    writeFileSync(join(cwd, input), dto('MissingCause'))
+    const { status, stdout, stderr } = lint(cwd)
+    assert.equal(status, 2, stdout + stderr)
+    assert.match(stderr, /retry-cause\/index\.d\.ts: TS2304.*MissingCause/)
+    assert.equal(stdout, '')
+  })
+}
+
 for (const [argument, code] of [
   ['MissingCause', 'TS2304'],
   ['boolean', 'TS2344'],
