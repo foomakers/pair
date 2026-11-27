@@ -135,6 +135,7 @@ export interface StepRecord extends StepExecutionIdentity {
 
 export interface FindingCounts {
   readonly open: number
+  readonly blockingOpen?: number
   readonly resolved: number
   readonly new: number
 }
@@ -1650,15 +1651,15 @@ function observeEscalation(
 
 function reviewFindingCounts(
   step: Step,
-  round: number | undefined,
   outputs: Record<string, unknown>,
   state: RunStateFile,
 ): FindingCounts | undefined {
   const findings = outputs['findings']
-  if (step.kind !== 'review' || round === undefined || !Array.isArray(findings)) return undefined
+  if (step.kind !== 'review' || !Array.isArray(findings)) return undefined
   const prior = state.latest?.['findings']
   return {
     open: findings.length,
+    blockingOpen: findings.filter(one => one.blocking === true).length,
     resolved: Array.isArray(prior)
       ? prior.filter((old: { id: string }) => !findings.some(one => one.id === old.id)).length
       : 0,
@@ -1717,7 +1718,7 @@ export async function record(
       .filter(name => name in settled)
       .map(name => [name, settled[name]]),
   )
-  const findingCounts = reviewFindingCounts(step, round, outputs, state)
+  const findingCounts = reviewFindingCounts(step, outputs, state)
   const entry = {
     ...recordOf(settled, outputs, round, previous),
     ...(findingCounts !== undefined && { findingCounts }),

@@ -318,13 +318,13 @@ const trend = runs => ({
 })
 
 const convergence = runs => {
-  const reviews = runs.flatMap(one => one.steps.filter(step => step.kind === 'review' && step.findingCounts && step.round !== undefined))
+  const reviews = runs.flatMap(one => one.steps.filter(step => step.kind === 'review' && step.findingCounts))
   const cards = groupBy(reviews, 'card').map(([card, steps]) => {
-    const rounds = steps.map(step => ({ round: step.round, ...step.findingCounts })).sort((a, b) => a.round - b.round)
+    const rounds = steps.map((step, index) => ({ round: step.round ?? index + 1, ...step.findingCounts })).sort((a, b) => a.round - b.round)
     return {
       card,
       rounds,
-      growth: rounds.some((round, index) => index > 0 && round.open > rounds[index - 1].open),
+      growth: rounds.some((round, index) => index > 0 && (round.blockingOpen ?? round.open) > (rounds[index - 1].blockingOpen ?? rounds[index - 1].open)),
       newAfterFix: total(rounds.slice(1).map(round => round.new)),
     }
   })

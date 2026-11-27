@@ -793,6 +793,7 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
         step: 'review',
         kind: 'review',
         uses: 'pair-process-review',
+        findingCounts: { open: 0, blockingOpen: 0, resolved: 0, new: 0 },
         ...launchedWith,
         startedAt: '2026-11-21T10:02:00.000Z',
         durationMs: 30_000,

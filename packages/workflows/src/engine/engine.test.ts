@@ -563,8 +563,8 @@ steps:
       findings: [finding('b', 'new'), finding('c', 'new')],
     })
     const counts = [
-      { open: 2, resolved: 0, new: 2 },
-      { open: 2, resolved: 1, new: 1 },
+      { open: 2, blockingOpen: 2, resolved: 0, new: 2 },
+      { open: 2, blockingOpen: 2, resolved: 1, new: 1 },
     ]
     expect.soft(findingCountsOf(run, 'rounds/review', 1)).toEqual(counts[0])
     expect.soft(findingCountsOf(run, 'rounds/review', 2)).toEqual(counts[1])
