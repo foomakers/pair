@@ -1432,22 +1432,44 @@ describe('engine session continuation (#698 AC-4)', () => {
   })
 
   function transport(
-    scenario: 'available' | 'other engine' | 'unreported session' | 'lost session',
+    scenario:
+      | 'available'
+      | 'other engine'
+      | 'unreported session'
+      | 'lost session'
+      | 'lost session event'
+      | 'execution error',
   ) {
     return vi.fn<NonNullable<WorkflowHostDependencies['runIteration']>>(async input => {
       if (skillOf(input.promptText) === 'pair-process-implement') {
         if (scenario !== 'unreported session')
           input.onEvent?.({ type: 'system', subtype: 'init', session_id: priorSession })
         input.onEvent?.({ type: 'result', subtype: 'success', result: first })
-      } else if (scenario === 'lost session' && resumeOf(input) === priorSession) {
+      } else if (
+        (scenario === 'lost session' ||
+          scenario === 'lost session event' ||
+          scenario === 'execution error') &&
+        resumeOf(input) === priorSession
+      ) {
+        const diagnostic = `No conversation found with session ID: ${priorSession}`
+        if (scenario !== 'lost session') {
+          input.onEvent?.({
+            type: 'result',
+            subtype: 'error_during_execution',
+            is_error: true,
+            num_turns: scenario === 'lost session event' ? 0 : 1,
+            session_id: priorSession,
+            errors: [diagnostic],
+          })
+        }
         return {
           outcome: 'failed',
-          detail: 'no terminal event',
+          detail: scenario === 'lost session' ? 'no terminal event' : 'error_during_execution',
           process: {
             exitCode: 1,
             signal: null,
             elapsedMs: 1,
-            stderrTail: [`No conversation found with session ID: ${priorSession}`],
+            stderrTail: [diagnostic],
           },
         }
       } else if (input.engine.id === 'codex') {
@@ -1486,7 +1508,7 @@ describe('engine session continuation (#698 AC-4)', () => {
     expect(state().steps['review']).not.toHaveProperty('contextFallback')
   })
 
-  it.each(['other engine', 'unreported session', 'lost session'] as const)(
+  it.each(['other engine', 'unreported session', 'lost session', 'lost session event'] as const)(
     'prints and records the handoff fallback for %s',
     async scenario => {
       const options = scenario === 'other engine' ? { config: 'quick' } : { engine: 'claude' }
@@ -1500,15 +1522,28 @@ describe('engine session continuation (#698 AC-4)', () => {
       expect(await run(['quick'], OK, options, { runIteration })).toBe(0)
 
       const inputs = runIteration.mock.calls.map(([input]) => input).slice(1)
+      const attemptedResume = scenario === 'lost session' || scenario === 'lost session event'
       expect(inputs.map(resumeOf)).toEqual(
-        scenario === 'lost session' ? [priorSession, undefined] : [undefined],
+        attemptedResume ? [priorSession, undefined] : [undefined],
       )
-      if (scenario === 'lost session') expect(inputs[0]?.promptText).not.toContain(handoff)
+      if (attemptedResume) expect(inputs[0]?.promptText).not.toContain(handoff)
       expect(inputs.at(-1)?.engine.id).toBe(scenario === 'other engine' ? 'codex' : 'claude')
       expect(inputs.at(-1)?.promptText).toContain(handoff)
       expectFallback()
     },
   )
+
+  it('preserves a resume failure after Claude has started working', async () => {
+    const runIteration = transport('execution error')
+    expect(await run(['quick'], OK, { engine: 'claude' }, { runIteration })).toBe(1)
+
+    expect(runIteration.mock.calls.map(([input]) => resumeOf(input))).toEqual([
+      undefined,
+      priorSession,
+    ])
+    expect(state().steps['review']).toMatchObject({ state: 'failed' })
+    expect(state().steps['review']).not.toHaveProperty('contextFallback')
+  })
 
   it('uses the handoff when a resume step interrupted during launch is run again', async () => {
     const runIteration = transport('available')
