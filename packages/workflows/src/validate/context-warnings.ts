@@ -54,7 +54,12 @@ function matchesExit(
 
 function matchesNonUntil(exit: LoopExit, step: Step, values: readonly unknown[]) {
   if (step === exit.last && exit.earlyFailure) return values.includes('failed')
-  return step.escalate?.failed === undefined && values.every(value => value === 'failed')
+  return values.every(value => {
+    if (value === 'failed') return escalationAction(step.escalate?.failed) !== 'continue'
+    if (value === 'blocked' || value === 'needs-decision')
+      return escalationAction(step.escalate?.[value]) !== 'continue'
+    return false
+  })
     ? false
     : undefined
 }
