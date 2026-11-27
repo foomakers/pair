@@ -771,6 +771,18 @@ for (const [shape, dto, lookup = "RetryDto['cause']", imports = 'RetryDto'] of [
     "Readonly<RetryDto>['cause']",
   ],
   [
+    'Required projection',
+    type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`,
+    "Required<RetryDto>['cause']",
+  ],
+  [
+    'aliased Readonly projection',
+    type =>
+      `export type RetryDto = { cause: ${type}; other: MissingDetail }\nexport type CauseView<T> = Readonly<T>\n`,
+    "CauseView<RetryDto>['cause']",
+    'CauseView, RetryDto',
+  ],
+  [
     'transitive alias',
     type => `type TransportDto = { cause: ${type}; other: MissingDetail }\nexport type RetryDto = TransportDto\n`,
   ],
@@ -819,6 +831,28 @@ for (const [shape, dto, lookup = "RetryDto['cause']", imports = 'RetryDto'] of [
     assert.equal(stdout, '')
   })
 }
+
+test('#750 750-R24 AC-3/4 checks only the inherited properties of an aliased Pick', t => {
+  const input = '../../node_modules/retry-cause/index.d.ts'
+  const dto = type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`
+  const cwd = workspace(t, {
+    [pilot]: `import type { RetryDto } from 'retry-cause'
+type CauseView<T extends { cause: unknown }> = Pick<T, 'cause'>
+export interface Retry extends CauseView<RetryDto> { tag: 'retry' }
+`,
+    [input]: dto('string'),
+  })
+  assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+  writeFileSync(join(cwd, input), dto('string | null'))
+  assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, 3, 18]] })
+
+  writeFileSync(join(cwd, input), dto('MissingCause'))
+  const { status, stdout, stderr } = lint(cwd)
+  assert.equal(status, 2, stdout + stderr)
+  assert.match(stderr, /retry-cause\/index\.d\.ts: TS2304.*MissingCause/)
+  assert.equal(stdout, '')
+})
 
 for (const [argument, code] of [
   ['MissingCause', 'TS2304'],
