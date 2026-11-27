@@ -56,6 +56,8 @@ describe('workflow authoring (AC-1–8)', () => {
 
   it('routes a card delivery cycle to the delivery workflow (#700 AC-7)', () => {
     const assistant = read('plugin/skills/pair-assistant/SKILL.md')
-    expect(assistant).toMatch(/\|[^|\n]*\bcycle\b[^|\n]*\bcard\b[^|\n]*\|[^|\n]*\/pair-workflow-run\s+delivery\b/i)
+    expect(assistant).toMatch(
+      /\|[^|\n]*\bcycle\b[^|\n]*\bcard\b[^|\n]*\|[^|\n]*\/pair-workflow-run\s+delivery\b/i,
+    )
   })
 })
