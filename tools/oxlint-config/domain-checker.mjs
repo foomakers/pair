@@ -104,6 +104,16 @@ function typeDependencyCheck(program, checker) {
     if (alias) follow(checker.getImmediateAliasedSymbol(symbol))
   }
 
+  function checkIndexedObjectArguments(node) {
+    if (ts.isParenthesizedTypeNode(node)) {
+      checkIndexedObjectArguments(node.type)
+    } else if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
+      for (const type of node.types) checkIndexedObjectArguments(type)
+    } else {
+      for (const argument of node.typeArguments ?? []) check(argument)
+    }
+  }
+
   function check(node) {
     if (
       !node ||
@@ -125,6 +135,7 @@ function typeDependencyCheck(program, checker) {
         }
         if (selected.every(Boolean) && !isUnresolvedType(checker.getTypeFromTypeNode(part))) {
           // The checker has selected the members. The rest of the DTO is outside this dependency.
+          checkIndexedObjectArguments(part.objectType)
           excluded.push([part.objectType.getStart(), part.objectType.end])
           visit(part.indexType)
           return
