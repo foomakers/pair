@@ -153,9 +153,10 @@ it.each(['approved', 'changes-requested'] as const)(
         ? { status: 'ok', summary: 'approved', verdict, reviewedHead: fixedHead, findings: [] }
         : { status: 'failed', summary: 'gap remains', verdict, reviewedHead: fixedHead, findings },
     )
+    const count = { approved: 0, 'changes-requested': 1 }[verdict]
     expect(findingCountsOf(run, finalReview!.id)).toMatchObject({
-      open: verdict === 'approved' ? 0 : 1,
-      blockingOpen: verdict === 'approved' ? 0 : 1,
+      open: count,
+      blockingOpen: count,
     })
     const result = await next(run)
     if (verdict === 'approved') expect(result.ready[0]?.id).toBe('checks')
