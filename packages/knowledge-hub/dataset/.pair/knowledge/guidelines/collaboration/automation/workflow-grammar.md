@@ -42,6 +42,9 @@ steps:
 | `kind` | String. `implement`, `review`, `fix`, `generic`, `gate`, `approval`, `merge`, `refine-story`, `plan-tasks` or `loop`. | Required. | Every step. The kind determines its inputs, `with` keys and result contract. | `kind: implement` |
 | `skill` | Installed skill name. | The kind's default. Required for a `generic` step without an include. | Agent steps. Host kinds execute directly. | `skill: pair-process-review` |
 | `interactive` | Boolean. | The kind's default. Ordinary agent kinds default to `false`. | A skill step with `true` runs in the session conversation. The terminal parks and prints the session resume command. | `interactive: true` |
+| `context` | `fresh`, `handoff` or `resume`. | `fresh` for review, `handoff` for other agent kinds. | Agent steps, including loop children. Structured inputs are always available. | `context: fresh` |
+| `prompt` | Literal text up to 300 words. | Absent. | Agent steps, including loop children. | `prompt: Check the release notes.` |
+| `prompt-at` | `before`, `with` or `after`. | `after`. | Agent steps that declare a prompt. | `prompt-at: before` |
 | `args` | Reserved outside grammar v1. A YAML `args` key is refused. | Absent. | The launcher supplies inputs from `--card` and earlier outputs. Use `with` for kind options. | `pair-cli run quick --card 627` |
 | `when` | Object with card filters (`has`, `lacks`, `status`, `assignee`) or an earlier `output` and an `is` list. | Run unconditionally. | Executable steps other than a loop's `until` child. A mismatch skips the step. | `when: { output: implement.status, is: [failed] }` |
 | `uses` | String naming an included workflow. | Absent. | A typed or generic include call. The included steps replace the call in file order. | `uses: shared` |
@@ -145,6 +148,26 @@ An `ok` result from `until` exits the loop immediately. By default, a failed `un
 ```
 
 Card facts are read as the step is about to start. Conditions combine keys with AND and match any value inside a list. For an output condition use `<step>.<name>` or `loop/step.name` with `is: [...]`. The producer must appear first. An unmatched condition records `skipped` and the run continues. Validation refuses an input that only a skippable step produces.
+
+## Step context and prompts
+
+```yaml
+steps:
+  implement:
+    kind: implement
+    prompt: Check the examples against the acceptance criteria.
+  review:
+    kind: review
+    context: fresh
+```
+
+- `fresh` gives the agent its structured inputs and omits the preceding handoff.
+- `handoff` adds the optional Markdown from the last step that ran. Skips do not consume the handoff. Inside a loop this follows execution order, including across rounds and after a failed result that lets the run continue.
+- `resume` continues the preceding agent session when the host and engine can reuse it. The message carries structured inputs and omits the handoff. If the session is unavailable, or the current step is relaunched after an interruption, the host uses `handoff` and prints the reason it records in run state.
+
+Validation warns when resume is known to be unavailable or a review uses context other than `fresh`. Every agent can return an optional `handoff` string. The engine saves it as Markdown, including for failed results, and truncates it after 800 words with a note.
+
+A prompt belongs in the workflow. The text stays literal and passes the host's prompt-safety check, as does any handoff added to the message. `prompt-at: before` puts instructions before the invocation, `with` joins them to the invocation line, and `after` puts them after the invocation and its inputs and options. The handoff follows those instructions. The kind's result contract always comes last.
 
 ## Agent timeouts and retries
 
@@ -399,15 +422,18 @@ steps:
 .pair/working/runs/<run-id>/
   run.lock              one process per run
   workflow.yaml         the workflow, frozen when the run started
-  state.json            each step’s state, outputs and process fault attempts
+  state.json            step state, outputs, session details, fallback and process faults
   steps/<step-id>/
     result.json         the validated result of the step
+    handoff.md          optional Markdown kept for the next step
     output.log          the final message of the agent
 ```
 
 `<run-id>` defaults to `<workflow>-<card>`. A step starts `pending`, becomes `running` when launched and ends with one of the recorded [outcomes](#outcomes-and-escalation).
 
 A step's `attempts` array records its process faults with an attempt number, loop round when applicable, detail, exit code, signal, elapsed time in milliseconds and the last 20 stderr lines. The end-of-run output includes these diagnoses, and enabled telemetry records each fault on its own step-attempt row.
+
+Loop children write the same artifacts under `steps/<loop-id>/<step-id>/round-<n>/`.
 
 | When                                | What happens                                                      |
 | ----------------------------------- | ----------------------------------------------------------------- |

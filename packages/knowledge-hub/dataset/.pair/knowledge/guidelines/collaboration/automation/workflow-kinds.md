@@ -26,6 +26,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 
 - **Default skill**: `pair-process-implement`
 - **Default interactive**: `false`
+- **Default context**: `handoff`
 - **Handoff**: `published-pr`
 - **Inputs**
   - `card`: `string` — The card to implement.
@@ -44,6 +45,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 
 - **Default skill**: `pair-process-review`
 - **Default interactive**: `false`
+- **Default context**: `fresh`
 - **Inputs**
   - `card`: `string` — The card the pull request delivers.
   - `pr`: `integer` — The pull request to review.
@@ -66,6 +68,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 
 - **Default skill**: `pair-process-fix`
 - **Default interactive**: `false`
+- **Default context**: `handoff`
 - **Inputs**
   - `card`: `string` — The card the pull request delivers.
   - `pr`: `integer` — The pull request to fix.
@@ -92,6 +95,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 
 - **Default skill**: none: `skill` is required
 - **Default interactive**: `false`
+- **Default context**: `handoff`
 - **Inputs**
   - Whatever the launch and the earlier steps produced.
 - **Outputs**, required when `status` is `ok`
@@ -165,6 +169,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 
 - **Default skill**: `pair-process-refine-story`
 - **Default interactive**: `false`
+- **Default context**: `handoff`
 - **Inputs**
   - `card`: `string` — The card to prepare.
 - **Outputs**, required when `status` is `ok`
@@ -180,6 +185,7 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
 
 - **Default skill**: `pair-process-plan-tasks`
 - **Default interactive**: `false`
+- **Default context**: `handoff`
 - **Inputs**
   - `card`: `string` — The card to prepare.
 - **Outputs**, required when `status` is `ok`
