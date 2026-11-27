@@ -333,9 +333,11 @@ const convergence = runs => {
     const reviews = steps.filter(step => step.kind === 'review' && step.findingCounts)
     if (!reviews.length) return []
     const rounds = reviews.map((step, index) => ({ round: step.round ?? index + 1, ...step.findingCounts }))
+    let lastRound = reviews[0].round
     const pairs = reviews.slice(1).map((review, index) => {
       const previous = reviews[index]
-      const reset = review.round != null && previous.round != null && review.round <= previous.round
+      const reset = review.round != null && lastRound != null && review.round <= lastRound
+      if (review.round != null) lastRound = review.round
       const between = steps.slice(steps.indexOf(previous) + 1, steps.indexOf(review))
       return { review, previous, reset, fixed: !reset && between.some(step => step.kind === 'fix') }
     })
