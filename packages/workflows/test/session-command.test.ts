@@ -173,6 +173,33 @@ it('#696 AC-8: validates and previews effective settings without opening a run',
   expect(git('worktree', 'list', '--porcelain')).not.toContain(`worktree ${worktree}\n`)
 })
 
+it.each(['claude', 'codex'])(
+  'R760-03 (#698 AC-5): validates a Claude predecessor and %s resume consumer',
+  engine => {
+    write(workflowFile, workflow.replace('    interactive: true', '    context: resume'))
+    write(
+      configFile,
+      `version: 1\nname: mine\ndefaults: { engine: claude }\nsteps: { discuss: { engine: ${engine} } }\n`,
+    )
+
+    expect(JSON.parse(successful(['validate', 'quick', '--config', 'mine']))).toMatchObject({
+      steps: [
+        { id: 'draft', settings: { engine: 'claude' } },
+        { id: 'discuss', settings: { engine } },
+      ],
+      warnings:
+        engine === 'claude'
+          ? []
+          : [
+              expect.stringMatching(
+                /steps\.discuss\.context.*'codex' differs from the preceding engine/,
+              ),
+            ],
+    })
+    expect(existsSync(dirname(runDir))).toBe(false)
+  },
+)
+
 it('#696 AC-8: validates the mapped configuration from a staged non-Git project', () => {
   const staged = realpathSync(mkdtempSync(join(tmpdir(), 'pair-workflow-staged-')))
   try {
