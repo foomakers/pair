@@ -115,7 +115,7 @@ export function buildMessage(step: StepLaunch, kind: StepKind, options: MessageO
   ].join('\n')
 }
 
-const FENCED_JSON = /```json[ \t]*\r?\n([\s\S]*?)```/g
+const FENCED_JSON = /```json[ \t]*\r?\n([\s\S]*?)^[ \t]*`{3,}[ \t]*\r?$/gm
 
 const invalid = (kind: StepKind, detail: string) => ({
   valid: false,
