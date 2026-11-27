@@ -87,14 +87,20 @@ describe('cardLine — pure over (card, columns, color, now)', () => {
     expect(displayId('573')).toBe('#573')
   })
 
-  it('colors only when asked', () => {
-    expect(
-      cardLine(
-        { ...running, status: 'merged', endedAt: T0 },
-        { columns: 80, color: true, now: T0 },
-      ),
-    ).toMatch(ANSI)
-    expect(cardLine(running, { columns: 80, color: false, now: T0 })).not.toMatch(ANSI)
+  it.each([
+    [undefined, 36],
+    ['awaiting-human', '38;5;208'],
+    ['failed', 31],
+    ['merged', 32],
+  ])('colors the entire %s row only when asked (#761)', (status, code) => {
+    const card = { ...running, status }
+    for (const columns of [12, 80]) {
+      const plain = cardLine(card, { columns, color: false, now: T0 })
+      expect(plain).not.toMatch(ANSI)
+      expect(cardLine(card, { columns, color: true, now: T0 })).toBe(
+        `\x1b[${code}m${plain}\x1b[39m`,
+      )
+    }
   })
 })
 

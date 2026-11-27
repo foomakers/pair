@@ -1043,6 +1043,61 @@ steps:
 })
 
 describe('declarative loop exit', () => {
+  it('gives a granted convergence window its own baseline (#761)', async () => {
+    const run = {
+      ...open(),
+      evaluateUntil: async ({ history }: { history: readonly unknown[] }) => history.length >= 3,
+    }
+    const source = {
+      file: 'workflows/quick.yaml',
+      text: `version: 1
+name: quick
+steps:
+  rounds:
+    kind: loop
+    until:
+      step: review
+      condition:
+        - prompt: Escalate after four reviews with the same blocking finding count.
+          do: escalate
+      max: 9
+      on-max: escalate
+    steps:
+      review: { kind: review, escalate: { failed: continue } }
+      fix: { kind: fix }
+`,
+    }
+    const findings = [{ id: 'a', severity: 'Major', title: 'gap', blocking: true }]
+    const failedReview = {
+      status: 'failed',
+      summary: 'gap',
+      verdict: 'changes-requested',
+      reviewedHead: HEAD,
+      findings,
+    }
+    const fixed = {
+      status: 'ok',
+      summary: 'fixed',
+      head: HEAD,
+      resolutions: [{ id: 'a', status: 'resolved', reason: 'fixed' }],
+    }
+
+    await start(run, source, { card: '627' })
+    for (const round of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      if (round === 5) await start(run, source, { card: '627', moreRounds: 5 })
+      expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/review', round })
+      await record(run, 'rounds/review', failedReview)
+      if (round === 4 || round === 8) {
+        expect((await next(run)).run).toBe('parked')
+        expect(stateOf(run).steps.rounds.reason).toBe('loop-condition')
+      } else {
+        expect((await next(run)).ready[0]).toMatchObject({ id: 'rounds/fix', round })
+        await record(run, 'rounds/fix', fixed)
+      }
+    }
+    expect(stateOf(run).loops.rounds.untilHistory).toHaveLength(8)
+  })
+
   it.each([
     { matched: true, approved: true },
     { matched: false, approved: true },

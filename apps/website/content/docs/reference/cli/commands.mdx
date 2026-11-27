@@ -1065,7 +1065,7 @@ child (or its `status`) with a scalar `equals` value. An absent output does not 
 the current result and previous observations to the child's configured engine
 and requires a boolean decision. An invalid decision fails the invocation.
 The first matching clause wins. `complete` exits successfully and `escalate`
-parks the loop for `--more-rounds`. If no clause matches, the workflow continues
+parks the loop for `--more-rounds`. Granting rounds starts a new observation window for prompt conditions and retains earlier observations in the checkpoint. If no clause matches, the workflow continues
 the round unless it has reached `max`. At the limit it evaluates the observed
 child first, then applies `on-max` before launching any remaining children.
 

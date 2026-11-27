@@ -155,6 +155,7 @@ export interface LoopRecord {
   readonly grants?: readonly { readonly rounds: number; readonly by: string; readonly at: string }[]
   readonly untilResult?: Readonly<Record<string, unknown>>
   readonly untilHistory?: readonly LoopObservation[]
+  readonly untilHistoryOffset?: number
 }
 
 /** A step ready to launch: the skill, its options and the inputs it receives. */
@@ -463,6 +464,7 @@ function withMoreRounds(
         round: loop.round + 1,
         max: loop.round + options.moreRounds,
         exhausted: false,
+        untilHistoryOffset: loop.untilHistory?.length ?? 0,
         grants,
       },
     },
@@ -1447,7 +1449,11 @@ async function observeUntil(
   const current = { round: loop.round, status, outputs }
   const history = loop.untilHistory ?? []
   const decision = extended
-    ? await evaluateConditions(extended, { current, history, inputs: state.latest ?? {} }, evaluate)
+    ? await evaluateConditions(
+        extended,
+        { current, history: history.slice(loop.untilHistoryOffset), inputs: state.latest ?? {} },
+        evaluate,
+      )
     : status === 'ok'
       ? 'complete'
       : undefined

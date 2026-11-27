@@ -44,20 +44,20 @@ const PARKED = new Set(['paused', 'awaiting-human', 'ready-for-merge', 'target-r
 export const PREPARED = 'prepared'
 const SEP = ' · '
 
-const paint = (color: boolean, code: number, text: string) =>
+const paint = (color: boolean, code: number | string, text: string) =>
   color ? `\x1b[${code}m${text}\x1b[39m` : text
 
 /** A numeric id reads as an issue (`#573`); any other id (Linear, Filesystem) renders unchanged. */
 export const displayId = (id: string): string => (/^\d+$/.test(id) ? `#${id}` : id)
 
-function icon(card: CardView, color: boolean, frame: number): string {
-  if (card.status === undefined) return paint(color, 36, SPINNER[frame % SPINNER.length]!)
-  if (DONE.has(card.status)) return paint(color, 32, '✔')
-  if (card.status === 'skipped') return paint(color, 90, '–')
-  if (PARKED.has(card.status)) return paint(color, 33, '⏸')
-  if (card.status === 'escalated') return paint(color, 33, '⚠')
-  if (card.status === 'unknown') return paint(color, 90, '?')
-  return paint(color, 31, '✖')
+function rowStyle(card: CardView, frame: number): readonly [string, number | string] {
+  if (card.status === undefined) return [SPINNER[frame % SPINNER.length]!, 36]
+  if (DONE.has(card.status)) return ['✔', 32]
+  if (card.status === 'skipped') return ['–', 90]
+  if (PARKED.has(card.status)) return ['⏸', '38;5;208']
+  if (card.status === 'escalated') return ['⚠', '38;5;208']
+  if (card.status === 'unknown') return ['?', 90]
+  return ['✖', 31]
 }
 
 function elapsed(ms: number): string {
@@ -82,24 +82,24 @@ function stateText(card: CardView): string | undefined {
 
 /** An ANSI CSI sequence (built from the ESC code so no control character sits in a regex literal). */
 export const ANSI_SEQUENCE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, 'g')
-const visible = (text: string) => text.replace(ANSI_SEQUENCE, '').length
 
 /** One card's line: icon · id · title · stage · PR · elapsed — the title shrinks first, then goes. */
 export function cardLine(card: CardView, options: LineOptions): string {
-  const head = `${icon(card, options.color, options.frame ?? 0)} ${displayId(card.id)}`
+  const [icon, color] = rowStyle(card, options.frame ?? 0)
+  const head = `${icon} ${displayId(card.id)}`
   const tail = [
     stateText(card),
     card.pr !== undefined ? `PR #${card.pr}` : undefined,
     elapsed((card.endedAt ?? options.now) - card.startedAt),
   ].filter((part): part is string => part !== undefined)
   const fixed = [head, ...tail].join(SEP)
-  const room = options.columns - visible(fixed) - SEP.length
+  const room = options.columns - fixed.length - SEP.length
   if (card.title && room >= 2) {
     const title = card.title.length <= room ? card.title : `${card.title.slice(0, room - 1)}…`
-    return [head, title, ...tail].join(SEP)
+    return paint(options.color, color, [head, title, ...tail].join(SEP))
   }
-  const plain = visible(fixed)
-  return plain <= options.columns ? fixed : `${fixed.slice(0, options.columns - 1)}…`
+  const line = fixed.length <= options.columns ? fixed : `${fixed.slice(0, options.columns - 1)}…`
+  return paint(options.color, color, line)
 }
 
 /** Append-only line for a non-TTY: timestamp, event, then whatever the event carries. */
