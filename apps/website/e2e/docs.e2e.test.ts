@@ -966,6 +966,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/process-lifecycle',
     '/docs/process-lifecycle/delivery-cycle',
     '/docs/process-lifecycle/delivery-workflow',
+    '/docs/process-lifecycle/shipped-workflows',
     '/docs/process-lifecycle/lifecycle-modes',
     '/docs/process-lifecycle/phases',
     '/docs/process-lifecycle/phases/execution',

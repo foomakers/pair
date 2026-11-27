@@ -48,11 +48,12 @@
 - `$BASE_URL/docs/concepts/skills`
 - `$BASE_URL/docs/concepts/tag-driven-gates`
 
-**Process Lifecycle** (12 pages):
+**Process Lifecycle** (13 pages):
 
 - `$BASE_URL/docs/process-lifecycle`
 - `$BASE_URL/docs/process-lifecycle/delivery-cycle`
 - `$BASE_URL/docs/process-lifecycle/delivery-workflow`
+- `$BASE_URL/docs/process-lifecycle/shipped-workflows`
 - `$BASE_URL/docs/process-lifecycle/lifecycle-modes`
 - `$BASE_URL/docs/process-lifecycle/phases`
 - `$BASE_URL/docs/process-lifecycle/phases/execution`
@@ -171,13 +172,13 @@
 
 ### Expected Result
 
-- All 116 URLs return HTTP 200
+- All 117 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 116 pages
+- Total: 117 pages
 
 ---
 
