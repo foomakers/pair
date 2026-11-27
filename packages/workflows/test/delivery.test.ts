@@ -165,3 +165,35 @@ it.each(['approved', 'changes-requested'] as const)(
     }
   },
 )
+
+it('full default configurations match expanded aliases (R763-01, #700 AC-2)', async () => {
+  const { parseConfiguration, checkAgainstEngines } = await import('../src/configuration')
+  const root = resolve(__dirname, '../../knowledge-hub/dataset/.pair')
+  const source = (name: string) =>
+    readFileSync(resolve(root, `adoption/tech/workflows/${name}.yaml`), 'utf8')
+  const workflow = validate(source('full'), 'full.yaml', {
+    skillExists: name => name !== 'refinement' && name !== 'delivery',
+    gateKeys: ['gate-pr', 'target:pr'],
+    launchInputs: ['card'],
+    isSafeText: () => true,
+    resolveWorkflow: name => ({ file: `${name}.yaml`, text: source(name) }),
+  }).workflow!
+  const defaults = JSON.parse(readFileSync(resolve(root, 'defaults/pair.config.json'), 'utf8'))
+  for (const name of Object.values(defaults.workflows.full.configuration) as string[]) {
+    const file = resolve(root, `adoption/tech/configurations/${name}.yaml`)
+    const configuration = parseConfiguration(readFileSync(file, 'utf8'), file).configuration!
+    expect(
+      checkAgainstEngines(configuration, {
+        file,
+        aliases: workflow.aliases,
+        steps: workflow.steps,
+        facts: {
+          known: () => true,
+          installed: () => true,
+          models: () => undefined,
+          supportsEffort: () => true,
+        },
+      }).errors,
+    ).toEqual([])
+  }
+})
