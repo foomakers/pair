@@ -392,6 +392,55 @@ describe('step context (#698 AC-5)', () => {
     expect(errors).toEqual([])
     expect(warnings.map(warning => warning.key)).toEqual(warningKeys)
   })
+
+  it.each([
+    { path: 'unconditional fix', reviewFailure: 'continue', mismatch: true },
+    { path: 'conditional fix', reviewFailure: 'continue', when: ', when: { has: [repair] }' },
+    {
+      path: 'early round failure',
+      reviewFailure: 'continue',
+      beforeFix: '      prepare: { kind: generic, skill: my-skill }\n',
+    },
+    { path: 'stopped review', reviewFailure: 'stop', fixEngine: 'codex', mismatch: true },
+  ])('R760-07 (#698 AC-5): validates resume after $path', test => {
+    const { errors, warnings } = check(
+      `version: 1
+name: quick
+steps:
+  implement: { kind: implement, ${allStops} }
+  review-rounds:
+    kind: loop
+    until: review
+    max: 3
+    on-max: escalate
+    steps:
+      review:
+        kind: review
+        context: resume
+        escalate: { failed: ${test.reviewFailure}, blocked: stop, needs-decision: stop }
+${test.beforeFix ?? ''}      fix: { kind: fix, ${allStops}${test.when ?? ''} }
+`,
+      {
+        resume: {
+          engineFor: step => {
+            if (step === 'implement') return 'claude'
+            if (step === 'review-rounds/fix') return test.fixEngine ?? 'claude'
+            return 'codex'
+          },
+          supports: () => true,
+        },
+      },
+    )
+    expect(errors).toEqual([])
+    expect(
+      warnings
+        .filter(warning => warning.key === 'steps.review-rounds.steps.review.context')
+        .map(warning => warning.problem),
+    ).toEqual([
+      'non-fresh context compromises review independence',
+      ...(test.mismatch ? ["engine 'codex' differs from the preceding engine"] : []),
+    ])
+  })
 })
 
 describe('step prompts (#698 AC-7, AC-9 and approved design §4)', () => {
