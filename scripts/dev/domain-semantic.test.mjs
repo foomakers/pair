@@ -671,6 +671,31 @@ for (const [form, declaration, dependency, location] of [
   }
 }
 
+for (const [shape, dto] of [
+  ['interface', type => `export interface RetryDto { cause: ${type}; other: MissingDetail }\n`],
+  ['alias', type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`],
+  [
+    'transitive alias',
+    type => `type TransportDto = { cause: ${type}; other: MissingDetail }\nexport type RetryDto = TransportDto\n`,
+  ],
+]) {
+  test(`#750 750-R24 AC-3/4 checks only the selected property of an imported ${shape}`, t => {
+    const input = '../../node_modules/retry-cause/index.d.ts'
+    const source = `import type { RetryDto } from 'retry-cause'\nexport interface Retry { cause: RetryDto['cause'] }\n`
+    const cwd = workspace(t, { [pilot]: source, [input]: dto('string') })
+    assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+    writeFileSync(join(cwd, input), dto('string | null'))
+    assert.deepEqual(findings(lint(cwd)), { status: 1, locations: [[pilot, semantic, 2, 26]] })
+
+    writeFileSync(join(cwd, input), dto('MissingCause'))
+    const { status, stdout, stderr } = lint(cwd)
+    assert.equal(status, 2, stdout + stderr)
+    assert.match(stderr, /retry-cause\/index\.d\.ts: TS2304.*MissingCause/)
+    assert.equal(stdout, '')
+  })
+}
+
 test('#750 AC-4 package lint distinguishes project-load errors from findings', t => {
   const cwd = workspace(t, { [pilot]: model('cause: unknown') })
   const project = join(cwd, 'tsconfig.json')
