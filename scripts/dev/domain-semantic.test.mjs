@@ -698,9 +698,14 @@ for (const [argument, code, lookup] of [
   })
 }
 
-for (const [shape, dto, key = "'cause'", imports = 'RetryDto'] of [
+for (const [shape, dto, lookup = "RetryDto['cause']", imports = 'RetryDto'] of [
   ['interface', type => `export interface RetryDto { cause: ${type}; other: MissingDetail }\n`],
   ['alias', type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`],
+  [
+    'Pick projection',
+    type => `export type RetryDto = { cause: ${type}; other: MissingDetail }\n`,
+    "Pick<RetryDto, 'cause'>['cause']",
+  ],
   [
     'transitive alias',
     type => `type TransportDto = { cause: ${type}; other: MissingDetail }\nexport type RetryDto = TransportDto\n`,
@@ -725,18 +730,18 @@ for (const [shape, dto, key = "'cause'", imports = 'RetryDto'] of [
   [
     'number index signature with a numeric string key',
     type => `export type RetryDto = { [key: string]: MissingDetail; [key: number]: ${type} }\n`,
-    "'0'",
+    "RetryDto['0']",
   ],
   [
     'unique-symbol property',
     type => `export declare const key: unique symbol\nexport type RetryDto = { [key]: ${type}; other: MissingDetail }\n`,
-    'typeof key',
+    'RetryDto[typeof key]',
     'RetryDto, key',
   ],
 ]) {
   test(`#750 750-R24 AC-3/4 checks only the selected property of an imported ${shape}`, t => {
     const input = '../../node_modules/retry-cause/index.d.ts'
-    const source = `import type { ${imports} } from 'retry-cause'\nexport interface Retry { cause: RetryDto[${key}] }\n`
+    const source = `import type { ${imports} } from 'retry-cause'\nexport interface Retry { cause: ${lookup} }\n`
     const cwd = workspace(t, { [pilot]: source, [input]: dto('string') })
     assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
 
