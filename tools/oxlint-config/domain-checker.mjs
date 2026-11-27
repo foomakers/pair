@@ -129,30 +129,46 @@ function typeDependencyCheck(program, checker) {
     }
   }
 
-  function indexedDeclarations(object, key) {
+  function indexValueNodes(object, info) {
+    if (info.declaration) return [info.declaration.type]
+    // The checker combines the value types of signatures with the same key type.
+    if (object.isUnionOrIntersection()) {
+      const parts = object.types.flatMap(type => {
+        const part = checker.getIndexInfosOfType(type).find(index => index.keyType === info.keyType)
+        return part ? [indexValueNodes(type, part)] : []
+      })
+      if (parts.length && parts.every(Boolean)) return parts.flat()
+    }
+    const mapped = object.getSymbol()?.declarations?.find(ts.isMappedTypeNode)
+    if (mapped?.type) return [mapped.type]
+  }
+
+  function indexedValueNodes(object, key) {
     let property
     if (key.isLiteral()) {
       property = checker.getPropertyOfType(object, String(key.value))
     } else if (key.flags & ts.TypeFlags.UniqueESSymbol) {
       property = checker.getPropertiesOfType(object).find(p => p.escapedName === key.escapedName)
     }
-    if (property) return property.declarations ?? []
+    if (property) return (property.declarations ?? []).map(declaration => declaration.type)
     if (key.flags & (ts.TypeFlags.Any | ts.TypeFlags.Never)) return
 
     const string = checker.getStringType()
     const number = checker.getNumberType()
-    const applicable = checker.getIndexInfosOfType(object).filter(
-      ({ keyType }) =>
-        checker.isTypeAssignableTo(key, keyType) ||
-        (keyType === string && checker.isTypeAssignableTo(key, number)) ||
-        (keyType === number && key.isStringLiteral() && String(Number(key.value)) === key.value),
-    )
+    const applicable = checker
+      .getIndexInfosOfType(object)
+      .filter(
+        ({ keyType }) =>
+          checker.isTypeAssignableTo(key, keyType) ||
+          (keyType === string && checker.isTypeAssignableTo(key, number)) ||
+          (keyType === number && key.isStringLiteral() && String(Number(key.value)) === key.value),
+      )
     // TypeScript uses the string signature only when no more specific signature applies.
     const specific = applicable.filter(info => info.keyType !== string)
-    const selected = specific.length ? specific : applicable
-    if (selected.length && selected.every(info => info.declaration)) {
-      return selected.map(info => info.declaration)
-    }
+    const selected = (specific.length ? specific : applicable).map(info =>
+      indexValueNodes(object, info),
+    )
+    if (selected.length && selected.every(Boolean)) return selected.flat()
   }
 
   function check(node) {
@@ -169,17 +185,19 @@ function typeDependencyCheck(program, checker) {
       if (ts.isIndexedAccessTypeNode(part)) {
         const object = checker.getTypeFromTypeNode(part.objectType)
         const selected = constituents(checker.getTypeFromTypeNode(part.indexType)).map(key =>
-          indexedDeclarations(object, key),
+          indexedValueNodes(object, key),
         )
-        for (const declarations of selected) {
-          for (const declaration of declarations ?? []) check(declaration.type)
+        for (const types of selected) {
+          for (const type of types ?? []) check(type)
         }
-        if (selected.every(Boolean) && !isUnresolvedType(checker.getTypeFromTypeNode(part))) {
-          // The checker has selected the members. The rest of the DTO is outside this dependency.
+        if (selected.every(Boolean)) {
           checkIndexedObjectArguments(part.objectType)
-          excluded.push([part.objectType.getStart(), part.objectType.end])
-          visit(part.indexType)
-          return
+          if (!isUnresolvedType(checker.getTypeFromTypeNode(part))) {
+            // The checker has selected the members. The rest of the DTO is outside this dependency.
+            excluded.push([part.objectType.getStart(), part.objectType.end])
+            visit(part.indexType)
+            return
+          }
         }
       }
       if (ts.isCallExpression(part) && isUnresolvedType(checker.getTypeAtLocation(part))) {
