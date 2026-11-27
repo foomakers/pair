@@ -707,6 +707,14 @@ for (const [form, definition, retry, location] of [
     [2, 13],
   ],
   [
+    'indexed model alias',
+    (argument, value) =>
+      `export interface Envelope<T extends string = ${argument}> { cause: ${value} }
+export type RetryDto = { attempt: Envelope }`,
+    "export type Retry = RetryDto['attempt']",
+    [2, 13],
+  ],
+  [
     'indexed alias',
     (argument, value) =>
       `export type RetryDto<T extends string = ${argument}> = { cause: ${value} }`,
