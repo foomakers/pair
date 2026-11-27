@@ -8,6 +8,7 @@ import {
   cardStateOf,
   cardStateToConfirm,
   escalationAction,
+  firstWordBeyond,
   parseWorkflow,
   type CardState,
   type EscalationRule,
@@ -22,6 +23,7 @@ import {
   fieldsOf,
   interactiveOf,
   kindByName,
+  MAX_HANDOFF_WORDS,
   settle,
   type StepResult,
   type StepStatus,
@@ -1371,7 +1373,18 @@ function launchable(
 const resultDir = (run: RunDirectory, stepId: string, round: number | undefined): string =>
   join(run.dir, 'steps', stepId, ...(round === undefined ? [] : [`round-${round}`]))
 
-/** `steps/<id>[/round-n]/result.json` and, when given, `output.log`. */
+function boundedHandoff(result: StepResult): StepResult {
+  const { handoff } = result
+  if (handoff === undefined) return result
+  const end = firstWordBeyond(handoff, MAX_HANDOFF_WORDS)
+  if (end === undefined) return result
+  return {
+    ...result,
+    handoff: `${handoff.slice(0, end).trimEnd()}\n\n*Handoff truncated after ${MAX_HANDOFF_WORDS} words.*\n`,
+  }
+}
+
+/** `steps/<id>[/round-n]/result.json` and the optional handoff and raw output. */
 async function writeResult(
   run: RunDirectory,
   dir: string,
@@ -1380,6 +1393,12 @@ async function writeResult(
 ): Promise<void> {
   await run.files.mkdir(dir, { recursive: true })
   if (output !== undefined) await run.files.writeFile(join(dir, 'output.log'), output)
+  const path = join(dir, 'handoff.md')
+  if (settled.handoff !== undefined) await writeAtomic(run.files, path, settled.handoff)
+  else if (run.files.existsSync(path)) {
+    if (run.files.unlink === undefined) await writeAtomic(run.files, path, '')
+    else await run.files.unlink(path)
+  }
   await writeAtomic(run.files, join(dir, 'result.json'), `${JSON.stringify(settled, null, 2)}\n`)
 }
 
@@ -1401,7 +1420,10 @@ export async function stageSuccess(
   if (step?.state !== 'running' || step.pendingSuccess !== undefined) return
   await writeState(run, {
     ...state,
-    steps: { ...state.steps, [id]: { ...step, pendingSuccess: result, ...executionOf(execution) } },
+    steps: {
+      ...state.steps,
+      [id]: { ...step, pendingSuccess: boundedHandoff(result), ...executionOf(execution) },
+    },
   })
 }
 
@@ -1486,7 +1508,7 @@ export async function record(
   checkAttempt(stepId, previous, options.attempt)
   const { step, outer, childId } = launchable(run, stepId)
   const kind = kindByName[step.kind]
-  const settled = settle(kind, result)
+  const settled = boundedHandoff(settle(kind, result))
   const round = childId === undefined ? undefined : loopRound(state, outer)
   await writeResult(run, resultDir(run, stepId, round), settled, output)
   const { status } = settled

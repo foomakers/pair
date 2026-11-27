@@ -17,6 +17,7 @@ export function createMemoryFiles(
     },
     writeFile: async (path, content) => void entries.set(path, content),
     mkdir: async path => void directories.add(path),
+    unlink: async path => void entries.delete(path),
     rename: async (from, to) => {
       const moved = [from, ...under(from)].filter(one => entries.has(one))
       if (moved.length === 0) throw new Error(`ENOENT: ${from}`)

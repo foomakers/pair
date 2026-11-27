@@ -38,6 +38,7 @@ export interface ResultRule {
 
 export const STEP_STATUSES = ['ok', 'failed', 'blocked', 'needs-decision'] as const
 export type StepStatus = (typeof STEP_STATUSES)[number]
+export const MAX_HANDOFF_WORDS = 800
 
 /** The result every step returns, whatever its kind. */
 export const COMMON_RESULT: JsonSchema = {
@@ -47,6 +48,10 @@ export const COMMON_RESULT: JsonSchema = {
     status: { enum: STEP_STATUSES },
     summary: { type: 'string', description: 'One line: what the step did.' },
     reason: { type: 'string', description: 'Why, when the status is not `ok`.' },
+    handoff: {
+      type: 'string',
+      description: `Markdown for the next step, saved as \`handoff.md\` and truncated after ${MAX_HANDOFF_WORDS} words.`,
+    },
   },
 }
 

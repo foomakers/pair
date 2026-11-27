@@ -13,6 +13,7 @@ import { review } from './review'
 export {
   agentResultSchema,
   COMMON_RESULT,
+  MAX_HANDOFF_WORDS,
   STEP_STATUSES,
   type StepKind,
   type StepStatus,
@@ -61,6 +62,7 @@ export interface StepResult {
   readonly summary: string
   readonly reason?: string
   readonly detail?: string
+  readonly handoff?: string
   readonly [output: string]: unknown
 }
 
@@ -100,7 +102,11 @@ export function checkResult(
   } as const
   if (found.length > 0) {
     const detail = found.map(one => `${one.path.join('.') || 'result'}: ${one.problem}`).join('; ')
-    return { valid: false, result: { ...invalid, detail } }
+    const handoff = common.length === 0 ? result.handoff : undefined
+    return {
+      valid: false,
+      result: { ...invalid, detail, ...(handoff === undefined ? {} : { handoff }) },
+    }
   }
   const broken = result.status === 'ok' ? kind.rule?.broken(result) : undefined
   return broken === undefined

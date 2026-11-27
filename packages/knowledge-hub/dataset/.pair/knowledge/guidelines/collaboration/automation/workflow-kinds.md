@@ -11,6 +11,7 @@ The agent ends its turn with one JSON object in a fenced `json` block. Whatever 
 - `status`: `"ok" | "failed" | "blocked" | "needs-decision"`
 - `summary`: `string` — One line: what the step did.
 - `reason`: `string`, optional — Why, when the status is not `ok`.
+- `handoff`: `string`, optional — Markdown for the next step, saved as `handoff.md` and truncated after 800 words.
 
 An agent can return `ok` and the statuses listed for its kind below.
 The `returns` contract describes when each non-success outcome applies. The workflow decides what happens next through [`escalate`](workflow-grammar.md#outcomes-and-escalation). The engine produces `exhausted` and `skipped`.

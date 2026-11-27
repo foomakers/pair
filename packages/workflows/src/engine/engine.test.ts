@@ -104,6 +104,7 @@ describe('engine: a linear run (AC-1)', () => {
       IMPLEMENTED,
     )
     expect(run.files.readFileSync(`${DIR}/steps/implement/output.log`)).toBe('final message')
+    expect(run.files.existsSync(`${DIR}/steps/implement/handoff.md`)).toBe(false)
     expect(stateOf(run).steps['implement']).toEqual({
       state: 'ok',
       executions: 1,
@@ -193,6 +194,30 @@ describe('engine: a linear run (AC-1)', () => {
     expect(written).toContain(`${DIR}/state.json.tmp`)
     expect(written).not.toContain(`${DIR}/state.json`)
     expect(run.files.existsSync(`${DIR}/state.json.tmp`)).toBe(false)
+  })
+})
+
+describe('engine: handoff storage (#698 AC-3)', () => {
+  const handoff = `# Notes\n\n${'word '.repeat(797)}last`
+  const path = `${DIR}/steps/implement/handoff.md`
+
+  it.each([800, 801])('records an ok step with a %i-word handoff', async words => {
+    const run = open()
+    await start(run, SOURCE, { card: '627' })
+    await next(run)
+    const result = await record(run, 'implement', {
+      ...IMPLEMENTED,
+      handoff: words === 800 ? handoff : `${handoff} overflow`,
+    })
+
+    expect(result.status).toBe('ok')
+    const stored = run.files.readFileSync(path)
+    expect(stored).toContain(handoff)
+    if (words === 800) expect(stored.trimEnd()).toBe(handoff)
+    else {
+      expect(stored).not.toContain('overflow')
+      expect(stored.slice(handoff.length)).toMatch(/\btruncated\b/i)
+    }
   })
 })
 
@@ -862,12 +887,12 @@ describe('engine: on-failed (#708 AC-7)', () => {
   }
   const text = (policy: string) =>
     `${QUICK.replace('kind: review', `kind: review${policy}`)}  fix:\n    kind: fix\n`
-  const opened = async (policy: string) => {
+  const opened = async (policy: string, changes = CHANGES) => {
     const run = open()
     await start(run, { text: text(policy), file: 'workflows/quick.yaml' }, { card: '627' })
     await record(run, 'implement', IMPLEMENTED)
     await next(run)
-    await record(run, 'review', CHANGES)
+    await record(run, 'review', changes)
     return run
   }
 
@@ -876,6 +901,15 @@ describe('engine: on-failed (#708 AC-7)', () => {
     ['continue', '\n    on-failed: continue', 'running'],
   ])('a failed step with %s leaves the run %s', async (_name, policy, run) => {
     expect((await next(await opened(policy))).run).toBe(run)
+  })
+
+  it('retains a failed review handoff (#698 AC-3)', async () => {
+    const handoff = '## Follow-up\n\n- Add the missing assertion.'
+    const changes = { ...CHANGES, handoff }
+    const run = await opened('\n    on-failed: continue', changes)
+
+    expect(statesOf(run).review).toBe('failed')
+    expect(run.files.readFileSync(`${DIR}/steps/review/handoff.md`).trimEnd()).toBe(handoff)
   })
 
   it('hands the next step the outputs of the failed one, and the last step decides the run', async () => {

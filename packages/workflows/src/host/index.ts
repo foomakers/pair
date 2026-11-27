@@ -227,6 +227,9 @@ function confirmPriorRefinement(
   return checked.status === 'ok' ? result : checked
 }
 
+const withHandoff = (result: StepResult, handoff: string | undefined): StepResult =>
+  handoff === undefined ? result : { ...result, handoff }
+
 async function recordResult(
   host: WorkflowHost,
   run: RunDirectory,
@@ -235,10 +238,12 @@ async function recordResult(
     result,
     output,
     model,
+    handoff = result.handoff,
     invalidatePendingSuccess,
   }: Confirmation & {
     output?: string
     model?: string | undefined
+    handoff?: string | undefined
   },
 ): Promise<StepResult> {
   let final = result
@@ -247,7 +252,10 @@ async function recordResult(
     return record(
       run,
       step.id,
-      unconfirmed(`the host cannot confirm the ${step.confirmState} transition`),
+      withHandoff(
+        unconfirmed(`the host cannot confirm the ${step.confirmState} transition`),
+        handoff,
+      ),
       {
         ...execution,
         attempt: step.attempt,
@@ -265,7 +273,7 @@ async function recordResult(
       final = unconfirmed((error as Error).message)
     }
   }
-  return record(run, step.id, final, {
+  return record(run, step.id, withHandoff(final, handoff), {
     output,
     invalidatePendingSuccess,
     ...execution,
@@ -325,7 +333,10 @@ async function execute(
     return recordExhausted(run, step, step.exhaustedFault)
   }
   if (step.pendingSuccess !== undefined)
-    return recordResult(host, run, step, await confirmed(host, run, step, step.pendingSuccess))
+    return recordResult(host, run, step, {
+      ...(await confirmed(host, run, step, step.pendingSuccess)),
+      handoff: step.pendingSuccess.handoff,
+    })
   if (step.interactive === true && host.parkInteractive !== undefined)
     return record(run, step.id, host.parkInteractive)
   const kind = kindByName[step.kind]
@@ -409,6 +420,7 @@ async function settleParsedResult(
     ...(await confirmed(host, run, step, checked)),
     output: final,
     model,
+    handoff: result.handoff,
   })
 }
 

@@ -34,6 +34,7 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- status: "ok" | "failed" | "blocked" | "needs-decision"',
         '- summary: string',
         '- reason: string (optional)',
+        '- handoff: string (optional)',
         '- branch: string matching ^[A-Za-z0-9][A-Za-z0-9._/-]*$',
         '- pr: integer',
         '- head: string matching ^[0-9a-f]{40}$',
@@ -95,6 +96,7 @@ describe('buildMessage (AC-4, AC-5)', () => {
         '- status: "ok" | "failed" | "blocked" | "needs-decision"',
         '- summary: string',
         '- reason: string (optional)',
+        '- handoff: string (optional)',
       ].join('\n'),
     )
     expect(message).toContain('Execution mode: unattended.')
@@ -172,6 +174,7 @@ describe('readResult (AC-4)', () => {
         verdict: 'changes-requested',
         reviewedHead: HEAD,
         findings: [{ id: 'f1', severity: 'Major', title: 'missing test', blocking: true }],
+        handoff: '## Follow-up\n\n- Add the missing assertion.',
       },
     ],
   ] as const)('reads a valid %s result', (kind, result) => {
@@ -224,6 +227,12 @@ describe('readResult (AC-4)', () => {
       'status: unknown value "done"',
     ],
     ['a missing summary', 'generic', { status: 'ok' }, "result: missing key 'summary'"],
+    [
+      'a non-text handoff (#698 AC-3)',
+      'generic',
+      { status: 'ok', summary: 'done', handoff: 42 },
+      'handoff: expected string, found integer 42',
+    ],
     [
       'a head that is not a sha',
       'review',
