@@ -173,30 +173,45 @@ it('#696 AC-8: validates and previews effective settings without opening a run',
   expect(git('worktree', 'list', '--porcelain')).not.toContain(`worktree ${worktree}\n`)
 })
 
-it.each(['claude', 'codex'])(
-  'R760-03 (#698 AC-5): validates a Claude predecessor and %s resume consumer',
-  engine => {
+it.each([
+  { producer: 'claude', engine: 'claude', warnings: [] },
+  {
+    producer: 'claude',
+    engine: 'codex',
+    warnings: [
+      expect.stringMatching(/steps\.discuss\.context.*'codex' differs from the preceding engine/),
+    ],
+  },
+  {
+    producer: 'opencode',
+    engine: 'opencode',
+    warnings: [
+      expect.stringMatching(/steps\.discuss\.context.*'opencode' does not support resume/),
+    ],
+  },
+])(
+  'R760-06 (#698 AC-5): reports resume warnings for $producer to $engine',
+  ({ producer, engine, warnings }) => {
     write(workflowFile, workflow.replace('    interactive: true', '    context: resume'))
     write(
       configFile,
-      `version: 1\nname: mine\ndefaults: { engine: claude }\nsteps: { discuss: { engine: ${engine} } }\n`,
+      `version: 1\nname: mine\ndefaults: { engine: ${producer} }\nsteps: { discuss: { engine: ${engine} } }\n`,
     )
 
-    expect(JSON.parse(successful(['validate', 'quick', '--config', 'mine']))).toMatchObject({
+    const validated = JSON.parse(successful(['validate', 'quick', '--config', 'mine']))
+    expect(validated).toMatchObject({
       steps: [
-        { id: 'draft', settings: { engine: 'claude' } },
+        { id: 'draft', settings: { engine: producer } },
         { id: 'discuss', settings: { engine } },
       ],
-      warnings:
-        engine === 'claude'
-          ? []
-          : [
-              expect.stringMatching(
-                /steps\.discuss\.context.*'codex' differs from the preceding engine/,
-              ),
-            ],
+      warnings,
     })
     expect(existsSync(dirname(runDir))).toBe(false)
+
+    const started = JSON.parse(
+      successful(['start', 'quick', '--card', card, '--engine', producer, '--config', 'mine']),
+    )
+    expect(started.warnings).toEqual(validated.warnings)
   },
 )
 
