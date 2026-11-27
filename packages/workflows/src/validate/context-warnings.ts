@@ -9,6 +9,30 @@ export interface ResumeFacts {
 
 const isAgent = (step: Step) => step.kind !== 'loop' && kindByName[step.kind].host !== true
 
+const advance = (step: Step, previous: readonly Step[]) =>
+  step.when === undefined ? [step] : [step, ...previous]
+
+function roundEndings(children: readonly Step[], until: string): readonly Step[] {
+  const early: Step[] = []
+  let last: readonly Step[] = []
+  for (const child of children) {
+    const { failed, blocked, 'needs-decision': needsDecision } = child.escalate ?? {}
+    if (child.id === until) {
+      // Success exits the loop. Only a settled non-success can reach the round end.
+      if (
+        failed !== undefined &&
+        [failed, blocked, needsDecision].every(rule => escalationAction(rule) !== 'continue')
+      )
+        return early
+    } else if (failed === undefined) {
+      // A non-until failure without an explicit rule closes the round immediately.
+      early.push(child)
+    }
+    last = advance(child, last)
+  }
+  return [...early, ...last]
+}
+
 function engineProblem(step: Step, previous: readonly Step[], facts: ResumeFacts) {
   const engine = facts.engineFor(step.id)
   if (engine === undefined) return undefined
@@ -44,9 +68,6 @@ function collectWarnings(
         : resume && engineProblem(step, agents, resume)
     if (problem !== undefined) warn(problem, 'use context: handoff or accept the fallback')
   }
-  const advance = (step: Step, previous: readonly Step[]) =>
-    step.when === undefined ? [step] : [step, ...previous]
-
   let previous: readonly Step[] = []
   for (const step of workflow.steps) {
     const path = ['steps', step.id]
@@ -56,8 +77,8 @@ function collectWarnings(
       continue
     }
     const children = (step.steps ?? []).map(child => ({ ...child, id: `${step.id}/${child.id}` }))
-    // A non-until child can close a round on failure. Any child could precede the next round.
-    let before = (step.max ?? 1) > 1 ? [...previous, ...children] : previous
+    const until = `${step.id}/${step.until}`
+    let before = (step.max ?? 1) > 1 ? [...previous, ...roundEndings(children, until)] : previous
     for (const child of children) {
       check(child, [...path, 'steps', child.id.slice(step.id.length + 1)], before)
       before = advance(child, before)
@@ -65,7 +86,7 @@ function collectWarnings(
     previous =
       escalationAction(step.escalate?.exhausted) === 'continue'
         ? children
-        : children.filter(child => child.id === `${step.id}/${step.until}`)
+        : children.filter(child => child.id === until)
   }
   return warnings
 }
