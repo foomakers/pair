@@ -325,14 +325,14 @@ it('#696 AC-1/AC-2/AC-5: advances a session run through the shipped script and r
 
 const draftHandoff = 'The draft covers two release notes.'
 
-function recordDraft(lease: string[], sessionId?: string) {
+function recordDraft(lease: string[], sessionId?: string, handoff = draftHandoff) {
   expect(JSON.parse(successful(['next', runId, ...lease]))).toMatchObject({
     ready: [{ id: 'draft', attempt: 1 }],
   })
   const identity = sessionId === undefined ? [] : ['--session-id', sessionId]
   successful(
     ['record', runId, 'draft', ...lease, '--result', '-', ...identity],
-    fenced({ ...drafted, handoff: draftHandoff }),
+    fenced({ ...drafted, handoff }),
   )
 }
 
@@ -439,6 +439,48 @@ it('#698 AC-4 control: dispatches an explicit handoff without a fallback', () =>
   ])
   expect(JSON.parse(readRun('state.json')).steps.discuss).not.toHaveProperty('contextFallback')
 })
+
+it.each(['handoff', 'resume'] as const)(
+  'R760-02 (#698 AC-2): records rejected prose and continues from %s',
+  context => {
+    write(
+      workflowFile,
+      workflow.replace(
+        '    interactive: true\n    escalate: { failed: stop, blocked: stop, needs-decision: stop }',
+        `    context: ${context}\n    escalate: { failed: continue, blocked: stop, needs-decision: stop }`,
+      ) +
+        `  recover:
+    kind: generic
+    skill: pair-fixture-discuss
+    context: fresh
+    escalate: { failed: stop, blocked: stop, needs-decision: stop }
+`,
+    )
+    const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
+    recordDraft(lease, 'agent-draft-42', 'See `release-notes.md` for the draft.')
+    const advance = ['next', runId, ...lease]
+    if (context === 'resume') {
+      expect(JSON.parse(successful(advance))).toMatchObject({
+        ready: [{ id: 'discuss', attempt: 1, resumeSessionId: 'agent-draft-42' }],
+      })
+    }
+
+    const rejected = successful(context === 'resume' ? [...advance, '--fallback-handoff'] : advance)
+    expect(JSON.parse(rejected)).toMatchObject({
+      ready: [],
+      events: [{ step: 'discuss', state: 'failed', reason: 'unsafe-value' }],
+    })
+    expect(rejected).not.toContain('release-notes.md')
+    expect(JSON.parse(readRun('state.json')).steps.discuss).toMatchObject({
+      state: 'failed',
+      executions: 1,
+      reason: 'unsafe-value',
+    })
+    expect(JSON.parse(successful(advance))).toMatchObject({
+      ready: [{ id: 'recover', attempt: 1 }],
+    })
+  },
+)
 
 async function seedHeadlessRun() {
   const run = { dir: runDir, files }
