@@ -110,7 +110,11 @@ function typeDependencyCheck(program, checker) {
     if (ts.isParenthesizedTypeNode(node)) {
       checkSelectedObjectArguments(node.type, contributes, seen)
     } else if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
-      for (const type of node.types) checkSelectedObjectArguments(type, contributes, seen)
+      for (const type of node.types) {
+        if (contributes(checker.getTypeFromTypeNode(type))) {
+          checkSelectedObjectArguments(type, contributes, seen)
+        }
+      }
     } else if (ts.isIndexedAccessTypeNode(node)) {
       const excluded = checkIndexedAccess(
         node,
