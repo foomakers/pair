@@ -57,7 +57,6 @@ function typeDependencyCheck(program, checker) {
   const diagnosticsBySource = new Map()
   const checkedNodes = new Set()
   const checkedSymbols = new Set()
-  const checkedIndexedObjects = new Set()
 
   function checkDiagnostics(node, excluded = []) {
     const source = node.getSourceFile()
@@ -105,26 +104,34 @@ function typeDependencyCheck(program, checker) {
     if (alias) follow(checker.getImmediateAliasedSymbol(symbol))
   }
 
-  function checkIndexedObjectArguments(node) {
-    if (
-      checkedIndexedObjects.has(node) ||
-      program.isSourceFileDefaultLibrary(node.getSourceFile())
-    ) {
-      return
-    }
-    checkedIndexedObjects.add(node)
+  function checkIndexedObjectArguments(node, keys, selected, seen = new Set()) {
+    if (seen.has(node) || program.isSourceFileDefaultLibrary(node.getSourceFile())) return
+    seen.add(node)
     if (ts.isParenthesizedTypeNode(node)) {
-      checkIndexedObjectArguments(node.type)
+      checkIndexedObjectArguments(node.type, keys, selected, seen)
     } else if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
-      for (const type of node.types) checkIndexedObjectArguments(type)
+      for (const type of node.types) checkIndexedObjectArguments(type, keys, selected, seen)
     } else {
       for (const argument of node.typeArguments ?? []) check(argument)
-      if (!ts.isTypeReferenceNode(node)) return
+      if (!ts.isTypeReferenceNode(node) && !ts.isExpressionWithTypeArguments(node)) return
+      const name = ts.isTypeReferenceNode(node) ? node.typeName : node.expression
       checkDiagnostics(node)
-      let symbol = checker.getSymbolAtLocation(node.typeName)
+      let symbol = checker.getSymbolAtLocation(name)
       if (symbol?.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol)
       for (const declaration of symbol?.declarations ?? []) {
-        if (ts.isTypeAliasDeclaration(declaration)) checkIndexedObjectArguments(declaration.type)
+        if (ts.isTypeAliasDeclaration(declaration)) {
+          checkIndexedObjectArguments(declaration.type, keys, selected, seen)
+        }
+        for (const clause of declaration.heritageClauses ?? []) {
+          if (clause.token !== ts.SyntaxKind.ExtendsKeyword) continue
+          for (const base of clause.types) {
+            const type = checker.getTypeAtLocation(base)
+            // Only follow a base that contributes a declaration for the selected member.
+            if (keys.some(key => indexedValueNodes(type, key)?.some(value => selected.has(value)))) {
+              checkIndexedObjectArguments(base, keys, selected, seen)
+            }
+          }
+        }
       }
     }
   }
@@ -184,14 +191,13 @@ function typeDependencyCheck(program, checker) {
     function visit(part) {
       if (ts.isIndexedAccessTypeNode(part)) {
         const object = checker.getTypeFromTypeNode(part.objectType)
-        const selected = constituents(checker.getTypeFromTypeNode(part.indexType)).map(key =>
-          indexedValueNodes(object, key),
-        )
+        const keys = constituents(checker.getTypeFromTypeNode(part.indexType))
+        const selected = keys.map(key => indexedValueNodes(object, key))
         for (const types of selected) {
           for (const type of types ?? []) check(type)
         }
         if (selected.every(Boolean)) {
-          checkIndexedObjectArguments(part.objectType)
+          checkIndexedObjectArguments(part.objectType, keys, new Set(selected.flat()))
           if (!isUnresolvedType(checker.getTypeFromTypeNode(part))) {
             // The checker has selected the members. The rest of the DTO is outside this dependency.
             excluded.push([part.objectType.getStart(), part.objectType.end])
