@@ -87,6 +87,23 @@ test('convergence includes terminal review and compares blocking counts (R763-04
   assert.equal(noGrowth.cards[0].growth, false)
 })
 
+test('R763-04: isolate runs and exclude terminal verification from mean loop rounds', () => {
+  const review = (run, id, round, open, fresh) => step(run, id, {
+    schema: 2, workflow: run === 'quick' ? 'quick' : 'delivery', card: '1', kind: 'review',
+    ...(round && { round }), findingCounts: { open, blockingOpen: open, resolved: 0, new: fresh },
+  })
+  const result = ask('convergence', {
+    delivery: [review('delivery', 'rounds/review', 1, 1, 1), review('delivery', 'rounds/review', 2, 0, 0), review('delivery', 'final-review', undefined, 0, 0)],
+    quick: [review('quick', 'review', undefined, 2, 2)],
+  })
+  assert.equal(result.cards.length, 2)
+  const delivery = result.cards.find(card => card.run === 'delivery')
+  assert.equal(delivery.growth, false)
+  assert.equal(delivery.newAfterFix, 0)
+  assert.equal(delivery.rounds.length, 3)
+  assert.equal(result.meanRounds, 2)
+})
+
 // #700 AC-5: comparison retains executions and park causes alongside duration and tokens.
 test('compare: steps and parks with causes are available alongside time and tokens', () => {
   const parked = [step('a', 'review', { status: 'blocked', reason: 'review-conflict' }), closing('a', 'parked')]
