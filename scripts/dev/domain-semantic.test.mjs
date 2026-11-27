@@ -738,6 +738,42 @@ for (const [shape, dto, key = "'cause'", imports = 'RetryDto'] of [
   })
 }
 
+for (const [argument, code] of [
+  ['MissingCause', 'TS2304'],
+  ['boolean', 'TS2344'],
+]) {
+  for (const imported of [false, true]) {
+    const input = imported ? 'src/http/inputs.ts' : pilot
+    const context = imported ? 'an imported' : 'a local'
+    test(`#750 750-R22 AC-3/4 rejects ${code} through ${context} type alias`, t => {
+      const retry = "export interface Retry { cause: RetryDto['cause'] }\n"
+      const dto = (type, value) =>
+        `type Envelope<T extends string> = { cause: [T] extends [string | boolean] ? ${value} : number }\nexport type TransportDto = Envelope<${type}>\nexport type RetryDto = TransportDto\n`
+      const source = (type, value) => dto(type, value) + (imported ? '' : retry)
+      const imports = imported ? { [pilot]: "import type { RetryDto } from './inputs.js'\n" + retry } : {}
+      const cwd = workspace(t, { ...imports, [input]: source('string', 'string') })
+      assert.deepEqual(findings(lint(cwd)), { status: 0, locations: [] })
+
+      writeFileSync(join(cwd, input), source('string', 'string | null'))
+      assert.deepEqual(findings(lint(cwd)), {
+        status: 1,
+        locations: imported
+          ? [[pilot, semantic, 2, 26]]
+          : [[pilot, semantic, 2, 13], [pilot, semantic, 3, 13], [pilot, semantic, 4, 26]],
+      })
+
+      for (const value of ['string', 'string | null']) {
+        writeFileSync(join(cwd, input), source(argument, value))
+        const { status, stdout, stderr } = lint(cwd)
+        assert.equal(status, 2, stdout + stderr)
+        assert.ok(stderr.includes(`${input}: ${code}`), stderr)
+        assert.ok(stderr.includes(argument), stderr)
+        assert.equal(stdout, '')
+      }
+    })
+  }
+}
+
 test('#750 AC-4 package lint distinguishes project-load errors from findings', t => {
   const cwd = workspace(t, { [pilot]: model('cause: unknown') })
   const project = join(cwd, 'tsconfig.json')
