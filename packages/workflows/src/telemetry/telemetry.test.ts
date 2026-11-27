@@ -246,6 +246,21 @@ describe('closing record (US-697 AC-2)', () => {
     await reopenRun({ ...run, dir: `${DIR}-none` })
   })
 
+  it('retains approval parks and their causes across resume and completion (R763-05)', async () => {
+    const run = await open()
+    await recordStep(run, { ...REVIEW, status: 'needs-decision', reason: 'approval' })
+    await closeRun(run, 'parked')
+    await reopenRun(run)
+    await recordStep(run, { ...REVIEW, step: { ...REVIEW.step, attempt: 2 } })
+    await closeRun(run, 'done')
+    expect(recordsOf(run)).toMatchObject([
+      { type: 'step', reason: 'approval' },
+      { type: 'run', status: 'parked' },
+      { type: 'step', attempt: 2 },
+      { type: 'run', status: 'done' },
+    ])
+  })
+
   it('starts a restarted run on an empty file: the records of the archived run stay with it', async () => {
     const run = await open()
     await recordStep(run, IMPLEMENT)
