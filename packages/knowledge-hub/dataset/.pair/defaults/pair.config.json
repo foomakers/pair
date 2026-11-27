@@ -17,6 +17,30 @@
         "risk:yellow": { "claude": "claude-medium", "codex": "codex-medium" },
         "risk:green": { "claude": "claude-cheap", "codex": "codex-cheap" }
       }
+    },
+    "delivery": {
+      "configuration": {
+        "claude": "claude-medium",
+        "codex": "codex-medium"
+      }
+    },
+    "full": {
+      "configuration": {
+        "claude": "claude-medium",
+        "codex": "codex-medium"
+      }
+    },
+    "quick": {
+      "configuration": {
+        "claude": "claude-medium",
+        "codex": "codex-medium"
+      }
+    },
+    "refinement": {
+      "configuration": {
+        "claude": "claude-medium",
+        "codex": "codex-medium"
+      }
     }
   }
 }

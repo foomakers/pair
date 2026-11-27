@@ -684,28 +684,33 @@ export function telemetryWriter(run: ObservedRun, telemetry: TelemetryOptions) {
       result: StepExecutionResult,
       exchange: TimedExchange,
       endedAt = now(),
-    ) =>
-      step(
-        {
-          step: launch,
-          startedAt: exchange.startedAt,
-          durationMs: Math.max(0, endedAt.getTime() - exchange.startedAt.getTime()),
-          tokens:
-            exchange.usage === undefined
-              ? estimated(exchange.sent, exchange.final)
-              : measured(exchange.usage),
-          ...(exchange.diagnosis !== undefined && { diagnosis: exchange.diagnosis }),
-          status: result.status,
-          ...(result.reason !== undefined && { reason: result.reason }),
-          ...(launch.kind === 'review' && {
-            findingCounts: findingCountsOf(run, launch.id, launch.round),
-          }),
-          ...escalationOf(run.outcomes.find(outcome => outcome.id === launch.id)),
-        },
-        exchange.model,
-      ),
+    ) => step(telemetryExecution(run, launch, result, { ...exchange, endedAt }), exchange.model),
     reopen: () => safe(() => reopenRun(run)),
     close: (status: RunOutcome['run']) => safe(() => closeWithFaults(run, status, now)),
+  }
+}
+
+function telemetryExecution(
+  run: ObservedRun,
+  launch: StepLaunch,
+  result: StepExecutionResult,
+  exchange: TimedExchange & { endedAt: Date },
+): Omit<StepExecution, 'host' | 'settings'> {
+  return {
+    step: launch,
+    startedAt: exchange.startedAt,
+    durationMs: Math.max(0, exchange.endedAt.getTime() - exchange.startedAt.getTime()),
+    tokens:
+      exchange.usage === undefined
+        ? estimated(exchange.sent, exchange.final)
+        : measured(exchange.usage),
+    ...(exchange.diagnosis !== undefined && { diagnosis: exchange.diagnosis }),
+    status: result.status,
+    ...(result.reason !== undefined && { reason: result.reason }),
+    ...(launch.kind === 'review' && {
+      findingCounts: findingCountsOf(run, launch.id, launch.round),
+    }),
+    ...escalationOf(run.outcomes.find(outcome => outcome.id === launch.id)),
   }
 }
 
