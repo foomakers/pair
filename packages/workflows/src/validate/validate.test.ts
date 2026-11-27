@@ -520,6 +520,24 @@ ${test.beforeFix ?? ''}      fix: { kind: fix, ${allStops}${test.when ?? ''} }
       mismatch: true,
     },
     {
+      path: 'failed or stopped blocked child leaves only its early exit',
+      output: 'rounds/edit.status',
+      outcomes: 'failed, blocked',
+      editCanEndRound: true,
+      editEngine: 'claude',
+      repairEngine: 'codex',
+      mismatch: true,
+    },
+    {
+      path: 'continued blocked child can reach repair',
+      output: 'rounds/edit.status',
+      outcomes: 'failed, blocked',
+      editCanEndRound: true,
+      editBlockedContinues: true,
+      editEngine: 'claude',
+      repairEngine: 'codex',
+    },
+    {
       path: 'both exits differ from Pi',
       outcomes: 'ok, exhausted',
       repairEngine: 'codex',
@@ -554,7 +572,7 @@ steps:
     max: 3
     escalate: { exhausted: continue }
     steps:
-      edit: { kind: generic, skill: my-skill, ${test.editCanEndRound ? decisionStops : allStops} }
+      edit: { kind: generic, skill: my-skill, ${test.editBlockedContinues ? 'escalate: { blocked: continue, needs-decision: stop }' : test.editCanEndRound ? decisionStops : allStops} }
       verify:
         kind: generic
         skill: my-skill
