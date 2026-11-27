@@ -509,6 +509,40 @@ it.each(['handoff', 'resume'] as const)(
   },
 )
 
+it('R760-05 (#698 AC-4): leaves handoff validation to the receiving engine', () => {
+  write(workflowFile, workflow.replace('    interactive: true', '    context: resume'))
+  write(
+    configFile,
+    'version: 1\nname: mine\ndefaults: { engine: claude }\nsteps: { discuss: { engine: codex } }\n',
+  )
+  const claude = openSession([
+    'start',
+    'quick',
+    '--card',
+    card,
+    '--engine',
+    'claude',
+    '--config',
+    'mine',
+  ])
+  recordDraft(claude, 'agent-draft-42', 'See `release-notes.md` for the draft.')
+
+  const transfer = successful(['next', runId, ...claude])
+  expect(JSON.parse(transfer)).toMatchObject({
+    ready: [{ id: 'discuss', settings: { engine: 'codex' } }],
+    events: [],
+  })
+  expect(JSON.parse(transfer).ready[0]).not.toHaveProperty('message')
+  expect(transfer).not.toContain('release-notes.md')
+  successful(['stop', runId, ...claude])
+
+  const codex = openSession(['resume', runId, '--engine', 'codex'])
+  expect(JSON.parse(successful(['next', runId, ...codex]))).toMatchObject({
+    ready: [],
+    events: [{ step: 'discuss', state: 'failed', reason: 'unsafe-value' }],
+  })
+})
+
 async function seedHeadlessRun() {
   const run = { dir: runDir, files }
   await start(run, { file: join(main, workflowFile), text: workflow }, { card })
