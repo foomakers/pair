@@ -104,6 +104,18 @@ test('R763-04: isolate runs and exclude terminal verification from mean loop rou
   assert.equal(result.meanRounds, 2)
 })
 
+test('R763-04: replacement loop does not attribute its first review to a fix', () => {
+  const review = (round, open, fresh) => step('a', 'rounds/review', {
+    kind: 'review', round, findingCounts: { open, blockingOpen: open, resolved: 0, new: fresh },
+  })
+  const result = ask('convergence', { a: [
+    review(1, 0, 0), step('a', 'head-check', { status: 'failed', reason: 'head-changed' }),
+    review(1, 1, 1), step('a', 'rounds/fix', { kind: 'fix', round: 1 }), review(2, 0, 0),
+  ] })
+  assert.equal(result.cards[0].growth, false)
+  assert.equal(result.cards[0].newAfterFix, 0)
+})
+
 // #700 AC-5: comparison retains executions and park causes alongside duration and tokens.
 test('compare: steps and parks with causes are available alongside time and tokens', () => {
   const parked = [step('a', 'review', { status: 'blocked', reason: 'review-conflict' }), closing('a', 'parked')]
