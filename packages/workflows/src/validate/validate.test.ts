@@ -474,6 +474,35 @@ ${test.beforeFix ?? ''}      fix: { kind: fix, ${allStops}${test.when ?? ''} }
     },
     { path: 'exhaustion can resume Codex', outcomes: 'exhausted', repairEngine: 'codex' },
     {
+      path: 'child success leaves only a Claude predecessor',
+      output: 'rounds/verify.status',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+      mismatch: true,
+    },
+    {
+      path: 'child repair success excludes both verification success and an early failure',
+      output: 'rounds/repair.status',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+      summaryEngine: 'claude',
+      editCanEndRound: true,
+      mismatch: true,
+    },
+    {
+      path: 'child verification success can resume Claude',
+      output: 'rounds/verify.status',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+      summaryEngine: 'claude',
+    },
+    {
+      path: 'child repair success can resume Codex',
+      output: 'rounds/repair.status',
+      outcomes: 'ok',
+      repairEngine: 'codex',
+    },
+    {
       path: 'both exits differ from Pi',
       outcomes: 'ok, exhausted',
       repairEngine: 'codex',
@@ -492,7 +521,8 @@ ${test.beforeFix ?? ''}      fix: { kind: fix, ${allStops}${test.when ?? ''} }
     const repair = test.repairEngine
       ? `      repair: { kind: generic, skill: my-skill, ${allStops} }\n`
       : ''
-    const when = (outcomes: string) => `, when: { output: rounds.status, is: [${outcomes}] }`
+    const when = (outcomes: string, output = 'rounds.status') =>
+      `, when: { output: ${output}, is: [${outcomes}] }`
     const beforeSummary = test.beforeSummary
       ? `  notify: { kind: generic, skill: my-skill, ${allStops}${when(test.beforeSummary)} }\n`
       : ''
@@ -512,7 +542,7 @@ steps:
         kind: generic
         skill: my-skill
         escalate: { failed: ${test.verifyFailure ?? 'continue'}, blocked: stop, needs-decision: stop }
-${repair}${beforeSummary}  summary: { kind: generic, skill: my-skill, context: resume, ${allStops}${test.outcomes ? when(test.outcomes) : ''} }
+${repair}${beforeSummary}  summary: { kind: generic, skill: my-skill, context: resume, ${allStops}${test.outcomes ? when(test.outcomes, test.output) : ''} }
 `,
       {
         resume: {

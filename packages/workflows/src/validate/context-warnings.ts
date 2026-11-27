@@ -22,6 +22,9 @@ const advance = (step: Step, previous: readonly Step[], runs = step.when === und
 interface LoopExit {
   readonly output: string
   readonly status: 'ok' | 'exhausted'
+  readonly children: readonly Step[]
+  readonly until: string
+  readonly last: Step
 }
 
 interface Predecessors {
@@ -29,13 +32,30 @@ interface Predecessors {
   readonly exit?: LoopExit
 }
 
+function matchesExit(
+  exit: LoopExit,
+  output: string | undefined,
+  values: readonly unknown[],
+): boolean | undefined {
+  if (output === exit.output) return values.includes(exit.status)
+  const child = exit.children.findIndex(step => output === `${step.id}.status`)
+  if (child < 0) return undefined
+  const last = exit.children.indexOf(exit.last)
+  // A skipped child or one past the last launch has no status outcome.
+  if (child > last) return false
+  if (exit.children[child]?.id !== exit.until) return undefined
+  if (exit.status === 'ok') return values.includes('ok')
+  // A successful until-step would have ended this round before exhaustion.
+  return values.every(value => value === 'ok') ? false : undefined
+}
+
 /** An unknown condition leaves both running and skipping possible. */
 function runsOnExit(when: When | undefined, exit: LoopExit | undefined): boolean | undefined {
   if (when === undefined) return true
+  if (exit === undefined) return undefined
   const { output, is, ...cardFilter } = when
-  if (exit === undefined || output !== exit.output) return undefined
-  if (!is?.includes(exit.status)) return false
-  return Object.keys(cardFilter).length === 0 ? true : undefined
+  const match = matchesExit(exit, output, is ?? [])
+  return match === true && Object.keys(cardFilter).length > 0 ? undefined : match
 }
 
 function roundEndings(children: readonly Step[], until: string): readonly Step[] {
@@ -59,12 +79,20 @@ function roundEndings(children: readonly Step[], until: string): readonly Step[]
   return [...early, ...last]
 }
 
-function loopPredecessors(loop: Step, success: readonly Step[], endings: readonly Step[]) {
-  const output = `${loop.id}.status`
-  const exits: Predecessors[] = [{ steps: success, exit: { output, status: 'ok' } }]
-  if (endings.length > 0 && escalationAction(loop.escalate?.exhausted) === 'continue')
-    exits.push({ steps: endings, exit: { output, status: 'exhausted' } })
-  return exits
+function loopPredecessors(
+  loop: Step,
+  children: readonly Step[],
+  until: string,
+  endings: readonly Step[],
+): Predecessors[] {
+  const route = (last: Step, status: LoopExit['status']): Predecessors => ({
+    steps: [last],
+    exit: { output: `${loop.id}.status`, status, children, until, last },
+  })
+  const success = children.filter(child => child.id === until).map(child => route(child, 'ok'))
+  return escalationAction(loop.escalate?.exhausted) === 'continue'
+    ? [...success, ...endings.map(child => route(child, 'exhausted'))]
+    : success
 }
 
 function engineProblem(step: Step, previous: readonly Step[], facts: ResumeFacts) {
@@ -133,11 +161,7 @@ function collectWarnings(
       check(child, [...path, 'steps', child.id.slice(step.id.length + 1)], before)
       before = advance(child, before)
     }
-    previous = loopPredecessors(
-      step,
-      children.filter(child => child.id === until),
-      endings,
-    )
+    previous = loopPredecessors(step, children, until, endings)
   }
   return warnings
 }
