@@ -245,6 +245,15 @@ describe('readResult (AC-4)', () => {
     expect(readResult(message, kindByName.implement)).toEqual(implemented)
   })
 
+  it('R760-04 (#698 AC-3): reads a Markdown code fence inside the result handoff', () => {
+    const result = {
+      ...implemented,
+      handoff: '## Example\n\n```text\nkeep the original field\n```',
+    }
+    const message = `Draft:\n${fenced(implemented)}\nFinal:\n${fenced(result)}\nDone.`
+    expect(readResult(message, kindByName.implement)).toEqual(result)
+  })
+
   it.each([
     [
       'no fenced json block',
