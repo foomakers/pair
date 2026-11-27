@@ -441,6 +441,58 @@ ${test.beforeFix ?? ''}      fix: { kind: fix, ${allStops}${test.when ?? ''} }
       ...(test.mismatch ? ["engine 'codex' differs from the preceding engine"] : []),
     ])
   })
+
+  it.each([
+    { path: 'earlier step stops on failure', mismatch: true },
+    { path: 'early round failure', editCanEndRound: true },
+    { path: 'trailing repair after failed verification', repairEngine: 'codex' },
+    { path: 'successful verification', verifyEngine: 'codex', repairEngine: 'claude' },
+    {
+      path: 'repair is unreachable',
+      verifyFailure: 'stop',
+      repairEngine: 'codex',
+      mismatch: true,
+    },
+  ])('R760-08 (#698 AC-5): validates post-loop resume when $path', test => {
+    const repair = test.repairEngine
+      ? `      repair: { kind: generic, skill: my-skill, ${allStops} }\n`
+      : ''
+    const { errors, warnings } = check(
+      `version: 1
+name: quick
+steps:
+  rounds:
+    kind: loop
+    until: verify
+    max: 3
+    escalate: { exhausted: continue }
+    steps:
+      edit: { kind: generic, skill: my-skill, ${test.editCanEndRound ? decisionStops : allStops} }
+      verify:
+        kind: generic
+        skill: my-skill
+        escalate: { failed: ${test.verifyFailure ?? 'continue'}, blocked: stop, needs-decision: stop }
+${repair}  summary: { kind: generic, skill: my-skill, context: resume, ${allStops} }
+`,
+      {
+        resume: {
+          engineFor: step => {
+            if (step === 'rounds/verify') return test.verifyEngine ?? 'claude'
+            if (step === 'rounds/repair') return test.repairEngine
+            return 'codex'
+          },
+          supports: () => true,
+        },
+      },
+    )
+    expect(errors).toEqual([])
+    const contextWarnings = warnings.filter(({ key }) => key.endsWith('.context'))
+    expect(contextWarnings.map(({ key, problem }) => [key, problem])).toEqual(
+      test.mismatch
+        ? [['steps.summary.context', "engine 'codex' differs from the preceding engine"]]
+        : [],
+    )
+  })
 })
 
 describe('step prompts (#698 AC-7, AC-9 and approved design §4)', () => {
