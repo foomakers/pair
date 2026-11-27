@@ -16,9 +16,24 @@
         "codex": "codex-medium"
       },
       "tiers": {
-        "risk:red": { "claude": "claude-high", "codex": "codex-high" },
-        "risk:yellow": { "claude": "claude-medium", "codex": "codex-medium" },
-        "risk:green": { "claude": "claude-cheap", "codex": "codex-cheap" }
+        "risk:red": {
+          "claude": "claude-high",
+          "codex": "codex-high"
+        },
+        "risk:yellow": {
+          "claude": "claude-medium",
+          "codex": "codex-medium"
+        },
+        "risk:green": {
+          "claude": "claude-cheap",
+          "codex": "codex-cheap"
+        }
+      }
+    },
+    "full": {
+      "configuration": {
+        "claude": "claude-full",
+        "codex": "codex-full"
       }
     }
   }

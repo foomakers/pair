@@ -1,0 +1,12 @@
+version: 1
+name: full
+description: Refine a card, then deliver it.
+select:
+  filter: { status: [Draft] }
+steps:
+  refinement:
+    kind: generic
+    uses: refinement
+  delivery:
+    kind: generic
+    uses: delivery

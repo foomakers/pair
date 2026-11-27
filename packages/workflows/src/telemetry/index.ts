@@ -9,6 +9,7 @@ import {
   type RunIdentity,
   type RunEndStatus,
   type StepLaunch,
+  type FindingCounts,
 } from '../engine'
 import type { EscalationAction, KindName } from '../grammar'
 import type { StepStatus } from '../kinds'
@@ -90,6 +91,7 @@ export interface StepTelemetry extends RunIdentity {
   /** The execution number of this step in the run. */
   readonly attempt: number
   readonly round?: number
+  readonly findingCounts?: FindingCounts | undefined
 }
 
 /** A sum of entries: an estimate when any summed entry is one. */
@@ -103,6 +105,7 @@ export interface RunTelemetry extends RunIdentity {
   readonly type: 'run'
   readonly schema: typeof TELEMETRY_SCHEMA
   readonly status: RunEndStatus
+  readonly historical?: true
   readonly durationMs: number
   readonly tokens: Readonly<Record<TokenName, TokenSum>>
   /** The number of step executions. */
@@ -128,19 +131,23 @@ export interface StepExecution {
   readonly reason?: string
   readonly diagnosis?: Diagnosis
   readonly escalate?: EscalationTelemetry
+  readonly findingCounts?: FindingCounts | undefined
 }
 
 const fileOf = (run: RunDirectory): string => join(run.dir, TELEMETRY_FILE)
 
 /** The step records of the run. A closing record is of a run that ended: it goes when the run moves again. */
-function stepsOf(run: RunDirectory): StepTelemetry[] {
+function recordsOf(run: RunDirectory): (StepTelemetry | RunTelemetry)[] {
   if (!run.files.existsSync(fileOf(run))) return []
   return migrateTelemetryStatuses(run.files.readFileSync(fileOf(run)))
     .split('\n')
     .filter(line => line !== '')
     .map(line => JSON.parse(line) as StepTelemetry | RunTelemetry)
-    .filter((record): record is StepTelemetry => record.type === 'step')
+    .filter(record => record.type === 'step' || record.status === 'parked')
 }
+
+const stepsOf = (run: RunDirectory): StepTelemetry[] =>
+  recordsOf(run).filter((record): record is StepTelemetry => record.type === 'step')
 
 // An arbitrary line can be a prompt or an unlabelled credential. Keep only complete, known-safe
 // messages in telemetry. The local run diagnosis still carries the original text for debugging.
@@ -195,7 +202,7 @@ const write = (run: RunDirectory, records: readonly (StepTelemetry | RunTelemetr
   )
 
 function stepRecord(run: RunDirectory, execution: StepExecution): StepTelemetry {
-  const { step, settings, tokens, reason, escalate, diagnosis } = execution
+  const { step, settings, tokens, reason, escalate, diagnosis, findingCounts } = execution
   const isEstimate = Object.values(tokens).some(entry => entry.source === 'estimated')
   return {
     type: 'step',
@@ -218,6 +225,7 @@ function stepRecord(run: RunDirectory, execution: StepExecution): StepTelemetry 
     ...(escalate !== undefined && { escalate }),
     attempt: step.attempt,
     ...(step.round !== undefined && { round: step.round }),
+    ...(findingCounts !== undefined && { findingCounts }),
   }
 }
 
@@ -226,7 +234,8 @@ const attemptKey = (id: string, attempt: number, round?: number) =>
 
 /** Appends a step record, or adds its escalation to a fault recovered before settlement. */
 export async function recordStep(run: RunDirectory, execution: StepExecution): Promise<void> {
-  const steps = stepsOf(run)
+  const records = recordsOf(run)
+  const steps = records.filter((row): row is StepTelemetry => row.type === 'step')
   const record = stepRecord(run, execution)
   if (record.diagnosis !== undefined) {
     const key = attemptKey(record.step, record.attempt, record.round)
@@ -238,12 +247,12 @@ export async function recordStep(run: RunDirectory, execution: StepExecution): P
       if (escalate !== undefined && existing.escalate === undefined)
         await write(
           run,
-          steps.map(row => (row === existing ? { ...row, escalate } : row)),
+          records.map(row => (row === existing ? { ...row, escalate } : row)),
         )
       return
     }
   }
-  await write(run, [...steps, record])
+  await write(run, [...records, record])
 }
 
 type RecoveredFault = Omit<StepExecution, 'durationMs' | 'tokens'> & { diagnosis: Diagnosis }
@@ -275,10 +284,24 @@ export async function recordMissingFaultSteps(
     ({ step }) => !recorded.has(attemptKey(step.id, step.attempt, step.round)),
   )
   if (missing.length === 0 && terminal === undefined) return
-  const repaired = [...steps, ...missing.map(fault => stepRecord(run, recoveredExecution(fault)))]
+  const retained = recordsOf(run)
+  if (terminal === 'parked' && missing.length === 0 && retained.at(-1)?.type === 'run') return
+  const repaired = [
+    ...retained,
+    ...missing.map(fault => stepRecord(run, recoveredExecution(fault))),
+  ]
   await write(
     run,
-    terminal === undefined ? repaired : [...repaired, closingRecord(run, repaired, terminal)],
+    terminal === undefined
+      ? repaired
+      : [
+          ...repaired,
+          closingRecord(
+            run,
+            repaired.filter((row): row is StepTelemetry => row.type === 'step'),
+            terminal,
+          ),
+        ],
   )
 }
 
@@ -299,7 +322,9 @@ function sumOf(name: TokenName, steps: readonly StepTelemetry[]): TokenSum {
 /** Writes a completed run's outcome and the totals of its step executions. */
 export async function closeRun(run: RunDirectory, status: RunTelemetry['status']): Promise<void> {
   const steps = stepsOf(run)
-  await write(run, [...steps, closingRecord(run, steps, status)])
+  const records = recordsOf(run)
+  if (status === 'parked' && records.at(-1)?.type === 'run') return
+  await write(run, [...records, closingRecord(run, steps, status)])
 }
 
 function closingRecord(
@@ -328,5 +353,11 @@ function closingRecord(
  * dropped, so the file never says `failed` (or `done`) for a run that went on without it.
  */
 export async function reopenRun(run: RunDirectory): Promise<void> {
-  if (run.files.existsSync(fileOf(run))) await write(run, stepsOf(run))
+  if (run.files.existsSync(fileOf(run)))
+    await write(
+      run,
+      recordsOf(run).map(record =>
+        record.type === 'run' ? { ...record, historical: true } : record,
+      ),
+    )
 }

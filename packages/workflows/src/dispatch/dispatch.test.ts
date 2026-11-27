@@ -67,7 +67,7 @@ describe('buildMessage (AC-4, AC-5)', () => {
     ])
     expect(message).toContain('- verdict: "approved" | "changes-requested"')
     expect(message).toContain(
-      '- findings: array of { id: string, severity: string, title: string, blocking: boolean }',
+      '- findings: array of { id: string, severity: string, title: string, blocking: boolean, origin: "new" | "carried" }',
     )
     expect(message).not.toContain('Options:')
     expect(message.indexOf('- head: ')).toBeLessThan(
@@ -232,7 +232,9 @@ describe('readResult (AC-4)', () => {
         summary: 'one blocking finding',
         verdict: 'changes-requested',
         reviewedHead: HEAD,
-        findings: [{ id: 'f1', severity: 'Major', title: 'missing test', blocking: true }],
+        findings: [
+          { id: 'f1', severity: 'Major', title: 'missing test', blocking: true, origin: 'new' },
+        ],
         handoff: '## Follow-up\n\n- Add the missing assertion.',
       },
     ],
@@ -310,7 +312,10 @@ describe('readResult (AC-4)', () => {
     [
       'a finding with a field missing',
       'review',
-      { ...reviewed, findings: [{ id: 'f1', severity: 'Major', title: 'missing test' }] },
+      {
+        ...reviewed,
+        findings: [{ id: 'f1', severity: 'Major', title: 'missing test', origin: 'new' }],
+      },
       "findings.0: missing key 'blocking'",
     ],
   ] as const)(

@@ -1,14 +1,14 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1086,
-  "files": 411,
-  "distinctContents": 376,
+  "files": 412,
+  "distinctContents": 377,
   "dispositionCounts": {
     "standalone-script": 17,
     "os-guarantee": 35,
     "type-contract": 13,
     "in-flight-churn": 241,
-    "repo-contract": 104,
+    "repo-contract": 105,
     "boundary-adapter": 1
   },
   "limits": [
@@ -6831,6 +6831,17 @@
       "reason": "Runs a real build to a temporary path, compares the shipped bytes and executes the output there.",
       "decision": "Keep the filesystem and process boundaries in the shipped-bundle check.",
       "testCategory": "real-process"
+    },
+    {
+      "path": "packages/workflows/test/delivery.test.ts",
+      "hash": "4c3e01bbc13af154fea9a38e0dd29084c3a14fac42a77cb303031a5e41898f85",
+      "dependencies": [{ "form": "import", "specifier": "node:fs", "line": 2 }],
+      "disposition": "repo-contract",
+      "producer": "packages/workflows/test/delivery.test.ts",
+      "observedOperations": ["readFileSync"],
+      "reason": "Validates the actual shipped workflow files and their expansion.",
+      "decision": "Keep the repository file boundary in the workflow integration test.",
+      "testCategory": "repository-contract"
     },
     {
       "path": "packages/workflows/test/session-command.test.ts",

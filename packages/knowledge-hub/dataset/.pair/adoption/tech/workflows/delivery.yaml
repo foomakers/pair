@@ -1,30 +1,44 @@
 version: 1
 name: delivery
-description: Implement, review, check, approve and merge one card.
+description: Implement a card, review and fix until clean, check, approve, merge.
+select:
+  filter: { status: [Ready] }
+  order: [priority, number]
 aliases:
-  build: { effort: medium }
-  judge: { effort: high }
+  build: {}
+  judge: {}
 steps:
   implement:
     kind: implement
     alias: build
+    gates: [target:pr]
     escalate: { failed: stop, blocked: stop, needs-decision: stop }
-  review:
+  rounds:
+    kind: loop
+    until: review
+    max: 3
+    escalate: { exhausted: continue }
+    steps:
+      review:
+        kind: review
+        alias: judge
+        escalate: { failed: continue, blocked: stop, needs-decision: stop }
+      fix:
+        kind: fix
+        alias: build
+        gates: [target:pr]
+        escalate: { failed: stop, blocked: stop, needs-decision: stop }
+  final-review:
     kind: review
     alias: judge
-    with: { publication: first-and-approved }
+    when: { output: rounds.status, is: [exhausted] }
     escalate: { failed: stop, blocked: stop, needs-decision: stop }
-  gate:
+  checks:
     kind: gate
-    on-resume: { reason: head-changed, step: review }
-    with:
-      gates: [target:pr]
-      checks: [head-unchanged]
-  approval:
+    with: { gates: [target:pr], checks: [ci-green, head-unchanged] }
+  approve:
     kind: approval
     escalate: { failed: stop, needs-decision: stop }
-    on-resume: { reason: head-moved, step: review }
-    with: { question: 'Approve merging this reviewed head?' }
+    with: { question: Merge this PR? }
   merge:
     kind: merge
-    on-resume: { reason: head-moved, step: review }

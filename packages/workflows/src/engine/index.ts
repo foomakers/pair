@@ -114,6 +114,7 @@ const executionOf = ({
 
 export interface StepRecord extends StepExecutionIdentity {
   readonly state: StepState
+  readonly findingCounts?: FindingCounts
   readonly interrupted?: true
   readonly contextFallback?: string
   readonly round?: number
@@ -132,6 +133,13 @@ export interface StepRecord extends StepExecutionIdentity {
   readonly retryBoardStatus?: string
 }
 
+export interface FindingCounts {
+  readonly open: number
+  readonly blockingOpen?: number
+  readonly resolved: number
+  readonly new: number
+}
+
 /** `state.json`: the only source for `next`. */
 export interface RunStateFile {
   readonly schemaVersion: typeof STATE_SCHEMA_VERSION
@@ -144,6 +152,7 @@ export interface RunStateFile {
   /** Present when the run froze a configuration; `override` is the `--config-override` applied, as given. */
   readonly configuration?: { readonly hash: string; readonly override?: unknown } | undefined
   readonly steps: Readonly<Record<string, StepRecord>>
+  readonly findingCounts?: Readonly<Record<string, Readonly<Record<number, FindingCounts>>>>
   readonly loops?: Readonly<Record<string, LoopRecord>>
   readonly latest?: Readonly<Record<string, unknown>>
   readonly replay?: StepReplay
@@ -242,6 +251,19 @@ function readState(run: RunDirectory): RunStateFile | undefined {
         `this version reads ${String(STATE_SCHEMA_VERSION)} — start over with --restart`,
     )
   return state
+}
+
+export function findingCountsOf(
+  run: RunDirectory,
+  id: string,
+  round?: number,
+): FindingCounts | undefined {
+  const state = readState(run)
+  const step = state?.steps[id]
+  return (
+    (round === undefined ? undefined : state?.findingCounts?.[id]?.[round]) ??
+    (step?.round === round ? step?.findingCounts : undefined)
+  )
 }
 
 async function migrateStateStatuses(run: RunDirectory, state: RunStateFile): Promise<RunStateFile> {
@@ -1627,6 +1649,47 @@ function observeEscalation(
     })
 }
 
+function reviewFindingCounts(
+  step: Step,
+  outputs: Record<string, unknown>,
+  state: RunStateFile,
+): FindingCounts | undefined {
+  const findings = outputs['findings']
+  if (step.kind !== 'review' || !Array.isArray(findings)) return undefined
+  const prior = state.latest?.['findings']
+  return {
+    open: findings.length,
+    blockingOpen: findings.filter(one => one.blocking === true).length,
+    resolved: Array.isArray(prior)
+      ? prior.filter((old: { id: string }) => !findings.some(one => one.id === old.id)).length
+      : 0,
+    new: findings.filter(one => !Array.isArray(prior) || !prior.some(old => old.id === one.id))
+      .length,
+  }
+}
+
+function countsHistory(
+  state: RunStateFile,
+  id: string,
+  round: number | undefined,
+  counts?: FindingCounts,
+) {
+  if (counts === undefined || round === undefined) return state.findingCounts
+  return { ...state.findingCounts, [id]: { ...state.findingCounts?.[id], [round]: counts } }
+}
+
+function reviewOrigins(step: Step, result: StepResult, state: RunStateFile): StepResult {
+  const prior = state.latest?.['findings']
+  if (step.kind !== 'review' || !Array.isArray(result['findings'])) return result
+  return {
+    ...result,
+    findings: result['findings'].map(one => ({
+      ...one,
+      origin: Array.isArray(prior) && prior.some(old => old.id === one.id) ? 'carried' : 'new',
+    })),
+  }
+}
+
 /**
  * Records the result of a step: validated against its kind (a result that breaks the contract is
  * recorded `failed`, `invalid-result`), written to `steps/<id>/result.json`, then to `state.json`.
@@ -1646,7 +1709,7 @@ export async function record(
   checkAttempt(stepId, previous, options.attempt)
   const { step, outer, childId } = launchable(run, stepId)
   const kind = kindByName[step.kind]
-  const settled = boundedHandoff(settle(kind, result))
+  const settled = reviewOrigins(step, boundedHandoff(settle(kind, result)), state)
   const round = childId === undefined ? undefined : loopRound(state, outer)
   await writeResult(run, resultDir(run, stepId, round), settled, output)
   const { status } = settled
@@ -1655,8 +1718,10 @@ export async function record(
       .filter(name => name in settled)
       .map(name => [name, settled[name]]),
   )
+  const findingCounts = reviewFindingCounts(step, outputs, state)
   const entry = {
     ...recordOf(settled, outputs, round, previous),
+    ...(findingCounts !== undefined && { findingCounts }),
     ...executionOf(previous?.pendingSuccess === undefined ? options : previous),
     ...fallbackOf(previous),
     ...retryAfter(status, previous, invalidatePendingSuccess),
@@ -1669,9 +1734,11 @@ export async function record(
         )
       : { steps: { ...state.steps, [stepId]: entry }, loops: state.loops }
   const { steps, loops } = progress
+  const counts = countsHistory(state, stepId, round, findingCounts)
   await writeState(run, {
     ...state,
     steps,
+    ...(counts !== undefined && { findingCounts: counts }),
     ...(loops !== undefined && { loops, latest: mergeOutputs(state.latest, outputs) }),
   })
   observeEscalation(run, { id: stepId, round }, step, settled)

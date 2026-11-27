@@ -349,7 +349,7 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
     ])
   })
 
-  it('ships the six profile equivalents and the two base configurations', () => {
+  it('ships profile, base and full configurations', () => {
     const names = Object.keys(files)
       .filter(path => path.includes('/configurations/'))
       .map(path => path.replace(/^.*\//, '').replace('.yaml', ''))
@@ -357,10 +357,12 @@ describe('the shipped set with quick (AC-8, AC-11)', () => {
       [
         'claude',
         'claude-cheap',
+        'claude-full',
         'claude-high',
         'claude-medium',
         'codex',
         'codex-cheap',
+        'codex-full',
         'codex-high',
         'codex-medium',
       ].sort(),

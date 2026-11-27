@@ -232,6 +232,7 @@ This map is judgment rather than syntax, which is why it is worth stating. Confi
 | the shared KB cache inspected or reclaimed | `kb-cache` | list or prune; options from `--help` |
 | words or estimated tokens of their pair files counted | `tokens` | per area; options from `--help` |
 | create, change, explain or configure a workflow | `/pair-capability-workflow` | invoke the authoring skill |
+| run the cycle on a card | `/pair-workflow-run delivery` | invoke the delivery workflow with the card |
 | run a workflow in the session | `/pair-workflow-run` | invoke the installed skill with the workflow and card or a saved run ID |
 | run a workflow from the terminal | `pair-cli run <workflow> --card <id>` | launch from the project checkout |
 | to change how pair behaves in this project | **Configure** (below) | autonomy, hooks, profiles, adoption files |

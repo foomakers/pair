@@ -1,0 +1,49 @@
+---
+title: Delivery and full workflows
+description: Run the shipped delivery and full workflows on a card.
+---
+
+`delivery` takes a Ready card through implementation, review and one-pass fixes, checks, approval and merge:
+
+```bash
+pair-cli run delivery --card 123 --telemetry
+```
+
+The review loop allows three rounds. A blocking review triggers a fix; a clean review advances to the checks. The checks include the PR gate, CI and the reviewed head. Approval precedes merge. A failure or a decision that needs a person stops the run; resume it after resolving the cause.
+
+`full` expands the shipped `refinement` and `delivery` workflows into one run for a Draft card:
+
+```bash
+pair-cli run full --card 123 --telemetry
+```
+
+The refinement may park for a product decision. Delivery starts after refinement completes. Run `pair-cli run --help` for selection and resume options.
+
+## Review and fix an existing PR
+
+A custom workflow can resume implementation for the card and then review and fix its PR. The implementation step provides the PR number and head to the review loop:
+
+```yaml
+version: 1
+name: review-fix
+aliases:
+  build: { effort: medium }
+  judge: { effort: medium }
+steps:
+  implement:
+    kind: implement
+  rounds:
+    kind: loop
+    until: review
+    max: 3
+    on-max: escalate
+    steps:
+      review:
+        kind: review
+        escalate: { failed: continue, blocked: stop, needs-decision: stop }
+      fix:
+        kind: fix
+        escalate: { failed: stop, blocked: stop, needs-decision: stop }
+```
+
+**Next:** [Workflow configuration](/docs/reference/configuration) for the grammar and available kinds. The existing delivery cycle remains available separately.

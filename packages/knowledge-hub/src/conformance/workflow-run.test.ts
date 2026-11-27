@@ -29,6 +29,11 @@ describe('workflow-run — session driver (#696 T-6)', () => {
       author: AUTHOR,
     },
   ])('$label', ({ root, run, author }) => {
+    it('routes a request for the cycle on a card to delivery (#700 AC-7)', () => {
+      const skill = instructions(root, run)
+      expect(skill).toMatch(/\bcycle\b.{0,100}\bcard\b.{0,160}\bdelivery\b/i)
+    })
+
     it('checks for a subagent primitive before opening and stops with the CLI fallback (AC-3)', () => {
       const skill = instructions(root, run)
       expect(skill).toMatch(

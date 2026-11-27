@@ -67,7 +67,7 @@ steps:
       summary: 'gap',
       verdict: 'changes-requested',
       reviewedHead: HEAD,
-      findings: [{ id: 'f', severity: 'Major', title: 'gap', blocking: true }],
+      findings: [{ id: 'f', severity: 'Major', title: 'gap', blocking: true, origin: 'new' }],
     })
     const fixed = fenced({
       status: 'ok',
@@ -94,6 +94,63 @@ steps:
       ['rounds/review', 2],
     ])
   })
+})
+
+it('#700 AC-3 records open, resolved and new findings for each review round', async () => {
+  const text = `version: 1
+name: quick
+steps:
+  implement: { kind: implement }
+  rounds:
+    kind: loop
+    until: review
+    max: 2
+    on-max: fail
+    steps:
+      review: { kind: review }
+      fix: { kind: fix }
+`
+  const finding = (id: string, origin: string) => ({
+    id,
+    severity: 'Major',
+    title: id,
+    blocking: true,
+    origin,
+  })
+  let reviews = 0
+  let firstState: unknown
+  const { host } = fakeHost({
+    'pair-process-implement': () => IMPLEMENTED,
+    'pair-process-review': () =>
+      fenced({
+        status: 'failed',
+        summary: 'gaps',
+        verdict: 'changes-requested',
+        reviewedHead: HEAD,
+        findings:
+          ++reviews === 1
+            ? [finding('a', 'new'), finding('b', 'new')]
+            : [finding('b', 'carried'), finding('c', 'new')],
+      }),
+    'pair-process-fix': () => {
+      firstState ??= JSON.parse(host.files.readFileSync(`${DIR}/state.json`)).steps['rounds/review']
+      return fenced({ status: 'ok', summary: 'fixed', head: HEAD, resolutions: [] })
+    },
+  })
+  await start({ files: host.files, dir: DIR }, { text, file: 'quick.yaml' }, { card: '627' })
+  await runSteps(host, DIR, { host: 'pair-run', settings: () => ({ engine: 'claude' }) })
+  const secondState = JSON.parse(host.files.readFileSync(`${DIR}/state.json`)).steps[
+    'rounds/review'
+  ]
+  const reviewRecords = telemetryOf(host).filter(record => record.step === 'rounds/review')
+  const firstCounts = { open: 2, resolved: 0, new: 2 }
+  const secondCounts = { open: 2, resolved: 1, new: 1 }
+  expect.soft(firstState).toMatchObject({ round: 1, findingCounts: firstCounts })
+  expect.soft(secondState).toMatchObject({ round: 2, findingCounts: secondCounts })
+  expect(reviewRecords).toMatchObject([
+    { round: 1, findingCounts: firstCounts },
+    { round: 2, findingCounts: secondCounts },
+  ])
 })
 
 describe('#728 AC-17: escalation telemetry', () => {
@@ -736,6 +793,7 @@ describe('runSteps: telemetry (US-697 AC-1, AC-2)', () => {
         step: 'review',
         kind: 'review',
         uses: 'pair-process-review',
+        findingCounts: { open: 0, blockingOpen: 0, resolved: 0, new: 0 },
         ...launchedWith,
         startedAt: '2026-11-21T10:02:00.000Z',
         durationMs: 30_000,

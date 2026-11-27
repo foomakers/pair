@@ -50,11 +50,12 @@ An input is satisfied by a launch argument (`--card`) or by an output of an earl
   - `card`: `string` — The card the pull request delivers.
   - `pr`: `integer` — The pull request to review.
   - `head`: `string` — The head to review.
+  - `findings`: `array of any value` — Findings from the previous review.
 - **Outputs**, required when `status` is `ok` or `failed`
   - `verdict`: `"approved" | "changes-requested"`
   - `reportPath`: `string` — Local report for this PR and reviewed head.
   - `reviewedHead`: `string matching ^[0-9a-f]{40}$` — The head the verdict is about, a 40-hex sha.
-  - `findings`: `array of { id: string, severity: string, title: string, blocking: boolean }` — Every finding. The step is `failed` when at least one is blocking.
+  - `findings`: `array of { id: string, severity: string, title: string, blocking: boolean, origin: "new" | "carried" }` — Every finding. The step is `failed` when at least one is blocking.
 - **Rule**: The status is "failed", never "ok", when at least one finding is blocking or the verdict is "changes-requested".
 - **Options** (`with`)
   - `publication`: `"always" | "first-and-approved" | "never"` — Publish every review, the first and approved reviews, or none. Default: always.

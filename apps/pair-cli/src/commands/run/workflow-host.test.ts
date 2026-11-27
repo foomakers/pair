@@ -1639,7 +1639,7 @@ steps:
       review: { kind: review }
       fix: { kind: fix }
 `
-  const findings = [{ id: 'f', severity: 'Major', title: 'gap', blocking: true }]
+  const findings = [{ id: 'f', severity: 'Major', title: 'gap', blocking: true, origin: 'new' }]
   const failedReview = fenced({
     status: 'failed',
     summary: 'gap',
@@ -2027,7 +2027,7 @@ describe('quick: implement, review, fix (#708 AC-8)', () => {
     reason: 'blocking-findings',
     verdict: 'changes-requested',
     reviewedHead: HEAD,
-    findings: [{ id: 'F1', severity: 'Major', title: 't', blocking: true }],
+    findings: [{ id: 'F1', severity: 'Major', title: 't', blocking: true, origin: 'new' }],
   })
   const quick = () =>
     write(
@@ -2143,6 +2143,8 @@ it.each([
     const moveFailure = { status: 'failed', reason: 'head-moved', summary: 'PR head moved' }
     const respond = (action: string | undefined, data: { flag?: object; head?: string }) => {
       switch (action) {
+        case 'ci':
+          return 'green'
         case 'head':
           return currentHead
         case 'approval-target':
@@ -2244,7 +2246,15 @@ it.each([
                 verdict: 'changes-requested',
                 reviewedHead: newHead,
                 reportPath: `.pair/working/reviews/12/${newHead}.md`,
-                findings: [{ id: 'F1', severity: 'Major', title: 'Regression', blocking: true }],
+                findings: [
+                  {
+                    id: 'F1',
+                    severity: 'Major',
+                    title: 'Regression',
+                    blocking: true,
+                    origin: 'new',
+                  },
+                ],
               })
             : REVIEWED.replaceAll(HEAD, currentHead)
         },

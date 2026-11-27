@@ -15,7 +15,7 @@ import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const QUESTIONS = ['cost', 'time', 'passes', 'compare', 'trend']
+const QUESTIONS = ['cost', 'time', 'passes', 'compare', 'trend', 'convergence']
 const TOKENS = ['read', 'cached', 'written']
 const NOT_CALCULATED = 'not calculated'
 /** The record format this script reads (ADR-033). */
@@ -124,8 +124,21 @@ export function readRuns(dir, only = {}) {
       const steps = records.filter(record => record.type === 'step')
       if (steps.length === 0) return []
       const { run, workflow, card } = steps[0]
-      const status = records.findLast(record => record.type === 'run')?.status ?? 'open'
-      return [{ run, workflow, card, status, steps }]
+      const last = records.at(-1)
+      const status = last?.type === 'run' && !last.historical ? last.status : 'open'
+      let segment = []
+      const parks = []
+      for (const record of records) {
+        if (record.type === 'step') segment.push(record)
+        if (record.type === 'run') {
+          if (record.status === 'parked') {
+            const cause = segment.findLast(step => ['blocked', 'needs-decision', 'exhausted'].includes(step.status) && step.escalate?.do !== 'continue')
+            if (cause) parks.push({ step: cause.step, reason: cause.reason })
+          }
+          segment = []
+        }
+      }
+      return [{ run, workflow, card, status, steps, parks }]
     })
     .filter(one => ['run', 'card', 'workflow'].every(key => only[key] === undefined || one[key] === only[key]))
 }
@@ -250,6 +263,8 @@ function compare(runs, { prices, by = 'card' }) {
   const rows = runs.map(one => ({
     ...identityOf(one),
     configuration: configurationOf(one.steps),
+    steps: one.steps.filter(step => step.kind !== 'loop').length,
+    parks: one.parks,
     durationMs: durationOf(one.steps),
     tokens: tokensOf(one.steps),
     cost: costOf(one.steps, prices),
@@ -314,7 +329,31 @@ const trend = runs => ({
   })),
 })
 
-const ANSWERS = { cost, time, passes, compare, trend }
+const convergence = runs => {
+  const cards = runs.flatMap(({ run, card, workflow, steps }) => {
+    const reviews = steps.filter(step => step.kind === 'review' && step.findingCounts)
+    if (!reviews.length) return []
+    const rounds = reviews.map((step, index) => ({ round: step.round ?? index + 1, ...step.findingCounts }))
+    let lastRound = reviews[0].round
+    const pairs = reviews.slice(1).map((review, index) => {
+      const previous = reviews[index]
+      const reset = review.round != null && lastRound != null && review.round <= lastRound
+      if (review.round != null) lastRound = review.round
+      const between = steps.slice(steps.indexOf(previous) + 1, steps.indexOf(review))
+      return { review, previous, reset, fixed: !reset && between.some(step => step.kind === 'fix') }
+    })
+    return [{
+      run, card, workflow, rounds,
+      loopRounds: reviews.filter(step => step.round != null).length,
+      growth: pairs.some(({ review, previous, reset }) => !reset && (review.findingCounts.blockingOpen ?? review.findingCounts.open) > (previous.findingCounts.blockingOpen ?? previous.findingCounts.open)),
+      newAfterFix: total(pairs.filter(pair => pair.fixed).map(pair => pair.review.findingCounts.new)),
+    }]
+  })
+  const loops = cards.filter(card => card.loopRounds > 0)
+  return { cards, meanRounds: loops.length ? total(loops.map(card => card.loopRounds)) / loops.length : null }
+}
+
+const ANSWERS = { cost, time, passes, compare, trend, convergence }
 
 function notesOf(runs) {
   const sessions = runs.filter(one => one.steps.some(step => step.host === 'session')).map(one => one.run)
@@ -338,7 +377,7 @@ function main(argv) {
   const by = arg('--by')
   if (!QUESTIONS.includes(question) || (by !== undefined && by !== 'card' && by !== 'workflow')) {
     console.error(
-      `usage: analyze.mjs <${QUESTIONS.join('|')}> [--runs <dir>] [--run <id>] [--card <id>] [--workflow <name>] [--prices <file.json>] [--by card|workflow]`,
+      `usage: analyze.mjs <${QUESTIONS.filter(one => one !== 'convergence').join('|')}> (also: convergence) [--runs <dir>] [--run <id>] [--card <id>] [--workflow <name>] [--prices <file.json>] [--by card|workflow]`,
     )
     return 2
   }

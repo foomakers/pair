@@ -134,7 +134,7 @@ export default defineAdapter({
     // AL: EVERY CI check on the head (check runs AND commit statuses), as `{ name, conclusion }` with the conclusion folded to
     // success | failure | pending. The most recent run of a name wins; neutral/skipped count as success; a run still in flight,
     // or any status/conclusion this map does not know, is NOT green (cancelled, timed_out, action_required… ⇒ failure).
-    const readCiChecks = ({ sha, repo, requireSuccess = false }) => {
+    const readCiChecks = ({ sha, repo, requireSuccess = false, excludedRuns = new Set() }) => {
       const byName = new Map()
       // `--paginate`: more than one page of runs/statuses must not hide a failing check on a later page.
       const pagesOf = path => {
@@ -145,7 +145,7 @@ export default defineAdapter({
         }
       }
       const runs = pagesOf(`${apiRepo(repo)}/commits/${sha}/check-runs?per_page=100`).flatMap(page => page.check_runs ?? [])
-      for (const r of [...runs].sort((a, b) => String(a.started_at ?? '').localeCompare(String(b.started_at ?? '')))) {
+      for (const r of [...runs].filter(r => !excludedRuns.has(String(r.html_url ?? r.details_url ?? '').match(/\/actions\/runs\/(\d+)/)?.[1])).sort((a, b) => String(a.started_at ?? '').localeCompare(String(b.started_at ?? '')))) {
         const success = r.conclusion === 'success' || (!requireSuccess && ['neutral', 'skipped'].includes(r.conclusion))
         const conclusion = r.status !== 'completed' ? 'pending' : success ? 'success' : 'failure'
         const name = String(r.name)
@@ -202,7 +202,13 @@ export default defineAdapter({
         if (!Array.isArray(rule.parameters?.required_status_checks)) throw new Error('Required ruleset CI contexts unreadable')
         return rule.parameters.required_status_checks.map(check => requirement(check?.context, check?.integration_id))
       }))
-      const reported = readCiChecks({ sha, repo, requireSuccess: true })
+      const excludedRuns = requirements.length ? new Set() : new Set(
+        splitObjectPages(gh(['api', '--paginate', `${root}/actions/runs?head_sha=${encodeURIComponent(sha)}&per_page=100`]))
+          .flatMap(page => page.workflow_runs ?? [])
+          .filter(run => run.path === '.github/workflows/pair-board-sync.yml')
+          .map(run => String(run.id)),
+      )
+      const reported = readCiChecks({ sha, repo, requireSuccess: true, excludedRuns })
       const required = requirements.length
         ? requirements.filter(row => !REVIEW_CONTEXTS.has(row.name))
         : reported.filter(row => !row.name.startsWith('pair-'))

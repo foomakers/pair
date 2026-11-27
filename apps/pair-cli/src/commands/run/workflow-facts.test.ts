@@ -45,6 +45,7 @@ const fixture = {
     | { contexts?: string[]; checks?: { context: string; app_id?: number }[] },
   branchProtected: false,
   rules: [] as object[],
+  actionRuns: [] as object[],
   machine: '',
   actor: { login: 'reader', type: 'User' },
   comments: [] as object[],
@@ -53,8 +54,6 @@ const fixture = {
   draft: false,
   solo: 'false',
 }
-let github: typeof fixture
-const transport = vi.mocked(spawnSync)
 
 function respondChecks(endpoint: string) {
   if (endpoint.endsWith('/branches/release%2Fnext/protection/required_status_checks'))
@@ -62,6 +61,7 @@ function respondChecks(endpoint: string) {
   if (endpoint.includes('/rules/branches/release%2Fnext?')) return json(github.rules)
   if (endpoint.endsWith('/branches/release%2Fnext'))
     return json({ protected: github.branchProtected })
+  if (endpoint.includes('/actions/runs?')) return json({ workflow_runs: github.actionRuns })
   if (endpoint.includes('/actions/variables?')) return ok(github.machine)
   const commit = `/commits/${github.head}`
   if (endpoint.includes(commit + '/check-runs')) return json({ check_runs: github.checks })
@@ -153,6 +153,8 @@ beforeEach(() => {
   })
 })
 
+let github: typeof fixture
+const transport = vi.mocked(spawnSync)
 const facts = (cwd: string, checks: readonly string[] = []) =>
   workflowFacts(() => scripts, cwd, {
     id: 'gate',
@@ -431,6 +433,21 @@ it.each([
   github.required = row.required
   github.checks = row.checks
   await expect(facts(dir, ['head-unchanged', 'ci-green']).ci()).resolves.toBe(row.expected)
+})
+
+it('ignores board synchronization jobs in the fallback CI inventory (R763-02)', async () => {
+  github.actionRuns = [
+    { id: 1, path: '.github/workflows/ci.yml' },
+    { id: 2, path: '.github/workflows/pair-board-sync.yml' },
+  ]
+  const from = (name: string, id: number, conclusion = 'success') => ({
+    ...check(name, conclusion),
+    html_url: `https://github.com/foomakers/pair/actions/runs/${id}/job/1`,
+  })
+  github.checks = [from('build', 1), from('created', 2, 'skipped'), from('pr-state', 2, 'failure')]
+  await expect(facts(dir).ci()).resolves.toBe('green')
+  github.checks[0] = from('build', 1, 'failure')
+  await expect(facts(dir).ci()).resolves.toBe('red')
 })
 
 it.each(['classic', 'ruleset'] as const)(

@@ -36,6 +36,10 @@ const validateAdopted = (root: string, path: string) =>
     gateTargets: Object.keys(readGateTargets(read(root, WAY_OF_WORKING))),
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
+    resolveWorkflow: name => ({
+      file: join(WORKFLOWS, `${name}.yaml`),
+      text: read(root, join(WORKFLOWS, `${name}.yaml`)),
+    }),
   })
 
 const errorsOf = (root: string) => validateAdopted(root, QUICK).errors
@@ -181,14 +185,10 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
     sources.flatMap(source =>
       workflowFiles(source.root).map(file => ({ ...source, file: file.name })),
     ),
-  )('$name $file has no new validation warnings', ({ name, root, file }) => {
+  )('$name $file has no new validation warnings', ({ root, file }) => {
     const { errors, warnings } = validateAdopted(root, join(WORKFLOWS, file))
     expect(errors).toEqual([])
-    expect(warnings.map(({ key, problem }) => ({ key, problem }))).toEqual(
-      name === 'repository' && file === 'delivery.yaml'
-        ? [{ key: 'steps.merge', problem: 'merge has no review after the last code-changing step' }]
-        : [],
-    )
+    expect(warnings.map(({ key, problem }) => ({ key, problem }))).toEqual([])
   })
 
   it.each(
@@ -217,7 +217,13 @@ describe('#728 AC 20: adopted workflows validate and quick keeps its gate sequen
       const readSteps = () =>
         (JSON.parse(run.files.readFileSync(join(run.dir, STATE_FILE))) as RunStateFile).steps
       const head = 'a'.repeat(40)
-      const firstFinding = { id: 'f1', severity: 'Major', title: 'Missing check', blocking: true }
+      const firstFinding = {
+        id: 'f1',
+        severity: 'Major',
+        title: 'Missing check',
+        blocking: true,
+        origin: 'new',
+      }
       const freshFinding = { ...firstFinding, id: 'f2', title: 'Missing assertion' }
       const requested = {
         status: 'failed',

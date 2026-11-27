@@ -4,6 +4,7 @@
     "phases",
     "refinement-workflow",
     "delivery-workflow",
+    "shipped-workflows",
     "delivery-cycle",
     "lifecycle-modes",
     "skill-layers",

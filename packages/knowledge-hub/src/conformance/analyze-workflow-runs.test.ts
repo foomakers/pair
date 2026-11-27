@@ -38,7 +38,7 @@ describe('analyze-workflow-runs — skill contract (#697)', () => {
     it(`${label} takes every number from the script and asks exactly the questions it answers`, () => {
       expect(content).toContain(SCRIPT)
       expect(lower).toContain('never computes')
-      expect(questions).toEqual(['cost', 'time', 'passes', 'compare', 'trend'])
+      expect(questions).toEqual(['cost', 'time', 'passes', 'compare', 'trend', 'convergence'])
       const asked = [...content.matchAll(/^\| `([a-z]+)` +\|/gm)].map(match => match[1])
       expect(asked).toEqual(questions)
     })

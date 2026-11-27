@@ -50,6 +50,120 @@ const ESTIMATED = [
 ]
 const PRICES = { 'claude-fable-5-2': { read: 10, cached: 1, written: 50 } }
 const ask = (question, runs, options = {}) => answer(question, readRuns(runsDir(runs)), options)
+const withFixes = reviews => reviews.flatMap((review, index) => index ? [step(review.run, 'rounds/fix', { kind: 'fix' }), review] : [review])
+
+// #700 AC-4: report each round and the cohort mean, including growth and new findings after a fix.
+test('convergence: per-card rounds, growth, new findings and cohort mean', () => {
+  const review = (run, card, round, counts) => step(run, 'rounds/review', {
+    schema: 2, workflow: 'delivery', card, kind: 'review', round, findingCounts: counts,
+  })
+  const result = ask('convergence', {
+    a: withFixes([review('a', '1', 1, { open: 2, resolved: 0, new: 2 }), review('a', '1', 2, { open: 0, resolved: 2, new: 0 })]),
+    b: withFixes([review('b', '2', 1, { open: 1, resolved: 0, new: 1 }), review('b', '2', 2, { open: 2, resolved: 0, new: 1 }), review('b', '2', 3, { open: 0, resolved: 2, new: 0 })]),
+    c: withFixes([review('c', '3', 1, { open: 0, resolved: 0, new: 0 })]),
+  })
+  assert.equal(result.meanRounds, 2)
+  assert.deepEqual(result.cards.map(card => [card.card, card.rounds.length, card.growth, card.newAfterFix]), [
+    ['1', 2, false, 0], ['2', 3, true, 1], ['3', 1, false, 0],
+  ])
+  assert.deepEqual(result.cards[1].rounds.map(({ open, resolved, new: fresh }) => [open, resolved, fresh]), [[1, 0, 1], [2, 0, 1], [0, 2, 0]])
+})
+
+test('convergence includes terminal review and compares blocking counts (R763-04)', () => {
+  const review = (id, round, counts) => step('a', id, {
+    schema: 2, workflow: 'delivery', card: '1', kind: 'review', ...(round && { round }), findingCounts: counts,
+  })
+  const result = ask('convergence', { a: withFixes([
+    review('rounds/review', 1, { open: 1, blockingOpen: 1, resolved: 0, new: 1 }),
+    review('rounds/review', 2, { open: 3, blockingOpen: 1, resolved: 0, new: 2 }),
+    review('final-review', undefined, { open: 2, blockingOpen: 2, resolved: 2, new: 1 }),
+  ]) })
+  assert.equal(result.cards[0].rounds.length, 3)
+  assert.equal(result.cards[0].growth, true)
+  assert.equal(result.cards[0].newAfterFix, 3)
+  const noGrowth = ask('convergence', { a: withFixes([
+    review('rounds/review', 1, { open: 1, blockingOpen: 1, resolved: 0, new: 1 }),
+    review('final-review', undefined, { open: 3, blockingOpen: 1, resolved: 0, new: 2 }),
+  ]) })
+  assert.equal(noGrowth.cards[0].growth, false)
+})
+
+test('R763-04: isolate runs and exclude terminal verification from mean loop rounds', () => {
+  const review = (run, id, round, open, fresh) => step(run, id, {
+    schema: 2, workflow: run === 'quick' ? 'quick' : 'delivery', card: '1', kind: 'review',
+    ...(round && { round }), findingCounts: { open, blockingOpen: open, resolved: 0, new: fresh },
+  })
+  const result = ask('convergence', {
+    delivery: withFixes([review('delivery', 'rounds/review', 1, 1, 1), review('delivery', 'rounds/review', 2, 0, 0), review('delivery', 'final-review', undefined, 0, 0)]),
+    quick: withFixes([review('quick', 'review', undefined, 2, 2)]),
+  })
+  assert.equal(result.cards.length, 2)
+  const delivery = result.cards.find(card => card.run === 'delivery')
+  assert.equal(delivery.growth, false)
+  assert.equal(delivery.newAfterFix, 0)
+  assert.equal(delivery.rounds.length, 3)
+  assert.equal(result.meanRounds, 2)
+})
+
+test('R763-04: replacement loop does not attribute its first review to a fix', () => {
+  const review = (round, open, fresh) => step('a', 'rounds/review', {
+    kind: 'review', round, findingCounts: { open, blockingOpen: open, resolved: 0, new: fresh },
+  })
+  const result = ask('convergence', { a: [
+    review(1, 0, 0), step('a', 'head-check', { status: 'failed', reason: 'head-changed' }),
+    review(1, 1, 1), step('a', 'rounds/fix', { kind: 'fix', round: 1 }), review(2, 0, 0),
+  ] })
+  assert.equal(result.cards[0].growth, false)
+  assert.equal(result.cards[0].newAfterFix, 0)
+})
+
+test('R763-04: replacement round after final review starts a new loop', () => {
+  const review = (id, round, open) => step('a', id, {
+    kind: 'review', ...(round && { round }), findingCounts: { open, blockingOpen: open, resolved: 0, new: open },
+  })
+  const result = ask('convergence', { a: [
+    review('rounds/review', 1, 1), review('rounds/review', 2, 0), review('final-review', undefined, 0),
+    step('a', 'head-check', { status: 'failed', reason: 'head-changed' }), review('rounds/review', 1, 1),
+  ] })
+  assert.equal(result.cards[0].growth, false)
+})
+
+// #700 AC-5: comparison retains executions and park causes alongside duration and tokens.
+test('compare: steps and parks with causes are available alongside time and tokens', () => {
+  const parked = [step('a', 'review', { status: 'blocked', reason: 'review-conflict' }), closing('a', 'parked')]
+  const finished = [step('b', 'review'), step('b', 'merge'), closing('b')]
+  const { runs } = ask('compare', { a: parked, b: finished }).groups[0]
+  assert.deepEqual(runs.map(run => [run.steps, run.parks]), [
+    [1, [{ step: 'review', reason: 'review-conflict' }]], [2, []],
+  ])
+  assert.equal(runs[0].durationMs.value, 60_000)
+  assert.equal(runs[1].tokens.read.value, 200)
+})
+
+test('R763-05: resumed parks remain history while the run is open', () => {
+  const park = { ...closing('a', 'parked'), historical: true }
+  const initial = step('a', 'review', { status: 'needs-decision', reason: 'approval' })
+  for (const records of [[initial, park], [initial, park, step('a', 'merge')]]) {
+    const [run] = readRuns(runsDir({ a: records }))
+    assert.equal(run.status, 'open')
+    assert.deepEqual(run.parks, [{ step: 'review', reason: 'approval' }])
+  }
+})
+
+test('R763-10: comparison excludes loop exhaustion from executions', () => {
+  const { runs } = ask('compare', {
+    a: [step('a', 'review')],
+    b: [step('b', 'review'), step('b', 'rounds', { kind: 'loop', status: 'exhausted', escalate: { do: 'continue' } })],
+  }).groups[0]
+  assert.deepEqual(runs.map(run => run.steps), [1, 1])
+})
+
+test('R763-05: failed loop exhaustion is not a park', () => {
+  const failed = [step('a', 'rounds', { kind: 'loop', status: 'exhausted', reason: 'loop-max' }), closing('a', 'failed')]
+  const parked = [step('b', 'rounds', { kind: 'loop', status: 'exhausted', reason: 'loop-max' }), closing('b', 'parked')]
+  const { runs } = ask('compare', { a: failed, b: parked }).groups[0]
+  assert.deepEqual(runs.map(run => run.parks.length), [0, 1])
+})
 
 test('cost: tokens per step and in total, each with its origin, and the cost from the price table', () => {
   const [run] = ask('cost', { 'quick-627': MEASURED }, { prices: PRICES }).runs

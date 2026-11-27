@@ -1,6 +1,14 @@
-import { frozenConfiguration, hashOf, next, record, start, type RunDirectory } from '.'
+import {
+  findingCountsOf,
+  frozenConfiguration,
+  hashOf,
+  next,
+  record,
+  start,
+  type RunDirectory,
+} from '.'
 import { buildMessage } from '../dispatch'
-import { kindByName } from '../kinds'
+import { kindByName, settle } from '../kinds'
 import { createMemoryFiles } from './memory-files'
 
 const QUICK = `version: 1
@@ -40,6 +48,25 @@ const stateOf = (run: RunDirectory) =>
   }
 const statesOf = (run: RunDirectory) =>
   Object.fromEntries(Object.entries(stateOf(run).steps).map(([id, step]) => [id, step.state]))
+
+describe('#700 AC-3 review finding origin', () => {
+  const finding = { id: 'a', severity: 'Minor', title: 'note', blocking: false }
+
+  it.each(['new', 'carried'])('accepts origin %s', origin => {
+    expect(
+      settle(kindByName.review, { ...REVIEWED, findings: [{ ...finding, origin }] }).status,
+    ).toBe('ok')
+  })
+
+  it.each([undefined, 'resolved'])('rejects invalid origin %s', origin => {
+    expect(
+      settle(kindByName.review, { ...REVIEWED, findings: [{ ...finding, origin }] }),
+    ).toMatchObject({
+      status: 'failed',
+      reason: 'invalid-result',
+    })
+  })
+})
 
 describe('engine: a linear run (AC-1)', () => {
   it('starts with a frozen copy and every step pending', async () => {
@@ -318,7 +345,7 @@ steps:
       fix: { kind: fix }
 `
   const source = { text, file: 'workflows/quick.yaml' }
-  const findings = [{ id: 'a', severity: 'Major', title: 'gap', blocking: true }]
+  const findings = [{ id: 'a', severity: 'Major', title: 'gap', blocking: true, origin: 'new' }]
   const failedReview = {
     status: 'failed',
     summary: 'gap',
@@ -497,6 +524,60 @@ steps:
     })
   })
 
+  it('#700 AC-3 passes the previous review findings into the next round', async () => {
+    const run = await opened()
+    const previous = [
+      { id: 'a', severity: 'Major', title: 'gap', blocking: true, origin: 'new' },
+      { id: 'b', severity: 'Minor', title: 'note', blocking: false, origin: 'new' },
+    ]
+    await next(run)
+    await record(run, 'rounds/review', { ...failedReview, findings: previous })
+    await next(run)
+    await record(run, 'rounds/fix', fixed)
+    expect((await next(run)).ready[0]).toMatchObject({
+      id: 'rounds/review',
+      round: 2,
+      inputs: { findings: previous },
+    })
+  })
+
+  it('#700 AC-3 retains each round’s finding counts across subsequent rounds and resume', async () => {
+    const run = await opened()
+    const finding = (id: string, origin: string) => ({
+      id,
+      severity: 'Major',
+      title: id,
+      blocking: true,
+      origin,
+    })
+    await next(run)
+    await record(run, 'rounds/review', {
+      ...failedReview,
+      findings: [finding('a', 'new'), finding('b', 'new')],
+    })
+    await next(run)
+    await record(run, 'rounds/fix', fixed)
+    await next(run)
+    await record(run, 'rounds/review', {
+      ...failedReview,
+      findings: [finding('b', 'new'), finding('c', 'new')],
+    })
+    const counts = [
+      { open: 2, blockingOpen: 2, resolved: 0, new: 2 },
+      { open: 2, blockingOpen: 2, resolved: 1, new: 1 },
+    ]
+    expect.soft(findingCountsOf(run, 'rounds/review', 1)).toEqual(counts[0])
+    expect.soft(findingCountsOf(run, 'rounds/review', 2)).toEqual(counts[1])
+    await next(run)
+    await record(run, 'rounds/fix', fixed)
+    expect((await next(run)).run).toBe('parked')
+    expect(
+      await start(run, source, { card: '627', moreRounds: 1, requestedBy: 'rucka' }),
+    ).toMatchObject({ status: 'resumed' })
+    expect.soft(findingCountsOf(run, 'rounds/review', 1)).toEqual(counts[0])
+    expect(findingCountsOf(run, 'rounds/review', 2)).toEqual(counts[1])
+  })
+
   describe('loop handoff (#698 AC-8)', () => {
     const reviewHandoff = '## Review notes\n\n- Add a regression test.'
     const fixHandoff = '## Fix notes\n\n- The new test covers the gap.'
@@ -566,7 +647,7 @@ steps:
     expect((await next(run)).run).toBe('parked')
     expect(stateOf(run).steps.rounds).toMatchObject({
       state: 'exhausted',
-      outputs: { findings },
+      outputs: { findings: findings.map(one => ({ ...one, origin: 'carried' })) },
     })
     expect(await start(run, source, { card: '627' })).toEqual({ status: 'parked', warnings: [] })
     expect(await start(run, source, { card: '627', moreRounds: 1, requestedBy: 'rucka' })).toEqual({
@@ -1010,7 +1091,7 @@ describe('engine: on-failed (#708 AC-7)', () => {
     reason: 'blocking-findings',
     verdict: 'changes-requested',
     reviewedHead: HEAD,
-    findings: [{ id: 'F1', severity: 'Major', title: 't', blocking: true }],
+    findings: [{ id: 'F1', severity: 'Major', title: 't', blocking: true, origin: 'new' }],
   }
   const text = (policy: string) =>
     `${QUICK.replace('kind: review', `kind: review${policy}`)}  fix:\n    kind: fix\n`
@@ -1163,7 +1244,7 @@ steps:
     status: 'failed',
     verdict: 'changes-requested',
     reviewedHead: replacement,
-    findings: [{ id: 'F1', severity: 'Major', title: 'Regression', blocking: true }],
+    findings: [{ id: 'F1', severity: 'Major', title: 'Regression', blocking: true, origin: 'new' }],
   })
   await start(run, source, { card: '627' })
   expect((await next(run)).ready[0]).toMatchObject({
