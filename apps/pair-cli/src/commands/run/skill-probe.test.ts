@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'path'
 import { fileSystemService as disk, InMemoryFileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
-import { createSkillProbe, readInstalledSkill, workflowDefaultSkill } from './skill-probe'
+import {
+  createSkillProbe,
+  readInstalledSkill,
+  workflowDefaultSkill,
+  workflowSkillProbe,
+} from './skill-probe'
 
 import { locateCycleScripts } from './cycle-scripts'
 
@@ -397,6 +402,41 @@ describe('createSkillProbe', () => {
       expect(
         ['tools:Inspect', 'tools:inspect', 'tools:disabled', 'tools:stale'].map(exists),
       ).toEqual([true, false, false, false])
+    } finally {
+      disk.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  // #674 AC-2/AC-5, R764-01: a registry target does not add to Codex's inventory.
+  it.each([
+    { target: '.claude/skills', configured: false },
+    { target: 'custom/skills', configured: true },
+    { target: '.agents/skills', configured: false },
+  ])('rejects a registry-only skill in $target', ({ target, configured }) => {
+    const root = fakeEngine(
+      'codex',
+      `
+      createInterface({ input: process.stdin }).on('line', line => {
+        const { id, method } = JSON.parse(line);
+        if (method === 'initialize') console.log(JSON.stringify({ id, result: {} }));
+        if (method === 'skills/list') console.log(JSON.stringify({ id, result: { data: [{
+          cwd: process.cwd(), skills: [{ name: 'control', enabled: true }],
+        }] } }));
+      });
+    `,
+    )
+    try {
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${root}/${target}/registry-only/SKILL.md`]: '',
+          [`${root}/.agents/skills/control/SKILL.md`]: '',
+        },
+        root,
+        root,
+      )
+      const exists = workflowSkillProbe(fs, skillsConfig([target]), root, 'codex')
+      expect(exists('control', configured)).toBe(true)
+      expect(exists('registry-only', configured)).toBe(false)
     } finally {
       disk.rmSync(root, { recursive: true, force: true })
     }
