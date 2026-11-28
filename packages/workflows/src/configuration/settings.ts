@@ -1,7 +1,7 @@
 import type { Step } from '../grammar'
 import type { Configuration, Entry } from './schema'
 
-export type Field = 'engine' | 'model' | 'effort'
+export type Field = 'engine' | 'model' | 'effort' | 'skill'
 /** `alias`: the configuration's `aliases`; `workflow`: the workflow's default for the alias. */
 export type Source = 'step' | 'alias' | 'workflow' | 'defaults'
 
@@ -10,22 +10,31 @@ export interface ResolvedSettings {
   readonly engine: string
   readonly model?: string
   readonly effort?: string
+  readonly skill?: string
   readonly sources: Readonly<Partial<Record<Field, Source>>>
 }
 
-/** Per field: `steps.<id>`, then `aliases.<alias>`, then the workflow's default for the alias, then `defaults`. */
-export function settingsFor(
+function settingsLayers(
   configuration: Configuration,
   step: Pick<Step, 'id' | 'alias'>,
   declared?: Readonly<Record<string, Entry>>,
-): ResolvedSettings {
+): readonly (readonly [Source, Entry | undefined])[] {
   const alias = step.alias ?? ''
-  const layers: readonly (readonly [Source, Entry | undefined])[] = [
+  return [
     ['step', configuration.steps?.[step.id]],
     ['alias', configuration.aliases?.[alias]],
     ['workflow', configuration['assignment-only'] ? undefined : declared?.[alias]],
     ['defaults', configuration.defaults],
   ]
+}
+
+/** Engine, model and effort inherit through aliases and defaults. Skills can be overridden by step id only. */
+export function settingsFor(
+  configuration: Configuration,
+  step: Pick<Step, 'id' | 'alias'>,
+  declared?: Readonly<Record<string, Entry>>,
+): ResolvedSettings {
+  const layers = settingsLayers(configuration, step, declared)
   const values: Partial<Record<Field, string>> & { engine: string } = {
     engine: configuration.defaults.engine,
   }
@@ -39,6 +48,11 @@ export function settingsFor(
       break
     }
   }
+  const skill = configuration.steps?.[step.id]?.skill
+  if (skill !== undefined) {
+    values.skill = skill
+    sources.skill = 'step'
+  }
   return { ...values, sources }
 }
 
@@ -50,5 +64,5 @@ export function describeSettings(stepId: string, settings: ResolvedSettings): st
       ? ''
       : ` ${field}=${value} (${settings.sources[field] ?? 'defaults'})`
   }
-  return `${stepId}:${show('engine')}${show('model')}${show('effort')}`
+  return `${stepId}:${show('engine')}${show('model')}${show('effort')}${show('skill')}`
 }

@@ -71,8 +71,8 @@ export function cardStateToConfirm(step: Parameters<typeof cardStateOf>[0]): Car
 
 /** A step id names a directory of the run and a row of the output: lower-case, digits and hyphens. */
 export const STEP_ID = '^[a-z][a-z0-9-]*$'
-/** A skill name, as the registries install it. */
-export const SKILL_NAME = '^[a-z0-9][a-z0-9:._-]*$'
+/** A case-sensitive skill name, with an optional engine namespace. */
+export const SKILL_NAME = '^[A-Za-z0-9][A-Za-z0-9:._-]*$'
 
 /** Engine, model and effort of a step; each is resolved on its own. */
 export interface Entry {
@@ -82,6 +82,7 @@ export interface Entry {
 }
 
 const text = { type: 'string' } as const
+export const skillNameSchema = { ...text, pattern: SKILL_NAME }
 
 /** A card assignment directive or an explicit login. */
 export type Assignment = string
@@ -179,9 +180,14 @@ export const stepSchema: JsonSchema = {
   properties: {
     kind: { enum: [...KIND_NAMES, 'loop'], description: 'What the step does and what it returns.' },
     skill: {
-      type: 'string',
-      pattern: SKILL_NAME,
+      ...skillNameSchema,
       description: 'The skill that runs. Optional for a typed kind, required for `generic`.',
+    },
+    args: {
+      type: 'object',
+      propertyNames: { pattern: '^[a-zA-Z][a-zA-Z0-9_-]*$' },
+      additionalProperties: { type: 'string' },
+      description: 'Text arguments passed to the skill.',
     },
     interactive: {
       type: 'boolean',
@@ -356,6 +362,7 @@ export interface Step {
   readonly id: string
   readonly kind: KindName | 'loop'
   readonly skill?: string
+  readonly args?: Readonly<Record<string, string>>
   readonly interactive?: boolean
   readonly context?: ContextMode
   readonly prompt?: string

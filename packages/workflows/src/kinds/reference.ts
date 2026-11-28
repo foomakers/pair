@@ -55,6 +55,8 @@ export function renderKindReference(): string {
     '',
     'A step of a [workflow file](workflow-grammar.md) has a `kind`. The kind says which skill runs by default, what the step receives, which options it accepts under `with`, and what it must return.',
     '',
+    'Agent steps can select an [installed skill](workflow-grammar.md#use-an-external-skill) with `skill` and pass it text arguments with `args`. The selected skill returns the result required by the step kind.',
+    '',
     '## The result every step returns',
     '',
     'The agent ends its turn with one JSON object in a fenced `json` block. Whatever the kind, it carries:',

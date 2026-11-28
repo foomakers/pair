@@ -42,6 +42,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 
 ## Runtime & CLI tooling
 
+- `jsonc-parser` v3.3.1 is pinned as a runtime dependency of `@pair/workflows` for OpenCode skill discovery in the terminal CLI and session bundle. [ADR-031](adr/adr-031-workflows-package-and-hosts.md#opencode-configuration-parsing).
 - commander v11.0.0 is adopted for CLI command parsing and argument management.
 - chalk v4.1.2 is adopted for terminal output colorization.
 - @inquirer/prompts v7.5.0 is adopted for interactive CLI prompts in package creation workflows (TypeScript-native, tree-shakeable individual imports).
@@ -103,7 +104,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - dts-bundle-generator is adopted to generate TypeScript definition files for bundles.
 - zip is adopted as the archive creation utility for packaging release artifacts.
 - sha256sum / shasum are adopted for checksum generation and verification.
-- adm-zip v0.5.26 is adopted for ZIP archive extraction in Node.js runtime (CLI KB installation).
+- adm-zip is adopted for ZIP archive extraction during CLI KB installation and read-only Claude plugin ZIP inspection in `@pair/workflows`.
 
 ## Release & versioning
 

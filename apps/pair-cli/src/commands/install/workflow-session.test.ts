@@ -95,10 +95,15 @@ function git(cwd: string, ...args: string[]) {
   expect(result.status, result.stderr).toBe(0)
 }
 
-function commitFixture(root: string, target?: string, update?: boolean) {
+function commitFixture(root: string, target?: string) {
   git(root, 'init', '-b', 'main')
-  // Check out the real updated installation with its retained aliases.
-  if (update && target) git(root, 'add', '-f', '--', target, '.pair/.skill-name-map.json')
+  // The session runs in the card checkout with the installation tracked by the repository.
+  if (target) {
+    git(root, 'add', '-f', '--', defaultTarget, '.pair/.skill-name-map.json', 'pair.config.json')
+    if (target !== defaultTarget) git(root, 'add', '-f', '--', target)
+    if (fileSystemService.existsSync(join(root, 'config.json')))
+      git(root, 'add', '-f', 'config.json')
+  }
   git(
     root,
     '-c',
@@ -301,7 +306,7 @@ async function verifyConfiguredSkill(
   const skill = 'vendor-notes'
   const effective = projectSkills ?? legacySkills
   const target = vendorTarget(effective)
-  const exact = `${target}/${skill}/SKILL.md`
+  const exact = `${defaultTarget}/${skill}/SKILL.md`
   write(root, `${target}/${effective.prefix}-${skill}/SKILL.md`, vendorSkill)
   write(
     root,
@@ -317,10 +322,10 @@ async function verifyConfiguredSkill(
   expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`skill=${skill}`))
   const explicit = { steps: [{ id: 'notes', skill }] }
   expect(invoke('validate', 'explicit')).toMatchObject(explicit)
-  const opened = invoke('start', 'explicit', '--card', '42', '--engine', 'codex')
+  const opened = invoke('start', 'explicit', '--card', '42', '--engine', 'claude')
   expect(opened).toMatchObject(explicit)
   expect(invoke('next', opened.runId, '--lease', opened.lease)).toMatchObject({
-    ready: [{ uses: skill, message: expect.stringContaining(`Run the ${skill} skill.`) }],
+    ready: [{ uses: skill, message: expect.stringContaining(`/${skill}\n`) }],
   })
   invoke('stop', opened.runId, '--lease', opened.lease)
 
@@ -349,17 +354,17 @@ afterEach(() => {
 })
 
 it.each([
-  ['legacy dataset_registries', { dataset_registries: { skills: teamRegistry } }, customTarget, 0],
+  ['legacy dataset_registries', { dataset_registries: { skills: teamRegistry } }, customTarget, 1],
   [
     'legacy target_path',
     { asset_registries: { skills: { target_path: customTarget } } },
     customTarget,
-    0,
+    1,
   ],
-  ['old bundle target', { asset_registries: { skills: teamRegistry } }, defaultTarget, 1],
+  ['Claude target', { asset_registries: { skills: teamRegistry } }, defaultTarget, 0],
   ['unconfigured OpenCode target', {}, '.opencode/skills', 1],
 ] as const)(
-  'R754-06: both hosts probe the effective registry with %s',
+  'R764-01: both hosts check engine availability with %s',
   async (_, legacy, target, status) => {
     const fs = fileSystemService
     const root = fs.mkdtempSync(join(tmpdir(), 'pair-skill-registry-'))
@@ -475,17 +480,15 @@ it.each([
     await installFixture(root, config, update, skillFile(root, 'pair-process-refine-story'))
     expect(fs.existsSync(skillFile(root, `${prefix}-process-refine-story`))).toBe(true)
 
-    const configuredTarget = vendorTarget(skills ?? legacySkills)
     const estimate = `${prefix}-capability-estimate`
     const installExplicit = (cwd: string) => {
-      // An installer override can move the bundle without moving the configured vendor target.
-      if (target !== configuredTarget)
+      if (target !== defaultTarget)
         write(
           cwd,
-          `${configuredTarget}/${estimate}/SKILL.md`,
+          `${defaultTarget}/${estimate}/SKILL.md`,
           fs.readFileSync(skillFile(cwd, estimate)),
         )
-      write(cwd, `${configuredTarget}/vendor-notes/SKILL.md`, vendorSkill)
+      write(cwd, `${defaultTarget}/vendor-notes/SKILL.md`, vendorSkill)
     }
     installExplicit(root)
     const adoption =
@@ -546,7 +549,7 @@ steps:
       ready: [
         {
           uses: `${prefix}-process-refine-story`,
-          message: expect.stringContaining(`Run the ${prefix}-process-refine-story skill.`),
+          message: expect.stringContaining(`/${prefix}-process-refine-story\n`),
         },
       ],
     }
@@ -560,11 +563,11 @@ steps:
       expect.stringContaining(`refine: refine-story skill=${prefix}-process-refine-story`),
     )
     const invoke = runner(root, script(root))
-    commitFixture(root, target, update)
+    commitFixture(root, target)
     if (legacySkills !== undefined)
       await verifyConfiguredSkill(root, script(root), legacySkills, skills)
     expect(invoke('validate', 'installed')).toMatchObject(preview)
-    const { runId, lease } = invoke('start', 'installed', '--card', '42', '--engine', 'codex')
+    const { runId, lease } = invoke('start', 'installed', '--card', '42', '--engine', 'claude')
     invoke('stop', runId, '--lease', lease)
 
     if (update) {
@@ -580,10 +583,10 @@ steps:
       )
       const explicit = { steps: [{ id: 'refine', skill }] }
       expect.soft(invoke('validate', 'explicit')).toMatchObject(explicit)
-      const opened = invoke('start', 'explicit', '--card', '42', '--engine', 'codex')
+      const opened = invoke('start', 'explicit', '--card', '42', '--engine', 'claude')
       expect.soft(opened).toMatchObject(explicit)
       expect.soft(invoke('next', opened.runId, '--lease', opened.lease)).toMatchObject({
-        ready: [{ uses: skill, message: expect.stringContaining(`Run the ${skill} skill.`) }],
+        ready: [{ uses: skill, message: expect.stringContaining(`/${skill}\n`) }],
       })
       invoke('stop', opened.runId, '--lease', opened.lease)
 
@@ -599,15 +602,11 @@ steps:
 
     const linked = join(fixture, 'linked')
     git(root, 'worktree', 'add', '--detach', linked)
-    write(linked, 'pair.config.json', fs.readFileSync(join(root, 'pair.config.json')))
-    if (legacySkills !== undefined)
-      write(linked, 'config.json', fs.readFileSync(join(root, 'config.json')))
+    expect(fs.existsSync(skillFile(linked, `${prefix}-process-refine-story`))).toBe(true)
     if (update) expect(fs.existsSync(skillFile(linked, 'pair-process-refine-story'))).toBe(true)
-    else expect(await install(linked, config)).toBe(0)
-    installExplicit(linked)
     const invokeLinked = runner(linked, script(linked))
     expect(invokeLinked('validate', 'installed')).toMatchObject(preview)
-    const resumed = invokeLinked('resume', runId, '--engine', 'codex')
+    const resumed = invokeLinked('resume', runId, '--engine', 'claude')
     expect(invokeLinked('next', runId, '--lease', resumed.lease)).toMatchObject(dispatch)
     if (workingArea !== undefined)
       await verifyCardExclusion(root, linked, workingArea.expected, () => {

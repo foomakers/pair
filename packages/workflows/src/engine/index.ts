@@ -181,6 +181,7 @@ export interface StepLaunch {
   readonly id: string
   readonly kind: KindName
   readonly uses: string
+  readonly args?: Readonly<Record<string, string>>
   /** Resolved by `next`; a caller constructing a launch can omit it for an ordinary step. */
   readonly interactive?: boolean
   readonly context?: ContextMode
@@ -370,6 +371,8 @@ export interface StartOptions {
   readonly moreRounds?: number
   readonly requestedBy?: string
   readonly replay?: StepReplay
+  /** Check the steps a resume would reopen before saving their new state. */
+  readonly checkResume?: (state: RunStateFile, workflow: Workflow) => void | Promise<void>
 }
 
 /** The frozen configuration of a run, when it has one. */
@@ -674,7 +677,9 @@ async function resume(
   if (options.replay !== undefined) state = replayFrom(run, state, options.replay)
   const settled = settledStatus(workflow, state)
   if (settled === undefined) {
-    await writeState(run, { ...state, steps: reopenedSteps(run, state, workflow) })
+    const reopened = { ...state, steps: reopenedSteps(run, state, workflow) }
+    await options.checkResume?.(reopened, workflow)
+    await writeState(run, reopened)
     return { status: 'resumed', ...diagnostics }
   }
   if (state !== saved) await writeState(run, state)
@@ -975,6 +980,7 @@ function haltAt(state: RunStateFile, step: Step, approval?: string): Halt | unde
 const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 
 const agentOptionsOf = (step: Step) => ({
+  ...(step.args !== undefined && { args: step.args }),
   ...(step['timeout-minutes'] !== undefined && { timeoutMinutes: step['timeout-minutes'] }),
   ...(step.retries !== undefined && { retries: step.retries }),
   ...(step.context !== undefined && { context: step.context }),

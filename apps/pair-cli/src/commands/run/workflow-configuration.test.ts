@@ -90,7 +90,12 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
         effort: input.effort,
       })
       const text = (skills[skillOf(input.promptText)] as FakeSkill)()
-      if (text !== undefined) input.onEvent?.({ type: 'result', subtype: 'success', result: text })
+      if (text !== undefined)
+        input.onEvent?.(
+          input.engine.id === 'codex'
+            ? { type: 'item.completed', item: { type: 'agent_message', text } }
+            : { type: 'result', subtype: 'success', result: text },
+        )
       return text === undefined
         ? { outcome: 'failed', detail: 'timed out (idle): no engine event for 1800s' }
         : { outcome: 'success', detail: 'terminal event: success' }
@@ -100,6 +105,10 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
     prepareWorktree: async ({ main, card }) => {
       const dir = join(main, 'worktrees', card)
       fs.mkdirSync(dir, { recursive: true })
+      for (const directory of ['.claude', '.agents']) {
+        const source = join(main, directory)
+        if (fs.existsSync(source)) fs.cpSync(source, join(dir, directory), { recursive: true })
+      }
       return dir
     },
     engineAvailable: () => true,
@@ -405,6 +414,92 @@ describe('validation of the configuration (AC-4)', () => {
     expect(lines.some(line => line.includes('Warning:') && line.includes("no step 'ghost'"))).toBe(
       true,
     )
+  })
+})
+
+describe('#674 AC-5 skill configuration per step', () => {
+  beforeEach(() => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('    gates: [quality-gate]\n', '').replace(
+        '    alias: judge',
+        '    alias: judge\n    skill: old-review-skill',
+      ),
+    )
+    writeConfig(
+      'mine',
+      `version: 1
+name: mine
+defaults: { engine: claude }
+steps:
+  review: { engine: codex, skill: Presentations }
+`,
+    )
+    vi.stubEnv('HOME', join(project, 'home'))
+    vi.stubEnv('PATH', join(project, 'bin'))
+  })
+
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('launches the configured name on the step engine when the workflow name is unavailable', async () => {
+    write('.agents/skills/Presentations/SKILL.md', '# Presentations')
+
+    const skills = { ...OK, Presentations: () => REVIEWED }
+    expect(await run(['quick'], skills, { config: 'mine' }), lines.join('\n')).toBe(0)
+    expect(launched.map(step => step.promptText.split('\n')[0])).toEqual([
+      '/pair-process-implement',
+      'Run the Presentations skill.',
+    ])
+  })
+
+  it('names the step and configured skill before any launch when only the run engine has it', async () => {
+    write('.claude/skills/old-review-skill/SKILL.md', '# Old review skill')
+    write('.agents/skills/old-review-skill/SKILL.md', '# Old review skill')
+    write('.claude/skills/Presentations/SKILL.md', '# Presentations')
+
+    expect(await run(['quick'], OK, { config: 'mine' }), lines.join('\n')).toBe(1)
+    expect(launched).toEqual([])
+    expect(lines.join('\n')).toMatch(
+      /^(?=.*\breview\b)(?=.*\bPresentations\b).*(?:not installed|not available|unavailable|not found)/m,
+    )
+  })
+
+  it('R764-10 (#674 AC-2/5): checks reopened skills in the prepared worktree with the frozen configuration', async () => {
+    const worktree = 'worktrees/627'
+    const implement = `${worktree}/.claude/skills/pair-process-implement/SKILL.md`
+    const review = `${worktree}/.agents/skills/Presentations/SKILL.md`
+    write(implement, '# Implement')
+    write(review, '# Review')
+    const options = { config: 'mine' }
+    const host = { prepareWorktree: async () => join(project, worktree) }
+    const skills = { ...OK, Presentations: () => REVIEWED }
+    const failing = {
+      ...skills,
+      Presentations: () => fenced({ status: 'failed', summary: 'review stopped' }),
+    }
+    expect(await run(['quick'], failing, options, host), lines.join('\n')).toBe(1)
+    expect(launched.map(step => step.cwd)).toEqual([
+      join(project, worktree),
+      join(project, worktree),
+    ])
+    const state = join(runDir(), 'state.json')
+    const before = fs.readFileSync(state)
+
+    fs.rmSync(join(project, implement))
+    fs.rmSync(join(project, review))
+    write(`${worktree}/.claude/skills/replacement/SKILL.md`, '# Replacement')
+    writeConfig('mine', `${CONFIG}steps:\n  review: { skill: replacement }\n`)
+    launched = []
+    expect(await run(['quick'], skills, options, host)).toBe(1)
+    expect(lines.join('\n')).toContain(
+      "steps.review.skill: skill 'Presentations' is not installed for engine 'codex'",
+    )
+    expect(launched).toEqual([])
+    expect(fs.readFileSync(state)).toBe(before)
+
+    write(review, '# Review')
+    expect(await run(['quick'], skills, options, host), lines.join('\n')).toBe(0)
+    expect(launched.map(step => skillOf(step.promptText))).toEqual(['Presentations'])
   })
 })
 

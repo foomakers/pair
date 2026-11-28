@@ -3,6 +3,7 @@ import { addressedSteps, formatError, type Workflow } from '../grammar'
 import { resumeEngineWarnings } from '../validate'
 import { loadSessionProjectConfig } from './session-files'
 import {
+  checkSessionWorkflowSkills,
   checkWorkflowConfiguration,
   effectiveSettings,
   workflowConfiguration,
@@ -42,9 +43,9 @@ export function validateWorkflow(
   name: string,
   { engine: engineFlag, config: flag }: { engine?: string; config?: string },
 ) {
-  const { workflow, warnings } = workflowDefinition(project, name)
   const projectSettings = loadSessionProjectConfig(project.cwd) ?? {}
   const engine = engineFlag ?? declaredEngine(projectSettings)
+  const { workflow, warnings, checkSkills } = workflowDefinition(project, name, engine)
   const selected = workflowConfiguration(
     project,
     { workflow: workflow.name, engine, flag, labels: [] },
@@ -52,6 +53,7 @@ export function validateWorkflow(
   )
   const configWarnings = checkWorkflowConfiguration(workflow, selected, engineFlag)
   const configuration = selected?.configuration
+  checkSessionWorkflowSkills(project, workflow, { configuration, engine, checkSkills })
   return {
     file: workflow.file,
     ...workflowSummary(project, workflow, configuration, engine),

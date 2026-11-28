@@ -111,11 +111,12 @@ beforeEach(() => {
   write(cardFile, `# ${title}\n\n**Status**: Ready\n`)
   write(workflowFile, workflow)
   write(configFile, configuration)
-  for (const skill of ['pair-fixture-draft', 'pair-fixture-discuss'])
-    write(
-      `.claude/skills/${skill}/SKILL.md`,
-      `---\nname: ${skill}\ndescription: Fixture skill\n---\n`,
-    )
+  for (const directory of ['.claude/skills', '.agents/skills'])
+    for (const skill of ['pair-fixture-draft', 'pair-fixture-discuss'])
+      write(
+        `${directory}/${skill}/SKILL.md`,
+        `---\nname: ${skill}\ndescription: Fixture skill\n---\n`,
+      )
   cpSync(join(repo, cycle), join(main, cycle), { recursive: true })
   const control = '.claude/skills/pair-next/control-state.mjs'
   mkdirSync(dirname(join(main, control)), { recursive: true })
@@ -218,7 +219,7 @@ it.each([
 it('#696 AC-8: validates the mapped configuration from a staged non-Git project', () => {
   const staged = realpathSync(mkdtempSync(join(tmpdir(), 'pair-workflow-staged-')))
   try {
-    for (const folder of ['.pair', '.claude'])
+    for (const folder of ['.pair', '.claude', '.agents'])
       cpSync(join(main, folder), join(staged, folder), { recursive: true })
     writeFileSync(
       join(staged, 'pair.config.json'),
@@ -246,6 +247,29 @@ it('#696 AC-8: rejects validation when a workflow requires a missing skill', () 
   })
 })
 
+// #674 AC-2, R764-02: availability must follow the working directory in the packet.
+it.each(['caller', 'worktree'])(
+  'starts according to the card worktree when the skill exists only in the %s',
+  where => {
+    const skill = 'local-notes'
+    git('worktree', 'add', '-b', branch, worktree, 'main')
+    const prefix = where === 'worktree' ? `worktrees/${card}/` : ''
+    write(`${prefix}.claude/skills/${skill}/SKILL.md`, 'Notes skill')
+    write(workflowFile, namedWorkflow(`  notes: { kind: generic, skill: ${skill} }\n`))
+    const args = ['start', 'quick', '--card', card, '--engine', 'claude']
+
+    if (where === 'caller') {
+      const result = invoke(args)
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain(`steps.notes.skill: skill '${skill}' is not installed`)
+      expect(existsSync(join(runDir, 'state.json'))).toBe(false)
+    } else {
+      const lease = openSession(args)
+      expect(advance(lease)).toMatchObject({ ready: [{ id: 'notes', uses: skill, worktree }] })
+    }
+  },
+)
+
 it('#696 design §2: exposes serializable workflow kinds', () => {
   expect(JSON.parse(successful(['kinds']))).toMatchObject({
     generic: { name: 'generic', defaultInteractive: false },
@@ -263,17 +287,79 @@ it('#696 design §2: lists project workflows and configurations by source', () =
   })
 })
 
-it('#696 design §2: expands included workflow steps in order', () => {
+it('R764-04: expands an include with a Codex-only skill', () => {
+  rmSync(join(main, '.claude/skills/pair-fixture-draft'), { recursive: true })
+  write(
+    'pair.config.json',
+    JSON.stringify({
+      asset_registries: { skills: { targets: [{ path: '.claude/skills', mode: 'canonical' }] } },
+    }),
+  )
   write(
     '.pair/adoption/tech/workflows/nested.yaml',
     'version: 1\nname: nested\nsteps:\n  included: { kind: generic, uses: quick }\n',
   )
 
+  expect(JSON.parse(successful(['validate', 'nested', '--engine', 'codex']))).toMatchObject({
+    steps: [{ id: 'included/draft', skill: 'pair-fixture-draft' }, { id: 'included/discuss' }],
+  })
   expect(JSON.parse(successful(['expand', 'nested']))).toMatchObject({
     name: 'nested',
-    steps: [{ id: 'included/draft' }, { id: 'included/discuss' }],
+    steps: [{ id: 'included/draft', skill: 'pair-fixture-draft' }, { id: 'included/discuss' }],
   })
 })
+
+it.each(['validate', 'start'])('R764-06: %s rejects a Codex skill and workflow clash', command => {
+  const name = 'pair-fixture-clash'
+  write(
+    'pair.config.json',
+    JSON.stringify({
+      worktreeRoot: 'worktrees',
+      asset_registries: { skills: { targets: [{ path: '.claude/skills', mode: 'canonical' }] } },
+    }),
+  )
+  write(`.agents/skills/${name}/SKILL.md`, `---\nname: ${name}\ndescription: Fixture skill\n---\n`)
+  write(
+    `.pair/adoption/tech/workflows/${name}.yaml`,
+    `version: 1\nname: ${name}\nsteps:\n  draft: { kind: generic, skill: pair-fixture-draft }\n`,
+  )
+  write(workflowFile, namedWorkflow(`  included: { kind: generic, uses: ${name} }\n`))
+
+  expect(JSON.parse(successful(['expand', 'quick']))).toMatchObject({
+    steps: [{ id: 'included/draft' }],
+  })
+  commitFixture()
+  const args = command === 'start' ? ['--card', card] : []
+  const result = invoke([command, 'quick', '--engine', 'codex', ...args])
+  expect(result.status).toBe(1)
+  expect(result.stderr).toContain(`steps.included.uses: workflow and skill name clash: ${name}`)
+})
+
+it.each(['caller', 'worktree'])(
+  'R764-06: checks include clashes in the card worktree when the skill exists only in the %s',
+  where => {
+    const name = 'local-notes'
+    git('worktree', 'add', '-b', branch, worktree, 'main')
+    const prefix = where === 'worktree' ? `worktrees/${card}/` : ''
+    write(`${prefix}.claude/skills/${name}/SKILL.md`, 'Notes skill')
+    write(
+      `.pair/adoption/tech/workflows/${name}.yaml`,
+      `version: 1\nname: ${name}\nsteps:\n  draft: { kind: generic, skill: pair-fixture-draft }\n`,
+    )
+    write(workflowFile, namedWorkflow(`  included: { kind: generic, uses: ${name} }\n`))
+    const args = ['start', 'quick', '--card', card, '--engine', 'claude']
+
+    if (where === 'worktree') {
+      const result = invoke(args)
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain(`steps.included.uses: workflow and skill name clash: ${name}`)
+      expect(existsSync(join(runDir, 'state.json'))).toBe(false)
+    } else {
+      const lease = openSession(args)
+      expect(advance(lease)).toMatchObject({ ready: [{ id: 'included/draft', worktree }] })
+    }
+  },
+)
 
 it('#696 AC-1/AC-2/AC-5: advances a session run through the shipped script and resumes its frozen inputs', () => {
   const lease = openSession([
@@ -842,6 +928,70 @@ const readTelemetry = () =>
     .split('\n')
     .map(line => JSON.parse(line) as unknown)
 
+it('R764-10 (#674 AC-2/5): checks remaining skills when resuming under another engine', () => {
+  const skillFile = (name: string) => `---\nname: ${name}\ndescription: Fixture skill\n---\n`
+  git('worktree', 'add', '-b', branch, worktree, 'main')
+  for (const name of ['completed-claude-skill', 'remaining-skill'])
+    write(`worktrees/${card}/.claude/skills/${name}/SKILL.md`, skillFile(name))
+  write(
+    workflowFile,
+    namedWorkflow(
+      '  draft: { kind: generic, skill: completed-claude-skill }\n' +
+        '  discuss: { kind: generic, skill: remaining-skill }\n',
+    ),
+  )
+  const lease = openSession(['start', 'quick', '--card', card, '--engine', 'claude'])
+  expect(advance(lease)).toMatchObject({ ready: [{ id: 'draft' }] })
+  successful(['record', runId, 'draft', ...lease, '--result', '-'], fenced(drafted))
+  successful(['stop', runId, ...lease])
+  write(workflowFile, 'The authoring source changed.\n')
+
+  const state = readRun('state.json')
+  const args = ['resume', runId, '--engine', 'codex']
+  const rejected = invoke(args)
+  expect(rejected.status).toBe(1)
+  expect(rejected.stderr).toContain(
+    "steps.discuss.skill: skill 'remaining-skill' is not installed for engine 'codex'",
+  )
+  expect(readRun('state.json')).toBe(state)
+
+  write(`worktrees/${card}/.agents/skills/remaining-skill/SKILL.md`, skillFile('remaining-skill'))
+  const resumed = openSession(args)
+  expect(advance(resumed)).toMatchObject({
+    ready: [{ id: 'discuss', uses: 'remaining-skill', worktree, settings: { engine: 'codex' } }],
+  })
+})
+
+it('R764-05 (#674 AC-7): sends Claude a slash invocation and meters the same text', () => {
+  write(
+    workflowFile,
+    namedWorkflow(
+      '  draft: { kind: generic, skill: pair-fixture-draft, args: { mode: strict } }\n',
+    ),
+  )
+  write(configFile, 'version: 1\nname: mine\ndefaults: { engine: claude }\ntelemetry: true\n')
+  const lease = openSession([
+    'start',
+    'quick',
+    '--card',
+    card,
+    '--engine',
+    'claude',
+    '--config',
+    'mine',
+  ])
+  const { ready } = advance(lease) as { ready: [{ message: string }] }
+  const [{ message }] = ready
+  expect(message.split('\n')[0]).toBe('/pair-fixture-draft mode=strict')
+
+  successful(['record', runId, 'draft', ...lease, '--result', '-'], fenced(drafted))
+  expect(readTelemetry()[0]).toMatchObject({
+    step: 'draft',
+    engine: 'claude',
+    tokens: { read: { value: Math.ceil(message.length / 4), source: 'estimated' } },
+  })
+})
+
 it.each(['measured', 'estimated'] as const)('#696 AC-10: records %s session usage', source => {
   const lease = startTelemetrySession(true)
   const launch = advance(lease) as { ready: [{ message: string; attempt: number }] }
@@ -1115,6 +1265,7 @@ it('#696 AC-1/AC-4: resumes on the registered worktree from the linked PR branch
 
 it('#696 AC-1/AC-4: replays review at the current PR head after a saved gate failure', async () => {
   const reviewedHead = git('rev-parse', 'HEAD').trim()
+  write('.claude/skills/pair-process-review/SKILL.md', 'Review the PR.')
   const head = installCodeHost('write')
   git('worktree', 'add', '-b', branch, worktree, 'main')
   expect(git('-C', worktree, 'rev-parse', 'HEAD').trim()).toBe(head)
@@ -1398,6 +1549,7 @@ it('R754-02 / AC-4: resumes pending refinement after the card meets the DoR on a
     namedWorkflow('  refine: { kind: refine-story }\n') +
     'select: { filter: { status: [Draft] } }\n'
   write(workflowFile, source)
+  commitFixture()
   const run = { dir: runDir, files }
   await start(run, { file: join(main, workflowFile), text: source }, { card })
   expect(await next(run)).toMatchObject({ ready: [{ id: 'refine' }] })
@@ -1477,7 +1629,7 @@ it('R754-05: renews the lease without replacing an outstanding step attempt', ()
   }
 })
 
-it('R754-06: starts from a redirected skills target with explicit installed names', () => {
+it('R754-06: uses the redirected cycle while Codex discovers explicit skills', () => {
   const target = 'team/skills'
   write(
     'pair.config.json',
@@ -1489,7 +1641,10 @@ it('R754-06: starts from a redirected skills target with explicit installed name
     }),
   )
   for (const skill of ['team-pair-fixture-draft', 'fixture-discuss'])
-    write(`${target}/${skill}/SKILL.md`, `---\nname: ${skill}\ndescription: Fixture skill\n---\n`)
+    write(
+      `.agents/skills/${skill}/SKILL.md`,
+      `---\nname: ${skill}\ndescription: Fixture skill\n---\n`,
+    )
   write(
     workflowFile,
     workflow
@@ -1499,7 +1654,10 @@ it('R754-06: starts from a redirected skills target with explicit installed name
   cpSync(join(main, cycle), join(main, target, 'team-workflow-cycle/scripts'), { recursive: true })
   rmSync(join(main, '.claude/skills/pair-fixture-draft'), { recursive: true })
   rmSync(join(main, cycle), { recursive: true })
-  expect(JSON.parse(successful(['validate', 'quick']))).toMatchObject({ workflow: 'quick' })
+  commitFixture()
+  expect(JSON.parse(successful(['validate', 'quick', '--engine', 'codex']))).toMatchObject({
+    workflow: 'quick',
+  })
   const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
   expect(advance(lease)).toMatchObject({
     ready: [{ id: 'draft', uses: 'team-pair-fixture-draft' }],
@@ -1520,6 +1678,7 @@ it('R754-06: previews and invokes the configured implicit default', () => {
     workflowFile,
     namedWorkflow('  refine: { kind: refine-story, with: { mode: autonomous } }\n'),
   )
+  commitFixture()
   expect(JSON.parse(successful(['validate', 'quick'])).steps).toMatchObject([{ skill }])
   const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
   expect(advance(lease)).toMatchObject({
@@ -1535,6 +1694,7 @@ it.each([
   { options: '{ mode: autonomous }', interactive: false },
 ])('R754-07 / AC-2: routes refinement with $options', ({ options, interactive }) => {
   write('.claude/skills/pair-process-refine-story/SKILL.md', 'Refine a story.')
+  commitFixture()
   const lease = startWorkflow(`  refine:
     kind: refine-story
     with: ${options}

@@ -36,9 +36,10 @@ export const kindByName: Readonly<Record<KindName, StepKind>> = {
 export function skillForStep(
   step: Pick<Step, 'skill' | 'kind'>,
   installed: (name: string) => string | undefined,
+  override?: string,
 ) {
   const name = step.kind === 'loop' ? undefined : kindByName[step.kind].defaultSkill
-  return step.skill ?? (name === undefined ? undefined : (installed(name) ?? name))
+  return override ?? step.skill ?? (name === undefined ? undefined : (installed(name) ?? name))
 }
 
 /** Whether the workflow needs a session conversation for this step. */

@@ -19,6 +19,27 @@ const BLOCKED_CASE = 'The checkout is unavailable.'
 const blockedOnly = { ...kindByName.generic, returns: { blocked: BLOCKED_CASE } }
 
 describe('buildMessage (AC-4, AC-5)', () => {
+  it.each(['external-skill', 'vendor:external-skill'])(
+    'passes %s unchanged and enforces the typed result contract (#674 AC-1, AC-4)',
+    name => {
+      const step = { ...implement, uses: name }
+      expect(buildMessage(step, kindByName.implement, { style: 'slash', ...safe })).toContain(
+        `/${name}`,
+      )
+      expect(
+        readResult(fenced({ status: 'ok', summary: 'done' }), kindByName.implement),
+      ).toMatchObject({
+        status: 'failed',
+        reason: 'invalid-result',
+      })
+      expect(
+        readResult(
+          fenced({ status: 'ok', summary: 'done', branch: 'feature/test', pr: 1, head: HEAD }),
+          kindByName.implement,
+        ).status,
+      ).toBe('ok')
+    },
+  )
   it('asks an implement step for its skill, inputs, options and result block', () => {
     const message = buildMessage(implement, kindByName.implement, { style: 'slash', ...safe })
     expect(message).toContain(

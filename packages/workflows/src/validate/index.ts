@@ -9,9 +9,11 @@ import {
   type Workflow,
   type WorkflowError,
 } from '../grammar'
+import type { Configuration } from '../configuration/schema'
+import { settingsFor } from '../configuration/settings'
 import { isSafeProse } from '../dispatch'
 import { expand, type WorkflowSource } from '../expand'
-import { fieldsOf, kindByName } from '../kinds'
+import { fieldsOf, kindByName, skillForStep } from '../kinds'
 import { textsOf, violations } from '../schema'
 import { contextWarnings, type ResumeFacts } from './context-warnings'
 import { escalationWarnings } from './escalation-warnings'
@@ -26,6 +28,8 @@ export interface ValidationDeps {
   readonly skillExists: (name: string) => boolean
   /** Resolve an implicit kind default for this installation, if it uses a different name. */
   readonly defaultSkillExists?: (name: string) => boolean
+  /** Check the definition now and probe step skills after configuration selection. */
+  readonly deferSkillProbe?: boolean
   /** The keys of the Custom Gate Registry. */
   readonly gateKeys: readonly string[]
   /** The targets of the Custom Gate Registry. */
@@ -46,6 +50,8 @@ export interface Validation {
   readonly errors: readonly WorkflowError[]
   /** Never refuse a workflow. */
   readonly warnings: readonly WorkflowError[]
+  /** Uses the original source locations of expanded steps. */
+  readonly checkSkills?: (context: WorkflowSkillContext) => WorkflowError[]
 }
 
 type Check = (
@@ -81,18 +87,87 @@ const skillErrors: Check = (workflow, step, deps, path) => {
         fix: "add 'skill' with the skill to run",
       }),
     ]
+  if (deps.deferSkillProbe) return []
   const exists =
     step.skill === undefined ? (deps.defaultSkillExists ?? deps.skillExists) : deps.skillExists
+  return skillAvailabilityErrors(workflow, path, skill, {
+    exists,
+    isSafeText: deps.isSafeText,
+    implicit: step.skill === undefined,
+  })
+}
+
+function skillAvailabilityErrors(
+  workflow: Workflow,
+  path: readonly string[],
+  skill: string,
+  {
+    engine,
+    exists,
+    implicit,
+    isSafeText,
+  }: {
+    engine?: string
+    exists: (skill: string) => boolean
+    implicit: boolean
+    isSafeText: (value: string) => boolean
+  },
+): WorkflowError[] {
+  if (!isSafeText(skill))
+    return [
+      errorAt(workflow, [...path, 'skill'], {
+        problem: 'skill name is not safe to hand to an agent',
+        fix: 'use a short, plain skill name',
+      }),
+    ]
   if (exists(skill)) return []
   return [
     errorAt(workflow, [...path, 'skill'], {
-      problem: `skill '${skill}' is not installed`,
-      fix:
-        step.skill === undefined
-          ? 'declare the installed skills target in pair.config.json, or run pair-cli update with the install configuration'
-          : "install it, or name an installed skill in 'skill'",
+      problem: `skill '${skill}' is not installed${engine === undefined ? '' : ` for engine '${engine}'`}`,
+      fix: implicit
+        ? 'declare the installed skills target in pair.config.json, or run pair-cli update with the install configuration'
+        : "install it, or name an installed skill in 'skill'",
     }),
   ]
+}
+
+export interface WorkflowSkillContext {
+  readonly configuration?: Configuration | undefined
+  readonly engine: string
+  readonly skillExists: (name: string, engine: string) => boolean
+  readonly defaultSkill: (name: string) => string | undefined
+  readonly isSafeText: (value: string) => boolean
+}
+
+/** Check the names agents will invoke after the run's configuration has been selected. */
+export function checkWorkflowSkills(
+  workflow: Workflow,
+  { configuration, engine, skillExists, defaultSkill, isSafeText }: WorkflowSkillContext,
+): WorkflowError[] {
+  const check = (step: Step, path: readonly string[], id: string): WorkflowError[] => {
+    if (step.kind === 'loop' || kindByName[step.kind].host === true) return []
+    const { engine: stepEngine, skill: override } = configuration
+      ? settingsFor(configuration, { ...step, id }, workflow.aliases)
+      : { engine, skill: undefined }
+    const implicit = override === undefined && step.skill === undefined
+    const kindDefault = kindByName[step.kind].defaultSkill
+    const installed = implicit && kindDefault !== undefined ? defaultSkill(kindDefault) : undefined
+    const skill = skillForStep(step, () => installed, override)
+    return skill === undefined
+      ? []
+      : skillAvailabilityErrors(workflow, path, skill, {
+          engine: stepEngine,
+          implicit,
+          isSafeText,
+          exists: name => installed !== undefined || skillExists(name, stepEngine),
+        })
+  }
+  return workflow.steps.flatMap(step => [
+    ...check(step, ['steps', step.id], step.id),
+    ...(step.steps ?? []).flatMap(child =>
+      check(child, ['steps', step.id, 'steps', child.id], `${step.id}/${child.id}`),
+    ),
+  ])
 }
 
 const withErrors: Check = (workflow, step, _deps, path) =>
@@ -145,7 +220,7 @@ const gateErrors: Check = (workflow, step, deps, path) => {
 }
 
 const safetyErrors: Check = (workflow, step, deps, path) =>
-  textsOf(step.with ?? {}, [...path, 'with'])
+  [...textsOf(step.with ?? {}, [...path, 'with']), ...textsOf(step.args ?? {}, [...path, 'args'])]
     .filter(([, text]) => !deps.isSafeText(text))
     .map(([path, text]) =>
       errorAt(workflow, path, {
@@ -181,7 +256,7 @@ const failedEscalationErrors: Check = (workflow, step, _deps, path) => {
     : []
 }
 
-const AGENT_ONLY = ['timeout-minutes', 'retries', 'context', 'prompt', 'prompt-at'] as const
+const AGENT_ONLY = ['timeout-minutes', 'retries', 'context', 'prompt', 'prompt-at', 'args'] as const
 
 const hostOptionErrors: Check = (workflow, step, _deps, path) =>
   step.kind !== 'loop' && kindByName[step.kind].host === true
@@ -543,9 +618,14 @@ function mergeWarnings(workflow: Workflow): WorkflowError[] {
  */
 export function validate(text: string, file: string, deps: ValidationDeps): Validation {
   const parsed = deps.resolveWorkflow
-    ? expand({ text, file }, deps.resolveWorkflow, deps.skillExists)
+    ? expand(
+        { text, file },
+        deps.resolveWorkflow,
+        deps.deferSkillProbe ? undefined : deps.skillExists,
+      )
     : parseWorkflow(text, file)
   if (parsed.workflow === undefined) return { errors: parsed.errors, warnings: [] }
+  const workflow = parsed.workflow
   const locate = (error: WorkflowError): WorkflowError => {
     if (!('origins' in parsed)) return error
     const path = error.key.split('.')
@@ -565,6 +645,14 @@ export function validate(text: string, file: string, deps: ValidationDeps): Vali
     : {
         workflow: parsed.workflow,
         errors: [],
+        ...(deps.deferSkillProbe && {
+          checkSkills: (context: WorkflowSkillContext) => [
+            ...('includeClashes' in parsed
+              ? parsed.includeClashes(name => context.skillExists(name, context.engine))
+              : []),
+            ...checkWorkflowSkills(workflow, context).map(locate),
+          ],
+        }),
         warnings: [
           ...warnings(parsed.workflow),
           ...escalationWarnings(parsed.workflow, deps.canCommentOnCard),

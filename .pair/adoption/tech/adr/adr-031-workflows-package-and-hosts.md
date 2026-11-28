@@ -53,6 +53,12 @@ Both hosts resolve implicit step skills through the installer's recorded names a
 
 The standalone session commands open the same run directory as `pair run`. Each open returns a token for a one-hour idle lease in `run.lock`. A command claims the lease with its live PID and renews it when it exits. Calling `next` during a long step renews the lease and returns the outstanding packet with the same attempt. `stop` releases the lease. A new owner on the same machine can take over after the idle lease expires or the active PID dies. It gets a new token and reopens the interrupted step from the frozen run. A host on another machine keeps its ownership.
 
+### OpenCode configuration parsing
+
+The shared host adapter adopts `jsonc-parser` 3.3.1 to read `skills.paths` from OpenCode configuration during skill validation (#674). The parser supports comments and trailing commas and reports malformed input. Both the terminal CLI and the standalone session bundle use it at runtime.
+
+The host adapter also reuses the workspace's `adm-zip` dependency to inspect locally supplied Claude plugin ZIP entries without extracting the archive (#674).
+
 ## Consequences
 
 ### Benefits
@@ -74,5 +80,5 @@ The standalone session commands open the same run directory as `pair run`. Each 
 ## Adoption Impact
 
 - `adoption/tech/architecture.md` names the package, its boundary and its host.
-- `adoption/tech/tech-stack.md`: `yaml` becomes a runtime dependency of `@pair/workflows`.
+- `adoption/tech/tech-stack.md`: `yaml`, `jsonc-parser`, and `adm-zip` are runtime dependencies of `@pair/workflows`.
 - `adoption/tech/risk-matrix.md`: `packages/workflows | Low`.

@@ -18,6 +18,7 @@ import {
   effectiveSelection,
   escalationAction,
   checkAgainstEngines,
+  checkWorkflowSkills,
   describeSettings,
   expandedWorkflowSource,
   formatError,
@@ -36,6 +37,7 @@ import {
   runSteps,
   settingsFor,
   start,
+  stepSettled,
   stoppedApproval,
   stoppedLoop,
   type AgentLaunchResult,
@@ -48,13 +50,16 @@ import {
   type StepResult,
   type StepFaults,
   type Started,
+  type StartOptions,
   type ResultFacts,
   type ResolvedAssignment,
   type StepEvent,
   type StepLaunch,
   type StepReplay,
   type StepSettings,
+  type Step,
   type Usage,
+  type Validation,
   type Workflow,
   type WorkflowHost,
   type WorkflowsConfig,
@@ -108,6 +113,7 @@ import {
   checkWorkflow,
   locateWorkflow,
   reportValidation,
+  workflowSkillContext,
   type Located,
 } from './workflow-source'
 import { acquireRunLock } from './run-lock'
@@ -213,6 +219,7 @@ async function cycleWorktree(input: WorktreeInput): Promise<string> {
 
 interface Resolved {
   readonly defaultSkill: ReturnType<typeof workflowDefaultSkill>
+  readonly checkSkills: NonNullable<Validation['checkSkills']>
   readonly workflow: Workflow
   readonly source: Located
   readonly project: Config
@@ -265,10 +272,36 @@ export function configureWorkflowRun(
     reportConfigurationErrors(outcome.errors)
     return undefined
   }
-  return {
+  const resolved = {
     ...at,
     ...(outcome.plan && { configuration: outcome.plan }),
   }
+  if (config.dryRun && !checkConfiguredSkills(services.fs, resolved, resolved.cwd)) return undefined
+  return resolved
+}
+
+function needsExecutionSkillCheck(opened: Opened, fs: FileSystemService): boolean {
+  const { resolved, request, runDir } = opened
+  return (
+    !savedRunState(request, runDir, fs) ||
+    (request.reconfigure === true &&
+      resolved.configuration !== undefined &&
+      !completedRun(
+        { files: fs, dir: runDir },
+        { card: request.card, workflow: resolved.workflow.name },
+      ))
+  )
+}
+
+function checkConfiguredSkills(fs: FileSystemService, at: Resolved, cwd: string): boolean {
+  const errors = at.checkSkills(
+    workflowSkillContext(fs, at.project, cwd, {
+      configuration: at.configuration?.configuration,
+      engine: at.engine.engine.id,
+    }),
+  )
+  reportValidation({ errors, warnings: [] })
+  return errors.length === 0
 }
 
 function resumeWorkflow(
@@ -276,7 +309,7 @@ function resumeWorkflow(
   request: RunWorkflowRequest,
   source: Located,
   { main, sources }: { main: string; sources: Record<string, string> },
-) {
+): Validation | undefined {
   const original = parseWorkflow(source.text, source.file).workflow
   const runId =
     request.runId ??
@@ -290,7 +323,8 @@ function resumeWorkflow(
     if (fs.existsSync(file))
       sources[file] = createHash('sha256').update(fs.readFileSync(file)).digest('hex')
   }
-  return { ...parseWorkflow(fs.readFileSync(frozen), source.file, true), warnings: [] }
+  const { workflow, errors } = parseWorkflow(fs.readFileSync(frozen), source.file, true)
+  return { ...(workflow !== undefined && { workflow }), errors, warnings: [] }
 }
 
 /** Validate the workflow and tier declarations before looking up card labels. */
@@ -308,18 +342,19 @@ export function resolveWorkflowDefinition(
   const sources: Record<string, string> = {
     [source.file]: createHash('sha256').update(source.text).digest('hex'),
   }
-  const checked =
-    (config.dryRun || !resume
-      ? undefined
-      : resumeWorkflow(fs, request, source, { main, sources })) ??
-    checkWorkflow(fs, project, { cwd, main, sources }, source)
-  console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
-  reportValidation(checked)
-  if (checked.workflow === undefined) return undefined
   const engine = withRunAgentRunner(
     resolveEngine({ flag: config.engine, declared: declaredEngine(project) }),
     project,
   )
+  const checked: Validation =
+    (config.dryRun || !resume
+      ? undefined
+      : resumeWorkflow(fs, request, source, { main, sources })) ??
+    checkWorkflow(fs, project, { cwd, main, sources, engine: engine.engine.id }, source)
+  console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
+  reportValidation(checked)
+  if (checked.workflow === undefined) return undefined
+  const workflow = checked.workflow
   console.log(`  ${describeEngineResolution(engine)}`)
   const errors = workflowTierErrors({ fs, cwd, main, project })
   if (errors.length > 0) {
@@ -328,8 +363,9 @@ export function resolveWorkflowDefinition(
   }
   return {
     defaultSkill: workflowDefaultSkill(fs, project, cwd),
-    workflow: checked.workflow,
-    source: expandedWorkflowSource(checked.workflow, source),
+    checkSkills: checked.checkSkills ?? (context => checkWorkflowSkills(workflow, context)),
+    workflow,
+    source: expandedWorkflowSource(workflow, source),
     project,
     engine,
     main,
@@ -416,6 +452,14 @@ function stepSettings(
     model: model ?? declaredEngineModel(resolved.project, engine),
     effort: engineOf(resolved, engine).effortArgs ? effort : undefined,
   }
+}
+
+function stepSkill(
+  resolved: Resolved,
+  effective: Configuration | undefined,
+  step: Pick<Step, 'id' | 'kind' | 'skill'>,
+) {
+  return skillForStep(step, resolved.defaultSkill, effective?.steps?.[step.id]?.skill)
 }
 
 /** The engine of a step: the run's own, or the one the configuration names for it. */
@@ -939,7 +983,7 @@ async function runOnConsole(
         isSafeText: isSafePromptText,
         parkInteractive: INTERACTIVE_PARK,
         skillOf: step =>
-          skillForStep(stepOf(resolved, step.id), resolved.defaultSkill) ?? step.uses,
+          stepSkill(resolved, opened.effective, stepOf(resolved, step.id)) ?? step.uses,
         styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
         ...resumeHostOf(opened),
@@ -1076,18 +1120,67 @@ async function finishClosure(
   return result.status === 'ok' ? 0 : 1
 }
 
-async function startOnConsole(opened: Opened, fs: FileSystemService, replay?: StepReplay) {
+async function startOnConsole(
+  opened: Opened,
+  fs: FileSystemService,
+  replay: StepReplay | undefined,
+  checkResume: NonNullable<StartOptions['checkResume']>,
+) {
   const { resolved, runDir } = opened
-  const started = await start(
-    { files: fs, dir: runDir },
-    resolved.source,
-    startOptions(opened, replay),
-  )
+  const started = await start({ files: fs, dir: runDir }, resolved.source, {
+    ...startOptions(opened, replay),
+    checkResume,
+  })
   recordIncludeSources(fs, runDir, resolved.sources, started.status)
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   if (started.telemetryWarning !== undefined) console.log(`  Warning: ${started.telemetryWarning}`)
   console.log(`  Run dir: ${runDir} (${started.status})`)
   return started
+}
+
+function workflowWorktree({ resolved, request, title }: Opened, { fs, deps }: Services) {
+  return (deps.workflow?.prepareWorktree ?? cycleWorktree)({
+    fs,
+    project: resolved.project,
+    cwd: resolved.cwd,
+    main: resolved.main,
+    card: request.card,
+    title,
+  })
+}
+
+async function prepareWorkflowStart(
+  opened: Opened,
+  services: Services,
+  replay: Awaited<ReturnType<typeof workflowReplay>>,
+) {
+  const { resolved, runDir } = opened
+  const { fs } = services
+  const precheck = needsExecutionSkillCheck(opened, fs)
+  let prepared: string | undefined
+  const prepare = async () => (prepared ??= await workflowWorktree(opened, services))
+  if (replay !== undefined) await prepareReplayHead(await prepare(), replay.inputs.head)
+  if (precheck && !checkConfiguredSkills(fs, resolved, await prepare())) return undefined
+
+  const refused = new Error('workflow-skill-validation')
+  const started = await startOnConsole(opened, fs, replay, async (reopened, workflow) => {
+    if (precheck) return
+    const worktree = await prepare()
+    const steps = workflow.steps.filter(step => !stepSettled(step, reopened.steps[step.id]?.state))
+    const errors = checkWorkflowSkills(
+      { ...workflow, steps },
+      workflowSkillContext(fs, resolved.project, worktree, {
+        configuration: effectiveConfiguration({ files: fs, dir: runDir }),
+        engine: resolved.engine.engine.id,
+      }),
+    )
+    reportValidation({ errors, warnings: [] })
+    if (errors.length > 0) throw refused
+  }).catch((error: unknown) => {
+    if (error !== refused) throw error
+    return undefined
+  })
+  return started === undefined ? undefined : { prepared, started }
 }
 
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
@@ -1096,23 +1189,14 @@ async function drive(
   opened: Opened,
   services: Services,
 ): Promise<number> {
-  const { resolved, request, runDir } = opened
+  const { resolved, runDir } = opened
   const { fs, deps } = services
   if (opened.closureOnly) return finishClosure(opened, fs, config)
   const flagStep = parkedApproval(opened, fs)
   const replay = await workflowReplay(opened, fs)
-  const prepare = () =>
-    (deps.workflow?.prepareWorktree ?? cycleWorktree)({
-      fs,
-      project: resolved.project,
-      cwd: resolved.cwd,
-      main: resolved.main,
-      card: request.card,
-      title: opened.title,
-    })
-  const replayTree = replay && (await prepare())
-  if (replay && replayTree) await prepareReplayHead(replayTree, replay.inputs.head)
-  const started = await startOnConsole(opened, fs, replay)
+  const preparation = await prepareWorkflowStart(opened, services, replay)
+  if (preparation === undefined) return 1
+  const { prepared, started } = preparation
   const effective = effectiveConfiguration({ files: fs, dir: runDir })
   printSettings(resolved, effective)
   probeUnchecked(
@@ -1126,12 +1210,17 @@ async function drive(
     await restoreStoppedFaults({ files: fs, dir: runDir }, started.status, config, resolved)
     return stopped
   }
-  const worktree = replayTree ?? (await prepare())
+  const worktree = prepared ?? (await workflowWorktree(opened, services))
+  const execution = {
+    ...resolved,
+    defaultSkill: workflowDefaultSkill(fs, resolved.project, worktree),
+  }
   console.log(`  Worktree: ${worktree}`)
   return runOnConsole(
     config,
     {
       ...opened,
+      resolved: execution,
       effective,
       worktree,
       telemetryWarned: started.telemetryWarning !== undefined,
@@ -1300,7 +1389,9 @@ function printWorkflowPreview(resolved: Resolved): number {
   }
   addressedSteps(resolved.workflow).forEach(step => {
     const host = step.kind === 'loop' || kindByName[step.kind].host === true
-    const skill = host ? undefined : skillForStep(step, resolved.defaultSkill)
+    const skill = host
+      ? undefined
+      : stepSkill(resolved, resolved.configuration?.configuration, step)
     const assignment =
       step.kind === 'loop'
         ? ''

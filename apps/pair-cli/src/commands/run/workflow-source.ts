@@ -7,18 +7,27 @@ import {
   readGateTargets,
   validate,
   type Validation,
+  type WorkflowSkillContext,
 } from '@pair/workflows'
 import type { Config } from '#registry'
 import { getKnowledgeHubDatasetPath } from '#config/kb-resolver'
 import { isSafePromptText } from './prompt-safety'
-import { createSkillProbe, workflowDefaultSkill } from './skill-probe'
+import { createSkillProbe, workflowDefaultSkill, workflowSkillProbe } from './skill-probe'
+import { isEngineId, type EngineId } from './engines'
 import { locateCycleScripts } from './cycle-scripts'
 import { canCommentOnCard } from './workflow-facts'
+import { resolveEngine } from './resolve-engine'
+import { withRunAgentRunner } from './run-context'
 
 const WORKFLOWS_DIR = '.pair/adoption/tech/workflows'
 const PORTABLE_QUICK =
   '.pair/knowledge/guidelines/collaboration/automation/workflow-examples/quick.yaml'
 export const WAY_OF_WORKING = '.pair/adoption/tech/way-of-working.md'
+
+function configuredSkillProbe(fs: FileSystemService, project: Config, cwd: string, id: EngineId) {
+  const { engine } = withRunAgentRunner(resolveEngine({ flag: id }), project)
+  return workflowSkillProbe(fs, project, cwd, engine)
+}
 
 export interface Located {
   readonly file: string
@@ -50,41 +59,49 @@ export function locateWorkflow(
   return { file, text: fs.readFileSync(file) }
 }
 
+function availableWorkflows(fs: FileSystemService, main: string): string[] {
+  const dirs = [join(main, WORKFLOWS_DIR)]
+  try {
+    dirs.push(join(getKnowledgeHubDatasetPath(fs), WORKFLOWS_DIR))
+  } catch {
+    // No knowledge base beside this CLI.
+  }
+  return dirs.flatMap(dir =>
+    fs.existsSync(dir)
+      ? fs
+          .readdirSync(dir)
+          .filter(entry => entry.isFile() && entry.name.endsWith('.yaml'))
+          .map(entry => entry.name.slice(0, -5))
+      : [],
+  )
+}
+
 export function checkWorkflow(
   fs: FileSystemService,
   project: Config,
-  { cwd, main, sources }: { cwd: string; main: string; sources?: Record<string, string> },
+  {
+    cwd,
+    main,
+    sources,
+    engine,
+  }: { cwd: string; main: string; sources?: Record<string, string>; engine?: EngineId },
   source: { text: string; file: string },
 ) {
   const registry = join(main, WAY_OF_WORKING)
   const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
-  const installed = workflowDefaultSkill(fs, project, cwd)
   return validate(source.text, source.file, {
-    skillExists: createSkillProbe(fs, project, cwd, true),
-    defaultSkillExists: name => installed(name) !== undefined,
+    skillExists:
+      engine === undefined
+        ? createSkillProbe(fs, project, cwd, true)
+        : configuredSkillProbe(fs, project, cwd, engine),
+    deferSkillProbe: true,
     gateKeys: Object.keys(readGateRegistry(registryText)),
     gateTargets: Object.keys(readGateTargets(registryText)),
     launchInputs: ['card'],
     isSafeText: isSafePromptText,
     canCommentOnCard: () =>
       canCommentOnCard(() => locateCycleScripts(fs, project, cwd).scriptsDir, cwd),
-    availableWorkflows: [
-      join(main, WORKFLOWS_DIR),
-      ...(() => {
-        try {
-          return [join(getKnowledgeHubDatasetPath(fs), WORKFLOWS_DIR)]
-        } catch {
-          return []
-        }
-      })(),
-    ].flatMap(dir =>
-      fs.existsSync(dir)
-        ? fs
-            .readdirSync(dir)
-            .filter(entry => entry.isFile() && entry.name.endsWith('.yaml'))
-            .map(entry => entry.name.slice(0, -5))
-        : [],
-    ),
+    availableWorkflows: availableWorkflows(fs, main),
     resolveWorkflow: name => {
       try {
         const included = locateWorkflow(fs, { cwd, main }, name)
@@ -96,6 +113,26 @@ export function checkWorkflow(
       }
     },
   })
+}
+
+export function workflowSkillContext(
+  fs: FileSystemService,
+  project: Config,
+  cwd: string,
+  at: Pick<WorkflowSkillContext, 'configuration' | 'engine'>,
+): WorkflowSkillContext {
+  const probes = new Map<EngineId, ReturnType<typeof workflowSkillProbe>>()
+  return {
+    ...at,
+    isSafeText: isSafePromptText,
+    defaultSkill: workflowDefaultSkill(fs, project, cwd),
+    skillExists(name, engine) {
+      if (!isEngineId(engine)) return false
+      const probe = probes.get(engine) ?? configuredSkillProbe(fs, project, cwd, engine)
+      probes.set(engine, probe)
+      return probe(name)
+    },
+  }
 }
 
 export function reportValidation(checked: Pick<Validation, 'errors' | 'warnings'>): void {

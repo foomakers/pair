@@ -1,6 +1,6 @@
 # Configuration of a workflow run
 
-A configuration sets the engine, the model and the effort of each step of `pair run <workflow>`. One workflow runs on different engines and budgets with no edit.
+A configuration sets the engine, model and effort of each step of `pair run <workflow>` and can override the skill name for an individual step. One workflow runs on different engines and budgets with no edit.
 
 ## The file
 
@@ -22,6 +22,7 @@ telemetry: true # optional; switches the run's telemetry on or off
 ```
 
 - Execution settings take `engine`, `model`, and `effort`. `defaults` needs `engine`.
+- Set `skill` under `steps.<id>` when an agent step uses a different skill name on that engine.
 - Set `assign` at the top level or under `steps.<id>` to override the [workflow's card assignment](workflow-grammar.md#card-assignment).
 - A loop id under `steps` accepts `max` (a positive integer) and `assign`. The loop's `assign` applies to its child steps unless the configuration sets `assign` for a specific child under `steps.<loop>/<child>`.
 - `model` is the real model id. There are no model classes.
@@ -53,7 +54,14 @@ Per field: configuration `steps.<id>`, then configuration `aliases.<alias>`, the
 review: engine=claude (alias) model=claude-opus-5-5 (alias) effort=high (alias)
 ```
 
-Different engines in one run are allowed.
+Different engines in one run are allowed. The step's `skill` entry replaces the workflow's skill name for the resolved engine.
+
+```yaml
+steps:
+  implement: { engine: codex, skill: implement-spec }
+```
+
+Validation reports an error with the skill and step if the effective name is unavailable on that engine.
 
 ## Which configuration runs
 

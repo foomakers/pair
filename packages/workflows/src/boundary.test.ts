@@ -17,6 +17,8 @@ function forbiddenImports(path: string, source: string): string[] {
     allowed.add('node:os')
   if (path === 'cli/session-files.ts') allowed.add('node:fs/promises')
   if (path === 'cli/workflow.ts') allowed.add('node:util')
+  if (path === 'cli/engine-skill-probe.ts') allowed.add('adm-zip')
+  if (path === 'cli/opencode-skill-paths.ts') allowed.add('jsonc-parser')
   if (path.startsWith('worktree/')) allowed.add('node:child_process')
   return [...source.matchAll(SPECIFIER)]
     .map(match => match[1] as string)

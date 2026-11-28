@@ -58,6 +58,7 @@ import { refreshReplayInputs } from './workflow-replay'
 import { loadSessionProjectConfig, readMessage, readText, sessionFiles } from './session-files'
 import { resolveWorkingPathOverride } from './working-area'
 import {
+  checkSessionWorkflowSkills,
   checkWorkflowConfiguration,
   controlStateScript,
   cycleScripts,
@@ -83,6 +84,10 @@ type StartInput = { workflow: string; card: string; engine: string; config?: str
 type OpenInput = { runId: string; engine: string } | StartInput
 type Definition = ReturnType<typeof workflowDefinition>
 
+function atWorktree(project: Project, worktree: string | undefined): Project {
+  return { ...project, cwd: worktree ?? project.cwd }
+}
+
 function startCoordinates(project: Project, input: StartInput) {
   const { card } = input
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(card) || card.includes('..'))
@@ -90,7 +95,7 @@ function startCoordinates(project: Project, input: StartInput) {
   const runId = `${workflowName(input.workflow)}-${card}`
   const run = sessionRun(project.main, runId)
   if (run.files.existsSync(join(run.dir, STATE_FILE))) return { runId }
-  const definition = workflowDefinition(project, input.workflow)
+  const definition = workflowDefinition(project, input.workflow, input.engine)
   return { runId: `${definition.workflow.name}-${card}`, definition }
 }
 
@@ -198,6 +203,11 @@ async function startFresh(
     configuration: selected?.configuration,
   })
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
+  checkSessionWorkflowSkills(atWorktree(project, worktree), definition.workflow, {
+    configuration: selected?.configuration,
+    engine: input.engine,
+    checkSkills: definition.checkSkills,
+  })
   const started = await start(run, definition.source, {
     card,
     ...(selected !== undefined && {
@@ -205,11 +215,8 @@ async function startFresh(
       cardLabels: selected.cardLabels,
     }),
   })
-  await writeAtomic(
-    run.files,
-    join(run.dir, 'sources.json'),
-    JSON.stringify(definition.digests, null, 2),
-  )
+  const digests = JSON.stringify(definition.digests, null, 2)
+  await writeAtomic(run.files, join(run.dir, 'sources.json'), digests)
   return {
     ...started,
     warnings: [...definition.warnings, ...configWarnings, ...resumeWarnings, ...started.warnings],
@@ -251,7 +258,22 @@ async function resumeSaved(
   const replay = await refreshReplayInputs({ workflow: saved, state }, operation)
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
   if (replay) await prepareReplayHead(worktree, replay.inputs.head, runHostProcess)
-  return { ...(await start(run, source, { card, ...(replay && { replay }) })), card, worktree }
+  const resumed = await start(run, source, {
+    card,
+    ...(replay && { replay }),
+    checkResume(reopened) {
+      const steps = saved.steps.filter(step => !stepSettled(step, reopened.steps[step.id]?.state))
+      checkSessionWorkflowSkills(
+        atWorktree(project, worktree),
+        { ...saved, steps },
+        {
+          configuration,
+          engine: input.engine,
+        },
+      )
+    },
+  })
+  return { ...resumed, card, worktree }
 }
 
 async function finishSessionClosure(
@@ -342,7 +364,7 @@ export async function openSession(project: Project, input: OpenInput) {
         ...(opened.worktree !== undefined && { worktree: opened.worktree }),
         result: {
           ...opened,
-          ...workflowSummary(project, workflow, config, lease.engine),
+          ...workflowSummary(atWorktree(project, opened.worktree), workflow, config, lease.engine),
           runId,
           lease: lease.token,
         },
@@ -351,22 +373,32 @@ export async function openSession(project: Project, input: OpenInput) {
   )
 }
 
-function sessionLaunch(project: Project, launch: StepLaunch, steps: readonly Step[]) {
+function sessionLaunch(
+  project: Project,
+  launch: StepLaunch,
+  steps: readonly Step[],
+  configuration: Configuration | undefined,
+) {
   const step = steps.find(candidate => candidate.id === launch.id)
   if (step === undefined) throw new Error(`step-unknown: ${launch.id}`)
   return {
     step,
     resolved: {
       ...launch,
-      uses: skillForStep(step, name => sessionDefaultSkill(project, name)) ?? launch.uses,
+      uses:
+        skillForStep(
+          step,
+          name => sessionDefaultSkill(project, name),
+          configuration?.steps?.[launch.id]?.skill,
+        ) ?? launch.uses,
       interactive: sessionInteractiveOf(launch),
     },
   }
 }
 
-const sessionMessage = (launch: StepLaunch, worktree: string | undefined) =>
+const sessionMessage = (launch: StepLaunch, engine: string, worktree: string | undefined) =>
   buildMessage(launch, kindByName[launch.kind], {
-    style: 'instruction',
+    style: engine === 'claude' ? 'slash' : 'instruction',
     isSafeText,
     worktree,
   })
@@ -381,7 +413,12 @@ function stepPacket(
   },
   launch: StepLaunch,
 ) {
-  const { step, resolved } = sessionLaunch(context.project, launch, addressedSteps(workflow))
+  const { step, resolved } = sessionLaunch(
+    atWorktree(context.project, context.worktree),
+    launch,
+    addressedSteps(workflow),
+    configuration,
+  )
   return {
     ...resolved,
     worktree: context.worktree,
@@ -535,7 +572,7 @@ async function readyPacket(
     process.stderr.write(`${launch.id}: using handoff — ${reason}\n`)
   }
   const { worktree, settings } = launch
-  return { ...ready, worktree, settings, message: sessionMessage(ready, worktree) }
+  return { ...ready, worktree, settings, message: sessionMessage(ready, settings.engine, worktree) }
 }
 
 function agentDispatch(
@@ -715,11 +752,12 @@ export async function recordSession(
     const writer = sessionTelemetry(observed, workflow, config, lease)
     const startedAt = new Date(lease.launchStartedAt ?? Date.now())
     const { resumeSessionId } = sessionContext(run, lease, launch)
-    const { resolved } = sessionLaunch(project, launch, steps)
+    const execution = atWorktree(project, lease.worktree)
+    const { resolved } = sessionLaunch(execution, launch, steps, config)
     const sent =
       writer === undefined
         ? ''
-        : sessionMessage(sessionDispatch(resolved, resumeSessionId), lease.worktree)
+        : sessionMessage(sessionDispatch(resolved, resumeSessionId), lease.engine, lease.worktree)
     const final = readMessage(file)
     const result = await settleAgentStep(host, observed, launch, {
       final,

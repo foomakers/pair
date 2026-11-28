@@ -18,7 +18,7 @@ import { hashOf } from '../engine'
 import { expandedWorkflowSource } from '../expand'
 import { addressedSteps, formatError, type Step, type Workflow } from '../grammar'
 import { interactiveOf, skillForStep, readGateRegistry, readGateTargets } from '../kinds'
-import { validate } from '../validate'
+import { checkWorkflowSkills, validate, type Validation } from '../validate'
 import { canCommentOnCard } from '../worktree/session'
 import { applyProjectConfig } from './project-config'
 import {
@@ -29,7 +29,8 @@ import {
   sessionFiles,
   yamlFiles,
 } from './session-files'
-import { defaultSkillPaths, findDefaultSkill, findSkillFile, skillsLayout } from './skill-paths'
+import { engineSkillProbe } from './engine-skill-probe'
+import { defaultSkillPaths, findDefaultSkill, skillsLayout } from './skill-paths'
 
 const TECH = '.pair/adoption/tech'
 const PORTABLE_QUICK =
@@ -78,13 +79,11 @@ function namedCandidates(project: Project, category: (typeof CATEGORIES)[number]
   ])
 }
 
-function sessionSkillsLayout(root: string, fallback = root) {
-  return skillsLayout(
+function sessionSkillConfig(root: string, fallback = root) {
+  return (
     applyProjectConfig(sessionFiles, installerConfig, root) ??
-      (fallback === root
-        ? undefined
-        : applyProjectConfig(sessionFiles, installerConfig, fallback)) ??
-      installerConfig,
+    (fallback === root ? undefined : applyProjectConfig(sessionFiles, installerConfig, fallback)) ??
+    installerConfig
   )
 }
 
@@ -96,7 +95,7 @@ function bundleLayout(project: Project) {
 }
 
 function installedSkillPaths(project: Project, name: string, root = project.main) {
-  const registry = sessionSkillsLayout(root, project.main)
+  const registry = skillsLayout(sessionSkillConfig(root, project.main))
   const bundle = bundleLayout(project)
   return defaultSkillPaths(
     sessionFiles,
@@ -108,7 +107,7 @@ function installedSkillPaths(project: Project, name: string, root = project.main
 
 export function sessionDefaultSkill(project: Project, name: string): string | undefined {
   const root = project.cwd
-  const registry = sessionSkillsLayout(root)
+  const registry = skillsLayout(sessionSkillConfig(root))
   return findDefaultSkill(
     isFile,
     root,
@@ -162,7 +161,7 @@ function readWorkflowSource(project: Project, name: string) {
   return file === undefined ? undefined : { file, text: readText(file) }
 }
 
-export function workflowDefinition(project: Project, name: string) {
+export function workflowDefinition(project: Project, name: string, engine?: string) {
   const digests: Record<string, string> = {}
   const locate = (source: string) => {
     const located = readWorkflowSource(project, source)
@@ -172,10 +171,12 @@ export function workflowDefinition(project: Project, name: string) {
   const source = locate(name)
   if (source === undefined) throw new Error(`workflow-not-found: ${name}`)
   const adoption = readAdoption(project)
-  const { targets } = sessionSkillsLayout(project.cwd)
   const checked = validate(source.text, source.file, {
-    skillExists: skill => findSkillFile(isFile, project.cwd, { targets }, skill) !== undefined,
-    defaultSkillExists: skill => sessionDefaultSkill(project, skill) !== undefined,
+    skillExists: engineSkillProbe(sessionFiles, isFile, project.cwd, {
+      config: sessionSkillConfig(project.cwd),
+      engine,
+    }),
+    deferSkillProbe: true,
     gateKeys: Object.keys(readGateRegistry(adoption)),
     gateTargets: Object.keys(readGateTargets(adoption)),
     launchInputs: ['card'],
@@ -194,7 +195,39 @@ export function workflowDefinition(project: Project, name: string) {
     source: expandedWorkflowSource(workflow, source),
     warnings: checked.warnings.map(formatError),
     digests,
+    checkSkills: checked.checkSkills,
   }
+}
+
+export function checkSessionWorkflowSkills(
+  project: Project,
+  workflow: Workflow,
+  {
+    configuration,
+    engine,
+    checkSkills = context => checkWorkflowSkills(workflow, context),
+  }: {
+    configuration?: Configuration | undefined
+    engine: string
+    checkSkills?: Validation['checkSkills']
+  },
+): void {
+  const config = sessionSkillConfig(project.cwd)
+  const probes = new Map<string, ReturnType<typeof engineSkillProbe>>()
+  const errors = checkSkills({
+    configuration,
+    engine,
+    defaultSkill: name => sessionDefaultSkill(project, name),
+    isSafeText,
+    skillExists(name, engine) {
+      const probe =
+        probes.get(engine) ??
+        engineSkillProbe(sessionFiles, isFile, project.cwd, { config, engine })
+      probes.set(engine, probe)
+      return probe(name)
+    },
+  })
+  if (errors.length) throw new Error(`workflow-invalid: ${errors.map(formatError).join('\n')}`)
 }
 
 export function workflowConfiguration(
@@ -280,13 +313,14 @@ export function workflowSummary(
     configuration: configuration?.name,
     steps: addressedSteps(workflow).flatMap(step => {
       if (step.kind === 'loop') return []
+      const settings = effectiveSettings(configuration, workflow, step, engine)
       return [
         {
           id: step.id,
           kind: step.kind,
-          skill: skillForStep(step, name => sessionDefaultSkill(project, name)),
+          skill: skillForStep(step, name => sessionDefaultSkill(project, name), settings.skill),
           interactive: sessionInteractiveOf(step),
-          settings: effectiveSettings(configuration, workflow, step, engine),
+          settings,
         },
       ]
     }),
