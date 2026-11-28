@@ -95,7 +95,7 @@ function startCoordinates(project: Project, input: StartInput) {
   const runId = `${workflowName(input.workflow)}-${card}`
   const run = sessionRun(project.main, runId)
   if (run.files.existsSync(join(run.dir, STATE_FILE))) return { runId }
-  const definition = workflowDefinition(project, input.workflow)
+  const definition = workflowDefinition(project, input.workflow, input.engine)
   return { runId: `${definition.workflow.name}-${card}`, definition }
 }
 
