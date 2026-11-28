@@ -203,6 +203,32 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
   )
 
   it.each([
+    ['review-renamed', true],
+    ['review-folder', true],
+    ['missing-skill', false],
+  ])(
+    'R764-12 (#674 AC-3/5): validates the Claude project skill name %s',
+    async (skill, available) => {
+      fs.writeFileSync(
+        join(project, 'pair.config.json'),
+        JSON.stringify({ run: { defaults: { engine: 'claude' } } }),
+      )
+      fs.writeFileSync(
+        join(project, '.claude/skills/review-folder/SKILL.md'),
+        '---\nname: review-renamed\ndescription: Review changes\n---\n',
+      )
+      fs.writeFileSync(
+        join(project, 'review.yaml'),
+        `version: 1\nname: review\nsteps:\n  draft: { kind: generic, skill: ${skill} }\n`,
+      )
+
+      await validate('./review.yaml')
+
+      expect(process.exitCode ?? 0, lines.join('\n')).toBe(available ? 0 : 1)
+    },
+  )
+
+  it.each([
     ['directory', './fixtures/local-tools', [], [true, true, true, false, false]],
     ['collection', './fixtures', [], [true, true, true, false, false]],
     ['ZIP', './local-tools.zip', [], [true, true, true, false, false]],
