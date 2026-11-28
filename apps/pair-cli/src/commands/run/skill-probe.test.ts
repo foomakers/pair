@@ -83,7 +83,6 @@ describe('createSkillProbe', () => {
     expect(exists('missing-skill')).toBe(false)
   })
 
-  // #674 AC-3, R764-03: manifest directories extend the default plugin inventory.
   it('R764-08 (#674 AC-3): uses the active Claude config directory for personal and plugin skills', () => {
     vi.stubEnv('HOME', '/user')
     vi.stubEnv('CLAUDE_CONFIG_DIR', '/alternate')
@@ -108,6 +107,7 @@ describe('createSkillProbe', () => {
     ).toEqual([true, true, true, false])
   })
 
+  // #674 AC-3, R764-03: manifest directories extend the default plugin inventory.
   it.each([
     { skills: './extra-skills/' },
     { skills: ['./extra-skills/', '.'] },

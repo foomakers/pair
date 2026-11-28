@@ -34,13 +34,13 @@ function hasClaudePluginSkill(
 function claudePluginSkill(
   fs: Pick<RunFiles, 'readFileSync'>,
   check: (path: string) => boolean,
-  { home, root }: { home: string; root: string },
+  { configDir, root }: { configDir: string; root: string },
   name: string,
 ): boolean {
   const match = /^([\w-]+):([\w-]+)$/.exec(name)
   if (!match) return false
   const settings = [
-    join(home, '.claude/settings.json'),
+    join(configDir, 'settings.json'),
     join(root, '.claude/settings.json'),
     join(root, '.claude/settings.local.json'),
   ]
@@ -48,9 +48,9 @@ function claudePluginSkill(
     {},
     ...settings.map(path => readJson(fs, path)['enabledPlugins'] ?? {}),
   ) as Record<string, boolean>
-  const installed = readJson(fs, join(home, '.claude/plugins/installed_plugins.json'))[
-    'plugins'
-  ] as Record<string, { installPath?: string; scope?: string; projectPath?: string }[]> | undefined
+  const installed = readJson(fs, join(configDir, 'plugins/installed_plugins.json'))['plugins'] as
+    | Record<string, { installPath?: string; scope?: string; projectPath?: string }[]>
+    | undefined
   return Object.entries(enabled).some(([id, active]) => {
     if (active !== true || id.split('@')[0] !== match[1]) return false
     const entries = installed?.[id]
@@ -184,13 +184,12 @@ function codexPluginSkill(
 function packageSkill(
   fs: Pick<RunFiles, 'readFileSync'>,
   check: (path: string) => boolean,
-  context: { root: string; home: string | undefined; engine: string | undefined },
+  context: { root: string; home: string | undefined; engine: string },
   name: string,
 ): boolean {
   const { root, home, engine } = context
   if (engine === 'pi') return piPackageSkill(fs, check, { root, home }, name)
   if (!home) return false
-  if (engine === 'claude') return claudePluginSkill(fs, check, { root, home }, name)
   if (engine === 'codex') return codexPluginSkill(fs, check, { root, home }, name)
   return false
 }
@@ -260,7 +259,7 @@ function cachedNativeSkill(
 }
 
 const skillDirectories = new Map<string, [string[], string[]]>([
-  ['claude', [['.claude/skills'], ['.claude/skills']]],
+  ['claude', [['.claude/skills'], ['skills']]],
   ['codex', [['.agents/skills'], ['.agents/skills']]],
   [
     'opencode',
@@ -303,6 +302,13 @@ export function engineSkillProbe(
   if (!directories) return () => false
   const [project, global] = directories
   const home = process.env['HOME']
+  const claudeDir = process.env['CLAUDE_CONFIG_DIR']
+  const globalRoot =
+    engine === 'claude'
+      ? claudeDir
+        ? resolve(projectRoot, claudeDir)
+        : home && join(home, '.claude')
+      : home
   const nativeSkill = cachedNativeSkill(projectRoot, engine, runner)
   return name => {
     // A successful native inventory includes selectors and disabled skills that paths cannot infer.
@@ -310,8 +316,11 @@ export function engineSkillProbe(
     if (native !== undefined) return native
     return Boolean(
       findSkillFile(check, projectRoot, { targets: project, prefix }, name) ||
-        (home && findSkillFile(check, home, { targets: global }, name)) ||
-        packageSkill(fs, check, { root: projectRoot, home, engine }, name),
+        (globalRoot && findSkillFile(check, globalRoot, { targets: global }, name)) ||
+        (engine === 'claude'
+          ? globalRoot &&
+            claudePluginSkill(fs, check, { root: projectRoot, configDir: globalRoot }, name)
+          : packageSkill(fs, check, { root: projectRoot, home, engine }, name)),
     )
   }
 }
