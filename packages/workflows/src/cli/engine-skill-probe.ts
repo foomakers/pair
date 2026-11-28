@@ -102,14 +102,13 @@ function claudeMode(args: readonly string[]) {
   return enabled('CLAUDE_CODE_SIMPLE') || args.includes('--bare') ? 'bare' : 'default'
 }
 
-function claudeSettingSources(args: readonly string[]): string[] {
-  let value = 'user,project,local'
+function claudeOption(args: readonly string[], flag: string): string | undefined {
+  let value: string | undefined
   for (const [index, arg] of args.entries()) {
-    const sources =
-      arg === '--setting-sources' ? args[index + 1] : /^--setting-sources=(.*)$/.exec(arg)?.[1]
-    if (sources !== undefined) value = sources
+    if (arg === flag) value = args[index + 1]
+    else if (arg.startsWith(`${flag}=`)) value = arg.slice(flag.length + 1)
   }
-  return value.split(',').map(source => source.trim())
+  return value
 }
 
 function claudeAddedDirectories(root: string, args: readonly string[]): string[] {
@@ -130,10 +129,10 @@ function claudeAddedDirectories(root: string, args: readonly string[]): string[]
 function claudeSkillDirectories(
   root: string,
   configDir: string | undefined,
+  settings: readonly string[],
   args: readonly string[],
   bare: boolean,
 ) {
-  const settings = claudeSettingSources(args)
   const projectDirs = settings.includes('project') ? claudeAddedDirectories(root, args) : []
   if (!bare && settings.includes('project')) projectDirs.unshift(root)
   const userDir = !bare && settings.includes('user') ? configDir : undefined
@@ -144,17 +143,26 @@ function claudePluginSkill(
   fs: Pick<RunFiles, 'readFileSync'>,
   check: (path: string) => boolean,
   { configDir, root }: { configDir: string; root: string },
+  sources: readonly string[],
+  override: string | undefined,
   { plugin, skill }: { plugin: string; skill: string },
 ): boolean {
   const settings = [
-    join(configDir, 'settings.json'),
-    join(root, '.claude/settings.json'),
-    join(root, '.claude/settings.local.json'),
-  ]
-  const enabled = Object.assign(
-    {},
-    ...settings.map(path => readJson(fs, path)['enabledPlugins'] ?? {}),
-  ) as Record<string, boolean>
+    ['user', join(configDir, 'settings.json')],
+    ['project', join(root, '.claude/settings.json')],
+    ['local', join(root, '.claude/settings.local.json')],
+  ] as const
+  const layers = settings
+    .filter(([source]) => sources.includes(source))
+    .map(([, path]) => readJson(fs, path))
+  if (override) {
+    layers.push(
+      override.trimStart().startsWith('{')
+        ? parseJsonObject(override)
+        : readJson(fs, resolve(root, override)),
+    )
+  }
+  const enabled = Object.assign({}, ...layers.map(layer => layer['enabledPlugins'] ?? {}))
   const installed = readJson(fs, join(configDir, 'plugins/installed_plugins.json'))['plugins'] as
     | Record<string, { installPath?: string; scope?: string; projectPath?: string }[]>
     | undefined
@@ -194,7 +202,17 @@ function claudeSkills(
   if (mode === 'disabled') return () => false
   const configured = process.env['CLAUDE_CONFIG_DIR']
   const configDir = configured ? resolve(root, configured) : home && join(home, '.claude')
-  const { projectDirs, userDir } = claudeSkillDirectories(root, configDir, args, mode === 'bare')
+  const settings = (claudeOption(args, '--setting-sources') ?? 'user,project,local')
+    .split(',')
+    .map(source => source.trim())
+  const override = claudeOption(args, '--settings')
+  const { projectDirs, userDir } = claudeSkillDirectories(
+    root,
+    configDir,
+    settings,
+    args,
+    mode === 'bare',
+  )
   let sources: ReturnType<typeof claudeRunnerSources> | undefined
   return (name: string) => {
     const match = /^([\w-]+):([\w-]+)$/.exec(name)
@@ -209,7 +227,10 @@ function claudeSkills(
         Boolean(
           mode === 'default' &&
             configDir &&
-            claudePluginSkill(fs, check, { root, configDir }, { plugin, skill }),
+            claudePluginSkill(fs, check, { root, configDir }, settings, override, {
+              plugin,
+              skill,
+            }),
         )
       )
     }
@@ -226,7 +247,15 @@ function claudeSkills(
 
 function readJson(fs: Pick<RunFiles, 'readFileSync'>, path: string): Record<string, unknown> {
   try {
-    const value: unknown = JSON.parse(fs.readFileSync(path))
+    return parseJsonObject(fs.readFileSync(path))
+  } catch {
+    return {}
+  }
+}
+
+function parseJsonObject(text: string): Record<string, unknown> {
+  try {
+    const value: unknown = JSON.parse(text)
     return isPlainObject(value) ? value : {}
   } catch {
     return {}
