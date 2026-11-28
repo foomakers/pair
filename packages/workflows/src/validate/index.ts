@@ -134,7 +134,7 @@ function skillAvailabilityErrors(
 export interface WorkflowSkillContext {
   readonly configuration?: Configuration | undefined
   readonly engine: string
-  readonly skillExists: (name: string, engine: string, configured: boolean) => boolean
+  readonly skillExists: (name: string, engine: string) => boolean
   readonly defaultSkill: (name: string) => string | undefined
   readonly isSafeText: (value: string) => boolean
 }
@@ -159,8 +159,7 @@ export function checkWorkflowSkills(
           engine: stepEngine,
           implicit,
           isSafeText,
-          exists: name =>
-            installed !== undefined || skillExists(name, stepEngine, override !== undefined),
+          exists: name => installed !== undefined || skillExists(name, stepEngine),
         })
   }
   return workflow.steps.flatMap(step => [

@@ -1,7 +1,7 @@
 import { isAbsolute, join, resolve } from 'node:path'
 import type { RunFiles } from '../engine'
 import { inventoryRequest } from '../worktree/inventory-process'
-import { isPlainObject, registryEntries, registryTargets } from './project-config'
+import { isPlainObject } from './project-config'
 import { findSkillFile, skillsLayout } from './skill-paths'
 
 function claudePluginSkill(
@@ -160,56 +160,6 @@ function codexPluginSkill(
   return enabled && findSkillFile(check, cache, { targets: ['skills'] }, match[2]!) !== undefined
 }
 
-function engineSkillTargets(
-  root: string,
-  targets: string[],
-  registry: Record<string, unknown> | undefined,
-  {
-    engine,
-    requireEngineTarget = false,
-  }: { engine?: string | undefined; requireEngineTarget?: boolean },
-): string[] {
-  if (!engine || (!requireEngineTarget && registry && targets.length === 1)) return targets
-  const owners = {
-    '.claude/skills': ['claude', 'opencode'],
-    '.agents/skills': ['codex', 'opencode', 'pi'],
-    '.opencode/skills': ['opencode'],
-    '.pi/skills': ['pi'],
-  }
-  const available = new Map(
-    Object.entries(owners).map(([target, engines]) => [
-      resolve(root, target),
-      engines.includes(engine),
-    ]),
-  )
-  const aliases = new Set(
-    registryTargets<{ path: string; mode?: string }>('skills', registry ?? {})
-      .filter(({ mode }) => mode === 'symlink' || mode === 'copy')
-      .map(({ path }) => resolve(root, path)),
-  )
-  // Existing workflow names support registry aliases. Overrides follow the selected engine's targets.
-  if (!requireEngineTarget && [...aliases].some(target => available.get(target) === true))
-    return targets
-  return targets.filter(target => {
-    const dir = resolve(root, target)
-    const supported = available.get(dir)
-    return supported ?? (!requireEngineTarget || !aliases.has(dir))
-  })
-}
-
-function redirectedDefault(
-  registry: Record<string, unknown> | undefined,
-  root: string,
-  targets: string[],
-): boolean {
-  return (
-    registry !== undefined &&
-    ((Array.isArray(registry['targets']) && registry['targets'].length > 0) ||
-      typeof registry['target_path'] === 'string') &&
-    !targets.some(target => resolve(root, target) === resolve(root, '.claude/skills'))
-  )
-}
-
 function packageSkill(
   fs: Pick<RunFiles, 'readFileSync'>,
   check: (path: string) => boolean,
@@ -310,35 +260,25 @@ export function engineSkillProbe(
     exact = true,
     engine,
   }: { config: unknown; exact?: boolean; engine?: string | undefined },
-): (name: string, requireEngineTarget?: boolean) => boolean {
+): (name: string) => boolean {
   const layout = skillsLayout(config)
-  const settings = registryEntries(config)['skills']
-  const configured = isPlainObject(settings) ? settings : undefined
-  const compatibleTargets = engineSkillTargets(projectRoot, layout.targets, configured, { engine })
-  const engineTargets = engineSkillTargets(projectRoot, layout.targets, configured, {
-    engine,
-    requireEngineTarget: true,
-  })
   const prefix = exact ? undefined : layout.prefix
-  const redirected = redirectedDefault(configured, projectRoot, layout.targets)
+  if (engine === undefined)
+    return name =>
+      findSkillFile(check, projectRoot, { targets: layout.targets, prefix }, name) !== undefined
+  const directories = skillDirectories.get(engine)
+  if (!directories) return () => false
+  const [project, global] = directories
   const home = process.env['HOME']
-  const directories = skillDirectories.get(engine ?? '')
   const nativeSkill = cachedNativeSkill(projectRoot, engine)
-  return (name, requireEngineTarget) => {
-    const targets = requireEngineTarget ? engineTargets : compatibleTargets
-    if (findSkillFile(check, projectRoot, { targets, prefix }, name)) return true
-    if (!directories) return false
+  return name => {
     // A successful native inventory includes selectors and disabled skills that paths cannot infer.
     const native = nativeSkill(name)
     if (native !== undefined) return native
-    const [project, global] = directories
-    // The explicit registry controls the default pair installation location.
-    const projectTargets = redirected ? project.filter(dir => dir !== '.claude/skills') : project
-    const installed = Boolean(
-      findSkillFile(check, projectRoot, { targets: projectTargets }, name) ||
-        (home && findSkillFile(check, home, { targets: global }, name)),
+    return Boolean(
+      findSkillFile(check, projectRoot, { targets: project, prefix }, name) ||
+        (home && findSkillFile(check, home, { targets: global }, name)) ||
+        packageSkill(fs, check, { root: projectRoot, home, engine }, name),
     )
-    if (installed) return true
-    return packageSkill(fs, check, { root: projectRoot, home, engine }, name)
   }
 }

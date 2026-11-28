@@ -111,11 +111,12 @@ beforeEach(() => {
   write(cardFile, `# ${title}\n\n**Status**: Ready\n`)
   write(workflowFile, workflow)
   write(configFile, configuration)
-  for (const skill of ['pair-fixture-draft', 'pair-fixture-discuss'])
-    write(
-      `.claude/skills/${skill}/SKILL.md`,
-      `---\nname: ${skill}\ndescription: Fixture skill\n---\n`,
-    )
+  for (const directory of ['.claude/skills', '.agents/skills'])
+    for (const skill of ['pair-fixture-draft', 'pair-fixture-discuss'])
+      write(
+        `${directory}/${skill}/SKILL.md`,
+        `---\nname: ${skill}\ndescription: Fixture skill\n---\n`,
+      )
   cpSync(join(repo, cycle), join(main, cycle), { recursive: true })
   const control = '.claude/skills/pair-next/control-state.mjs'
   mkdirSync(dirname(join(main, control)), { recursive: true })
@@ -218,7 +219,7 @@ it.each([
 it('#696 AC-8: validates the mapped configuration from a staged non-Git project', () => {
   const staged = realpathSync(mkdtempSync(join(tmpdir(), 'pair-workflow-staged-')))
   try {
-    for (const folder of ['.pair', '.claude'])
+    for (const folder of ['.pair', '.claude', '.agents'])
       cpSync(join(main, folder), join(staged, folder), { recursive: true })
     writeFileSync(
       join(staged, 'pair.config.json'),
@@ -1477,7 +1478,7 @@ it('R754-05: renews the lease without replacing an outstanding step attempt', ()
   }
 })
 
-it('R754-06: starts from a redirected skills target with explicit installed names', () => {
+it('R754-06: uses the redirected cycle while Codex discovers explicit skills', () => {
   const target = 'team/skills'
   write(
     'pair.config.json',
@@ -1489,7 +1490,10 @@ it('R754-06: starts from a redirected skills target with explicit installed name
     }),
   )
   for (const skill of ['team-pair-fixture-draft', 'fixture-discuss'])
-    write(`${target}/${skill}/SKILL.md`, `---\nname: ${skill}\ndescription: Fixture skill\n---\n`)
+    write(
+      `.agents/skills/${skill}/SKILL.md`,
+      `---\nname: ${skill}\ndescription: Fixture skill\n---\n`,
+    )
   write(
     workflowFile,
     workflow
@@ -1499,7 +1503,9 @@ it('R754-06: starts from a redirected skills target with explicit installed name
   cpSync(join(main, cycle), join(main, target, 'team-workflow-cycle/scripts'), { recursive: true })
   rmSync(join(main, '.claude/skills/pair-fixture-draft'), { recursive: true })
   rmSync(join(main, cycle), { recursive: true })
-  expect(JSON.parse(successful(['validate', 'quick']))).toMatchObject({ workflow: 'quick' })
+  expect(JSON.parse(successful(['validate', 'quick', '--engine', 'codex']))).toMatchObject({
+    workflow: 'quick',
+  })
   const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
   expect(advance(lease)).toMatchObject({
     ready: [{ id: 'draft', uses: 'team-pair-fixture-draft' }],

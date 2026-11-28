@@ -14,13 +14,8 @@ const isFile = (fs: FileSystemService) => (path: string) =>
   fs.existsSync(path) && fs.statSync(path).isFile()
 
 /**
- * Builds the "is this skill installed" probe from the SAME layout knowledge `pair-cli install`
- * writes with (ADR-005): the `skills` registry's target paths and its `prefix`. Nothing here
- * re-derives an installation path — a project that redirected its skills targets in
- * `pair.config.json` is probed where its skills actually are.
- *
- * Workflow `skill:` names are literal. Default and CLI-selected skills also support
- * the registry prefix aliases used by the resolver.
+ * Engine-specific lookups use the engine inventory. Legacy CLI selection uses the
+ * installation registry and supports its prefix aliases.
  */
 export function createSkillProbe(
   fs: FileSystemService,
@@ -32,7 +27,7 @@ export function createSkillProbe(
   return name => probe(name)
 }
 
-/** Literal workflow names, including overrides that require an engine-visible target. */
+/** Literal workflow names as seen by the selected engine. */
 export function workflowSkillProbe(
   fs: FileSystemService,
   config: Config,

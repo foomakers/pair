@@ -408,14 +408,12 @@ describe('createSkillProbe', () => {
   })
 
   // #674 AC-2/AC-5, R764-01: a registry target does not add to Codex's inventory.
-  it.each([
-    { target: '.claude/skills', configured: false },
-    { target: 'custom/skills', configured: true },
-    { target: '.agents/skills', configured: false },
-  ])('rejects a registry-only skill in $target', ({ target, configured }) => {
-    const root = fakeEngine(
-      'codex',
-      `
+  it.each(['.claude/skills', 'custom/skills', '.agents/skills'])(
+    'rejects a registry-only skill in %s',
+    target => {
+      const root = fakeEngine(
+        'codex',
+        `
       createInterface({ input: process.stdin }).on('line', line => {
         const { id, method } = JSON.parse(line);
         if (method === 'initialize') console.log(JSON.stringify({ id, result: {} }));
@@ -424,23 +422,24 @@ describe('createSkillProbe', () => {
         }] } }));
       });
     `,
-    )
-    try {
-      const fs = new InMemoryFileSystemService(
-        {
-          [`${root}/${target}/registry-only/SKILL.md`]: '',
-          [`${root}/.agents/skills/control/SKILL.md`]: '',
-        },
-        root,
-        root,
       )
-      const exists = workflowSkillProbe(fs, skillsConfig([target]), root, 'codex')
-      expect(exists('control', configured)).toBe(true)
-      expect(exists('registry-only', configured)).toBe(false)
-    } finally {
-      disk.rmSync(root, { recursive: true, force: true })
-    }
-  })
+      try {
+        const fs = new InMemoryFileSystemService(
+          {
+            [`${root}/${target}/registry-only/SKILL.md`]: '',
+            [`${root}/.agents/skills/control/SKILL.md`]: '',
+          },
+          root,
+          root,
+        )
+        const exists = workflowSkillProbe(fs, skillsConfig([target]), root, 'codex')
+        expect(exists('control')).toBe(true)
+        expect(exists('registry-only')).toBe(false)
+      } finally {
+        disk.rmSync(root, { recursive: true, force: true })
+      }
+    },
+  )
 
   it('R754-06: prepares workflow runs with the configured built-in cycle skill', () => {
     const directory = join(cwd, 'team/skills/team-workflow-cycle')

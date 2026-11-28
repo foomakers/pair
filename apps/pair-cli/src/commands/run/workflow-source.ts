@@ -116,11 +116,11 @@ export function workflowSkillContext(
     ...at,
     isSafeText: isSafePromptText,
     defaultSkill: workflowDefaultSkill(fs, project, cwd),
-    skillExists(name, engine, configured) {
+    skillExists(name, engine) {
       if (!isEngineId(engine)) return false
       const probe = probes.get(engine) ?? workflowSkillProbe(fs, project, cwd, engine)
       probes.set(engine, probe)
-      return probe(name, configured)
+      return probe(name)
     },
   }
 }

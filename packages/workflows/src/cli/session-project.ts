@@ -220,12 +220,12 @@ export function checkSessionWorkflowSkills(
     engine,
     defaultSkill: name => sessionDefaultSkill(project, name),
     isSafeText,
-    skillExists(name, engine, configured) {
+    skillExists(name, engine) {
       const probe =
         probes.get(engine) ??
         engineSkillProbe(sessionFiles, isFile, project.cwd, { config, engine })
       probes.set(engine, probe)
-      return probe(name, configured)
+      return probe(name)
     },
   })
   if (errors.length) throw new Error(`workflow-invalid: ${errors.map(formatError).join('\n')}`)
