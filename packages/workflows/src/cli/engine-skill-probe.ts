@@ -1,21 +1,34 @@
-import { isAbsolute, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import type { RunFiles } from '../engine'
 import { inventoryRequest } from '../worktree/inventory-process'
 import { isPlainObject } from './project-config'
 import { findSkillFile, skillsLayout } from './skill-paths'
 
-function claudePluginTargets(fs: Pick<RunFiles, 'readFileSync'>, root: string): string[] {
+function claudeManifestSkillPaths(fs: Pick<RunFiles, 'readFileSync'>, root: string): string[] {
   const skills = readJson(fs, join(root, '.claude-plugin/plugin.json'))['skills']
   const paths: unknown[] = Array.isArray(skills) ? skills : [skills]
-  return [
-    'skills',
-    ...paths.filter(
-      (path): path is string =>
-        typeof path === 'string' &&
-        (path === '.' || path.startsWith('./')) &&
-        !path.split(/[/\\]/).includes('..'),
-    ),
-  ]
+  return paths.filter(
+    (path): path is string =>
+      typeof path === 'string' &&
+      (path === '.' || path.startsWith('./')) &&
+      !path.split(/[/\\]/).includes('..'),
+  )
+}
+
+function hasClaudePluginSkill(
+  fs: Pick<RunFiles, 'readFileSync'>,
+  check: (path: string) => boolean,
+  root: string,
+  name: string,
+): boolean {
+  const manifestPaths = claudeManifestSkillPaths(fs, root)
+  return (
+    findSkillFile(check, root, { targets: ['skills', ...manifestPaths] }, name) !== undefined ||
+    manifestPaths.some(path => {
+      const directory = resolve(root, path)
+      return basename(directory) === name && check(join(directory, 'SKILL.md'))
+    })
+  )
 }
 
 function claudePluginSkill(
@@ -47,12 +60,7 @@ function claudePluginSkill(
         entry =>
           ((entry.scope !== 'project' && entry.scope !== 'local') || entry.projectPath === root) &&
           typeof entry.installPath === 'string' &&
-          findSkillFile(
-            check,
-            entry.installPath,
-            { targets: claudePluginTargets(fs, entry.installPath) },
-            match[2]!,
-          ) !== undefined,
+          hasClaudePluginSkill(fs, check, entry.installPath, match[2]!),
       )
     )
   })
