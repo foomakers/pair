@@ -48,7 +48,6 @@ describe("readAutomationPolicy — absent file (today's real path for most proje
     const policy = policyFrom().read()
 
     expect(policy.eligibility).toBeUndefined()
-    expect(policy.maxIterations).toBe(Number.POSITIVE_INFINITY)
     expect(policy.maxParallelism).toBe(1)
     expect(policy.auditLocation).toBe(DEFAULT_AUDIT_LOCATION)
     expect(policy.source).toContain('fail-safe defaults')
@@ -64,19 +63,6 @@ describe('readAutomationPolicy — present file', () => {
 
     expect(policy.eligibility).toBe('risk:green')
   })
-
-  it('HALTS on the ASCII `=>` arrow, naming the documented form (round 3, Major)', () => {
-    // The schema (`automation-policy.md` §Stop Predicate) documents `⇒` and nothing else, and the
-    // tier-1 workflow accepts `⇒` alone. A driver that ALSO accepted `=>` would be inventing a
-    // laxer grammar than the schema owner — and the same adoption file would then run on tier 2
-    // and HALT on tier 1, which is precisely what ADR-021's "one capability" claim forbids.
-    expect(() => policyFrom('## Stop Predicate\n\nroot => Done\n').read()).toThrow(
-      /uses `=>`, but the documented arrow is `⇒`/,
-    )
-    expect(() => policyFrom('## Stop Predicate\n\ntag:risk:red => Done\n').read()).toThrow(
-      /`## Stop Predicate`/,
-    )
-  })
 })
 
 describe('readAutomationPolicy — HALTs before any card is touched', () => {
@@ -90,11 +76,6 @@ describe('readAutomationPolicy — HALTs before any card is touched', () => {
       'two Eligibility headings',
       '## Eligibility\n\nrisk:green\n\n## Eligibility\n\nrisk:yellow\n',
       /carries 2 `## Eligibility` headings/,
-    ],
-    [
-      'an unknown predicate shape',
-      '## Stop Predicate\n\nwhenever it feels done\n',
-      /matches neither/,
     ],
     [
       'an absolute audit path',
@@ -170,67 +151,6 @@ describe('readAutomationPolicy — a policy value is never a command fragment (r
     ).read()
 
     expect(policy.eligibility).toBe('good first issue')
-    expect(policy.stopPredicate).toBe('type:user story ⇒ Done and has-tag:risk:red')
-  })
-})
-
-/** Round 4, minor 1: parity measured on the CLASS — the same strictness tier 1 applies. */
-describe('readAutomationPolicy — numeric and condition forms match tier 1 exactly', () => {
-  it.each([['scientific notation', '1e3']])(
-    'HALTs on max-iterations in %s form',
-    (_case, value) => {
-      expect(() => policyFrom(`## Stop Predicate\n\nmax-iterations: ${value}\n`).read()).toThrow(
-        /not a positive integer/,
-      )
-    },
-  )
-
-  it.each([['a has-tag payload carrying a space', 'root ⇒ has-tag:a b']])(
-    'HALTs on a condition with %s',
-    (_case, value) => {
-      expect(() => policyFrom(`## Stop Predicate\n\n${value}\n`).read()).toThrow(
-        /not a canonical macrostate/,
-      )
-    },
-  )
-
-  it.each([
-    ['a malformed override line', 'risk:green 5'],
-    ['an override naming a non-label', 'not a tier: 5'],
-    ['an override at zero', 'risk:green: 0'],
-  ])('HALTs on %s instead of ignoring it silently', (_case, override) => {
-    expect(() => policyFrom(`## Max Parallelism\n\n3\n${override}\n`).read()).toThrow(
-      /`## Max Parallelism`/,
-    )
-  })
-
-  it('US-491: exposes the per-tier overrides for run --root --parallel, absent when none is declared', () => {
-    expect(
-      policyFrom('## Max Parallelism\n\n3\nrisk:green: 5\nrisk:yellow: 2\n').read()
-        .maxParallelismOverrides,
-    ).toEqual({ 'risk:green': 5, 'risk:yellow': 2 })
-    expect(policyFrom('## Max Parallelism\n\n3\n').read()).not.toHaveProperty(
-      'maxParallelismOverrides',
-    )
-  })
-})
-
-describe('US-573 AC5: `## Stop Predicate` idle-timeout', () => {
-  it('reads `idle-timeout: <seconds>` next to the predicate and max-iterations', () => {
-    const policy = policyFrom(
-      '## Stop Predicate\n\nroot ⇒ Done\nmax-iterations: 3\nidle-timeout: 600\n',
-    ).read()
-    expect(policy.idleTimeoutSeconds).toBe(600)
-    expect(policy.maxIterations).toBe(3)
-  })
-
-  it('absent ⇒ undefined; a non-positive value HALTs', () => {
-    expect(
-      policyFrom('## Stop Predicate\n\nroot ⇒ Done\n').read().idleTimeoutSeconds,
-    ).toBeUndefined()
-    expect(() => policyFrom('## Stop Predicate\n\nidle-timeout: 0\n').read()).toThrow(
-      /idle-timeout/,
-    )
   })
 })
 
@@ -245,20 +165,5 @@ describe('US-576 AC3: only `## Autonomy` declared', () => {
     expect(
       policyFrom('# Automation\n\n## Max Parallelism\n\n1\n').read().warnings.join('\n'),
     ).toContain('automation is off')
-  })
-})
-describe('US-576 AC6: no max-iterations declared ⇒ no iteration cap (the loop runs to a natural stop)', () => {
-  it('absent file, absent `## Stop Predicate`, a predicate with no max-iterations: all uncapped', () => {
-    expect(policyFrom().read().maxIterations).toBe(Number.POSITIVE_INFINITY)
-    expect(policyFrom('# A\n\n## Autonomy\n\npreset: full\n').read().maxIterations).toBe(
-      Number.POSITIVE_INFINITY,
-    )
-    expect(policyFrom('## Stop Predicate\n\ntag:risk:red ⇒ Done\n').read().maxIterations).toBe(
-      Number.POSITIVE_INFINITY,
-    )
-  })
-
-  it('a declared max-iterations still caps', () => {
-    expect(policyFrom('## Stop Predicate\n\nmax-iterations: 4\n').read().maxIterations).toBe(4)
   })
 })

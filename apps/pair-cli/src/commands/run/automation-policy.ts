@@ -1,5 +1,4 @@
 import { join } from 'path'
-import { MAX_TIMEOUT_SECONDS } from '../../config/engine-block'
 import type { FileSystemService } from '@pair/content-ops'
 import { isLabelShape, isSafePromptText, promptSafetyFailure } from './prompt-safety'
 import { assertLabelValue, policyHalt, POLICY_PATH, sectionLines } from './policy-sections'
@@ -23,11 +22,6 @@ import { readWorkflowMapping, type WorkflowMapping } from './workflow-mapping'
 
 export { POLICY_PATH } from './policy-sections'
 export const DEFAULT_AUDIT_LOCATION = 'automation/loop-audit.md'
-/**
- * US-576: no `max-iterations` declared ⇒ no iteration cap — the loop runs until a natural stop (nothing eligible,
- * every remaining card blocked or parked; each card still stops at its own gates). A declared cap still binds.
- */
-export const NO_ITERATION_CAP = Number.POSITIVE_INFINITY
 export const FAIL_SAFE_MAX_PARALLELISM = 1
 
 /** `## Auto-Advance`'s fail-closed default: nothing pushes or merges unattended. */
@@ -46,8 +40,6 @@ export interface AutomationPolicy {
    */
   readonly autoAdvance: string
   /** `## Stop Predicate`'s `<selector> ⇒ <condition>` line, verbatim (passed on, never evaluated here). */
-  readonly stopPredicate?: string
-  readonly maxIterations: number
   /** US-573: `## Stop Predicate`'s `idle-timeout: <seconds>`, present only when declared. */
   readonly idleTimeoutSeconds?: number
   readonly maxParallelism: number
@@ -107,7 +99,6 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
   if (!fs.existsSync(path)) {
     return {
       autoAdvance: AUTO_ADVANCE_OFF,
-      maxIterations: NO_ITERATION_CAP,
       maxParallelism: FAIL_SAFE_MAX_PARALLELISM,
       auditLocation: DEFAULT_AUDIT_LOCATION,
       source: 'fail-safe defaults (policy file absent)',
@@ -118,16 +109,12 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
   const markdown = fs.readFileSync(path)
   const warnings: string[] = []
   const eligibility = readEligibility(markdown, warnings)
-  const stop = readStopPredicate(markdown)
   const workflows = readWorkflowMapping(markdown)
   const parallelism = readMaxParallelism(markdown)
 
   return {
     ...(eligibility !== undefined && { eligibility }),
     autoAdvance: readAutoAdvance(markdown, eligibility),
-    ...(stop.predicate !== undefined && { stopPredicate: stop.predicate }),
-    maxIterations: stop.maxIterations,
-    ...(stop.idleTimeoutSeconds !== undefined && { idleTimeoutSeconds: stop.idleTimeoutSeconds }),
     maxParallelism: parallelism.global,
     ...(Object.keys(parallelism.perTier).length > 0 && {
       maxParallelismOverrides: parallelism.perTier,
@@ -260,131 +247,6 @@ export function describeMergePosture(policy: AutomationPolicy): string {
   )
 }
 
-/* ------------------------------------------------------------ stop predicate */
-
-/**
- * `<selector> ⇒ <condition>` — the arrow is `⇒`, and ONLY `⇒`.
- *
- * The driver borrows this grammar; it does not get to widen it (AC8, BR2, D18). An earlier version
- * also accepted the ASCII `=>`, which was this module inventing schema: `automation-policy.md`
- * §Stop Predicate documents `⇒` alone, and the tier-1 workflow (`.claude/workflows/pair-loop.js`)
- * matches `⇒` alone — so the SAME adoption file ran unattended on tier 2 and HALTed on tier 1,
- * which is exactly the divergence ADR-021's "one capability, three realizations" rules out. The
- * ASCII form is now a HALT with the correct spelling in the message (round 3, Major).
- */
-const SELECTOR = /^(root|tag:.+|type:.+)\s*⇒\s*(.+)$/
-
-/** The near-miss worth naming explicitly rather than reporting as "matches neither grammar". */
-const ASCII_ARROW = /^(root|tag:.+|type:.+)\s*=>\s*(.+)$/
-const CONDITIONS = ['Draft', 'Ready', 'In Progress', 'Done']
-
-/**
- * One `<selector> ⇒ <condition>` predicate line, validated with the grammar `## Stop Predicate` uses (also what
- * `--predicate` takes): HALTs on a near-miss arrow, a malformed line, an empty selector payload, a bad condition
- * or content that could become a command fragment. Returns the line, trimmed.
- */
-export function validateStopPredicateLine(line: string): string {
-  const match = SELECTOR.exec(line)
-  if (!match) {
-    // Named separately from "matches neither grammar": an ASCII arrow is a spelling mistake with
-    // an obvious fix, and reporting it as an unrecognised line sends the maintainer hunting.
-    if (ASCII_ARROW.test(line)) {
-      policyHalt(
-        `\`## Stop Predicate\` line \`${line}\` uses \`=>\`, but the documented arrow is \`⇒\` ` +
-          `(U+21D2) — the same form the fan-out workflow requires, so the two realizations of the ` +
-          `loop read this file identically`,
-      )
-    }
-    policyHalt(
-      `\`## Stop Predicate\` line \`${line}\` matches neither \`<selector> ⇒ <condition>\` nor \`max-iterations: <n>\``,
-    )
-  }
-  assertSelector(match[1]!.trim(), line)
-  assertCondition(match[2]!.trim(), line)
-  // The WHOLE LINE is what `readStopPredicate` returns and what reaches the prompt, so the whole
-  // line is what gets content-checked (round 5, Major). Checking the selector payload alone left
-  // `root ⇒ has-tag:$(whoami)` through: `/^has-tag:\S+$/` is a SHAPE rule, and `\S+` happily
-  // admits a backtick, `$(` or 4000 characters. This exposure is TIER-2-ONLY — tier 1 accepts the
-  // same strings but evaluates the predicate in JS and never inlines it — so no parity comparison
-  // can catch it; the guard has to be applied here, directly.
-  assertSafePromptText('Stop Predicate', line)
-  return line
-}
-
-/** `## Stop Predicate` — the predicate line (borrowed verbatim) plus its `max-iterations` backstop. */
-function readStopPredicate(markdown: string): {
-  predicate?: string
-  maxIterations: number
-  idleTimeoutSeconds?: number
-} {
-  const lines = sectionLines(markdown, 'Stop Predicate')
-  if (lines === undefined || lines.length === 0) {
-    return { maxIterations: NO_ITERATION_CAP }
-  }
-
-  let predicate: string | undefined
-  let maxIterations: number | undefined
-  let idleTimeoutSeconds: number | undefined
-
-  for (const line of lines) {
-    const idle = /^idle-timeout:\s*(.+)$/.exec(line)
-    if (idle) {
-      idleTimeoutSeconds = positiveInteger(idle[1]!, '`## Stop Predicate` idle-timeout')
-      if (idleTimeoutSeconds > MAX_TIMEOUT_SECONDS)
-        policyHalt(
-          `\`## Stop Predicate\` idle-timeout declares \`${idleTimeoutSeconds}\`, above the ${MAX_TIMEOUT_SECONDS}-second maximum`,
-        )
-      continue
-    }
-    const iterations = /^max-iterations:\s*(.+)$/.exec(line)
-    if (iterations) {
-      maxIterations = positiveInteger(iterations[1]!, '`## Stop Predicate` max-iterations')
-      continue
-    }
-    predicate = validateStopPredicateLine(line)
-  }
-
-  return {
-    ...(predicate !== undefined && { predicate }),
-    maxIterations: maxIterations ?? NO_ITERATION_CAP,
-    ...(idleTimeoutSeconds !== undefined && { idleTimeoutSeconds }),
-  }
-}
-
-/**
- * The selector's PAYLOAD is the part an operator writes freely (`tag:<label>`, `type:<issue-type>`),
- * so it is the part that reaches the prompt and therefore the part tier 1 content-checks
- * (`validateSelector`). `root` carries no payload. A payload that is empty, or that could become a
- * command fragment, HALTs here — before it can be rendered into an unattended agent's prompt
- * (round 4, Major).
- */
-function assertSelector(selector: string, line: string): void {
-  if (selector === 'root') return
-  const payload = /^(?:tag|type):(.*)$/.exec(selector)?.[1] ?? ''
-  if (payload.length === 0) {
-    policyHalt(
-      `\`## Stop Predicate\` line \`${line}\` has an empty selector payload — \`tag:\`/\`type:\` needs a label`,
-    )
-  }
-  assertSafePromptText('Stop Predicate', payload)
-}
-
-/**
- * A condition is a canonical macrostate and/or a `has-tag:` — never issue-body content (D18).
- *
- * `has-tag:` requires a NON-EMPTY, space-free payload, exactly as tier 1's `/^has-tag:\S+$/` does:
- * `startsWith('has-tag:')` alone accepted a bare `has-tag:` and `has-tag:a b` (round 4, minor 1).
- */
-function assertCondition(condition: string, line: string): void {
-  const parts = condition.split(/\s+and\s+/i).map(part => part.trim())
-  const valid = parts.every(part => CONDITIONS.includes(part) || /^has-tag:\S+$/.test(part))
-  if (!valid) {
-    policyHalt(
-      `\`## Stop Predicate\` line \`${line}\` names \`${condition}\`, which is not a canonical macrostate (${CONDITIONS.join(', ')}) or \`has-tag:<label>\``,
-    )
-  }
-}
-
 /* --------------------------------------------------------- parallelism/audit */
 
 /**
@@ -486,27 +348,6 @@ function readAuditLocation(markdown: string): string {
  */
 function numericPositiveInteger(raw: string, what: string): number {
   const text = raw.trim()
-  const value = Number(text)
-  if (!Number.isInteger(value) || value <= 0) {
-    policyHalt(`${what} declares \`${text}\`, which is not a positive integer`)
-  }
-  return value
-}
-
-/**
- * A positive integer in the strict form tier 1 requires for `max-iterations`: decimal digits only.
- *
- * `Number()` alone was far too permissive for THIS field — it read `1e3` as 1000, `0x10` as 16 and
- * `2.0` as 2, each of which tier 1's `/^max-iterations:\s*(-?\d+)\s*$/` rejects outright, so the
- * same file meant different things to the two realizations (round 4, minor 1).
- */
-function positiveInteger(raw: string, what: string): number {
-  const text = raw.trim()
-  if (!/^-?\d+$/.test(text)) {
-    policyHalt(
-      `${what} declares \`${text}\`, which is not a positive integer (decimal digits only)`,
-    )
-  }
   const value = Number(text)
   if (!Number.isInteger(value) || value <= 0) {
     policyHalt(`${what} declares \`${text}\`, which is not a positive integer`)

@@ -37,4 +37,3 @@ describe.each(ROOTS)('workflow scripts shape (%s)', root => {
     ).not.toThrow()
   })
 })
-

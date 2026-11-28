@@ -1,6 +1,5 @@
 [
   "apps/pair-cli/src/commands/run/card-entry-prepare.test.ts:21:  // @ts-expect-error — an untyped .mjs shipped as a skill script",
-  "apps/pair-cli/src/commands/run/cards-lifecycle-4.test.ts:9:// @ts-expect-error — shipped script has no TypeScript declaration",
   "apps/pair-cli/src/commands/run/cycle.test.ts:621:      // @ts-expect-error — `merge` is not a recognised collaborator; the loop's own type has none.",
   "apps/pair-cli/src/commands/run/workflow-facts.test.ts:139:      // @ts-expect-error The installed script is JavaScript.",
   "apps/pair-cli/src/commands/run/workflow-host.test.ts:16:// @ts-expect-error Vite loads the adopted definition as fixture text.",

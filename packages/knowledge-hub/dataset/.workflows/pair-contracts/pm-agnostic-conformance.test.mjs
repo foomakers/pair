@@ -25,8 +25,8 @@ test('AC3: no workflow prompt names a PM tracker CLI', () => {
   assert.deepEqual(found, [])
 })
 
-test('AC3/AC4: pair-next and pair-loop (PM-agnostic selection) name no PM tracker CLI', () => {
-  assert.deepEqual([...hits(join(DATASET, '.skills', 'next', 'SKILL.md')), ...hits(join(DATASET, '.skills', 'loop', 'SKILL.md'))], [])
+test('AC3/AC4: pair-next (PM-agnostic selection) names no PM tracker CLI', () => {
+  assert.deepEqual(hits(join(DATASET, '.skills', 'next', 'SKILL.md')), [])
 })
 
 test('AC3: publish-pr / write-issue name a tracker CLI only on a per-tool dispatch line', () => {

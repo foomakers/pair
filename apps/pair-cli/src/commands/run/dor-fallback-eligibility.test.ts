@@ -212,7 +212,7 @@ describe('AC15 through handleRunCommand', () => {
           },
         }),
         [`${cwd}/${POLICY_PATH}`]: policy,
-        [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '',
+        [`${cwd}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
         [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
         [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
         [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
@@ -429,7 +429,7 @@ describe('AC15 through handleRunCommand', () => {
 
       const code = await handleRunCommand(
         parseRunCommand({ card: '218', cardTags: 'risk:red', autonomous }),
-        fs('## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n'),
+        fs('## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-process-plan-tasks\n'),
         handler,
       )
 

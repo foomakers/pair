@@ -14,7 +14,7 @@ import { readWorkflowMapping } from './workflow-mapping'
 
 const MAPPING = readWorkflowMapping(`## Workflows
 
-auto-dev ⇒ pair-loop
+auto-dev ⇒ pair-process-plan-tasks
 `)
 
 const route = decideDispatch({
@@ -43,7 +43,7 @@ describe('auditRecordFor / renderAuditLine — every decision leaves a trail', (
     expect(line).toContain('event=start')
     expect(line).toContain('card=217')
     expect(line).toContain('tag=auto-dev')
-    expect(line).toContain('workflow=pair-loop')
+    expect(line).toContain('workflow=pair-process-plan-tasks')
   })
 
   it('records a skip with the reason, so a card that never ran is explainable', () => {
@@ -76,7 +76,7 @@ describe('dispatchRecordLine — the half a host adapter posts on the card', () 
 
     expect(line.startsWith('DISPATCH-RECORD:')).toBe(true)
     expect(line).toContain('card=217')
-    expect(line).toContain('workflow=pair-loop')
+    expect(line).toContain('workflow=pair-process-plan-tasks')
     expect(line.split('\n')).toHaveLength(1)
   })
 })

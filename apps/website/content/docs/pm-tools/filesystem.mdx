@@ -97,7 +97,7 @@ The PR itself never lives here: a filesystem tracker hosts no repositories or pu
 
 ## Unattended loop (`pair-cli run`)
 
-The delivery cycle (`pair-cli run --root IN-01 --autonomous`, `/pair-loop`, the batch engine) runs on a filesystem backlog exactly as on GitHub: every card read and write goes through the shipped `filesystem` PM adapter, PRs, checks and merge go to your `code-host`.
+Run `pair-cli run delivery --root IN-01` on a filesystem backlog; card operations use the filesystem PM adapter and PR operations use the configured code host.
 
 | Concept | Filesystem |
 |---------|-----------|

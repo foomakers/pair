@@ -1,22 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { isParallelRun, parseRunCommand } from './parser'
+import { parseRunCommand } from './parser'
 
 describe('parseRunCommand', () => {
   it('AC-24: carries an explicit telemetry flag and leaves absence to adoption', () => {
     expect(parseRunCommand({ card: '645' }).telemetry).toBeUndefined()
     expect(parseRunCommand({ card: '645', telemetry: true }).telemetry).toBe(true)
     expect(parseRunCommand({ card: '645', telemetry: false }).telemetry).toBe(false)
-  })
-  it('US-611: validates --state-order as a root-run argument', () => {
-    expect(
-      parseRunCommand({ root: '605', stateOrder: 'Ready,Review,In Progress' }).stateOrder,
-    ).toEqual(['Ready', 'Review', 'In Progress'])
-    expect(() => parseRunCommand({ card: '1', stateOrder: 'Ready,Review,In Progress' })).toThrow(
-      /requires a root\/filter run/,
-    )
-    expect(() => parseRunCommand({ root: '605', stateOrder: 'Ready,Ready,Review' })).toThrow(
-      /permutation/,
-    )
   })
 
   it('US-573 AC5: --iteration-timeout is an opt-in total cap (no default); --idle-timeout is carried when passed', () => {
@@ -41,7 +30,6 @@ describe('parseRunCommand', () => {
       root: '212',
       filter: 'risk:green',
       cwd: '/tmp/project',
-      maxIterations: '4',
       autonomous: true,
       approveProjectTrust: true,
       iterationTimeout: '90',
@@ -54,7 +42,6 @@ describe('parseRunCommand', () => {
       invocation: { kind: 'skill', name: 'pair-next' },
       scope: { root: '212', filter: 'risk:green' },
       cwd: '/tmp/project',
-      maxIterations: 4,
       autonomous: true,
       approveProjectTrust: true,
       approveIneligible: false,
@@ -74,13 +61,6 @@ describe('parseRunCommand', () => {
       "Unknown engine 'cursor'. Supported engines: pi, opencode, claude",
     )
   })
-
-  it.each([['0', '--max-iterations must be a positive integer (received: 0)']])(
-    'rejects --max-iterations %s',
-    (value, message) => {
-      expect(() => parseRunCommand({ maxIterations: value })).toThrow(message)
-    },
-  )
 
   it.each([
     ['skill', '--skill'],
@@ -183,7 +163,6 @@ describe('parseRunCommand: a workflow name (US-652)', () => {
       /^--workflow-config cannot be combined with a workflow name: .*--config/,
     ],
     ['a cycle flag', { pr: '12' }, /^--pr cannot be combined with a workflow name/],
-    ['a loop flag', { watch: true }, /^--watch cannot be combined with a workflow name/],
   ])('refuses %s with a workflow name', (_name, options, message) => {
     expect(() => parseRunCommand({ card: '627', ...options }, ['quick'])).toThrow(message)
   })
@@ -425,150 +404,6 @@ describe('parseRunCommand — cycle-coordinator flags on --card (US-487)', () =>
   })
 })
 
-describe('parseRunCommand — --root --parallel N (US-491 T-3)', () => {
-  it('carries --parallel as a positive integer next to its --root', () => {
-    const config = parseRunCommand({ root: '66', parallel: '3' })
-
-    expect(config.parallel).toBe(3)
-    expect(config.scope).toEqual({ root: '66' })
-    expect(config.dispatch).toBeUndefined()
-  })
-
-  it('leaves parallel absent without the flag (loop mode unchanged)', () => {
-    expect(parseRunCommand({ root: '66' })).not.toHaveProperty('parallel')
-  })
-
-  it.each(['0', '-1', '1.5', 'many'])('refuses --parallel %s', value => {
-    expect(() => parseRunCommand({ root: '66', parallel: value })).toThrow(
-      /--parallel must be a positive integer/,
-    )
-  })
-
-  it('US-522: --parallel without --root parses: the scope (root or filter) is checked at resolve time', () => {
-    expect(parseRunCommand({ parallel: '2', filter: 'PIPPO' })).toMatchObject({
-      parallel: 2,
-      scope: { filter: 'PIPPO' },
-    })
-    expect(parseRunCommand({ parallel: '2' }).parallel).toBe(2)
-  })
-
-  it('refuses --parallel with --card: a dispatched card is one card, not a batch', () => {
-    expect(() => parseRunCommand({ card: '7', parallel: '2' })).toThrow(/--parallel/)
-  })
-
-  it('names EVERY flag that conflicts with --parallel', () => {
-    expect(() =>
-      parseRunCommand({
-        root: '66',
-        parallel: '2',
-        skill: 'pair-next',
-        prompt: 'x',
-      }),
-    ).toThrow(/--skill or --prompt/)
-  })
-
-  it('US-522 AC2/AC9: --filter, --assignee, --status and --max-iterations ride along with --parallel', () => {
-    expect(
-      parseRunCommand({
-        parallel: '2',
-        filter: 'risk:green',
-        assignee: '@me',
-        status: 'Ready',
-        maxIterations: '3',
-      }),
-    ).toMatchObject({
-      parallel: 2,
-      maxIterations: 3,
-      scope: { filter: 'risk:green', assignee: '@me', status: 'Ready' },
-    })
-  })
-})
-
-describe('parseRunCommand — --watch / --interval (US-522 AC14)', () => {
-  it('carries --watch and --interval as seconds, keeping the operator text', () => {
-    const config = parseRunCommand({ parallel: '1', filter: 'x', watch: true, interval: '90s' })
-    expect(config.watch).toBe(true)
-    expect(config.interval).toEqual({ text: '90s', seconds: 90 })
-  })
-
-  it.each([
-    ['1m', 60],
-    ['10m', 600],
-    ['2h', 7200],
-  ])('accepts --interval %s', (text, seconds) => {
-    expect(parseRunCommand({ parallel: '1', watch: true, interval: text }).interval?.seconds).toBe(
-      seconds,
-    )
-  })
-
-  it('--no-watch is carried as watch=false', () => {
-    expect(parseRunCommand({ parallel: '1', watch: false }).watch).toBe(false)
-  })
-
-  it('leaves watch and interval absent without the flags', () => {
-    const config = parseRunCommand({ root: '1', parallel: '2' })
-    expect(config).not.toHaveProperty('watch')
-    expect(config).not.toHaveProperty('interval')
-  })
-
-  it('--watch and supported --interval without --parallel leave the request absent', () => {
-    const watched = parseRunCommand({ root: '1', watch: true })
-    expect(watched).toMatchObject({ watch: true })
-    expect(watched).not.toHaveProperty('parallel')
-    const unwatched = parseRunCommand({ root: '1', watch: false })
-    expect(unwatched).toMatchObject({ watch: false })
-    expect(unwatched).not.toHaveProperty('parallel')
-    const interval = parseRunCommand({ root: '1', watch: true, interval: '5m' })
-    expect(interval).toMatchObject({ watch: true, interval: { text: '5m', seconds: 300 } })
-    expect(interval).not.toHaveProperty('parallel')
-    expect(parseRunCommand({ root: '1', parallel: '3', watch: true }).parallel).toBe(3)
-    expect(() => parseRunCommand({ card: '1', watch: true })).toThrow(/--watch belongs to the loop/)
-  })
-
-  it('refuses --interval without --watch', () => {
-    expect(() => parseRunCommand({ root: '1', parallel: '1', interval: '5m' })).toThrow(
-      /--interval requires --watch/,
-    )
-    expect(() =>
-      parseRunCommand({ root: '1', parallel: '1', watch: false, interval: '5m' }),
-    ).toThrow(/--interval requires --watch/)
-  })
-
-  it.each(['10', '5x', 'm', '-5m', '1.5m', '1d', ' ', '10 m'])(
-    'refuses malformed --interval %j',
-    raw => {
-      expect(() =>
-        parseRunCommand({ root: '1', parallel: '1', watch: true, interval: raw }),
-      ).toThrow(/--interval must be <n>s, <n>m or <n>h/)
-    },
-  )
-
-  it.each(['59s', '1s', '0m'])('refuses --interval %s below the 60s floor', raw => {
-    expect(() => parseRunCommand({ root: '1', parallel: '1', watch: true, interval: raw })).toThrow(
-      /at least 60s/,
-    )
-  })
-})
-
-describe('R: --predicate (the loop override of ## Stop Predicate)', () => {
-  it('is refused off the loop (--skill/--prompt/--card); a --root alone leaves the request absent', () => {
-    expect(() => parseRunCommand({ skill: 'pair-next', predicate: 'root ⇒ Done' })).toThrow(
-      /--predicate .*the loop/,
-    )
-    const platformCases = ['darwin', 'linux'] as const
-    for (const platform of platformCases)
-      expect(
-        parseRunCommand({ root: platform === 'darwin' ? '1' : '2', predicate: 'root ⇒ Done' }),
-      ).not.toHaveProperty('parallel')
-  })
-  it.each(['tag: ⇒ Done'])(
-    'an invalid predicate %s is refused at parse time, before anything spawns',
-    bad => {
-      expect(() => parseRunCommand({ parallel: '2', root: '1', predicate: bad })).toThrow()
-    },
-  )
-})
-
 describe('US-576 T-3: --preset and --filter *', () => {
   it('carries --preset raw with --card or the loop (parallel request absent), refuses it on --skill/--prompt', () => {
     expect(parseRunCommand({ card: '42', preset: 'escalate-red' }).autonomy).toEqual({
@@ -577,9 +412,6 @@ describe('US-576 T-3: --preset and --filter *', () => {
     expect(parseRunCommand({ parallel: '2', root: '7', preset: 'full' }).autonomy).toEqual({
       preset: 'full',
     })
-    const implied = parseRunCommand({ root: '578', preset: 'escalate-red' })
-    expect(implied).toMatchObject({ autonomy: { preset: 'escalate-red' } })
-    expect(implied).not.toHaveProperty('parallel')
     expect(() => parseRunCommand({ skill: 'pair-next', preset: 'full' })).toThrow(
       /--preset .*only meaningful with --card or --parallel/,
     )
@@ -587,52 +419,5 @@ describe('US-576 T-3: --preset and --filter *', () => {
 
   it("accepts --filter '*' as a scope", () => {
     expect(parseRunCommand({ parallel: '2', filter: '*' }).scope.filter).toBe('*')
-  })
-})
-
-describe('US-614 --cards', () => {
-  const usage = (opts: Record<string, unknown>) => {
-    try {
-      parseRunCommand({ cards: '1,2', ...opts })
-    } catch (e) {
-      return e as Error & { exitCode?: number }
-    }
-    throw new Error('expected a refusal')
-  }
-
-  it('AC1: keeps the order, trims ids', () => {
-    expect(parseRunCommand({ cards: '12, 15,9' }).cards).toEqual(['12', '15', '9'])
-  })
-
-  it('single id behaves as a one-card list; --card alone is unchanged (AC2)', () => {
-    expect(parseRunCommand({ cards: '12' }).cards).toEqual(['12'])
-    const card = parseRunCommand({ card: '12' })
-    expect(card.cards).toBeUndefined()
-    expect(card.dispatch?.card).toBe('12')
-  })
-
-  it('--cards with the loop autonomy args is a cards run, not a fan-out', () => {
-    const config = parseRunCommand({ cards: '1,2', until: 'merged' })
-    expect(isParallelRun(config)).toBe(false)
-    expect(config.autonomy).toEqual({ until: 'merged' })
-  })
-
-  it.each([
-    ['empty list', { cards: '' }],
-    ['empty element', { cards: '1,,2' }],
-    ['duplicate', { cards: '1,2,1' }],
-    ['unsafe id', { cards: '1,$(rm)' }],
-    ['--card', { card: '3' }],
-    ['--root', { root: '3' }],
-    ['--filter', { filter: 'x' }],
-    ['--parallel 2', { parallel: 2 }],
-    ['--skill', { skill: 'x' }],
-    ['--watch', { watch: true, parallel: 1 }],
-  ])('AC10: refuses %s with exit code 2', (_name, opts) => {
-    expect(usage(opts).exitCode).toBe(2)
-  })
-
-  it('--parallel 1 is accepted and dropped', () => {
-    expect(parseRunCommand({ cards: '1,2', parallel: 1 }).parallel).toBeUndefined()
   })
 })

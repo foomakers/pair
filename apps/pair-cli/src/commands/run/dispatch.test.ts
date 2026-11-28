@@ -4,12 +4,12 @@ import { readWorkflowMapping } from './workflow-mapping'
 
 const MAPPING = readWorkflowMapping(`## Workflows
 
-auto-dev ⇒ pair-loop
+auto-dev ⇒ pair-process-plan-tasks
 auto-plan ⇒ pair-process-plan-tasks
 Precedence: auto-plan, auto-dev
 `)
 
-const INSTALLED = new Set(['pair-loop', 'pair-process-plan-tasks'])
+const INSTALLED = new Set(['pair-process-plan-tasks'])
 
 function request(overrides: Partial<DispatchRequest> = {}): DispatchRequest {
   return {
@@ -28,7 +28,7 @@ describe('decideDispatch — routing an eligible, mapped card (AC1)', () => {
       kind: 'route',
       card: '217',
       tag: 'auto-dev',
-      workflow: 'pair-loop',
+      workflow: 'pair-process-plan-tasks',
     })
   })
 
@@ -36,6 +36,15 @@ describe('decideDispatch — routing an eligible, mapped card (AC1)', () => {
     const decision = decideDispatch(request({ tags: ['auto-dev', 'auto-plan', 'risk:green'] }))
 
     expect(decision).toMatchObject({ kind: 'route', tag: 'auto-plan' })
+    const reversed = readWorkflowMapping(`## Workflows
+
+auto-dev ⇒ pair-process-plan-tasks
+auto-plan ⇒ pair-process-plan-tasks
+Precedence: auto-dev, auto-plan
+`)
+    expect(
+      decideDispatch(request({ mapping: reversed, tags: ['auto-dev', 'auto-plan', 'risk:green'] })),
+    ).toMatchObject({ kind: 'route', tag: 'auto-dev' })
   })
 
   it('matches a tag by plain string equality, never by prefix or family', () => {
@@ -103,7 +112,7 @@ describe('decideDispatch — HALTs, never a silent choice', () => {
   it('HALTs on two mapped tags with no precedence declared', () => {
     const mapping = readWorkflowMapping(`## Workflows
 
-auto-dev ⇒ pair-loop
+auto-dev ⇒ pair-process-plan-tasks
 auto-plan ⇒ pair-process-plan-tasks
 `)
 
@@ -115,9 +124,9 @@ auto-plan ⇒ pair-process-plan-tasks
   it('HALTs when precedence lists none of the tags the card actually carries', () => {
     const mapping = readWorkflowMapping(`## Workflows
 
-auto-dev ⇒ pair-loop
+auto-dev ⇒ pair-process-plan-tasks
 auto-plan ⇒ pair-process-plan-tasks
-auto-dev-fast ⇒ pair-loop
+auto-dev-fast ⇒ pair-process-plan-tasks
 Precedence: auto-dev-fast
 `)
 
@@ -173,12 +182,12 @@ auto-review ⇒ pair-process-review
   it('detects an unscopable workflow before deciding, not only when a card routes to it', () => {
     const mapping = readWorkflowMapping(`## Workflows
 
-auto-dev ⇒ pair-loop
+auto-dev ⇒ pair-process-plan-tasks
 auto-review ⇒ pair-process-review
 Precedence: auto-review, auto-dev
 `)
 
-    // This card carries `auto-dev` only — it would route cleanly to pair-loop. The mapping is
+    // This card carries `auto-dev` only — it would route cleanly to pair-process-plan-tasks. The mapping is
     // broken configuration either way, and which trigger fires first must not decide whether the
     // board finds out.
     expect(() =>
@@ -225,7 +234,7 @@ auto-triage ⇒ pair-next
     expect(String(thrown)).toMatch(/scop/i)
     // The list the message offers is the mappable set, and it does not name the workflow it just
     // refused — a HALT whose remedy includes the rejected value is not a remedy.
-    expect(String(thrown)).toMatch(/`pair-loop`, `pair-process-plan-tasks`/)
+    expect(String(thrown)).toMatch(/`pair-process-plan-tasks`/)
   })
 
   it('refuses `pair-process-refine-story` for the reason that is actually true of it', () => {
@@ -259,7 +268,7 @@ auto-refine ⇒ pair-process-refine-story
     expect(String(thrown)).toMatch(/catalog does not name as mappable/)
     // The claim that would be false of this workflow — the driver holds a `--story` row for it.
     expect(String(thrown)).not.toMatch(/no declaration of how that workflow names the card/)
-    expect(String(thrown)).toMatch(/`pair-loop`, `pair-process-plan-tasks`/)
+    expect(String(thrown)).toMatch(/`pair-process-plan-tasks`/)
     expect(String(thrown)).toMatch(/automation\.md/)
   })
 
@@ -269,7 +278,7 @@ auto-refine ⇒ pair-process-refine-story
     const mapping = readWorkflowMapping(`## Workflows
 
 auto-plan ⇒ pair-process-plan-tasks
-auto-dev ⇒ pair-loop
+auto-dev ⇒ pair-process-plan-tasks
 Precedence: auto-plan, auto-dev
 `)
     const installed = new Set(INSTALLED)
@@ -300,7 +309,7 @@ describe('describeDispatch — every decision is legible before anything spawns'
 
     expect(line).toContain('217')
     expect(line).toContain('auto-dev')
-    expect(line).toContain('pair-loop')
+    expect(line).toContain('pair-process-plan-tasks')
   })
 })
 

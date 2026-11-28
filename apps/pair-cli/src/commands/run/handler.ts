@@ -4,9 +4,7 @@ import { plainConsole, plainNote } from './plain-console'
 import { join, resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
-import { isParallelRun, parseRunCommand, type RunCommandConfig } from './parser'
-import { optionsOfArgv, runCardInProcess } from './parallel'
-import { handleCardsRun } from './cards-entry'
+import { type RunCommandConfig } from './parser'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
 import {
@@ -28,7 +26,7 @@ import { acquireRunLock } from './run-lock'
 import { readWorkingCleanup, sweepWorkingAreaAsync } from './working-cleanup'
 import { POLICY_PATH } from './policy-sections'
 import { describeDispatch, type DispatchDecision } from './dispatch'
-import { driveRun } from './loop-driver'
+import { driveRun } from './skill-driver'
 import { whileInterruptible } from './interrupt'
 import { effectiveSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
@@ -45,7 +43,6 @@ import {
   validateProfileRun,
 } from './workflow-profile'
 import { ENGINE_IDS, isEngineId } from './engines'
-import { handleParallelRun } from './parallel-entry'
 import { handleMappedWorkflow, handleWorkflowBatch } from './workflow-batch'
 import { handleWorkflowRun } from './workflow-host'
 import {
@@ -112,8 +109,6 @@ function perimeterFor(input: {
     filter: config.scope.filter,
     cwd,
     cwdDeclared: config.cwd !== undefined,
-    requestedCap: config.maxIterations,
-    policyCap: context.policy.maxIterations,
     invocationKind: invocation.kind,
     filterDelivery: filterDeliveryFor(invocation),
   })
@@ -363,7 +358,7 @@ function haltOnUnresolvedProfileInDryRun(
 ): void {
   const flagged = config.profile !== undefined || config.workflowConfig !== undefined
   // --parallel resolves its own profile (parallel-entry)
-  if (!config.dryRun || isParallelRun(config) || !flagged) return
+  if (!config.dryRun || !flagged) return
   ;(deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
     locateCycleScripts(fs, context.config, cwd).scriptsDir,
     { root: cwd, profile: config.profile, workflowConfig: config.workflowConfig },
@@ -412,37 +407,6 @@ async function withPlainConsole(run: () => Promise<number>): Promise<number> {
   } finally {
     console.log = log
   }
-}
-
-/** The loop drives each card's cycle in this process (no nested `pair-cli run`), unless a runner was injected. */
-function withInProcessCards(
-  deps: RunHandlerDependencies,
-  fs: FileSystemService,
-  callerDeps: RunHandlerDependencies,
-): RunHandlerDependencies {
-  const runCard = (args: readonly string[]) =>
-    runCommand(
-      parseRunCommand(optionsOfArgv(args) as Parameters<typeof parseRunCommand>[0]),
-      fs,
-      callerDeps,
-    )
-  return { ...deps, runCardProcess: deps.runCardProcess ?? runCardInProcess(runCard) }
-}
-
-/** The multi-card entries: `--cards` (ordered, serial passes) or the `--parallel` fan-out. */
-async function runMulti(
-  ctx: { config: RunCommandConfig; context: RunContext; fs: FileSystemService; cwd: string },
-  deps: RunHandlerDependencies,
-  fs: FileSystemService,
-  callerDeps: RunHandlerDependencies,
-): Promise<number> {
-  if (ctx.config.cards === undefined)
-    return await handleParallelRun(ctx, withInProcessCards(deps, fs, callerDeps))
-  return await handleCardsRun({
-    ...ctx,
-    deps,
-    runCard: config => runCommand(config, fs, callerDeps),
-  })
 }
 
 async function runCommand(
@@ -516,11 +480,6 @@ async function runCommandInner(
   const { config, context, deps } = entry
 
   haltOnUnresolvedProfileInDryRun({ config, context, fs, cwd }, deps)
-  // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
-  const ctx = { config, context, fs, cwd }
-  if (config.cards !== undefined || isParallelRun(config))
-    return await runMulti(ctx, deps, fs, callerDeps)
-
   // Nothing to run on this card: report the decision and stop. This is a clean exit, never an
   // error — automation is opt-in per card (D21), so "no workflow applies here" is the shipped
   // answer for every card a team has not explicitly tagged.

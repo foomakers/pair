@@ -4,7 +4,6 @@ import { createPerimeter, describePerimeter, type PerimeterInput } from './perim
 const base: PerimeterInput = {
   cwd: '/project',
   cwdDeclared: false,
-  policyCap: 20,
   invocationKind: 'skill',
   // pair-next's posture: the invocation can carry `--filter`. The pair-loop case (it cannot) is
   // exercised explicitly below — that asymmetry is what round 1 finding 1 is about.
@@ -126,32 +125,6 @@ describe('createPerimeter', () => {
       '/project',
     )
   })
-
-  it('narrows the policy cap with --max-iterations', () => {
-    const perimeter = createPerimeter({ ...base, root: '212', requestedCap: 3 })
-
-    expect(perimeter.maxIterations).toBe(3)
-    expect(perimeter.capSource).toBe('--max-iterations')
-  })
-
-  it('lets an explicit argument supersede the policy cap', () => {
-    const perimeter = createPerimeter({ ...base, root: '212', requestedCap: 100 })
-
-    expect(perimeter.maxIterations).toBe(100)
-    expect(perimeter.capSource).toBe('--max-iterations')
-  })
-
-  it('reports an equal explicit value as an argument', () => {
-    expect(createPerimeter({ ...base, root: '212', requestedCap: 20 }).capSource).toBe(
-      '--max-iterations',
-    )
-  })
-
-  it.each([0, -1, 1.5, Number.NaN])('rejects an invalid policy cap %s', cap => {
-    expect(() => createPerimeter({ ...base, root: '212', policyCap: cap })).toThrow(
-      /Invalid iteration cap from the automation policy/,
-    )
-  })
 })
 
 describe('describePerimeter', () => {
@@ -160,11 +133,10 @@ describe('describePerimeter', () => {
       ...base,
       root: '212',
       eligibility: 'risk:green',
-      requestedCap: 2,
     })
 
     expect(describePerimeter(perimeter)).toBe(
-      'Perimeter: root 212, filter risk:green (from tech/automation.md, passed to the skill) · cwd /project · max 2 iteration(s) (from --max-iterations)',
+      'Perimeter: root 212, filter risk:green (from tech/automation.md, passed to the skill) · cwd /project',
     )
   })
 
@@ -173,7 +145,6 @@ describe('describePerimeter', () => {
       ...base,
       root: '212',
       eligibility: 'risk:green',
-      requestedCap: 2,
       filterDelivery: 'read-by-skill',
     })
 
@@ -187,7 +158,6 @@ describe('describePerimeter', () => {
       ...base,
       invocationKind: 'prompt',
       cwdDeclared: true,
-      requestedCap: 1,
     })
 
     expect(describePerimeter(perimeter)).toContain('cwd only (--prompt run)')
@@ -207,25 +177,9 @@ describe('createPerimeter, per platform', () => {
         ...base,
         invocationKind: 'prompt',
         cwdDeclared: true,
-        requestedCap: 1,
       })
       expect(perimeter.cwd).toBe('/project')
       expect(describePerimeter(perimeter)).toContain('cwd only (--prompt run)')
     })
   }
-})
-
-describe('US-576 AC6: an uncapped policy', () => {
-  it('runs to a natural stop, says so, and --max-iterations still narrows it', () => {
-    const p = createPerimeter({ ...base, root: '212', policyCap: Number.POSITIVE_INFINITY })
-    expect(p.maxIterations).toBe(Number.POSITIVE_INFINITY)
-    expect(describePerimeter(p)).toMatch(/no iteration cap — runs until nothing is eligible/)
-    const narrowed = createPerimeter({
-      ...base,
-      root: '212',
-      policyCap: Number.POSITIVE_INFINITY,
-      requestedCap: 3,
-    })
-    expect(narrowed.maxIterations).toBe(3)
-  })
 })

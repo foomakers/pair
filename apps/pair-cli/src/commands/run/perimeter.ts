@@ -28,10 +28,6 @@ export interface Perimeter {
   readonly status?: string
   /** The directory every iteration runs in. */
   readonly cwd: string
-  /** Hard cap on iterations — the backstop for a stop condition that never becomes true. */
-  readonly maxIterations: number
-  /** Which bound produced `maxIterations`; printed, so a surprising cap is visible. */
-  readonly capSource: '--max-iterations' | 'tech/automation.md'
   /** Where `filter` came from, when there is one. */
   readonly filterSource?: string
   /**
@@ -67,10 +63,6 @@ export interface PerimeterInput {
   cwd: string
   /** Whether the working directory was DECLARED (`--cwd`) rather than inherited. */
   cwdDeclared: boolean
-  /** `--max-iterations`, if passed. */
-  requestedCap?: number | undefined
-  /** The policy's `max-iterations` (its own fail-safe default applies upstream). */
-  policyCap: number
   /** A verbatim prompt cannot carry scope parameters — see `createPerimeter`. */
   invocationKind: 'skill' | 'prompt'
   /**
@@ -123,8 +115,6 @@ export function createPerimeter(input: PerimeterInput): Perimeter {
   const filter = resolveFilter(input)
   assertScopeDeclared(input, filter.value)
 
-  const cap = resolveCap(input)
-
   return {
     ...(input.root !== undefined && { root: input.root }),
     ...(filter.value !== undefined && { filter: filter.value }),
@@ -133,8 +123,6 @@ export function createPerimeter(input: PerimeterInput): Perimeter {
     ...(filter.source && { filterSource: filter.source }),
     ...(filter.delivery && { filterDelivery: filter.delivery }),
     cwd: input.cwd,
-    maxIterations: cap.maxIterations,
-    capSource: cap.source,
   }
 }
 
@@ -177,24 +165,6 @@ function assertScopeDeclared(input: PerimeterInput, filter: string | undefined):
 }
 
 /**
- * An explicit cap has precedence over the adopted cap.
- */
-function resolveCap(input: PerimeterInput): {
-  maxIterations: number
-  source: Perimeter['capSource']
-} {
-  const uncapped = input.policyCap === Number.POSITIVE_INFINITY
-  if (!uncapped && (!Number.isInteger(input.policyCap) || input.policyCap <= 0)) {
-    throw new Error(
-      `Invalid iteration cap from the automation policy: ${String(input.policyCap)} (must be a positive integer)`,
-    )
-  }
-  return input.requestedCap !== undefined
-    ? { maxIterations: input.requestedCap, source: '--max-iterations' }
-    : { maxIterations: input.policyCap, source: 'tech/automation.md' }
-}
-
-/**
  * The perimeter line printed before execution — what the run may touch, and nothing else.
  *
  * The label's wording follows its DELIVERY: `filter … passed to the skill` when the driver hands
@@ -214,10 +184,5 @@ export function describePerimeter(perimeter: Perimeter): string {
   ]
     .filter(Boolean)
     .join(', ')
-  return (
-    `Perimeter: ${scope || 'cwd only (--prompt run)'} · cwd ${perimeter.cwd} · ` +
-    (perimeter.maxIterations === Number.POSITIVE_INFINITY
-      ? 'no iteration cap — runs until nothing is eligible or every remaining card is blocked/parked (no `max-iterations` declared)'
-      : `max ${perimeter.maxIterations} iteration(s) (from ${perimeter.capSource})`)
-  )
+  return `Perimeter: ${scope || 'cwd only (--prompt run)'} · cwd ${perimeter.cwd}`
 }

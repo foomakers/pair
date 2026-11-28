@@ -142,10 +142,7 @@ describe.each(sources)('pair-next control state — %s SKILL.md', (_, content) =
 
 describe.each([
   ['dataset', join(SKILLS, 'workflow/cycle/SKILL.md')],
-  [
-    'mirror',
-    join(ROOT_SKILLS, 'pair-workflow-cycle/SKILL.md'),
-  ],
+  ['mirror', join(ROOT_SKILLS, 'pair-workflow-cycle/SKILL.md')],
 ])('orchestration modes reference — never duplicate — the procedure (%s)', (_, cycle) => {
   it('the cycle coordinator points at /pair-next Control-State Resolution', () => {
     for (const path of [cycle]) {

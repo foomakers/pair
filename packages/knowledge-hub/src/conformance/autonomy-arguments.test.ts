@@ -75,7 +75,8 @@ describe('US-521 T-9: one vocabulary across the autonomy consumers', () => {
     expect(PRECEDENCE_SENTENCE).toMatch(
       /argument > argument preset > explicit adoption key .* > adoption preset > KB default .* printed with its source/,
     )
-    for (const { name, file } of CONSUMERS) expect(read(file), name).toContain(PRECEDENCE_SENTENCE)
+    for (const { name, file } of CONSUMERS.filter(c => c.name !== 'pair-cli run (metadata)'))
+      expect(read(file), name).toContain(PRECEDENCE_SENTENCE)
   })
 
   it('the script’s key list is exactly the ten names the KB documents (US-575: the two budgets; US-576: preset)', async () => {
@@ -107,9 +108,7 @@ describe('US-521 T-9: one vocabulary across the autonomy consumers', () => {
 })
 
 describe('US-524: batch and loop honour the model — the A1 refusal is gone', () => {
-  const files = [
-    join(DATASET, '.workflows/pair-implement-batch.js'),
-  ]
+  const files = [join(DATASET, '.workflows/pair-implement-batch.js')]
   it('no consumer still refuses with the #524 pointer', () => {
     for (const file of files) expect(read(file), file).not.toContain('autonomy-not-supported')
   })
@@ -138,7 +137,6 @@ describe('US-524: batch and loop honour the model — the A1 refusal is gone', (
     expect(text).toContain('a card merges ONLY when the merge gate allows it')
     expect(text).toContain('/pair-workflow-cycle one card at a time with the same arguments')
   })
-
 })
 
 describe('US-521 T-3: the KB examples are parsed by the shared script', () => {

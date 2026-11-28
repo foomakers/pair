@@ -2,7 +2,7 @@
 
 How much of the delivery flow a project lets run **unattended** is a project decision, so it lives in an adoption file: the optional `.pair/adoption/tech/automation.md`. This guideline defines that file's schema.
 
-It specifies seven sections, landed across several stories and owned one at a time so two stories never claim the same lines of the same file: `## Eligibility` (#216) selects **which cards** an unattended run may pick up at all; `## Workflows` (#217) maps **a tag to the workflow that runs on a card carrying it**, which is what makes automation opt-in per card; `## Harness`/`## Model Policy` (#450) declare supported agent harnesses and per-tier model class; and `## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location` (#250) are the remaining ADR-017 §6 knobs — which tier may auto-merge, when a run stops, the parallel-batch ceiling, and where the audit trail is written.
+The file records project-specific automation decisions, including eligibility, routing, autonomy, audit location, harness and model policy.
 
 **Eligibility selects `which cards`, never which gates.** The per-tier gate/approval policy already exists in [`quality-model.md`](../../quality-assurance/quality-model.md) §4 and is not restated here — auto-advance *enacts* that policy, it does not redefine it. Two sources of truth for the same rule is the failure mode this split exists to prevent.
 
@@ -100,13 +100,13 @@ An **untagged** card — one carrying no `risk:*` label at all — never matches
 | --- | --- |
 | Which gates must be green before a card auto-advances? | [`quality-model.md`](../../quality-assurance/quality-model.md) §4 — per-tier requirements (D10). Not restated here |
 | Is the card Ready / in the right state? | The consumer's own selection rules (`pair-next`). Eligibility is a **label** predicate only; state and readiness gating stay where they already live |
-| Auto-advance switch, stop predicate, step defaults, `max_parallelism`, audit location | ADR-017 §6 — the four sections below (`## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location`), landed by the automation loop story (#250) |
+| Auto-advance switch and audit location | Legacy automation declarations |
 | Which label a card carries | `classify`, via the Tag Projection declaration in `tech/risk-matrix.md` |
 | Which workflow runs on an eligible card | `## Workflows` below — the tag→workflow mapping (#217). Eligibility selects, the mapping routes; neither answers the other's question |
 
 ## Auto-Advance — which tiers may push/merge unattended
 
-A third, independent section of the same file (ADR-017 §6). Disjoint from `## Eligibility` (which cards a run may even pick up) and from `## Harness and Model Policy` below. This section answers: once a card's PR is review-approved, which risk tiers may `pair-loop` itself push and merge to the default branch without a human?
+This section declares which risk tiers may merge unattended.
 
 ```markdown
 ## Auto-Advance
@@ -115,13 +115,13 @@ A third, independent section of the same file (ADR-017 §6). Disjoint from `## E
 ```
 
 - **The value is the project's own `## Eligibility` tier, verbatim, or the literal `(none)`** — never a family/tier the caller invents independently of that declaration. (The schema still accepts a comma-separated list syntactically, but every listed tier must be that same one value, so in practice this is a single tier or `(none)`.)
-- **It is a *switch*, never a gate list.** The gate set a tier must pass before advancing unattended is [`quality-model.md`](../../quality-assurance/quality-model.md) §4's existing per-tier table (D10) — this declaration does not restate it, add to it, or override it. `pair-loop` **enacts** that table; it is never a second source of truth for what "green" means.
+- **It is a *switch*, never a gate list.** The gate set a tier must pass before advancing unattended is [`quality-model.md`](../../quality-assurance/quality-model.md) §4's existing per-tier table (D10) — this declaration does not restate it, add to it, or override it. The cycle **enacts** that table; it is never a second source of truth for what "green" means.
 - **No tier other than `## Eligibility`'s own value can ever appear here — by construction, not by a family-naming heuristic.** A card outside the eligibility filter is never selected at all, so it can never reach a review-approved outcome to advance in the first place: naming any other tier here — `risk:yellow`, `risk:red`, or a renamed family's own higher-risk equivalent — is unreachable, and a consumer HALTs on it rather than silently ignoring dead configuration. This deliberately replaced an earlier, narrower rule that only forbade the literal substrings `yellow`/`red` — a heuristic a project with a **renamed** tag family (`tech/risk-matrix.md`'s Tag Projection) could slip past, declaring its own red-equivalent tier here with no HALT anywhere. Checking against the project's own Eligibility value needs no family-naming knowledge at all, and closes that gap by construction.
 - **An untagged card is never advanced**, regardless of this declaration — the same fail-safe `## Eligibility` already applies (untagged ⇒ treated as `risk:red`).
 
 ### Fail-safe default — **`(none)`**, fail-closed
 
-**Absent file, absent section, or a section body containing exactly the literal `(none)` ⇒ auto-advance is off.** `pair-loop` runs cards to a review-approved PR and stops there for every tier; nothing pushes or merges unattended. This is the **shipped default** — a maintainer opts in explicitly by writing `risk:green` here, never the reverse. A project that never adds this section keeps full manual control over every merge, which is exactly the fail-closed posture ADR-017 §6 and quality-model §4's "a review that blocks a fresh install produces a repository nobody can merge into" reasoning both call for, mirrored: **a loop that merges on a fresh install is the same failure in the other direction.**
+**Absent file, absent section, or a section body containing exactly the literal `(none)` ⇒ auto-advance is off.** The cycle runs cards to a review-approved PR and stops there for every tier; nothing pushes or merges unattended. This is the **shipped default** — a maintainer opts in explicitly by writing `risk:green` here, never the reverse. A project that never adds this section keeps full manual control over every merge, which is exactly the fail-closed posture ADR-017 §6 and quality-model §4's "a review that blocks a fresh install produces a repository nobody can merge into" reasoning both call for, mirrored: **a loop that merges on a fresh install is the same failure in the other direction.**
 
 ### Not exactly a valid switch ⇒ HALT
 
@@ -133,11 +133,11 @@ A consumer **MUST HALT**, naming the file and the offending value, when the sect
 
 ### Merge execution — what auto-advance verifies at merge time
 
-The switch above authorizes **which tiers** may merge unattended; it does not merge by itself. When a review-approved card's tier is in `## Auto-Advance`, the delivery cycle's merge stage executes the merge ONLY after re-verifying, on freshly re-read signals, the conjunction that IS `merge_allowed` ([pr-states.md](../../collaboration/project-management-tool/pr-states.md) synthesis): the card's tier re-read (a mid-run raise parks the card), the PR's current remote head identical to the reviewed head (a moved head is never merged), `pair-review` conclusion `success` on that head, `pair-explicit-approval` conclusion `success` on that head (below 🔴 it auto-passes — a repository that publishes no such check at all is satisfied there, the tier does not require it; at 🔴 a missing or pending one awaits a human and a failing one halts — D10), the tier read being the PR's CURRENT `risk:*` (the review's classification) for this rule and for the merge gate alike — an untagged PR is 🔴, and a card still tagged green whose PR the review raised is decided on the raised tier at every boundary of the merge phase, the escalation firing before the merge check, and the tier's gate set green. Anything unreadable, moved, or not `success` parks the card with the failing item named — never merged. The merge itself follows merge-and-cascade (adopted strategy, commit message per template, story close + parent cascade with read-back, branch deletion, checkpoint removal). That conjunction is the `merge` stage of the delivery cycle (US-490): `cycle-state.mjs resolve` offers it only when this section names the card's tier, and `cycle-merge.mjs` — a script, not an agent — re-reads every signal and either merges and closes the story or parks the card with a comment on it. `pair-implement-batch` (which `pair-loop` drives), the in-session cycle and `pair-cli run --card` all reach it through the same script, so the rule has one owner; `pair-loop` itself holds no merge call. The cycle therefore executes exactly the merges the synthesis authorizes, on tiers the project named — coherent with the adoption-gated light row, which authorizes the *approving review* under the same below-🔴 synthesis while this switch authorizes the *merge execution*.
+The switch above authorizes **which tiers** may merge unattended; it does not merge by itself. When a review-approved card's tier is in `## Auto-Advance`, the delivery cycle's merge stage executes the merge ONLY after re-verifying, on freshly re-read signals, the conjunction that IS `merge_allowed` ([pr-states.md](../../collaboration/project-management-tool/pr-states.md) synthesis): the card's tier re-read (a mid-run raise parks the card), the PR's current remote head identical to the reviewed head (a moved head is never merged), `pair-review` conclusion `success` on that head, `pair-explicit-approval` conclusion `success` on that head (below 🔴 it auto-passes — a repository that publishes no such check at all is satisfied there, the tier does not require it; at 🔴 a missing or pending one awaits a human and a failing one halts — D10), the tier read being the PR's CURRENT `risk:*` (the review's classification) for this rule and for the merge gate alike — an untagged PR is 🔴, and a card still tagged green whose PR the review raised is decided on the raised tier at every boundary of the merge phase, the escalation firing before the merge check, and the tier's gate set green. Anything unreadable, moved, or not `success` parks the card with the failing item named — never merged. The merge itself follows merge-and-cascade (adopted strategy, commit message per template, story close + parent cascade with read-back, branch deletion, checkpoint removal). That conjunction is the `merge` stage of the delivery cycle (US-490): `cycle-state.mjs resolve` offers it only when this section names the card's tier, and `cycle-merge.mjs` — a script, not an agent — re-reads every signal and either merges and closes the story or parks the card with a comment on it. `pair-implement-batch`, the in-session cycle and `pair-cli run --card` all reach it through the same script, so the rule has one owner. The cycle therefore executes exactly the merges the synthesis authorizes, on tiers the project named — coherent with the adoption-gated light row, which authorizes the *approving review* under the same below-🔴 synthesis while this switch authorizes the *merge execution*.
 
 ## Autonomy — selection, target and gates (US-521, ADR-027)
 
-One declaration for "which cards, how far, when a human takes over". It is resolved by ONE shared function (`autonomy-policy.mjs`, shipped with the cycle scripts) and honoured by `/pair-workflow-cycle`, `pair-cli run`, `/pair-next`, `pair-implement-batch` and `pair-loop`; no consumer re-derives it. `pair-implement-batch` is the cycle on N cards (it decides every stage boundary through the script and, under `until: merged`, merges a review-approved card through `cycle-merge.mjs` only when the merge gate allows it — default: nothing merges); `pair-loop` selects (`/pair-next` with the resolved `filter` / `assignee` / `status` / `root`), hands `until` / `prepare` / `merge` to the batch and repeats — it holds no merge call. A harness with no Workflow tool runs `/pair-workflow-cycle` one card at a time with the same arguments. Whether `## Autonomy` is declared is the script's `parse().declared`: an empty section is off.
+Autonomy declares selection, target and gates. The cycle resolves these through `autonomy-policy.mjs`.
 
 ```autonomy
 preset: escalate-red
@@ -152,7 +152,7 @@ autoRecoveryRounds: 5
 maxFixRounds: 10
 ```
 
-- **Presets** (US-576): `preset: full | escalate-red | supervised | custom` (or `--preset` / `$preset`) supplies the values a key does not declare. Precedence: argument > argument preset > explicit adoption key > adoption preset > KB default — a `--preset`/`$preset` argument beats every adoption key (legacy sections included); with no argument preset, an explicit key contradicting the adoption preset wins and the warning names both; an unknown preset HALTs listing the known ones. `custom` supplies nothing (explicit keys only). New projects get `escalate-red` from the [automation template](../templates/automation-template.md) and `/pair-process-bootstrap`; a project with no `## Autonomy` keeps the KB defaults (every gate held — the supervised behaviour). An empty `## Autonomy` is asked once by the first interactive consumer (`pair run` on a TTY, `/pair-loop`, `/pair-next --mode`, `/pair-workflow-cycle`): `full / escalate-red / supervised` (Enter = `supervised`), written as `preset:` (skills through `/pair-capability-record-decision`); a non-TTY run writes nothing, runs supervised and prints how to set it.
+- **Presets** (US-576): `preset: full | escalate-red | supervised | custom` (or `--preset` / `$preset`) supplies the values a key does not declare. Precedence: argument > argument preset > explicit adoption key > adoption preset > KB default — a `--preset`/`$preset` argument beats every adoption key (legacy sections included); with no argument preset, an explicit key contradicting the adoption preset wins and the warning names both; an unknown preset HALTs listing the known ones. `custom` supplies nothing (explicit keys only). New projects get `escalate-red` from the [automation template](../templates/automation-template.md) and `/pair-process-bootstrap`; a project with no `## Autonomy` keeps the KB defaults (every gate held — the supervised behaviour). An empty `## Autonomy` is asked once by the first interactive consumer (`pair run` on a TTY, `/pair-next --mode`, `/pair-workflow-cycle`): `full / escalate-red / supervised` (Enter = `supervised`), written as `preset:` (skills through `/pair-capability-record-decision`); a non-TTY run writes nothing, runs supervised and prints how to set it.
 
   | preset         | filter             | prepare       | merge                      | until    |
   | -------------- | ------------------ | ------------- | -------------------------- | -------- |
@@ -169,13 +169,14 @@ maxFixRounds: 10
 - **Budgets** (US-575): `autoRecoveryRounds` bounds the cycle's mechanical recoveries — a merge-time gate re-run, a base sync, a CI re-run beyond the first — and `maxFixRounds` the completed corrective cycles. A spent budget parks the card `needs-human: <reason>` (console and audit) and the run goes on with the other cards; `0` parks at once, naming the budget. The values are policy data handed to `cycle-state.mjs` with every `resolve` and every stage packet; the recovery rules themselves are in [delivery-cycle.md](delivery-cycle.md#auto-recovery).
 - **`merge` gate** (under `until: merged`, at `ready-for-merge`): `hold-always` parks `awaiting-human` (exit 0, today's behaviour); `hold-never` and `hold-when` enter the `merge` stage unless an escalation fires. `merge: hold-never` is not a bypass: remote head = `reviewedHead`, `pair-review` = success, green CI and the tier gate set green all stay mandatory; it replaces the tier-membership check and, being the maintainer's explicit "never hold", also waives `pair-explicit-approval` on a `risk:red` or untagged PR (US-576 — a rejected approval still halts). `hold-when; has: risk:red` (the `escalate-red` preset) keeps the red hold.
 - **Escalation**: before every stage dispatch of an `until: merged` run and before `merge`, labels are re-read live; a `hold-when` gate whose `has:` label is present or whose `lacks:` label is absent stops the cycle with status `escalated` (exit 1, `on-halt`, ONE marker-keyed comment on the card naming the condition(s) and the stage; the PR stays open). A card with no labels under `lacks: risk:green` escalates; unreadable labels under a `hold-when` gate escalate. A re-invocation re-reads the labels: still matching ⇒ escalated again, no duplicate comment; gone ⇒ the cycle resumes. `escalated` (a cycle status) is distinct from the batch's row status `escalate`; `awaiting-human` (a park, exit 0: the tier is outside Auto-Advance / `merge: hold-always`, or the human `pair-explicit-approval` is still missing or pending as the ONLY failing condition) and `halted` (a problem, exit 1: any other failing condition, or an approval that was rejected) are unchanged otherwise.
-- **`prepare` gate** (US-523, ADR-028): who prepares a Draft or Ready-without-breakdown card — refinement and task breakdown, one phase, run before the delivery cycle's own state machine. `hold-always` (default) keeps R3.11: a human prepares (attended `pair-cli run --card` and the in-session cycle run `/pair-process-refine-story` and `/pair-process-plan-tasks` interactively; every unattended entry — `--autonomous`, a loop iteration, a batch — skips the card, audited `prepare-needs-human`, and never re-attempts it that run). `hold-never` proceeds alone: refinement runs with `$approval: auto` and `$prepare: hold-never` (phase 0 does not compose `/pair-capability-grill`; each question it would have asked is self-answered into the story's `## Assumptions` — question, answer, evidence, how to overturn — and the body carries `Prepared autonomously under prepare: <value> (<source>) — ADR-028`), the Step 2–4 rounds resolve as accepted-and-reported, planning runs with `$approval: auto`, and Ready is written once, after the breakdown, by `cycle-prepare.mjs complete`. `hold-when; has: …; lacks: …` proceeds alone like `hold-never` unless a condition fires at a **stage boundary** — `B0` before refinement, `B1` after it (classification tags now written), `B2` after the breakdown (a `refined-no-breakdown` card enters at `B1`): the card then stays Draft, gets the `needs-review` label (created on first use) and ONE marker-keyed comment naming the condition, the boundary, the effective gate and source and the assumptions recorded so far; the outcome is `escalated` (exit 1, `on-halt`). A question only a human can answer (a product decision the repository cannot settle) escalates under `hold-never` too: it is recorded under `## Open Questions`, never invented. One rule for `needs-review`, at every entry **where autonomy resolves** (an argument, `## Autonomy` or a translated legacy section; `pair-cli run --card`, the loop, `/pair-workflow-cycle` and `pair-implement-batch` once it resolves): a card carrying it is NOT picked unattended, whatever its readiness (Ready included); an attended run is never blocked by it. It is cleared when a human removes it or when an attended `cycle-prepare.mjs complete` writes Ready (an attended refinement through the interactive skills does not remove it — remove it yourself). An open question is answered when its entry under `## Open Questions` is ticked `- [x]` (or the whole section reads `none`; an entry that merely starts with the word, such as `- None of the current tiers fit…?`, is still open); an unticked entry escalates again. `cycle-prepare.mjs complete` requires the `## Assumptions` section and the provenance line only when the agent ran the refinement in this prepare (`--refinedAutonomously true`, the default); a card a human already refined (entering at `B1`) needs neither. The one exception is a `pair-implement-batch` given no autonomy argument (`until` / `prepare` / `merge`) AND `policyText: ""` (the caller's own Read found no `automation.md`): it is the pre-#523 batch, its input contract stays Ready cards, and it evaluates no prepare gate and reads no `needs-review` (the default-off rule — nothing declared, nothing changes — overrides the "every entry" statements above and the default-gate evaluation; no existing behaviour changes). Every other case resolves autonomy and evaluates the gate (the default `hold-always` parks a Draft card `awaiting-human`): any autonomy argument, a present `automation.md`, or `policyText` omitted — an omitted `policyText` does not mean "no file"; the resolver reads `automation.md` itself, and with none the KB default `hold-always` applies. `pair-cli run refinement` `refine` mode resolves the same gate: under the default `hold-always` its prompt is unchanged (human path); under `hold-never`/`hold-when` it passes `$approval: auto` + `$prepare`, escalates through `cycle-prepare.mjs escalate` and writes Ready only through `cycle-prepare.mjs complete` after a task breakdown (a refine-only run leaves the card for plan-tasks/complete). `until: ready` stops right after the phase (card Ready with its breakdown, no worktree, no branch); `pr` and `merged` continue into the cycle. The decision is `cycle-prepare.mjs decide` — one function every entry (`pair-cli run`, `/pair-workflow-cycle`, `pair-implement-batch`, `pair-loop`) calls, so the same policy and card give the same decision. `hold-never` / `hold-when` is a maintainer-chosen exception to R3.11: nothing enables it implicitly, and the default restores today's behaviour.
+
+- **`prepare` gate** (US-523, ADR-028): who prepares a Draft or Ready-without-breakdown card — refinement and task breakdown, one phase, run before the delivery cycle's own state machine. `hold-always` (default) keeps R3.11: a human prepares (attended `pair-cli run --card` and the in-session cycle run `/pair-process-refine-story` and `/pair-process-plan-tasks` interactively; every unattended entry — `--autonomous`, a batch — skips the card, audited `prepare-needs-human`, and never re-attempts it that run). `hold-never` proceeds alone: refinement runs with `$approval: auto` and `$prepare: hold-never` (phase 0 does not compose `/pair-capability-grill`; each question it would have asked is self-answered into the story's `## Assumptions` — question, answer, evidence, how to overturn — and the body carries `Prepared autonomously under prepare: <value> (<source>) — ADR-028`), the Step 2–4 rounds resolve as accepted-and-reported, planning runs with `$approval: auto`, and Ready is written once, after the breakdown, by `cycle-prepare.mjs complete`. `hold-when; has: …; lacks: …` proceeds alone like `hold-never` unless a condition fires at a **stage boundary** — `B0` before refinement, `B1` after it (classification tags now written), `B2` after the breakdown (a `refined-no-breakdown` card enters at `B1`): the card then stays Draft, gets the `needs-review` label (created on first use) and ONE marker-keyed comment naming the condition, the boundary, the effective gate and source and the assumptions recorded so far; the outcome is `escalated` (exit 1, `on-halt`). A question only a human can answer (a product decision the repository cannot settle) escalates under `hold-never` too: it is recorded under `## Open Questions`, never invented. One rule for `needs-review`, at every entry **where autonomy resolves** (an argument, `## Autonomy` or a translated legacy section; `pair-cli run --card`, `/pair-workflow-cycle` and `pair-implement-batch` once it resolves): a card carrying it is NOT picked unattended, whatever its readiness (Ready included); an attended run is never blocked by it. It is cleared when a human removes it or when an attended `cycle-prepare.mjs complete` writes Ready (an attended refinement through the interactive skills does not remove it — remove it yourself). An open question is answered when its entry under `## Open Questions` is ticked `- [x]` (or the whole section reads `none`; an entry that merely starts with the word, such as `- None of the current tiers fit…?`, is still open); an unticked entry escalates again. `cycle-prepare.mjs complete` requires the `## Assumptions` section and the provenance line only when the agent ran the refinement in this prepare (`--refinedAutonomously true`, the default); a card a human already refined (entering at `B1`) needs neither. The one exception is a `pair-implement-batch` given no autonomy argument (`until` / `prepare` / `merge`) AND `policyText: ""` (the caller's own Read found no `automation.md`): it is the pre-#523 batch, its input contract stays Ready cards, and it evaluates no prepare gate and reads no `needs-review` (the default-off rule — nothing declared, nothing changes — overrides the "every entry" statements above and the default-gate evaluation; no existing behaviour changes). Every other case resolves autonomy and evaluates the gate (the default `hold-always` parks a Draft card `awaiting-human`): any autonomy argument, a present `automation.md`, or `policyText` omitted — an omitted `policyText` does not mean "no file"; the resolver reads `automation.md` itself, and with none the KB default `hold-always` applies. `pair-cli run refinement` `refine` mode resolves the same gate: under the default `hold-always` its prompt is unchanged (human path); under `hold-never`/`hold-when` it passes `$approval: auto` + `$prepare`, escalates through `cycle-prepare.mjs escalate` and writes Ready only through `cycle-prepare.mjs complete` after a task breakdown (a refine-only run leaves the card for plan-tasks/complete). `until: ready` stops right after the phase (card Ready with its breakdown, no worktree, no branch); `pr` and `merged` continue into the cycle. The decision is `cycle-prepare.mjs decide` — one function every entry (`pair-cli run`, `/pair-workflow-cycle`, `pair-implement-batch`) calls, so the same policy and card give the same decision. `hold-never` / `hold-when` is a maintainer-chosen exception to R3.11: nothing enables it implicitly, and the default restores today's behaviour.
 
 ### Precedence — always printed
 
 Precedence: argument > argument preset > explicit adoption key (`## Autonomy`, then translated legacy sections) > adoption preset > KB default — every effective value is printed with its source.
 
-Sources are `argument`, `adoption`, `preset <name>`, `adoption (translated from ## Auto-Advance)` / `adoption (translated from ## Eligibility)` and `default`. The arguments are the same everywhere: `--preset`, `--filter`, `--assignee`, `--status`, `--root`, `--until`, `--prepare`, `--merge` on `pair-cli run` and `/pair-next` (selection keys), `$until`, `$prepare`, `$merge` on `/pair-workflow-cycle`. On `pair-cli run --parallel` (with or without `--watch`) `--until`, `--prepare` and `--merge` are forwarded, as separate arguments and as given, to every child `run --card` the loop spawns; the loop prints each forwarded value with its source and none is forwarded when none is passed. **Surface scoping**: `resolve --surface interactive` (what `/pair-next` passes) sets aside a `filter` that comes only from the legacy `## Eligibility` translation — that section bounds unattended runs (`pair-cli run`, `/pair-loop`, `pair-implement-batch`), not an interactive selection — and prints that it did; an explicit `## Autonomy` `filter:` or a `--filter` argument still applies on every surface, and on the interactive surface an explicit `--root` is never excluded by an inherited adoption filter (unattended: filter and root intersect, so a loop never picks an ineligible card). Default surface is `unattended` (unchanged).
+Sources are `argument`, `adoption`, `preset <name>`, `adoption (translated from ## Auto-Advance)` / `adoption (translated from ## Eligibility)` and `default`. The arguments are the same everywhere: `--preset`, `--filter`, `--assignee`, `--status`, `--root`, `--until`, `--prepare`, `--merge` on `pair-cli run` and `/pair-next` (selection keys), `$until`, `$prepare`, `$merge` on `/pair-workflow-cycle`. **Surface scoping**: `resolve --surface interactive` (what `/pair-next` passes) sets aside a `filter` that comes only from the legacy `## Eligibility` translation — that section bounds unattended runs (`pair-implement-batch`), not an interactive selection — and prints that it did; an explicit `## Autonomy` `filter:` or a `--filter` argument still applies on every surface, and on the interactive surface an explicit `--root` is never excluded by an inherited adoption filter (unattended: filter and root intersect, so a loop never picks an ineligible card). Default surface is `unattended` (unchanged).
 
 ### Legacy sections are translated, never broken
 
@@ -195,76 +196,6 @@ cleanup: after 7d
 
 `cleanup: never | on-close | after <n>d|h|m`, default `after 7d`; `after 0d` is `on-close`. At the start of `pair run` (never on `--dry-run`), the run state `runs/<run>/<card>/**` and the checkpoint `checkpoints/<card>.md` under `.pair/working/` are removed for every card closed as Done longer than the duration. An open card — parked, escalated, failed, or reopened after Done — and a card whose state cannot be read are never touched; nothing outside `runs/` and `checkpoints/` is (the loop audit stays). `pair install` and `pair update` add `.pair/working/` to `.gitignore` when no line ignores it yet.
 
-## Stop Predicate — when an unattended run stops
-
-```markdown
-## Stop Predicate
-
-tag:risk:red ⇒ Done
-max-iterations: 20
-```
-
-- **Grammar**: `<selector> ⇒ <condition>`, where `selector` is one of `root` (the whole scope), `tag:<label>` (every card carrying that label) or `type:<issue-type>`, and `condition` is a canonical macrostate (`Draft`, `Ready`, `In Progress`, `Done`) and/or `has-tag:<label>`, optionally combined (`Done` alone, `has-tag:risk:red` alone, or `Done and has-tag:risk:red`).
-- **`max-iterations: <positive integer>`** is a second, independent line — a hard backstop that always applies alongside the predicate, never a replacement for it.
-- **`idle-timeout: <positive integer seconds>`** (optional, US-573) is the console driver's hang guard: `pair-cli run` stops an iteration after that long with **no engine event** (any event resets it), and reports it `timed out (idle) at <card>/<stage>`. Absent ⇒ `pair.config.json` `engine.idleTimeout`, else `1800`; `--idle-timeout` overrides all three. The workflow validates the line and never acts on it.
-- **The condition is evaluated against PM-tool state through the state mapping** (never issue-body content — assessments are not predicates, D18) — see [canonical states](../../collaboration/project-management-tool/canonical-states.md).
-- **Whichever bound is reached first stops the run.**
-
-### Fail-safe default
-
-**Absent file, absent section or no `max-iterations` line ⇒ no iteration cap, no predicate (US-576).** The loop keeps going until a natural stop — nothing eligible, or every remaining card blocked or parked — and prints `stopped: <reason>, N eligible cards left`. Each card still stops at its own gates (`prepare`, `merge`), so an uncapped run never merges what a gate holds. A maintainer bounds a run explicitly with `max-iterations: <n>` (or `--max-iterations`).
-
-### Malformed ⇒ HALT before any card runs
-
-A consumer **MUST HALT**, printing the expected grammar, when: the selector or condition keyword is not one of the ones above; the condition names issue-body content instead of a macrostate/tag; `max-iterations` or `idle-timeout` is zero, negative, or non-integer; or the section carries no line matching either grammar at all. An **unsatisfiable predicate** (a selector that matches nothing on the current board) is not malformed — it is reported at the first evaluation and the run exits cleanly; `max-iterations` still applies regardless.
-
-## Max Parallelism — the parallel-batch ceiling
-
-```markdown
-## Max Parallelism
-
-3
-```
-
-or, with a per-tier override:
-
-```markdown
-## Max Parallelism
-
-3
-risk:green: 5
-```
-
-- **First line: a single positive integer** — the global ceiling `pair-loop` passes to `implement-batch` as `min(dependency-allowed, max_parallelism)`.
-- **Optional following lines: `<tier>: <positive integer>`** — a per-tier override, consulted only for a batch composed entirely of that tier; a mixed-tier batch uses the global value. A tier named here that the project's Tag Projection does not emit is malformed.
-- **Parallelism is always a ceiling, never a target.** `min(D, P)` with `D` eligible-and-unblocked cards always wins when `D < P`; the loop never pads a batch to reach the cap.
-- **The portable fan-out reads the same key.** `pair-cli run --root <id> --parallel <n>` (US-491) runs `pair-next --root` once, applies `pair-loop`'s dependency + mutex analysis (ported, parity-tested against the workflow), and starts at most `min(dependency-allowed, n)` card delivery cycles at once when `--parallel n` is explicit (otherwise the adopted `max_parallelism` applies) (driven in the loop's own process — each stage a skill in its own engine process, never a nested `pair-cli run`) — the override lines included, applied exactly as above. It prints the plan (cards run, cards excluded and why, the effective limit and its argument or adoption source) before any process starts; an over-cap card waits for a free slot, so `--parallel 1` is sequential (at an effective ceiling of 1 the mutex is not applied to selection: every dependency-allowed card runs in order, none is mutex-excluded). One card failing never aborts the others, each card's mutex resources are held through the card lock for the life of its cycle, and one `event=batch` line (with `excluded=` ids and `excludedReasons=`, a percent-encoded JSON array of `{id, reason}`) is appended to `## Audit Location` next to each card's own `start`/`end` lines. Merge stays each card's own (`## Auto-Advance`); the pool has no merge logic.
-- A root epic whose unattended preparation needs a human remains in the plan, but its clean card skip is reported as `skipped` with `prepare-needs-human` in the live card row, batch outcome and audit. Eligible descendants continue; an all-skipped batch exits 0 without reporting epic delivery.
-
-## Delivery State Order — root delivery priority
-
-Optional one-line permutation of `Review,In Progress,Ready` (for example `Ready,Review,In Progress`). Absent: `Review,In Progress,Ready`. `Draft` follows these states; `Done`, unreadable, and unmapped states are excluded with their actual value. Each state keeps selection order. The run argument `--state-order` overrides this section. Both the CLI and `/pair-loop` apply the order before mutex allocation, report it with its source, and drain conflicting cards after their holder finishes. An incomplete, duplicate, or unknown list HALTs with the received value.
-
-### The watch loop — `--parallel` with `--watch` / `--max-iterations` (US-522)
-
-The same fan-out becomes a portable loop on any engine, outside Claude Code's `Workflow` tool. Each iteration runs ONE fresh selection process (`pair-next` with the resolved `root` / `filter` / `assignee` / `status` — `--root` is optional when a filter resolves), plans it with the analysis above, runs up to the effective limit of `pair-cli run --card` processes, and starts the next iteration with a fresh selection (no card list is cached, as `pair-loop`).
-
-- **Entered explicitly.** `--watch` (needs `--parallel`; `--parallel 1` is sequential) or `--max-iterations K`. Without either, the fan-out runs exactly one iteration, byte-identical to before.
-- **Workable** = selected − escalated (until its escalation is cleared) − locked − terminal in this run (completed: merged, parked, target reached) − durable failures (a reported `failed-*` or `escalate`: the cycle's own budgets are spent / a human decision is owed — reported with its reason, never retried). Only a TRANSIENT failure (a crash, a kill, an engine/API error before the cycle reported a status) is retried, once per run (printed in the loop header, each retry audited), then excluded as `retry budget exhausted`. A cycle status `escalated` (an autonomy gate fired) is NOT durable: the card is skipped while escalated and re-picked once cleared. Escalation is judged by the selection process (a required boolean `escalated` per candidate, using the autonomy model's own marker and clearing rule); a candidate without it makes the selection unusable. A card whose card lock or mutex-resource lock is held is skipped and eligible again later (a lock whose holder pid is dead on this host is reclaimed).
-- **Idle.** Nothing workable: `--watch` waits `--interval` (`<n>s|m|h`, default `10m`, floor `60s`) and re-selects; without `--watch` the run exits `0` (`nothing workable`). Work ran: the next iteration starts at once.
-- **Stops** at the `## Stop Predicate` (evaluated by the driver at every iteration boundary — an EMPTY snapshot is never satisfied, and a snapshot that omits a selected card carrying the selector tag fails the selection —, the first included, from a board snapshot returned by the same selection process), at the iteration cap, or on Ctrl-C/SIGTERM. An explicit `--max-iterations` overrides the adopted `## Stop Predicate max-iterations` cap; without `--watch` every iteration counts; under `--watch` only an iteration that ran a card counts — an idle poll never spends the cap (it keeps its iteration number), so a watch loop waiting for new cards or for a human never stops on its own. No `max-iterations` declared ⇒ no cap: the watch loop runs until the Stop Predicate or Ctrl-C (US-576).
-- **Fail closed.** A selection that fails, times out or is malformed stops the loop with exit `1`, never retried. Restarting a dead watcher (tmux, launchd, cron, CI) stays outside pair.
-- **Printed.** The effective `watch`, `interval`, `max-iterations`, `parallel` and selection values with their source (flag, or the KB default — `## Autonomy` (or the legacy `## Eligibility` for the filter) is a source only for root, filter, assignee and status; `max-iterations` and the predicate come from `## Stop Predicate`) before any selection; then ONE line per iteration, and `event=loop-start`, `event=iteration`, `event=loop-end` lines in `## Audit Location` next to each batch's own lines.
-- **Exit code.** Signal ⇒ `130` / `143`; any card failed or crashed, or a selection failure ⇒ `1`; otherwise `0` for every stop reason. The loop holds no merge logic: merge stays each card's own.
-
-### Fail-safe default
-
-**Absent file or absent section ⇒ `1`** (fully sequential). A maintainer opts into parallel batches explicitly.
-
-### Malformed cap ⇒ HALT on the policy read, before any card is touched
-
-`0`, negative, non-integer, or a per-tier override naming an unknown tier — each **MUST HALT**, naming the offending value. `pair-loop` never substitutes `1` for a malformed value; a malformed policy is a policy that has not been read.
-
 ## Audit Location — where the unattended trail is written
 
 ```markdown
@@ -283,7 +214,7 @@ automation/loop-audit.md
 
 ### Unwritable destination ⇒ fail loudly
 
-If the resolved path cannot be created or written, `pair-loop` **MUST HALT the run** rather than proceed unaudited: an unattended run with no audit trail is not an acceptable degraded mode (ADR-017 §6).
+If the resolved path cannot be created or written, The dispatcher **MUST HALT the run** rather than proceed unaudited: an unattended run with no audit trail is not an acceptable degraded mode (ADR-017 §6).
 
 ## Telemetry — local delivery records (opt-in)
 
@@ -316,12 +247,11 @@ The **tag→workflow mapping** (#217, R4.4): the declaration that makes automati
 ```markdown
 ## Workflows
 
-auto-dev ⇒ pair-loop
 auto-plan ⇒ pair-process-plan-tasks
 Precedence: auto-dev, auto-plan
 ```
 
-- **One entry per line, `<tag> ⇒ <workflow>`** — the same `⇒` (U+21D2) `## Stop Predicate` uses, and only that one. An ASCII `=>` is a **HALT** naming the documented spelling, so the same file cannot mean different things to two consumers.
+- **One entry per line, `<tag> ⇒ <workflow>`** — use the `⇒` (U+21D2) separator.
 - **The tag is an OPAQUE routing key** (D18). It is matched against the card's labels with the plain **string equality** `## Eligibility` already uses — no tier arithmetic, no family knowledge, and **no classification criteria anywhere in the routing code**: tags are produced by `classify`, and a workflow only ever *reads* them. That property is grep-verifiable, and it is meant to be.
 - **The workflow is a skill name** — the entry point of a composition of existing skills, never a bespoke engine and never a merit rule. Two conditions, both required: it must be **installed**, and it must be one the dispatcher can hand the dispatched card to — the set named in *"The workflows a mapping can name"* below. A skill that is installed but outside that catalog is **refused**, and the refusal stops dispatch for the whole board (see the routing-time HALTs), so this bullet is not the whole rule: read it together with the catalog section.
 - **`Precedence: <tag>, <tag>, …`** — optional, at most one line, first listed wins. It resolves a card carrying **more than one** mapped tag, and nothing else.
@@ -332,7 +262,7 @@ A card carrying **no mapped tag is never routed to a mapped workflow**. There is
 
 ### Absent section ⇒ no workflow is available
 
-`## Workflows` absent (or the whole optional file absent) ⇒ **no mapping is declared**: nothing can be routed by tag. A dispatch **MUST** report `no mapping declared`, naming the file — automation is opt-in (D21), so a project that never wrote this section has simply not opted in to tag dispatch, and that is never an error and never a default workflow. A tag consumer (`pair-loop`'s selection, a trigger adapter's routing) MUST then exit cleanly; `pair-cli run --card` continues into the card-readiness fallback below.
+`## Workflows` absent (or the whole optional file absent) ⇒ **no mapping is declared**: nothing can be routed by tag. A dispatch **MUST** report `no mapping declared`, naming the file — automation is opt-in (D21), so a project that never wrote this section has simply not opted in to tag dispatch, and that is never an error and never a default workflow. `pair-cli run --card` continues into the card-readiness fallback below.
 
 ### `pair-cli run --card` on an unmapped card: the card's own readiness decides
 
@@ -389,7 +319,6 @@ A workflow is a **skill that already exists** — the entry point of a compositi
 
 | Workflow | What a card routed to it gets | A tag teams usually map to it | How the dispatched card reaches it |
 | --- | --- | --- | --- |
-| `pair-loop` | the delivery loop — selects the card, implements it, opens the PR, drives the review/fix rounds, and stops at a review-approved PR (it holds no merge call: merging is the batch's merge gate, default nothing merges) | `auto-dev` | `--root <card>` |
 | `pair-process-plan-tasks` | a refined story broken into implementation tasks, with the dependency graph and the AC-coverage table written back onto the card | `auto-plan` | `--story <card>` |
 
 **A mapping may only name a workflow in that table, and the last column is why.** The dispatched card is the whole subject of the run, and it arrives as an **argument** — under the name that workflow's own `## Arguments` table declares, borrowed and never invented (D18). The two above spell it differently, and the difference is not cosmetic: `pair-process-plan-tasks` states that **when its `$story` is absent it selects the highest-priority story on the board itself**. So a card handed to it under a name it does not declare is a card it never sees — the workflow runs, on a *different* card, while the audit trail and the on-issue `DISPATCH-RECORD:` both name the card that was tagged. A consumer therefore **MUST HALT** on a mapped workflow this table does not list, with an adoption-fix message, rather than dispatch a run it cannot scope — the same fail-fast, whole-board check an uninstalled workflow already gets, and for the same reason: a run nobody is watching must never pick its own subject.
@@ -409,14 +338,12 @@ A dispatch runs with **nobody watching**, under an autonomy posture the operator
 ## Workflows
 
 auto-plan ⇒ pair-process-plan-tasks
-auto-dev ⇒ pair-loop
 Precedence: auto-plan, auto-dev
 ```
 
 Two properties of that example are worth stating, because both are load-bearing rather than stylistic:
 
 - **The precedence line is what makes the pair safe.** A card that has just been broken into tasks often still carries `auto-plan` when `auto-dev` is added; without the line, that card is a HALT the moment a trigger fires on it. Declaring `auto-plan` first is not a preference — it is the answer to a question the dispatcher refuses to answer for you.
-- **A workflow is never mapped to two tags to mean two intensities of it.** Tags carry no merit (D18), so `auto-dev-fast ⇒ pair-loop` and `auto-dev ⇒ pair-loop` route identically; what varies a run's behaviour is the policy above (`## Eligibility`, `## Stop Predicate`, `## Max Parallelism`), never the tag that routed it.
 
 ### What fires the dispatch — the per-host adapter
 
@@ -424,7 +351,7 @@ Nothing in this file starts a run. A **trigger** does: a thin, per-host piece th
 
 ## Harness and Model Policy
 
-A second, independent section of the same file — disjoint from `## Eligibility` above (which cards run unattended) and from `## Auto-Advance` / `## Stop Predicate` / `## Max Parallelism` / `## Audit Location` (the rest-of-file schema ADR-017 §6/#250 lands). This section answers two different questions: **which agent harnesses this project supports**, and **which model class each risk tier gets**. `/pair-capability-setup-harness` reads exactly these two declarations; the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) documents what each harness value means.
+This section declares supported agent harnesses and model classes by risk tier.
 
 ### Zero-configuration path — stated first, on purpose
 
@@ -460,7 +387,7 @@ risk:red: frontier
 
 ## Blocking Severities — what blocks the delivery cycle, and its dispatch ceiling
 
-A third, independent schema owner (US-514) — disjoint from every section above, all of which are `pair-loop`'s own policy. This one is read by the **delivery cycle** itself, both realizations (`pair-workflow-cycle`'s in-session coordinator, `pair-cli run --card`) and both roles that decide "does this block" (review-phase, red-verify). It answers two questions: which severities BLOCK, and — optionally — how many published handoffs a run may reach before it stops or warns.
+The delivery cycle reads this section to determine blocking severities and the optional dispatch ceiling.
 
 **The #514/AC1 revision (maintainer 2026-09-24): a FLOOR, compared by RANK — the same rule as `severityFloor` / `--severity-floor` elsewhere in the chain, never a severity list.**
 
@@ -499,7 +426,7 @@ A declared policy still carrying the retired severity-LIST key (the pre-revision
 | Question | Answered by |
 | --- | --- |
 | Which gates must be green before a card auto-advances? | [`quality-model.md`](../../quality-assurance/quality-model.md) §4 — per-tier requirements (D10). Not restated here |
-| Which cards an unattended run may pick up | `## Eligibility` above — a different consumer (`pair-loop`), a different question |
+| Which cards an unattended run may pick up | `## Eligibility` above |
 | The two per-story engine ceilings this key does NOT touch | `consecutiveRedirects` (the durable state and the dispatched step disagree) stays the engine's own constant, never adoption — only the dispatch-count ceiling moved here |
 
 ### Recovery — a maintainer's own commands, generalized (US-514 T-4)

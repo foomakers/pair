@@ -3,9 +3,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { ENGINES } from './engines'
 import { readIterationOutcome, toLines } from './stream-reader'
-import { selectRootCandidates } from './root-select'
 import { relayLines } from './spawn'
-import type { SpawnIterationInput } from './spawn'
 
 /** US-603 — codex's final text is its LAST agent message; `turn.completed` carries only usage. */
 
@@ -69,33 +67,6 @@ describe('AC3: failure detail', () => {
   it('says so when there is no agent message', async () => {
     const result = await readIterationOutcome(lines(stream(completed)), ENGINES.codex)
     expect(result.detail).toContain('no agent message')
-  })
-})
-
-describe('AC2: root selection from the last agent message', () => {
-  const run = (text: string) => {
-    const runIteration = vi.fn(async (input: SpawnIterationInput) => {
-      for (const line of text.split('\n').filter(Boolean)) input.onEvent?.(JSON.parse(line))
-      return { outcome: 'success' as const, detail: '' }
-    })
-    return selectRootCandidates({
-      engine: ENGINES.codex,
-      cwd: '.',
-      autonomyArgs: [],
-      root: '1',
-      runIteration,
-    })
-  }
-
-  it('returns the candidates (not 0)', async () => {
-    expect(await run(fixture('codex-root-select.jsonl'))).toHaveLength(1)
-  })
-
-  it('a marker in an earlier message only is not read', async () => {
-    const marked = fixture('codex-root-select.jsonl').split('\n')
-    const text = [marked[2], marked[3]!.replace('Candidates below.\\nPAIR', 'PAIR')].join('\n')
-    const swapped = [text, JSON.stringify(message('and nothing else'))].join('\n')
-    await expect(run(swapped)).rejects.toThrow(/no PAIR-ROOT-CANDIDATES/)
   })
 })
 

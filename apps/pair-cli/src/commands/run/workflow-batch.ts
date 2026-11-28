@@ -17,7 +17,7 @@ import { loadConfigWithOverrides } from '#config'
 import { MACROSTATES } from './card-readiness'
 import { mainCheckoutOrCwd } from './cycle-wiring'
 import { isInterrupted, whileInterruptible } from './interrupt'
-import { runPool } from './parallel'
+import { runPool } from './workflow-pool'
 import { inPooledCard } from './pooled-card'
 import { savedWorkflow } from './workflow-saved-state'
 import {
@@ -412,6 +412,48 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
   )
 }
 
+async function confirmUnscopedBatch(plan: Awaited<ReturnType<typeof planBatch>>): Promise<boolean> {
+  const cards = plan.selected.filter(card => !plan.prior.has(card.id))
+  console.log('  Selected cards:')
+  for (const card of cards) console.log(`  #${card.id}: ${card.title}`)
+  if (cards.length === 0) return false
+  if (!process.stdin.isTTY) {
+    console.log('  Specify --card, --root or --filter to run without a terminal.')
+    return false
+  }
+  const prompt = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    if (!/^y(es)?$/i.test((await prompt.question('Run these cards? [y/N] ')).trim())) return false
+  } finally {
+    prompt.close()
+  }
+  return true
+}
+
+async function migratePriorBatch(
+  plan: Awaited<ReturnType<typeof planBatch>>,
+  config: RunCommandConfig,
+  resolved: NonNullable<ReturnType<typeof resolveWorkflowDefinition>>,
+  services: Services,
+) {
+  for (const [id, outcome] of plan.prior) {
+    if (outcome.outcome === 'skipped')
+      await migrateCompletedRunTelemetry(
+        {
+          files: services.fs,
+          dir: join(resolved.main, '.pair/working/runs', plan.runId(id)),
+        },
+        config,
+        resolved,
+        id,
+      )
+  }
+}
+
+function isUnscopedBatch(request: RunWorkflowBatch) {
+  return request.cards === undefined && request.root === undefined && request.filter === undefined
+}
+
 export async function handleWorkflowBatch(
   config: RunCommandConfig,
   request: RunWorkflowBatch,
@@ -430,36 +472,9 @@ export async function handleWorkflowBatch(
     if (card.uncertain) console.log(`  #${card.id}: unparsed dependency: ${card.uncertain}`)
   }
   if (config.dryRun) return previewBatch(plan)
-  const unscoped =
-    request.cards === undefined && request.root === undefined && request.filter === undefined
-  if (unscoped) {
-    const cards = plan.selected.filter(card => !plan.prior.has(card.id))
-    console.log('  Selected cards:')
-    for (const card of cards) console.log(`  #${card.id}: ${card.title}`)
-    if (cards.length === 0) return 0
-    if (!process.stdin.isTTY) {
-      console.log('  Specify --card, --root or --filter to run without a terminal.')
-      return 0
-    }
-    const prompt = createInterface({ input: process.stdin, output: process.stdout })
-    try {
-      if (!/^y(es)?$/i.test((await prompt.question('Run these cards? [y/N] ')).trim())) return 0
-    } finally {
-      prompt.close()
-    }
-  }
-  for (const [id, outcome] of plan.prior) {
-    if (outcome.outcome === 'skipped')
-      await migrateCompletedRunTelemetry(
-        {
-          files: services.fs,
-          dir: join(resolved.main, '.pair/working/runs', plan.runId(id)),
-        },
-        config,
-        resolved,
-        id,
-      )
-  }
+  const unscoped = isUnscopedBatch(request)
+  if (unscoped && !(await confirmUnscopedBatch(plan))) return 0
+  await migratePriorBatch(plan, config, resolved, services)
   return driveBatch(input, unscoped ? { ...plan, excluded: [] } : plan)
 }
 
@@ -469,12 +484,12 @@ function legacyCycleRequested(config: RunCommandConfig): boolean {
     config.profile,
     config.workflowConfig,
     config.autonomy,
+    config.autonomous,
     config.eligibilityFilter,
     config.approveIneligible,
     config.dispatch?.tagsObserved,
     config.dispatch?.rounds,
     config.runSnapshot,
-    config.cards,
   ].some(Boolean)
 }
 
@@ -535,6 +550,36 @@ function mappedCard(found: WorkflowCard | undefined, names: string[], routing: R
   return { selected, excluded }
 }
 
+function handleDefaultBatch(config: RunCommandConfig, services: Services, workflow: unknown) {
+  if (
+    typeof workflow !== 'string' ||
+    config.invocation.kind !== 'skill' ||
+    config.invocation.name !== undefined ||
+    Object.values(config.scope).some(Boolean)
+  )
+    return undefined
+  return handleWorkflowBatch(config, { name: workflow, restart: false }, services)
+}
+
+function listAvailableWorkflows(fs: Services['fs'], main: string, card: string) {
+  const dir = join(main, '.pair/adoption/tech/workflows')
+  const available = fs.existsSync(dir)
+    ? fs
+        .readdirSync(dir)
+        .filter(entry => entry.isFile() && /\.ya?ml$/.test(entry.name))
+        .map(entry => entry.name.replace(/\.ya?ml$/, ''))
+        .sort()
+    : []
+  console.log(
+    `Available workflows:\n${available.map(name => `  pair run ${name} ${card}`).join('\n')}`,
+  )
+  return 0
+}
+
+function workflowCwd(config: RunCommandConfig, services: Services) {
+  return resolve(config.cwd ?? services.fs.currentWorkingDirectory())
+}
+
 /** Explicitly named workflow mappings opt a project into routing a bare card to YAML. */
 export async function handleMappedWorkflow(
   config: RunCommandConfig,
@@ -542,36 +587,21 @@ export async function handleMappedWorkflow(
 ): Promise<number | undefined> {
   const card = config.dispatch?.card
   if (legacyCycleRequested(config)) return undefined
-  const { fs, deps } = services
-  const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
+  const { fs } = services
+  const cwd = workflowCwd(config, services)
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
   const defaultWorkflow = project['defaultWorkflow']
-  if (!card) {
-    if (
-      typeof defaultWorkflow !== 'string' ||
-      config.invocation.kind !== 'skill' ||
-      config.invocation.name !== undefined ||
-      Object.values(config.scope).some(Boolean)
-    ) return undefined
-    return await handleWorkflowBatch(config, { name: defaultWorkflow, restart: false }, services)
-  }
+  if (!card) return handleDefaultBatch(config, services, defaultWorkflow)
   if (typeof defaultWorkflow === 'string')
-    return await handleWorkflowRun(config, { name: defaultWorkflow, card, restart: false }, services)
+    return await handleWorkflowRun(
+      config,
+      { name: defaultWorkflow, card, restart: false },
+      services,
+    )
   const names = mappedNames(project['workflows'] as WorkflowsConfig | undefined)
   const main = mainCheckoutOrCwd(cwd)
-  const listAvailable = () => {
-    const dir = join(main, '.pair/adoption/tech/workflows')
-    const available = fs.existsSync(dir)
-      ? fs.readdirSync(dir)
-          .filter(entry => entry.isFile() && /\.ya?ml$/.test(entry.name))
-          .map(entry => entry.name.replace(/\.ya?ml$/, ''))
-          .sort()
-      : []
-    console.log(`Available workflows:\n${available.map(name => `  pair run ${name} ${card}`).join('\n')}`)
-    return 0
-  }
-  if (names.length === 0) return listAvailable()
-  const { cards, assignee } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
+  if (names.length === 0) return listAvailableWorkflows(fs, main, card)
+  const { cards, assignee } = await (services.deps.workflow?.readSelection ?? readWorkflowCards)(
     { fs, project, cwd, main },
     { cards: [card], ...config.scope },
   )
@@ -583,5 +613,5 @@ export async function handleMappedWorkflow(
     printOutcome({ id: card, outcome: 'not-applicable', reason: 'selection filter' })
     return 0
   }
-  return listAvailable()
+  return listAvailableWorkflows(fs, main, card)
 }

@@ -43,7 +43,6 @@ Use it when the project is set up, the backlog is known, and you want independen
 **pair watches the backlog and applies the whole process to every card that matches your criterion, inside the gates you set.**
 
 - **Selection**: the criterion is a label filter in `## Autonomy` of `tech/automation.md` (`filter: risk:green`, or a team label such as `ui`), applied to the cards under a root card.
-- **Drivers**: `/pair-loop` in a Claude Code session, or `pair-cli run --root <id> --parallel <n> --watch` as a daemon on any [engine](/docs/concepts/glossary#engine).
 - **Gates**: `until` (`ready`, `pr`, `merged`), `prepare` and `merge` decide how far a card goes; an escalation hands a card back to a human.
 - **Safe defaults**: nothing merges and no Draft card is prepared unattended until you declare it.
 
@@ -58,7 +57,6 @@ Assisted needs only a tool that reads skills. Supervised in-session needs a [har
 | Assisted | yes | yes | yes | yes | yes | yes | yes |
 | Supervised, in session (`/pair-workflow-cycle`) | yes | yes | yes, with pi-subagents | no | no | no | no |
 | Supervised and Autonomous, from a shell (`pair-cli run`) | yes (`claude -p`) | yes | yes | yes | no | no | no |
-| Autonomous, in session (`/pair-loop` with the batch workflows) | yes | degraded, one card per run | degraded, one card per run | no | no | no | no |
 
 "Degraded" means the skill runs one card and prints a continue-token for the next invocation. The harness and engine layer is explained in [Harnesses and engines](/docs/integrations/adding-a-harness); per-tool setup in [AI coding tools](/docs/integrations).
 
@@ -71,7 +69,6 @@ Assisted needs only a tool that reads skills. Supervised in-session needs a [har
 | Supervised | Refinement | you, per card or batch | `pair-cli run --card --until ready`, `pair-cli run refinement` | Ready, or a grill question | `prepare` |
 | Supervised | Delivery | you, per card or batch | `/pair-workflow-cycle`, `/pair-implement-batch`, `pair-cli run --card` | review-approved PR, escalation | `until`, Blocking Severities |
 | Autonomous | Refinement | the loop | `prepare` gate `hold-never` or `hold-when` | escalation (`needs-review`) | `prepare` |
-| Autonomous | Delivery | the loop or daemon | `/pair-loop`, `pair-cli run --root --parallel --watch` | gates `until` and `merge`, escalation | `## Autonomy` |
 
 ## Which to use
 

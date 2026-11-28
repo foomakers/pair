@@ -27,10 +27,6 @@ import type { ProfileRequest, ResolvedWorkflowProfile } from './workflow-profile
 import type { IterationResult } from './stream-reader'
 import type { RunEvent } from './run-events'
 import { resolveIdleTimeout, type IdleTimeout } from './spawn'
-import type { SelectRootInput, SelectionAnswer } from './root-select'
-import type { Wait } from './wait'
-import type { RootCandidate } from './root-plan'
-import type { CardProcessRunner } from './parallel'
 import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
 import { effectiveSelection } from './autonomy-policy'
 import { acquireCardLock, type CardLock, type LockAcquirer } from './card-lock'
@@ -123,13 +119,9 @@ export interface RunHandlerDependencies {
   ) => Date | null | undefined | Promise<Date | null | undefined>
   /** US-575 AC6: a card's prerequisite state (`cycle-state.mjs prereq-state`); injected in tests. */
   readPrereqState?: (card: string) => import('./cycle-scripts').PrereqState
-  selectCandidates?: (input: SelectRootInput) => Promise<RootCandidate[]>
   /** US-522: the loop's selection (candidates + predicate snapshot); defaults to `selectCandidates` or the shipped one. */
-  selectAnswer?: (input: SelectRootInput) => Promise<SelectionAnswer>
   /** US-522: the `--watch` idle wait (shipped: a real, interruptible timer). Injected so tests run on a fake clock. */
-  wait?: Wait
   /** US-491: one `pair-cli run --card` child process (shipped `spawnCardProcess`). */
-  runCardProcess?: CardProcessRunner
   /** US-523: the prepare phase's collaborators (default: the installed `cycle-prepare.mjs` and `gh`). */
   prepare?: PrepareDependencies
   /** D1: the card's live labels (default: `gh issue view`), read when `--autonomous` has no `--card-tags`. */

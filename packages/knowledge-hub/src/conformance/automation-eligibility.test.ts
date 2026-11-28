@@ -482,11 +482,6 @@ describe.each(policySources)('automation-policy.md — %s (boundaries)', (_, con
     expect(content.toLowerCase()).toMatch(/never which gates|not which gates/)
   })
 
-  it('scopes itself to `## Eligibility` and defers the rest of the file to #250', () => {
-    expect(content).toContain('max_parallelism')
-    expect(content).toContain('#250')
-  })
-
   it('states there is no dedicated eligibility tag', () => {
     expect(content.toLowerCase()).toContain('no dedicated eligibility tag')
   })
@@ -769,7 +764,7 @@ describe('automation-policy.md — Auto-Advance section (story #250 T1)', () => 
   it.each(policySources)('%s: fail-closed default is `(none)` — auto-advance off', (_, content) => {
     const section = content.slice(
       content.indexOf('## Auto-Advance — which tiers'),
-      content.indexOf('## Stop Predicate — when an unattended run stops'),
+      content.indexOf('## Autonomy — selection, target and gates (US-521, ADR-027)'),
     )
     expect(section).toMatch(/\(none\)/)
     expect(section.toLowerCase()).toMatch(/shipped default/)
@@ -781,86 +776,13 @@ describe('automation-policy.md — Auto-Advance section (story #250 T1)', () => 
     (_, content) => {
       const section = content.slice(
         content.indexOf('## Auto-Advance — which tiers'),
-        content.indexOf('## Stop Predicate — when an unattended run stops'),
+        content.indexOf('## Autonomy — selection, target and gates (US-521, ADR-027)'),
       )
       expect(section).toMatch(/MUST HALT/)
       expect(section).toContain('risk:yellow')
       expect(section).toContain('risk:red')
     },
   )
-})
-
-describe('automation-policy.md — Stop Predicate section (story #250 T1)', () => {
-  it.each(policySources)(
-    '%s: grammar is `<selector> ⇒ <condition>` plus max-iterations',
-    (_, content) => {
-      const section = content.slice(
-        content.indexOf('## Stop Predicate — when an unattended run stops'),
-        content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
-      )
-      expect(section).toMatch(/<selector>/)
-      expect(section).toMatch(/<condition>/)
-      expect(section).toContain('max-iterations')
-      expect(section.toLowerCase()).toMatch(/canonical macrostate/)
-    },
-  )
-
-  it.each(policySources)(
-    '%s: no max-iterations declared ⇒ no cap, a natural stop (US-576)',
-    (_, content) => {
-      const section = content.slice(
-        content.indexOf('## Stop Predicate — when an unattended run stops'),
-        content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
-      )
-      expect(section).toMatch(/no iteration cap/)
-      expect(section).toMatch(/stopped: <reason>, N eligible cards left/)
-    },
-  )
-
-  it.each(policySources)(
-    '%s: rejects issue-body content and HALTs on malformed grammar',
-    (_, content) => {
-      const section = content.slice(
-        content.indexOf('## Stop Predicate — when an unattended run stops'),
-        content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
-      )
-      expect(section).toMatch(/MUST HALT/)
-      expect(section.toLowerCase()).toMatch(/issue-body content/)
-      expect(section).toContain('D18')
-    },
-  )
-})
-
-describe('automation-policy.md — Max Parallelism section (story #250 T1)', () => {
-  it.each(policySources)(
-    '%s: global integer ceiling with optional per-tier override',
-    (_, content) => {
-      const section = content.slice(
-        content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
-        content.indexOf('## Audit Location — where the unattended trail is written'),
-      )
-      expect(section.toLowerCase()).toMatch(/single positive integer/)
-      expect(section.toLowerCase()).toMatch(/per-tier override/)
-      expect(section.toLowerCase()).toMatch(/ceiling, never a target/)
-    },
-  )
-
-  it.each(policySources)('%s: fail-safe default is 1 (fully sequential)', (_, content) => {
-    const section = content.slice(
-      content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
-      content.indexOf('## Audit Location — where the unattended trail is written'),
-    )
-    expect(section).toMatch(/Absent file or absent section ⇒ `1`/)
-  })
-
-  it.each(policySources)('%s: malformed cap HALTs before any card is touched', (_, content) => {
-    const section = content.slice(
-      content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
-      content.indexOf('## Audit Location — where the unattended trail is written'),
-    )
-    expect(section).toMatch(/MUST HALT/)
-    expect(section.toLowerCase()).toMatch(/before any card is touched/)
-  })
 })
 
 describe('automation-policy.md — Audit Location section (story #250 T1)', () => {
@@ -910,10 +832,9 @@ describe('automation-policy.md — Workflows section (story #217 T1)', () => {
     '%s: the declaration is `<tag> ⇒ <workflow>`, one per line',
     (_, content) => {
       const section = workflowsSection(content)
-      expect(section).toContain('## Workflows\n\nauto-dev ⇒ pair-loop')
+      expect(section).toContain('## Workflows\n\nauto-plan ⇒ pair-process-plan-tasks')
       expect(section).toMatch(/One entry per line/)
       expect(section).toMatch(/U\+21D2/)
-      expect(section).toMatch(/ASCII `=>`/)
     },
   )
 
@@ -953,7 +874,7 @@ describe('automation-policy.md — Workflows section (story #217 T1)', () => {
     (_, content) => {
       const section = workflowsSection(content)
       expect(section).toMatch(/no mapping declared/)
-      expect(section).toMatch(/exit cleanly/)
+      expect(section).toMatch(/continues into the card-readiness fallback/)
       expect(section).toMatch(/never an error/)
       expect(section).toMatch(/Absent section ≠ empty section/)
     },
@@ -1031,8 +952,8 @@ describe('automation-policy.md — Workflows section (story #217 T1)', () => {
   )
 
   it.each(policySources)('%s: the file index names the seventh section', (_, content) => {
-    expect(content).toMatch(/It specifies seven sections/)
-    expect(content).toMatch(/`## Workflows` \(#217\)/)
+    expect(content).toMatch(/eligibility, routing, autonomy, audit location/)
+    expect(content).toContain('## Workflows')
   })
 
   it.each(policySources)(
@@ -1066,7 +987,7 @@ describe('automation-policy.md — the workflow catalog (story #217 T4)', () => 
     expect(section).toMatch(/### The workflows a mapping can name/)
     // A catalog whose entries are not installable skill names is worse than none: it reads as
     // authoritative and every tag mapped from it HALTs on the uninstalled-workflow rule.
-    expect(catalogRows(content)).toEqual(['pair-loop', 'pair-process-plan-tasks'])
+    expect(catalogRows(content)).toEqual(['pair-process-plan-tasks'])
   })
 
   /**
@@ -1133,7 +1054,7 @@ describe('automation-policy.md — the workflow catalog (story #217 T4)', () => 
       ]
       // Two rows today; the assertion is that EVERY row carries the column, not how many.
       expect(rows.length).toBe([...section.matchAll(/^\| `pair-[a-z0-9-]+` \|/gm)].length)
-      expect(rows.length).toBeGreaterThan(1)
+      expect(rows.length).toBeGreaterThan(0)
 
       for (const [, workflow, parameter] of rows) {
         const slug = workflow!.replace(/^pair-/, '')

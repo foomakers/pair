@@ -1,8 +1,6 @@
 import { MAX_TIMEOUT_SECONDS } from '../../config/engine-block'
-import { validateStopPredicateLine } from './automation-policy'
 import { ENGINE_IDS, isEngineId, type EngineId } from './engines'
 import { idSafetyFailure, isSafeId, isSafePromptText, promptSafetyFailure } from './prompt-safety'
-import { parseStateOrder } from './root-plan'
 
 /**
  * The perimeter's scope components, expressed with `pair-next`'s OWN frozen parameter names
@@ -116,8 +114,6 @@ export interface RunCommandConfig {
   autonomy?: RunAutonomyArguments
   /** Present only when `--cwd` was passed; otherwise the process working directory. */
   cwd?: string
-  /** Present only when `--max-iterations` was passed; the policy supplies the cap otherwise. */
-  maxIterations?: number
   /** Explicit opt-in — never inferable from configuration (AC6). */
   autonomous: boolean
   /** Explicit operator authorization to run in a project the engine does not trust (AC6). */
@@ -126,8 +122,6 @@ export interface RunCommandConfig {
   approveIneligible: boolean
   /** Internal (the loop sets it): the effective filter as THIS card's eligibility; needs `--card`. */
   eligibilityFilter?: string
-  /** `--predicate '<selector> ⇒ <condition>'`: the loop's stop predicate, overriding `## Stop Predicate` (needs `--parallel`). */
-  predicate?: string
   /** US-573: `--iteration-timeout` — an opt-in TOTAL cap per iteration; absent ⇒ none (the idle timeout guards hangs). */
   iterationTimeoutSeconds?: number
   /** US-573: `--idle-timeout` — present only when passed; precedence over the policy/config lives in `resolveIdleTimeout`. */
@@ -140,36 +134,13 @@ export interface RunCommandConfig {
   noColor?: true
   /** Present only when `--card` was passed: the run is a tag-driven dispatch (US-217). */
   dispatch?: RunDispatchRequest
-  /** US-614: `--cards a,b,c` — the ordered card list, run serially in passes; never with `--card`/`--root`/`--filter`/`--parallel`. */
-  cards?: readonly string[]
   /** US-488: `--profile <name>` — present only when passed. */
   profile?: string
   /** US-488: `--workflow-config <path>` — present only when passed. */
   workflowConfig?: string
   /** Resolve, print and exit without spawning anything. */
   dryRun: boolean
-  /**
-   * US-491: `--parallel N` alongside `--root` — the fan-out mode: `pair-next --root` selects, the
-   * borrowed dependency + mutex analysis plans, and up to N `run --card` processes run at once.
-   */
-  parallel?: number
-  /** --state-order overrides ## Delivery State Order for this root run. */
-  stateOrder?: readonly string[]
-  /** US-522: `--watch` (true) / `--no-watch` (false) — present only when passed; needs `--parallel`. */
-  watch?: boolean
-  /** US-522: `--interval <n>s|m|h` — the idle wait under `--watch`; present only when passed. */
-  interval?: RunInterval
 }
-
-/** US-522: a parsed `--interval`: the operator's own text (printed) and its length in seconds. */
-export interface RunInterval {
-  readonly text: string
-  readonly seconds: number
-}
-
-/** US-522: the `--watch` idle poll default and its floor — every poll spawns an engine process. */
-export const DEFAULT_WATCH_INTERVAL: RunInterval = { text: '10m', seconds: 600 }
-export const MIN_WATCH_INTERVAL_SECONDS = 60
 
 interface ParseRunOptions {
   runSnapshot?: string
@@ -186,12 +157,10 @@ interface ParseRunOptions {
   prepare?: string
   merge?: string
   cwd?: string
-  maxIterations?: string | number
   autonomous?: boolean
   approveProjectTrust?: boolean
   approveIneligible?: boolean
   eligibilityFilter?: string
-  predicate?: string
   iterationTimeout?: string | number
   idleTimeout?: string | number
   quiet?: boolean
@@ -200,8 +169,6 @@ interface ParseRunOptions {
   /** commander's `--no-color` ⇒ `color: false`. */
   color?: boolean
   card?: string
-  /** US-614: `--cards a,b,c`. */
-  cards?: string
   cardTags?: string
   dryRun?: boolean
   /** US-487: `--pr` — meaningful only with `--card` (the cycle coordinator's own entry). */
@@ -212,11 +179,6 @@ interface ParseRunOptions {
   rounds?: string
   /** US-491: `--parallel N` — the fan-out; with `--root` and/or `--filter` (US-522). */
   parallel?: string | number
-  stateOrder?: string
-  /** US-522: `--watch` (true) / `--no-watch` (false) — both together are refused at argv (cli.ts). */
-  watch?: boolean
-  /** US-522: `--interval <n>s|m|h`. */
-  interval?: string
   /** US-488: `--profile <name>` — the workflow profile (per-stage engine/model/effort/context); needs `--card`, `--root` or `--parallel`. */
   profile?: string
   /** US-488: `--workflow-config <path>` — an external profile file, wins over every other source; needs `--card`, `--root` or `--parallel`. */
@@ -295,52 +257,6 @@ function resolveInvocation(options: ParseRunOptions): RunInvocationRequest {
   if (prompt === undefined) return { kind: 'skill', ...(skill && { name: skill }) }
   if (prompt.trim().length === 0) throw new Error('--prompt was passed with an empty value')
   return { kind: 'prompt', text: prompt }
-}
-
-/** US-614: a usage refusal — the CLI exits 2 for it (AC9), never 1. */
-export class UsageError extends Error {
-  readonly exitCode = 2
-}
-
-const CARDS_CONFLICTS = [
-  ['card', '--card'],
-  ['root', '--root'],
-  ['filter', '--filter'],
-  ['skill', '--skill'],
-  ['prompt', '--prompt'],
-  ['watch', '--watch'],
-  ['interval', '--interval'],
-  ['predicate', '--predicate'],
-  ['stateOrder', '--state-order'],
-  ['pr', '--pr'],
-  ['runId', '--run-id'],
-  ['rounds', '--rounds'],
-  ['cardTags', '--card-tags'],
-] as const
-
-/** US-614 AC1/AC10: `--cards a,b,c` — ordered, each id safe, none empty or repeated, nothing that selects or fans out beside it. */
-function resolveCards(options: ParseRunOptions): { cards?: readonly string[] } {
-  if (options.cards === undefined) return {}
-  try {
-    const conflicting: string[] = CARDS_CONFLICTS.filter(([key]) => options[key] !== undefined).map(
-      ([, flag]) => flag,
-    )
-    if (options.parallel !== undefined && Number(options.parallel) !== 1)
-      conflicting.push('--parallel')
-    if (conflicting.length > 0)
-      throw new Error(
-        `--cards cannot be combined with ${conflicting.join(' or ')}: the list is the whole scope, run one card at a time`,
-      )
-    const cards = options.cards.split(',').map(id => id.trim())
-    if (cards.some(id => id.length === 0))
-      throw new Error(`--cards has an empty entry (received: ${options.cards})`)
-    for (const id of cards) if (!isSafeId(id)) throw new Error(idSafetyFailure('--cards', id))
-    const dup = cards.find((id, i) => cards.indexOf(id) !== i)
-    if (dup !== undefined) throw new Error(`--cards names card ${dup} twice`)
-    return { cards }
-  } catch (error) {
-    throw new UsageError((error as Error).message)
-  }
 }
 
 function resolveEngineFlag(engine: string | undefined): EngineId | undefined {
@@ -512,84 +428,6 @@ function validateTags(tags: string[], rawTrimmed: string): void {
   }
 }
 
-/**
- * `--parallel` flags that would give the fan-out a second answer to a question it already has:
- * `--card` names ONE card (the batch is `pair-next`'s), `--skill`/`--prompt` name what runs (each
- * card runs its own `run --card`). `--filter` / `--assignee` / `--status` are the selection's own
- * parameters and `--max-iterations` its loop cap (US-522): all four are accepted.
- */
-const FLAGS_CONFLICTING_WITH_PARALLEL = [
-  ['card', '--card'],
-  ['skill', '--skill'],
-  ['prompt', '--prompt'],
-] as const
-
-const INTERVAL_PATTERN = /^(\d+)([smh])$/
-const UNIT_SECONDS = { s: 1, m: 60, h: 3600 } as const
-
-/** US-522 AC14: `<n>s|m|h`, at least 60s — refused otherwise, naming the received text. */
-export function parseInterval(raw: string): RunInterval {
-  const text = raw.trim()
-  const match = INTERVAL_PATTERN.exec(text)
-  if (match === null) {
-    throw new Error(`--interval must be <n>s, <n>m or <n>h, e.g. 10m (received: ${raw})`)
-  }
-  const seconds = Number(match[1]) * UNIT_SECONDS[match[2] as 's' | 'm' | 'h']
-  if (seconds < MIN_WATCH_INTERVAL_SECONDS) {
-    throw new Error(
-      `--interval must be at least ${MIN_WATCH_INTERVAL_SECONDS}s: every idle poll spawns an engine process (received: ${raw})`,
-    )
-  }
-  return { text, seconds }
-}
-
-/** US-522 AC14: the watch flags — every refusal at parse time, before anything spawns. */
-function resolveWatch(options: ParseRunOptions): { watch?: boolean; interval?: RunInterval } {
-  const { watch, interval } = options
-  if (watch === undefined && interval === undefined) return {}
-  if (options.parallel === undefined) {
-    const flag = watch === true ? '--watch' : watch === false ? '--no-watch' : '--interval'
-    throw new Error(
-      `${flag} belongs to the loop (--root/--filter, one card at a time unless --parallel <n>): not with --card, --skill or --prompt`,
-    )
-  }
-  if (interval !== undefined && watch !== true) {
-    throw new Error('--interval requires --watch: it is the wait between idle polls')
-  }
-  return {
-    ...(watch !== undefined && { watch }),
-    ...(interval !== undefined && { interval: parseInterval(interval) }),
-  }
-}
-
-/**
- * US-491 T-3 / US-522: `--parallel N` — a positive integer, with nothing that competes with it. That a
- * scope exists (`--root`, `--filter` or the policy's) is checked at RESOLVE time, where the policy is read.
- */
-function resolveParallel(options: ParseRunOptions): { parallel?: number } {
-  if (options.parallel === undefined) return {}
-  const parallel = parsePositiveInteger('--parallel', options.parallel)
-  const conflicting = FLAGS_CONFLICTING_WITH_PARALLEL.filter(
-    ([key]) => options[key] !== undefined,
-  ).map(([, flag]) => flag)
-  if (conflicting.length > 0) {
-    throw new Error(
-      `--parallel cannot be combined with ${conflicting.join(' or ')}: the fan-out runs every card ` +
-        '`pair-next` selects as its own `pair-cli run --card` process, planned by the ' +
-        'borrowed dependency + mutex analysis — there is no second skill or card to take',
-    )
-  }
-  return { parallel }
-}
-
-function resolveStateOrder(options: ParseRunOptions): { stateOrder?: readonly string[] } {
-  if (options.stateOrder === undefined) return {}
-  if (options.parallel === undefined && options.root === undefined && options.filter === undefined)
-    throw new Error('--state-order requires a root/filter run')
-  // The planner's parser owns the supported values.
-  return { stateOrder: parseStateOrder(options.stateOrder) }
-}
-
 /** `--profile` / `--workflow-config` select a workflow profile in every run mode. */
 function resolveProfileSelection(options: ParseRunOptions): {
   profile?: string
@@ -646,7 +484,7 @@ function resolveAutonomyArguments(options: ParseRunOptions): RunAutonomyArgument
   const prepare = promptSafeText(options.prepare, '--prepare')
   const merge = promptSafeText(options.merge, '--merge')
   if ([preset, until, prepare, merge].every(v => v === undefined)) return undefined
-  if (options.card === undefined && options.cards === undefined && options.parallel === undefined)
+  if (options.card === undefined && options.parallel === undefined)
     refuseAutonomyOffCycle(preset, until, prepare)
   return {
     ...(preset && { preset }),
@@ -654,21 +492,6 @@ function resolveAutonomyArguments(options: ParseRunOptions): RunAutonomyArgument
     ...(prepare && { prepare }),
     ...(merge && { merge }),
   }
-}
-
-/**
- * `--predicate '<selector> ⇒ <condition>'` — the loop's stop predicate, argument > `## Stop Predicate`. Only a
- * loop (`--parallel`) has one; it is validated with the adoption's own grammar HERE, before anything spawns.
- */
-function predicateOf(options: ParseRunOptions): { predicate?: string } {
-  const text = promptSafeText(options.predicate, '--predicate')
-  if (text === undefined) return {}
-  if (options.parallel === undefined) {
-    throw new Error(
-      '--predicate is the stop predicate of the loop (--root/--filter): not with --card, --skill or --prompt',
-    )
-  }
-  return { predicate: validateStopPredicateLine(text.trim()) }
 }
 
 /** The loop's per-card eligibility input (`--eligibility-filter`): meaningless without `--card`. */
@@ -705,71 +528,18 @@ function outputModeOf(
  * Two defaults are load-bearing and asserted by tests: `autonomous` and
  * `approveProjectTrust` are FALSE with no flags, so the parser can never pre-empt AC6.
  */
-const LOOP_ONLY_FLAGS = [
-  'watch',
-  'interval',
-  'predicate',
-  'preset',
-  'until',
-  'prepare',
-  'merge',
-  'stateOrder',
-] as const
-
-/**
- * A loop flag (`--watch`, `--preset`, `--until`…) with no `--card`/`--skill`/`--prompt` IS the loop: `--parallel`
- * only sets how many cards run at once. The temporary value validates loop grammar;
- * it is never returned as an argument request (omission inherits policy).
- */
-function withImpliedParallel(options: ParseRunOptions): ParseRunOptions {
-  if (options.parallel !== undefined || options.cards !== undefined) return options
-  if (FLAGS_CONFLICTING_WITH_PARALLEL.some(([key]) => options[key] !== undefined)) return options
-  return LOOP_ONLY_FLAGS.some(key => options[key] !== undefined)
-    ? { ...options, parallel: 1 }
-    : options
-}
-
-export function isParallelRun(config: RunCommandConfig): boolean {
-  return (
-    config.cards === undefined &&
-    (config.parallel !== undefined ||
-      (config.invocation.kind === 'skill' &&
-        config.invocation.name === undefined &&
-        config.dispatch?.card === undefined &&
-        (config.watch !== undefined ||
-          config.interval !== undefined ||
-          config.predicate !== undefined ||
-          config.autonomy !== undefined)))
-  )
-}
-
-/** `--parallel 1` beside `--cards` is accepted and dropped: a card list is serial by definition. */
-function explicitParallel(
-  input: ParseRunOptions,
-  parallel: Pick<RunCommandConfig, 'parallel'>,
-  cards: Pick<RunCommandConfig, 'cards'>,
-) {
-  return input.parallel !== undefined && cards.cards === undefined ? parallel : {}
-}
-
 /** Flags of the cycle and of the loop: none of them reaches a workflow run. */
 const FLAGS_NOT_FOR_A_WORKFLOW = [
   ['skill', '--skill'],
   ['prompt', '--prompt'],
-  ['cards', '--cards'],
   ['cardTags', '--card-tags'],
   ['pr', '--pr'],
   ['rounds', '--rounds'],
-  ['stateOrder', '--state-order'],
-  ['watch', '--watch'],
-  ['interval', '--interval'],
   ['preset', '--preset'],
   ['until', '--until'],
   ['prepare', '--prepare'],
   ['merge', '--merge'],
-  ['predicate', '--predicate'],
   ['eligibilityFilter', '--eligibility-filter'],
-  ['maxIterations', '--max-iterations'],
 ] as const
 
 const passed = <K extends keyof ParseRunOptions>(
@@ -954,15 +724,10 @@ function workflowOf(
 
 export function parseRunCommand(input: ParseRunOptions, args: string[] = []): RunCommandConfig {
   const workflow = workflowOf(args, input)
-  const options =
-    workflow.workflowBatch === undefined ? withImpliedParallel(input) : withoutWorkflowScope(input)
+  const options = workflow.workflowBatch === undefined ? input : withoutWorkflowScope(input)
 
   const engine = resolveEngineFlag(options.engine)
   const cwd = optionalText(options.cwd, '--cwd')
-  const cards = resolveCards(options)
-  const parallel = resolveParallel(options)
-  const stateOrder = resolveStateOrder(options)
-  const watch = resolveWatch(options)
   const dispatch = resolveDispatch(options)
   const profileSelection = resolveProfileSelection(options)
   const autonomy = resolveAutonomyArguments(options)
@@ -973,20 +738,15 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
     ...telemetryOptionOf(options),
     ...(engine && { engine }),
     ...(dispatch && { dispatch }),
-    ...cards,
     ...profileSelection,
     invocation: resolveInvocation(options),
     scope: resolveScope(options),
     ...(autonomy && { autonomy }),
     ...(cwd && { cwd }),
-    ...(options.maxIterations !== undefined && {
-      maxIterations: parsePositiveInteger('--max-iterations', options.maxIterations),
-    }),
     autonomous: options.autonomous === true,
     approveProjectTrust: options.approveProjectTrust === true,
     approveIneligible: options.approveIneligible === true,
     ...eligibilityFilterOf(options),
-    ...predicateOf(options),
     ...(options.iterationTimeout !== undefined && {
       iterationTimeoutSeconds: parseTimeoutSeconds('--iteration-timeout', options.iterationTimeout),
     }),
@@ -995,9 +755,6 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
     }),
     ...outputModeOf(options),
     dryRun: options.dryRun === true,
-    ...explicitParallel(input, parallel, cards),
-    ...stateOrder,
-    ...watch,
   }
 }
 

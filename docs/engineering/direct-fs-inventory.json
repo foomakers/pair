@@ -1,14 +1,14 @@
 {
   "base": "a453ad7f5996d73d87b8bd61c78b16dd43c26e2b",
   "scanned": 1086,
-  "files": 412,
-  "distinctContents": 377,
+  "files": 383,
+  "distinctContents": 348,
   "dispositionCounts": {
     "standalone-script": 17,
     "os-guarantee": 35,
     "type-contract": 13,
-    "in-flight-churn": 241,
-    "repo-contract": 105,
+    "in-flight-churn": 213,
+    "repo-contract": 104,
     "boundary-adapter": 1
   },
   "limits": [
@@ -458,166 +458,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/card-risk-label.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/cards-classify-partitions.test.ts",
-      "hash": "2b36d96f14d4adf21dd1ebc8a39474dcd4547be80f15cb0f00f21a63adf1194b",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-classify-partitions.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/cards-entry.ts",
-      "hash": "e472ac1f44e1defeffcbbe0f1254e89cb43e6e85e0e1f45c6e5b7c476f1b646c",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 3
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-entry.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/cards-gate-red.test.ts",
-      "hash": "8bdbf371311342cfb7393dc7d4fb9852a648f672b5298da596177eaa98afaa0b",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-gate-red.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/cards-handler.test.ts",
-      "hash": "a0d27d4bf5204762dcdbfb52fa837069913374c596c409e774fc2c94b138f8fd",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-handler.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/cards-lifecycle-2.test.ts",
-      "hash": "6503f0e3026bb7fc44c159e7d2015bd9384d1ee21f825d5d4d8c4cf3eaf13690",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-lifecycle-2.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/cards-lifecycle-lib.ts",
-      "hash": "345f1ed6b1b3c4c3fe04553a402de1eeb9716bcfff81cd1023331a0a6851c9a5",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-lifecycle-lib.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/cards-review-progress-4.test.ts",
-      "hash": "cd02652ab3cee8b9b4c5e9f3ac10dc8ea9a7153fbcbc2106b9c79931fdc4b09c",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-review-progress-4.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/cards-review-progress-lib.ts",
-      "hash": "1110bfdf3e6e82b1db860b99fee778dc661810df475a475e7749550357042146",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-review-progress-lib.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/cards-run.test.ts",
-      "hash": "7b35f332e9455e871332f55472099978d76fce2d88bd16a730b25743234db7c3",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-run.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/cards-run.ts",
-      "hash": "72d88e1f2c6a6121294ad92ec9d5c54a3b0be25448e6018da6f292e462dcb508",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/cards-run.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
@@ -1535,102 +1375,6 @@
       "testCategory": "root import guard"
     },
     {
-      "path": "apps/pair-cli/src/commands/run/lock-probe.test.ts",
-      "hash": "bb1420d1f68e41aa075851bdb986c356fb5f96b4e23f77ad24d2a8eee5329747",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/lock-probe.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/lock-probe.ts",
-      "hash": "47a77f72aabe35fac5b4bcdd7cb3c2ec76ffcfd492d5ded648a12f48818155d7",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 1
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/lock-probe.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/lock-stale.test.ts",
-      "hash": "1bf26a4f5ed3d8f7305f6bfd77571655a06b04add8f0ac6e57c6869a893a81fc",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/lock-stale.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/loop-driver-unknown-outcome.test.ts",
-      "hash": "1d25c5e6c368b1fc24eda04b0e79d388c5f5fc1bc03cf85e286163f5ad7dce8a",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/loop-driver-unknown-outcome.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
-      "hash": "7079887bbff2ca129a4aee670681dae5a5b4065517ee14beb4fe29447f11dc36",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/loop-prereq-597.test.ts",
-      "hash": "3bd8df17968af5e803ab4e013ba3ee1e83e904d9a16b44033a354b0dfc4daaef",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 1
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/loop-prereq-597.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
       "path": "apps/pair-cli/src/commands/run/nested-host-signal-601.test.ts",
       "hash": "1bef9c5a12a9217333be48e8de5c78166848269cfad8b59cce93e730daab81c4",
       "dependencies": [
@@ -1645,86 +1389,6 @@
       "reason": "Real subprocess and filesystem integration fixture.",
       "decision": "Keep this exact execution boundary covered by the host recovery regression tests.",
       "testCategory": "real subprocess and lock integration"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/pair-loop-parity.test.ts",
-      "hash": "e08b7d9423965bf20f3a2e8e384e642dcfdf5e72210029217198ef6c1632bdbb",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/pair-loop-parity.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/parallel-entry.test.ts",
-      "hash": "e1dc85a4e6ffb6ab2fd6b6165dec65a78234e070a06e541e69a8f543c8a81faa",
-      "dependencies": [
-        {
-          "form": "dynamic-import",
-          "specifier": "fs",
-          "line": 740
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/parallel-entry.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
-      "hash": "c77452bcd6c29e35ba20ed4e45e236fcee89c39056c42d850af1ad52280b160f",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/parallel-loop.test.ts",
-      "hash": "80b8f398ff657cfc1dfbbece280f3de8b76482e9d4b5d7c144d24dd5e9f9b7a7",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/parallel-loop.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/parallel.test.ts",
-      "hash": "0c19efdd2b87318a3015491cdf001b802291c6427e0a4d856a255a3e5c8f0cbb",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 4
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/parallel.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
     },
     {
       "path": "apps/pair-cli/src/commands/run/preparation-failure-pr.test.ts",
@@ -1802,54 +1466,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/profile-stages-617.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/prompt-safety.test.ts",
-      "hash": "955820f2ed93a7cb11c805695cdd2cc03a49758605da527f5b12ce44de542160",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/prompt-safety.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/root-plan.test.ts",
-      "hash": "29859b5affa46ba4bb999f3ebbd2ed792b48052b96cac3902ac7a878867c58e3",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/root-plan.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/root-select.test.ts",
-      "hash": "92c71cff63a1027b70810dac42706849cb326f05aa97d85df615cfeb4cf3c633",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/root-select.test.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
@@ -1946,22 +1562,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/run-events.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
-      "hash": "31f88462d4e738fd0a340b94f9973958819d5995c55a3ed80eacedf12e21e17d",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 5
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
@@ -2083,22 +1683,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/stage-telemetry.test.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/stop-predicate.test.ts",
-      "hash": "955a962b81d0bfb82a75cd43adeb907473b0e5fa2721e4c5584054ae64a08126",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/stop-predicate.test.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
@@ -2293,22 +1877,6 @@
       ],
       "disposition": "in-flight-churn",
       "producer": "apps/pair-cli/src/commands/run/telemetry.ts",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
-      "path": "apps/pair-cli/src/commands/run/tier-parity.test.ts",
-      "hash": "9fef54494cec7b54e0e43f86a91c996e0bbb39ddade1319c26ce4343faceb4c8",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "fs",
-          "line": 2
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "apps/pair-cli/src/commands/run/tier-parity.test.ts",
       "reason": "in-flight-churn",
       "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
       "testCategory": "root import guard"
@@ -2954,7 +2522,13 @@
     {
       "path": "packages/content-ops/src/http/retry.domain.test.ts",
       "hash": "12f671c3ffc6db59a07819e0c0c02cb5ea53aac91a655e28cd828383932a3d4c",
-      "dependencies": [{ "form": "import", "specifier": "node:fs", "line": 2 }],
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
       "disposition": "os-guarantee",
       "producer": "packages/content-ops/src/http/retry.domain.test.ts",
       "reason": "The real tsc subprocess resolves inherited config, dependencies and a mutated copy of the production retry model from disk.",
@@ -5061,22 +4635,6 @@
       "testCategory": "root import guard"
     },
     {
-      "path": "packages/knowledge-hub/dataset/.workflows/pair-loop.test.mjs",
-      "hash": "9178ee02fefa6b099fff19ae2ff3583ccb2bd86eee5085068cf37e3b21fc9a46",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 17
-        }
-      ],
-      "disposition": "in-flight-churn",
-      "producer": "packages/knowledge-hub/dataset/.workflows/pair-loop.test.mjs",
-      "reason": "in-flight-churn",
-      "decision": "Retain this exact path under the story Scope Limit while concurrent delivery-cycle changes land; the root guard must reject any new unlisted path and any stale entry.",
-      "testCategory": "root import guard"
-    },
-    {
       "path": "packages/knowledge-hub/dataset/.workflows/pair-profile-batch-regressions.test.mjs",
       "hash": "afe5ffbf98990ede6809d1fd07e15dba2e80bf0ddf92b84c17d7d853802a109f",
       "dependencies": [
@@ -6005,25 +5563,6 @@
       "testCategory": "repo-file-contract"
     },
     {
-      "path": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
-      "hash": "3436003d488d8773e24e6d63b5976400f1afc3cfe7c7702157f04e5763cbeed7",
-      "dependencies": [
-        {
-          "form": "import",
-          "specifier": "node:fs",
-          "line": 3
-        }
-      ],
-      "disposition": "repo-contract",
-      "producer": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
-      "sourceSymbols": ["readFileSync"],
-      "observedOperations": ["readFileSync"],
-      "operationConsumer": "see observedOperations",
-      "reason": "Read-only assertions over real checked-in repository files; an in-memory copy would only prove its own seed.",
-      "decision": "Exact-path exception; no migration.",
-      "testCategory": "repo-file-contract"
-    },
-    {
       "path": "packages/knowledge-hub/src/conformance/pair-next-autonomy-selection.test.ts",
       "hash": "3523f5690538644006dca9df0301cd338a341721dfe9fde87836a8010ee81806",
       "dependencies": [
@@ -6835,7 +6374,13 @@
     {
       "path": "packages/workflows/test/delivery.test.ts",
       "hash": "4c3e01bbc13af154fea9a38e0dd29084c3a14fac42a77cb303031a5e41898f85",
-      "dependencies": [{ "form": "import", "specifier": "node:fs", "line": 2 }],
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 2
+        }
+      ],
       "disposition": "repo-contract",
       "producer": "packages/workflows/test/delivery.test.ts",
       "observedOperations": ["readFileSync"],
@@ -6932,7 +6477,13 @@
     {
       "path": "scripts/dev/domain-ratchet.test.mjs",
       "hash": "e3616327665184d45a0b4e3bc46a394ce0035bd1a873a5c08488c72b05573463",
-      "dependencies": [{ "form": "import", "specifier": "node:fs", "line": 3 }],
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 3
+        }
+      ],
       "disposition": "os-guarantee",
       "producer": "scripts/dev/domain-ratchet.test.mjs",
       "reason": "Real Git, Oxlint and TypeScript resolve and inspect paths in disposable tracked repositories.",
@@ -6942,7 +6493,13 @@
     {
       "path": "scripts/dev/domain-semantic.test.mjs",
       "hash": "0c5529c73ef0f5ee9f20733fb1474a949e76697d51c62303acc60ff547b71dbb",
-      "dependencies": [{ "form": "import", "specifier": "node:fs", "line": 11 }],
+      "dependencies": [
+        {
+          "form": "import",
+          "specifier": "node:fs",
+          "line": 11
+        }
+      ],
       "disposition": "os-guarantee",
       "producer": "scripts/dev/domain-semantic.test.mjs",
       "reason": "The real pnpm lint entry point and compiler resolve the temporary workspace and its linked dependencies from disk.",

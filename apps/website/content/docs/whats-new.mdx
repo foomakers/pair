@@ -14,7 +14,7 @@ Most important first. Each item says what it changes for you; the link opens the
 
    A preset sets every rule at once: `escalate-red` works through the whole backlog and stops only on high-risk cards, `full` merges everything, `supervised` waits for you before preparing or merging. Nothing merges without you unless you allow it. [Autonomy and profiles](/docs/guides/autonomy-and-profiles)
 
-3. **Let pair work through the backlog while you do something else.** Start it from the terminal (`pair-cli run`) or from Claude Code (`/pair-loop`): it picks the cards it is allowed to take, delivers them and hands back the ones that need a person. With `--watch` it stays on, waiting for new cards or for your decision, until you stop it. On a terminal each card is one line that updates in place: what it is doing now, its PR and how long it has run. [Automated development](/docs/tutorials/automated-development)
+3. **Deliver a backlog root.** Run `pair-cli run delivery --root <epic> --parallel 3`; the summary identifies approvals and waiting dependents. [Automated development](/docs/tutorials/automated-development)
 
 4. **pair gets itself out of trouble instead of stopping.** A red CI run goes back to the fix step with the failing checks, a branch behind its base is synced, a worktree left messy by an interrupted run is cleaned up or resumed, and a fix that needs a file outside its plan widens the plan instead of stopping. When it really cannot continue, the card says why. [The delivery cycle](/docs/process-lifecycle/delivery-cycle)
 

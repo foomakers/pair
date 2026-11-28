@@ -532,11 +532,14 @@ ${assign === undefined ? '' : `assign: ${assign}\n`}steps:
 })
 
 it('#701 AC-2 names the approval blocking dependents and how to resume', async () => {
-  write('.pair/adoption/tech/workflows/quick.yaml', `version: 1
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    `version: 1
 name: quick
 steps:
   approval: { kind: approval }
-`)
+`,
+  )
   write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Cycle')
   write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
   hostProcess.mockImplementation(async (_bin, args) =>
@@ -544,7 +547,12 @@ steps:
   )
   const readSelection: NonNullable<WorkflowHostDependencies['readSelection']> = async () => ({
     cards: ['9', '10', '11'].map(id => ({
-      id, title: `Card ${id}`, body: '', labels: [], boardState: 'Ready', closed: false,
+      id,
+      title: `Card ${id}`,
+      body: '',
+      labels: [],
+      boardState: 'Ready',
+      closed: false,
       prerequisites: id === '9' ? [] : ['9'],
     })),
   })

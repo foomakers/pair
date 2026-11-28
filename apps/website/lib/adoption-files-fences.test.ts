@@ -19,13 +19,7 @@ const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/
 // The automation.md sections the page documents with a fenced example, each opening with its heading.
 // #552 increment 6: `## Eligibility` and `## Auto-Advance` are legacy, named in prose only, so they
 // have no fenced example any more; they must still never leak out as a page heading (H below).
-const AUTOMATION_SECTIONS = [
-  'Autonomy',
-  'Stop Predicate',
-  'Max Parallelism',
-  'Audit Location',
-  'Workflows',
-]
+const AUTOMATION_SECTIONS = ['Autonomy', 'Audit Location', 'Workflows']
 const LEGACY_SECTIONS = ['Eligibility', 'Auto-Advance']
 
 const source = readFileSync(PAGE, 'utf8')

@@ -112,17 +112,6 @@ describe('selection arguments reach pair-next only', () => {
     ).toEqual(['--root', '9', '--filter', 'a,b', '--assignee', '@me', '--status', 'Draft,Ready'])
   })
 
-  it('S2: pair-loop declares selection arguments', () => {
-    expect(buildSkillArgs('pair-loop', { root: '9', assignee: '@me', status: 'Ready' })).toEqual([
-      '--root',
-      '9',
-      '--assignee',
-      '@me',
-      '--status',
-      'Ready',
-    ])
-  })
-
   it('S3: the perimeter REFUSES them where they cannot be honoured, with the driver-declaration reason', () => {
     const base = {
       root: '1',
@@ -153,7 +142,7 @@ describe('selection arguments reach pair-next only', () => {
     ).toBe(true)
     expect(
       selectionDeliveredBy({ kind: 'skill', name: 'pair-loop', source: 'cascade' } as never),
-    ).toBe(true)
+    ).toBe(false)
     expect(selectionDeliveredBy({ kind: 'prompt', text: 'x' } as never)).toBe(false)
   })
 })

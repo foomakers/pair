@@ -1,10 +1,6 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import { InMemoryFileSystemService } from '@pair/content-ops'
+import { describe, it, expect } from 'vitest'
 import { ENGINES } from './engines'
 import { buildEngineArgs } from './spawn'
-import { handleRunCommand, type RunHandlerDependencies } from './handler'
-import { parseRunCommand } from './parser'
-import { buildCardProcessArgs } from './parallel'
 import { markIgnoredEffort, type ResolvedWorkflowProfile } from './workflow-profile'
 
 /** US-560: effort reaches the engine (AC1-3); --profile / --workflow-config reach --parallel children (AC4). */
@@ -75,69 +71,6 @@ describe('AC3: unverified engines are named, never silently dropped', () => {
   })
   it('no warning when every effort is sent', () => {
     expect(markIgnoredEffort(profile(), () => ENGINES.claude).warning).toBeUndefined()
-  })
-})
-
-describe('AC4: --profile / --workflow-config with --root/--parallel/--watch', () => {
-  const cand = { id: '9', title: 't', branch: 'b', tier: 'risk:green', labels: [] }
-
-  it('parser accepts them without --card', () => {
-    expect(parseRunCommand({ root: '1', parallel: '2', profile: 'x' }).profile).toBe('x')
-    expect(
-      parseRunCommand({ root: '1', parallel: '2', watch: '5', workflowConfig: '/c.json' } as never)
-        .workflowConfig,
-    ).toBe('/c.json')
-  })
-  it('accepts a profile on an off-cycle skill', () => {
-    expect(parseRunCommand({ skill: 'pair-next', profile: 'x' }).profile).toBe('x')
-  })
-  it('every child gets the same flag', () => {
-    const config = parseRunCommand({ root: '1', parallel: '2', profile: 'x' })
-    expect(buildCardProcessArgs(config, cand as never, '/p')).toEqual(
-      expect.arrayContaining(['--profile', 'x']),
-    )
-    const wc = parseRunCommand({ root: '1', parallel: '2', workflowConfig: '/c.json' })
-    expect(buildCardProcessArgs(wc, cand as never, '/p')).toEqual(
-      expect.arrayContaining(['--workflow-config', '/c.json']),
-    )
-  })
-
-  afterEach(() => vi.restoreAllMocks())
-
-  it('unknown profile HALTs profile-unresolved before any child spawns', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    const cwd = '/project'
-    const fs = new InMemoryFileSystemService(
-      {
-        [`${cwd}/config.json`]: JSON.stringify({ asset_registries: {} }),
-        [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
-        '/bin/claude': '',
-      },
-      cwd,
-      cwd,
-    )
-    const runCardProcess = vi.fn()
-    const deps: RunHandlerDependencies = {
-      selectCandidates: async () => [],
-      runCardProcess,
-      resolveWorkflowProfile: () => {
-        throw new Error('profile-unresolved: nope')
-      },
-    }
-    const prev = process.env['PATH']
-    process.env['PATH'] = '/bin'
-    try {
-      await expect(
-        handleRunCommand(
-          parseRunCommand({ root: '1', parallel: '2', autonomous: true, profile: 'nope' }),
-          fs,
-          deps,
-        ),
-      ).rejects.toThrow(/profile-unresolved/)
-    } finally {
-      process.env['PATH'] = prev
-    }
-    expect(runCardProcess).not.toHaveBeenCalled()
   })
 })
 

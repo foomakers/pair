@@ -12,20 +12,12 @@ const installed =
     names.includes(name)
 
 describe('resolveInvocation', () => {
-  it('invokes pair-loop when it is installed', () => {
-    const resolved = resolveInvocation(
-      { kind: 'skill' },
-      installed(PREFERRED_SKILL, FALLBACK_SKILL),
-    )
-
-    expect(resolved).toEqual({ kind: 'skill', name: 'pair-loop', source: 'cascade' })
-  })
-
-  it('falls back to pair-next when pair-loop is absent, and says so', () => {
-    const resolved = resolveInvocation({ kind: 'skill' }, installed(FALLBACK_SKILL))
-
-    expect(resolved).toEqual({ kind: 'skill', name: 'pair-next', source: 'cascade-fallback' })
-    expect(describeSkillResolution(resolved)).toContain('pair-loop not installed, falling back')
+  it('invokes pair-next by default', () => {
+    expect(resolveInvocation({ kind: 'skill' }, installed(PREFERRED_SKILL))).toEqual({
+      kind: 'skill',
+      name: 'pair-next',
+      source: 'cascade',
+    })
   })
 
   it('honours an explicit --skill with no fallback', () => {
@@ -45,7 +37,7 @@ describe('resolveInvocation', () => {
 
   it('fails when neither cascade skill is installed', () => {
     expect(() => resolveInvocation({ kind: 'skill' }, installed())).toThrow(
-      /Neither pair-loop nor pair-next is installed/,
+      /Skill pair-next is not installed/,
     )
   })
 

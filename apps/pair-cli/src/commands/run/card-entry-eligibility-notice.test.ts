@@ -86,12 +86,4 @@ describe('r1-4: the card path never says "nothing is selected unattended" and th
       )
     })
   }
-
-  it('E4-C1: loop mode keeps the "automation is off" warning verbatim', async () => {
-    const output = capture()
-
-    await handleRunCommand(parseRunCommand({ dryRun: true, root: '5' }), files(), deps)
-
-    expect(output()).toContain('automation is off')
-  })
 })

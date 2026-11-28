@@ -34,10 +34,8 @@ until: pr
 
 ## Tags route cards to workflows
 
-`## Workflows` maps a label to the workflow that runs on a card carrying it (`auto-dev ⇒ pair-loop`). A card with no mapped tag runs nothing: the absence of a route is the opt-in boundary. The filter is applied before routing. Recipe: [Automate work via tags](/docs/guides/tag-automation).
 
 ## The unattended loop
 
-`/pair-loop` and `pair-cli run` select cards through the filter, drive each through the delivery cycle (`implement → verify`, remediation rounds as needed), and stop on the project's `## Stop Predicate` or iteration cap. A card that clears review stops at ready-for-merge unless the `merge` gate allows the merge stage under `until: merged`. Walkthrough: [Automated development](/docs/tutorials/automated-development).
 
 **Next:** [Deliver a card](/docs/guides/deliver-a-card), the recipe that puts all of this to work.

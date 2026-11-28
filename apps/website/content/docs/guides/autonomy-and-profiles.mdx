@@ -34,7 +34,6 @@ description: Decide how far unattended runs go, and which engine, model and effo
      until: pr
      ```
 
-   - With an empty `## Autonomy`, the first interactive `pair-cli run` (or `/pair-loop`, `/pair-next --mode`, `/pair-workflow-cycle`) asks `full / escalate-red / supervised` (Enter = `supervised`) and writes the answer; a non-interactive run writes nothing and keeps every gate held.
 
    - With `/pair-assistant` (optional, Claude Code): "let green cards go up to merge" shows the diff first, then writes it through record-decision.
 2. **Check the effective values**
@@ -86,7 +85,6 @@ description: Decide how far unattended runs go, and which engine, model and effo
 3. **Print the resolved table**
    - With pair-cli: `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --profile mixed --tier risk:green`. The JSON's `table` has one line per stage with engine, model, effort and context, each with the level that decided it. A run prints the same table before its first dispatch.
 4. **Pick the profile per run**
-   - With pair-cli: `pair-cli run --card 217 --profile mixed`, or `--workflow-config ./file.json` for an external file used verbatim. Both also work with `--root`, `--parallel` and `--watch`: every child card gets the same flag.
    - In your assistant: `/pair-workflow-cycle` takes the same as `$profile` and `$workflowConfig`.
 
 Cascade, highest first: `--workflow-config` > `--profile` > `workflowProfiles.default` > KB default (the run's engine, its default model, default effort, fresh context). An unknown name or a bad value halts (`profile-unresolved`, `profile-invalid`, `profile-name-collision`), never a silent fallback.

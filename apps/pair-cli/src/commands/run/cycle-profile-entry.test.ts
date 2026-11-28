@@ -32,7 +32,7 @@ const files = (extra: Record<string, string> = {}, configExtra: Record<string, u
         },
         ...configExtra,
       }),
-      [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '# Pair Loop',
+      [`${cwd}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '# Pair Loop',
       [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
       [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
       [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
@@ -219,7 +219,7 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     const output = capture()
     const fs = files({
       [`${cwd}/${POLICY_PATH}`]:
-        '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n',
+        '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-process-plan-tasks\n',
     })
 
     const iteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'done' }))
@@ -249,7 +249,7 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     const selected = { ...configured, stages: { ...configured.stages, defaults } }
     const fs = files({
       [`${cwd}/${POLICY_PATH}`]:
-        '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n',
+        '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-process-plan-tasks\n',
     })
 
     expect(
