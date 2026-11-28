@@ -247,6 +247,29 @@ it('#696 AC-8: rejects validation when a workflow requires a missing skill', () 
   })
 })
 
+// #674 AC-2, R764-02: availability must follow the working directory in the packet.
+it.each(['caller', 'worktree'])(
+  'starts according to the card worktree when the skill exists only in the %s',
+  where => {
+    const skill = 'local-notes'
+    git('worktree', 'add', '-b', branch, worktree, 'main')
+    const prefix = where === 'worktree' ? `worktrees/${card}/` : ''
+    write(`${prefix}.claude/skills/${skill}/SKILL.md`, 'Notes skill')
+    write(workflowFile, namedWorkflow(`  notes: { kind: generic, skill: ${skill} }\n`))
+    const args = ['start', 'quick', '--card', card, '--engine', 'claude']
+
+    if (where === 'caller') {
+      const result = invoke(args)
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain(`steps.notes.skill: skill '${skill}' is not installed`)
+      expect(existsSync(join(runDir, 'state.json'))).toBe(false)
+    } else {
+      const lease = openSession(args)
+      expect(advance(lease)).toMatchObject({ ready: [{ id: 'notes', uses: skill, worktree }] })
+    }
+  },
+)
+
 it('#696 design §2: exposes serializable workflow kinds', () => {
   expect(JSON.parse(successful(['kinds']))).toMatchObject({
     generic: { name: 'generic', defaultInteractive: false },

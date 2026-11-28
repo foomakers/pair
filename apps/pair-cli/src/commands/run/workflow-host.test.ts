@@ -697,6 +697,34 @@ describe('validation before any launch (AC-2, AC-3)', () => {
     expect(fs.existsSync(runDir())).toBe(false)
   })
 
+  // #674 AC-2, R764-02: the launcher changes directories before invoking any skill.
+  it.each(['caller', 'worktree'])(
+    'probes the execution directory when the skill exists only in the %s',
+    async where => {
+      const skill = 'local-notes'
+      const dir = 'worktrees/627'
+      const prefix = where === 'worktree' ? `${dir}/` : ''
+      write(`${prefix}.claude/skills/${skill}/SKILL.md`, 'Notes skill')
+      write(
+        '.pair/adoption/tech/workflows/quick.yaml',
+        `version: 1\nname: quick\nsteps:\n  notes: { kind: generic, skill: ${skill} }\n`,
+      )
+
+      const exit = await run(['quick'], {
+        [skill]: () => fenced({ status: 'ok', summary: 'Notes' }),
+      })
+      if (where === 'caller') {
+        expect(exit).toBe(1)
+        expect(lines.join('\n')).toContain(`steps.notes.skill: skill '${skill}' is not installed`)
+        expect(launched).toEqual([])
+        expect(fs.existsSync(runDir())).toBe(false)
+      } else {
+        expect(exit, lines.join('\n')).toBe(0)
+        expect(launched.map(launch => launch.cwd)).toEqual([join(project, dir)])
+      }
+    },
+  )
+
   it('--dry-run validates and prints the steps without launching or creating a run', async () => {
     expect(await run(['quick'], OK, { dryRun: true })).toBe(0)
     expect(lines).toContain('  1. implement — implement')
