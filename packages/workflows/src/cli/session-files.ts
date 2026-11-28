@@ -2,12 +2,14 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { chmod, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import type { RunFiles } from '../engine'
 import { applyProjectConfig } from './project-config'
+import type { SkillFiles } from './opencode-skill-paths'
 
 export const readText = (file: string): string => readFileSync(file, 'utf8')
 
-export const sessionFiles: RunFiles = {
+export const sessionFiles: RunFiles & SkillFiles = {
   existsSync,
   readFileSync: readText,
+  readdirSync: path => readdirSync(path, { withFileTypes: true }),
   statSync,
   chmod,
   async mkdir(path, options) {
