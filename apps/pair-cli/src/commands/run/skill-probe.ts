@@ -8,7 +8,7 @@ import {
 import type { FileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
 import type { SkillProbe } from './resolve-skill'
-import type { EngineId } from './engines'
+import type { EngineDefinition, EngineId } from './engines'
 
 const isFile = (fs: FileSystemService) => (path: string) =>
   fs.existsSync(path) && fs.statSync(path).isFile()
@@ -33,8 +33,9 @@ export function workflowSkillProbe(
   config: Config,
   root: string,
   engine: EngineId,
+  runner?: Pick<EngineDefinition, 'command' | 'runnerArgs'>,
 ) {
-  return engineSkillProbe(fs, isFile(fs), root, { config, engine })
+  return engineSkillProbe(fs, isFile(fs), root, { config, engine, runner })
 }
 
 /** Read the installed skill through the same registry targets as the existence probe. */

@@ -195,11 +195,13 @@ function packageSkill(
   return false
 }
 
-function codexSkills(root: string): Set<string> | undefined {
+type SkillRunner = { command: string; runnerArgs?: readonly string[] | undefined }
+
+function codexSkills(root: string, runner: SkillRunner): Set<string> | undefined {
   const reply = inventoryRequest(
     root,
-    'codex',
-    ['app-server', '--listen', 'stdio://'],
+    runner.command,
+    [...(runner.runnerArgs ?? []), 'app-server', '--listen', 'stdio://'],
     [
       { id: 1, method: 'initialize', params: { clientInfo: { name: 'pair', version: '1' } } },
       { method: 'initialized' },
@@ -223,11 +225,11 @@ function codexSkills(root: string): Set<string> | undefined {
   )
 }
 
-function piSkills(root: string): Set<string> | undefined {
+function piSkills(root: string, runner: SkillRunner): Set<string> | undefined {
   const reply = inventoryRequest(
     root,
-    'pi',
-    ['--offline', '--mode', 'rpc', '--no-session', '--no-extensions'],
+    runner.command,
+    [...(runner.runnerArgs ?? []), '--offline', '--mode', 'rpc', '--no-session', '--no-extensions'],
     [{ id: 'skills', type: 'get_commands' }],
   )
   if (!isPlainObject(reply) || reply['type'] !== 'response' || reply['success'] !== true)
@@ -244,11 +246,15 @@ function piSkills(root: string): Set<string> | undefined {
   )
 }
 
-function cachedNativeSkill(root: string, engine: string | undefined) {
+function cachedNativeSkill(
+  root: string,
+  engine: string,
+  runner: SkillRunner = { command: engine },
+) {
   const list = engine === 'codex' ? codexSkills : engine === 'pi' ? piSkills : undefined
   let inventory: Set<string> | undefined | null = null
   return (name: string) => {
-    if (inventory === null) inventory = list?.(root)
+    if (inventory === null) inventory = list?.(root, runner)
     return inventory?.has(name)
   }
 }
@@ -280,7 +286,13 @@ export function engineSkillProbe(
     config,
     exact = true,
     engine,
-  }: { config: unknown; exact?: boolean; engine?: string | undefined },
+    runner,
+  }: {
+    config: unknown
+    exact?: boolean
+    engine?: string | undefined
+    runner?: SkillRunner | undefined
+  },
 ): (name: string) => boolean {
   const layout = skillsLayout(config)
   const prefix = exact ? undefined : layout.prefix
@@ -291,7 +303,7 @@ export function engineSkillProbe(
   if (!directories) return () => false
   const [project, global] = directories
   const home = process.env['HOME']
-  const nativeSkill = cachedNativeSkill(projectRoot, engine)
+  const nativeSkill = cachedNativeSkill(projectRoot, engine, runner)
   return name => {
     // A successful native inventory includes selectors and disabled skills that paths cannot infer.
     const native = nativeSkill(name)

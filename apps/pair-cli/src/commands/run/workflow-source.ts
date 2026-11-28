@@ -16,11 +16,18 @@ import { createSkillProbe, workflowDefaultSkill, workflowSkillProbe } from './sk
 import { isEngineId, type EngineId } from './engines'
 import { locateCycleScripts } from './cycle-scripts'
 import { canCommentOnCard } from './workflow-facts'
+import { resolveEngine } from './resolve-engine'
+import { withRunAgentRunner } from './run-context'
 
 const WORKFLOWS_DIR = '.pair/adoption/tech/workflows'
 const PORTABLE_QUICK =
   '.pair/knowledge/guidelines/collaboration/automation/workflow-examples/quick.yaml'
 export const WAY_OF_WORKING = '.pair/adoption/tech/way-of-working.md'
+
+function configuredSkillProbe(fs: FileSystemService, project: Config, cwd: string, id: EngineId) {
+  const { engine } = withRunAgentRunner(resolveEngine({ flag: id }), project)
+  return workflowSkillProbe(fs, project, cwd, id, engine)
+}
 
 export interface Located {
   readonly file: string
@@ -83,7 +90,10 @@ export function checkWorkflow(
   const registry = join(main, WAY_OF_WORKING)
   const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
   return validate(source.text, source.file, {
-    skillExists: createSkillProbe(fs, project, cwd, true, engine),
+    skillExists:
+      engine === undefined
+        ? createSkillProbe(fs, project, cwd, true)
+        : configuredSkillProbe(fs, project, cwd, engine),
     deferSkillProbe: true,
     gateKeys: Object.keys(readGateRegistry(registryText)),
     gateTargets: Object.keys(readGateTargets(registryText)),
@@ -118,7 +128,7 @@ export function workflowSkillContext(
     defaultSkill: workflowDefaultSkill(fs, project, cwd),
     skillExists(name, engine) {
       if (!isEngineId(engine)) return false
-      const probe = probes.get(engine) ?? workflowSkillProbe(fs, project, cwd, engine)
+      const probe = probes.get(engine) ?? configuredSkillProbe(fs, project, cwd, engine)
       probes.set(engine, probe)
       return probe(name)
     },
