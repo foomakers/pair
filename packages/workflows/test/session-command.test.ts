@@ -328,6 +328,7 @@ it.each(['validate', 'start'])('R764-06: %s rejects a Codex skill and workflow c
   expect(JSON.parse(successful(['expand', 'quick']))).toMatchObject({
     steps: [{ id: 'included/draft' }],
   })
+  commitFixture()
   const args = command === 'start' ? ['--card', card] : []
   const result = invoke([command, 'quick', '--engine', 'codex', ...args])
   expect(result.status).toBe(1)

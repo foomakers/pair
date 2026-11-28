@@ -618,7 +618,11 @@ function mergeWarnings(workflow: Workflow): WorkflowError[] {
  */
 export function validate(text: string, file: string, deps: ValidationDeps): Validation {
   const parsed = deps.resolveWorkflow
-    ? expand({ text, file }, deps.resolveWorkflow, deps.skillExists)
+    ? expand(
+        { text, file },
+        deps.resolveWorkflow,
+        deps.deferSkillProbe ? undefined : deps.skillExists,
+      )
     : parseWorkflow(text, file)
   if (parsed.workflow === undefined) return { errors: parsed.errors, warnings: [] }
   const workflow = parsed.workflow
@@ -642,8 +646,12 @@ export function validate(text: string, file: string, deps: ValidationDeps): Vali
         workflow: parsed.workflow,
         errors: [],
         ...(deps.deferSkillProbe && {
-          checkSkills: (context: WorkflowSkillContext) =>
-            checkWorkflowSkills(workflow, context).map(locate),
+          checkSkills: (context: WorkflowSkillContext) => [
+            ...('includeClashes' in parsed
+              ? parsed.includeClashes(name => context.skillExists(name, context.engine))
+              : []),
+            ...checkWorkflowSkills(workflow, context).map(locate),
+          ],
         }),
         warnings: [
           ...warnings(parsed.workflow),

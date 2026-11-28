@@ -31,6 +31,7 @@ export interface Expansion {
   readonly workflow?: Workflow
   readonly errors: readonly WorkflowError[]
   readonly origins: Readonly<Record<string, { readonly file: string; readonly line: number }>>
+  readonly includeClashes: (skillExists: (name: string) => boolean) => WorkflowError[]
 }
 
 function recordOrigins(
@@ -56,7 +57,8 @@ type ExpansionState = {
   outputSteps: Record<string, string>
   aliases: Record<string, NonNullable<Workflow['aliases']>[string]>
   resolve: (name: string) => WorkflowSource | undefined
-  skillExists: (name: string) => boolean
+  skillExists: ((name: string) => boolean) | undefined
+  includes: { name: string; clash: WorkflowError }[]
 }
 
 type StepContext = { workflow: Workflow; step: Step; id: string }
@@ -181,14 +183,16 @@ function expandStep(state: ExpansionState, context: StepContext, chain: readonly
     )
     return []
   }
-  if (step.uses && state.skillExists(step.uses)) {
-    state.errors.push(
-      errorAt(workflow, ['steps', step.id, 'uses'], {
-        problem: `workflow and skill name clash: ${step.uses}`,
-        fix: 'rename the workflow or skill',
-      }),
-    )
-    return []
+  if (step.uses !== undefined) {
+    const clash = errorAt(workflow, ['steps', step.id, 'uses'], {
+      problem: `workflow and skill name clash: ${step.uses}`,
+      fix: 'rename the workflow or skill',
+    })
+    if (state.skillExists?.(step.uses)) {
+      state.errors.push(clash)
+      return []
+    }
+    state.includes.push({ name: step.uses, clash })
   }
   if (chain.includes(target.file) || chain.length >= 4) {
     state.errors.push(
@@ -243,7 +247,7 @@ function visit(
 export function expand(
   source: WorkflowSource,
   resolve: (name: string) => WorkflowSource | undefined,
-  skillExists: (name: string) => boolean = () => false,
+  skillExists?: (name: string) => boolean,
 ): Expansion {
   const state: ExpansionState = {
     errors: [],
@@ -252,6 +256,7 @@ export function expand(
     aliases: {},
     resolve,
     skillExists,
+    includes: [],
   }
   const workflow = visit(state, source, '', [source.file])
   const bind = (step: Step): Step => {
@@ -272,5 +277,7 @@ export function expand(
       }),
     errors: state.errors,
     origins: state.origins,
+    includeClashes: exists =>
+      state.includes.filter(({ name }) => exists(name)).map(({ clash }) => clash),
   }
 }
