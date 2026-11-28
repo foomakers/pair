@@ -11,7 +11,7 @@ import { whileInterruptible } from './interrupt'
 import { CardOutOfScopeError } from './card-readiness'
 import { filterDeliveryFor } from './invocation'
 import { carriesEligibility, type DispatchSkipReason } from './dispatch'
-import { driveRun } from './loop-driver'
+import { driveRun } from './skill-driver'
 import {
   handlePreparation,
   NEEDS_REVIEW,
@@ -478,8 +478,6 @@ function preparePrepSkill(
     eligibility: context.policy.eligibility,
     cwd,
     cwdDeclared: config.cwd !== undefined,
-    requestedCap: config.maxIterations,
-    policyCap: context.policy.maxIterations,
     invocationKind: invocation.kind,
     filterDelivery: filterDeliveryFor(invocation),
   })

@@ -6,7 +6,6 @@ import { InMemoryFileSystemService } from '@pair/content-ops'
 import { handleRunCommand, type IterationRunner, type RunHandlerDependencies } from './handler'
 import type { LockAcquirer } from './card-lock'
 import { parseRunCommand } from './parser'
-import { POLICY_PATH } from './automation-policy'
 import type { CardReadiness } from './cycle-scripts'
 
 /**
@@ -84,9 +83,6 @@ const NO_READY_MAPPING = `# Way of Working
 | In Progress | In Progress |
 | Done        | Done        |
 `
-
-/** `## Eligibility` + `## Workflows`: a project that opted into tag dispatch (US-217). */
-const MAPPED_POLICY = '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n'
 
 const BREAKDOWN = `
 ## Task Breakdown
@@ -303,22 +299,4 @@ describe('r0-2: `--card N --pr P` enters the cycle with the PR or refuses naming
       }
     })
   }
-})
-
-// ── r0-4 — the per-card lock on both fallback routes ────────────────────────────────────────────
-describe('r0-4: both fallback routes take the per-card lock and release it on every exit', () => {
-  it('R4-C1: a MAPPED route with the lock held is a run-in-progress skip (US-217, unchanged)', async () => {
-    const output = captureLog()
-    const { calls, handler } = harness({ held: true })
-
-    const outcome = await run(
-      { card: '9', cardTags: 'auto-dev,risk:green' },
-      project({ [`${cwd}/${POLICY_PATH}`]: MAPPED_POLICY }),
-      handler,
-    )
-
-    expect(outcome.code).toBe(0)
-    expect(output()).toContain('run-in-progress')
-    expect(calls).toHaveLength(0)
-  })
 })

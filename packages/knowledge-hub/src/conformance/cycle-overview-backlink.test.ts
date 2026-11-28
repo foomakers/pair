@@ -15,10 +15,6 @@ const owners = {
     dataset: join(DATASET, '.skills/workflow/cycle/SKILL.md'),
     installed: join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/SKILL.md'),
   },
-  'pair-loop': {
-    dataset: join(DATASET, '.skills/loop/SKILL.md'),
-    installed: join(REPO_ROOT, '.claude/skills/pair-loop/SKILL.md'),
-  },
 }
 
 const PAGE = /\]\(([^)\s]*automation\/delivery-cycle\.md)(#[^)\s]*)?\)/

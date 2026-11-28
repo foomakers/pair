@@ -21,10 +21,6 @@ Recovery budgets use durable handoff publication identities and accepted maintai
 
 Minor
 
-## Stop Predicate
-
-tag:risk:red ⇒ Done
-
 ## Audit Location
 
 automation/loop-audit.md

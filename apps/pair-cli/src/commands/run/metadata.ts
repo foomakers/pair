@@ -1,30 +1,23 @@
 export const runCommandMetadata = {
   name: 'run',
-  description: 'Run a pair skill headlessly on a chosen engine, re-invoked until it stops',
+  description: 'Run a workflow or skill headlessly on a chosen engine',
   usage: 'pair-cli run [workflow] [options]',
   examples: [
-    'pair-cli run --root 212 --max-iterations 5            # drive the #212 subtree, confirmations active',
-    'pair-cli run --engine pi --root 212 --autonomous --max-iterations 3   # eligibility comes from the policy',
-    'pair-cli run --skill pair-next --filter risk:green --max-iterations 1 # --filter needs a skill that declares it',
     'pair-cli run --skill pair-next --root 212 --dry-run   # resolve and print, spawn nothing',
-    'pair-cli run --prompt "/pair-next --root 212" --max-iterations 1',
     'pair-cli run --card 217 --card-tags "auto-dev,risk:green"   # tag-driven: the mapping picks the workflow',
     "pair-cli run --card 487                                # Ready, no mapping: drives or resumes the story's delivery cycle",
-    'pair-cli run --cards 12,15,9 --autonomous             # ordered list: serial, retried in passes while progress is made',
     'pair-cli run quick --card 627                           # workflow `quick`: implement, then review, one step at a time (always autonomous; only an escalation stops it)',
     'pair-cli run quick --card 627 --dry-run               # validates the workflow and prints its steps; launches nothing',
     'pair-cli run --card 487 --pr 42                        # enters the cycle at {verify, first, r0} — never prepare',
     'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',
-    'pair-cli run --root 66 --parallel 3 --autonomous       # fan-out: up to 3 `run --card` processes at once',
-    'pair-cli run --filter PIPPO --assignee @me --parallel 2 --watch --interval 10m   # portable loop: re-selects each iteration',
+    'pair-cli run delivery --root 66 --parallel 3            # run up to 3 independent cards at once',
     "pair-cli run --card 521 --until merged --merge 'hold-when; has: cost:red'   # merge unless escalated; prints every effective value and its source",
-    'pair-cli run --skill pair-next --filter risk:green,risk:yellow --assignee @me --status Draft,Ready --max-iterations 1',
   ],
   options: [
     {
       flags: '[workflow]',
       description:
-        'US-652: a workflow to run step by step on one card (needs --card): the path of a workflow file, else `.pair/adoption/tech/workflows/<name>.yaml`, else the knowledge-base default of that name. Validated before any launch; a failed step exits 1, a step that needs a person parks the run (exit 0) and prints the command that resumes it. Without it, `--card` runs the delivery cycle, unchanged',
+        'Workflow name or file path; select cards with --card, --root, --filter or --assignee. Without a name, defaultWorkflow selects the workflow.',
     },
     { flags: '--engine <id>', description: 'Engine to run: pi | opencode | claude | codex' },
     {
@@ -61,44 +54,45 @@ export const runCommandMetadata = {
     },
     {
       flags: '--skill <name>',
-      description: 'Skill to invoke (no fallback); default cascades pair-loop → pair-next',
+      description: 'Skill to invoke once (no fallback)',
     },
     { flags: '--prompt <text>', description: 'Prompt to run instead of a skill invocation' },
-    { flags: '--root <id>', description: 'Scope root passed to the skill (pair-next --root)' },
+    {
+      flags: '--root <id>',
+      description:
+        'Select descendants of this root for a workflow, or pass the root to a skill that accepts it',
+    },
     {
       flags: '--filter <tag>',
-      description:
-        'Label filter, for a skill that declares one (pair-next): one label or a comma-separated any-of list (risk:green,risk:yellow). REFUSED for pair-loop, which reads `## Eligibility` from tech/automation.md itself',
+      description: 'Select cards by label, or pass a label filter to a skill that accepts it',
     },
     {
       flags: '--assignee <login|@me>',
       description:
-        'US-521: keep issues assigned to this user (@me = the authenticated code-host user), for a skill that declares it (pair-next); refused for pair-loop (the driver declares only root/predicate/iteration for it)',
+        'Select cards assigned to this user, or pass the assignee to a skill that accepts it',
     },
     {
       flags: '--status <macrostates>',
       description:
-        'US-521: comma-separated canonical macrostates (e.g. Draft,Ready), for a skill that declares it (pair-next); refused for pair-loop (the driver declares only root/predicate/iteration for it)',
+        'Select cards by canonical state, or pass the states to a skill that accepts them',
     },
     {
       flags: '--preset <full|escalate-red|supervised|custom>',
-      description:
-        'US-576: a named autonomy preset — full (filter *, prepare/merge hold-never, until merged), escalate-red (same, but merge hold-when; has: risk:red), supervised (filter *, prepare/merge hold-always, until merged), custom (explicit keys only). Requires --card, or the loop (--root/--filter; omitted --parallel inherits adoption (## Max Parallelism), otherwise KB default 1, forwarded to every child card). Precedence: argument > argument preset > explicit adoption key > adoption preset > KB default — every effective value is printed with its source.',
+      description: 'Select an autonomy preset for a card delivery cycle',
     },
     {
       flags: '--until <ready|pr|merged>',
-      description:
-        "US-521: how far the card's delivery cycle goes — ready (stop before implement), pr (default: the review-approved PR), merged (enter the merge stage; the only value that evaluates the merge gate). Requires --card, or the loop (--root/--filter; omitted --parallel inherits adoption (## Max Parallelism), otherwise KB default 1, forwarded to every child card). Precedence: argument > argument preset > explicit adoption key (`## Autonomy`, then translated legacy sections) > adoption preset > KB default — every effective value is printed with its source.",
+      description: 'Set how far the card delivery cycle proceeds',
     },
     {
       flags: '--prepare <gate>',
       description:
-        'US-523: the prepare gate `<hold-always|hold-never|hold-when>[; has: <labels>][; lacks: <labels>]` (with --card, or the loop: --root/--filter, omitted --parallel inherits adoption (## Max Parallelism), otherwise KB default 1, forwarded to every child card; `always|never|when` are deprecated aliases) — who prepares a Draft card: `hold-always` (default) needs a human (R3.11), `hold-never` proceeds alone recording assumptions, `hold-when` proceeds alone unless a boundary escalates (`needs-review`, card stays Draft). Requires --card',
+        'Set the card preparation gate: hold-always, hold-never or hold-when with optional label conditions',
     },
     {
       flags: '--merge <gate>',
       description:
-        "US-521: the merge gate, same grammar: hold-always parks awaiting-human (default), hold-never/hold-when enter the merge stage unless a has/lacks escalation fires (status escalated, exit 1, on-halt). hold-never waives pair-explicit-approval on a risk:red/untagged PR (US-576); #490's other signal checks stay mandatory. Requires --card, or the loop (--root/--filter; omitted --parallel inherits adoption (## Max Parallelism), otherwise KB default 1, forwarded to every child card)",
+        'Set the card merge gate: hold-always, hold-never or hold-when with optional label conditions',
     },
     {
       flags: '--card <id>',
@@ -113,11 +107,6 @@ export const runCommandMetadata = {
     {
       flags: '--no-telemetry',
       description: 'Disable local telemetry for this run; overrides ## Telemetry adoption setting',
-    },
-    {
-      flags: '--cards <list>',
-      description:
-        'US-614: run the listed cards (comma-separated ids) one at a time, in the given order, each through its own `--card` lifecycle and policy gates. After a pass, only the unfinished retryable cards run again, in the same order, while the previous pass made verifiable progress (a card moved to a later lifecycle state, read from durable state); a full pass with no progress stops the run and reports each remaining card with its reason. Escalated, awaiting-human and gate-red cards are never retried; a safety halt (perimeter/trust) stops at once. Passes are capped by --max-iterations (else policy max-iterations). Re-running the same list skips cards at target. Exit 0 = all at target, 1 = any card failed/escalated/stalled, 2 = invalid usage. Refused with --card, --root, --filter, --parallel > 1, --skill, --prompt, duplicate or unsafe ids',
     },
     {
       flags: '--card-tags <list>',
@@ -141,34 +130,9 @@ export const runCommandMetadata = {
     },
     {
       flags: '--parallel <n>',
-      description:
-        "US-491: fan-out (optional: the loop flags --watch, --preset, --until, --prepare, --merge, --predicate imply fan-out; omitted --parallel inherits adoption (## Max Parallelism), otherwise KB default 1) — pair-next selects (--root and/or --filter, --assignee, --status), pair-loop's dependency + mutex analysis plans, and up to min(dependency-allowed, n) `pair-cli run --card` processes run at once; explicit n overrides adoption; one iteration, or a re-selecting loop with --watch / --max-iterations (US-522). Needs --root or --filter (or the policy's); not with --card/--skill/--prompt",
+      description: 'Maximum concurrent cards in a workflow run',
     },
-    {
-      flags: '--state-order <states>',
-      description:
-        'Root delivery priority for this run: a comma-separated permutation of Review,In Progress,Ready. Overrides ## Delivery State Order; Draft follows these states.',
-    },
-    {
-      flags: '--watch',
-      description:
-        'US-522: the loop (--root/--filter; --parallel optional; omission inherits adoption (## Max Parallelism), otherwise KB default 1): each iteration re-selects (skipping escalated, locked and already-driven cards), and an idle one waits --interval and re-selects. Stops at the Stop Predicate, the iteration cap (only iterations that ran a card count; idle polls never do) or Ctrl-C',
-    },
-    {
-      flags: '--no-watch',
-      description: 'US-522: explicitly no watch loop (the default; refused together with --watch)',
-    },
-    {
-      flags: '--interval <n>s|m|h',
-      description:
-        'US-522: the idle wait under --watch (default 10m, at least 60s); requires --watch',
-    },
-    { flags: '--cwd <dir>', description: 'Working directory every iteration runs in' },
-    {
-      flags: '--max-iterations <n>',
-      description:
-        'Hard cap on iterations (narrows the policy cap, never widens it); with --parallel it enables the re-selecting loop; under --watch it counts the iterations that ran a card, never an idle poll',
-    },
+    { flags: '--cwd <dir>', description: 'Working directory for the run' },
     {
       flags: '--autonomous',
       description: 'Explicit opt-in: run without confirmations (never a default)',
@@ -184,29 +148,20 @@ export const runCommandMetadata = {
         'Explicit operator authorization for THIS --autonomous run on a card `## Eligibility` would exclude (announced, never persisted)',
     },
     {
-      flags: '--predicate <selector⇒condition>',
-      description:
-        'On the loop (--parallel optional; omission inherits adoption (## Max Parallelism), otherwise KB default 1): the loop stop predicate (same grammar as `## Stop Predicate`), argument > adoption, printed with its source. Checked at each iteration boundary before work; an empty or incomplete board snapshot never counts as satisfied',
-    },
-    {
       flags: '--eligibility-filter <labels>',
-      description:
-        "Internal: set by the --parallel loop on each child --card run — the loop's effective filter (argument or ## Autonomy) as THIS card's eligibility, replacing the legacy ## Eligibility label. Needs --card; not a selector",
+      description: 'Override the eligibility filter for this card run',
     },
     {
       flags: '--iteration-timeout <seconds>',
-      description:
-        'Opt-in TOTAL wall-clock cap per iteration (no default; the idle timeout is the hang guard)',
+      description: 'Maximum wall-clock duration for one engine invocation',
     },
     {
       flags: '--idle-timeout <seconds>',
-      description:
-        'Stop an iteration after this long with no engine event (default 1800); over `## Stop Predicate` idle-timeout and pair.config.json engine.idleTimeout',
+      description: 'Stop an engine invocation after this duration without an event',
     },
     {
       flags: '--quiet',
-      description:
-        'Plain output as before live progress: one line per iteration, no live card lines',
+      description: 'Print plain progress without live card lines',
     },
     {
       flags: '--verbose',
@@ -223,13 +178,11 @@ export const runCommandMetadata = {
     },
     {
       flags: '--profile <name>',
-      description:
-        'Select stage engine/model/effort/context for cards, skills, prompts and root/parallel runs; unmapped invocations use defaults. run.defaults and run.agents provide fallbacks. Unknown names halt profile-unresolved',
+      description: 'Select stage engine, model, effort and context for a card or skill run',
     },
     {
       flags: '--workflow-config <path>',
-      description:
-        'External workflow profile for cards, mapped/preparation skills, --skill, --prompt and root/parallel children; wins over --profile and pair.config.json',
+      description: 'Select an external workflow profile for a card or skill run',
     },
     {
       flags: '--dry-run',
@@ -237,18 +190,10 @@ export const runCommandMetadata = {
     },
   ],
   notes: [
-    'A work perimeter is MANDATORY: without a scope (--root/--filter or the policy eligibility filter) and a cap, the run refuses to start',
-    'Autonomy and project-trust approval are two separate, explicit opt-ins — neither can be granted by pair.config.json',
-    'Every iteration is a fresh engine process and a fresh session; conditions are re-evaluated each time',
-    'An iteration outcome comes from the engine event stream, never from its exit code — no terminal event means failed',
-    'Policy (eligibility, stop predicate, parallelism, audit) is read from .pair/adoption/tech/automation.md and never written',
-    'The driver NEVER merges, in any mode',
-    'Tag-driven dispatch is opt-in per card: a card with no mapped tag is never routed to a mapped workflow; an ineligible card is skipped',
-    'No mapped tag ⇒ the card readiness decides: Ready ⇒ the delivery cycle; Draft/no breakdown ⇒ prep skill (never under --autonomous); unmapped/Done or an unreadable card with no mapping ⇒ clean skip',
-    'Under --autonomous, `## Eligibility` bounds the fallback too (--approve-ineligible overrides one run); --pr enters the cycle at review',
-    'Every route that spawns on a card takes an exclusive per-card lock: a trigger burst never starts a second run on the same card',
-    '--root --parallel prints the plan (run / excluded and why / effective limit and what bound it) before any process starts; one card failing never aborts the others, and one batch summary line is appended to the audit file',
-    '--parallel --watch prints each effective loop value with its source, then ONE line per iteration, and appends event=loop-start / iteration / loop-end lines to the audit file; escalated and locked cards are skipped, a card driven once is never re-driven in the same run; a failed selection stops the loop (exit 1), never retried',
-    'engine.bin / engine.model in pair.config.json: per-machine executable path and run-wide model, keyed by engine id',
+    'A named workflow selects and runs cards according to its configuration',
+    'A skill or prompt runs once; --dry-run launches nothing',
+    'An unscoped workflow previews its cards and requires terminal confirmation',
+    'Autonomy and project-trust approval are separate, explicit opt-ins',
+    'engine.bin and engine.model in pair.config.json configure the executable and model',
   ],
 } as const

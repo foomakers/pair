@@ -17,26 +17,6 @@ import {
 import { ENGINES } from './engines'
 
 describe('buildSkillArgs', () => {
-  it('passes pair-loop only the parameters pair-loop declares', () => {
-    const args = buildSkillArgs('pair-loop', {
-      root: '212',
-      filter: 'risk:green',
-      predicate: 'Done',
-      iteration: 3,
-    })
-
-    expect(args).toEqual([
-      '--root',
-      '212',
-      '--filter',
-      'risk:green',
-      '--predicate',
-      'Done',
-      '--iteration',
-      '3',
-    ])
-  })
-
   it('passes pair-next only the parameters pair-next declares', () => {
     const args = buildSkillArgs('pair-next', {
       root: '212',
@@ -65,8 +45,6 @@ describe('buildSkillArgs', () => {
       '--approval',
       '--assignee',
       '--filter',
-      '--iteration',
-      '--predicate',
       '--prepare',
       '--root',
       '--status',
@@ -104,15 +82,6 @@ describe('buildSkillArgs', () => {
     expect(
       buildSkillArgs('pair-process-refine-story', { root: '304', filter: 'risk:green' }),
     ).toEqual(['--story', '304'])
-  })
-
-  it('quotes a multi-word borrowed value, as the skill documents it (round 1, finding 2)', () => {
-    // `pair-loop`'s SKILL.md renders the argument as `--predicate "<text>"`, and the workflow
-    // behind it validates the predicate BY CONTENT before any agent starts — so an unquoted
-    // multi-word value is either rejected or read as a DIFFERENT predicate on an unattended run.
-    expect(
-      buildSkillArgs('pair-loop', { root: '212', predicate: 'tag:risk:red ⇒ Done', iteration: 1 }),
-    ).toEqual(['--root', '212', '--predicate', '"tag:risk:red ⇒ Done"', '--iteration', '1'])
   })
 
   it('quotes a label whose name contains spaces', () => {
@@ -464,7 +433,7 @@ describe('SKILL_PARAMETERS matches the corpus that defines it', () => {
     const catalogued = catalogWorkflows()
     // The catalog is the thing a team copies from: `auto-plan ⇒ pair-process-plan-tasks`
     // appears verbatim there, in adoption-files.mdx and in the tutorial.
-    expect(catalogued.length).toBeGreaterThan(1)
+    expect(catalogued.length).toBeGreaterThan(0)
     expect([...DISPATCHABLE_WORKFLOWS].sort()).toEqual([...catalogued].sort())
   })
 
@@ -516,16 +485,6 @@ describe('buildPromptText', () => {
         { root: '212' },
       ),
     ).toBe('/pair-loop --root 212')
-  })
-
-  it('keeps a quoted multi-word argument intact in the rendered prompt', () => {
-    expect(
-      buildPromptText(
-        ENGINES.claude,
-        { kind: 'skill', name: 'pair-loop', source: 'cascade' },
-        { root: '212', predicate: 'tag:risk:red ⇒ Done', iteration: 1 },
-      ),
-    ).toBe('/pair-loop --root 212 --predicate "tag:risk:red ⇒ Done" --iteration 1')
   })
 
   it('renders a portable instruction for an engine without slash syntax', () => {

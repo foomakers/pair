@@ -21,7 +21,6 @@ pair's skills sit in three layers. A skill only calls down, never up, so every l
 | `pair-cli run refinement` | `/pair-process-refine-story`, `/pair-process-plan-tasks` |
 | `/pair-implement-batch` | `/pair-workflow-cycle` stages for many cards |
 | `/pair-process-brainstorm` | `/pair-capability-grill`, `/pair-process-plan-epics`, `/pair-process-plan-stories` |
-| `/pair-loop` | the batch workflows, which run the cycle |
 | `/pair-next` | suggests a process skill; runs none |
 
 You normally start at the top (`/pair-next`, `/pair-workflow-cycle`) and let it call down. Drop a layer when you want control: run a process skill by hand, or a capability on its own. Every skill, with its command and what it composes: [Skills catalog](/docs/reference/skills-catalog).

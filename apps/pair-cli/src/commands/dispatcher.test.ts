@@ -251,7 +251,7 @@ describe('dispatchCommand() - real handlers integration', () => {
       process.exitCode = undefined
       // The cascade needs a skill to resolve; this shared fs has no skills registry, so seed the
       // conventional location the probe falls back to.
-      await fs.writeFile(`${cwd}/.claude/skills/pair-loop/SKILL.md`, '')
+      await fs.writeFile(`${cwd}/.claude/skills/pair-next/SKILL.md`, '')
     })
 
     test('leaves the exit code untouched on a successful (dry) run', async () => {
@@ -283,7 +283,7 @@ describe('dispatchCommand() - real handlers integration', () => {
 
       // The probes read the injected fs; the spawn reads the real one — so the stub and the run
       // directory have to exist in both worlds.
-      await fs.writeFile(`${realDir}/.claude/skills/pair-loop/SKILL.md`, '')
+      await fs.writeFile(`${realDir}/.claude/skills/pair-next/SKILL.md`, '')
       await fs.writeFile(stub, '')
       vi.stubEnv('PATH', binDir)
       process.exitCode = 0

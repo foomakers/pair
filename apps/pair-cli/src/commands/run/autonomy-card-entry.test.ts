@@ -38,7 +38,8 @@ const SCRIPT_SRC = join(
   '../../../../../packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs',
 )
 const HEADER = 'Autonomy (argument > --preset > adoption > adoption preset > KB default):'
-const MAPPED_POLICY = '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n'
+const MAPPED_POLICY =
+  '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-process-plan-tasks\n'
 const ELIGIBILITY = '## Eligibility\n\nrisk:green\n'
 
 let root: string
@@ -75,7 +76,7 @@ const project = (files: Record<string, string> = {}) =>
           },
         },
       }),
-      [`${root}/.claude/skills/pair-loop/SKILL.md`]: '',
+      [`${root}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
       [`${root}/.claude/skills/pair-process-refine-story/SKILL.md`]: '',
       [`${root}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
       [`${root}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',

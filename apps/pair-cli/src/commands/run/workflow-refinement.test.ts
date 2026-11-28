@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnSync } from 'child_process'
 import { hostname, tmpdir } from 'os'
 import { join } from 'path'
+import { PassThrough } from 'stream'
 import { fileSystemService as fs } from '@pair/content-ops'
 import { next, record, start } from '@pair/workflows'
 import { CLI_ENTRY } from '../../test-utils/cli-entry'
@@ -137,6 +138,163 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   fs.rmSync(project, { recursive: true, force: true })
+})
+
+describe('#701 AC-3 default workflow', () => {
+  const readSelection: NonNullable<WorkflowHostDependencies['readSelection']> = async () => ({
+    cards: [
+      {
+        id: '627',
+        title: 'Story',
+        body: '',
+        labels: [],
+        assignees: [],
+        status: 'Ready',
+        boardState: 'Ready',
+        closed: false,
+        prerequisites: [],
+      },
+    ],
+  })
+  it('uses the configured default ahead of the first matching mapped workflow', async () => {
+    write(
+      'pair.config.json',
+      JSON.stringify({ defaultWorkflow: 'quick', workflows: { other: {}, quick: {} } }),
+    )
+    write('.pair/adoption/tech/workflows/other.yaml', QUICK.replace('name: quick', 'name: other'))
+    expect(await run([], OK, {}, { readSelection })).toBe(0)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+  })
+
+  it('refuses an unknown default before launching', async () => {
+    write(
+      'pair.config.json',
+      JSON.stringify({ defaultWorkflow: 'missing', workflows: { quick: {} } }),
+    )
+    await expect(run([], OK, {}, { readSelection })).rejects.toThrow(/missing/)
+    expect(launched).toHaveLength(0)
+  })
+
+  it('lists available workflows and exits successfully when none accepts the card', async () => {
+    write('pair.config.json', JSON.stringify({ workflows: { quick: {} } }))
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('name: quick', 'name: quick\nselect: { filter: { status: [Draft] } }'),
+    )
+    expect(await run([], OK, {}, { readSelection })).toBe(0)
+    expect(launched).toHaveLength(0)
+    expect(lines.join('\n').split('Available workflows')[1]).toMatch(/pair run quick/)
+  })
+
+  it('lists available workflows even when no workflow is mapped', async () => {
+    write('pair.config.json', JSON.stringify({}))
+    expect(await run([], OK, {}, { readSelection })).toBe(0)
+    expect(launched).toHaveLength(0)
+    expect(lines.join('\n').split('Available workflows')[1]).toMatch(/pair run quick/)
+  })
+
+  it('lists all available workflows, including unmapped ones, one per launch line', async () => {
+    write('pair.config.json', JSON.stringify({ workflows: { quick: {} } }))
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('name: quick', 'name: quick\nselect: { filter: { status: [Draft] } }'),
+    )
+    write('.pair/adoption/tech/workflows/other.yaml', QUICK.replace('name: quick', 'name: other'))
+    expect(await run([], OK, {}, { readSelection })).toBe(0)
+    expect(launched).toHaveLength(0)
+    const listing = lines.join('\n').split('Available workflows')[1]
+    expect(listing).toMatch(/pair run quick/)
+    expect(listing).toMatch(/pair run other/)
+  })
+})
+
+describe('#701 AC-4 no-selection confirmation', () => {
+  const readSelection: NonNullable<WorkflowHostDependencies['readSelection']> = async () => ({
+    cards: [
+      {
+        id: '627',
+        title: 'Ready story',
+        body: '',
+        labels: [],
+        assignees: [],
+        status: 'Ready',
+        boardState: 'Ready',
+        closed: false,
+        prerequisites: [],
+      },
+      {
+        id: '628',
+        title: 'Draft story',
+        body: '',
+        labels: [],
+        assignees: [],
+        status: 'Draft',
+        boardState: 'Draft',
+        closed: false,
+        prerequisites: [],
+      },
+      {
+        id: '629',
+        title: 'Closed story',
+        body: '',
+        labels: [],
+        assignees: [],
+        status: 'Ready',
+        boardState: 'Ready',
+        closed: true,
+        prerequisites: [],
+      },
+    ],
+  })
+
+  it.each([
+    ['named', 'confirmed', 'y\n', true],
+    ['named', 'declined', 'n\n', false],
+    ['named', 'no terminal', undefined, false],
+    ['default', 'confirmed', 'y\n', true],
+    ['default', 'declined', 'n\n', false],
+    ['default', 'no terminal', undefined, false],
+  ] as const)(
+    '%s workflow, %s: previews eligible cards before any launch',
+    async (route, _case, answer, shouldLaunch) => {
+      if (route === 'default')
+        write('pair.config.json', JSON.stringify({ defaultWorkflow: 'quick' }))
+      write(
+        '.pair/adoption/tech/workflows/quick.yaml',
+        QUICK.replace('name: quick', 'name: quick\nselect: { filter: { status: [Ready] } }'),
+      )
+      const input = Object.assign(new PassThrough(), { isTTY: answer !== undefined })
+      if (answer !== undefined) input.end(answer)
+      vi.spyOn(process, 'stdin', 'get').mockReturnValue(input as unknown as typeof process.stdin)
+      const observed: string[] = []
+      vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) =>
+        observed.push(args.join(' ')),
+      )
+      const runIteration: NonNullable<WorkflowHostDependencies['runIteration']> = async value => {
+        expect(observed.join('\n')).toContain('627')
+        launched.push(value)
+        value.onEvent?.({
+          type: 'result',
+          subtype: 'success',
+          result: OK[skillOf(value.promptText) as keyof typeof OK](),
+        })
+        return { outcome: 'success', detail: 'terminal event: success' }
+      }
+      expect(
+        await handleRunCommand(
+          parseRunCommand({ cwd: project }, route === 'default' ? [] : ['quick']),
+          fs,
+          deps(OK, { readSelection, runIteration }),
+        ),
+      ).toBe(0)
+      const preview = observed.join('\n')
+      expect(preview).toContain('627')
+      expect(preview).not.toContain('628')
+      expect(preview).not.toContain('629')
+      if (answer === undefined) expect(preview).toMatch(/--card|--root|--filter/)
+      expect(launched.length > 0).toBe(shouldLaunch)
+    },
+  )
 })
 
 describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {

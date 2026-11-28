@@ -24,16 +24,10 @@ describe('"Timeouts, stalls and retries by surface" — one owner, referenced ev
       /SIGTERM/,
       /deadDispatchRetries/,
       /failed-<stage>/,
-      /selection/i,
-      /transient/i,
-      /durable/i,
-      /retry budget/i,
-      /stale lock|dead pid/i,
       /Step 4/,
       /agentTimeoutMinutes/,
       /30 minutes/,
       /setTimeout/,
-      /continue-token/i,
       /human check required/,
       /second writer/,
     ])
@@ -47,10 +41,10 @@ describe('"Timeouts, stalls and retries by surface" — one owner, referenced ev
     expect(read(join(REPO, file))).toContain(ANCHOR)
   })
 
-  it.each([
-    '.skills/loop/SKILL.md',
-    '.pair/knowledge/guidelines/collaboration/automation/automation-policy.md',
-  ])('%s references the owner section', file => {
-    expect(read(join(DATASET, file))).toContain(ANCHOR)
-  })
+  it.each(['.pair/knowledge/guidelines/collaboration/automation/automation-policy.md'])(
+    '%s references the owner section',
+    file => {
+      expect(read(join(DATASET, file))).toContain(ANCHOR)
+    },
+  )
 })

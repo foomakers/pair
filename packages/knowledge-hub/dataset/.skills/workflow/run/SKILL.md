@@ -9,6 +9,8 @@ author: Foomakers
 
 ## Arguments
 
+For a request to deliver the ready cards of an epic, use `/pair-workflow-run delivery --root <epic>`. Run `pair-cli run delivery --root <epic>` from the project checkout (forward an explicitly requested `--parallel <n>`). The CLI owns selection, dependency scheduling, approvals and the summary; report its result. Do not enumerate cards or dispatch them independently in the session.
+
 For a request to run the cycle on a card, use `/pair-workflow-run delivery --card <card>`.
 
 Use `/pair-workflow-run <workflow> --card <card> [--config <name-or-file>]` to open a workflow on a card, or `/pair-workflow-run <run-id>` to resume.

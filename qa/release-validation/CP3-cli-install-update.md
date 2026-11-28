@@ -84,7 +84,7 @@
 - `AGENTS.md` exists and is non-empty
 - `CLAUDE.md` exists (transform with claude prefix)
 - `.github/` directory exists
-- `.claude/skills/`, `.claude/workflows/` (incl. `pair-loop.js`) and `.claude/agents/` exist
+- `.claude/skills/`, `.claude/workflows/` and `.claude/agents/` exist
 - `.claude/skills/` canonical; `.github/skills/`, `.cursor/skills/`, `.agent/skills/`, `.agents/skills/` are symlinks to it
 
 ---

@@ -17,7 +17,6 @@ Two Claude Code workflows ship:
 | Workflow               | What it drives                                                                                                                          |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `pair-implement-batch` | a batch of cards, each to a review-approved PR through four judgment stages (preparation, independent contract validation + seal, implementation, independent final verification) resuming a cycle from its first incomplete step |
-| `pair-loop`            | the unattended delivery loop, selects eligible cards via `/pair-next`, runs a dependency + mutex analysis, composes `pair-implement-batch` for the actual batch, hands the autonomy policy (until / prepare / merge) to the batch, which merges a review-approved card only when the merge gate allows it, and evaluates the stop predicate. Realization for the `/pair-loop` skill in Claude Code (ADR-017 §4); elsewhere the skill takes a degraded one-card + continue-token path and this workflow never runs |
 
 Use [the refinement workflow](/docs/process-lifecycle/refinement-workflow) to refine a batch through `pair-cli`.
 
@@ -164,7 +163,7 @@ The scope-decision packet stays PR-scoped: its `sc-` ids and the maintainer's an
 - **Statuses** a caller may see: `ready-for-merge` (only with a 40-hex `reviewedHead` and a
 `verdict`), `merged`, `awaiting-human`, `escalated` (an autonomy gate condition fired, distinct from the review's `escalate`), `target-ready`, `escalate`, `failed-preparation`, `failed-contract`, `failed-seal`, `failed-implement`, `failed-fix`, `failed-verify`, `failed-custody`, `failed-resume`, `needs-human` (a recovery budget spent, `4.0.1`), `incompatible`, and four added in `4.0.0`: `awaiting-scope-decision` (quality converged, one or more scope proposals still pending a human decision), `failed-publication` (the final summary could not be confirmed, retry publication only, quality evidence stays intact), `interrupted` and `abandoned` (an explicit developer abandonment).
 
-`pair-loop` halts on every one but the first.
+The caller handles every outcome except the first as a halt.
 
 ### PM tool and code host: one adapter layer
 

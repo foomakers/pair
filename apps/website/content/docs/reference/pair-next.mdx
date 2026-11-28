@@ -74,13 +74,13 @@ A mode is a **facade, not a new skill**:
 - **The process profile applies inside the phase.** A step your [process profile](#process-profile-steps-this-project-does-not-run) disables is skipped and the enabled steps still chain across the gap; if every step that could run is disabled, the mode says which and stops.
 - **A HALT is shown as-is.** If a step halts, the mode stops and prints that step's message unchanged: it never retries or continues with the next one.
 - **Wrong context is reported, not guessed.** `--mode review` with no open PR says what is missing (for example "no open PR or item in `Review` in scope") and suggests the mode that fits, such as `--mode implementation`.
-- **One work unit per run.** A mode drives one story (or one planning gap); when more are in scope it says so, use `/pair-loop` to drive many cards.
+- **One work unit per run.** Use `/pair-workflow-run delivery --root <epic>` to deliver many cards.
 
 > **Source:** the mode ↔ step table lives only in `packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/macro-phase-modes.md`; this page is checked against it.
 
 ## Control state: macrostate first, Definition of Ready second, never titles
 
-Every decision `/pair-next` makes rests on one **Control-State Resolution** procedure (the same one `/pair-loop`, `/pair-workflow-cycle` and `pair-cli run` reference, none re-derives it). Its inputs are the item's board-state literal, its body and the optional `## State Mapping` in `way-of-working.md`; nothing else.
+Every decision `/pair-next` makes rests on one **Control-State Resolution** procedure. Its inputs are the item's board-state literal, its body and the optional `## State Mapping` in `way-of-working.md`; nothing else.
 
 | Situation | Resolution |
 | --- | --- |

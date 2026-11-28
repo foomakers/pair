@@ -287,7 +287,7 @@ risk:green
 ## Workflows
 
 auto-plan ⇒ pair-process-plan-tasks
-auto-dev ⇒ pair-loop
+auto-dev ⇒ pair-process-plan-tasks
 Precedence: auto-plan, auto-dev
 `
 
@@ -302,14 +302,12 @@ Precedence: auto-plan, auto-dev
      * own row instead of shifting a positional index under an assertion about a different card.
      */
     const BOARD = [
-      // pair-loop declares `--iteration` too, and plan-tasks does not: each invocation carries
-      // exactly the arguments its own `## Arguments` table declares, and nothing else.
       {
         card: '301',
         tags: ['auto-dev', 'risk:green'],
-        routes: '/pair-loop --root 301 --filter risk:green --iteration 1',
+        routes: '/pair-process-plan-tasks --story 301',
         trail: [
-          /event=start card=301 tag=auto-dev workflow=pair-loop/,
+          /event=start card=301 tag=auto-dev workflow=pair-process-plan-tasks/,
           /event=end card=301 .*outcome=completed/,
         ],
       },
@@ -439,7 +437,6 @@ Precedence: auto-plan, auto-dev
           card,
           cardTags: tags.join(','),
           cwd: project,
-          maxIterations: 1,
           ...(autonomous && { autonomous: true }),
         }),
         fileSystemService,
@@ -524,7 +521,6 @@ Precedence: auto-plan, auto-dev
           cardTags: 'auto-dev,risk:green',
           root: '300',
           cwd: project,
-          maxIterations: 1,
         }),
       ).toThrow(/--card cannot be combined with --root/)
 

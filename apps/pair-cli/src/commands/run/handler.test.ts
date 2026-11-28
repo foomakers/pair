@@ -166,25 +166,6 @@ describe('handleRunCommand — resolution reporting', () => {
     ).rejects.toThrow(/Engine 'opencode' is not installed or not on PATH/)
   })
 
-  it('states the perimeter, the borrowed policy and the parallelism limit before running', async () => {
-    const output = captureLog()
-    const fs = projectFs({ [`${cwd}/${POLICY_PATH}`]: POLICY })
-
-    await handleRunCommand(parseRunCommand({ root: '212', maxIterations: '2', dryRun: true }), fs)
-
-    const printed = output()
-    // The resolved legacy filter is passed through pair-loop's declared selector.
-    expect(printed).toContain(
-      'Perimeter: root 212, filter risk:green (from tech/automation.md, passed to the skill)',
-    )
-    expect(printed).toContain('max 2 iteration(s) (from --max-iterations)')
-    expect(printed).toContain('policy declares max 3')
-    // `## Auto-Advance` is absent in this fixture ⇒ (none) ⇒ every gate really is human.
-    expect(printed).toContain('the driver never merges')
-    expect(printed).toContain('(none)')
-    expect(printed).not.toContain('the gate stays human')
-  })
-
   it('normalises the perimeter directory to an absolute path (a boundary must be legible)', async () => {
     const output = captureLog()
 
@@ -269,11 +250,9 @@ describe('handleRunCommand — refusals happen before any spawn', () => {
     })
     const { calls, runner } = fakeRunner([ok()])
 
-    await handleRunCommand(
-      parseRunCommand({ skill: 'pair-next', filter: 'risk:yellow', maxIterations: '1' }),
-      fs,
-      { runIteration: runner },
-    )
+    await handleRunCommand(parseRunCommand({ skill: 'pair-next', filter: 'risk:yellow' }), fs, {
+      runIteration: runner,
+    })
 
     expect(calls[0]?.promptText).toBe('/pair-next --filter risk:yellow')
   })
@@ -311,7 +290,7 @@ describe('handleRunCommand — refusals happen before any spawn', () => {
       const { calls, runner } = fakeRunner([ok()])
 
       await handleRunCommand(
-        parseRunCommand({ skill: DECLARES, root: '212', maxIterations: '1', autonomous: true }),
+        parseRunCommand({ skill: DECLARES, root: '212', autonomous: true }),
         withDeclaringSkill(),
         { runIteration: runner },
       )
@@ -326,7 +305,7 @@ describe('handleRunCommand — refusals happen before any spawn', () => {
       const { calls, runner } = fakeRunner([ok()])
 
       await handleRunCommand(
-        parseRunCommand({ skill: DECLARES, root: '212', filter: 'risk:green', maxIterations: '1' }),
+        parseRunCommand({ skill: DECLARES, root: '212', filter: 'risk:green' }),
         withDeclaringSkill(),
         { runIteration: runner },
       )
@@ -342,11 +321,9 @@ describe('handleRunCommand — refusals happen before any spawn', () => {
       const fs = projectFs({ [`${cwd}/${POLICY_PATH}`]: POLICY })
       const { calls, runner } = fakeRunner([ok()])
 
-      await handleRunCommand(
-        parseRunCommand({ root: '212', maxIterations: '1', autonomous: true }),
-        fs,
-        { runIteration: runner },
-      )
+      await handleRunCommand(parseRunCommand({ root: '212', autonomous: true }), fs, {
+        runIteration: runner,
+      })
 
       // Resolved through the cascade to `pair-loop`, which declares no approval round.
       expect(calls[0]?.promptText).toBe(
@@ -411,41 +388,6 @@ describe('handleRunCommand — driving the loop', () => {
     vi.restoreAllMocks()
   })
 
-  it('drives fresh iterations with the perimeter and the borrowed parameters', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    const fs = projectFs({ [`${cwd}/${POLICY_PATH}`]: POLICY })
-    const { calls, runner } = fakeRunner([ok('pair-loop --root 212 --iteration 2'), ok()])
-
-    const code = await handleRunCommand(parseRunCommand({ root: '212', maxIterations: '5' }), fs, {
-      runIteration: runner,
-    })
-
-    expect(code).toBe(0)
-    expect(calls).toHaveLength(2)
-    // The multi-word predicate is QUOTED, as pair-loop's own SKILL.md renders it — the previous
-    // expectation pinned the malformed spelling (round 1, finding 2).
-    expect(calls[0]?.promptText).toBe(
-      '/pair-loop --root 212 --filter risk:green --predicate "tag:risk:red ⇒ Done" --iteration 1',
-    )
-    expect(calls[0]?.promptText).toContain('--filter risk:green')
-    expect(calls[1]?.promptText).toContain('--iteration 2')
-    expect(calls[0]?.cwd).toBe(cwd)
-    // Confirmations active by default: no autonomy args reach the engine.
-    expect(calls[0]?.autonomyArgs).toEqual([])
-  })
-
-  it('caps iterations at the perimeter, whatever the skill keeps reporting', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    const fs = projectFs({ [`${cwd}/${POLICY_PATH}`]: POLICY })
-    const { calls, runner } = fakeRunner([ok('t1'), ok('t2'), ok('t3'), ok('t4')])
-
-    await handleRunCommand(parseRunCommand({ root: '212', maxIterations: '2' }), fs, {
-      runIteration: runner,
-    })
-
-    expect(calls).toHaveLength(2)
-  })
-
   it('reports a failed iteration with a non-zero exit code', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const { runner } = fakeRunner([{ outcome: 'failed', detail: 'no terminal event' }])
@@ -461,11 +403,9 @@ describe('handleRunCommand — driving the loop', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const { calls, runner } = fakeRunner([ok()])
 
-    await handleRunCommand(
-      parseRunCommand({ prompt: 'audit the backlog', cwd, maxIterations: '1' }),
-      projectFs(),
-      { runIteration: runner },
-    )
+    await handleRunCommand(parseRunCommand({ prompt: 'audit the backlog', cwd }), projectFs(), {
+      runIteration: runner,
+    })
 
     expect(calls[0]?.promptText).toBe('audit the backlog')
   })

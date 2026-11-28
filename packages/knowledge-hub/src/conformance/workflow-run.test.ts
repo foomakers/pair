@@ -20,6 +20,13 @@ describe('workflow-run — session driver (#696 T-6)', () => {
     expect(read(join(INSTALLED, AUTHOR, SCRIPT))).toBe(script)
   })
 
+  it('routes epic delivery from the assistant (#701 AC-7)', () => {
+    const assistant = read(join(__dirname, '../../dataset/plugin/skills/pair-assistant/SKILL.md'))
+    expect(assistant).toMatch(
+      /deliver ready cards of an epic[^\n]*\/pair-workflow-run delivery --root <epic>/,
+    )
+  })
+
   describe.each([
     { label: 'dataset', root: DATASET, run: 'workflow/run', author: 'capability/workflow' },
     {
@@ -32,6 +39,12 @@ describe('workflow-run — session driver (#696 T-6)', () => {
     it('routes a request for the cycle on a card to delivery (#700 AC-7)', () => {
       const skill = instructions(root, run)
       expect(skill).toMatch(/\bcycle\b.{0,100}\bcard\b.{0,160}\bdelivery\b/i)
+    })
+
+    it('routes epic delivery through the scheduler (#701 AC-7)', () => {
+      const skill = instructions(root, run)
+      expect(skill).toContain('/pair-workflow-run delivery --root <epic>')
+      expect(skill).toContain('pair-cli run delivery --root <epic>')
     })
 
     it('checks for a subagent primitive before opening and stops with the CLI fallback (AC-3)', () => {

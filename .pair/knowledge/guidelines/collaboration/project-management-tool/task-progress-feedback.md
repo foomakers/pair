@@ -6,7 +6,7 @@ It exists because an unattended run is otherwise silent between "In Progress" an
 
 ## Scope — one mechanism, one owner
 
-The call sites belong to `/pair-process-implement` — Step 2.8 (per task) and its closing phase (the flush). **`/pair-process-implement` is also the only caller**: a supervised run reaches this loop through `/pair-loop` → `/implement-batch` → `/pair-process-implement`, so the manual and the supervised path run the same code path by construction, not by two implementations kept in agreement. An automation layer that posted its own per-task progress comment would double every line this one already carries.
+The call sites belong to `/pair-process-implement` — Step 2.8 (per task) and its closing phase (the flush). **`/pair-process-implement` is also the only caller**: a supervised run reaches this loop through `/loop` → `/implement-batch` → `/pair-process-implement`, so the manual and the supervised path run the same code path by construction, not by two implementations kept in agreement. An automation layer that posted its own per-task progress comment would double every line this one already carries.
 
 What this guideline owns: the locator, the tick, the batch, its format, and the fallbacks when a write does not land. What it does not own:
 

@@ -1,13 +1,7 @@
 import type { RunInvocationRequest } from './parser'
 
-/**
- * The cascade's preferred skill and its fallback (AC2).
- *
- * `pair-loop` is the loop engine (#250); `pair-next` is the frozen selector atom (ADR-017 §1)
- * every installation has. Falling back to `pair-next` is what keeps this driver off #250's
- * critical path — it works today and gains `pair-loop` the moment it is installed.
- */
-export const PREFERRED_SKILL = 'pair-loop'
+/** Default skill for an unnamed invocation. */
+export const PREFERRED_SKILL = 'pair-next'
 export const FALLBACK_SKILL = 'pair-next'
 
 /** Whether a skill is installed. Injected — one filesystem probe per run, never per iteration. */
@@ -25,7 +19,7 @@ export type ResolvedInvocation =
  * - `--skill <name>` is explicit and NEVER falls back: a named skill that is not installed is
  *   an actionable error, because silently running a different skill than the one asked for is
  *   the one outcome no operator can debug.
- * - No flag ⇒ `pair-loop` when installed, else `pair-next`, and the fallback is STATED.
+ * - No flag ⇒ `pair-next`.
  */
 export function resolveInvocation(
   request: RunInvocationRequest,
@@ -37,7 +31,7 @@ export function resolveInvocation(
     if (!probe(request.name)) {
       throw new Error(
         `Skill '${request.name}' is not installed (--skill never falls back). ` +
-          `Install it with \`pair-cli install\`, or drop --skill to use the ${PREFERRED_SKILL} → ${FALLBACK_SKILL} cascade.`,
+          `Install it with \`pair-cli install\`, or drop --skill to use ${PREFERRED_SKILL}.`,
       )
     }
     return { kind: 'skill', name: request.name, source: '--skill' }
@@ -48,7 +42,7 @@ export function resolveInvocation(
     return { kind: 'skill', name: FALLBACK_SKILL, source: 'cascade-fallback' }
 
   throw new Error(
-    `Neither ${PREFERRED_SKILL} nor ${FALLBACK_SKILL} is installed: there is no skill to run. ` +
+    `Skill ${PREFERRED_SKILL} is not installed: there is no skill to run. ` +
       `Run \`pair-cli install\`, or pass --prompt to run a prompt instead.`,
   )
 }

@@ -62,14 +62,6 @@ type SkillParameterMap = Readonly<Partial<Record<keyof SkillArguments, string>>>
  * there to answer its human-judgment gates.
  */
 export const SKILL_PARAMETERS: Readonly<Record<string, SkillParameterMap>> = Object.freeze({
-  'pair-loop': {
-    root: '--root',
-    filter: '--filter',
-    assignee: '--assignee',
-    status: '--status',
-    predicate: '--predicate',
-    iteration: '--iteration',
-  },
   'pair-next': { root: '--root', filter: '--filter', assignee: '--assignee', status: '--status' },
   'pair-process-refine-story': { root: '--story' },
   'pair-process-plan-tasks': { root: '--story' },
@@ -118,7 +110,7 @@ export function scopeParameterFor(skill: string): string | undefined {
  * accepted by a driver that every document says refuses it.
  */
 export const DISPATCHABLE_WORKFLOWS: ReadonlySet<string> = Object.freeze(
-  new Set(['pair-loop', 'pair-process-plan-tasks']),
+  new Set(['pair-process-plan-tasks']),
 )
 
 /**
@@ -149,7 +141,7 @@ const UNKNOWN_SKILL_PARAMETERS: SkillParameterMap = { root: '--root', filter: '-
  * "applied by the skill itself" would print a perimeter nobody applies — the same class of untrue
  * perimeter line round 1's finding 1 removed, one skill over.
  */
-const POLICY_READING_SKILLS: ReadonlySet<string> = Object.freeze(new Set(['pair-loop']))
+const POLICY_READING_SKILLS: ReadonlySet<string> = Object.freeze(new Set<string>())
 
 /**
  * How `approval` is spelled on the wire, once (US-464).

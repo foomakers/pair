@@ -58,7 +58,7 @@ A capability that is **not a step** is outside the profile entirely. The profile
 | `/pair-capability-estimate`, `/pair-capability-classify`      | Composed inside a step (refinement); a team does not "decide not to size stories" as a phase |
 | `/pair-capability-verify-quality`, `/pair-capability-verify-done` | Quality mechanics that apply to whatever process runs                                    |
 | `/pair-capability-record-decision`, `/pair-capability-write-issue` | Writers composed by steps; disabling one would break every step that composes it        |
-| `/pair-next`, `/pair-loop`              | Navigators — they READ the profile, they are not governed by it                              |
+| `/pair-next`, `/loop`              | Navigators — they READ the profile, they are not governed by it                              |
 
 The boundary is the table, not a judgement call: if an id is not in **The Catalogue**, a whitelist naming it HALTs.
 

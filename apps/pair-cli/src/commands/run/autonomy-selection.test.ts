@@ -95,11 +95,9 @@ async function run(flags: Record<string, string | boolean>, policy?: string) {
     return { outcome: 'success', detail: 'done' }
   }
   const fs = project(policy)
-  const outcome = handleRunCommand(
-    parseRunCommand({ skill: 'pair-next', maxIterations: '1', ...flags }),
-    fs,
-    { runIteration },
-  )
+  const outcome = handleRunCommand(parseRunCommand({ skill: 'pair-next', ...flags }), fs, {
+    runIteration,
+  })
   return { outcome, stdout, calls }
 }
 
@@ -202,17 +200,5 @@ describe('r0-3 controls: legacy and default-off selection unchanged', () => {
     const r = await run({ filter: 'X' }, '## Autonomy\n\nfilter: PIPPO\n')
     expect(await r.outcome).toBe(0)
     expect(r.calls[0]?.promptText).toBe('/pair-next --filter X')
-  })
-})
-
-describe('US-593 loop selector relay', () => {
-  it('passes explicit selectors and a full-preset filter to pair-loop', async () => {
-    const r = await run(
-      { skill: 'pair-loop', root: '1', assignee: '@me', status: 'Ready' },
-      '## Autonomy\n\npreset: full\n',
-    )
-    expect(await r.outcome).toBe(0)
-    expect(r.calls[0]?.promptText).toContain('--root 1 --filter * --assignee @me --status Ready')
-    expect(perimeterLine(r.stdout)).toContain('filter * (from preset full, passed to the skill)')
   })
 })

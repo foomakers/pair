@@ -33,7 +33,6 @@ const files = (
         },
       },
     }),
-    [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '',
     [`${cwd}/.claude/skills/pair-process-refine-story/SKILL.md`]: '',
     [`${cwd}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
     [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
@@ -46,7 +45,8 @@ const files = (
   return new InMemoryFileSystemService(seed, cwd, cwd)
 }
 
-const MAPPED_POLICY = '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n'
+const MAPPED_POLICY =
+  '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-process-plan-tasks\n'
 
 function harness(readiness: CardReadiness) {
   const audit: string[] = []
@@ -200,7 +200,7 @@ describe('r1-1: every spawning fallback route writes start + end and prints one 
     )
 
     expect(outcome.code).toBe(0)
-    expect(audit[0]).toMatch(/event=start card=31 tag=auto-dev workflow=pair-loop/)
+    expect(audit[0]).toMatch(/event=start card=31 tag=auto-dev workflow=pair-process-plan-tasks/)
     expect(audit[1]).toMatch(/event=end card=31\b.*outcome=completed/)
     expect(records()).toHaveLength(1)
   })

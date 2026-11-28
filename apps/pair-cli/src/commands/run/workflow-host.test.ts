@@ -531,6 +531,40 @@ ${assign === undefined ? '' : `assign: ${assign}\n`}steps:
   })
 })
 
+it('#701 AC-2 names the approval blocking dependents and how to resume', async () => {
+  write(
+    '.pair/adoption/tech/workflows/quick.yaml',
+    `version: 1
+name: quick
+steps:
+  approval: { kind: approval }
+`,
+  )
+  write('.claude/skills/pair-workflow-cycle/SKILL.md', '# Cycle')
+  write('.claude/skills/pair-workflow-cycle/scripts/workflow-facts.mjs', '')
+  hostProcess.mockImplementation(async (_bin, args) =>
+    success(JSON.stringify(args[1] === 'approval-target' ? { pr: 12, head: HEAD } : {})),
+  )
+  const readSelection: NonNullable<WorkflowHostDependencies['readSelection']> = async () => ({
+    cards: ['9', '10', '11'].map(id => ({
+      id,
+      title: `Card ${id}`,
+      body: '',
+      labels: [],
+      boardState: 'Ready',
+      closed: false,
+      prerequisites: id === '9' ? [] : ['9'],
+    })),
+  })
+  const result = await run(['quick'], {}, { root: '641', card: undefined }, { readSelection })
+  expect(result, lines.join('\n')).toBe(0)
+  expect(lines.some(line => /#9: parked/.test(line))).toBe(true)
+  expect(lines.some(line => /#10: waiting/.test(line))).toBe(true)
+  expect(lines.some(line => /#11: waiting/.test(line))).toBe(true)
+  expect(lines.some(line => /2 cards? waiting for (?:the )?approval of #9/i.test(line))).toBe(true)
+  expect(lines.some(line => /resume/i.test(line) && /command/i.test(line))).toBe(true)
+})
+
 describe('#723 T-7 held cards in a batch (AC-4)', () => {
   it.each([
     { source: 'explicit assignment', declaresAssign: true, routing: '' },
