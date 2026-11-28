@@ -876,6 +876,36 @@ const readTelemetry = () =>
     .split('\n')
     .map(line => JSON.parse(line) as unknown)
 
+it('R764-05 (#674 AC-7): sends Claude a slash invocation and meters the same text', () => {
+  write(
+    workflowFile,
+    namedWorkflow(
+      '  draft: { kind: generic, skill: pair-fixture-draft, args: { mode: strict } }\n',
+    ),
+  )
+  write(configFile, 'version: 1\nname: mine\ndefaults: { engine: claude }\ntelemetry: true\n')
+  const lease = openSession([
+    'start',
+    'quick',
+    '--card',
+    card,
+    '--engine',
+    'claude',
+    '--config',
+    'mine',
+  ])
+  const { ready } = advance(lease) as { ready: [{ message: string }] }
+  const [{ message }] = ready
+  expect(message.split('\n')[0]).toBe('/pair-fixture-draft mode=strict')
+
+  successful(['record', runId, 'draft', ...lease, '--result', '-'], fenced(drafted))
+  expect(readTelemetry()[0]).toMatchObject({
+    step: 'draft',
+    engine: 'claude',
+    tokens: { read: { value: Math.ceil(message.length / 4), source: 'estimated' } },
+  })
+})
+
 it.each(['measured', 'estimated'] as const)('#696 AC-10: records %s session usage', source => {
   const lease = startTelemetrySession(true)
   const launch = advance(lease) as { ready: [{ message: string; attempt: number }] }
