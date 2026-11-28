@@ -84,44 +84,45 @@ describe('createSkillProbe', () => {
   })
 
   // #674 AC-3, R764-03: manifest directories extend the default plugin inventory.
-  it.each([{ skills: './extra-skills/' }, { skills: ['./extra-skills/', '.'] }])(
-    'finds qualified Claude plugin skills with manifest paths $skills',
-    ({ skills }) => {
-      vi.stubEnv('HOME', '/user')
-      const plugin = '/user/.claude/plugins/cache/market/example/1.0.0'
-      const fs = new InMemoryFileSystemService(
-        {
-          '/user/.claude/settings.json': JSON.stringify({
-            enabledPlugins: { 'example@market': true },
-          }),
-          '/user/.claude/plugins/installed_plugins.json': JSON.stringify({
-            version: 2,
-            plugins: {
-              'example@market': [{ scope: 'user', installPath: plugin, version: '1.0.0' }],
-            },
-          }),
-          [`${plugin}/.claude-plugin/plugin.json`]: JSON.stringify({ name: 'example', skills }),
-          [`${plugin}/skills/inspect/SKILL.md`]: '',
-          [`${plugin}/extra-skills/audit/SKILL.md`]: '',
-          [`${plugin}/root-skill/SKILL.md`]: '',
-          [`${plugin}/unlisted/hidden/SKILL.md`]: '',
-        },
-        cwd,
-        cwd,
-      )
-      const exists = Reflect.apply(createSkillProbe, undefined, [
-        fs,
-        skillsConfig([]),
-        cwd,
-        true,
-        'claude',
-      ])
-      expect(exists('example:inspect')).toBe(true)
-      expect(exists('example:audit')).toBe(true)
-      expect(exists('example:root-skill')).toBe(Array.isArray(skills))
-      expect(exists('example:hidden')).toBe(false)
-    },
-  )
+  it.each([
+    { skills: './extra-skills/' },
+    { skills: ['./extra-skills/', '.'] },
+    { skills: './extra-skills/audit' },
+  ])('finds qualified Claude plugin skills with manifest paths $skills', ({ skills }) => {
+    vi.stubEnv('HOME', '/user')
+    const plugin = '/user/.claude/plugins/cache/market/example/1.0.0'
+    const fs = new InMemoryFileSystemService(
+      {
+        '/user/.claude/settings.json': JSON.stringify({
+          enabledPlugins: { 'example@market': true },
+        }),
+        '/user/.claude/plugins/installed_plugins.json': JSON.stringify({
+          version: 2,
+          plugins: {
+            'example@market': [{ scope: 'user', installPath: plugin, version: '1.0.0' }],
+          },
+        }),
+        [`${plugin}/.claude-plugin/plugin.json`]: JSON.stringify({ name: 'example', skills }),
+        [`${plugin}/skills/inspect/SKILL.md`]: '',
+        [`${plugin}/extra-skills/audit/SKILL.md`]: '',
+        [`${plugin}/root-skill/SKILL.md`]: '',
+        [`${plugin}/unlisted/hidden/SKILL.md`]: '',
+      },
+      cwd,
+      cwd,
+    )
+    const exists = Reflect.apply(createSkillProbe, undefined, [
+      fs,
+      skillsConfig([]),
+      cwd,
+      true,
+      'claude',
+    ])
+    expect(exists('example:inspect')).toBe(true)
+    expect(exists('example:audit')).toBe(true)
+    expect(exists('example:root-skill')).toBe(Array.isArray(skills))
+    expect(exists('example:hidden')).toBe(false)
+  })
 
   // #674 AC-2/AC-3: project plugin settings apply to the launching project.
   it('finds a Claude plugin enabled by project settings', () => {
