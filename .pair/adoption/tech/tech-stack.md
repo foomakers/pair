@@ -42,6 +42,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 
 ## Runtime & CLI tooling
 
+- `jsonc-parser` v3.3.1 is pinned as a runtime dependency of `@pair/workflows` for OpenCode skill discovery in the terminal CLI and session bundle. [ADR-031](adr/adr-031-workflows-package-and-hosts.md#opencode-configuration-parsing).
 - commander v11.0.0 is adopted for CLI command parsing and argument management.
 - chalk v4.1.2 is adopted for terminal output colorization.
 - @inquirer/prompts v7.5.0 is adopted for interactive CLI prompts in package creation workflows (TypeScript-native, tree-shakeable individual imports).
