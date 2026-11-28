@@ -372,7 +372,7 @@ export interface StartOptions {
   readonly requestedBy?: string
   readonly replay?: StepReplay
   /** Check the steps a resume would reopen before saving their new state. */
-  readonly checkResume?: (state: RunStateFile) => void
+  readonly checkResume?: (state: RunStateFile, workflow: Workflow) => void | Promise<void>
 }
 
 /** The frozen configuration of a run, when it has one. */
@@ -678,7 +678,7 @@ async function resume(
   const settled = settledStatus(workflow, state)
   if (settled === undefined) {
     const reopened = { ...state, steps: reopenedSteps(run, state, workflow) }
-    options.checkResume?.(reopened)
+    await options.checkResume?.(reopened, workflow)
     await writeState(run, reopened)
     return { status: 'resumed', ...diagnostics }
   }

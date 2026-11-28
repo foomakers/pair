@@ -37,6 +37,7 @@ import {
   runSteps,
   settingsFor,
   start,
+  stepSettled,
   stoppedApproval,
   stoppedLoop,
   type AgentLaunchResult,
@@ -49,6 +50,7 @@ import {
   type StepResult,
   type StepFaults,
   type Started,
+  type StartOptions,
   type ResultFacts,
   type ResolvedAssignment,
   type StepEvent,
@@ -1118,13 +1120,17 @@ async function finishClosure(
   return result.status === 'ok' ? 0 : 1
 }
 
-async function startOnConsole(opened: Opened, fs: FileSystemService, replay?: StepReplay) {
+async function startOnConsole(
+  opened: Opened,
+  fs: FileSystemService,
+  replay: StepReplay | undefined,
+  checkResume: NonNullable<StartOptions['checkResume']>,
+) {
   const { resolved, runDir } = opened
-  const started = await start(
-    { files: fs, dir: runDir },
-    resolved.source,
-    startOptions(opened, replay),
-  )
+  const started = await start({ files: fs, dir: runDir }, resolved.source, {
+    ...startOptions(opened, replay),
+    checkResume,
+  })
   recordIncludeSources(fs, runDir, resolved.sources, started.status)
   started.warnings.forEach(warning => console.log(`  Warning: ${warning}`))
   if (started.telemetryWarning !== undefined) console.log(`  Warning: ${started.telemetryWarning}`)
@@ -1148,14 +1154,33 @@ async function prepareWorkflowStart(
   services: Services,
   replay: Awaited<ReturnType<typeof workflowReplay>>,
 ) {
-  const checkSkills = needsExecutionSkillCheck(opened, services.fs)
-  if (!checkSkills && replay === undefined) return { valid: true }
-  const prepared = await workflowWorktree(opened, services)
-  if (replay) await prepareReplayHead(prepared, replay.inputs.head)
-  return {
-    prepared,
-    valid: !checkSkills || checkConfiguredSkills(services.fs, opened.resolved, prepared),
-  }
+  const { resolved, runDir } = opened
+  const { fs } = services
+  const precheck = needsExecutionSkillCheck(opened, fs)
+  let prepared: string | undefined
+  const prepare = async () => (prepared ??= await workflowWorktree(opened, services))
+  if (replay !== undefined) await prepareReplayHead(await prepare(), replay.inputs.head)
+  if (precheck && !checkConfiguredSkills(fs, resolved, await prepare())) return undefined
+
+  const refused = new Error('workflow-skill-validation')
+  const started = await startOnConsole(opened, fs, replay, async (reopened, workflow) => {
+    if (precheck) return
+    const worktree = await prepare()
+    const steps = workflow.steps.filter(step => !stepSettled(step, reopened.steps[step.id]?.state))
+    const errors = checkWorkflowSkills(
+      { ...workflow, steps },
+      workflowSkillContext(fs, resolved.project, worktree, {
+        configuration: effectiveConfiguration({ files: fs, dir: runDir }),
+        engine: resolved.engine.engine.id,
+      }),
+    )
+    reportValidation({ errors, warnings: [] })
+    if (errors.length > 0) throw refused
+  }).catch((error: unknown) => {
+    if (error !== refused) throw error
+    return undefined
+  })
+  return started === undefined ? undefined : { prepared, started }
 }
 
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
@@ -1169,9 +1194,9 @@ async function drive(
   if (opened.closureOnly) return finishClosure(opened, fs, config)
   const flagStep = parkedApproval(opened, fs)
   const replay = await workflowReplay(opened, fs)
-  const { prepared, valid } = await prepareWorkflowStart(opened, services, replay)
-  if (!valid) return 1
-  const started = await startOnConsole(opened, fs, replay)
+  const preparation = await prepareWorkflowStart(opened, services, replay)
+  if (preparation === undefined) return 1
+  const { prepared, started } = preparation
   const effective = effectiveConfiguration({ files: fs, dir: runDir })
   printSettings(resolved, effective)
   probeUnchecked(
