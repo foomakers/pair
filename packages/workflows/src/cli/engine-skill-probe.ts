@@ -3,7 +3,11 @@ import type { RunFiles } from '../engine'
 import { inventoryRequest } from '../worktree/inventory-process'
 import { isPlainObject } from './project-config'
 import { findSkillFile, skillsLayout } from './skill-paths'
-import { openCodeConfiguredSkills, type SkillFiles } from './opencode-skill-paths'
+import {
+  openCodeConfiguredSkills,
+  openCodeSkillDirectories,
+  type SkillFiles,
+} from './opencode-skill-paths'
 
 function claudeManifestSkillPaths(fs: Pick<RunFiles, 'readFileSync'>, root: string): string[] {
   const skills = readJson(fs, join(root, '.claude-plugin/plugin.json'))['skills']
@@ -285,13 +289,6 @@ const skillDirectories = new Map<string, [string[], string[]]>([
   ['claude', [['.claude/skills'], ['skills']]],
   ['codex', [['.agents/skills'], ['.agents/skills']]],
   [
-    'opencode',
-    [
-      ['.opencode/skills', '.claude/skills', '.agents/skills'],
-      ['.config/opencode/skills', '.claude/skills', '.agents/skills'],
-    ],
-  ],
-  [
     'pi',
     [
       ['.pi/skills', '.agents/skills'],
@@ -318,7 +315,8 @@ export function engineSkillProbe(
   if (engine === undefined)
     return name =>
       findSkillFile(check, projectRoot, { targets: layout.targets, prefix }, name) !== undefined
-  const directories = skillDirectories.get(engine)
+  const directories =
+    engine === 'opencode' ? openCodeSkillDirectories() : skillDirectories.get(engine)
   if (!directories) return () => false
   const [project, global] = directories
   const home = process.env['HOME']

@@ -7,6 +7,19 @@ import { isPlainObject } from './project-config'
 export interface SkillFiles {
   readFileSync(path: string): string
   readdirSync(path: string): readonly Dirent[]
+  realpathSync(path: string): string
+}
+
+const envFlag = (name: string) => /^(1|true)$/i.test(process.env[name] ?? '')
+
+export function openCodeSkillDirectories(): [string[], string[]] {
+  const claudeDisabled =
+    envFlag('OPENCODE_DISABLE_CLAUDE_CODE') || envFlag('OPENCODE_DISABLE_CLAUDE_CODE_SKILLS')
+  const compatible = claudeDisabled ? ['.agents/skills'] : ['.claude/skills', '.agents/skills']
+  return [
+    ['.opencode/skills', ...compatible],
+    ['.config/opencode/skills', ...compatible],
+  ]
 }
 
 function pathsFrom(text: string | undefined): string[] | undefined {
@@ -25,7 +38,7 @@ function configCandidates(root: string, home: string | undefined): string[] {
   const env = process.env
   const global = env['XDG_CONFIG_HOME'] || (home && join(home, '.config'))
   const configFiles = ['opencode.json', 'opencode.jsonc']
-  const projectDisabled = /^(1|true)$/i.test(env['OPENCODE_DISABLE_PROJECT_CONFIG'] ?? '')
+  const projectDisabled = envFlag('OPENCODE_DISABLE_PROJECT_CONFIG')
   return [
     ...(global ? ['config.json', ...configFiles].map(file => join(global, 'opencode', file)) : []),
     ...(env['OPENCODE_CONFIG'] ? [resolve(root, env['OPENCODE_CONFIG'])] : []),
@@ -64,20 +77,36 @@ function skillName(fs: SkillFiles, file: string): string | undefined {
   }
 }
 
-function discover(fs: SkillFiles, directory: string, names: Set<string>): void {
+function canDescend(entry: Dirent): boolean {
+  return (
+    (entry.isDirectory() || entry.isSymbolicLink()) &&
+    !entry.name.startsWith('.') &&
+    entry.name !== 'node_modules'
+  )
+}
+
+function discover(
+  fs: SkillFiles,
+  directory: string,
+  names: Set<string>,
+  visited: Set<string>,
+): void {
   let entries: readonly Dirent[]
   try {
-    entries = fs.readdirSync(directory)
+    const physical = fs.realpathSync(directory)
+    if (visited.has(physical)) return
+    entries = fs.readdirSync(physical)
+    visited.add(physical)
   } catch {
     return
   }
   for (const entry of entries) {
     const file = join(directory, entry.name)
-    if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
-      discover(fs, file, names)
-    } else if (entry.name === 'SKILL.md') {
+    if (entry.name === 'SKILL.md' && !entry.isDirectory()) {
       const name = skillName(fs, file)
       if (name !== undefined) names.add(name)
+    } else if (canDescend(entry)) {
+      discover(fs, file, names, visited)
     }
   }
 }
@@ -85,11 +114,12 @@ function discover(fs: SkillFiles, directory: string, names: Set<string>): void {
 /** OpenCode's local skills.paths discovery without starting its config/plugin installers. */
 export function openCodeConfiguredSkills(fs: SkillFiles, root: string, home: string | undefined) {
   const names = new Set<string>()
+  const visited = new Set<string>()
   for (const path of configuredPaths(fs, root, home)) {
     const directory = path.startsWith('~/')
       ? home && resolve(home, path.slice(2))
       : resolve(root, path)
-    if (directory) discover(fs, directory, names)
+    if (directory) discover(fs, directory, names, visited)
   }
   return names
 }

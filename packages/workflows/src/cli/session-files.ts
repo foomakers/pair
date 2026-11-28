@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { chmod, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import type { RunFiles } from '../engine'
 import { applyProjectConfig } from './project-config'
@@ -10,6 +10,7 @@ export const sessionFiles: RunFiles & SkillFiles = {
   existsSync,
   readFileSync: readText,
   readdirSync: path => readdirSync(path, { withFileTypes: true }),
+  realpathSync,
   statSync,
   chmod,
   async mkdir(path, options) {
