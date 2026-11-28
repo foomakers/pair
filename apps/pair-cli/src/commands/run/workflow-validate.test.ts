@@ -96,6 +96,60 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
     expect(lines.join('\n')).not.toMatch(/warning:/i)
   })
 
+  it('R764-07 (#674 AC-2/5): validates with the configured Codex runner and its literal arguments', async () => {
+    const root = disk.mkdtempSync(join(tmpdir(), 'pair-runner-validation-'))
+    const inventory = (name: string) => `
+      require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+        const { id, method } = JSON.parse(line);
+        const result = method === 'skills/list'
+          ? { data: [{ skills: [{ name: ${JSON.stringify(name)}, enabled: true }] }] }
+          : {};
+        if (id !== undefined) console.log(JSON.stringify({ id, result }));
+      });
+    `
+    try {
+      vi.stubEnv('PATH', root)
+      const fallback = join(root, 'codex')
+      disk.writeFileSync(fallback, `#!${process.execPath}\n${inventory('default-skill')}`)
+      disk.chmodSync(fallback, 0o755)
+      const runner = join(root, 'custom-runner.cjs')
+      disk.writeFileSync(
+        runner,
+        `if (process.argv[2] !== 'custom profile' || process.argv[3] !== 'app-server')
+           process.exit(1);
+         ${inventory('runner-skill')}`,
+      )
+      fs = new InMemoryFileSystemService(
+        {
+          [join(root, 'pair.config.json')]: JSON.stringify({
+            run: {
+              defaults: { engine: 'codex' },
+              agents: { codex: { command: process.execPath, args: [runner, 'custom profile'] } },
+            },
+          }),
+          ...Object.fromEntries(
+            ['runner-skill', 'default-skill'].map(skill => [
+              join(root, `${skill}.yaml`),
+              `version: 1\nname: ${skill}\nsteps:\n  build: { kind: generic, skill: ${skill} }\n`,
+            ]),
+          ),
+        },
+        root,
+        root,
+      )
+
+      await validate('./runner-skill.yaml')
+      expect(process.exitCode ?? 0, lines.join('\n')).toBe(0)
+      await validate('./default-skill.yaml')
+      expect(process.exitCode).toBe(1)
+      expect(lines.join('\n')).toContain(
+        "steps.build.skill: skill 'default-skill' is not installed",
+      )
+    } finally {
+      disk.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('rejects an invalid file and reports its location and missing status producer', async () => {
     await validate('./invalid.yaml')
 
