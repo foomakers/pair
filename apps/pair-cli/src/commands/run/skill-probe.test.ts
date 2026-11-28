@@ -64,10 +64,11 @@ describe('createSkillProbe', () => {
     ['pi', '.pi/skills', '.pi/agent/skills'],
   ])('finds project and user skills for %s', (engine, projectDir, userDir) => {
     vi.stubEnv('HOME', '/user')
+    vi.stubEnv('XDG_CONFIG_HOME', '')
     const fs = new InMemoryFileSystemService(
       {
-        [`${cwd}/${projectDir}/project-skill/SKILL.md`]: '',
-        [`/user/${userDir}/user-skill/SKILL.md`]: '',
+        [`${cwd}/${projectDir}/project-skill/SKILL.md`]: '---\nname: project-skill\n---\n',
+        [`/user/${userDir}/user-skill/SKILL.md`]: '---\nname: user-skill\n---\n',
       },
       cwd,
       cwd,
@@ -161,7 +162,7 @@ describe('createSkillProbe', () => {
         [`${cwd}/shared/linked/SKILL.md`]:
           '---\nname: linked-notes\ndescription: Linked release notes\n---\n',
         [`${cwd}/.opencode/skills/conventional/SKILL.md`]:
-          '---\nname: conventional\ndescription: Conventional location\n---\n',
+          '---\nname: conventional-notes\ndescription: Conventional location\n---\n',
         [`${cwd}/unlisted/hidden/SKILL.md`]:
           '---\nname: hidden\ndescription: Outside skill sources\n---\n',
       },
@@ -172,9 +173,41 @@ describe('createSkillProbe', () => {
     fs.symlinkSync(`${cwd}/team-skills`, `${cwd}/shared/linked/back`)
     const exists = workflowSkillProbe(fs, skillsConfig([]), cwd, 'opencode')
     expect(
-      ['conventional', 'release-notes', 'linked-notes', 'notes', 'hidden'].map(exists),
-    ).toEqual([true, true, true, false, false])
+      [
+        'conventional-notes',
+        'conventional',
+        'release-notes',
+        'linked-notes',
+        'notes',
+        'hidden',
+      ].map(exists),
+    ).toEqual([true, false, true, true, false, false])
   })
+
+  it.each([false, true])(
+    'R764-09 (#674 AC-2/3/5): uses OpenCode roots with project config disabled=%s',
+    disabled => {
+      vi.stubEnv('HOME', '/user')
+      vi.stubEnv('XDG_CONFIG_HOME', '/xdg')
+      vi.stubEnv('OPENCODE_DISABLE_PROJECT_CONFIG', String(disabled))
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${cwd}/.opencode/skill/project-control/SKILL.md`]: '---\nname: project-control\n---\n',
+          '/xdg/opencode/skills/user-control/SKILL.md': '---\nname: user-control\n---\n',
+          '/user/.config/opencode/skills/stale/SKILL.md': '---\nname: stale\n---\n',
+        },
+        cwd,
+        cwd,
+      )
+      const exists = workflowSkillProbe(fs, skillsConfig([]), cwd, 'opencode')
+      expect(['project-control', 'user-control', 'stale', 'absent'].map(exists)).toEqual([
+        !disabled,
+        true,
+        false,
+        false,
+      ])
+    },
+  )
 
   // #674 AC-2/AC-3: project plugin settings apply to the launching project.
   it('finds a Claude plugin enabled by project settings', () => {
@@ -209,8 +242,8 @@ describe('createSkillProbe', () => {
     vi.stubEnv('HOME', '/user')
     const fs = new InMemoryFileSystemService(
       {
-        [`${cwd}/${projectDir}/project-skill/SKILL.md`]: '',
-        [`/user/${userDir}/user-skill/SKILL.md`]: '',
+        [`${cwd}/${projectDir}/project-skill/SKILL.md`]: '---\nname: project-skill\n---\n',
+        [`/user/${userDir}/user-skill/SKILL.md`]: '---\nname: user-skill\n---\n',
       },
       cwd,
       cwd,
@@ -231,9 +264,9 @@ describe('createSkillProbe', () => {
       vi.stubEnv(flag, 'true')
       const fs = new InMemoryFileSystemService(
         {
-          [`${cwd}/.claude/skills/claude-project/SKILL.md`]: '',
-          '/user/.claude/skills/claude-user/SKILL.md': '',
-          [`${cwd}/.agents/skills/shared/SKILL.md`]: '',
+          [`${cwd}/.claude/skills/claude-project/SKILL.md`]: '---\nname: claude-project\n---\n',
+          '/user/.claude/skills/claude-user/SKILL.md': '---\nname: claude-user\n---\n',
+          [`${cwd}/.agents/skills/shared/SKILL.md`]: '---\nname: shared\n---\n',
         },
         cwd,
         cwd,
