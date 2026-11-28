@@ -152,6 +152,57 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
   })
 
   it.each([
+    { args: [], available: true },
+    { args: ['--setting-sources', 'project'], available: false },
+    {
+      args: ['--settings', '{"enabledPlugins":{"example@market":false}}'],
+      available: false,
+    },
+    { args: ['--settings=./runner-settings.json'], available: false },
+  ])(
+    'R764-07 (#674 AC-2/3/5): applies Claude plugin settings for $args',
+    async ({ args, available }) => {
+      const config = join(project, 'claude-config')
+      const plugin = join(config, 'plugins/cache/market/example/1.0.0')
+      vi.stubEnv('CLAUDE_CONFIG_DIR', config)
+      const settings = (enabled: boolean) =>
+        JSON.stringify({ enabledPlugins: { 'example@market': enabled } })
+      fs.writeFileSync(
+        join(project, 'pair.config.json'),
+        JSON.stringify({
+          run: { defaults: { engine: 'claude' }, agents: { claude: { args } } },
+        }),
+      )
+      fs.writeFileSync(join(config, 'settings.json'), settings(true))
+      fs.writeFileSync(join(project, 'runner-settings.json'), settings(false))
+      fs.writeFileSync(
+        join(config, 'plugins/installed_plugins.json'),
+        JSON.stringify({
+          version: 2,
+          plugins: { 'example@market': [{ scope: 'user', installPath: plugin, version: '1.0.0' }] },
+        }),
+      )
+      fs.writeFileSync(
+        join(plugin, 'skills/inspect/SKILL.md'),
+        '---\nname: inspect\ndescription: Inspect\n---\n',
+      )
+      fs.writeFileSync(
+        join(project, 'plugin.yaml'),
+        'version: 1\nname: plugin\nsteps:\n  draft: { kind: generic, skill: example:inspect }\n',
+      )
+
+      await validate('./plugin.yaml')
+
+      expect(process.exitCode ?? 0, lines.join('\n')).toBe(available ? 0 : 1)
+      if (!available) {
+        expect(lines.join('\n')).toContain(
+          "steps.draft.skill: skill 'example:inspect' is not installed",
+        )
+      }
+    },
+  )
+
+  it.each([
     ['directory', './fixtures/local-tools', [], [true, true, true, false, false]],
     ['collection', './fixtures', [], [true, true, true, false, false]],
     ['ZIP', './local-tools.zip', [], [true, true, true, false, false]],
