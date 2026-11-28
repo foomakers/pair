@@ -158,6 +158,8 @@ describe('createSkillProbe', () => {
         }`,
         [`${cwd}/team-skills/group/notes/SKILL.md`]:
           '---\nname: release-notes\ndescription: Prepare release notes\n---\n',
+        [`${cwd}/shared/linked/SKILL.md`]:
+          '---\nname: linked-notes\ndescription: Linked release notes\n---\n',
         [`${cwd}/.opencode/skills/conventional/SKILL.md`]:
           '---\nname: conventional\ndescription: Conventional location\n---\n',
         [`${cwd}/unlisted/hidden/SKILL.md`]:
@@ -166,13 +168,12 @@ describe('createSkillProbe', () => {
       cwd,
       cwd,
     )
+    fs.symlinkSync(`${cwd}/shared/linked`, `${cwd}/team-skills/linked`)
+    fs.symlinkSync(`${cwd}/team-skills`, `${cwd}/shared/linked/back`)
     const exists = workflowSkillProbe(fs, skillsConfig([]), cwd, 'opencode')
-    expect(['conventional', 'release-notes', 'notes', 'hidden'].map(exists)).toEqual([
-      true,
-      true,
-      false,
-      false,
-    ])
+    expect(
+      ['conventional', 'release-notes', 'linked-notes', 'notes', 'hidden'].map(exists),
+    ).toEqual([true, true, true, false, false])
   })
 
   // #674 AC-2/AC-3: project plugin settings apply to the launching project.
@@ -221,6 +222,26 @@ describe('createSkillProbe', () => {
       false,
     ])
   })
+
+  it.each(['OPENCODE_DISABLE_CLAUDE_CODE_SKILLS', 'OPENCODE_DISABLE_CLAUDE_CODE'])(
+    'R764-09 (#674 AC-2/3): respects %s at project and user scope',
+    flag => {
+      vi.stubEnv('HOME', '/user')
+      vi.stubEnv('OPENCODE_DISABLE_EXTERNAL_SKILLS', 'false')
+      vi.stubEnv(flag, 'true')
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${cwd}/.claude/skills/claude-project/SKILL.md`]: '',
+          '/user/.claude/skills/claude-user/SKILL.md': '',
+          [`${cwd}/.agents/skills/shared/SKILL.md`]: '',
+        },
+        cwd,
+        cwd,
+      )
+      const exists = workflowSkillProbe(fs, skillsConfig([]), cwd, 'opencode')
+      expect(['claude-project', 'claude-user', 'shared'].map(exists)).toEqual([false, false, true])
+    },
+  )
 
   it('does not expose Claude-only skills to Codex', () => {
     vi.stubEnv('HOME', '/user')
