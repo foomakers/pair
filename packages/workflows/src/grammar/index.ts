@@ -183,6 +183,12 @@ export const stepSchema: JsonSchema = {
       pattern: SKILL_NAME,
       description: 'The skill that runs. Optional for a typed kind, required for `generic`.',
     },
+    args: {
+      type: 'object',
+      propertyNames: { pattern: '^[a-zA-Z][a-zA-Z0-9_-]*$' },
+      additionalProperties: { type: 'string' },
+      description: 'Text arguments passed to the skill.',
+    },
     interactive: {
       type: 'boolean',
       description:
@@ -356,6 +362,7 @@ export interface Step {
   readonly id: string
   readonly kind: KindName | 'loop'
   readonly skill?: string
+  readonly args?: Readonly<Record<string, string>>
   readonly interactive?: boolean
   readonly context?: ContextMode
   readonly prompt?: string

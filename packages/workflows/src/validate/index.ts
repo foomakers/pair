@@ -145,7 +145,7 @@ const gateErrors: Check = (workflow, step, deps, path) => {
 }
 
 const safetyErrors: Check = (workflow, step, deps, path) =>
-  textsOf(step.with ?? {}, [...path, 'with'])
+  [...textsOf(step.with ?? {}, [...path, 'with']), ...textsOf(step.args ?? {}, [...path, 'args'])]
     .filter(([, text]) => !deps.isSafeText(text))
     .map(([path, text]) =>
       errorAt(workflow, path, {
@@ -181,7 +181,7 @@ const failedEscalationErrors: Check = (workflow, step, _deps, path) => {
     : []
 }
 
-const AGENT_ONLY = ['timeout-minutes', 'retries', 'context', 'prompt', 'prompt-at'] as const
+const AGENT_ONLY = ['timeout-minutes', 'retries', 'context', 'prompt', 'prompt-at', 'args'] as const
 
 const hostOptionErrors: Check = (workflow, step, _deps, path) =>
   step.kind !== 'loop' && kindByName[step.kind].host === true

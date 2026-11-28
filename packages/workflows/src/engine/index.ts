@@ -181,6 +181,7 @@ export interface StepLaunch {
   readonly id: string
   readonly kind: KindName
   readonly uses: string
+  readonly args?: Readonly<Record<string, string>>
   /** Resolved by `next`; a caller constructing a launch can omit it for an ordinary step. */
   readonly interactive?: boolean
   readonly context?: ContextMode
@@ -975,6 +976,7 @@ function haltAt(state: RunStateFile, step: Step, approval?: string): Halt | unde
 const gatesOf = (step: Step) => (step.gates ? { gates: step.gates } : {})
 
 const agentOptionsOf = (step: Step) => ({
+  ...(step.args !== undefined && { args: step.args }),
   ...(step['timeout-minutes'] !== undefined && { timeoutMinutes: step['timeout-minutes'] }),
   ...(step.retries !== undefined && { retries: step.retries }),
   ...(step.context !== undefined && { context: step.context }),

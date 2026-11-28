@@ -66,7 +66,7 @@ export function isSafeProse(value: string, isSafeText: MessageOptions['isSafeTex
 export class UnsafeMessageError extends Error {}
 
 function checkMessageText(step: StepLaunch, isSafeText: MessageOptions['isSafeText']): void {
-  const unsafe = textsOf([step.uses, step.inputs, step.with])
+  const unsafe = textsOf([step.uses, step.inputs, step.with, step.args])
     .map(([, text]) => text)
     .find(text => !isSafeText(text))
   if (unsafe !== undefined)
@@ -82,8 +82,17 @@ function checkMessageText(step: StepLaunch, isSafeText: MessageOptions['isSafeTe
 
 const WORKFLOW_INSTRUCTIONS = 'Workflow instructions for this step:'
 
-function invocationLines({ uses, prompt, promptAt }: StepLaunch, style: InvocationStyle): string[] {
-  const invocation = style === 'slash' ? `/${uses}` : `Run the ${uses} skill.`
+function invocationLines(
+  { uses, args, prompt, promptAt }: StepLaunch,
+  style: InvocationStyle,
+): string[] {
+  const pairs = Object.entries(args ?? {})
+    .map(([name, value]) => `${name}=${/[\s"'\\]/.test(value) ? JSON.stringify(value) : value}`)
+    .join(' ')
+  const invocation =
+    style === 'slash'
+      ? `/${uses}${pairs ? ` ${pairs}` : ''}`
+      : `Run the ${uses} skill.${pairs ? ` Arguments: ${pairs}` : ''}`
   if (prompt && promptAt === 'before') return [WORKFLOW_INSTRUCTIONS, prompt, '', invocation]
   if (prompt && promptAt === 'with') return [`${invocation} ${WORKFLOW_INSTRUCTIONS} ${prompt}`]
   return [invocation]

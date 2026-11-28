@@ -154,6 +154,7 @@ const INCLUDE_FORBIDDEN_KEYS = [
   'context',
   'prompt',
   'prompt-at',
+  'args',
   'when',
   'gates',
   'state',
