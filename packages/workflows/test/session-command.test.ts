@@ -309,6 +309,31 @@ it('R764-04: expands an include with a Codex-only skill', () => {
   })
 })
 
+it.each(['validate', 'start'])('R764-06: %s rejects a Codex skill and workflow clash', command => {
+  const name = 'pair-fixture-clash'
+  write(
+    'pair.config.json',
+    JSON.stringify({
+      worktreeRoot: 'worktrees',
+      asset_registries: { skills: { targets: [{ path: '.claude/skills', mode: 'canonical' }] } },
+    }),
+  )
+  write(`.agents/skills/${name}/SKILL.md`, `---\nname: ${name}\ndescription: Fixture skill\n---\n`)
+  write(
+    `.pair/adoption/tech/workflows/${name}.yaml`,
+    `version: 1\nname: ${name}\nsteps:\n  draft: { kind: generic, skill: pair-fixture-draft }\n`,
+  )
+  write(workflowFile, namedWorkflow(`  included: { kind: generic, uses: ${name} }\n`))
+
+  expect(JSON.parse(successful(['expand', 'quick']))).toMatchObject({
+    steps: [{ id: 'included/draft' }],
+  })
+  const args = command === 'start' ? ['--card', card] : []
+  const result = invoke([command, 'quick', '--engine', 'codex', ...args])
+  expect(result.status).toBe(1)
+  expect(result.stderr).toContain(`steps.included.uses: workflow and skill name clash: ${name}`)
+})
+
 it('#696 AC-1/AC-2/AC-5: advances a session run through the shipped script and resumes its frozen inputs', () => {
   const lease = openSession([
     'start',
