@@ -28,3 +28,5 @@ export {
   registryTargets,
 } from './project-config'
 export { DEFAULT_WORKING_PATH, resolveWorkingPathOverride } from './working-area'
+
+export { engineSkillProbe } from './engine-skill-probe'

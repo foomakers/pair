@@ -1,6 +1,8 @@
 import { join, resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import { loadConfigWithOverrides } from '#config'
+import { declaredEngine } from '../run/run-context'
+import { DEFAULT_ENGINE_ID } from '../run/engines'
 import { mainCheckoutOrCwd } from '../run/cycle-wiring'
 import { checkWorkflow, locateWorkflow, reportValidation } from '../run/workflow-source'
 
@@ -45,7 +47,12 @@ export async function handleWorkflowCommand(
     skipBaseConfig: !fs.existsSync(join(fs.rootModuleDirectory(), 'config.json')),
   }).config
   const source = locateWorkflow(fs, { cwd, main }, name)
-  const checked = checkWorkflow(fs, project, { cwd, main }, source)
+  const checked = checkWorkflow(
+    fs,
+    project,
+    { cwd, main, engine: declaredEngine(project) ?? DEFAULT_ENGINE_ID },
+    source,
+  )
   reportValidation(checked)
   if (checked.workflow === undefined) return 1
   console.log(`Valid workflow: ${source.file}`)

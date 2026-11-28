@@ -42,9 +42,9 @@ export function validateWorkflow(
   name: string,
   { engine: engineFlag, config: flag }: { engine?: string; config?: string },
 ) {
-  const { workflow, warnings } = workflowDefinition(project, name)
   const projectSettings = loadSessionProjectConfig(project.cwd) ?? {}
   const engine = engineFlag ?? declaredEngine(projectSettings)
+  const { workflow, warnings } = workflowDefinition(project, name, engine)
   const selected = workflowConfiguration(
     project,
     { workflow: workflow.name, engine, flag, labels: [] },

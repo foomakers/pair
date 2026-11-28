@@ -308,18 +308,18 @@ export function resolveWorkflowDefinition(
   const sources: Record<string, string> = {
     [source.file]: createHash('sha256').update(source.text).digest('hex'),
   }
-  const checked =
-    (config.dryRun || !resume
-      ? undefined
-      : resumeWorkflow(fs, request, source, { main, sources })) ??
-    checkWorkflow(fs, project, { cwd, main, sources }, source)
-  console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
-  reportValidation(checked)
-  if (checked.workflow === undefined) return undefined
   const engine = withRunAgentRunner(
     resolveEngine({ flag: config.engine, declared: declaredEngine(project) }),
     project,
   )
+  const checked =
+    (config.dryRun || !resume
+      ? undefined
+      : resumeWorkflow(fs, request, source, { main, sources })) ??
+    checkWorkflow(fs, project, { cwd, main, sources, engine: engine.engine.id }, source)
+  console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
+  reportValidation(checked)
+  if (checked.workflow === undefined) return undefined
   console.log(`  ${describeEngineResolution(engine)}`)
   const errors = workflowTierErrors({ fs, cwd, main, project })
   if (errors.length > 0) {

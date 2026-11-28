@@ -1,5 +1,6 @@
 import {
   defaultSkillPaths,
+  engineSkillProbe,
   findDefaultSkill,
   findSkillFile,
   skillsLayout,
@@ -7,6 +8,7 @@ import {
 import type { FileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
 import type { SkillProbe } from './resolve-skill'
+import type { EngineId } from './engines'
 
 const isFile = (fs: FileSystemService) => (path: string) =>
   fs.existsSync(path) && fs.statSync(path).isFile()
@@ -24,12 +26,9 @@ export function createSkillProbe(
   fs: FileSystemService,
   config: Config,
   projectRoot: string,
-  exact = false,
+  ...[exact = false, engine]: [boolean?, EngineId?]
 ): SkillProbe {
-  const { targets, prefix } = skillsLayout(config)
-  const check = isFile(fs)
-  const layout = { targets, prefix: exact ? undefined : prefix }
-  return name => findSkillFile(check, projectRoot, layout, name) !== undefined
+  return engineSkillProbe(fs, isFile(fs), projectRoot, { config, exact, engine })
 }
 
 /** Read the installed skill through the same registry targets as the existence probe. */
