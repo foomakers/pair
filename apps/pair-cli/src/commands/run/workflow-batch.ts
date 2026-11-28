@@ -513,9 +513,23 @@ export async function handleMappedWorkflow(
   const { fs, deps } = services
   const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
+  const defaultWorkflow = project['defaultWorkflow']
+  if (typeof defaultWorkflow === 'string')
+    return await handleWorkflowRun(config, { name: defaultWorkflow, card, restart: false }, services)
   const names = mappedNames(project['workflows'] as WorkflowsConfig | undefined)
-  if (names.length === 0) return undefined
   const main = mainCheckoutOrCwd(cwd)
+  const listAvailable = () => {
+    const dir = join(main, '.pair/adoption/tech/workflows')
+    const available = fs.existsSync(dir)
+      ? fs.readdirSync(dir)
+          .filter(entry => entry.isFile() && /\.ya?ml$/.test(entry.name))
+          .map(entry => entry.name.replace(/\.ya?ml$/, ''))
+          .sort()
+      : []
+    console.log(`Available workflows:\n${available.map(name => `  pair run ${name} ${card}`).join('\n')}`)
+    return 0
+  }
+  if (names.length === 0) return listAvailable()
   const { cards, assignee } = await (deps.workflow?.readSelection ?? readWorkflowCards)(
     { fs, project, cwd, main },
     { cards: [card], ...config.scope },
@@ -528,7 +542,5 @@ export async function handleMappedWorkflow(
     printOutcome({ id: card, outcome: 'not-applicable', reason: 'selection filter' })
     return 0
   }
-  throw new Error(
-    `workflow-not-applicable: no mapped workflow accepts card ${card}; pass a workflow name explicitly`,
-  )
+  return listAvailable()
 }

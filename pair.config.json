@@ -9,6 +9,7 @@
   "agents": {
     "targets": ["claude", "codex"]
   },
+  "defaultWorkflow": "delivery",
   "workflows": {
     "default": {
       "configuration": {

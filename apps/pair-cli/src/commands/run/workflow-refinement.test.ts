@@ -139,6 +139,50 @@ afterEach(() => {
   fs.rmSync(project, { recursive: true, force: true })
 })
 
+describe('#701 AC-3 default workflow', () => {
+  const readSelection: NonNullable<WorkflowHostDependencies['readSelection']> = async () => ({
+    cards: [{ id: '627', title: 'Story', body: '', labels: [], assignees: [], status: 'Ready', boardState: 'Ready', closed: false, prerequisites: [] }],
+  })
+  it('uses the configured default ahead of the first matching mapped workflow', async () => {
+    write('pair.config.json', JSON.stringify({ defaultWorkflow: 'quick', workflows: { other: {}, quick: {} } }))
+    write('.pair/adoption/tech/workflows/other.yaml', QUICK.replace('name: quick', 'name: other'))
+    expect(await run([], OK, {}, { readSelection })).toBe(0)
+    expect(states()).toEqual({ implement: 'ok', review: 'ok' })
+  })
+
+  it('refuses an unknown default before launching', async () => {
+    write('pair.config.json', JSON.stringify({ defaultWorkflow: 'missing', workflows: { quick: {} } }))
+    await expect(run([], OK, {}, { readSelection })).rejects.toThrow(/missing/)
+    expect(launched).toHaveLength(0)
+  })
+
+  it('lists available workflows and exits successfully when none accepts the card', async () => {
+    write('pair.config.json', JSON.stringify({ workflows: { quick: {} } }))
+    write('.pair/adoption/tech/workflows/quick.yaml', QUICK.replace('name: quick', 'name: quick\nselect: { filter: { status: [Draft] } }'))
+    expect(await run([], OK, {}, { readSelection })).toBe(0)
+    expect(launched).toHaveLength(0)
+    expect(lines.join('\n').split('Available workflows')[1]).toMatch(/pair run quick/)
+  })
+
+  it('lists available workflows even when no workflow is mapped', async () => {
+    write('pair.config.json', JSON.stringify({}))
+    expect(await run([], OK, {}, { readSelection })).toBe(0)
+    expect(launched).toHaveLength(0)
+    expect(lines.join('\n').split('Available workflows')[1]).toMatch(/pair run quick/)
+  })
+
+  it('lists all available workflows, including unmapped ones, one per launch line', async () => {
+    write('pair.config.json', JSON.stringify({ workflows: { quick: {} } }))
+    write('.pair/adoption/tech/workflows/quick.yaml', QUICK.replace('name: quick', 'name: quick\nselect: { filter: { status: [Draft] } }'))
+    write('.pair/adoption/tech/workflows/other.yaml', QUICK.replace('name: quick', 'name: other'))
+    expect(await run([], OK, {}, { readSelection })).toBe(0)
+    expect(launched).toHaveLength(0)
+    const listing = lines.join('\n').split('Available workflows')[1]
+    expect(listing).toMatch(/pair run quick/)
+    expect(listing).toMatch(/pair run other/)
+  })
+})
+
 describe('shipped refinement (#678 AC-1, AC-5, AC-6 and AC-9)', () => {
   it.each([
     ['successful transitions', undefined, false, undefined],
