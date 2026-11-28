@@ -928,6 +928,40 @@ const readTelemetry = () =>
     .split('\n')
     .map(line => JSON.parse(line) as unknown)
 
+it('R764-10 (#674 AC-2/5): checks remaining skills when resuming under another engine', () => {
+  const skillFile = (name: string) => `---\nname: ${name}\ndescription: Fixture skill\n---\n`
+  git('worktree', 'add', '-b', branch, worktree, 'main')
+  for (const name of ['completed-claude-skill', 'remaining-skill'])
+    write(`worktrees/${card}/.claude/skills/${name}/SKILL.md`, skillFile(name))
+  write(
+    workflowFile,
+    namedWorkflow(
+      '  draft: { kind: generic, skill: completed-claude-skill }\n' +
+        '  discuss: { kind: generic, skill: remaining-skill }\n',
+    ),
+  )
+  const lease = openSession(['start', 'quick', '--card', card, '--engine', 'claude'])
+  expect(advance(lease)).toMatchObject({ ready: [{ id: 'draft' }] })
+  successful(['record', runId, 'draft', ...lease, '--result', '-'], fenced(drafted))
+  successful(['stop', runId, ...lease])
+  write(workflowFile, 'The authoring source changed.\n')
+
+  const state = readRun('state.json')
+  const args = ['resume', runId, '--engine', 'codex']
+  const rejected = invoke(args)
+  expect(rejected.status).toBe(1)
+  expect(rejected.stderr).toContain(
+    "steps.discuss.skill: skill 'remaining-skill' is not installed for engine 'codex'",
+  )
+  expect(readRun('state.json')).toBe(state)
+
+  write(`worktrees/${card}/.agents/skills/remaining-skill/SKILL.md`, skillFile('remaining-skill'))
+  const resumed = openSession(args)
+  expect(advance(resumed)).toMatchObject({
+    ready: [{ id: 'discuss', uses: 'remaining-skill', worktree, settings: { engine: 'codex' } }],
+  })
+})
+
 it('R764-05 (#674 AC-7): sends Claude a slash invocation and meters the same text', () => {
   write(
     workflowFile,
