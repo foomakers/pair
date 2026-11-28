@@ -162,7 +162,9 @@ describe('createSkillProbe', () => {
         [`${cwd}/shared/linked/SKILL.md`]:
           '---\nname: linked-notes\ndescription: Linked release notes\n---\n',
         [`${cwd}/.opencode/skills/conventional/SKILL.md`]:
-          '---\nname: conventional-notes\ndescription: Conventional location\n---\n',
+          '---\r\nname: conventional-notes\r\ndescription: Conventional location\r\n---\r\n',
+        [`${cwd}/.opencode/skills/with-bom/SKILL.md`]:
+          '\uFEFF---\nname: bom-notes\ndescription: UTF-8 with a BOM\n---\n',
         [`${cwd}/unlisted/hidden/SKILL.md`]:
           '---\nname: hidden\ndescription: Outside skill sources\n---\n',
       },
@@ -176,12 +178,13 @@ describe('createSkillProbe', () => {
       [
         'conventional-notes',
         'conventional',
+        'bom-notes',
         'release-notes',
         'linked-notes',
         'notes',
         'hidden',
       ].map(exists),
-    ).toEqual([true, false, true, true, false, false])
+    ).toEqual([true, false, true, true, true, false, false])
   })
 
   it.each([false, true])(
