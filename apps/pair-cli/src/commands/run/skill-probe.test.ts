@@ -84,6 +84,30 @@ describe('createSkillProbe', () => {
   })
 
   // #674 AC-3, R764-03: manifest directories extend the default plugin inventory.
+  it('R764-08 (#674 AC-3): uses the active Claude config directory for personal and plugin skills', () => {
+    vi.stubEnv('HOME', '/user')
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '/alternate')
+    const plugin = '/alternate/plugins/cache/market/example/1.0.0'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/.claude/skills/project-skill/SKILL.md`]: '',
+        '/user/.claude/skills/stale-skill/SKILL.md': '',
+        '/alternate/skills/personal-skill/SKILL.md': '',
+        '/alternate/settings.json': JSON.stringify({ enabledPlugins: { 'example@market': true } }),
+        '/alternate/plugins/installed_plugins.json': JSON.stringify({
+          plugins: { 'example@market': [{ scope: 'user', installPath: plugin }] },
+        }),
+        [`${plugin}/skills/inspect/SKILL.md`]: '',
+      },
+      cwd,
+      cwd,
+    )
+    const exists = workflowSkillProbe(fs, skillsConfig([]), cwd, 'claude')
+    expect(
+      ['project-skill', 'personal-skill', 'example:inspect', 'stale-skill'].map(exists),
+    ).toEqual([true, true, true, false])
+  })
+
   it.each([
     { skills: './extra-skills/' },
     { skills: ['./extra-skills/', '.'] },
