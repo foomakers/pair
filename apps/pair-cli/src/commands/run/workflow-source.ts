@@ -26,7 +26,7 @@ export const WAY_OF_WORKING = '.pair/adoption/tech/way-of-working.md'
 
 function configuredSkillProbe(fs: FileSystemService, project: Config, cwd: string, id: EngineId) {
   const { engine } = withRunAgentRunner(resolveEngine({ flag: id }), project)
-  return workflowSkillProbe(fs, project, cwd, id, engine)
+  return workflowSkillProbe(fs, project, cwd, engine)
 }
 
 export interface Located {

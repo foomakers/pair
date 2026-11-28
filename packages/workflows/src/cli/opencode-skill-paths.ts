@@ -21,12 +21,12 @@ function pathsFrom(text: string | undefined): string[] | undefined {
     : undefined
 }
 
-function configuredPaths(fs: SkillFiles, root: string, home: string | undefined): string[] {
+function configCandidates(root: string, home: string | undefined): string[] {
   const env = process.env
   const global = env['XDG_CONFIG_HOME'] || (home && join(home, '.config'))
   const configFiles = ['opencode.json', 'opencode.jsonc']
   const projectDisabled = /^(1|true)$/i.test(env['OPENCODE_DISABLE_PROJECT_CONFIG'] ?? '')
-  const files = [
+  return [
     ...(global ? ['config.json', ...configFiles].map(file => join(global, 'opencode', file)) : []),
     ...(env['OPENCODE_CONFIG'] ? [resolve(root, env['OPENCODE_CONFIG'])] : []),
     ...(projectDisabled
@@ -35,10 +35,13 @@ function configuredPaths(fs: SkillFiles, root: string, home: string | undefined)
     ...(env['OPENCODE_CONFIG_DIR']
       ? configFiles.map(file => resolve(root, env['OPENCODE_CONFIG_DIR']!, file))
       : []),
-  ]
-  const inline = pathsFrom(env['OPENCODE_CONFIG_CONTENT'])
+  ].reverse()
+}
+
+function configuredPaths(fs: SkillFiles, root: string, home: string | undefined): string[] {
+  const inline = pathsFrom(process.env['OPENCODE_CONFIG_CONTENT'])
   if (inline !== undefined) return inline
-  for (const file of files.reverse()) {
+  for (const file of configCandidates(root, home)) {
     try {
       const paths = pathsFrom(fs.readFileSync(file))
       if (paths !== undefined) return paths
@@ -47,6 +50,18 @@ function configuredPaths(fs: SkillFiles, root: string, home: string | undefined)
     }
   }
   return []
+}
+
+function skillName(fs: SkillFiles, file: string): string | undefined {
+  try {
+    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(fs.readFileSync(file))
+    if (frontmatter === null) return
+    const skill: unknown = parseYaml(frontmatter[1]!)
+    return isPlainObject(skill) && typeof skill['name'] === 'string' ? skill['name'] : undefined
+  } catch {
+    // OpenCode skips unreadable or malformed skill files.
+    return
+  }
 }
 
 function discover(fs: SkillFiles, directory: string, names: Set<string>): void {
@@ -61,14 +76,8 @@ function discover(fs: SkillFiles, directory: string, names: Set<string>): void {
     if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
       discover(fs, file, names)
     } else if (entry.name === 'SKILL.md') {
-      try {
-        const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(fs.readFileSync(file))
-        if (frontmatter === null) continue
-        const skill: unknown = parseYaml(frontmatter[1]!)
-        if (isPlainObject(skill) && typeof skill['name'] === 'string') names.add(skill['name'])
-      } catch {
-        // OpenCode skips unreadable or malformed skill files.
-      }
+      const name = skillName(fs, file)
+      if (name !== undefined) names.add(name)
     }
   }
 }

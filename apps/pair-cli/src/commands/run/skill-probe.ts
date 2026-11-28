@@ -32,10 +32,10 @@ export function workflowSkillProbe(
   fs: FileSystemService,
   config: Config,
   root: string,
-  engine: EngineId,
-  runner?: Pick<EngineDefinition, 'command' | 'runnerArgs'>,
+  engine: EngineId | Pick<EngineDefinition, 'id' | 'command' | 'runnerArgs'>,
 ) {
-  return engineSkillProbe(fs, isFile(fs), root, { config, engine, runner })
+  const runner = typeof engine === 'string' ? { id: engine, command: engine } : engine
+  return engineSkillProbe(fs, isFile(fs), root, { config, engine: runner.id, runner })
 }
 
 /** Read the installed skill through the same registry targets as the existence probe. */

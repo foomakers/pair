@@ -183,17 +183,16 @@ function expandStep(state: ExpansionState, context: StepContext, chain: readonly
     )
     return []
   }
-  if (step.uses !== undefined) {
-    const clash = errorAt(workflow, ['steps', step.id, 'uses'], {
-      problem: `workflow and skill name clash: ${step.uses}`,
-      fix: 'rename the workflow or skill',
-    })
-    if (state.skillExists?.(step.uses)) {
-      state.errors.push(clash)
-      return []
-    }
-    state.includes.push({ name: step.uses, clash })
+  const name = step.uses!
+  const clash = errorAt(workflow, ['steps', step.id, 'uses'], {
+    problem: `workflow and skill name clash: ${name}`,
+    fix: 'rename the workflow or skill',
+  })
+  if (state.skillExists?.(name)) {
+    state.errors.push(clash)
+    return []
   }
+  state.includes.push({ name, clash })
   if (chain.includes(target.file) || chain.length >= 4) {
     state.errors.push(
       errorAt(workflow, ['steps', step.id, 'uses'], {
