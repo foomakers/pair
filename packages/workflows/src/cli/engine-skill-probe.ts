@@ -1,5 +1,6 @@
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import AdmZip from 'adm-zip'
+import { parse as parseYaml } from 'yaml'
 import type { RunFiles } from '../engine'
 import { inventoryRequest } from '../worktree/inventory-process'
 import { isPlainObject } from './project-config'
@@ -129,9 +130,7 @@ function claudeAddedDirectories(root: string, args: readonly string[]): string[]
 function claudeSkillDirectories(
   root: string,
   configDir: string | undefined,
-  settings: readonly string[],
-  args: readonly string[],
-  bare: boolean,
+  { settings, args, bare }: { settings: readonly string[]; args: readonly string[]; bare: boolean },
 ) {
   const projectDirs = settings.includes('project') ? claudeAddedDirectories(root, args) : []
   if (!bare && settings.includes('project')) projectDirs.unshift(root)
@@ -139,12 +138,39 @@ function claudeSkillDirectories(
   return { projectDirs, userDir }
 }
 
+function claudeProjectSkillNames(fs: SkillFiles, root: string): string[] {
+  const directory = join(root, '.claude/skills')
+  let entries: ReturnType<SkillFiles['readdirSync']>
+  try {
+    entries = fs.readdirSync(directory)
+  } catch {
+    return []
+  }
+  return entries.flatMap(entry => {
+    if (!(entry.isDirectory() || entry.isSymbolicLink()) || entry.name.startsWith('.')) return []
+    try {
+      const text = fs.readFileSync(join(directory, entry.name, 'SKILL.md'))
+      const frontmatter = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text)?.[1]
+      if (frontmatter === undefined) return []
+      const metadata: unknown = parseYaml(frontmatter)
+      return isPlainObject(metadata) && typeof metadata['name'] === 'string'
+        ? [metadata['name']]
+        : []
+    } catch {
+      return []
+    }
+  })
+}
+
 function claudePluginSkill(
   fs: Pick<RunFiles, 'readFileSync'>,
   check: (path: string) => boolean,
-  { configDir, root }: { configDir: string; root: string },
-  sources: readonly string[],
-  override: string | undefined,
+  {
+    configDir,
+    root,
+    sources,
+    override,
+  }: { configDir: string; root: string; sources: readonly string[]; override: string | undefined },
   { plugin, skill }: { plugin: string; skill: string },
 ): boolean {
   const settings = [
@@ -181,66 +207,85 @@ function claudePluginSkill(
   })
 }
 
+function claudePluginProbe(
+  fs: EngineSkillFiles,
+  check: (path: string) => boolean,
+  root: string,
+  {
+    args,
+    configDir,
+    settings,
+  }: { args: readonly string[]; configDir: string | undefined; settings: readonly string[] },
+) {
+  const override = claudeOption(args, '--settings')
+  let sources: ReturnType<typeof claudeRunnerSources> | undefined
+  return (plugin: string, skill: string) => {
+    sources ??= claudeRunnerPluginDirs(root, args).flatMap(path =>
+      claudeRunnerSources(fs, check, path),
+    )
+    return (
+      sources.some(source => source(plugin, skill)) ||
+      (configDir !== undefined &&
+        claudePluginSkill(
+          fs,
+          check,
+          { root, configDir, sources: settings, override },
+          { plugin, skill },
+        ))
+    )
+  }
+}
+
+type ClaudeSkillOptions = {
+  root: string
+  home: string | undefined
+  prefix: string | undefined
+  runnerArgs?: readonly string[] | undefined
+}
+
 function claudeSkills(
   fs: EngineSkillFiles,
   check: (path: string) => boolean,
-  {
-    root,
-    home,
-    prefix,
-    runnerArgs = [],
-  }: {
-    root: string
-    home: string | undefined
-    prefix: string | undefined
-    runnerArgs?: readonly string[] | undefined
-  },
+  options: ClaudeSkillOptions,
 ) {
+  const { root, home, prefix, runnerArgs = [] } = options
   const end = runnerArgs.indexOf('--')
   const args = end < 0 ? runnerArgs : runnerArgs.slice(0, end)
   const mode = claudeMode(args)
   if (mode === 'disabled') return () => false
   const configured = process.env['CLAUDE_CONFIG_DIR']
-  const configDir = configured ? resolve(root, configured) : home && join(home, '.claude')
+  const configDir = configured
+    ? resolve(root, configured)
+    : home
+      ? join(home, '.claude')
+      : undefined
   const settings = (claudeOption(args, '--setting-sources') ?? 'user,project,local')
     .split(',')
     .map(source => source.trim())
-  const override = claudeOption(args, '--settings')
-  const { projectDirs, userDir } = claudeSkillDirectories(
-    root,
-    configDir,
+  const { projectDirs, userDir } = claudeSkillDirectories(root, configDir, {
     settings,
     args,
-    mode === 'bare',
-  )
-  let sources: ReturnType<typeof claudeRunnerSources> | undefined
+    bare: mode === 'bare',
+  })
+  const pluginSkill = claudePluginProbe(fs, check, root, {
+    args,
+    configDir: mode === 'default' ? configDir : undefined,
+    settings,
+  })
+  let projectNames: Set<string> | undefined
   return (name: string) => {
     const match = /^([\w-]+):([\w-]+)$/.exec(name)
-    if (match) {
-      const plugin = match[1]!
-      const skill = match[2]!
-      sources ??= claudeRunnerPluginDirs(root, args).flatMap(path =>
-        claudeRunnerSources(fs, check, path),
-      )
-      return (
-        sources.some(source => source(plugin, skill)) ||
-        Boolean(
-          mode === 'default' &&
-            configDir &&
-            claudePluginSkill(fs, check, { root, configDir }, settings, override, {
-              plugin,
-              skill,
-            }),
-        )
-      )
-    }
+    if (match) return pluginSkill(match[1]!, match[2]!)
     return (
       projectDirs.some(
         dir =>
           findSkillFile(check, dir, { targets: ['.claude/skills'], prefix }, name) !== undefined,
       ) ||
       (userDir !== undefined &&
-        findSkillFile(check, userDir, { targets: ['skills'] }, name) !== undefined)
+        findSkillFile(check, userDir, { targets: ['skills'] }, name) !== undefined) ||
+      (projectNames ??= new Set(projectDirs.flatMap(dir => claudeProjectSkillNames(fs, dir)))).has(
+        name,
+      )
     )
   }
 }
