@@ -385,8 +385,8 @@ describe('parseWorkflow (AC-2)', () => {
       {
         line: 11,
         key: 'steps.review.skill',
-        problem: '"My Skill" does not match ^[a-z0-9][a-z0-9:._-]*$',
-        fix: 'write a value matching ^[a-z0-9][a-z0-9:._-]*$',
+        problem: '"My Skill" does not match ^[A-Za-z0-9][A-Za-z0-9:._-]*$',
+        fix: 'write a value matching ^[A-Za-z0-9][A-Za-z0-9:._-]*$',
       },
     ],
     [

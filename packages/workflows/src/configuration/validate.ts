@@ -1,5 +1,5 @@
 import { errorAt, type Lines, type Step, type Workflow, type WorkflowError } from '../grammar'
-import { interactiveOf } from '../kinds'
+import { interactiveOf, kindByName } from '../kinds'
 import type { Configuration, Entry } from './schema'
 import { isConfigurationPath } from './select'
 import { settingsFor } from './settings'
@@ -180,6 +180,19 @@ function loopOptionErrors(
   })
 }
 
+function hostSkillErrors(
+  c: Configuration,
+  steps: NonNullable<CheckContext['steps']>,
+  at: Issue,
+): WorkflowError[] {
+  return steps.flatMap(({ id, kind }) =>
+    c.steps?.[id]?.skill !== undefined &&
+    (kind === 'loop' || (kind !== undefined && kindByName[kind].host === true))
+      ? [at(['steps', id, 'skill'], 'skill is only allowed on an agent step', "remove 'skill'")]
+      : [],
+  )
+}
+
 /** What the workflow adds: an unknown step id warns; an undeclared alias and an engine used and not installed refuse. */
 function checkWorkflow(
   c: Configuration,
@@ -221,7 +234,10 @@ function checkWorkflow(
         `install ${engine}, or choose another configuration`,
       ),
     )
-  return { errors: [...loopOptions, ...undeclared, ...notInstalled], warnings }
+  return {
+    errors: [...loopOptions, ...hostSkillErrors(c, steps, at), ...undeclared, ...notInstalled],
+    warnings,
+  }
 }
 
 /** The checks of design §5 that need the engines. A file that parsed has the right shape already. */

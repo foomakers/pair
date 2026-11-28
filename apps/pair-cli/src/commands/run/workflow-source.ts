@@ -7,12 +7,13 @@ import {
   readGateTargets,
   validate,
   type Validation,
+  type WorkflowSkillContext,
 } from '@pair/workflows'
 import type { Config } from '#registry'
 import { getKnowledgeHubDatasetPath } from '#config/kb-resolver'
 import { isSafePromptText } from './prompt-safety'
-import { createSkillProbe, workflowDefaultSkill } from './skill-probe'
-import type { EngineId } from './engines'
+import { createSkillProbe, workflowDefaultSkill, workflowSkillProbe } from './skill-probe'
+import { isEngineId, type EngineId } from './engines'
 import { locateCycleScripts } from './cycle-scripts'
 import { canCommentOnCard } from './workflow-facts'
 
@@ -81,10 +82,9 @@ export function checkWorkflow(
 ) {
   const registry = join(main, WAY_OF_WORKING)
   const registryText = fs.existsSync(registry) ? fs.readFileSync(registry) : ''
-  const installed = workflowDefaultSkill(fs, project, cwd)
   return validate(source.text, source.file, {
     skillExists: createSkillProbe(fs, project, cwd, true, engine),
-    defaultSkillExists: name => installed(name) !== undefined,
+    deferSkillProbe: true,
     gateKeys: Object.keys(readGateRegistry(registryText)),
     gateTargets: Object.keys(readGateTargets(registryText)),
     launchInputs: ['card'],
@@ -103,6 +103,26 @@ export function checkWorkflow(
       }
     },
   })
+}
+
+export function workflowSkillContext(
+  fs: FileSystemService,
+  project: Config,
+  cwd: string,
+  at: Pick<WorkflowSkillContext, 'configuration' | 'engine'>,
+): WorkflowSkillContext {
+  const probes = new Map<EngineId, ReturnType<typeof workflowSkillProbe>>()
+  return {
+    ...at,
+    isSafeText: isSafePromptText,
+    defaultSkill: workflowDefaultSkill(fs, project, cwd),
+    skillExists(name, engine, configured) {
+      if (!isEngineId(engine)) return false
+      const probe = probes.get(engine) ?? workflowSkillProbe(fs, project, cwd, engine)
+      probes.set(engine, probe)
+      return probe(name, configured)
+    },
+  }
 }
 
 export function reportValidation(checked: Pick<Validation, 'errors' | 'warnings'>): void {

@@ -18,6 +18,7 @@ import {
   effectiveSelection,
   escalationAction,
   checkAgainstEngines,
+  checkWorkflowSkills,
   describeSettings,
   expandedWorkflowSource,
   formatError,
@@ -54,7 +55,9 @@ import {
   type StepLaunch,
   type StepReplay,
   type StepSettings,
+  type Step,
   type Usage,
+  type Validation,
   type Workflow,
   type WorkflowHost,
   type WorkflowsConfig,
@@ -108,6 +111,7 @@ import {
   checkWorkflow,
   locateWorkflow,
   reportValidation,
+  workflowSkillContext,
   type Located,
 } from './workflow-source'
 import { acquireRunLock } from './run-lock'
@@ -213,6 +217,7 @@ async function cycleWorktree(input: WorktreeInput): Promise<string> {
 
 interface Resolved {
   readonly defaultSkill: ReturnType<typeof workflowDefaultSkill>
+  readonly checkSkills: NonNullable<Validation['checkSkills']>
   readonly workflow: Workflow
   readonly source: Located
   readonly project: Config
@@ -265,10 +270,34 @@ export function configureWorkflowRun(
     reportConfigurationErrors(outcome.errors)
     return undefined
   }
-  return {
+  const resolved = {
     ...at,
     ...(outcome.plan && { configuration: outcome.plan }),
   }
+  return checkConfiguredSkills(config, request, services, resolved) ? resolved : undefined
+}
+
+function checkConfiguredSkills(
+  config: RunCommandConfig,
+  request: RunWorkflowRequest,
+  { fs }: Services,
+  at: Resolved,
+): boolean {
+  const run = { files: fs, dir: workflowRunDir(at, request) }
+  const saved = !config.dryRun && savedRunState(request, run.dir, fs)
+  if (saved && completedRun(run, { card: request.card, workflow: at.workflow.name })) return true
+  const configuration =
+    saved && (!request.reconfigure || at.configuration === undefined)
+      ? effectiveConfiguration(run)
+      : at.configuration?.configuration
+  const errors = at.checkSkills(
+    workflowSkillContext(fs, at.project, at.cwd, {
+      configuration,
+      engine: at.engine.engine.id,
+    }),
+  )
+  reportValidation({ errors, warnings: [] })
+  return errors.length === 0
 }
 
 function resumeWorkflow(
@@ -276,7 +305,7 @@ function resumeWorkflow(
   request: RunWorkflowRequest,
   source: Located,
   { main, sources }: { main: string; sources: Record<string, string> },
-) {
+): Validation | undefined {
   const original = parseWorkflow(source.text, source.file).workflow
   const runId =
     request.runId ??
@@ -290,7 +319,8 @@ function resumeWorkflow(
     if (fs.existsSync(file))
       sources[file] = createHash('sha256').update(fs.readFileSync(file)).digest('hex')
   }
-  return { ...parseWorkflow(fs.readFileSync(frozen), source.file, true), warnings: [] }
+  const { workflow, errors } = parseWorkflow(fs.readFileSync(frozen), source.file, true)
+  return { ...(workflow !== undefined && { workflow }), errors, warnings: [] }
 }
 
 /** Validate the workflow and tier declarations before looking up card labels. */
@@ -312,7 +342,7 @@ export function resolveWorkflowDefinition(
     resolveEngine({ flag: config.engine, declared: declaredEngine(project) }),
     project,
   )
-  const checked =
+  const checked: Validation =
     (config.dryRun || !resume
       ? undefined
       : resumeWorkflow(fs, request, source, { main, sources })) ??
@@ -320,6 +350,7 @@ export function resolveWorkflowDefinition(
   console.log(`pair run ${basename(source.file, extname(source.file))} — ${source.file}`)
   reportValidation(checked)
   if (checked.workflow === undefined) return undefined
+  const workflow = checked.workflow
   console.log(`  ${describeEngineResolution(engine)}`)
   const errors = workflowTierErrors({ fs, cwd, main, project })
   if (errors.length > 0) {
@@ -328,8 +359,9 @@ export function resolveWorkflowDefinition(
   }
   return {
     defaultSkill: workflowDefaultSkill(fs, project, cwd),
-    workflow: checked.workflow,
-    source: expandedWorkflowSource(checked.workflow, source),
+    checkSkills: checked.checkSkills ?? (context => checkWorkflowSkills(workflow, context)),
+    workflow,
+    source: expandedWorkflowSource(workflow, source),
     project,
     engine,
     main,
@@ -416,6 +448,14 @@ function stepSettings(
     model: model ?? declaredEngineModel(resolved.project, engine),
     effort: engineOf(resolved, engine).effortArgs ? effort : undefined,
   }
+}
+
+function stepSkill(
+  resolved: Resolved,
+  effective: Configuration | undefined,
+  step: Pick<Step, 'id' | 'kind' | 'skill'>,
+) {
+  return skillForStep(step, resolved.defaultSkill, effective?.steps?.[step.id]?.skill)
 }
 
 /** The engine of a step: the run's own, or the one the configuration names for it. */
@@ -939,7 +979,7 @@ async function runOnConsole(
         isSafeText: isSafePromptText,
         parkInteractive: INTERACTIVE_PARK,
         skillOf: step =>
-          skillForStep(stepOf(resolved, step.id), resolved.defaultSkill) ?? step.uses,
+          stepSkill(resolved, opened.effective, stepOf(resolved, step.id)) ?? step.uses,
         styleOf: id => ENGINES[engineIdOf(opened, id)].skillInvocationStyle,
         launch,
         ...resumeHostOf(opened),
@@ -1300,7 +1340,9 @@ function printWorkflowPreview(resolved: Resolved): number {
   }
   addressedSteps(resolved.workflow).forEach(step => {
     const host = step.kind === 'loop' || kindByName[step.kind].host === true
-    const skill = host ? undefined : skillForStep(step, resolved.defaultSkill)
+    const skill = host
+      ? undefined
+      : stepSkill(resolved, resolved.configuration?.configuration, step)
     const assignment =
       step.kind === 'loop'
         ? ''

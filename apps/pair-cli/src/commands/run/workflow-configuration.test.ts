@@ -90,7 +90,12 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
         effort: input.effort,
       })
       const text = (skills[skillOf(input.promptText)] as FakeSkill)()
-      if (text !== undefined) input.onEvent?.({ type: 'result', subtype: 'success', result: text })
+      if (text !== undefined)
+        input.onEvent?.(
+          input.engine.id === 'codex'
+            ? { type: 'item.completed', item: { type: 'agent_message', text } }
+            : { type: 'result', subtype: 'success', result: text },
+        )
       return text === undefined
         ? { outcome: 'failed', detail: 'timed out (idle): no engine event for 1800s' }
         : { outcome: 'success', detail: 'terminal event: success' }
@@ -404,6 +409,54 @@ describe('validation of the configuration (AC-4)', () => {
     expect(await run(['quick'], OK, { config: 'mine' })).toBe(0)
     expect(lines.some(line => line.includes('Warning:') && line.includes("no step 'ghost'"))).toBe(
       true,
+    )
+  })
+})
+
+describe('#674 AC-5 skill configuration per step', () => {
+  beforeEach(() => {
+    write(
+      '.pair/adoption/tech/workflows/quick.yaml',
+      QUICK.replace('    gates: [quality-gate]\n', '').replace(
+        '    alias: judge',
+        '    alias: judge\n    skill: old-review-skill',
+      ),
+    )
+    writeConfig(
+      'mine',
+      `version: 1
+name: mine
+defaults: { engine: claude }
+steps:
+  review: { engine: codex, skill: Presentations }
+`,
+    )
+    vi.stubEnv('HOME', join(project, 'home'))
+    vi.stubEnv('PATH', join(project, 'bin'))
+  })
+
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('launches the configured name on the step engine when the workflow name is unavailable', async () => {
+    write('.agents/skills/Presentations/SKILL.md', '# Presentations')
+
+    const skills = { ...OK, Presentations: () => REVIEWED }
+    expect(await run(['quick'], skills, { config: 'mine' }), lines.join('\n')).toBe(0)
+    expect(launched.map(step => step.promptText.split('\n')[0])).toEqual([
+      '/pair-process-implement',
+      'Run the Presentations skill.',
+    ])
+  })
+
+  it('names the step and configured skill before any launch when only the run engine has it', async () => {
+    write('.claude/skills/old-review-skill/SKILL.md', '# Old review skill')
+    write('.agents/skills/old-review-skill/SKILL.md', '# Old review skill')
+    write('.claude/skills/Presentations/SKILL.md', '# Presentations')
+
+    expect(await run(['quick'], OK, { config: 'mine' }), lines.join('\n')).toBe(1)
+    expect(launched).toEqual([])
+    expect(lines.join('\n')).toMatch(
+      /^(?=.*\breview\b)(?=.*\bPresentations\b).*(?:not installed|not available|unavailable|not found)/m,
     )
   })
 })

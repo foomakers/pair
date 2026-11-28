@@ -3,6 +3,7 @@ import {
   entrySchema as entry,
   STEP_ID,
   selectSchema,
+  skillNameSchema,
   type Assignment,
   type Entry,
 } from '../grammar'
@@ -21,7 +22,10 @@ export interface Configuration {
   /** Internal to a frozen assignment-only override that had no selected configuration. */
   readonly 'assignment-only'?: true
   readonly steps?: Readonly<
-    Record<string, Entry & { readonly max?: number; readonly assign?: Assignment }>
+    Record<
+      string,
+      Entry & { readonly max?: number; readonly assign?: Assignment; readonly skill?: string }
+    >
   >
   /** Switches the run's telemetry on or off; a flag overrides it. */
   readonly telemetry?: boolean
@@ -47,6 +51,7 @@ export const configurationSchemaV1: JsonSchema = {
           ...entry.properties,
           max: { type: 'integer', minimum: 1 },
           assign: assignmentSchema,
+          skill: skillNameSchema,
         },
       },
     },

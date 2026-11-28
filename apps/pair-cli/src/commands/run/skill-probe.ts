@@ -28,7 +28,18 @@ export function createSkillProbe(
   projectRoot: string,
   ...[exact = false, engine]: [boolean?, EngineId?]
 ): SkillProbe {
-  return engineSkillProbe(fs, isFile(fs), projectRoot, { config, exact, engine })
+  const probe = engineSkillProbe(fs, isFile(fs), projectRoot, { config, exact, engine })
+  return name => probe(name)
+}
+
+/** Literal workflow names, including overrides that require an engine-visible target. */
+export function workflowSkillProbe(
+  fs: FileSystemService,
+  config: Config,
+  root: string,
+  engine: EngineId,
+) {
+  return engineSkillProbe(fs, isFile(fs), root, { config, engine })
 }
 
 /** Read the installed skill through the same registry targets as the existence probe. */

@@ -96,6 +96,17 @@ describe('workflow-only prompt options (#698 AC-7 and AC-9)', () => {
   })
 })
 
+describe('#674 AC-5 step-only skill configuration', () => {
+  it.each([
+    ['defaults.skill', BASE.replace('effort: medium }', 'effort: medium, skill: alternate }')],
+    ['aliases.judge.skill', BASE.replace('effort: high }', 'effort: high, skill: alternate }')],
+  ])('refuses %s', (key, text) => {
+    expect(parseConfiguration(text, FILE).errors).toEqual([
+      expect.objectContaining({ key, problem: "unknown key 'skill'" }),
+    ])
+  })
+})
+
 describe('settings of a step (AC-1)', () => {
   const c = parsed()
   it.each([

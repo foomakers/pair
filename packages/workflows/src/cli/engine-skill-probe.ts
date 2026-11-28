@@ -164,9 +164,12 @@ function engineSkillTargets(
   root: string,
   targets: string[],
   registry: Record<string, unknown> | undefined,
-  engine?: string,
+  {
+    engine,
+    requireEngineTarget = false,
+  }: { engine?: string | undefined; requireEngineTarget?: boolean },
 ): string[] {
-  if (!engine || (registry && targets.length === 1)) return targets
+  if (!engine || (!requireEngineTarget && registry && targets.length === 1)) return targets
   const owners = {
     '.claude/skills': ['claude', 'opencode'],
     '.agents/skills': ['codex', 'opencode', 'pi'],
@@ -179,16 +182,19 @@ function engineSkillTargets(
       engines.includes(engine),
     ]),
   )
-  // Installer aliases expose the canonical registry target to the matching engine.
-  if (
-    registry &&
-    registryTargets<{ path: string; mode?: string }>('skills', registry).some(
-      ({ path, mode }) =>
-        (mode === 'symlink' || mode === 'copy') && available.get(resolve(root, path)) === true,
-    )
+  const aliases = new Set(
+    registryTargets<{ path: string; mode?: string }>('skills', registry ?? {})
+      .filter(({ mode }) => mode === 'symlink' || mode === 'copy')
+      .map(({ path }) => resolve(root, path)),
   )
+  // Existing workflow names support registry aliases. Overrides follow the selected engine's targets.
+  if (!requireEngineTarget && [...aliases].some(target => available.get(target) === true))
     return targets
-  return targets.filter(target => available.get(resolve(root, target)) !== false)
+  return targets.filter(target => {
+    const dir = resolve(root, target)
+    const supported = available.get(dir)
+    return supported ?? (!requireEngineTarget || !aliases.has(dir))
+  })
 }
 
 function redirectedDefault(
@@ -304,20 +310,23 @@ export function engineSkillProbe(
     exact = true,
     engine,
   }: { config: unknown; exact?: boolean; engine?: string | undefined },
-): (name: string) => boolean {
+): (name: string, requireEngineTarget?: boolean) => boolean {
   const layout = skillsLayout(config)
   const settings = registryEntries(config)['skills']
   const configured = isPlainObject(settings) ? settings : undefined
-  const registry = {
-    targets: engineSkillTargets(projectRoot, layout.targets, configured, engine),
-    prefix: exact ? undefined : layout.prefix,
-  }
+  const compatibleTargets = engineSkillTargets(projectRoot, layout.targets, configured, { engine })
+  const engineTargets = engineSkillTargets(projectRoot, layout.targets, configured, {
+    engine,
+    requireEngineTarget: true,
+  })
+  const prefix = exact ? undefined : layout.prefix
   const redirected = redirectedDefault(configured, projectRoot, layout.targets)
   const home = process.env['HOME']
   const directories = skillDirectories.get(engine ?? '')
   const nativeSkill = cachedNativeSkill(projectRoot, engine)
-  return name => {
-    if (findSkillFile(check, projectRoot, registry, name)) return true
+  return (name, requireEngineTarget) => {
+    const targets = requireEngineTarget ? engineTargets : compatibleTargets
+    if (findSkillFile(check, projectRoot, { targets, prefix }, name)) return true
     if (!directories) return false
     // A successful native inventory includes selectors and disabled skills that paths cannot infer.
     const native = nativeSkill(name)

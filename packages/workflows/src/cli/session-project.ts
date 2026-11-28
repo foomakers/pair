@@ -18,7 +18,7 @@ import { hashOf } from '../engine'
 import { expandedWorkflowSource } from '../expand'
 import { addressedSteps, formatError, type Step, type Workflow } from '../grammar'
 import { interactiveOf, skillForStep, readGateRegistry, readGateTargets } from '../kinds'
-import { validate } from '../validate'
+import { checkWorkflowSkills, validate, type Validation } from '../validate'
 import { canCommentOnCard } from '../worktree/session'
 import { applyProjectConfig } from './project-config'
 import {
@@ -177,6 +177,7 @@ export function workflowDefinition(project: Project, name: string, engine?: stri
       engine,
     }),
     defaultSkillExists: skill => sessionDefaultSkill(project, skill) !== undefined,
+    deferSkillProbe: engine !== undefined,
     gateKeys: Object.keys(readGateRegistry(adoption)),
     gateTargets: Object.keys(readGateTargets(adoption)),
     launchInputs: ['card'],
@@ -195,7 +196,39 @@ export function workflowDefinition(project: Project, name: string, engine?: stri
     source: expandedWorkflowSource(workflow, source),
     warnings: checked.warnings.map(formatError),
     digests,
+    checkSkills: checked.checkSkills,
   }
+}
+
+export function checkSessionWorkflowSkills(
+  project: Project,
+  workflow: Workflow,
+  {
+    configuration,
+    engine,
+    checkSkills = context => checkWorkflowSkills(workflow, context),
+  }: {
+    configuration?: Configuration | undefined
+    engine: string
+    checkSkills?: Validation['checkSkills']
+  },
+): void {
+  const config = sessionSkillConfig(project.cwd)
+  const probes = new Map<string, ReturnType<typeof engineSkillProbe>>()
+  const errors = checkSkills({
+    configuration,
+    engine,
+    defaultSkill: name => sessionDefaultSkill(project, name),
+    isSafeText,
+    skillExists(name, engine, configured) {
+      const probe =
+        probes.get(engine) ??
+        engineSkillProbe(sessionFiles, isFile, project.cwd, { config, engine })
+      probes.set(engine, probe)
+      return probe(name, configured)
+    },
+  })
+  if (errors.length) throw new Error(`workflow-invalid: ${errors.map(formatError).join('\n')}`)
 }
 
 export function workflowConfiguration(
@@ -281,13 +314,14 @@ export function workflowSummary(
     configuration: configuration?.name,
     steps: addressedSteps(workflow).flatMap(step => {
       if (step.kind === 'loop') return []
+      const settings = effectiveSettings(configuration, workflow, step, engine)
       return [
         {
           id: step.id,
           kind: step.kind,
-          skill: skillForStep(step, name => sessionDefaultSkill(project, name)),
+          skill: skillForStep(step, name => sessionDefaultSkill(project, name), settings.skill),
           interactive: sessionInteractiveOf(step),
-          settings: effectiveSettings(configuration, workflow, step, engine),
+          settings,
         },
       ]
     }),

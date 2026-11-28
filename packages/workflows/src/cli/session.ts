@@ -58,6 +58,7 @@ import { refreshReplayInputs } from './workflow-replay'
 import { loadSessionProjectConfig, readMessage, readText, sessionFiles } from './session-files'
 import { resolveWorkingPathOverride } from './working-area'
 import {
+  checkSessionWorkflowSkills,
   checkWorkflowConfiguration,
   controlStateScript,
   cycleScripts,
@@ -188,6 +189,11 @@ async function startFresh(
   })
   // The session engine describes this host. Other engines are handled at the step boundary.
   const configWarnings = checkWorkflowConfiguration(definition.workflow, selected)
+  checkSessionWorkflowSkills(project, definition.workflow, {
+    configuration: selected?.configuration,
+    engine: input.engine,
+    checkSkills: definition.checkSkills,
+  })
   const resumeWarnings = workflowResumeWarnings(
     definition.workflow,
     selected?.configuration,
@@ -205,11 +211,8 @@ async function startFresh(
       cardLabels: selected.cardLabels,
     }),
   })
-  await writeAtomic(
-    run.files,
-    join(run.dir, 'sources.json'),
-    JSON.stringify(definition.digests, null, 2),
-  )
+  const digests = JSON.stringify(definition.digests, null, 2)
+  await writeAtomic(run.files, join(run.dir, 'sources.json'), digests)
   return {
     ...started,
     warnings: [...definition.warnings, ...configWarnings, ...resumeWarnings, ...started.warnings],
@@ -247,6 +250,7 @@ async function resumeSaved(
     runWorkflowOperation(runHostProcess, () => scripts, project.main, { action, card, data })
   if (view.closed)
     return finishSessionClosure(project.main, run, { card, state, workflow: saved }, operation)
+  checkSessionWorkflowSkills(project, saved, { configuration, engine: input.engine })
   checkSelection(project, scripts, view, { workflow: saved, configuration, run })
   const replay = await refreshReplayInputs({ workflow: saved, state }, operation)
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
@@ -351,14 +355,24 @@ export async function openSession(project: Project, input: OpenInput) {
   )
 }
 
-function sessionLaunch(project: Project, launch: StepLaunch, steps: readonly Step[]) {
+function sessionLaunch(
+  project: Project,
+  launch: StepLaunch,
+  steps: readonly Step[],
+  configuration: Configuration | undefined,
+) {
   const step = steps.find(candidate => candidate.id === launch.id)
   if (step === undefined) throw new Error(`step-unknown: ${launch.id}`)
   return {
     step,
     resolved: {
       ...launch,
-      uses: skillForStep(step, name => sessionDefaultSkill(project, name)) ?? launch.uses,
+      uses:
+        skillForStep(
+          step,
+          name => sessionDefaultSkill(project, name),
+          configuration?.steps?.[launch.id]?.skill,
+        ) ?? launch.uses,
       interactive: sessionInteractiveOf(launch),
     },
   }
@@ -381,7 +395,12 @@ function stepPacket(
   },
   launch: StepLaunch,
 ) {
-  const { step, resolved } = sessionLaunch(context.project, launch, addressedSteps(workflow))
+  const { step, resolved } = sessionLaunch(
+    context.project,
+    launch,
+    addressedSteps(workflow),
+    configuration,
+  )
   return {
     ...resolved,
     worktree: context.worktree,
@@ -715,7 +734,7 @@ export async function recordSession(
     const writer = sessionTelemetry(observed, workflow, config, lease)
     const startedAt = new Date(lease.launchStartedAt ?? Date.now())
     const { resumeSessionId } = sessionContext(run, lease, launch)
-    const { resolved } = sessionLaunch(project, launch, steps)
+    const { resolved } = sessionLaunch(project, launch, steps, config)
     const sent =
       writer === undefined
         ? ''
