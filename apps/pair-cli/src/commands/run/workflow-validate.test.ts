@@ -150,6 +150,40 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
     }
   })
 
+  it('R764-07 (#674 AC-3/5): validates Claude skills from a runner plugin directory', async () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', join(project, 'claude-config'))
+    const plugin = './fixtures/local-tools'
+    const skill = 'runner-tools:inspect'
+    const workflow = `version: 1\nname: plugin\nsteps:\n  build: { kind: generic, skill: ${skill} }\n`
+    fs = new InMemoryFileSystemService(
+      {
+        [join(project, 'pair.config.json')]: JSON.stringify({
+          run: {
+            defaults: { engine: 'claude' },
+            agents: { claude: { args: ['--plugin-dir', plugin] } },
+          },
+        }),
+        [join(project, plugin, '.claude-plugin/plugin.json')]: JSON.stringify({
+          name: 'runner-tools',
+          skills: './extra-skills/',
+        }),
+        [join(project, plugin, 'extra-skills/inspect/SKILL.md')]: '# Inspect',
+        [join(project, 'plugin.yaml')]: workflow,
+        [join(project, 'wrong.yaml')]: workflow.replace(skill, 'local-tools:inspect'),
+      },
+      project,
+      project,
+    )
+
+    await validate('./plugin.yaml')
+    expect(process.exitCode ?? 0, lines.join('\n')).toBe(0)
+    await validate('./wrong.yaml')
+    expect(process.exitCode).toBe(1)
+    expect(lines.join('\n')).toContain(
+      "steps.build.skill: skill 'local-tools:inspect' is not installed",
+    )
+  })
+
   it('rejects an invalid file and reports its location and missing status producer', async () => {
     await validate('./invalid.yaml')
 
