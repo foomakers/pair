@@ -258,7 +258,22 @@ async function resumeSaved(
   const replay = await refreshReplayInputs({ workflow: saved, state }, operation)
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
   if (replay) await prepareReplayHead(worktree, replay.inputs.head, runHostProcess)
-  return { ...(await start(run, source, { card, ...(replay && { replay }) })), card, worktree }
+  const resumed = await start(run, source, {
+    card,
+    ...(replay && { replay }),
+    checkResume(reopened) {
+      const steps = saved.steps.filter(step => !stepSettled(step, reopened.steps[step.id]?.state))
+      checkSessionWorkflowSkills(
+        atWorktree(project, worktree),
+        { ...saved, steps },
+        {
+          configuration,
+          engine: input.engine,
+        },
+      )
+    },
+  })
+  return { ...resumed, card, worktree }
 }
 
 async function finishSessionClosure(

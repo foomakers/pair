@@ -1265,6 +1265,7 @@ it('#696 AC-1/AC-4: resumes on the registered worktree from the linked PR branch
 
 it('#696 AC-1/AC-4: replays review at the current PR head after a saved gate failure', async () => {
   const reviewedHead = git('rev-parse', 'HEAD').trim()
+  write('.claude/skills/pair-process-review/SKILL.md', 'Review the PR.')
   const head = installCodeHost('write')
   git('worktree', 'add', '-b', branch, worktree, 'main')
   expect(git('-C', worktree, 'rev-parse', 'HEAD').trim()).toBe(head)
@@ -1548,6 +1549,7 @@ it('R754-02 / AC-4: resumes pending refinement after the card meets the DoR on a
     namedWorkflow('  refine: { kind: refine-story }\n') +
     'select: { filter: { status: [Draft] } }\n'
   write(workflowFile, source)
+  commitFixture()
   const run = { dir: runDir, files }
   await start(run, { file: join(main, workflowFile), text: source }, { card })
   expect(await next(run)).toMatchObject({ ready: [{ id: 'refine' }] })
