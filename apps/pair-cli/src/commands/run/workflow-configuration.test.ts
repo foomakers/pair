@@ -463,6 +463,44 @@ steps:
       /^(?=.*\breview\b)(?=.*\bPresentations\b).*(?:not installed|not available|unavailable|not found)/m,
     )
   })
+
+  it('R764-10 (#674 AC-2/5): checks reopened skills in the prepared worktree with the frozen configuration', async () => {
+    const worktree = 'worktrees/627'
+    const implement = `${worktree}/.claude/skills/pair-process-implement/SKILL.md`
+    const review = `${worktree}/.agents/skills/Presentations/SKILL.md`
+    write(implement, '# Implement')
+    write(review, '# Review')
+    const options = { config: 'mine' }
+    const host = { prepareWorktree: async () => join(project, worktree) }
+    const skills = { ...OK, Presentations: () => REVIEWED }
+    const failing = {
+      ...skills,
+      Presentations: () => fenced({ status: 'failed', summary: 'review stopped' }),
+    }
+    expect(await run(['quick'], failing, options, host), lines.join('\n')).toBe(1)
+    expect(launched.map(step => step.cwd)).toEqual([
+      join(project, worktree),
+      join(project, worktree),
+    ])
+    const state = join(runDir(), 'state.json')
+    const before = fs.readFileSync(state)
+
+    fs.rmSync(join(project, implement))
+    fs.rmSync(join(project, review))
+    write(`${worktree}/.claude/skills/replacement/SKILL.md`, '# Replacement')
+    writeConfig('mine', `${CONFIG}steps:\n  review: { skill: replacement }\n`)
+    launched = []
+    expect(await run(['quick'], skills, options, host)).toBe(1)
+    expect(lines.join('\n')).toContain(
+      "steps.review.skill: skill 'Presentations' is not installed for engine 'codex'",
+    )
+    expect(launched).toEqual([])
+    expect(fs.readFileSync(state)).toBe(before)
+
+    write(review, '# Review')
+    expect(await run(['quick'], skills, options, host), lines.join('\n')).toBe(0)
+    expect(launched.map(step => skillOf(step.promptText))).toEqual(['Presentations'])
+  })
 })
 
 describe('#707 AC-5 workflow tier validation', () => {
