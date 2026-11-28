@@ -148,6 +148,33 @@ describe('createSkillProbe', () => {
     expect(exists('example:hidden')).toBe(false)
   })
 
+  it('R764-09 (#674 AC-3): discovers OpenCode skills under configured local paths', () => {
+    vi.stubEnv('HOME', '/user')
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/opencode.jsonc`]: `{
+          // Paths resolve against OpenCode's working directory.
+          "skills": { "paths": ["./team-skills"], },
+        }`,
+        [`${cwd}/team-skills/group/notes/SKILL.md`]:
+          '---\nname: release-notes\ndescription: Prepare release notes\n---\n',
+        [`${cwd}/.opencode/skills/conventional/SKILL.md`]:
+          '---\nname: conventional\ndescription: Conventional location\n---\n',
+        [`${cwd}/unlisted/hidden/SKILL.md`]:
+          '---\nname: hidden\ndescription: Outside skill sources\n---\n',
+      },
+      cwd,
+      cwd,
+    )
+    const exists = workflowSkillProbe(fs, skillsConfig([]), cwd, 'opencode')
+    expect(['conventional', 'release-notes', 'notes', 'hidden'].map(exists)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ])
+  })
+
   // #674 AC-2/AC-3: project plugin settings apply to the launching project.
   it('finds a Claude plugin enabled by project settings', () => {
     vi.stubEnv('HOME', '/user')
