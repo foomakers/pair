@@ -39,6 +39,7 @@
     "schema:reference": "ts-node -T src/describe/reference-cli.ts > ../knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-schema.md"
   },
   "dependencies": {
+    "adm-zip": "catalog:",
     "jsonc-parser": "3.3.1",
     "yaml": "catalog:"
   },
@@ -47,6 +48,7 @@
     "@pair/markdownlint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/ts-config": "workspace:*",
+    "@types/adm-zip": "catalog:",
     "@types/node": "catalog:",
     "@vercel/ncc": "0.45.0",
     "@vitest/coverage-v8": "catalog:",

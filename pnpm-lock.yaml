@@ -655,6 +655,9 @@ importers:
 
   packages/workflows:
     dependencies:
+      adm-zip:
+        specifier: 'catalog:'
+        version: 0.5.16
       jsonc-parser:
         specifier: 3.3.1
         version: 3.3.1
@@ -674,6 +677,9 @@ importers:
       '@pair/ts-config':
         specifier: workspace:*
         version: link:../../tools/ts-config
+      '@types/adm-zip':
+        specifier: 'catalog:'
+        version: 0.5.7
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.4

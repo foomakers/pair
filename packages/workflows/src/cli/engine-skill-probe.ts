@@ -1,4 +1,5 @@
-import { basename, isAbsolute, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import AdmZip from 'adm-zip'
 import type { RunFiles } from '../engine'
 import { inventoryRequest } from '../worktree/inventory-process'
 import { isPlainObject } from './project-config'
@@ -9,8 +10,11 @@ import {
   type SkillFiles,
 } from './opencode-skill-paths'
 
+export type EngineSkillFiles = SkillFiles & { readFileBytesSync(path: string): Buffer }
+const claudeManifest = '.claude-plugin/plugin.json'
+
 function claudeManifestSkillPaths(fs: Pick<RunFiles, 'readFileSync'>, root: string): string[] {
-  const skills = readJson(fs, join(root, '.claude-plugin/plugin.json'))['skills']
+  const skills = readJson(fs, join(root, claudeManifest))['skills']
   const paths: unknown[] = Array.isArray(skills) ? skills : [skills]
   return paths.filter(
     (path): path is string =>
@@ -43,29 +47,71 @@ function claudeRunnerPluginDirs(root: string, args: readonly string[]): string[]
   })
 }
 
+function claudePluginSource(
+  fs: Pick<RunFiles, 'readFileSync'>,
+  check: (path: string) => boolean,
+  root: string,
+  fallbackName = basename(root),
+) {
+  const name = readJson(fs, join(root, claudeManifest))['name'] ?? fallbackName
+  return (plugin: string, skill: string) =>
+    plugin === name && hasClaudePluginSkill(fs, check, root, skill)
+}
+
+function claudeZipSource(fs: EngineSkillFiles, archive: string) {
+  // Read entries in place. Validation never extracts a plugin or starts its hooks.
+  const zip = new AdmZip(fs.readFileBytesSync(archive))
+  const top = new Set(zip.getEntries().map(entry => entry.entryName.split('/')[0]!))
+  const [only] = top
+  const wrapped =
+    only !== undefined && top.size === 1 && !['.claude-plugin', 'skills'].includes(only)
+  const root = wrapped ? join(archive, only) : archive
+  const entryAt = (file: string) => zip.getEntry(relative(archive, file).split(sep).join('/'))
+  const readFileSync = (file: string) => {
+    const entry = entryAt(file)
+    // Only the plugin manifest is read. Bound the decompression of that metadata.
+    return entry && !entry.isDirectory && entry.header.size <= 1024 * 1024
+      ? entry.getData().toString('utf8')
+      : ''
+  }
+  const check = (file: string) => entryAt(file)?.isDirectory === false
+  return claudePluginSource({ readFileSync }, check, root, basename(archive, '.zip'))
+}
+
+function claudeRunnerSources(fs: EngineSkillFiles, check: (path: string) => boolean, path: string) {
+  try {
+    if (path.endsWith('.zip') && check(path)) return [claudeZipSource(fs, path)]
+    const direct = claudePluginSource(fs, check, path)
+    if (check(join(path, claudeManifest))) return [direct]
+    const children = fs.readdirSync(path)
+    if (children.some(entry => ['skills', 'commands', 'agents', 'hooks'].includes(entry.name)))
+      return [direct]
+    return children.flatMap(entry => {
+      const child = join(path, entry.name)
+      return check(join(child, claudeManifest)) ? [claudePluginSource(fs, check, child)] : []
+    })
+  } catch {
+    return []
+  }
+}
+
+function claudeMode(args: readonly string[]) {
+  const enabled = (key: string) => /^(1|true)$/i.test(process.env[key] ?? '')
+  if (
+    enabled('CLAUDE_CODE_SAFE_MODE') ||
+    args.includes('--safe-mode') ||
+    args.includes('--disable-slash-commands')
+  )
+    return 'disabled'
+  return enabled('CLAUDE_CODE_SIMPLE') || args.includes('--bare') ? 'bare' : 'default'
+}
+
 function claudePluginSkill(
   fs: Pick<RunFiles, 'readFileSync'>,
   check: (path: string) => boolean,
-  {
-    configDir,
-    root,
-    runnerArgs = [],
-  }: { configDir: string | undefined; root: string; runnerArgs?: readonly string[] | undefined },
-  name: string,
+  { configDir, root }: { configDir: string; root: string },
+  { plugin, skill }: { plugin: string; skill: string },
 ): boolean {
-  const match = /^([\w-]+):([\w-]+)$/.exec(name)
-  if (!match) return false
-  if (
-    claudeRunnerPluginDirs(root, runnerArgs).some(path => {
-      const manifest = readJson(fs, join(path, '.claude-plugin/plugin.json'))
-      return (
-        (manifest['name'] ?? basename(path)) === match[1] &&
-        hasClaudePluginSkill(fs, check, path, match[2]!)
-      )
-    })
-  )
-    return true
-  if (!configDir) return false
   const settings = [
     join(configDir, 'settings.json'),
     join(root, '.claude/settings.json'),
@@ -79,7 +125,7 @@ function claudePluginSkill(
     | Record<string, { installPath?: string; scope?: string; projectPath?: string }[]>
     | undefined
   return Object.entries(enabled).some(([id, active]) => {
-    if (active !== true || id.split('@')[0] !== match[1]) return false
+    if (active !== true || id.split('@')[0] !== plugin) return false
     const entries = installed?.[id]
     return (
       Array.isArray(entries) &&
@@ -87,10 +133,59 @@ function claudePluginSkill(
         entry =>
           ((entry.scope !== 'project' && entry.scope !== 'local') || entry.projectPath === root) &&
           typeof entry.installPath === 'string' &&
-          hasClaudePluginSkill(fs, check, entry.installPath, match[2]!),
+          hasClaudePluginSkill(fs, check, entry.installPath, skill),
       )
     )
   })
+}
+
+function claudeSkills(
+  fs: EngineSkillFiles,
+  check: (path: string) => boolean,
+  {
+    root,
+    home,
+    prefix,
+    runnerArgs = [],
+  }: {
+    root: string
+    home: string | undefined
+    prefix: string | undefined
+    runnerArgs?: readonly string[] | undefined
+  },
+) {
+  const end = runnerArgs.indexOf('--')
+  const args = end < 0 ? runnerArgs : runnerArgs.slice(0, end)
+  const mode = claudeMode(args)
+  if (mode === 'disabled') return () => false
+  const configured = process.env['CLAUDE_CONFIG_DIR']
+  const configDir = configured ? resolve(root, configured) : home && join(home, '.claude')
+  let sources: ReturnType<typeof claudeRunnerSources> | undefined
+  return (name: string) => {
+    const match = /^([\w-]+):([\w-]+)$/.exec(name)
+    if (match) {
+      const plugin = match[1]!
+      const skill = match[2]!
+      sources ??= claudeRunnerPluginDirs(root, args).flatMap(path =>
+        claudeRunnerSources(fs, check, path),
+      )
+      return (
+        sources.some(source => source(plugin, skill)) ||
+        Boolean(
+          mode === 'default' &&
+            configDir &&
+            claudePluginSkill(fs, check, { root, configDir }, { plugin, skill }),
+        )
+      )
+    }
+    return (
+      mode === 'default' &&
+      Boolean(
+        findSkillFile(check, root, { targets: ['.claude/skills'], prefix }, name) ||
+          (configDir && findSkillFile(check, configDir, { targets: ['skills'] }, name)),
+      )
+    )
+  }
 }
 
 function readJson(fs: Pick<RunFiles, 'readFileSync'>, path: string): Record<string, unknown> {
@@ -286,7 +381,6 @@ function cachedNativeSkill(
 }
 
 const skillDirectories = new Map<string, [string[], string[]]>([
-  ['claude', [['.claude/skills'], ['skills']]],
   ['codex', [['.agents/skills'], ['.agents/skills']]],
   [
     'pi',
@@ -305,7 +399,7 @@ type EngineSkillOptions = {
 }
 
 export function engineSkillProbe(
-  fs: SkillFiles,
+  fs: EngineSkillFiles,
   check: (path: string) => boolean,
   projectRoot: string,
   { config, exact = true, engine, runner }: EngineSkillOptions,
@@ -315,18 +409,18 @@ export function engineSkillProbe(
   if (engine === undefined)
     return name =>
       findSkillFile(check, projectRoot, { targets: layout.targets, prefix }, name) !== undefined
+  const home = process.env['HOME']
+  if (engine === 'claude')
+    return claudeSkills(fs, check, {
+      root: projectRoot,
+      home,
+      prefix,
+      runnerArgs: runner?.runnerArgs,
+    })
   const directories =
     engine === 'opencode' ? openCodeSkillDirectories() : skillDirectories.get(engine)
   if (!directories) return () => false
   const [project, global] = directories
-  const home = process.env['HOME']
-  const claudeDir = process.env['CLAUDE_CONFIG_DIR']
-  const globalRoot =
-    engine === 'claude'
-      ? claudeDir
-        ? resolve(projectRoot, claudeDir)
-        : home && join(home, '.claude')
-      : home
   const nativeSkill = cachedNativeSkill(projectRoot, engine, runner)
   let configuredSkills: Set<string> | undefined
   return name => {
@@ -335,15 +429,8 @@ export function engineSkillProbe(
     if (native !== undefined) return native
     return Boolean(
       findSkillFile(check, projectRoot, { targets: project, prefix }, name) ||
-        (globalRoot && findSkillFile(check, globalRoot, { targets: global }, name)) ||
-        (engine === 'claude'
-          ? claudePluginSkill(
-              fs,
-              check,
-              { root: projectRoot, configDir: globalRoot, runnerArgs: runner?.runnerArgs },
-              name,
-            )
-          : packageSkill(fs, check, { root: projectRoot, home, engine }, name)) ||
+        (home && findSkillFile(check, home, { targets: global }, name)) ||
+        packageSkill(fs, check, { root: projectRoot, home, engine }, name) ||
         (engine === 'opencode' &&
           (configuredSkills ??= openCodeConfiguredSkills(fs, projectRoot, home)).has(name)),
     )

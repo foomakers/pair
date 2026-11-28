@@ -57,6 +57,8 @@ The standalone session commands open the same run directory as `pair run`. Each 
 
 The shared host adapter adopts `jsonc-parser` 3.3.1 to read `skills.paths` from OpenCode configuration during skill validation (#674). The parser supports comments and trailing commas and reports malformed input. Both the terminal CLI and the standalone session bundle use it at runtime.
 
+The host adapter also reuses the workspace's `adm-zip` dependency to inspect locally supplied Claude plugin ZIP entries without extracting the archive (#674).
+
 ## Consequences
 
 ### Benefits
@@ -78,5 +80,5 @@ The shared host adapter adopts `jsonc-parser` 3.3.1 to read `skills.paths` from 
 ## Adoption Impact
 
 - `adoption/tech/architecture.md` names the package, its boundary and its host.
-- `adoption/tech/tech-stack.md`: `yaml` and `jsonc-parser` are runtime dependencies of `@pair/workflows`.
+- `adoption/tech/tech-stack.md`: `yaml`, `jsonc-parser`, and `adm-zip` are runtime dependencies of `@pair/workflows`.
 - `adoption/tech/risk-matrix.md`: `packages/workflows | Low`.
