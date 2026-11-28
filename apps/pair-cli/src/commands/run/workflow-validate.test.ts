@@ -152,17 +152,50 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
   })
 
   it.each([
-    ['directory', './fixtures/local-tools', [], [true, true, true]],
-    ['collection', './fixtures', [], [true, true, true]],
-    ['ZIP', './local-tools.zip', [], [true, true, true]],
-    ['wrapped ZIP', './wrapped.zip', [], [true, true, true]],
-    ['bare', './fixtures/local-tools', ['--bare'], [true, false, false]],
-    ['safe mode', './fixtures/local-tools', ['--safe-mode'], [false, false, false]],
+    ['directory', './fixtures/local-tools', [], [true, true, true, false, false]],
+    ['collection', './fixtures', [], [true, true, true, false, false]],
+    ['ZIP', './local-tools.zip', [], [true, true, true, false, false]],
+    ['wrapped ZIP', './wrapped.zip', [], [true, true, true, false, false]],
+    [
+      'additional directories',
+      './fixtures/local-tools',
+      ['--add-dir', '../extra-skills', '/other-skills'],
+      [true, true, true, true, true],
+    ],
+    [
+      'bare',
+      './fixtures/local-tools',
+      ['--bare', '--add-dir=../extra-skills', '--add-dir', '/other-skills'],
+      [true, false, false, true, true],
+    ],
+    [
+      'user settings only',
+      './fixtures/local-tools',
+      ['--add-dir', '../extra-skills', '--setting-sources', 'user'],
+      [true, false, true, false, false],
+    ],
+    [
+      'project settings only',
+      './fixtures/local-tools',
+      [
+        '--setting-sources=user',
+        '--setting-sources=project, local',
+        '--add-dir',
+        '../extra-skills',
+      ],
+      [true, true, false, true, false],
+    ],
+    [
+      'safe mode',
+      './fixtures/local-tools',
+      ['--add-dir', '../extra-skills', '--safe-mode'],
+      [false, false, false, false, false],
+    ],
     [
       'slash commands disabled',
       './fixtures/local-tools',
       ['--disable-slash-commands'],
-      [false, false, false],
+      [false, false, false, false, false],
     ],
   ] as const)(
     'R764-07 (#674 AC-2/3/5): validates the Claude %s inventory',
@@ -187,6 +220,10 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
             '---\nname: project-control\ndescription: Project control\n---\n',
           [join(project, 'claude-config/skills/user-control/SKILL.md')]:
             '---\nname: user-control\ndescription: User control\n---\n',
+          '/extra-skills/.claude/skills/relative-skill/SKILL.md':
+            '---\nname: relative-skill\ndescription: Skill in a relative directory\n---\n',
+          '/other-skills/.claude/skills/absolute-skill/SKILL.md':
+            '---\nname: absolute-skill\ndescription: Skill in an absolute directory\n---\n',
         },
         project,
         project,
@@ -204,6 +241,8 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
         ['runner-tools:inspect', expected[0]],
         ['project-control', expected[1]],
         ['user-control', expected[2]],
+        ['relative-skill', expected[3]],
+        ['absolute-skill', expected[4]],
         ['runner-tools:absent', false],
         ['local-tools:inspect', false],
       ] as const
