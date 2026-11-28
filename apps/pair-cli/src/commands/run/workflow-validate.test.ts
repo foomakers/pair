@@ -169,7 +169,6 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
         }),
         [join(project, plugin, 'extra-skills/inspect/SKILL.md')]: '# Inspect',
         [join(project, 'plugin.yaml')]: workflow,
-        [join(project, 'wrong.yaml')]: workflow.replace(skill, 'local-tools:inspect'),
       },
       project,
       project,
@@ -177,7 +176,8 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
 
     await validate('./plugin.yaml')
     expect(process.exitCode ?? 0, lines.join('\n')).toBe(0)
-    await validate('./wrong.yaml')
+    fs.writeFileSync(join(project, 'plugin.yaml'), workflow.replace(skill, 'local-tools:inspect'))
+    await validate('./plugin.yaml')
     expect(process.exitCode).toBe(1)
     expect(lines.join('\n')).toContain(
       "steps.build.skill: skill 'local-tools:inspect' is not installed",

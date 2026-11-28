@@ -32,14 +32,36 @@ function hasClaudePluginSkill(
   )
 }
 
+function claudeRunnerPluginDirs(root: string, args: readonly string[]): string[] {
+  return args.flatMap((arg, index) => {
+    const path = arg === '--plugin-dir' ? args[index + 1] : /^--plugin-dir=(.+)$/.exec(arg)?.[1]
+    return path ? [resolve(root, path)] : []
+  })
+}
+
 function claudePluginSkill(
   fs: Pick<RunFiles, 'readFileSync'>,
   check: (path: string) => boolean,
-  { configDir, root }: { configDir: string; root: string },
+  {
+    configDir,
+    root,
+    runnerArgs = [],
+  }: { configDir: string | undefined; root: string; runnerArgs?: readonly string[] | undefined },
   name: string,
 ): boolean {
   const match = /^([\w-]+):([\w-]+)$/.exec(name)
   if (!match) return false
+  if (
+    claudeRunnerPluginDirs(root, runnerArgs).some(path => {
+      const manifest = readJson(fs, join(path, '.claude-plugin/plugin.json'))
+      return (
+        (manifest['name'] ?? basename(path)) === match[1] &&
+        hasClaudePluginSkill(fs, check, path, match[2]!)
+      )
+    })
+  )
+    return true
+  if (!configDir) return false
   const settings = [
     join(configDir, 'settings.json'),
     join(root, '.claude/settings.json'),
@@ -278,21 +300,18 @@ const skillDirectories = new Map<string, [string[], string[]]>([
   ],
 ])
 
+type EngineSkillOptions = {
+  config: unknown
+  exact?: boolean
+  engine?: string | undefined
+  runner?: SkillRunner | undefined
+}
+
 export function engineSkillProbe(
   fs: SkillFiles,
   check: (path: string) => boolean,
   projectRoot: string,
-  {
-    config,
-    exact = true,
-    engine,
-    runner,
-  }: {
-    config: unknown
-    exact?: boolean
-    engine?: string | undefined
-    runner?: SkillRunner | undefined
-  },
+  { config, exact = true, engine, runner }: EngineSkillOptions,
 ): (name: string) => boolean {
   const layout = skillsLayout(config)
   const prefix = exact ? undefined : layout.prefix
@@ -320,8 +339,12 @@ export function engineSkillProbe(
       findSkillFile(check, projectRoot, { targets: project, prefix }, name) ||
         (globalRoot && findSkillFile(check, globalRoot, { targets: global }, name)) ||
         (engine === 'claude'
-          ? globalRoot &&
-            claudePluginSkill(fs, check, { root: projectRoot, configDir: globalRoot }, name)
+          ? claudePluginSkill(
+              fs,
+              check,
+              { root: projectRoot, configDir: globalRoot, runnerArgs: runner?.runnerArgs },
+              name,
+            )
           : packageSkill(fs, check, { root: projectRoot, home, engine }, name)) ||
         (engine === 'opencode' &&
           (configuredSkills ??= openCodeConfiguredSkills(fs, projectRoot, home)).has(name)),
