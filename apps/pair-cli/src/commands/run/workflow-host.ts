@@ -285,14 +285,16 @@ function checkConfiguredSkills(
 ): boolean {
   const run = { files: fs, dir: workflowRunDir(at, request) }
   const saved = !config.dryRun && savedRunState(request, run.dir, fs)
-  if (saved && completedRun(run, { card: request.card, workflow: at.workflow.name })) return true
-  const configuration =
-    saved && (!request.reconfigure || at.configuration === undefined)
-      ? effectiveConfiguration(run)
-      : at.configuration?.configuration
+  if (
+    saved &&
+    (!request.reconfigure ||
+      at.configuration === undefined ||
+      completedRun(run, { card: request.card, workflow: at.workflow.name }))
+  )
+    return true
   const errors = at.checkSkills(
     workflowSkillContext(fs, at.project, at.cwd, {
-      configuration,
+      configuration: at.configuration?.configuration,
       engine: at.engine.engine.id,
     }),
   )

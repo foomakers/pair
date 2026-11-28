@@ -1,8 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'path'
-import { InMemoryFileSystemService } from '@pair/content-ops'
+import { fileSystemService as disk, InMemoryFileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
 import { createSkillProbe, readInstalledSkill, workflowDefaultSkill } from './skill-probe'
 
@@ -35,16 +34,17 @@ function probe(files: string[], config: Config) {
 }
 
 function fakeEngine(engine: 'codex' | 'pi', script: string): string {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-skill-probe-')))
+  const root = disk.realpathSync(disk.mkdtempSync(join(tmpdir(), 'pair-skill-probe-')))
   vi.stubEnv('PATH', root)
   vi.stubEnv('HOME', join(root, 'home'))
   vi.stubEnv('CODEX_HOME', join(root, 'home/.codex'))
   vi.stubEnv('PI_CODING_AGENT_DIR', join(root, 'home/.pi/agent'))
-  writeFileSync(
-    join(root, engine),
+  const executable = join(root, engine)
+  disk.writeFileSync(
+    executable,
     `#!${process.execPath}\nconst { createInterface } = require('node:readline');\n${script}`,
-    { mode: 0o755 },
   )
+  disk.chmodSync(executable, 0o755)
   return root
 }
 
@@ -274,7 +274,7 @@ describe('createSkillProbe', () => {
         false,
       ])
     } finally {
-      rmSync(root, { recursive: true, force: true })
+      disk.rmSync(root, { recursive: true, force: true })
     }
   })
 
@@ -398,7 +398,7 @@ describe('createSkillProbe', () => {
         ['tools:Inspect', 'tools:inspect', 'tools:disabled', 'tools:stale'].map(exists),
       ).toEqual([true, false, false, false])
     } finally {
-      rmSync(root, { recursive: true, force: true })
+      disk.rmSync(root, { recursive: true, force: true })
     }
   })
 

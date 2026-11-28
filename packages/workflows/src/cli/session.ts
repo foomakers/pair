@@ -250,7 +250,6 @@ async function resumeSaved(
     runWorkflowOperation(runHostProcess, () => scripts, project.main, { action, card, data })
   if (view.closed)
     return finishSessionClosure(project.main, run, { card, state, workflow: saved }, operation)
-  checkSessionWorkflowSkills(project, saved, { configuration, engine: input.engine })
   checkSelection(project, scripts, view, { workflow: saved, configuration, run })
   const replay = await refreshReplayInputs({ workflow: saved, state }, operation)
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
