@@ -287,15 +287,25 @@ it('#696 design §2: lists project workflows and configurations by source', () =
   })
 })
 
-it('#696 design §2: expands included workflow steps in order', () => {
+it('R764-04: expands an include with a Codex-only skill', () => {
+  rmSync(join(main, '.claude/skills/pair-fixture-draft'), { recursive: true })
+  write(
+    'pair.config.json',
+    JSON.stringify({
+      asset_registries: { skills: { targets: [{ path: '.claude/skills', mode: 'canonical' }] } },
+    }),
+  )
   write(
     '.pair/adoption/tech/workflows/nested.yaml',
     'version: 1\nname: nested\nsteps:\n  included: { kind: generic, uses: quick }\n',
   )
 
+  expect(JSON.parse(successful(['validate', 'nested', '--engine', 'codex']))).toMatchObject({
+    steps: [{ id: 'included/draft', skill: 'pair-fixture-draft' }, { id: 'included/discuss' }],
+  })
   expect(JSON.parse(successful(['expand', 'nested']))).toMatchObject({
     name: 'nested',
-    steps: [{ id: 'included/draft' }, { id: 'included/discuss' }],
+    steps: [{ id: 'included/draft', skill: 'pair-fixture-draft' }, { id: 'included/discuss' }],
   })
 })
 
