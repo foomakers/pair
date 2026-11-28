@@ -161,7 +161,7 @@ function readWorkflowSource(project: Project, name: string) {
   return file === undefined ? undefined : { file, text: readText(file) }
 }
 
-export function workflowDefinition(project: Project, name: string, engine?: string) {
+export function workflowDefinition(project: Project, name: string) {
   const digests: Record<string, string> = {}
   const locate = (source: string) => {
     const located = readWorkflowSource(project, source)
@@ -174,10 +174,8 @@ export function workflowDefinition(project: Project, name: string, engine?: stri
   const checked = validate(source.text, source.file, {
     skillExists: engineSkillProbe(sessionFiles, isFile, project.cwd, {
       config: sessionSkillConfig(project.cwd),
-      engine,
     }),
-    defaultSkillExists: skill => sessionDefaultSkill(project, skill) !== undefined,
-    deferSkillProbe: engine !== undefined,
+    deferSkillProbe: true,
     gateKeys: Object.keys(readGateRegistry(adoption)),
     gateTargets: Object.keys(readGateTargets(adoption)),
     launchInputs: ['card'],
