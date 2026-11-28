@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import AdmZip from 'adm-zip'
 import {
   fileSystemService as disk,
   InMemoryFileSystemService,
@@ -150,39 +151,80 @@ describe('pair workflow validate (#728 AC-15, AC-16)', () => {
     }
   })
 
-  it('R764-07 (#674 AC-3/5): validates Claude skills from a runner plugin directory', async () => {
-    vi.stubEnv('CLAUDE_CONFIG_DIR', join(project, 'claude-config'))
-    const plugin = './fixtures/local-tools'
-    const skill = 'runner-tools:inspect'
-    const workflow = `version: 1\nname: plugin\nsteps:\n  build: { kind: generic, skill: ${skill} }\n`
-    fs = new InMemoryFileSystemService(
-      {
-        [join(project, 'pair.config.json')]: JSON.stringify({
-          run: {
-            defaults: { engine: 'claude' },
-            agents: { claude: { args: ['--plugin-dir', plugin] } },
-          },
-        }),
-        [join(project, plugin, '.claude-plugin/plugin.json')]: JSON.stringify({
-          name: 'runner-tools',
-          skills: './extra-skills/',
-        }),
-        [join(project, plugin, 'extra-skills/inspect/SKILL.md')]: '# Inspect',
-        [join(project, 'plugin.yaml')]: workflow,
-      },
-      project,
-      project,
-    )
+  it.each([
+    ['directory', './fixtures/local-tools', [], [true, true, true]],
+    ['collection', './fixtures', [], [true, true, true]],
+    ['ZIP', './local-tools.zip', [], [true, true, true]],
+    ['wrapped ZIP', './wrapped.zip', [], [true, true, true]],
+    ['bare', './fixtures/local-tools', ['--bare'], [true, false, false]],
+    ['safe mode', './fixtures/local-tools', ['--safe-mode'], [false, false, false]],
+    [
+      'slash commands disabled',
+      './fixtures/local-tools',
+      ['--disable-slash-commands'],
+      [false, false, false],
+    ],
+  ] as const)(
+    'R764-07 (#674 AC-2/3/5): validates the Claude %s inventory',
+    async (_mode, source, flags, expected) => {
+      vi.stubEnv('CLAUDE_CONFIG_DIR', join(project, 'claude-config'))
+      vi.stubEnv('CLAUDE_CODE_SIMPLE', '0')
+      vi.stubEnv('CLAUDE_CODE_SAFE_MODE', '0')
+      const plugin = './fixtures/local-tools'
+      const manifest = JSON.stringify({ name: 'runner-tools', skills: './extra-skills/' })
+      const inspect = '---\nname: inspect\ndescription: Inspect a fixture\n---\n'
+      fs = new InMemoryFileSystemService(
+        {
+          [join(project, 'pair.config.json')]: JSON.stringify({
+            run: {
+              defaults: { engine: 'claude' },
+              agents: { claude: { args: ['--plugin-dir', source, ...flags] } },
+            },
+          }),
+          [join(project, plugin, '.claude-plugin/plugin.json')]: manifest,
+          [join(project, plugin, 'extra-skills/inspect/SKILL.md')]: inspect,
+          [join(project, '.claude/skills/project-control/SKILL.md')]:
+            '---\nname: project-control\ndescription: Project control\n---\n',
+          [join(project, 'claude-config/skills/user-control/SKILL.md')]:
+            '---\nname: user-control\ndescription: User control\n---\n',
+        },
+        project,
+        project,
+      )
 
-    await validate('./plugin.yaml')
-    expect(process.exitCode ?? 0, lines.join('\n')).toBe(0)
-    fs.writeFileSync(join(project, 'plugin.yaml'), workflow.replace(skill, 'local-tools:inspect'))
-    await validate('./plugin.yaml')
-    expect(process.exitCode).toBe(1)
-    expect(lines.join('\n')).toContain(
-      "steps.build.skill: skill 'local-tools:inspect' is not installed",
-    )
-  })
+      if (source.endsWith('.zip')) {
+        const archive = new AdmZip()
+        const prefix = source === './wrapped.zip' ? 'local-tools/' : ''
+        archive.addFile(`${prefix}.claude-plugin/plugin.json`, Buffer.from(manifest))
+        archive.addFile(`${prefix}extra-skills/inspect/SKILL.md`, Buffer.from(inspect))
+        await fs.writeFileBinary(join(project, source), archive.toBuffer())
+      }
+
+      const cases = [
+        ['runner-tools:inspect', expected[0]],
+        ['project-control', expected[1]],
+        ['user-control', expected[2]],
+        ['runner-tools:absent', false],
+        ['local-tools:inspect', false],
+      ] as const
+      const steps = cases.map(
+        ([skill], index) => `  skill-${index}: { kind: generic, skill: ${skill} }`,
+      )
+      fs.writeFileSync(
+        join(project, 'plugin.yaml'),
+        `version: 1\nname: plugin\nsteps:\n${steps.join('\n')}\n`,
+      )
+      await validate('./plugin.yaml')
+      expect(process.exitCode).toBe(1)
+      const errors = lines.join('\n')
+      expect(
+        cases.map(
+          ([skill], index) =>
+            !errors.includes(`steps.skill-${index}.skill: skill '${skill}' is not installed`),
+        ),
+      ).toEqual(cases.map(([, installed]) => installed))
+    },
+  )
 
   it('rejects an invalid file and reports its location and missing status producer', async () => {
     await validate('./invalid.yaml')
