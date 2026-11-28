@@ -102,6 +102,44 @@ function claudeMode(args: readonly string[]) {
   return enabled('CLAUDE_CODE_SIMPLE') || args.includes('--bare') ? 'bare' : 'default'
 }
 
+function claudeSettingSources(args: readonly string[]): string[] {
+  let value = 'user,project,local'
+  for (const [index, arg] of args.entries()) {
+    const sources =
+      arg === '--setting-sources' ? args[index + 1] : /^--setting-sources=(.*)$/.exec(arg)?.[1]
+    if (sources !== undefined) value = sources
+  }
+  return value.split(',').map(source => source.trim())
+}
+
+function claudeAddedDirectories(root: string, args: readonly string[]): string[] {
+  const directories: string[] = []
+  let readingDirectories = false
+  for (const arg of args) {
+    if (arg.startsWith('-')) {
+      readingDirectories = arg === '--add-dir'
+      const directory = /^--add-dir=(.+)$/.exec(arg)?.[1]
+      if (directory) directories.push(resolve(root, directory))
+    } else if (readingDirectories && arg) {
+      directories.push(resolve(root, arg))
+    }
+  }
+  return directories
+}
+
+function claudeSkillDirectories(
+  root: string,
+  configDir: string | undefined,
+  args: readonly string[],
+  bare: boolean,
+) {
+  const settings = claudeSettingSources(args)
+  const projectDirs = settings.includes('project') ? claudeAddedDirectories(root, args) : []
+  if (!bare && settings.includes('project')) projectDirs.unshift(root)
+  const userDir = !bare && settings.includes('user') ? configDir : undefined
+  return { projectDirs, userDir }
+}
+
 function claudePluginSkill(
   fs: Pick<RunFiles, 'readFileSync'>,
   check: (path: string) => boolean,
@@ -156,6 +194,7 @@ function claudeSkills(
   if (mode === 'disabled') return () => false
   const configured = process.env['CLAUDE_CONFIG_DIR']
   const configDir = configured ? resolve(root, configured) : home && join(home, '.claude')
+  const { projectDirs, userDir } = claudeSkillDirectories(root, configDir, args, mode === 'bare')
   let sources: ReturnType<typeof claudeRunnerSources> | undefined
   return (name: string) => {
     const match = /^([\w-]+):([\w-]+)$/.exec(name)
@@ -175,11 +214,12 @@ function claudeSkills(
       )
     }
     return (
-      mode === 'default' &&
-      Boolean(
-        findSkillFile(check, root, { targets: ['.claude/skills'], prefix }, name) ||
-          (configDir && findSkillFile(check, configDir, { targets: ['skills'] }, name)),
-      )
+      projectDirs.some(
+        dir =>
+          findSkillFile(check, dir, { targets: ['.claude/skills'], prefix }, name) !== undefined,
+      ) ||
+      (userDir !== undefined &&
+        findSkillFile(check, userDir, { targets: ['skills'] }, name) !== undefined)
     )
   }
 }
