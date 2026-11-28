@@ -40,12 +40,12 @@ steps:
 | Key | Type and values | Default | Applies to | Example |
 | --- | --- | --- | --- | --- |
 | `kind` | String. `implement`, `review`, `fix`, `generic`, `gate`, `approval`, `merge`, `refine-story`, `plan-tasks` or `loop`. | Required. | Every step. The kind determines its inputs, `with` keys and result contract. | `kind: implement` |
-| `skill` | Installed skill name. | The kind's default. Required for a `generic` step without an include. | Agent steps. Host kinds execute directly. | `skill: pair-process-review` |
+| `skill` | The exact skill name used by the engine, optionally qualified by a plugin. | The kind's default. Required for a `generic` step without an include. | Agent steps. Host kinds execute directly. | `skill: pair-process-review` |
 | `interactive` | Boolean. | The kind's default. Ordinary agent kinds default to `false`. | A skill step with `true` runs in the session conversation. The terminal parks and prints the session resume command. | `interactive: true` |
 | `context` | `fresh`, `handoff` or `resume`. | `fresh` for review, `handoff` for other agent kinds. | Agent steps, including loop children. Structured inputs are always available. | `context: fresh` |
 | `prompt` | Literal text up to 300 words. | Absent. | Agent steps, including loop children. | `prompt: Check the release notes.` |
 | `prompt-at` | `before`, `with` or `after`. | `after`. | Agent steps that declare a prompt. | `prompt-at: before` |
-| `args` | Reserved outside grammar v1. A YAML `args` key is refused. | Absent. | The launcher supplies inputs from `--card` and earlier outputs. Use `with` for kind options. | `pair-cli run quick --card 627` |
+| `args` | Map of argument names to short plain-text values. | Absent. | Agent steps. | `args: { spec: docs/spec.md, mode: strict }` |
 | `when` | Object with card filters (`has`, `lacks`, `status`, `assignee`) or an earlier `output` and an `is` list. | Run unconditionally. | Executable steps other than a loop's `until` child. A mismatch skips the step. | `when: { output: implement.status, is: [failed] }` |
 | `uses` | String naming an included workflow. | Absent. | A typed or generic include call. The included steps replace the call in file order. | `uses: shared` |
 | `with` | Object of kind-specific options. | Empty object and kind defaults. | Executable steps. On an include, options apply to the selected output step of the same kind. | `with: { question: 'Merge this PR?' }` |
@@ -63,6 +63,22 @@ steps:
 | `escalate` | Map of status to `stop`, `continue` or `{ do, comment }`. | [Outcome defaults](#outcomes-and-escalation). | Executable steps handle their own outcomes. A loop accepts only `exhausted`. | `escalate: { failed: continue }` |
 
 A step id starts with a lower-case letter and continues with lower-case letters, digits and hyphens: it names a directory of the run.
+
+### Use an external skill
+
+```yaml
+steps:
+  implement:
+    kind: implement
+    skill: vendor:implement-spec
+    args: { spec: docs/spec.md, mode: strict }
+```
+
+Use the name the engine advertises, including a plugin prefix when present. Validation checks the effective skill on the step's engine before launch. An unavailable skill produces an error with its name and step id. Use a [step configuration](workflow-configuration.md#settings-of-a-step) when engines use different names for the same step.
+
+Keep external skills in the repository so each change is versioned and reviewed with the workflow. A plugin manages its own skill versions outside the repository's control. Pair leaves skill installation and version management to the repository and engine.
+
+The engine formats the invocation from `skill` and `args`. Put kind options in `with`. Use `prompt` to tell an external skill what to do and where to write. The step kind still determines its [result contract](workflow-kinds.md#the-result-every-step-returns).
 
 ### Include a workflow
 
@@ -287,7 +303,7 @@ pair-cli workflow validate quick
 | Coherence | Gate keys and `target:<name>` resolve through the Custom Gate Registry. Project-owned inline commands use `command:<shell line>`. |
 | Coherence | A `gate` has `gates` or `checks`. `when.output` names an earlier step with the named output or `status`. A loop and its `until` child cannot use `when`. |
 | Coherence | Escalation keys and actions must be known. Explicit rules and shorthands must agree. |
-| Coherence | Every text under `with` is short plain text: no backtick, no `$(`, no line break.                 |
+| Coherence | Text under `args` and `with` must be short plain text without backticks, `$(` or line breaks.                 |
 
 An error refuses the workflow. A warning does not.
 

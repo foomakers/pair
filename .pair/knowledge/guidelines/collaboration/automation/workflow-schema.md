@@ -146,7 +146,7 @@ These schemas come from the workflow validator.
             },
             "skill": {
               "type": "string",
-              "pattern": "^[a-z0-9][a-z0-9:._-]*$",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9:._-]*$",
               "description": "The skill that runs. Optional for a typed kind, required for `generic`."
             },
             "args": {
@@ -531,6 +531,10 @@ These schemas come from the workflow validator.
               "type": "string",
               "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*(?:\\[bot\\])?$",
               "description": "Use `me` for the runner, a login, `none` to keep the assignee, or `unassign` to clear it."
+            },
+            "skill": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9:._-]*$"
             }
           }
         }
