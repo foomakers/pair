@@ -850,7 +850,7 @@ function resolveWorkflowRun(
   }
   const workflow = promptSafeText(name, 'the workflow name')!
   assertWorkflowFlags(workflow, options)
-  const { cards, ...scope } = parseWorkflowScope(workflow, options)
+  const { cards, ...scope } = parseWorkflowScope(options)
   const request = workflowRequest(workflow, options)
   if (cards?.length === 1 && Object.keys(scope).length === 0 && options.parallel === undefined) {
     const card = cards[0]!
@@ -909,13 +909,11 @@ function workflowCards(value: ParseRunOptions['card']): string[] | undefined {
   ]
 }
 
-function parseWorkflowScope(workflow: string, options: ParseRunOptions) {
+function parseWorkflowScope(options: ParseRunOptions) {
   const scope = resolveScope(options)
   const cards = workflowCards(options.card)
   if (cards !== undefined && scope.root !== undefined)
     throw new Error('--card cannot be combined with --root')
-  if (cards === undefined && scope.root === undefined && scope.filter === undefined)
-    throw new Error(`pair-cli run ${workflow} needs --card <id>, --root <id> or --filter <label>`)
   return { cards, ...scope }
 }
 

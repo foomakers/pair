@@ -188,10 +188,8 @@ describe('parseRunCommand: a workflow name (US-652)', () => {
     expect(() => parseRunCommand({ card: '627', ...options }, ['quick'])).toThrow(message)
   })
 
-  it('needs a card', () => {
-    expect(() => parseRunCommand({}, ['quick'])).toThrow(
-      'pair-cli run quick needs --card <id>, --root <id> or --filter <label>',
-    )
+  it('accepts an unscoped workflow for preview and confirmation', () => {
+    expect(parseRunCommand({}, ['quick']).workflowBatch).toMatchObject({ name: 'quick' })
   })
 
   it('refuses --restart without a workflow name', () => {

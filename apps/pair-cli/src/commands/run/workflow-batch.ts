@@ -1,5 +1,6 @@
 import { createHash } from 'crypto'
 import { dirname, join, resolve } from 'path'
+import { createInterface } from 'node:readline/promises'
 import {
   chooseWorkflow,
   completedRun,
@@ -416,6 +417,24 @@ export async function handleWorkflowBatch(
     if (card.uncertain) console.log(`  #${card.id}: unparsed dependency: ${card.uncertain}`)
   }
   if (config.dryRun) return previewBatch(plan)
+  const unscoped =
+    request.cards === undefined && request.root === undefined && request.filter === undefined
+  if (unscoped) {
+    const cards = plan.selected.filter(card => !plan.prior.has(card.id))
+    console.log('  Selected cards:')
+    for (const card of cards) console.log(`  #${card.id}: ${card.title}`)
+    if (cards.length === 0) return 0
+    if (!process.stdin.isTTY) {
+      console.log('  Specify --card, --root or --filter to run without a terminal.')
+      return 0
+    }
+    const prompt = createInterface({ input: process.stdin, output: process.stdout })
+    try {
+      if (!/^y(es)?$/i.test((await prompt.question('Run these cards? [y/N] ')).trim())) return 0
+    } finally {
+      prompt.close()
+    }
+  }
   for (const [id, outcome] of plan.prior) {
     if (outcome.outcome === 'skipped')
       await migrateCompletedRunTelemetry(
@@ -428,7 +447,7 @@ export async function handleWorkflowBatch(
         id,
       )
   }
-  return driveBatch(input, plan)
+  return driveBatch(input, unscoped ? { ...plan, excluded: [] } : plan)
 }
 
 function legacyCycleRequested(config: RunCommandConfig): boolean {
@@ -509,11 +528,20 @@ export async function handleMappedWorkflow(
   services: Services,
 ): Promise<number | undefined> {
   const card = config.dispatch?.card
-  if (!card || legacyCycleRequested(config)) return undefined
+  if (legacyCycleRequested(config)) return undefined
   const { fs, deps } = services
   const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
   const project = loadConfigWithOverrides(fs, { projectRoot: cwd }).config
   const defaultWorkflow = project['defaultWorkflow']
+  if (!card) {
+    if (
+      typeof defaultWorkflow !== 'string' ||
+      config.invocation.kind !== 'skill' ||
+      config.invocation.name !== undefined ||
+      Object.values(config.scope).some(Boolean)
+    ) return undefined
+    return await handleWorkflowBatch(config, { name: defaultWorkflow, restart: false }, services)
+  }
   if (typeof defaultWorkflow === 'string')
     return await handleWorkflowRun(config, { name: defaultWorkflow, card, restart: false }, services)
   const names = mappedNames(project['workflows'] as WorkflowsConfig | undefined)
