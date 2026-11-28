@@ -82,7 +82,7 @@ function configuredPaths(fs: SkillFiles, root: string, home: string | undefined)
 
 function skillName(fs: SkillFiles, file: string): string | undefined {
   try {
-    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(fs.readFileSync(file))
+    const frontmatter = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(fs.readFileSync(file))
     if (frontmatter === null) return
     const skill: unknown = parseYaml(frontmatter[1]!)
     if (!isPlainObject(skill) || typeof skill['name'] !== 'string') return
