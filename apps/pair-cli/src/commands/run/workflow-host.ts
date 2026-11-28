@@ -274,26 +274,26 @@ export function configureWorkflowRun(
     ...at,
     ...(outcome.plan && { configuration: outcome.plan }),
   }
-  return checkConfiguredSkills(config, request, services, resolved) ? resolved : undefined
+  if (config.dryRun && !checkConfiguredSkills(services.fs, resolved, resolved.cwd)) return undefined
+  return resolved
 }
 
-function checkConfiguredSkills(
-  config: RunCommandConfig,
-  request: RunWorkflowRequest,
-  { fs }: Services,
-  at: Resolved,
-): boolean {
-  const run = { files: fs, dir: workflowRunDir(at, request) }
-  const saved = !config.dryRun && savedRunState(request, run.dir, fs)
-  if (
-    saved &&
-    (!request.reconfigure ||
-      at.configuration === undefined ||
-      completedRun(run, { card: request.card, workflow: at.workflow.name }))
+function needsExecutionSkillCheck(opened: Opened, fs: FileSystemService): boolean {
+  const { resolved, request, runDir } = opened
+  return (
+    !savedRunState(request, runDir, fs) ||
+    (request.reconfigure === true &&
+      resolved.configuration !== undefined &&
+      !completedRun(
+        { files: fs, dir: runDir },
+        { card: request.card, workflow: resolved.workflow.name },
+      ))
   )
-    return true
+}
+
+function checkConfiguredSkills(fs: FileSystemService, at: Resolved, cwd: string): boolean {
   const errors = at.checkSkills(
-    workflowSkillContext(fs, at.project, at.cwd, {
+    workflowSkillContext(fs, at.project, cwd, {
       configuration: at.configuration?.configuration,
       engine: at.engine.engine.id,
     }),
@@ -1132,28 +1132,45 @@ async function startOnConsole(opened: Opened, fs: FileSystemService, replay?: St
   return started
 }
 
+function workflowWorktree({ resolved, request, title }: Opened, { fs, deps }: Services) {
+  return (deps.workflow?.prepareWorktree ?? cycleWorktree)({
+    fs,
+    project: resolved.project,
+    cwd: resolved.cwd,
+    main: resolved.main,
+    card: request.card,
+    title,
+  })
+}
+
+async function prepareWorkflowStart(
+  opened: Opened,
+  services: Services,
+  replay: Awaited<ReturnType<typeof workflowReplay>>,
+) {
+  const checkSkills = needsExecutionSkillCheck(opened, services.fs)
+  if (!checkSkills && replay === undefined) return { valid: true }
+  const prepared = await workflowWorktree(opened, services)
+  if (replay) await prepareReplayHead(prepared, replay.inputs.head)
+  return {
+    prepared,
+    valid: !checkSkills || checkConfiguredSkills(services.fs, opened.resolved, prepared),
+  }
+}
+
 /** The run itself, under the lock: start or resume, the worktree, then the steps. */
 async function drive(
   config: RunCommandConfig,
   opened: Opened,
   services: Services,
 ): Promise<number> {
-  const { resolved, request, runDir } = opened
+  const { resolved, runDir } = opened
   const { fs, deps } = services
   if (opened.closureOnly) return finishClosure(opened, fs, config)
   const flagStep = parkedApproval(opened, fs)
   const replay = await workflowReplay(opened, fs)
-  const prepare = () =>
-    (deps.workflow?.prepareWorktree ?? cycleWorktree)({
-      fs,
-      project: resolved.project,
-      cwd: resolved.cwd,
-      main: resolved.main,
-      card: request.card,
-      title: opened.title,
-    })
-  const replayTree = replay && (await prepare())
-  if (replay && replayTree) await prepareReplayHead(replayTree, replay.inputs.head)
+  const { prepared, valid } = await prepareWorkflowStart(opened, services, replay)
+  if (!valid) return 1
   const started = await startOnConsole(opened, fs, replay)
   const effective = effectiveConfiguration({ files: fs, dir: runDir })
   printSettings(resolved, effective)
@@ -1168,12 +1185,17 @@ async function drive(
     await restoreStoppedFaults({ files: fs, dir: runDir }, started.status, config, resolved)
     return stopped
   }
-  const worktree = replayTree ?? (await prepare())
+  const worktree = prepared ?? (await workflowWorktree(opened, services))
+  const execution = {
+    ...resolved,
+    defaultSkill: workflowDefaultSkill(fs, resolved.project, worktree),
+  }
   console.log(`  Worktree: ${worktree}`)
   return runOnConsole(
     config,
     {
       ...opened,
+      resolved: execution,
       effective,
       worktree,
       telemetryWarned: started.telemetryWarning !== undefined,

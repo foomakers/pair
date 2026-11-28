@@ -95,10 +95,15 @@ function git(cwd: string, ...args: string[]) {
   expect(result.status, result.stderr).toBe(0)
 }
 
-function commitFixture(root: string, target?: string, update?: boolean) {
+function commitFixture(root: string, target?: string) {
   git(root, 'init', '-b', 'main')
-  // Check out the real updated installation with its retained aliases.
-  if (update && target) git(root, 'add', '-f', '--', target, '.pair/.skill-name-map.json')
+  // The session runs in the card checkout with the installation tracked by the repository.
+  if (target) {
+    git(root, 'add', '-f', '--', defaultTarget, '.pair/.skill-name-map.json', 'pair.config.json')
+    if (target !== defaultTarget) git(root, 'add', '-f', '--', target)
+    if (fileSystemService.existsSync(join(root, 'config.json')))
+      git(root, 'add', '-f', 'config.json')
+  }
   git(
     root,
     '-c',
@@ -558,7 +563,7 @@ steps:
       expect.stringContaining(`refine: refine-story skill=${prefix}-process-refine-story`),
     )
     const invoke = runner(root, script(root))
-    commitFixture(root, target, update)
+    commitFixture(root, target)
     if (legacySkills !== undefined)
       await verifyConfiguredSkill(root, script(root), legacySkills, skills)
     expect(invoke('validate', 'installed')).toMatchObject(preview)
@@ -597,12 +602,8 @@ steps:
 
     const linked = join(fixture, 'linked')
     git(root, 'worktree', 'add', '--detach', linked)
-    write(linked, 'pair.config.json', fs.readFileSync(join(root, 'pair.config.json')))
-    if (legacySkills !== undefined)
-      write(linked, 'config.json', fs.readFileSync(join(root, 'config.json')))
+    expect(fs.existsSync(skillFile(linked, `${prefix}-process-refine-story`))).toBe(true)
     if (update) expect(fs.existsSync(skillFile(linked, 'pair-process-refine-story'))).toBe(true)
-    else expect(await install(linked, config)).toBe(0)
-    installExplicit(linked)
     const invokeLinked = runner(linked, script(linked))
     expect(invokeLinked('validate', 'installed')).toMatchObject(preview)
     const resumed = invokeLinked('resume', runId, '--engine', 'claude')

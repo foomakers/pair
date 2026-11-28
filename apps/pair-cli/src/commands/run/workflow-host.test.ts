@@ -131,6 +131,8 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
     prepareWorktree: async ({ main, card }) => {
       const dir = join(main, 'worktrees', card)
       fs.mkdirSync(dir, { recursive: true })
+      for (const directory of ['.claude', '.agents'])
+        fs.cpSync(join(main, directory), join(dir, directory), { recursive: true })
       return dir
     },
     engineAvailable: () => true,
@@ -694,7 +696,7 @@ describe('validation before any launch (AC-2, AC-3)', () => {
     expect(lines.some(line => line.includes(error) && line.includes('— fix: '))).toBe(true)
     expect(lines).toContain('  Refused: 1 error(s); nothing was launched.')
     expect(launched).toEqual([])
-    expect(fs.existsSync(runDir())).toBe(false)
+    expect(fs.existsSync(join(runDir(), 'state.json'))).toBe(false)
   })
 
   // #674 AC-2, R764-02: the launcher changes directories before invoking any skill.
@@ -710,14 +712,25 @@ describe('validation before any launch (AC-2, AC-3)', () => {
         `version: 1\nname: quick\nsteps:\n  notes: { kind: generic, skill: ${skill} }\n`,
       )
 
-      const exit = await run(['quick'], {
-        [skill]: () => fenced({ status: 'ok', summary: 'Notes' }),
-      })
+      const exit = await run(
+        ['quick'],
+        {
+          [skill]: () => fenced({ status: 'ok', summary: 'Notes' }),
+        },
+        {},
+        {
+          prepareWorktree: async () => {
+            const path = join(project, dir)
+            fs.mkdirSync(path, { recursive: true })
+            return path
+          },
+        },
+      )
       if (where === 'caller') {
         expect(exit).toBe(1)
         expect(lines.join('\n')).toContain(`steps.notes.skill: skill '${skill}' is not installed`)
         expect(launched).toEqual([])
-        expect(fs.existsSync(runDir())).toBe(false)
+        expect(fs.existsSync(join(runDir(), 'state.json'))).toBe(false)
       } else {
         expect(exit, lines.join('\n')).toBe(0)
         expect(launched.map(launch => launch.cwd)).toEqual([join(project, dir)])
@@ -743,6 +756,7 @@ describe('validation before any launch (AC-2, AC-3)', () => {
     )
     const skill = 'team-process-refine-story'
     write(`team/skills/${skill}/SKILL.md`, 'Refine a story.')
+    write(`worktrees/627/team/skills/${skill}/SKILL.md`, 'Refine a story.')
     const file = '.pair/adoption/tech/workflows/quick.yaml'
     const definition =
       'version: 1\nname: quick\nsteps:\n  refine: { kind: refine-story, with: { mode: autonomous } }\n'

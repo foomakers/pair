@@ -189,11 +189,6 @@ async function startFresh(
   })
   // The session engine describes this host. Other engines are handled at the step boundary.
   const configWarnings = checkWorkflowConfiguration(definition.workflow, selected)
-  checkSessionWorkflowSkills(project, definition.workflow, {
-    configuration: selected?.configuration,
-    engine: input.engine,
-    checkSkills: definition.checkSkills,
-  })
   const resumeWarnings = workflowResumeWarnings(
     definition.workflow,
     selected?.configuration,
@@ -204,6 +199,11 @@ async function startFresh(
     configuration: selected?.configuration,
   })
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
+  checkSessionWorkflowSkills({ ...project, cwd: worktree }, definition.workflow, {
+    configuration: selected?.configuration,
+    engine: input.engine,
+    checkSkills: definition.checkSkills,
+  })
   const started = await start(run, definition.source, {
     card,
     ...(selected !== undefined && {
@@ -345,7 +345,12 @@ export async function openSession(project: Project, input: OpenInput) {
         ...(opened.worktree !== undefined && { worktree: opened.worktree }),
         result: {
           ...opened,
-          ...workflowSummary(project, workflow, config, lease.engine),
+          ...workflowSummary(
+            { ...project, cwd: opened.worktree ?? project.cwd },
+            workflow,
+            config,
+            lease.engine,
+          ),
           runId,
           lease: lease.token,
         },
@@ -395,7 +400,7 @@ function stepPacket(
   launch: StepLaunch,
 ) {
   const { step, resolved } = sessionLaunch(
-    context.project,
+    { ...context.project, cwd: context.worktree ?? context.project.cwd },
     launch,
     addressedSteps(workflow),
     configuration,
@@ -733,7 +738,12 @@ export async function recordSession(
     const writer = sessionTelemetry(observed, workflow, config, lease)
     const startedAt = new Date(lease.launchStartedAt ?? Date.now())
     const { resumeSessionId } = sessionContext(run, lease, launch)
-    const { resolved } = sessionLaunch(project, launch, steps, config)
+    const { resolved } = sessionLaunch(
+      { ...project, cwd: lease.worktree ?? project.cwd },
+      launch,
+      steps,
+      config,
+    )
     const sent =
       writer === undefined
         ? ''

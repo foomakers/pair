@@ -92,7 +92,11 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
     readResultFacts: async () => ({ head: HEAD }),
     prepareWorktree: async ({ main, card }) => {
       const dir = join(main, 'worktrees', card)
-      fs.mkdirSync(dir, { recursive: true })
+      const skills = join(dir, '.claude/skills')
+      if (!fs.existsSync(skills)) {
+        fs.mkdirSync(join(dir, '.claude'), { recursive: true })
+        fs.symlinkSync(join(main, '.claude/skills'), skills)
+      }
       return dir
     },
     engineAvailable: () => true,

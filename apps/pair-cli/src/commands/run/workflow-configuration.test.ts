@@ -105,6 +105,10 @@ function deps(skills: Record<string, FakeSkill>, over: Partial<WorkflowHostDepen
     prepareWorktree: async ({ main, card }) => {
       const dir = join(main, 'worktrees', card)
       fs.mkdirSync(dir, { recursive: true })
+      for (const directory of ['.claude', '.agents']) {
+        const source = join(main, directory)
+        if (fs.existsSync(source)) fs.cpSync(source, join(dir, directory), { recursive: true })
+      }
       return dir
     },
     engineAvailable: () => true,

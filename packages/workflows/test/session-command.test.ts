@@ -1526,6 +1526,7 @@ it('R754-06: uses the redirected cycle while Codex discovers explicit skills', (
   cpSync(join(main, cycle), join(main, target, 'team-workflow-cycle/scripts'), { recursive: true })
   rmSync(join(main, '.claude/skills/pair-fixture-draft'), { recursive: true })
   rmSync(join(main, cycle), { recursive: true })
+  commitFixture()
   expect(JSON.parse(successful(['validate', 'quick', '--engine', 'codex']))).toMatchObject({
     workflow: 'quick',
   })
@@ -1549,6 +1550,7 @@ it('R754-06: previews and invokes the configured implicit default', () => {
     workflowFile,
     namedWorkflow('  refine: { kind: refine-story, with: { mode: autonomous } }\n'),
   )
+  commitFixture()
   expect(JSON.parse(successful(['validate', 'quick'])).steps).toMatchObject([{ skill }])
   const lease = openSession(['start', 'quick', '--card', card, '--engine', 'codex'])
   expect(advance(lease)).toMatchObject({
@@ -1564,6 +1566,7 @@ it.each([
   { options: '{ mode: autonomous }', interactive: false },
 ])('R754-07 / AC-2: routes refinement with $options', ({ options, interactive }) => {
   write('.claude/skills/pair-process-refine-story/SKILL.md', 'Refine a story.')
+  commitFixture()
   const lease = startWorkflow(`  refine:
     kind: refine-story
     with: ${options}

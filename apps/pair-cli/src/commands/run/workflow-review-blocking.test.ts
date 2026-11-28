@@ -68,7 +68,7 @@ beforeEach(() => {
   project = fs.mkdtempSync(join(tmpdir(), 'pair-workflow-review-'))
   lines = []
   for (const skill of ['pair-process-implement', 'pair-process-review'])
-    write(`.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
+    write(`worktrees/627/.claude/skills/${skill}/SKILL.md`, `# ${skill}\n`)
   write('.pair/adoption/tech/workflows/quick.yaml', QUICK)
   const keep = (...args: unknown[]) => void lines.push(args.join(' '))
   vi.spyOn(console, 'log').mockImplementation(keep)
