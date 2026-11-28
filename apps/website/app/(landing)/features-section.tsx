@@ -31,7 +31,7 @@ const FEATURES: Feature[] = [
   {
     name: 'Workflows',
     description:
-      '/pair-workflow-cycle, /pair-loop and pair-cli run chain the skills and stop where you tell them.',
+      '/pair-workflow-cycle and pair-cli run chain the skills and stop where you tell them.',
     accent: 'from-pair-blue to-pair-teal',
     icon: <LinkIcon className='h-6 w-6' />,
   },

@@ -6,7 +6,7 @@
 <text x="30" y="24" font-size="14" font-weight="bold" fill="#222">Skill layers</text>
 <rect x="30" y="50" width="1020" height="70" rx="6" fill="#e9f6ec" stroke="#2f7d46" stroke-width="1.3"/>
 <text x="540.0" y="81.0" text-anchor="middle" fill="#222" font-weight="bold">Top: workflow, brainstorm, loop, batch</text>
-<text x="540.0" y="97.0" text-anchor="middle" fill="#222">/pair-workflow-cycle, /pair-process-brainstorm, /pair-loop, /pair-implement-batch, /pair-next</text>
+<text x="540.0" y="97.0" text-anchor="middle" fill="#222">/pair-workflow-cycle, /pair-process-brainstorm, /pair-workflow-run, /pair-next</text>
 <rect x="30" y="150" width="1020" height="70" rx="6" fill="#fff6df" stroke="#a06a00" stroke-width="1.3"/>
 <text x="540.0" y="181.0" text-anchor="middle" fill="#222" font-weight="bold">Middle: process skills</text>
 <text x="540.0" y="197.0" text-anchor="middle" fill="#222">specify-prd, bootstrap, plan-*, refine-story, implement, review</text>
