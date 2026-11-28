@@ -48,7 +48,6 @@ describe('"Timeouts, stalls and retries by surface" — one owner, referenced ev
   })
 
   it.each([
-    '.skills/loop/SKILL.md',
     '.pair/knowledge/guidelines/collaboration/automation/automation-policy.md',
   ])('%s references the owner section', file => {
     expect(read(join(DATASET, file))).toContain(ANCHOR)

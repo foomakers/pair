@@ -12,89 +12,6 @@ const DATASET = join(__dirname, '../../dataset')
 const POLICY_SCRIPT = join(DATASET, '.skills/workflow/cycle/scripts/autonomy-policy.mjs')
 const read = (path: string) => readFileSync(path, 'utf-8')
 
-describe('/pair-loop Codex fan-out contract', () => {
-  const SOURCE = join(DATASET, '.skills/loop/SKILL.md')
-  const MIRROR = join(REPO_ROOT, '.claude/skills/pair-loop/SKILL.md')
-  const realizationOf = (file: string) =>
-    read(file).split('## Step 1: Realization')[1]?.split('## Boundaries')[0] ?? ''
-  const itemOf = (realization: string, n: number) =>
-    new RegExp(`^${n}\\. .*`, 'm').exec(realization)?.[0] ?? ''
-  const realization = realizationOf(SOURCE)
-  const item = (n: number) => itemOf(realization, n)
-
-  it('probes an available subagent primitive and drives scoped cards in fresh agents', () => {
-    expect(realization).toContain('collaboration.spawn_agent')
-    expect(realization).toContain('/pair-workflow-cycle --card')
-    expect(realization).toMatch(/Codex.*(?:iteration|iterate)/s)
-  })
-
-  it.each([
-    ['source', SOURCE],
-    ['mirror', MIRROR],
-  ])('AC1 item cross-refs resolve to the intended items (%s)', (_label, file) => {
-    const r = realizationOf(file)
-    const degrade = /one-card path \((\d)\)/.exec(itemOf(r, 1))?.[1]
-    const retry = /exactly as in item (\d)/.exec(itemOf(r, 2))?.[1]
-    expect(itemOf(r, Number(degrade))).toContain('**Act — any other tool**')
-    expect(itemOf(r, Number(retry))).toContain('**Act — Claude Code (`Workflow`)**')
-  })
-
-  it.each([
-    ['source', SOURCE],
-    ['mirror', MIRROR],
-  ])('AC3 resume uses the bound resume primitive, never a hardcoded name (%s)', (_label, file) => {
-    const codex = itemOf(realizationOf(file), 2)
-    expect(codex).not.toContain('collaboration.followup_task')
-    expect(codex).not.toContain('multi_agent_v1__resume_agent')
-    expect(codex).toContain('bound resume primitive')
-  })
-
-  it('AC1 the Codex iteration runs selection, mutex analysis, bounded subagents, outcome, stop predicate in order', () => {
-    const codex = item(2)
-    const order = [
-      '/pair-next',
-      'mutex',
-      'spawn up to the effective `--parallel`',
-      'outcome',
-      'stop predicate',
-    ]
-    const at = order.map(k => codex.indexOf(k))
-    expect(at.every(i => i >= 0)).toBe(true)
-    expect([...at].sort((a, b) => a - b)).toEqual(at)
-  })
-
-  it('AC2 orchestrator context stays independent of N', () => {
-    expect(item(2)).toContain('this context never grows with N')
-    expect(item(2)).toContain("never read a card's transcript")
-  })
-
-  it('AC3 exclusion, retry budget, audit and dead-dispatch budget are named', () => {
-    const codex = item(2)
-    expect(codex).toContain('exclusion, retry budget and audit')
-    expect(codex).toContain('pair-cli run --watch')
-    expect(codex).toContain('same dead-dispatch budget as the cycle')
-    expect(read(SOURCE)).toMatch(/retry budget exhausted/)
-  })
-
-  it('AC4 no runner: one-card path with the continue-token, never a multi-card loop', () => {
-    expect(item(1)).toContain('nesting forbidden')
-    expect(item(1)).toContain('name the tier')
-    expect(item(4)).toContain('**one-card path**')
-    expect(item(4)).toContain("never iterate multiple cards in this session's own context")
-    expect(read(SOURCE)).toContain('continue-token**:')
-  })
-
-  it('AC5 Claude Code with Workflow still delegates the whole run to the pair-loop workflow', () => {
-    expect(item(3)).toContain('Delegate the entire unattended run to the `pair-loop` workflow')
-    expect(item(3)).toContain('`--until` / `--prepare` / `--merge`')
-  })
-
-  it('edge: --iteration resumes in tier 1 and merge authority stays in cycle-merge.mjs', () => {
-    expect(item(2)).toContain('`--iteration` resumes the counter')
-    expect(item(2)).toContain('This loop never merges: `cycle-merge.mjs` owns it.')
-  })
-})
-
 interface Consumer {
   readonly name: string
   readonly file: string
@@ -131,24 +48,6 @@ const CONSUMERS: readonly Consumer[] = [
     name: 'pair-implement-batch (workflow)',
     file: join(DATASET, '.workflows/pair-implement-batch.js'),
     names: ['`until`', '`prepare`', '`merge`'],
-  },
-  {
-    name: 'pair-loop (workflow)',
-    file: join(DATASET, '.workflows/pair-loop.js'),
-    names: ['"until"', '"prepare"', '"merge"', '"filter"', '"assignee"', '"status"'],
-  },
-  {
-    name: '/pair-loop',
-    file: join(DATASET, '.skills/loop/SKILL.md'),
-    names: [
-      '`--until`',
-      '`--prepare`',
-      '`--merge`',
-      '`--filter`',
-      '`--assignee`',
-      '`--status`',
-      '`--root`',
-    ],
   },
   {
     name: 'KB automation-policy guideline',
@@ -199,9 +98,7 @@ describe('US-521 T-9: one vocabulary across the autonomy consumers', () => {
     for (const rel of [
       '.claude/skills/pair-next/SKILL.md',
       '.claude/skills/pair-workflow-cycle/SKILL.md',
-      '.claude/skills/pair-loop/SKILL.md',
       '.claude/workflows/pair-implement-batch.js',
-      '.claude/workflows/pair-loop.js',
     ]) {
       const text = read(join(REPO_ROOT, rel))
       expect(text, rel).toContain('Precedence: argument > argument preset > explicit adoption key')
@@ -212,8 +109,6 @@ describe('US-521 T-9: one vocabulary across the autonomy consumers', () => {
 describe('US-524: batch and loop honour the model — the A1 refusal is gone', () => {
   const files = [
     join(DATASET, '.workflows/pair-implement-batch.js'),
-    join(DATASET, '.workflows/pair-loop.js'),
-    join(DATASET, '.skills/loop/SKILL.md'),
   ]
   it('no consumer still refuses with the #524 pointer', () => {
     for (const file of files) expect(read(file), file).not.toContain('autonomy-not-supported')
@@ -237,38 +132,13 @@ describe('US-524: batch and loop honour the model — the A1 refusal is gone', (
       read(join(REPO_ROOT, 'apps/website/content/docs/reference/cli/commands.mdx')),
     ).not.toMatch(/until #524/)
   })
-  it('/pair-loop Step 0 does not exit on a missing ## Eligibility: the filter resolves argument > ## Autonomy > ## Eligibility', () => {
-    const text = read(files[2]!)
-    expect(text).not.toMatch(/no `## Eligibility` section\?/)
-    expect(text).not.toContain(
-      'automation is off — `tech/automation.md` declares no `## Eligibility`',
-    )
-    expect(text).toMatch(/argument > `## Autonomy` > `## Eligibility`/)
-  })
-  it('/pair-loop continue-token carries the effective argument set', () => {
-    const text = read(files[2]!)
-    for (const flag of ['--filter', '--assignee', '--status', '--until', '--prepare', '--merge'])
-      expect(text.split('continue-token**:')[1]!.split('\n')[0], flag).toContain(flag)
-  })
   it('the batch description no longer says it NEVER merges; it states the merge gate and the sequential fallback', () => {
     const text = read(files[0]!)
     expect(text).not.toMatch(/Stops at PR-ready; NEVER merges/)
     expect(text).toContain('a card merges ONLY when the merge gate allows it')
     expect(text).toContain('/pair-workflow-cycle one card at a time with the same arguments')
   })
-  it('/pair-loop states the degraded path as the cycle one card at a time and owns no merge', () => {
-    const text = read(files[2]!)
-    expect(text).toContain('`/pair-workflow-cycle --card <id>`')
-    expect(text).toContain('**Never merges.**')
-  })
-  it('pair-loop.js carries no cycle-merge call (merge authority has one owner: the batch)', () => {
-    expect(
-      read(files[1]!)
-        .split('\n')
-        .filter(l => !/^\s*\/\//.test(l))
-        .join('\n'),
-    ).not.toContain('cycle-merge')
-  })
+
 })
 
 describe('US-521 T-3: the KB examples are parsed by the shared script', () => {

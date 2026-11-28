@@ -38,12 +38,3 @@ describe.each(ROOTS)('workflow scripts shape (%s)', root => {
   })
 })
 
-describe('the loop skill documents the stale-workflow failure (Y)', () => {
-  const text = readFileSync(join(__dirname, '../../dataset/.skills/loop/SKILL.md'), 'utf-8')
-  it("explains `Unexpected keyword 'export'` when launching by name and its remedy", () => {
-    expect(text).toMatch(/Unexpected keyword 'export'/)
-    expect(text).toMatch(/scriptPath/)
-    expect(text).toMatch(/restart/i)
-    expect(text).toMatch(/pair update/)
-  })
-})

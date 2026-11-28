@@ -595,15 +595,6 @@ describe('wiring — /implement owns both call sites (AC1/AC2, T3)', () => {
 })
 
 describe('wiring — nobody duplicates the loop (AC2, T3)', () => {
-  it('/loop states it never posts its own per-task progress comments', () => {
-    const boundaries = sectionOf(
-      read(SKILL_DATASET('loop/SKILL.md')),
-      '## Boundaries — What This Skill Does Not Do',
-    )
-    expect(boundaries.toLowerCase()).toMatch(/task-progress|per-task progress/)
-    expect(boundaries).toContain('task-progress-feedback.md')
-  })
-
   it('/write-issue documents the composition /implement drives it through', () => {
     const writeIssue = read(SKILL_DATASET('capability/write-issue/SKILL.md'))
     const section = sectionOf(writeIssue, '## Composition Interface')

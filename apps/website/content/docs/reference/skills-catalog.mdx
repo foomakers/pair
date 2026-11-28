@@ -1,9 +1,9 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 57 pair skills organized by type, process, capability, workflow, and meta.
+description: Complete catalog of all 56 pair skills organized by type, process, capability, workflow, and meta.
 ---
 
-pair ships with 57 skills organized into four types: **process** (lifecycle orchestration), **capability** (atomic operations), **workflow** (delivery stages and in-session workflow runners), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 56 skills organized into four types: **process** (lifecycle orchestration), **capability** (atomic operations), **workflow** (delivery stages and in-session workflow runners), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
 > **Last updated:** 2026-09-24. Source: `packages/knowledge-hub/dataset/.skills/`
 
@@ -12,7 +12,6 @@ pair ships with 57 skills organized into four types: **process** (lifecycle orch
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
 | **next** | `/pair-next` | Determines the most relevant next action for your project by reading adoption files and PM tool state. |
-| **loop** | `/pair-loop` | Unattended delivery loop: per iteration, selects eligible cards via pair-next, runs a dependency + mutex analysis, composes implement-batch for a mutex-safe parallel batch (or drives one card sequentially), hands the autonomy policy (until / prepare / merge) to the batch, which merges a review-approved card only when the merge gate allows it, and evaluates the stop predicate. |
 
 ## Process Skills
 
