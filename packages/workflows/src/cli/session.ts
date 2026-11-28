@@ -84,6 +84,10 @@ type StartInput = { workflow: string; card: string; engine: string; config?: str
 type OpenInput = { runId: string; engine: string } | StartInput
 type Definition = ReturnType<typeof workflowDefinition>
 
+function atWorktree(project: Project, worktree: string | undefined): Project {
+  return { ...project, cwd: worktree ?? project.cwd }
+}
+
 function startCoordinates(project: Project, input: StartInput) {
   const { card } = input
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(card) || card.includes('..'))
@@ -199,7 +203,7 @@ async function startFresh(
     configuration: selected?.configuration,
   })
   const worktree = await prepareSessionWorktree(project, scripts, card, view)
-  checkSessionWorkflowSkills({ ...project, cwd: worktree }, definition.workflow, {
+  checkSessionWorkflowSkills(atWorktree(project, worktree), definition.workflow, {
     configuration: selected?.configuration,
     engine: input.engine,
     checkSkills: definition.checkSkills,
@@ -345,12 +349,7 @@ export async function openSession(project: Project, input: OpenInput) {
         ...(opened.worktree !== undefined && { worktree: opened.worktree }),
         result: {
           ...opened,
-          ...workflowSummary(
-            { ...project, cwd: opened.worktree ?? project.cwd },
-            workflow,
-            config,
-            lease.engine,
-          ),
+          ...workflowSummary(atWorktree(project, opened.worktree), workflow, config, lease.engine),
           runId,
           lease: lease.token,
         },
@@ -382,9 +381,9 @@ function sessionLaunch(
   }
 }
 
-const sessionMessage = (launch: StepLaunch, worktree: string | undefined) =>
+const sessionMessage = (launch: StepLaunch, engine: string, worktree: string | undefined) =>
   buildMessage(launch, kindByName[launch.kind], {
-    style: 'instruction',
+    style: engine === 'claude' ? 'slash' : 'instruction',
     isSafeText,
     worktree,
   })
@@ -400,7 +399,7 @@ function stepPacket(
   launch: StepLaunch,
 ) {
   const { step, resolved } = sessionLaunch(
-    { ...context.project, cwd: context.worktree ?? context.project.cwd },
+    atWorktree(context.project, context.worktree),
     launch,
     addressedSteps(workflow),
     configuration,
@@ -558,7 +557,7 @@ async function readyPacket(
     process.stderr.write(`${launch.id}: using handoff — ${reason}\n`)
   }
   const { worktree, settings } = launch
-  return { ...ready, worktree, settings, message: sessionMessage(ready, worktree) }
+  return { ...ready, worktree, settings, message: sessionMessage(ready, settings.engine, worktree) }
 }
 
 function agentDispatch(
@@ -738,16 +737,12 @@ export async function recordSession(
     const writer = sessionTelemetry(observed, workflow, config, lease)
     const startedAt = new Date(lease.launchStartedAt ?? Date.now())
     const { resumeSessionId } = sessionContext(run, lease, launch)
-    const { resolved } = sessionLaunch(
-      { ...project, cwd: lease.worktree ?? project.cwd },
-      launch,
-      steps,
-      config,
-    )
+    const execution = atWorktree(project, lease.worktree)
+    const { resolved } = sessionLaunch(execution, launch, steps, config)
     const sent =
       writer === undefined
         ? ''
-        : sessionMessage(sessionDispatch(resolved, resumeSessionId), lease.worktree)
+        : sessionMessage(sessionDispatch(resolved, resumeSessionId), lease.engine, lease.worktree)
     const final = readMessage(file)
     const result = await settleAgentStep(host, observed, launch, {
       final,

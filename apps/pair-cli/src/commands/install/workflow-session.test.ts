@@ -325,7 +325,7 @@ async function verifyConfiguredSkill(
   const opened = invoke('start', 'explicit', '--card', '42', '--engine', 'claude')
   expect(opened).toMatchObject(explicit)
   expect(invoke('next', opened.runId, '--lease', opened.lease)).toMatchObject({
-    ready: [{ uses: skill, message: expect.stringContaining(`Run the ${skill} skill.`) }],
+    ready: [{ uses: skill, message: expect.stringContaining(`/${skill}\n`) }],
   })
   invoke('stop', opened.runId, '--lease', opened.lease)
 
@@ -549,7 +549,7 @@ steps:
       ready: [
         {
           uses: `${prefix}-process-refine-story`,
-          message: expect.stringContaining(`Run the ${prefix}-process-refine-story skill.`),
+          message: expect.stringContaining(`/${prefix}-process-refine-story\n`),
         },
       ],
     }
@@ -586,7 +586,7 @@ steps:
       const opened = invoke('start', 'explicit', '--card', '42', '--engine', 'claude')
       expect.soft(opened).toMatchObject(explicit)
       expect.soft(invoke('next', opened.runId, '--lease', opened.lease)).toMatchObject({
-        ready: [{ uses: skill, message: expect.stringContaining(`Run the ${skill} skill.`) }],
+        ready: [{ uses: skill, message: expect.stringContaining(`/${skill}\n`) }],
       })
       invoke('stop', opened.runId, '--lease', opened.lease)
 
