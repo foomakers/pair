@@ -334,6 +334,32 @@ it.each(['validate', 'start'])('R764-06: %s rejects a Codex skill and workflow c
   expect(result.stderr).toContain(`steps.included.uses: workflow and skill name clash: ${name}`)
 })
 
+it.each(['caller', 'worktree'])(
+  'R764-06: checks include clashes in the card worktree when the skill exists only in the %s',
+  where => {
+    const name = 'local-notes'
+    git('worktree', 'add', '-b', branch, worktree, 'main')
+    const prefix = where === 'worktree' ? `worktrees/${card}/` : ''
+    write(`${prefix}.claude/skills/${name}/SKILL.md`, 'Notes skill')
+    write(
+      `.pair/adoption/tech/workflows/${name}.yaml`,
+      `version: 1\nname: ${name}\nsteps:\n  draft: { kind: generic, skill: pair-fixture-draft }\n`,
+    )
+    write(workflowFile, namedWorkflow(`  included: { kind: generic, uses: ${name} }\n`))
+    const args = ['start', 'quick', '--card', card, '--engine', 'claude']
+
+    if (where === 'worktree') {
+      const result = invoke(args)
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain(`steps.included.uses: workflow and skill name clash: ${name}`)
+      expect(existsSync(join(runDir, 'state.json'))).toBe(false)
+    } else {
+      const lease = openSession(args)
+      expect(advance(lease)).toMatchObject({ ready: [{ id: 'included/draft', worktree }] })
+    }
+  },
+)
+
 it('#696 AC-1/AC-2/AC-5: advances a session run through the shipped script and resumes its frozen inputs', () => {
   const lease = openSession([
     'start',
