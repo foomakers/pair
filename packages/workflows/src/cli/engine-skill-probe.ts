@@ -4,6 +4,20 @@ import { inventoryRequest } from '../worktree/inventory-process'
 import { isPlainObject } from './project-config'
 import { findSkillFile, skillsLayout } from './skill-paths'
 
+function claudePluginTargets(fs: Pick<RunFiles, 'readFileSync'>, root: string): string[] {
+  const skills = readJson(fs, join(root, '.claude-plugin/plugin.json'))['skills']
+  const paths: unknown[] = Array.isArray(skills) ? skills : [skills]
+  return [
+    'skills',
+    ...paths.filter(
+      (path): path is string =>
+        typeof path === 'string' &&
+        (path === '.' || path.startsWith('./')) &&
+        !path.split(/[/\\]/).includes('..'),
+    ),
+  ]
+}
+
 function claudePluginSkill(
   fs: Pick<RunFiles, 'readFileSync'>,
   check: (path: string) => boolean,
@@ -12,13 +26,6 @@ function claudePluginSkill(
 ): boolean {
   const match = /^([\w-]+):([\w-]+)$/.exec(name)
   if (!match) return false
-  const read = (path: string): Record<string, unknown> => {
-    try {
-      return JSON.parse(fs.readFileSync(path)) as Record<string, unknown>
-    } catch {
-      return {}
-    }
-  }
   const settings = [
     join(home, '.claude/settings.json'),
     join(root, '.claude/settings.json'),
@@ -26,11 +33,11 @@ function claudePluginSkill(
   ]
   const enabled = Object.assign(
     {},
-    ...settings.map(path => read(path)['enabledPlugins'] ?? {}),
+    ...settings.map(path => readJson(fs, path)['enabledPlugins'] ?? {}),
   ) as Record<string, boolean>
-  const installed = read(join(home, '.claude/plugins/installed_plugins.json'))['plugins'] as
-    | Record<string, { installPath?: string; scope?: string; projectPath?: string }[]>
-    | undefined
+  const installed = readJson(fs, join(home, '.claude/plugins/installed_plugins.json'))[
+    'plugins'
+  ] as Record<string, { installPath?: string; scope?: string; projectPath?: string }[]> | undefined
   return Object.entries(enabled).some(([id, active]) => {
     if (active !== true || id.split('@')[0] !== match[1]) return false
     const entries = installed?.[id]
@@ -40,7 +47,12 @@ function claudePluginSkill(
         entry =>
           ((entry.scope !== 'project' && entry.scope !== 'local') || entry.projectPath === root) &&
           typeof entry.installPath === 'string' &&
-          findSkillFile(check, entry.installPath, { targets: ['skills'] }, match[2]!) !== undefined,
+          findSkillFile(
+            check,
+            entry.installPath,
+            { targets: claudePluginTargets(fs, entry.installPath) },
+            match[2]!,
+          ) !== undefined,
       )
     )
   })
@@ -48,7 +60,8 @@ function claudePluginSkill(
 
 function readJson(fs: Pick<RunFiles, 'readFileSync'>, path: string): Record<string, unknown> {
   try {
-    return JSON.parse(fs.readFileSync(path)) as Record<string, unknown>
+    const value: unknown = JSON.parse(fs.readFileSync(path))
+    return isPlainObject(value) ? value : {}
   } catch {
     return {}
   }
