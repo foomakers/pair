@@ -8,6 +8,7 @@ import {
   effectiveSelection,
   matches,
   orderCards,
+  stoppedApproval,
   type CardSelection,
   type Filter,
   type WorkflowsConfig,
@@ -18,6 +19,7 @@ import { mainCheckoutOrCwd } from './cycle-wiring'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import { runPool } from './parallel'
 import { inPooledCard } from './pooled-card'
+import { savedWorkflow } from './workflow-saved-state'
 import {
   matchesWorkflowCard,
   pendingWorkflowCard,
@@ -355,7 +357,8 @@ function previewBatch(plan: Plan): number {
   return [...plan.prior.values()].some(card => card.outcome === 'failed') ? 1 : 0
 }
 
-function writeSummary(fs: Services['fs'], summary: string, cards: readonly BatchOutcome[]): number {
+function writeSummary(fs: Services['fs'], plan: Plan, cards: readonly BatchOutcome[]): number {
+  const { summary } = plan
   const totals: Partial<Record<Outcome, number>> = {}
   for (const result of cards) {
     totals[result.outcome] = (totals[result.outcome] ?? 0) + 1
@@ -364,6 +367,16 @@ function writeSummary(fs: Services['fs'], summary: string, cards: readonly Batch
   fs.mkdirSync(dirname(summary), { recursive: true })
   fs.writeFileSync(summary, `${JSON.stringify({ cards, totals }, null, 2)}\n`)
   console.log(`  Summary: ${summary} · ${JSON.stringify(totals)}`)
+  const graph = dependencyGraph(plan.selected)
+  for (const parked of cards.filter(card => card.outcome === 'parked')) {
+    const runDir = join(dirname(dirname(summary)), plan.runId(parked.id))
+    const saved = savedWorkflow({ card: parked.id, restart: false }, runDir, fs)
+    if (!saved || !stoppedApproval(saved.workflow, saved.state)) continue
+    const waiting = cards.filter(
+      card => card.outcome === 'waiting' && graph.get(card.id)?.selected.includes(parked.id),
+    ).length
+    if (waiting) console.log(`  ${waiting} cards waiting for the approval of #${parked.id}.`)
+  }
   if (totals.waiting || totals.parked)
     console.log('  Resume parked and waiting cards by repeating this command.')
   return totals.failed ? 1 : 0
@@ -392,7 +405,7 @@ async function driveBatch(input: BatchRequest, plan: Plan): Promise<number> {
   return await whileInterruptible(
     () => releases.forEach(release => release()),
     async () =>
-      writeSummary(services.fs, plan.summary, [
+      writeSummary(services.fs, plan, [
         ...(await scheduleWorkflowCards(selected, limit, prior, launch)),
         ...excluded,
       ]),
