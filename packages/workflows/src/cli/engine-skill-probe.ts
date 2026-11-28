@@ -4,11 +4,7 @@ import type { RunFiles } from '../engine'
 import { inventoryRequest } from '../worktree/inventory-process'
 import { isPlainObject } from './project-config'
 import { findSkillFile, skillsLayout } from './skill-paths'
-import {
-  openCodeConfiguredSkills,
-  openCodeSkillDirectories,
-  type SkillFiles,
-} from './opencode-skill-paths'
+import { openCodeSkills, type SkillFiles } from './opencode-skill-paths'
 
 export type EngineSkillFiles = SkillFiles & { readFileBytesSync(path: string): Buffer }
 const claudeManifest = '.claude-plugin/plugin.json'
@@ -417,12 +413,14 @@ export function engineSkillProbe(
       prefix,
       runnerArgs: runner?.runnerArgs,
     })
-  const directories =
-    engine === 'opencode' ? openCodeSkillDirectories() : skillDirectories.get(engine)
+  if (engine === 'opencode') {
+    let names: Set<string> | undefined
+    return name => (names ??= openCodeSkills(fs, projectRoot, home)).has(name)
+  }
+  const directories = skillDirectories.get(engine)
   if (!directories) return () => false
   const [project, global] = directories
   const nativeSkill = cachedNativeSkill(projectRoot, engine, runner)
-  let configuredSkills: Set<string> | undefined
   return name => {
     // A successful native inventory includes selectors and disabled skills that paths cannot infer.
     const native = nativeSkill(name)
@@ -430,9 +428,7 @@ export function engineSkillProbe(
     return Boolean(
       findSkillFile(check, projectRoot, { targets: project, prefix }, name) ||
         (home && findSkillFile(check, home, { targets: global }, name)) ||
-        packageSkill(fs, check, { root: projectRoot, home, engine }, name) ||
-        (engine === 'opencode' &&
-          (configuredSkills ??= openCodeConfiguredSkills(fs, projectRoot, home)).has(name)),
+        packageSkill(fs, check, { root: projectRoot, home, engine }, name),
     )
   }
 }

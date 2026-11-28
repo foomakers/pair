@@ -12,13 +12,28 @@ export interface SkillFiles {
 
 const envFlag = (name: string) => /^(1|true)$/i.test(process.env[name] ?? '')
 
-export function openCodeSkillDirectories(): [string[], string[]] {
+function globalConfigDir(home: string | undefined): string | undefined {
+  const config = process.env['XDG_CONFIG_HOME'] || (home && join(home, '.config'))
+  return config ? join(config, 'opencode') : undefined
+}
+
+function openCodeSkillDirectories(root: string, home: string | undefined): string[] {
+  const global = globalConfigDir(home)
+  const custom = process.env['OPENCODE_CONFIG_DIR']
+  const configDirs = [
+    global,
+    envFlag('OPENCODE_DISABLE_PROJECT_CONFIG') ? undefined : join(root, '.opencode'),
+    home && join(home, '.opencode'),
+    custom && resolve(root, custom),
+  ].flatMap(dir => (dir ? [join(dir, 'skill'), join(dir, 'skills')] : []))
+  if (envFlag('OPENCODE_DISABLE_EXTERNAL_SKILLS')) return configDirs
   const claudeDisabled =
     envFlag('OPENCODE_DISABLE_CLAUDE_CODE') || envFlag('OPENCODE_DISABLE_CLAUDE_CODE_SKILLS')
   const compatible = claudeDisabled ? ['.agents/skills'] : ['.claude/skills', '.agents/skills']
   return [
-    ['.opencode/skills', ...compatible],
-    ['.config/opencode/skills', ...compatible],
+    ...configDirs,
+    ...compatible.map(dir => join(root, dir)),
+    ...(home ? compatible.map(dir => join(home, dir)) : []),
   ]
 }
 
@@ -36,11 +51,11 @@ function pathsFrom(text: string | undefined): string[] | undefined {
 
 function configCandidates(root: string, home: string | undefined): string[] {
   const env = process.env
-  const global = env['XDG_CONFIG_HOME'] || (home && join(home, '.config'))
+  const global = globalConfigDir(home)
   const configFiles = ['opencode.json', 'opencode.jsonc']
   const projectDisabled = envFlag('OPENCODE_DISABLE_PROJECT_CONFIG')
   return [
-    ...(global ? ['config.json', ...configFiles].map(file => join(global, 'opencode', file)) : []),
+    ...(global ? ['config.json', ...configFiles].map(file => join(global, file)) : []),
     ...(env['OPENCODE_CONFIG'] ? [resolve(root, env['OPENCODE_CONFIG'])] : []),
     ...(projectDisabled
       ? []
@@ -70,7 +85,9 @@ function skillName(fs: SkillFiles, file: string): string | undefined {
     const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(fs.readFileSync(file))
     if (frontmatter === null) return
     const skill: unknown = parseYaml(frontmatter[1]!)
-    return isPlainObject(skill) && typeof skill['name'] === 'string' ? skill['name'] : undefined
+    if (!isPlainObject(skill) || typeof skill['name'] !== 'string') return
+    if (skill['description'] !== undefined && typeof skill['description'] !== 'string') return
+    return skill['name']
   } catch {
     // OpenCode skips unreadable or malformed skill files.
     return
@@ -111,10 +128,12 @@ function discover(
   }
 }
 
-/** OpenCode's local skills.paths discovery without starting its config/plugin installers. */
-export function openCodeConfiguredSkills(fs: SkillFiles, root: string, home: string | undefined) {
+/** Read OpenCode's registered names from local skill sources. */
+export function openCodeSkills(fs: SkillFiles, root: string, home: string | undefined) {
   const names = new Set<string>()
   const visited = new Set<string>()
+  for (const directory of openCodeSkillDirectories(root, home))
+    discover(fs, directory, names, visited)
   for (const path of configuredPaths(fs, root, home)) {
     const directory = path.startsWith('~/')
       ? home && resolve(home, path.slice(2))

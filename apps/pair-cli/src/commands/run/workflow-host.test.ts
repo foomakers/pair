@@ -184,7 +184,7 @@ beforeEach(() => {
     'my-skill',
   ])
     for (const directory of ['.claude/skills', '.agents/skills'])
-      write(`${directory}/${skill}/SKILL.md`, `# ${skill}\n`)
+      write(`${directory}/${skill}/SKILL.md`, `---\nname: ${skill}\n---\n`)
   write('.pair/adoption/tech/way-of-working.md', REGISTRY)
   write('.pair/adoption/tech/workflows/quick.yaml', QUICK)
   const keep = (...args: unknown[]) => void lines.push(args.join(' '))
